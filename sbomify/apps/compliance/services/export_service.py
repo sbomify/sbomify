@@ -122,7 +122,7 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "  is benign.\n\n"
         "This CRA export bundle ships with two integrity primitives:\n\n"
         "- `metadata/manifest.json` — per-file SHA-256 hashes for every "
-        "artefact listed in its `files` array. `metadata/manifest.json`, "
+        "artifact listed in its `files` array. `metadata/manifest.json`, "
         "`metadata/manifest.sha256`, and this `metadata/INTEGRITY.md` are "
         "NOT listed (they are the integrity primitives themselves — "
         "listing them would be circular).\n"
@@ -137,7 +137,7 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "```\n\n"
         "Expected output: `metadata/manifest.json: OK`.\n\n"
         f"Expected digest (from `metadata/manifest.sha256`): `{manifest_sha256}`\n\n"
-        "## 2. Verifying every individual artefact\n\n"
+        "## 2. Verifying every individual artifact\n\n"
         "Again from the extracted bundle root:\n\n"
         "```sh\n"
         'jq -r \'.files[] | "\\(.sha256)  \\(.path | sub("^cra-package-[^/]*/"; ""))"\' \\\n'

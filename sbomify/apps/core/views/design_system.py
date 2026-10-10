@@ -15,7 +15,7 @@ from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE,
 GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "settings-controls", "label": "Settings controls", "group": "Layout"},
     {"id": "app-overview", "label": "App chrome and overview", "group": "Layout"},
-    {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
+    {"id": "colors", "label": "Color tokens", "group": "Foundations"},
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
     {"id": "metric-chips", "label": "Metric chips", "group": "Foundations"},
@@ -138,6 +138,68 @@ class DesignSystemView(LoginRequiredMixin, View):
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
             "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
+            # Both panels show a slice of a longer list and say so. The demo
+            # carries the totals as well as the rows, because the sentence that
+            # states the slice is the part a reviewer cannot see otherwise.
+            "overview_demo_digest": {
+                "needs_attention": [
+                    {
+                        "id": "CVE-2026-10001",
+                        "component_id": "demo00000001",
+                        "component_name": "Example component",
+                        "package": "libexample",
+                        "version": "1.2.3",
+                        "severity": "medium",
+                        "kev": True,
+                        "malicious": False,
+                        "decision": "Not reviewed",
+                        "products": ["Example product"],
+                        "sla": {"label": "3 days over", "overdue": True},
+                    },
+                    {
+                        "id": "CVE-2026-10002",
+                        "component_id": "demo00000001",
+                        "component_name": "Example component",
+                        "package": "example-runtime",
+                        "version": "2.0.0",
+                        "severity": "critical",
+                        "kev": False,
+                        "malicious": False,
+                        "decision": "Not reviewed",
+                        "products": ["Example product"],
+                        "sla": {"label": "Awaiting history", "overdue": False},
+                    },
+                ],
+                "needs_attention_total": 9,
+                "metrics": {"open": 14},
+            },
+            "overview_demo_products": [
+                {
+                    "id": "demo00000002",
+                    "name": "Example product",
+                    "component_count": 3,
+                    "security_component_count": 3,
+                    "counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+                    "unassessed": 0,
+                    "stale": 1,
+                    "missing_sboms": 0,
+                    "no_policy": 0,
+                    "past_sla": 2,
+                },
+                {
+                    "id": "demo00000003",
+                    "name": "Example service",
+                    "component_count": 0,
+                    "security_component_count": 0,
+                    "counts": {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "other": 0},
+                    "unassessed": 0,
+                    "stale": 0,
+                    "missing_sboms": 0,
+                    "no_policy": 0,
+                    "past_sla": 0,
+                },
+            ],
+            "overview_demo_product_count": 11,
             "scorecard_demo": {
                 "issues": [{"tone": "success", "count": 6}, {"tone": "warning", "count": 1}],
                 "scan": [
@@ -251,7 +313,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "demo_accordion": [
                 {
                     "id": "org",
-                    "label": "Organisational controls",
+                    "label": "Organizational controls",
                     "body": "Policies, roles and supplier relationships.",
                 },
                 {
@@ -332,7 +394,7 @@ class DesignSystemView(LoginRequiredMixin, View):
         from django.core.paginator import Paginator
         from django.urls import reverse
 
-        from sbomify.apps.core.services.inventory_page import COLUMNS
+        from sbomify.apps.core.services.inventory_page import COLUMNS, HEADINGS, KINDS
 
         inventory_url = reverse("core:products_dashboard")
         row = {
@@ -372,6 +434,21 @@ class DesignSystemView(LoginRequiredMixin, View):
             ],
             "page": Paginator([row], 10).page(1),
             "page_range": [1],
+            # Shaped like build_inventory_table's tabs, so c-inventory.tab-link
+            # renders here from the same fields it reads on the real page.
+            "tabs": [
+                {
+                    "id": key,
+                    "label": key.title(),
+                    "is_active": key == "products",
+                    "heading": HEADINGS[key][0],
+                    "subtitle": HEADINGS[key][1],
+                    "document_title": f"{HEADINGS[key][0]} · sbomify",
+                    "badge": badge,
+                    "href": reverse(f"core:{key}_dashboard"),
+                }
+                for key, badge in zip(KINDS, ("1", "2", "3"), strict=True)
+            ],
         }
         if request.headers.get("HX-Target") == "ds-vulnerability-report":
             return render(request, "core/components/vulnerability_demo.html.j2", context)

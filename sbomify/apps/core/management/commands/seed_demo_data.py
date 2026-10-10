@@ -211,7 +211,7 @@ SLICE_A: tuple[ProductSpec, ...] = (
     ),
     ProductSpec(
         "Beacon Telemetry Service",
-        "Ingest tier that accepts device telemetry and normalises it for analytics.",
+        "Ingest tier that accepts device telemetry and normalizes it for analytics.",
         False,
         (ComponentSpec("beacon-ingest-service", BOM, PRIVATE, sboms=1),),
     ),

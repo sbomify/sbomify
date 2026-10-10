@@ -57,7 +57,7 @@
          x-data="teamBranding('{}')">
         <c-cards.card>
         <div class="space-y-4">
-            <c-forms.color-field size="sm" id="ds-settings-color" label="Accent color" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" />
+            <c-forms.color-field size="sm" id="ds-settings-color" label="Accent color" color="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" />
             <c-forms.file-upload size="sm" name="ds-settings-logo" input_ref="previewFile" accept="image/*" preview="''" required disabled hint="Disabled input, with state on the real control.">Choose a logo</c-forms.file-upload>
         </div>
         </c-cards.card>
@@ -80,7 +80,7 @@
          class="grid grid-cols-2 xl:grid-cols-4 gap-3"
          aria-label="Example overview metrics">
         <c-layout.stat-card :value="12" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-        <c-layout.stat-card :value="4" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+        <c-layout.stat-card :value="4" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
         <c-layout.stat-card unmeasured unmeasured_label="Not scanned yet" label="Open vulnerabilities" icon="fas fa-crosshairs" accent="warning" />
         <c-layout.stat-card :value="0" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
         <c-layout.stat-card :value="2" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
@@ -90,7 +90,7 @@
         Zero values stay neutral. The component owns its spacing and type at every width.
     </p>
     <c-overview.quick-actions>
-    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organise components and artifacts" icon="fas fa-cube" />
+    <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" title="Add product" description="Organize components and artifacts" icon="fas fa-cube" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" title="Add release" description="Bring a version's artifacts together" icon="fas fa-tag" href="{% url 'core:release_new' %}" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:component_new' %}" title="Add component" description="Store SBOMs and documents" icon="fas fa-puzzle-piece" />
     <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:security_advisory_new' %}" title="Add advisory" description="Create a draft security advisory" icon="fas fa-shield-halved" />
@@ -116,6 +116,9 @@
         <c-overview.evidence :product="overview_demo_evidence" />
     </div>
     </c-cards.card>
+    <c-forms.hint>Each panel is a slice of a longer list and states its own scope: the digest counts the findings it ranked, and exposure says why its rows cannot be added up.</c-forms.hint>
+    <c-overview.priority :dashboard="overview_demo_digest" />
+    <c-overview.products :products="overview_demo_products" :product_count="overview_demo_product_count" :shares_components="True" :omits_components="True" />
     <c-overview.priority :dashboard="overview_demo_empty" />
     <c-overview.products />
     <c-forms.hint>An empty workspace shows setup in place of metrics and tables, using the onboarding explanations and existing upload controls.</c-forms.hint>
@@ -123,10 +126,8 @@
     </c-layout.frame>
     <c-layout.frame>
     <c-layout.page-header title="Product inventory" subtitle="Linked tabs, compact server-sorted cells, severity breakdowns and shared filters." />
-    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedInventory: 'products' }">
-    <c-navigation.tab href="{% url 'core:products_dashboard' %}" active_binding="selectedInventory === 'products'" badge="1" active>Products</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:releases_dashboard' %}" badge="2">Releases</c-navigation.tab>
-    <c-navigation.tab href="{% url 'core:components_dashboard' %}" badge="3">Components</c-navigation.tab>
+    <c-navigation.tabs links aria-label="Example inventory views" x-data="{ selectedKind: 'products' }">
+    {% for tab in inventory_demo.tabs %}<c-inventory.tab-link :tab="tab" />{% endfor %}
     </c-navigation.tabs>
     <c-inventory.table :inventory="inventory_demo" hx-disable />
     <c-inventory.results :inventory="inventory_demo" preview />
@@ -141,11 +142,11 @@
     </div>
     </c-layout.frame>
     {# ── Foundations ───────────────────────────────────────────────────────── #}
-    <h2 id="colors" class="text-xl font-semibold text-text">Colour tokens</h2>
+    <h2 id="colors" class="text-xl font-semibold text-text">Color tokens</h2>
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         Text and icons use these tokens directly. Backgrounds, borders and focus rings can use
-        transparent tints. Do not blend foreground colours with text or add local colour values.
+        transparent tints. Do not blend foreground colors with text or add local color values.
         Swatches read the custom properties directly in both themes.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -174,7 +175,7 @@
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         The accent carrier of the design language: a flat 12% tint with the accent as foreground.
-        Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
+        Every "icon beside a heading" is one of these. Never a gradient chip, never a colored side-border.
     </p>
     <p class="tw-data-label mb-2">Sizes</p>
     <div class="flex flex-wrap items-center gap-4 mb-5">
@@ -311,7 +312,7 @@
             <c-assessments.row state="open" @click="open = !open" name="NTIA Minimum Elements (2021)" tone="warning" label="1 issue" caption="6 of 7 checks passed" :segments="scorecard_demo.issues" bar_label="6 passed, 1 failed">
             <c-slot name="details">
             <ul class="m-0 px-4 py-1">
-                <c-assessments.check status="fail" title="SBOM Author" remediation="Add the person or organisation that assembled this SBOM.">
+                <c-assessments.check status="fail" title="SBOM Author" remediation="Add the person or organization that assembled this SBOM.">
                 No author is recorded for this SBOM.
                 </c-assessments.check>
                 <c-assessments.check status="warning" title="Declared licenses need review">
@@ -369,11 +370,14 @@
         use the same header and title alignment as list pages.
         <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
         named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
-        line. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
+        line. <code class="tw-code-inline">breadcrumbs</code> is the trail to the page, under the title; a
+        page may carry both a trail and a subtitle, as the one below does.
+        <code class="tw-code-inline">x_heading</code> and <code class="tw-code-inline">x_caption</code> bind the
+        title and the subtitle to Alpine expressions, for a heading that changes in place. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
     </p>
-    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
+    <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" :breadcrumbs="demo_breadcrumbs" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
     <hr class="border-border">
     <div class="flex flex-col gap-4">
         <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
@@ -514,7 +518,7 @@ first-of-type rule that drops the leading hairline reads the section's position
             bare fill and it takes the radius of whatever tile holds it.
             c-forms.color-field below is the whole field built on it.
         {% endcomment %}
-        <c-forms.field label="Colour" for="ds-color" hint="Sized by its container, not by the browser.">
+        <c-forms.field label="Color" for="ds-color" hint="Sized by its container, not by the browser.">
         <c-forms.input name="ds-color" type="color" value="#7C8CFF" class="h-11 rounded-lg overflow-hidden" />
         </c-forms.field>
         <c-forms.field label="Select" for="ds-select" hint="Pick an artifact type.">
@@ -523,12 +527,12 @@ first-of-type rule that drops the leading hairline reads the section's position
     </div>
     <div class="mt-5" x-data="{ swatch: '#7C8CFF' }">
         <p class="text-sm text-text-muted mb-3">
-            <code class="tw-code-inline">c-forms.color-field</code> is a colour as a field, shaped like
+            <code class="tw-code-inline">c-forms.color-field</code> is a color as a field, shaped like
             every other one: label above, hint below. The swatch and the hex are two halves of one control
-            bound to the same value, so a brand colour can be typed or pasted as well as picked, and the
+            bound to the same value, so a brand color can be typed or pasted as well as picked, and the
             ring is drawn on the pair rather than on whichever half has focus.
         </p>
-        <c-forms.color-field id="ds-color-field" label="Primary brand color" hint="Headers, navigation, primary elements" colour="swatch" on_input="swatch = $event.target.value" />
+        <c-forms.color-field id="ds-color-field" label="Primary brand color" hint="Headers, navigation, primary elements" color="swatch" on_input="swatch = $event.target.value" />
     </div>
     <div class="mt-5">
         <c-forms.field label="Textarea" for="ds-textarea">
@@ -570,7 +574,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     c-forms.field's, so a group of tiles reads like every other field.
     {% endcomment %}
     <p class="text-sm text-text-muted mb-4">
-        Radios as tiles, for a short set of values that carry an icon and a colour elsewhere. Each option wears the
+        Radios as tiles, for a short set of values that carry an icon and a color elsewhere. Each option wears the
         accent its badge wears, so choosing one looks like the badge it produces. Selection is painted with
         <code class="tw-code-inline">:has(:checked)</code>, so the highlight cannot drift from what submits.
         Longer or free-form lists stay in <code class="tw-code-inline">select</code>.
@@ -870,7 +874,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted">
         One bordered container of divided collapsible sections. The compact density
         (<code class="tw-code-inline">density="sm"</code>) is for category lists inside a card, like the
-        controls catalogue.
+        controls catalog.
     </p>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-navigation.accordion x-data="{ open: 'a-org' }">
@@ -927,7 +931,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-buttons.secondary @click="wide = true">Open large modal</c-buttons.secondary>
         <c-buttons.secondary @click="removeTarget = { name: 'acme-gateway-core' }">Open row dialog</c-buttons.secondary>
         <c-modal id="ds-modal" title="Assign a component">
-        <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognise.">
+        <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognize.">
         <c-forms.input name="ds-modal-name" placeholder="acme-gateway-core" />
         </c-forms.field>
         <c-slot name="footer">
@@ -1093,7 +1097,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         The shell holds the toolbar, the table and the footer. A wide table scrolls inside the table
         component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
         the shell drops its own frame. <c-code-inline>fixed</c-code-inline> gives every
-        column an equal share and centres the middle ones; <c-code-inline>sized</c-code-inline> fixes the
+        column an equal share and centers the middle ones; <c-code-inline>sized</c-code-inline> fixes the
         layout and leaves alignment alone. Use it for sortable tables: give the supporting columns widths
         and leave the name column to fill the remaining space. Sorting then changes rows without moving columns.
         The header uses the same sort control for Alpine buttons (<c-code-inline>sort</c-code-inline>)
@@ -1157,6 +1161,35 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}
     </c-cards.card>
+    <p class="text-sm text-text-muted">
+        A chart drawn on a canvas is a picture, so a screen reader gets its name and none of its numbers.
+        Follow the chart with a <c-code-inline>screen-reader-table</c-code-inline> built from the data the
+        chart draws. It renders nothing on screen: the card below holds one with three rows.
+    </p>
+    <c-cards.card title="Signups" subtitle="Last 3 days.">
+    <c-tables.screen-reader-table caption="Signups per day">
+    <thead>
+        <tr>
+            <th scope="col">Day</th>
+            <th scope="col">Signups</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <th scope="row">Oct 5</th>
+            <td>2</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 6</th>
+            <td>0</td>
+        </tr>
+        <tr>
+            <th scope="row">Oct 7</th>
+            <td>5</td>
+        </tr>
+    </tbody>
+    </c-tables.screen-reader-table>
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
@@ -1208,6 +1241,19 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card accent="success" icon="fas fa-circle-check" value="96%" label="NTIA compliant" />
         <c-layout.stat-card accent="warning" icon="fas fa-clock" value="4" label="Stale scans" />
     </div>
+    <p class="tw-data-label mb-3">With a note, for a figure that needs a caveat</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <c-layout.stat-card icon="fas fa-box-open" label="Components" value="128" note="From the latest release of each product." />
+        <c-layout.stat-card accent="warning" icon="fas fa-clock" label="Awaiting a scan" value="6">
+        <c-slot name="note">Queued behind {{ running_jobs|default:2 }} running jobs.</c-slot>
+        </c-layout.stat-card>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">note</code> is the footnote under a number: where it came from, or what it
+        leaves out. Pass it as an attribute for a fixed sentence, or as a <code class="tw-code-inline">note</code>
+        slot when the sentence is assembled from template logic. It is a part of the card rather than a paragraph
+        the page styles, so a strip of cards cannot drift apart one card at a time.
+    </p>
     <p class="tw-data-label">Compact, the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <c-layout.stat-card compact accent="danger" value="3" label="At risk" />
@@ -1217,7 +1263,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card compact accent="danger" value="0" label="Unscanned" />
     </div>
     <p class="text-sm text-text-muted">
-        Compact changes spacing and type size. Accents include semantic colours and severity levels.
+        Compact changes spacing and type size. Accents include semantic colors and severity levels.
         Zero values stay neutral. For client state, x_value binds the value and its zero state together.
     </p>
     <div x-data="{ count: 0 }" class="flex flex-wrap items-center gap-4">
@@ -1229,7 +1275,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted mb-4">
         One component for the whole scale: pass the band as <code class="tw-code-inline">level</code>, so pages
         never write a five-branch <code class="tw-code-inline">if/elif</code> chain. Squarer and uppercase so the
-        shape carries the "this is a severity" signal, not just the colour.
+        shape carries the "this is a severity" signal, not just the color.
     </p>
     {% comment %}
     This section renders through the cotton component library
@@ -1538,6 +1584,16 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
     </div>
     <p class="text-sm text-text-muted mt-6 mb-2">
+        The nav link is the one that moves you between pages, rather than between panels on one
+        page. It is a real anchor, and the page you are on carries
+        <c-code-inline>aria-current="page"</c-code-inline> on the anchor itself.
+    </p>
+    <nav class="flex items-center gap-1" aria-label="Navigation link demo">
+        <c-navigation.nav-link href="#nav-link" current>Overview</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link">Revenue</c-navigation.nav-link>
+        <c-navigation.nav-link href="#nav-link" icon="fas fa-heart-pulse">Platform</c-navigation.nav-link>
+    </nav>
+    <p class="text-sm text-text-muted mt-6 mb-2">
         The segmented control wears the same pills, for buttons that switch what is already on screen
         rather than select a panel: it is a group, so every button stays in the tab order, and which
         one is chosen is client state bound to <c-code-inline>data-active</c-code-inline>.
@@ -1708,14 +1764,14 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-navigation.stepper class="mt-6" role="list" aria-label="Compact setup progress">
     <c-navigation.stepper-step compact state="completed" label="Why" role="listitem" />
     <c-navigation.stepper-connector compact />
-    <c-navigation.stepper-step compact state="active" label="Organisation" role="listitem" aria-current="step" />
+    <c-navigation.stepper-step compact state="active" label="Organization" role="listitem" aria-current="step" />
     <c-navigation.stepper-connector compact />
     <c-navigation.stepper-step compact label="Security" role="listitem" />
     </c-navigation.stepper>
     <div class="grid gap-6 mt-6 lg:grid-cols-2">
-        <c-onboarding.reason number="01" title="Who you are" description="Record the organisation and person responsible for your artifacts." />
+        <c-onboarding.reason number="01" title="Who you are" description="Record the organization and person responsible for your artifacts." />
         <c-cards.card flush>
-        <c-onboarding.checklist-item complete title="Organisation identity" description="Your default contact profile is saved." />
+        <c-onboarding.checklist-item complete title="Organization identity" description="Your default contact profile is saved." />
         <c-onboarding.checklist-item active title="Security contact" description="Where researchers can report vulnerabilities." />
         </c-cards.card>
     </div>
@@ -1861,18 +1917,18 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.card>
     <p class="text-sm text-text-muted mb-4">
         <code class="tw-code-inline">c-branded.*</code> is a second, smaller library for pages we render on
-        behalf of a workspace, for their customers to read: the trust centre first, and anything else
+        behalf of a workspace, for their customers to read: the trust center first, and anything else
         shared outwards later. It is the same cotton conventions as everything above, with one rule added.
-        A workspace picks one colour. It reaches the page only through
+        A workspace picks one color. It reaches the page only through
         <code class="tw-code-inline">c-branded.theme</code>, which publishes
         <code class="tw-code-inline">--brand</code> and <code class="tw-code-inline">--brand-ink</code>,
-        and nothing else is brandable. Colour goes on what a reader acts on, never on the ground they read
-        against, so no brand colour can produce a page that is hard to read.
+        and nothing else is brandable. Color goes on what a reader acts on, never on the ground they read
+        against, so no brand color can produce a page that is hard to read.
     </p>
     <p class="text-sm text-text-muted mb-4">
         The ink is measured, not chosen: <code class="tw-code-inline">is_dark_color</code> compares the
         brand's WCAG relative luminance against the point where white and black text contrast equally, so
-        each row below picks its own label colour. The pale amber gets dark text and the navy gets white
+        each row below picks its own label color. The pale amber gets dark text and the navy gets white
         without either being told to.
     </p>
     <div class="flex flex-col gap-4">

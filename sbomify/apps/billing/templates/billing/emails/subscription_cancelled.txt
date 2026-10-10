@@ -1,6 +1,6 @@
 Hi {{ user_name }},
 
-Your subscription for workspace "{{ team_name }}" has been cancelled. Your workspace will revert to the community plan with limited features.
+Your subscription for workspace "{{ team_name }}" has been canceled. Your workspace will revert to the community plan with limited features.
 
 Changed your mind? You can reactivate any time: {{ action_url }}
 

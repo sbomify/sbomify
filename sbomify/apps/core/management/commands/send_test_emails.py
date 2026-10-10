@@ -123,7 +123,7 @@ class Command(BaseCommand):
                 },
             },
             {
-                "subject": "Your sbomify subscription has been cancelled",
+                "subject": "Your sbomify subscription has been canceled",
                 "template_html": "billing/emails/subscription_cancelled.html.j2",
                 "template_txt": "billing/emails/subscription_cancelled.txt",
                 "context": {
