@@ -458,6 +458,41 @@ class TestTheSweepHoldsNoLockAcrossStorage:
         assert superseded.result is None
         assert load_result(superseded) == rewrite
 
+    def test_a_missed_write_leaves_no_object_behind(self, sbom, bucket):
+        """Nothing points at a revision the UPDATE did not apply, and the orphan
+        sweep only collects objects of deleted runs, so the sweep removes it."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        upload = bucket.upload_data_as_file
+
+        def rewritten_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            save_result(AssessmentRun.objects.get(pk=superseded.pk), _result(total=1))
+
+        bucket.upload_data_as_file = rewritten_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")]
+
+    def test_a_miss_keeps_the_object_a_concurrent_sweep_moved_the_row_to(self, sbom, bucket):
+        """Same payload, same key: when another sweep has already moved the row
+        to this object, the miss must not delete what the row now reads."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        upload = bucket.upload_data_as_file
+
+        def moved_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=key)
+
+        bucket.upload_data_as_file = moved_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        superseded.refresh_from_db()
+        assert superseded.result_object_key in bucket.objects
+
 
 @pytest.mark.django_db
 class TestAMissingPayloadIsNotAnEmptyOne:

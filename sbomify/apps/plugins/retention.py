@@ -122,7 +122,7 @@ def prune_assessment_runs(
             # read and the row deleted, not only rows already offloaded: an
             # offload writes its key in one UPDATE that waits on the same lock,
             # so one landing mid-batch is either seen here or finds the row gone
-            # and writes nothing, leaving what it stored to the orphan sweep.
+            # and writes nothing, deleting what it stored.
             offloaded = [
                 run_id
                 for run_id, key in AssessmentRun.objects.select_for_update()

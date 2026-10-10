@@ -189,6 +189,11 @@ def save_result(run: Any, result: dict[str, Any]) -> None:
         run.result_object_key = key
 
 
+def delete_result_object(key: str) -> None:
+    """Remove one stored payload, for a revision no row ever pointed at."""
+    _client().delete_object(_bucket(), key)
+
+
 def delete_result_objects(run_id: Any) -> int:
     """Remove every stored payload for a run. Returns how many were deleted.
 
