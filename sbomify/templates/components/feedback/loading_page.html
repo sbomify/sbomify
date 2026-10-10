@@ -17,6 +17,9 @@ a page whose list is introduced rather than starting at the top of the frame.
 rows is the fallback row count and sublines the number of quiet lines under each
 row's title, so a placeholder for rows carrying a description is not half the
 height of the rows that replace it.
+
+The slot follows the counted cards, inside the same status, for a card whose
+shape a row count cannot describe.
 {% endcomment %}
 <c-vars message="Loading page..." sections rows="2" sublines="1" heading class="" />
 <c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-6" class="{{ class }}" :attrs="attrs">
@@ -44,4 +47,5 @@ height of the rows that replace it.
         </c-cards.card>
     {% endfor %}
 {% endif %}
+{{ slot }}
 </c-feedback.loading>

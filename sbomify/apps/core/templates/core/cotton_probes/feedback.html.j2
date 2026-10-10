@@ -61,3 +61,8 @@ Still scanning.
 {# An empty shape is an answer: no cards, rather than the generic two. #}
 <c-feedback.loading-page :sections="empty_sections" data-probe="loading-page-empty" />
 <c-feedback.loading-page :sections="catalogue_sections" data-probe="loading-page-sections" />
+{# A card the rows cannot describe follows the counted ones, inside the same status. #}
+<c-feedback.loading-page :sections="empty_sections" data-probe="loading-page-slot">
+<c-feedback.loading-list rows="1" />
+</c-feedback.loading-page>
+<c-feedback.loading-list rows="4" columns="2" data-probe="loading-list-columns" />

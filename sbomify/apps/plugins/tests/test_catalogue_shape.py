@@ -33,8 +33,6 @@ def test_shape_counts_one_card_per_category_and_one_row_per_plugin() -> None:
     assert shape.value["stat_cards"] == 4
     # One card per category, holding that category's plugins.
     assert shape.value["section_rows"] == [3, 1]
-    # The response always ends with the About assessments card.
-    assert shape.value["card_rows"] == [3, 1, 2]
 
 
 @pytest.mark.django_db
@@ -72,8 +70,6 @@ def test_an_empty_catalogue_asks_for_no_cards() -> None:
 
     assert shape.value["section_rows"] == []
     assert shape.value["stat_cards"] == 2
-    # "No plugins available" still arrives above the About assessments card.
-    assert shape.value["card_rows"] == [2]
 
 
 @pytest.mark.django_db
@@ -120,3 +116,25 @@ def test_the_frame_draws_a_card_for_every_card_the_response_brings(
     frame = html.split('id="plugins-page-content"', 1)[1]
 
     assert frame.count("data-surface") == cards
+
+
+@pytest.mark.django_db
+def test_the_about_placeholder_sits_two_to_a_line_from_md_like_the_card(client, sample_team_with_owner_member) -> None:
+    """The About assessments card stacks its four notes on a phone and sets them
+    two to a line from md up, so its placeholder draws the same four on the same grid."""
+    from django.urls import reverse
+
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+    RegisteredPlugin.objects.all().delete()
+    _plugin("ntia", "compliance")
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+
+    html = client.get(reverse("plugins:plugins_page")).content.decode()
+    frame = html.split('id="plugins-page-content"', 1)[1]
+    about = frame.rsplit("data-surface", 1)[1]
+
+    assert "md:grid-cols-2" in about
+    # The avatar skeleton's own classes: the page's modals also round things.
+    assert about.count("shrink-0 rounded-full") == 4

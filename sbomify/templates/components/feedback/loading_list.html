@@ -14,10 +14,14 @@ rows and sublines count a caller's real content, so neither is bounded by a
 literal to slice: a catalogue with more rows than the string was long used to
 get a placeholder shorter than the list replacing it, which is the jump this
 component prevents.
+
+columns="2" sets the rows two to a line from md up and stacks them below it,
+for content laid out on that grid, so the placeholder has the content's height
+at every width.
 {% endcomment %}
 {% load utils %}
-<c-vars message="Loading items..." rows="3" sublines="1" class="" />
-<c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-5 px-4 py-4" class="{{ class }}" :attrs="attrs">
+<c-vars message="Loading items..." rows="3" sublines="1" columns="1" class="" />
+<c-feedback.loading message="{{ message }}" variant_class="{% if columns == '2' %}grid min-w-0 gap-5 px-4 py-4 md:grid-cols-2{% else %}flex min-w-0 flex-col gap-5 px-4 py-4{% endif %}" class="{{ class }}" :attrs="attrs">
 {% for row in rows|repeat %}
     <div class="flex min-w-0 items-start gap-3">
         <c-feedback.skeleton type="avatar" width="2rem" height="2rem" />

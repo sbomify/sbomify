@@ -330,6 +330,20 @@ def test_an_empty_shape_draws_no_cards_and_an_absent_one_falls_back(rendered_wit
     assert _section(rendered_with_catalogue, "loading-page").count("rounded-full") == 4
 
 
+def test_a_card_the_rows_cannot_describe_follows_the_counted_ones(rendered_with_catalogue: str) -> None:
+    # No counted cards, then the caller's own, under the page's one status.
+    slot = _section(rendered_with_catalogue, "loading-page-slot")
+    assert slot.count("rounded-full") == 1
+
+
+def test_a_list_can_sit_two_to_a_line_from_md(rendered: str) -> None:
+    # One display segment each way: the grid stacks on a phone, the default never grids.
+    columns = _section(rendered, "loading-list-columns")
+    assert columns.count("rounded-full") == 4
+    assert 'class="grid min-w-0 gap-5 px-4 py-4 md:grid-cols-2"' in columns
+    assert "md:grid-cols-2" not in _section(rendered, "loading-list")
+
+
 def test_loading_forwards_state_to_the_root(rendered: str) -> None:
     tag = _probe(rendered, "loading-list")
     assert 'hx-swap-oob="true"' in tag
