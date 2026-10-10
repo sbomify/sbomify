@@ -208,3 +208,20 @@ def test_the_report_offers_vex_upload_only_to_a_role_that_can_upload(items) -> N
     assert 'id="triage-modal"' in operator.content.decode()
     assert "Upload VEX" not in operator.content.decode()
     assert "Upload VEX" in member.content.decode()
+
+
+@pytest.mark.parametrize(("role", "offered"), [("operator", False), ("member", False), ("admin", True)])
+def test_the_artifact_page_offers_sbom_deletion_only_to_a_role_that_can_delete(role, offered, items) -> None:
+    """``sbom:delete`` is the DELETE tier, so the button follows the roles the API lets delete."""
+    client = _client(items["team"], role)
+    url = reverse(
+        "core:component_item",
+        kwargs={"component_id": items["component_id"], "item_type": "sboms", "item_id": items["sbom_id"]},
+    )
+
+    page = client.get(url)
+
+    assert page.status_code == 200
+    assert ("Delete SBOM" in page.content.decode()) is offered
+    if not offered:
+        assert client.delete(reverse("api-1:delete_sbom", kwargs={"sbom_id": items["sbom_id"]})).status_code == 403
