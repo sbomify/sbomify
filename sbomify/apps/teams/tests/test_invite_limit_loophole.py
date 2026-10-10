@@ -75,6 +75,7 @@ def test_a_scheduled_downgrade_caps_seats_at_the_plan_it_drops_to(django_user_mo
     can_add, msg = can_add_user_to_team(team)
     assert can_add is False
     assert "scheduled downgrade to Community" in msg
+    assert "the plan limit of 1 member." in msg
 
     # Reactivated in Stripe before the webhook landed: the paid plan decides again.
     still_cancelling.return_value = False

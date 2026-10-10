@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits
@@ -454,7 +455,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
                 return (
                     False,
                     f"You cannot add this member because your scheduled downgrade to {scheduled.name} would "
-                    f"exceed the plan limit of {scheduled.max_users} members. "
+                    f"exceed the plan limit of {scheduled.max_users} member{pluralize(scheduled.max_users)}. "
                     "Please reduce your usage or continue with your current plan.",
                 )
 
