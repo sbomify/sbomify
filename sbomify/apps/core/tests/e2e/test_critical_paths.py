@@ -165,7 +165,7 @@ class TestCriticalPaths:
         )
 
         # Verify token appears in list on a fresh fetch
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content
