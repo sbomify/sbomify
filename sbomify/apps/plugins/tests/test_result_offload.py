@@ -184,6 +184,22 @@ class TestWhatIsSafeToDemote:
         assert demotable_run_ids() == [older.id]
         assert completed.id not in demotable_run_ids()
 
+    def test_a_newer_skipped_run_does_not_unseat_the_last_real_scan(self, sbom, bucket):
+        """The lifecycle check reads each peer's newest completed run that was
+        not skipped, straight from the column. A newer skip must leave that
+        payload inline, or the peer's findings would read as gone."""
+        from sbomify.apps.plugins.lifecycle import _still_reported_by_peers
+
+        real = _run(sbom, "dependency-track", days_ago=800)
+        older = _run(sbom, "dependency-track", days_ago=900)
+        _run(sbom, "dependency-track", days_ago=1, result={**_result(0), "metadata": {"skipped": True}})
+
+        assert demotable_run_ids() == [older.id]
+        offload_assessment_results()
+        assert "CVE-2026-0" in _still_reported_by_peers(str(sbom.component_id), "osv")
+        real.refresh_from_db()
+        assert real.result_object_key == ""
+
     def test_a_run_with_no_payload_is_not_a_candidate(self, sbom):
         _run(sbom, days_ago=400)
         pending = AssessmentRun.objects.create(
