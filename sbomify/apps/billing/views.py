@@ -227,6 +227,16 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                 flow_type = None
             flow_data: dict[str, Any] | None = None
 
+            # The plan page links an active subscription straight here, so the one
+            # move whose target is known, cancelling to Community, is checked here.
+            if flow_type == "subscription_cancel":
+                from .services.plan_selection import check_downgrade
+
+                community = BillingPlan.objects.filter(key=BillingPlan.KEY_COMMUNITY).first()
+                if community and not (downgrade := check_downgrade(team, community)).ok:
+                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                    return redirect("billing:select_plan", team_key=team.key)
+
             if sub_id and sub_status in ["active", "trialing"]:
                 if flow_type == "subscription_update" and not cancel_at_period_end:
                     flow_data = {
