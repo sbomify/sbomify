@@ -19,7 +19,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.forms import CreateAccessTokenForm
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -29,7 +29,7 @@ from sbomify.apps.teams.services.settings_page import tokens_context
 
 
 @method_decorator(never_cache, name="dispatch")
-class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
     # READ_INTERNAL, the same tier as the tab registry: tokens are personal, and

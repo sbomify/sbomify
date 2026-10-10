@@ -10,9 +10,17 @@ page reached tens of megabytes and a gateway timeout. Nobody reads a closed acco
 nothing here is built until one is opened.
 
 Swapped in whole, pager included, so a page link replaces the same region the first load
-filled.{% endcomment %}
+filled.
+
+The refresh trigger is on this response rather than on the placeholder it replaces, so an
+unopened card stays unfetched: the whole point of the lazy load. Once a reader has opened
+one, a triage saved from these rows has to show up in them, and the artifact region around
+this cannot do it — the host is hx-preserve'd precisely so a refresh does not put the
+placeholder back over a table the reader has filtered.{% endcomment %}
 <div id="findings-{{ run.id }}"
      class="run-findings"
+     hx-get="{{ findings_url }}?{{ findings_refresh_query }}"
+     hx-trigger="refresh-assessments from:body"
      hx-target="this"
      hx-swap="outerHTML">
     {% comment %}The toolbar narrows the list this card shows. Its parameters are

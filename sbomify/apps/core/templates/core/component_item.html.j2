@@ -49,7 +49,7 @@
         what the reader has opened. hx-disinherit keeps the select and the swap
         off descendants that do their own requests.
     {% endcomment %}
-    <c-layout.frame id="artifact-content" x-data hx-ext="ignore:alpine-morph, morph-preserve" hx-get="{% url 'core:component_item' component_id=component_id item_type=item_type item_id=item.id %}" hx-trigger="refresh-assessments from:body" hx-select="#artifact-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if (($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ item.id }}') || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}')) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+    <c-layout.frame id="artifact-content" x-data="{ refreshTimer: null }" hx-ext="ignore:alpine-morph, morph-preserve" hx-get="{% url 'core:component_item' component_id=component_id item_type=item_type item_id=item.id %}" hx-trigger="refresh-assessments from:body" hx-select="#artifact-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if (($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ item.id }}') || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}')) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     {# Stats Badges #}
     <div class="flex flex-wrap gap-2">
         {% if is_sbom_backed %}

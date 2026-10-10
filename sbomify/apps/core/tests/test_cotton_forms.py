@@ -391,7 +391,7 @@ def test_file_upload_active_swaps_the_whole_recipe_rather_than_adding_to_it(rend
     assert set("group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl".split()) <= set(
         panel.split('class="', 1)[1].split('"', 1)[0].split()
     )
-    # Nothing static may fight the binding: border style, border colour and fill
+    # Nothing static may fight the binding: border style, border color and fill
     # come from whichever branch is live, never from two utilities at once.
     for utility in ("border-dashed", "border-solid", "border-border", "border-primary", "bg-background"):
         assert utility not in classes
@@ -499,20 +499,20 @@ def test_textarea_carries_the_runtime_state_recipes(rendered: str) -> None:
 # ── Colour field ────────────────────────────────────────────────────────────
 
 
-def _colour(rendered: str) -> str:
-    """The whole colour field, from its label through to the hidden input."""
-    start = rendered.index('for="probe-colour"')
-    return rendered[start : rendered.index("probe-colour-bare", start)]
+def _color(rendered: str) -> str:
+    """The whole color field, from its label through to the hidden input."""
+    start = rendered.index('for="probe-color"')
+    return rendered[start : rendered.index("probe-color-bare", start)]
 
 
-def test_colour_field_wears_the_field_label_and_hint(rendered: str) -> None:
-    """A colour reads as one of the form's fields, not a block beside them."""
-    field = _colour(rendered)
+def test_color_field_wears_the_field_label_and_hint(rendered: str) -> None:
+    """A color reads as one of the form's fields, not a block beside them."""
+    field = _color(rendered)
     assert "Primary brand color" in field
     assert "Headers, navigation, primary elements" in field
 
 
-def test_colour_field_draws_one_border_around_both_halves(rendered: str) -> None:
+def test_color_field_draws_one_border_around_both_halves(rendered: str) -> None:
     """The swatch and the hex are one control, so the wrapper owns the ring."""
     wrapper = _open_tag(rendered, "div", "focus-within:border-primary")
     assert "border-[1.5px] border-solid border-border" in wrapper
@@ -521,13 +521,13 @@ def test_colour_field_draws_one_border_around_both_halves(rendered: str) -> None
         in wrapper
     )
     # Neither input paints a border of its own.
-    assert "border" not in _classes(rendered, "input", 'id="probe-colour"')
+    assert "border" not in _classes(rendered, "input", 'id="probe-color"')
 
 
-def test_colour_field_binds_both_halves_to_one_value(rendered: str) -> None:
+def test_color_field_binds_both_halves_to_one_value(rendered: str) -> None:
     """Typing a hex drives the swatch and picking drives the hex."""
-    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
-    hexed = _open_tag(rendered, "input", 'id="probe-colour"')
+    swatch = _open_tag(rendered, "input", 'id="probe-color-swatch"')
+    hexed = _open_tag(rendered, "input", 'id="probe-color"')
     for half in (swatch, hexed):
         assert ':value="branding.primary"' in half
         assert '@input="branding.primary = $event.target.value"' in half
@@ -535,13 +535,13 @@ def test_colour_field_binds_both_halves_to_one_value(rendered: str) -> None:
     assert 'type="text"' in hexed
 
 
-def test_colour_field_names_the_picker_for_a_screen_reader(rendered: str) -> None:
-    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
-    assert 'aria-label="Primary brand color, colour picker"' in swatch
+def test_color_field_names_the_picker_for_a_screen_reader(rendered: str) -> None:
+    swatch = _open_tag(rendered, "input", 'id="probe-color-swatch"')
+    assert 'aria-label="Primary brand color, color picker"' in swatch
 
 
-def test_colour_field_posts_through_a_hidden_input_only_when_named(rendered: str) -> None:
+def test_color_field_posts_through_a_hidden_input_only_when_named(rendered: str) -> None:
     """The visible halves are display; a form gets one value, once."""
-    field = _colour(rendered)
-    assert '<input type="hidden" name="probe-colour" :value="branding.primary">' in field
-    assert 'type="hidden"' not in rendered[rendered.index("probe-colour-bare") :]
+    field = _color(rendered)
+    assert '<input type="hidden" name="probe-color" :value="branding.primary">' in field
+    assert 'type="hidden"' not in rendered[rendered.index("probe-color-bare") :]

@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
     _get_team_and_membership_role,
     _get_team_owner_email,
@@ -72,7 +72,7 @@ def _format_formset_errors(formset: Any) -> str:
     return " ".join(messages) if messages else "Validation failed"
 
 
-class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class ContactProfileView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
@@ -131,7 +131,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return htmx_success_response(f"'{profile.name}' set as default profile", triggers={"refreshProfileList": True})
 
 
-class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str, profile_id: str | None = None) -> HttpResponse:

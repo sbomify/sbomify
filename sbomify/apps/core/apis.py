@@ -5183,7 +5183,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     - Personal access tokens revoked
     - Pending invitations removed
     - Workspaces where you are the sole member will be deleted
-    - Stripe subscriptions for deleted workspaces will be cancelled
+    - Stripe subscriptions for deleted workspaces will be canceled
 
     **After 14 days:**
     - Account permanently deleted

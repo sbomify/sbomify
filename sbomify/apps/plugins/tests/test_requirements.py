@@ -106,8 +106,8 @@ def test_the_worst_outcome_wins_within_one_standard(sample_sbom):
             sample_sbom,
             "bsi-tr03183-v2.1-compliance",
             [
-                _finding("distribution_licences", "Distribution Licences", "pass"),
-                _finding("original_licences", "Original Licences", "fail"),
+                _finding("distribution_licences", "Distribution Licenses", "pass"),
+                _finding("original_licences", "Original Licenses", "fail"),
             ],
         )
     ]

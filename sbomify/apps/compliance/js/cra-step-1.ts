@@ -24,7 +24,7 @@ interface ManufacturerInfo {
 const PROCEDURE_INFO: Record<string, { label: string; note: string }> = {
   module_a: {
     label: 'Module A — Internal production control (self-assessment)',
-    note: 'CRA Art 32(1). For Class I: only if harmonised standard applied (Art 32(2)).',
+    note: 'CRA Art 32(1). For Class I: only if harmonized standard applied (Art 32(2)).',
   },
   module_b_c: {
     label: 'Module B+C — EU-type examination (notified body)',
@@ -180,7 +180,7 @@ export function craStep1() {
       if (!this.supportPeriodEnd) fields.push({ target: 'support-period-end', message: 'Set the support end date.' });
       if (!this.conformityAssessmentProcedure) fields.push({ target: 'conformity-procedure', message: 'Choose a conformity assessment procedure.' });
       if (this.supportPeriodShort && !this.supportPeriodShortJustification.trim()) fields.push({ target: 'support-short-justification', message: 'Explain the support period below five years.' });
-      if (this.category === 'class_i' && this.conformityAssessmentProcedure === 'module_a' && !this.harmonisedStandardApplied) fields.push({ target: 'harmonised-standard', message: 'Confirm the harmonised standard, or choose another procedure.' });
+      if (this.category === 'class_i' && this.conformityAssessmentProcedure === 'module_a' && !this.harmonisedStandardApplied) fields.push({ target: 'harmonised-standard', message: 'Confirm the harmonized standard, or choose another procedure.' });
       if (this.euEstablished === 'no') {
         if (!this.authorizedRepName.trim()) fields.push({ target: 'ar-name', message: 'Enter the representative’s name.' });
         if (!this.authorizedRepAddress.trim()) fields.push({ target: 'ar-address', message: 'Enter the representative’s address.' });

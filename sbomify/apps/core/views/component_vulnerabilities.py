@@ -28,7 +28,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
@@ -119,7 +119,7 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
         )
 
 
-class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Load the selected occurrence's current decision only when triage is opened."""
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:

@@ -275,7 +275,7 @@ def _run_to_schema(
         if not all((err.get("loc") or (None,))[0] == "result" for err in e.errors()):
             raise
         logger.warning(
-            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serialising without it",
+            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serializing without it",
             run.id,
             run.plugin_name,
         )
@@ -395,7 +395,7 @@ def get_sbom_assessments(
     is a 504 at the gateway before the page is ever written.
 
     ``include_history`` drops ``all_runs``. Every finding was otherwise stamped,
-    validated and serialised twice, once for the latest run per plugin and again
+    validated and serialized twice, once for the latest run per plugin and again
     for the same run inside the history, and the artifact page reads only the
     former.
 
@@ -829,7 +829,7 @@ def update_team_plugin_settings(
 
 
 class AssessmentRerunResponse(BaseModel):
-    """Acknowledgement that a re-run was accepted onto the queue."""
+    """Acknowledgment that a re-run was accepted onto the queue."""
 
     sbom_id: str
     plugin_name: str
