@@ -384,8 +384,18 @@ def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
         .prefetch_related("releases")
     }
     runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, get_result
+
     for run in runs:
         envelope = getattr(run, "envelope", None)
+        if envelope is None and run.result_object_key:
+            # A moved run's column is empty, so its envelope is the stored
+            # payload's. Cut here like the inline ones: left as None, the
+            # serializer would load the payload again, findings and all.
+            try:
+                envelope = get_result(run.result_object_key)
+            except ResultObjectMissing:
+                envelope = None
         run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
     return runs
 

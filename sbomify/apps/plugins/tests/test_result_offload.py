@@ -558,7 +558,9 @@ class TestTheApiDegradesRatherThanFailing:
         assert by_id[str(superseded.id)].result is None
         assert by_id[str(current.id)].result is not None
 
-    def test_an_offloaded_payload_is_served_from_storage(self, sbom, bucket, rf, monkeypatch):
+    def test_an_offloaded_history_row_is_served_from_storage_without_findings(self, sbom, bucket, rf, monkeypatch):
+        """A history row is the result minus its findings, inline or moved: the
+        stored payload supplies the envelope, never the findings array."""
         from sbomify.apps.plugins.apis import get_sbom_assessments
 
         _run(sbom, days_ago=400)
@@ -572,7 +574,8 @@ class TestTheApiDegradesRatherThanFailing:
 
         served = {run.id: run for run in response.all_runs}[str(superseded.id)]
         assert served.result is not None
-        assert len(served.result.findings) == 2
+        assert served.result.summary.total_findings == 2
+        assert served.result.findings == []
 
 
 @pytest.mark.django_db
