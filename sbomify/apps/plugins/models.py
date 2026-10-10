@@ -427,8 +427,10 @@ class AssessmentRun(models.Model):
     # Empty string means the result is inline in ``result``, which is the state
     # of every run as it is written. Exactly one of the two holds the payload:
     # the sweep sets this key and nulls ``result`` in a single UPDATE, so no row
-    # can be seen with neither. A run that never produced a result (pending,
-    # failed) has both empty, which is why the pair is not a constraint.
+    # can be seen with neither. A run that never produced a result, one still
+    # pending or one that failed before writing any, has both empty, which is
+    # why the pair is not a constraint. A failed run that carries a synthesised
+    # result holds it like any other run.
     #
     # Keyed by content hash under the run's own prefix, so a re-annotated result
     # is a new object rather than an overwrite and the old bytes stay verifiable
