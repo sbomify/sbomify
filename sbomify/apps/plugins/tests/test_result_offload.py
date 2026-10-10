@@ -355,6 +355,21 @@ class TestTheMove:
         assert superseded.result is None
         assert superseded.result_summary == {"total_findings": 7, "by_severity": {"high": 7}}
 
+    @pytest.mark.parametrize("update_fields", [None, ["result"], ["status"]])
+    def test_saving_a_moved_run_keeps_its_summary_columns(self, sbom, bucket, update_fields):
+        """Once the payload has moved, the columns are the only copy of the counts,
+        so a save must not recompute them from the empty payload column."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result={**_result(total=7), "metadata": {"skipped": False}})
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        superseded.save(update_fields=update_fields)
+        superseded.refresh_from_db()
+
+        assert superseded.result_summary == {"total_findings": 7, "by_severity": {"high": 7}}
+        assert superseded.result_skipped is False
+
     def test_a_legacy_row_with_no_summary_gains_one(self, sbom, bucket):
         """A row written before the summary columns existed has them NULL.
         Nulling its payload without filling them first would lose its counts for

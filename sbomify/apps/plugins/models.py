@@ -468,11 +468,17 @@ class AssessmentRun(models.Model):
         rewrite can't leave them stale. Saves that don't write ``result``
         (e.g. status-only updates, deferred-field instances) leave the
         columns untouched — recomputing there would be wasted work and, on
-        a deferred instance, would silently refetch the multi-MB blob.
+        a deferred instance, would silently refetch the multi-MB blob. Nor
+        does a run whose payload has moved to storage: its columns are the
+        only copy of the counts, and the empty payload column would erase them.
         """
         update_fields = kwargs.get("update_fields")
         writes_result = update_fields is None or "result" in update_fields
-        if writes_result and "result" not in self.get_deferred_fields():
+        if (
+            writes_result
+            and "result" not in self.get_deferred_fields()
+            and not (self.result is None and self.result_object_key)
+        ):
             self._populate_result_columns()
             if update_fields is not None:
                 kwargs["update_fields"] = list(set(update_fields) | {"result_summary", "result_skipped"})
