@@ -365,7 +365,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
-            return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
+            return self._handle_scheduled_downgrade(team, team_key, plan, scheduled_downgrade_plan, request)
 
         if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
             result = self._handle_subscription_cancel(team, team_key, plan, request)
@@ -390,9 +390,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         return redirect("billing:select_plan", team_key=team_key)
 
     def _handle_scheduled_downgrade(
-        self, team: Team, team_key: str, scheduled_downgrade_plan: Any, request: HttpRequest
+        self, team: Team, team_key: str, plan: BillingPlan, scheduled_downgrade_plan: Any, request: HttpRequest
     ) -> HttpResponse:
         """Handle case where subscription already has cancel_at_period_end set."""
+        from .services.plan_selection import check_downgrade
+
         if scheduled_downgrade_plan:
             messages.info(
                 request,
@@ -402,6 +404,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         else:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
+                # Checked again under the workspace lock, as the immediate move does.
+                downgrade = check_downgrade(team, plan)
+                if not downgrade.ok:
+                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                    return redirect("billing:select_plan", team_key=team_key)
                 billing_limits = team.billing_plan_limits or {}
                 billing_limits["scheduled_downgrade_plan"] = "community"
                 team.billing_plan_limits = billing_limits
