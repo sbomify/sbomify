@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES, features_lost_moving_to
+from sbomify.apps.billing.stripe_client import LIVE_SUBSCRIPTION_STATUSES
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
@@ -54,7 +55,7 @@ def _guarded(workspace: Team, plan_key: str) -> bool:
     the request both ask this, so the server refuses exactly what the cards do.
     """
     current = workspace.billing_plan or BillingPlan.KEY_COMMUNITY
-    subscribed = (workspace.billing_plan_limits or {}).get("subscription_status") in ("active", "trialing")
+    subscribed = (workspace.billing_plan_limits or {}).get("subscription_status") in LIVE_SUBSCRIPTION_STATUSES
     return subscribed and _ORDER.get(plan_key, 99) < _ORDER.get(current, 99)
 
 

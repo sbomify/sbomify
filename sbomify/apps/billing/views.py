@@ -424,9 +424,9 @@ class SelectPlanView(LoginRequiredMixin, View):
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 # Checked again under the workspace lock that product, component
                 # and seat creation also take. Like the first check, it only applies
-                # to a status still active or trialing, which here means one with no
-                # subscription id. A cancelled or absent subscription is never
-                # blocked, so it moves to Community whatever its usage.
+                # to a live status, which here means one with no subscription id. A
+                # cancelled or absent subscription is never blocked, so it moves to
+                # Community whatever its usage.
                 downgrade = check_downgrade(team, plan)
                 if not downgrade.ok:
                     messages.error(request, downgrade.error or "Reduce usage to choose this plan.")

@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES, effective_features, features_lost_moving_to
-from sbomify.apps.billing.services.plan_selection import build_plan_selection_context
+from sbomify.apps.billing.services.plan_selection import build_plan_selection_context, check_downgrade
 from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     business_plan,
     community_plan,
@@ -115,6 +115,24 @@ def test_the_cheaper_plan_is_marked_as_a_downgrade(subscribed_workspace) -> None
     assert by_key["community"]["downgrade"] is True
     assert by_key["business"]["downgrade"] is False
     assert by_key["business"]["current"] is True
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("status", ["past_due", "incomplete"])
+def test_a_live_subscription_behind_on_payment_is_still_guarded(subscribed_workspace, status) -> None:
+    """Stripe still counts these as the subscription the workspace pays through."""
+    subscribed_workspace.billing_plan_limits = {
+        **subscribed_workspace.billing_plan_limits,
+        "subscription_status": status,
+    }
+    subscribed_workspace.save()
+    _add_members(subscribed_workspace, 3)
+    community = BillingPlan.objects.get(key="community")
+
+    context = build_plan_selection_context(_request(), subscribed_workspace, {}).value
+
+    assert _community(context)["exceeds"] is True
+    assert check_downgrade(subscribed_workspace, community).status_code == 409
 
 
 @pytest.mark.django_db
