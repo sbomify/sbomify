@@ -36,7 +36,7 @@ def _owner_client(sbom: SBOM) -> Client:
 @pytest.mark.django_db
 def test_card_renders_for_cbom_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = _owner_client(sample_sbom).get(_card_url(sample_sbom.id))
+    response = _owner_client(sample_sbom).get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -51,7 +51,7 @@ def test_card_renders_for_cbom_sbom(sample_sbom: SBOM, mocker: MockerFixture):  
 @pytest.mark.django_db
 def test_card_is_a_partial_not_a_full_page(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id)).content.decode()
+    html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true").content.decode()
     assert "<html" not in html.lower()
     assert "<!doctype" not in html.lower()
 
@@ -59,7 +59,7 @@ def test_card_is_a_partial_not_a_full_page(sample_sbom: SBOM, mocker: MockerFixt
 @pytest.mark.django_db
 def test_card_empty_for_non_crypto_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, json.dumps({"specVersion": "1.6", "components": [{"type": "library", "name": "x"}]}).encode())
-    response = _owner_client(sample_sbom).get(_card_url(sample_sbom.id))
+    response = _owner_client(sample_sbom).get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert response.content.decode().strip() == ""  # nothing to show -> placeholder collapses
 
@@ -67,7 +67,7 @@ def test_card_empty_for_non_crypto_sbom(sample_sbom: SBOM, mocker: MockerFixture
 @pytest.mark.django_db
 def test_card_empty_for_unknown_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, b"{}")
-    response = _owner_client(sample_sbom).get(_card_url("doesnotexist1"))
+    response = _owner_client(sample_sbom).get(_card_url("doesnotexist1"), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert response.content.decode().strip() == ""
 
@@ -75,7 +75,7 @@ def test_card_empty_for_unknown_sbom(sample_sbom: SBOM, mocker: MockerFixture): 
 @pytest.mark.django_db
 def test_card_does_not_leak_private_to_anonymous(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client().get(_card_url(sample_sbom.id))  # anon, component is private
+    response = Client().get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true")  # anon, component is private
     assert response.status_code == 200
     assert "RSA-2048" not in response.content.decode()
 
@@ -85,7 +85,7 @@ def test_card_visible_on_public_component_to_anonymous(sample_sbom: SBOM, mocker
     sample_sbom.component.visibility = Component.Visibility.PUBLIC
     sample_sbom.component.save()
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client().get(_card_url(sample_sbom.id))
+    response = Client().get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert "RSA-2048" in response.content.decode()
 
@@ -93,7 +93,7 @@ def test_card_visible_on_public_component_to_anonymous(sample_sbom: SBOM, mocker
 @pytest.mark.django_db
 def test_card_shows_pqc_readiness(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id)).content.decode()
+    html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id), HTTP_HX_REQUEST="true").content.decode()
     assert "At risk" in html  # overall readiness badge (RSA/ECDSA vulnerable)
     assert "Vulnerable" in html  # per-asset status
     assert "Quantum-safe" in html  # ML-KEM

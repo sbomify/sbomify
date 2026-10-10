@@ -10,21 +10,21 @@ beforeEach(() => {
 afterEach(() => { globalThis.requestAnimationFrame = originalRequestAnimationFrame; });
 
 function build() {
-    const organisationField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
+    const organizationField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
     const securityField = { disabled: false, checkValidity: mock(() => true), reportValidity: mock() };
     const refs = {
-        organisation: { querySelectorAll: () => [organisationField] },
+        organization: { querySelectorAll: () => [organizationField] },
         security: { querySelectorAll: () => [securityField] },
         email: { value: 'author@example.com' },
         securityEmail: { value: '' },
-        organisationTitle: { focus: mock(), scrollIntoView: mock() },
+        organizationTitle: { focus: mock(), scrollIntoView: mock() },
         securityTitle: { focus: mock(), scrollIntoView: mock() },
     };
-    const wizard = Object.assign(onboardingWizard({ step: 'organisation', addressExpanded: false }), {
+    const wizard = Object.assign(onboardingWizard({ step: 'organization', addressExpanded: false }), {
         $refs: refs,
         $nextTick: (callback: () => void) => callback(),
     });
-    return { wizard, refs, organisationField, securityField };
+    return { wizard, refs, organizationField, securityField };
 }
 
 function submitEvent() {
@@ -32,13 +32,13 @@ function submitEvent() {
 }
 
 describe('Onboarding flow', () => {
-    test('validates organisation before advancing and supplies the contact suggestion', () => {
-        const { wizard, refs, organisationField } = build();
-        organisationField.checkValidity.mockReturnValue(false);
+    test('validates organization before advancing and supplies the contact suggestion', () => {
+        const { wizard, refs, organizationField } = build();
+        organizationField.checkValidity.mockReturnValue(false);
         wizard.next();
-        expect(wizard.step).toBe('organisation');
-        expect(organisationField.reportValidity).toHaveBeenCalled();
-        organisationField.checkValidity.mockReturnValue(true);
+        expect(wizard.step).toBe('organization');
+        expect(organizationField.reportValidity).toHaveBeenCalled();
+        organizationField.checkValidity.mockReturnValue(true);
         wizard.next();
         expect(wizard.step).toBe('security');
         expect(refs.securityEmail.value).toBe('author@example.com');
@@ -51,14 +51,14 @@ describe('Onboarding flow', () => {
         wizard.next();
         refs.securityEmail.value = 'security@example.com';
         wizard.back();
-        expect(refs.organisationTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
+        expect(refs.organizationTitle.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'instant' });
         refs.email.value = 'new-author@example.com';
         wizard.next();
         expect(refs.securityEmail.value).toBe('security@example.com');
-        expect(refs.organisationTitle.focus).toHaveBeenCalled();
+        expect(refs.organizationTitle.focus).toHaveBeenCalled();
     });
 
-    test('Enter on the organisation step advances without saving', () => {
+    test('Enter on the organization step advances without saving', () => {
         const { wizard } = build();
         const event = submitEvent();
         wizard.submit(event);
@@ -68,14 +68,14 @@ describe('Onboarding flow', () => {
     });
 
     test('returns to the relevant step for an invalid control and blocks duplicate saves', () => {
-        const { wizard, organisationField, securityField } = build();
+        const { wizard, organizationField, securityField } = build();
         wizard.next();
-        organisationField.checkValidity.mockReturnValue(false);
+        organizationField.checkValidity.mockReturnValue(false);
         const invalid = submitEvent();
         wizard.submit(invalid);
         expect(invalid.preventDefault).toHaveBeenCalled();
-        expect(wizard.step).toBe('organisation');
-        organisationField.checkValidity.mockReturnValue(true);
+        expect(wizard.step).toBe('organization');
+        organizationField.checkValidity.mockReturnValue(true);
         wizard.next();
         securityField.checkValidity.mockReturnValue(false);
         wizard.submit(submitEvent());

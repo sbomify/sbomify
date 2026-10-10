@@ -93,7 +93,7 @@ class PluginsConfig(AppConfig):
                     "the seventeen data fields: nine about the document, including its "
                     "author, signature, format, generation context, tool and version, and "
                     "eight about each component, including producer, identifiers, hash "
-                    "value and algorithm, licence and dependencies. Where the standard "
+                    "value and algorithm, license and dependencies. Where the standard "
                     "allows an author to state that a value is unknown, saying so reads as "
                     "a warning rather than a miss."
                 ),
@@ -108,7 +108,7 @@ class PluginsConfig(AppConfig):
                     "Scores SBOMs against the August 2025 public comment draft of the CISA "
                     "Minimum Elements, which the 2026 elements have since replaced. Checks "
                     "the eleven data fields: SBOM author, software producer, component name "
-                    "and version, software identifiers, hash, licence, dependencies, tool "
+                    "and version, software identifiers, hash, license, dependencies, tool "
                     "name, timestamp and generation context. Use this where an agreement "
                     "asks for the 2025 elements by name; otherwise use the 2026 plugin."
                 ),
@@ -146,7 +146,7 @@ class PluginsConfig(AppConfig):
                     "authoritative technical standard for EU Cyber Resilience Act SBOM compliance. "
                     "Requires CycloneDX 1.6+ or SPDX 3.0.1+. Checks for: SBOM Creator, Timestamp, "
                     "Component Creator, Component Name/Version, Filename, Dependencies with Completeness, "
-                    "Distribution Licences (SPDX), SHA-512 Hash, Executable/Archive/Structured Properties. "
+                    "Distribution Licenses (SPDX), SHA-512 Hash, Executable/Archive/Structured Properties. "
                     "For digital signature requirements, use in combination with attestation plugins."
                 ),
                 {

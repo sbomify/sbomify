@@ -273,7 +273,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
             except StripeError as e:
                 error_str = str(e).lower()
                 if "already set to be canceled" in error_str or "already scheduled for cancellation" in error_str:
-                    logger.info("Subscription already cancelled in Stripe for team %s, syncing...", team_key)
+                    logger.info("Subscription already canceled in Stripe for team %s, syncing...", team_key)
                     sync_subscription_from_stripe(team, force_refresh=True)
                     team.refresh_from_db()
                     billing_limits = team.billing_plan_limits or {}

@@ -506,6 +506,7 @@ class TestTriageModal:
         response = _client(member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0030", "package": "pkg-0030", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         assert response.context["triage_payload"]["id"] == "CVE-2026-0030"
@@ -521,6 +522,7 @@ class TestTriageModal:
         response = _client(sample_team_with_owner_member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.headers["HX-Reswap"] == "none"
         assert "triage-modal" not in response.content.decode()
@@ -531,6 +533,7 @@ class TestTriageModal:
         response = _client(member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0000", "package": "missing", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.headers["HX-Reswap"] == "none"
         assert "triage-modal" not in response.content.decode()

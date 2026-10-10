@@ -143,7 +143,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -160,7 +160,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, community_team, sample_user)
 
-        response = client.get(f"/workspaces/{community_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{community_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -176,7 +176,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, team_with_domain, sample_user)
 
-        response = client.get(f"/workspaces/{team_with_domain.key}/custom-domain")
+        response = client.get(f"/workspaces/{team_with_domain.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -202,7 +202,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, team, sample_user)
 
-        response = client.get(f"/workspaces/{team.key}/custom-domain")
+        response = client.get(f"/workspaces/{team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -216,7 +216,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -231,7 +231,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -251,7 +251,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -269,7 +269,7 @@ class TestTeamBrandingViewCustomDomain:
         client = Client()
         setup_authenticated_client_session(client, business_team, sample_user)
 
-        response = client.get(f"/workspaces/{business_team.key}/custom-domain")
+        response = client.get(f"/workspaces/{business_team.key}/custom-domain", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
         content = response.content.decode()

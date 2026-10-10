@@ -726,7 +726,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 cache_key = f"invitation_inviter:{invitation.token}"
                 cache.delete(cache_key)
 
-                messages.success(request, f"Invitation to {email} has been cancelled")
+                messages.success(request, f"Invitation to {email} has been canceled")
 
                 # For HTMX requests, return the updated access request queue
                 if request.headers.get("HX-Request") == "true":

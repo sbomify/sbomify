@@ -32,7 +32,9 @@ def test_controls_permissions_use_live_membership(
     else:
         assert response.status_code in (302, 403)
 
-    response = client.get(reverse("controls:product_controls", args=[workspace.key, product.pk]))
+    response = client.get(
+        reverse("controls:product_controls", args=[workspace.key, product.pk]), HTTP_HX_REQUEST="true"
+    )
     if role == "guest":
         assert response.status_code in (302, 403)
     else:
@@ -54,7 +56,9 @@ def test_product_controls_reject_foreign_workspace(
 ) -> None:
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
     product = Product.objects.create(team=sample_team, name="Other workspace product")
-    response = client.get(reverse("controls:product_controls", args=[team_with_business_plan.key, product.pk]))
+    response = client.get(
+        reverse("controls:product_controls", args=[team_with_business_plan.key, product.pk]), HTTP_HX_REQUEST="true"
+    )
     assert response["HX-Reswap"] == "none"
     assert json.loads(response["HX-Trigger"])["messages"][0]["type"] == "error"
     assert b"Other workspace product" not in response.content

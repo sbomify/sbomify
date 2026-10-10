@@ -99,16 +99,18 @@ def test_inventory_sorting_preserves_columns_and_position(
     expect(table.locator("tbody tr")).to_have_count(7)
     assert geometry(table) == pytest.approx(original, abs=0.1)
 
-    for kind in ("Components", "Releases"):
+    # The order the reader chose follows them across the tabs: products were left
+    # on name descending, and each tab is then left on created_at ascending.
+    for kind, (column, direction) in (("Components", ("name", "desc")), ("Releases", ("created_at", "asc"))):
         page.get_by_role("navigation", name="Product inventory").get_by_role(
             "link", name=re.compile(f"^{kind}")
         ).click()
         table = page.get_by_role("table", name=kind, exact=True)
         expect(table).to_be_visible()
-        expect(table.locator("[data-table-sort]").first).to_have_attribute("data-sort", "asc")
+        expect(table.locator(f'[data-table-sort="{column}"]')).to_have_attribute("data-sort", direction)
         original = geometry(table)
-        for column in ("name", "vulnerabilities", "created_at"):
-            sort_with_keyboard(table, column, original, server=True)
+        for sort_column in ("name", "vulnerabilities", "created_at"):
+            sort_with_keyboard(table, sort_column, original, server=True)
     assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")
     assert not errors
 

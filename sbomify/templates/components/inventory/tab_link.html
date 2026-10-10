@@ -1,0 +1,20 @@
+{% comment %}
+One inventory tab link. It carries the slice the reader is looking at, so the
+tab opens on the same filters, and the words its kind gives the page, so
+selecting it can retitle the page before the panel arrives.
+
+oob re-sends the link with a results swap. HTMX reads a boosted link's target
+when it processes the element rather than when it is clicked, so a link left in
+place would keep requesting the slice the page opened on, and its badge would
+keep counting that scope. The links alone are replaced: the row around them
+stays mounted, with its scroll position and its keyboard focus.
+
+The two branches differ in that one attribute and in nothing else. It cannot be
+a value on one tag, because an empty hx-swap-oob is still an out-of-band swap.
+{% endcomment %}
+<c-vars tab oob />
+{% if oob %}
+    <c-navigation.tab hx-swap-oob="outerHTML" id="inventory-tab-{{ tab.id }}" href="{{ tab.href }}" data-inventory-tab="{{ tab.id }}" data-inventory-heading="{{ tab.heading }}" data-inventory-subtitle="{{ tab.subtitle }}" data-inventory-title="{{ tab.document_title }}" active_binding="selectedKind === '{{ tab.id }}'" :active="tab.is_active" icon="{{ tab.icon }}" badge="{{ tab.badge }}">{{ tab.label }}</c-navigation.tab>
+{% else %}
+    <c-navigation.tab id="inventory-tab-{{ tab.id }}" href="{{ tab.href }}" data-inventory-tab="{{ tab.id }}" data-inventory-heading="{{ tab.heading }}" data-inventory-subtitle="{{ tab.subtitle }}" data-inventory-title="{{ tab.document_title }}" active_binding="selectedKind === '{{ tab.id }}'" :active="tab.is_active" icon="{{ tab.icon }}" badge="{{ tab.badge }}">{{ tab.label }}</c-navigation.tab>
+{% endif %}

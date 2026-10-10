@@ -4,21 +4,32 @@ actions. The parent c-layout.frame owns the gap before navigation or content;
 this header only arranges its children and supplies no external margins.
 
 The default slot holds real action controls. copy_values and the named meta
-slot sit beside the title, for identifiers and statuses. breadcrumbs replaces
-the subtitle on detail pages, and editable_item_type with editable_item_id
-keeps the same title editable without a second header implementation.
+slot sit beside the title, for identifiers and statuses. breadcrumbs is the
+trail to the page, under the title; a page may carry both a trail and a
+subtitle, because where a page sits and what it is are different sentences.
+editable_item_type with editable_item_id keeps the same title editable without
+a second header implementation.
+
+x_heading and x_caption bind the title and the subtitle to Alpine expressions,
+for a page whose heading changes in place: the server still renders the current
+words, so a binding only ever restates what is already on the screen. An
+editable title owns its own markup and ignores x_heading. They are named away
+from the props they bind because a `title` inside another attribute name reads
+as a duplicate attribute to the template linter.
 
 description is optional supporting text. Long descriptions can be expanded
 without truncating the page title. Its state is scoped to the description so
 callers can still bind their own Alpine state to the header.
 {% endcomment %}
-<c-vars title subtitle description copy_values breadcrumbs editable_item_type editable_item_id class />
+<c-vars title subtitle description copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
 <header class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
         data-page-header
         {{ attrs }}>
     <div class="min-w-0 max-w-full">
         <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="min-w-0 max-w-full [overflow-wrap:anywhere] text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
+            {# djlint:off #}
+            <h1 class="min-w-0 max-w-full [overflow-wrap:anywhere] text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0"{% if x_heading and not editable_item_type %} x-text="{{ x_heading }}"{% endif %}>
+            {# djlint:on #}
                 {% if editable_item_type and editable_item_id %}
                     {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
                 {% else %}
@@ -36,8 +47,11 @@ callers can still bind their own Alpine state to the header.
         </div>
         {% if breadcrumbs %}
             <c-navigation.breadcrumbs :items="breadcrumbs" class="text-sm text-text-muted mt-1" />
-        {% elif subtitle %}
-            <p class="text-sm leading-[1.5] text-text-muted [overflow-wrap:anywhere] mt-1">{{ subtitle }}</p>
+        {% endif %}
+        {% if subtitle %}
+            {# djlint:off #}
+            <p class="text-sm leading-[1.5] text-text-muted [overflow-wrap:anywhere] mt-1"{% if x_caption %} x-text="{{ x_caption }}"{% endif %}>{{ subtitle }}</p>
+            {# djlint:on #}
         {% endif %}
         {% if description %}
             <div class="flex flex-col items-start gap-1 mt-2 max-w-3xl"
