@@ -123,7 +123,8 @@ class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, Login
     """Load the selected occurrence's current decision only when triage is opened."""
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        if not viewer_rights(request, component_id).may_triage:
+        rights = viewer_rights(request, component_id)
+        if not rights.may_triage:
             return htmx_error_response("Component not found")
         identity = (
             request.GET.get("advisory", ""),
@@ -141,7 +142,7 @@ class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, Login
             "core/components/priority_triage_modal.html.j2",
             {
                 "component_id": component_id,
-                "team_key": request.session.get("current_workspace", {}).get("key", ""),
+                "team_key": rights.team_key,
                 "triage_payload": {
                     "id": finding["id"],
                     "purl": finding["purl"],

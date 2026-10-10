@@ -52,7 +52,18 @@ def test_chrome_reflects_demotion_without_waiting_for_fragment_cache(
         rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', contributor_page.content
     )
     assert member_suggestions
-    assert "api key" not in {item.get("query") for item in json.loads(member_suggestions[1])}
+    # Every internal role may open the API tokens tab, so a member keeps that example.
+    assert "api key" in {item.get("query") for item in json.loads(member_suggestions[1])}
+
+    member.role = "operator"
+    member.save(update_fields=["role"])
+    operator_page = client.get(reverse("core:dashboard"))
+    assert operator_page.status_code == 200
+    operator_suggestions = re.search(
+        rb'<script id="navbar-search-suggestions" type="application/json">(.*?)</script>', operator_page.content
+    )
+    assert operator_suggestions
+    assert "new release" not in {item.get("query") for item in json.loads(operator_suggestions[1])}
 
     member.role = "guest"
     member.save(update_fields=["role"])
@@ -146,6 +157,40 @@ def test_trends_page_hands_its_filters_to_the_fragment_it_fetches(
     hx_get = re.search(rb'hx-get="([^"]+)"', filtered.content)
     assert hx_get
     assert hx_get[1].decode() == f"{fragment}?show_product_filter=true&amp;release_id=&amp;days=7"
+
+
+def test_sidebar_links_point_at_the_workspace_the_page_is_about(
+    client: Client, sample_user: User, sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """The capability flags describe the URL's workspace, so the links have to go there too.
+
+    Built from the session's workspace, they sent an operator on another
+    workspace's page to links its flags were never checked against.
+    """
+    from sbomify.apps.teams.models import Team
+
+    other = Team.objects.create(name="Other workspace")
+    Member.objects.create(team=other, user=sample_user, role="operator")
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_user)
+    session = client.session
+    session["current_workspace"]["has_completed_wizard"] = True
+    session.save()
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+
+    page = client.get(reverse("vulnerability_scanning:vulnerability_scans", kwargs={"team_key": other.key}))
+
+    assert page.status_code == 200
+    sidebar = re.search(r'<aside id="sidebar".*?</aside>', page.content.decode(), re.S)
+    assert sidebar
+    for url in (
+        reverse("vulnerability_scanning:vulnerability_scans", kwargs={"team_key": other.key}),
+        reverse("sboms:workspace_crypto", kwargs={"team_key": other.key}),
+        reverse("teams:team_settings_tab", kwargs={"team_key": other.key, "tab": "tokens"}),
+        reverse("teams:team_settings", kwargs={"team_key": other.key}),
+    ):
+        assert f'href="{url}"' in sidebar[0], url
+        # The switcher lists the session's workspace as current; only these links must not.
+        assert f'href="{url.replace(other.key, sample_team_with_owner_member.team.key)}"' not in sidebar[0], url
 
 
 def test_the_overview_metric_labels_are_not_second_person(

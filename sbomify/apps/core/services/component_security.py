@@ -214,10 +214,12 @@ def viewer_manages_component(request: Any, component_id: str) -> bool:
     its trust center is not publishing its CVE inventory, its VEX dispositions
     or which of its findings are known-exploited.
 
-    ``component:manage`` is the capability the private component page is for,
-    and the one the standalone scan report already requires (`sbom:manage`
-    resolves to the same workspace tiers), so this puts the panel and the page
-    that links to it on the same footing.
+    ``component:read_internal`` is the capability the private component page
+    is for: seeing the internal picture is a read, and gating it on
+    ``component:manage`` meant the one role that exists to read it -- the
+    ``operator``, whose single write is ``artifact:publish_vex`` -- fell
+    through to the public page. Its ``may_triage`` was then unreachable from
+    any screen.
     """
     return viewer_rights(request, component_id).may_see
 
@@ -232,10 +234,14 @@ class ViewerRights:
     query on every filter change and page turn.
     """
 
-    #: ``component:manage``: may see the internal security picture at all.
+    #: ``component:read_internal``: may see the internal security picture at
+    #: all. A read, deliberately: an operator may look without being able to
+    #: change anything but a VEX decision.
     may_see: bool
     #: ``artifact:publish_vex``: may record a VEX decision on what they see.
     may_triage: bool
+    #: The component's own workspace, which a page may not share with the session.
+    team_key: str = ""
 
 
 def viewer_rights(request: Any, component_id: str) -> ViewerRights:
@@ -243,10 +249,16 @@ def viewer_rights(request: Any, component_id: str) -> ViewerRights:
     from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Component
 
-    component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
+    component = (
+        Component.objects.filter(pk=component_id)
+        .select_related("team")
+        .only("id", "team_id", "visibility", "team__key")
+        .first()
+    )
     if component is None:
         return ViewerRights(may_see=False, may_triage=False)
     return ViewerRights(
-        may_see=bool(can(request, "component:manage", component)),
+        may_see=bool(can(request, "component:read_internal", component)),
         may_triage=bool(can(request, "artifact:publish_vex", component)),
+        team_key=component.team.key or "",
     )

@@ -151,3 +151,13 @@ class TestInvitationsApi:
 
         assert _client(owner).delete(_url(team, theirs.pk)).status_code == 404
         assert Invitation.objects.filter(pk=theirs.pk).exists()
+
+
+def test_the_invitation_schema_names_every_role_an_invite_accepts():
+    """The role field's description is the API's documentation of what it accepts."""
+    from sbomify.apps.teams.schemas import InvitationCreateSchema
+    from sbomify.apps.teams.services.invitations import MEMBER_INVITE_ROLES
+
+    description = InvitationCreateSchema.model_fields["role"].description or ""
+
+    assert [role for role in MEMBER_INVITE_ROLES if role not in description] == []

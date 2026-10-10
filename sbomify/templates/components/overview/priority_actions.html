@@ -2,7 +2,7 @@
 <c-vars finding />
 <c-actions-menu label="Actions for {{ finding.id }}" icon="fas fa-ellipsis">
 <c-dropdowns.item compact href="{% url 'core:component_details' finding.component_id %}" icon="fas fa-arrow-up-right-from-square">Go to component</c-dropdowns.item>
-{% if can_manage %}
+{% if can_triage_vulnerabilities %}
     <c-dropdowns.item compact icon="fas fa-stethoscope" hx-get="{% url 'core:component_triage_modal' finding.component_id %}?advisory={{ finding.id|urlencode }}&amp;package={{ finding.package|urlencode }}&amp;version={{ finding.version|urlencode }}&amp;ecosystem={{ finding.ecosystem|urlencode }}" hx-target="#priority-triage-host" hx-sync="#priority-triage-host:replace" hx-swap="innerHTML">Triage</c-dropdowns.item>
 {% endif %}
 </c-actions-menu>

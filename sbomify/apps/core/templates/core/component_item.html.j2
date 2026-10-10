@@ -259,10 +259,12 @@
                 {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
             </div>
         {% endif %}
-        {# Danger Zone #}
-        <div>
-            {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
-        </div>
+        {% if can_delete_sbom %}
+            {# Danger Zone #}
+            <div>
+                {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
+            </div>
+        {% endif %}
     {% elif item_type == 'documents' %}
         {# Document Info Card #}
         <c-cards.card flush>

@@ -83,6 +83,19 @@ class TestRoleVisibility:
 
         assert "API tokens" not in titles
 
+    def test_every_internal_role_finds_what_its_views_admit(self):
+        """The API tokens tab and the vulnerability pages admit every internal
+        role, so search finds them for each one, the operator included."""
+        from sbomify.apps.core.authz import READ_INTERNAL
+
+        for role in READ_INTERNAL:
+            titles = {
+                r["title"]
+                for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
+                for r in search_destinations(query, role=role, team_key="AAAAAAAA")
+            }
+            assert {"API tokens", "Vulnerability scans", "Vulnerability trends", "Cryptography"} <= titles, role
+
     def test_an_owner_sees_owner_only_destinations(self):
         titles = [r["title"] for r in search_destinations("billing", role="owner", team_key="AAAAAAAA")]
 
@@ -399,10 +412,10 @@ class TestInitialSuggestions:
             results = search_destinations(item.get("query", item["title"]), role="owner", team_key="AAAAAAAA")
             assert any(result["url"] == item["url"] for result in results)
 
-    @pytest.mark.parametrize("role", ["member", "admin", "owner", ""])
+    @pytest.mark.parametrize("role", ["operator", "member", "admin", "owner", ""])
     def test_examples_follow_destination_permissions(self, role: str) -> None:
         queries = {item.get("query") for item in initial_suggestions(role=role, workspace_key="AAAAAAAA")}
-        assert ("api key" in queries) == (role in {"admin", "owner"})
+        assert ("api key" in queries) == (role in {"operator", "member", "admin", "owner"})
         assert ("new release" in queries) == (role in {"member", "admin", "owner"})
         assert "versions" in queries
 

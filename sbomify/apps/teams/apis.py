@@ -80,15 +80,24 @@ class FieldValue(BaseModel):
 
 def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     current_user_id = getattr(getattr(request, "user", None), "id", None)
+    # The settings pages show members and billing to admins and owners only, so
+    # the API does too. Everyone keeps their own row and both counts, which the
+    # workspaces page reads.
+    sees_members = bool(can(request, "member:manage", team))
+    sees_billing = bool(can(request, "billing:manage", team))
 
     members_data = [
         MemberSchema(
             id=member.id,
-            user=UserSchema(
-                id=member.user.id,
-                first_name=member.user.first_name,
-                last_name=member.user.last_name,
-                email=member.user.email,
+            user=(
+                UserSchema(
+                    id=member.user.id,
+                    first_name=member.user.first_name,
+                    last_name=member.user.last_name,
+                    email=member.user.email,
+                )
+                if sees_members or member.user.id == current_user_id
+                else UserSchema(id=member.user.id, first_name="", last_name="", email="")
             ),
             role=member.role,
             # One value, two names, while clients migrate off the old one.
@@ -111,8 +120,8 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     invitations_data = [
         InvitationSchema(
             id=invitation.id,
-            token=str(invitation.token),
-            email=invitation.email,
+            token=str(invitation.token) if sees_members else "",
+            email=invitation.email if sees_members else "",
             role=invitation.granted_role,
             created_at=invitation.created_at,
             expires_at=invitation.expires_at,
@@ -127,7 +136,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
         is_public=team.is_public,
         created_at=team.created_at,
         billing_plan=team.billing_plan,
-        billing_plan_limits=team.billing_plan_limits,
+        billing_plan_limits=team.billing_plan_limits if sees_billing else None,
         has_completed_wizard=team.has_completed_wizard,
         custom_domain=team.custom_domain,
         custom_domain_validated=team.custom_domain_validated,

@@ -462,6 +462,8 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # Same tier the rerun endpoint enforces, so the button is only offered
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
+        # sbom:delete is the DELETE tier, which neither a member nor an operator holds.
+        can_delete_sbom = can(request, "sbom:delete", component)
         can_manage_plugins = can(request, "workspace:administer", component.team)
 
         # The header takes the copy chip and breadcrumb trail as lists.
@@ -500,6 +502,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
+                "can_delete_sbom": can_delete_sbom,
                 "can_manage_plugins": can_manage_plugins,
                 "team_key": component.team.key,
             },

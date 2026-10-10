@@ -536,7 +536,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         return error_response(request, HttpResponseNotFound("Product not found"))
 
     if not product.is_public:
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     # Get format parameters from query string and normalize early
@@ -577,7 +577,7 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal", component):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     metadata = component.metadata or {}
