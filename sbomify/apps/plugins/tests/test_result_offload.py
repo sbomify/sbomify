@@ -29,6 +29,7 @@ from sbomify.apps.plugins.offload import (
     DEFAULT_OFFLOAD_AFTER_DAYS,
     demotable_run_ids,
     offload_assessment_results,
+    offload_run,
 )
 from sbomify.apps.plugins.result_store import (
     RESULT_PREFIX,
@@ -775,9 +776,11 @@ class TestTheRunFindingsCardReadsStorage:
 
 @pytest.mark.django_db
 class TestVexReachesAnOffloadedRun:
-    """A VEX uploaded after a scan is re-applied to the component's completed
-    runs. Read from the column, an offloaded run's payload is not there, so the
-    run would be skipped and keep a disposition the new VEX changed."""
+    """A VEX uploaded after a scan is re-applied to the component's current
+    runs. One can be moved between being picked and being written, when a newer
+    scan completes in between. Read from the column, its payload is not there,
+    so the run would be skipped and keep a disposition the new VEX changed.
+    These tests move the picked run directly to stand in for that sweep."""
 
     def test_the_rewrite_lands_as_a_new_revision(self, sbom, bucket, monkeypatch):
         from sbomify.apps.vulnerability_scanning import vex
@@ -787,10 +790,9 @@ class TestVexReachesAnOffloadedRun:
         payload = _result()
         for finding in payload["findings"]:
             finding["component"]["ecosystem"] = "pypi"
-        _run(sbom, days_ago=400)
         superseded = _run(sbom, days_ago=800, result=payload)
         sync_findings(superseded, [])
-        assert offload_assessment_results() == 1
+        assert offload_run(superseded)
         superseded.refresh_from_db()
         first_key = superseded.result_object_key
 
@@ -818,9 +820,9 @@ class TestVexReachesAnOffloadedRun:
     def test_an_unreadable_payload_does_not_stop_the_rest(self, sbom, bucket, monkeypatch):
         from sbomify.apps.vulnerability_scanning import vex
 
-        _run(sbom, days_ago=400)
+        _run(sbom, "dependency-track", days_ago=400)
         superseded = _run(sbom, days_ago=800)
-        assert offload_assessment_results() == 1
+        assert offload_run(superseded)
         bucket.objects.clear()
         monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [])
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
@@ -862,7 +864,6 @@ class TestVexReachesAnOffloadedRun:
         payload = _result()
         for finding in payload["findings"]:
             finding["component"]["ecosystem"] = "pypi"
-        _run(sbom, days_ago=400)
         superseded = _run(sbom, days_ago=800, result=payload)
         old_bytes = serialise_result(superseded.result)
         old_key = object_key_for(superseded.id, old_bytes)
