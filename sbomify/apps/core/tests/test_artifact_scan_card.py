@@ -50,7 +50,7 @@ def _skipped(total_findings: int) -> dict[str, Any]:
         "findings": [
             {
                 "id": "osv:no-packages",
-                "title": "No Packages Recognised",
+                "title": "No Packages Recognized",
                 "status": "warning",
                 "severity": "info",
             }
@@ -439,14 +439,14 @@ class TestTheFindingsListArrivesWhenAsked:
         client, component = signed_in
         run = self._run_with(component, 1)
         run.result["findings"].append(
-            {"id": "osv:no-packages", "title": "No Packages Recognised", "status": "warning", "severity": "info"}
+            {"id": "osv:no-packages", "title": "No Packages Recognized", "status": "warning", "severity": "info"}
         )
         AssessmentRun.objects.filter(pk=run.pk).update(result=run.result)
 
         html = self._open(client, run).content.decode()
 
         assert "CVE-2026-00000" in html
-        assert "No Packages Recognised" not in html
+        assert "No Packages Recognized" not in html
 
     def test_a_reader_without_the_component_gets_nothing(self, signed_in, guest_user) -> None:
         _, component = signed_in

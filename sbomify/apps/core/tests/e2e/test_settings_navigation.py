@@ -79,6 +79,7 @@ def test_settings_controls_and_navigation(
         "Account",
         "General",
     ):
+        page.evaluate("window.scrollTo({ top: 0, behavior: 'instant' })")
         page.locator("#main-content").evaluate("el => el.scrollTop = 0")
         navigation.get_by_role("link", name=label, exact=True).click()
         expect(page.get_by_role("region", name=f"{label} settings", exact=True)).to_be_visible()

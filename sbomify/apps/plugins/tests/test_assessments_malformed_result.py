@@ -12,6 +12,7 @@ import pytest
 from django.test import RequestFactory
 
 from sbomify.apps.core.models import Component
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 from sbomify.apps.plugins.apis import get_sbom_assessments
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
@@ -66,6 +67,7 @@ def test_malformed_result_degrades_that_run_only(sample_team_with_owner_member):
         component=component,
     )
     _make_run(sbom, "osv", VALID_RESULT)
+    register_plugin("legacy-plugin")
     _make_run(sbom, "legacy-plugin", MALFORMED_RESULT)
 
     request = RequestFactory().get(f"/api/v1/plugins/assessments/{sbom.id}")

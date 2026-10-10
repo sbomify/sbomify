@@ -173,6 +173,8 @@ def test_recommended_targets_restore_defaults_and_invalidate_dashboard(
     workspace.patch_sla_days = {"critical": 1, "high": None, "medium": None, "low": None}
     workspace.save(update_fields=["patch_sla_days"])
     setup_authenticated_client_session(client, workspace, membership.user)
+    # The key comes from the dashboard service, not a literal: this assertion
+    # passed for two versions while production deleted a key nothing read.
     cache_key = dashboard_cache_key(workspace.pk)
     cache.set(cache_key, {"stale": True})
     with django_capture_on_commit_callbacks(execute=True):

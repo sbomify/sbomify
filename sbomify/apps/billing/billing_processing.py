@@ -65,7 +65,7 @@ def cancel_replaced_subscription(subscription_id: str) -> None:
     if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
         return
     stripe_client.cancel_subscription(subscription_id)
-    logger.info("Cancelled the subscription a checkout replaced")
+    logger.info("Canceled the subscription a checkout replaced")
 
 
 def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
@@ -734,7 +734,7 @@ def _send_subscription_notifications(team: Team, status: str, previous_status: A
 
     elif status == "canceled":
         notify_billing_managers(team, email_notifications.notify_subscription_cancelled)
-        logger.info("Subscription cancelled notification sent")
+        logger.info("Subscription canceled notification sent")
 
     elif status in ["incomplete", "incomplete_expired"]:
         notify_billing_managers(team, email_notifications.notify_payment_failed, None)
@@ -1185,7 +1185,7 @@ def handle_checkout_completed(session: Any) -> None:
             existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
 
             if existing_subscription_id and existing_subscription_id != session.subscription:
-                logger.info("Cancelling old subscription to prevent double billing")
+                logger.info("Canceling old subscription to prevent double billing")
                 try:
                     cancel_replaced_subscription(existing_subscription_id)
                 except StripeError as e:
@@ -1204,12 +1204,12 @@ def handle_checkout_completed(session: Any) -> None:
                     ) from e
                 except Exception as e:
                     logger.critical(
-                        "CRITICAL: Unexpected error cancelling old subscription: %s. "
+                        "CRITICAL: Unexpected error canceling old subscription: %s. "
                         "Both subscriptions would be active — deferring via retry.",
                         e,
                     )
                     raise BillingRetryableError(
-                        "Cannot complete checkout yet: unexpected error cancelling existing subscription; "
+                        "Cannot complete checkout yet: unexpected error canceling existing subscription; "
                         "retrying to avoid leaving both subscriptions active."
                     ) from e
 

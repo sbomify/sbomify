@@ -300,7 +300,7 @@ class TestBrandingOffNotice:
     NOTICE = "customers still see the default sbomify look"
 
     def _render(self, client, team):
-        return client.get(reverse("teams:team_branding", kwargs={"team_key": team.key}))
+        return client.get(reverse("teams:team_branding", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
 
     def test_the_notice_renders_when_branding_is_off(self, client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team

@@ -19,7 +19,7 @@ from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.domain.exceptions import ExternalServiceError
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.models import Integration
@@ -40,7 +40,7 @@ def _team_or_none(team_key: str) -> Team | None:
     return Team.objects.filter(key=team_key).first()
 
 
-class IntegrationsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """The tab body, loaded over HTMX, plus its two POST actions."""
 
     allowed_roles = list(ADMINISTER)

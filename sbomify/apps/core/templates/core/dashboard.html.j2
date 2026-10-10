@@ -20,14 +20,13 @@
              aria-label="Key metrics">
             {# djlint:off #}
             <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
-            <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past your patch SLA" icon="fas fa-clock" accent="danger" />
+            <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
             <c-layout.stat-card :value="dashboard.metrics.known_exploited" :unmeasured="dashboard.metrics.unmeasured_known_exploited" unmeasured_label="Not scanned yet" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
-            {# djlint:on #}
-            <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
+            {# djlint:on #}            <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
         </div>
         {% if can_manage %}
             <c-overview.quick-actions>
-            <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organise components and artifacts" />
+            <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Add product" description="Organize components and artifacts" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" icon="fas fa-tag" title="Add release" description="Bring a version's artifacts together" href="{% url 'core:release_new' %}" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:component_new' %}" icon="fas fa-puzzle-piece" title="Add component" description="Store SBOMs and documents" />
             <c-layout.action-tile flush trailing_icon="fa-plus" accent="info" href="{% url 'core:security_advisory_new' %}" icon="fas fa-shield-halved" title="Add advisory" description="Create a draft security advisory" />
@@ -44,7 +43,7 @@
             </c-feedback.alert>
         {% endif %}
         <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
-        <c-overview.products :products="dashboard.products" />
+        <c-overview.products :products="dashboard.products" :product_count="dashboard.product_count" :shares_components="dashboard.shares_components" :omits_components="dashboard.omits_components" />
         {% if can_manage %}<div id="priority-triage-host" class="contents"></div>{% endif %}
     {% endif %}
 {% endblock %}

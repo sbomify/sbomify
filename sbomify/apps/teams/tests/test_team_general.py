@@ -333,7 +333,7 @@ class TestTeamGeneralView:
         team.save(update_fields=["sbom_freshness_days"])
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("teams:team_general", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_general", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         html = response.content.decode()
 
         assert response.status_code == 200
