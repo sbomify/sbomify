@@ -366,7 +366,7 @@ def priced_plans(team_with_business_plan: Team) -> Team:
         key="enterprise",
         defaults={
             "name": "Enterprise",
-            "description": "For organisations with custom needs",
+            "description": "For organizations with custom needs",
         },
     )
 

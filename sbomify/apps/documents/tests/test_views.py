@@ -308,17 +308,26 @@ class TestDocumentsTableView:
             "documents:documents_table_public",
             kwargs={"component_id": public_document_component.id},
         )
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_documents_table_private_view_requires_auth(self, client, sample_document_component):
-        """Test that private view requires authentication."""
+        """Signed out, the table's own htmx read is sent to sign in."""
         url = reverse(
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = client.get(url)
-        assert response.status_code == 302  # Redirect to login
+        response = client.get(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 302
+        assert response["Location"].startswith("/login")
+
+    def test_documents_table_direct_visit_is_a_404_even_signed_out(self, client, sample_document_component):
+        """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
+        url = reverse(
+            "documents:documents_table",
+            kwargs={"component_id": sample_document_component.id},
+        )
+        assert client.get(url).status_code == 404
 
     def test_documents_table_private_view_accessible_auth(
         self, authenticated_web_client, sample_document_component, sample_user
@@ -330,7 +339,7 @@ class TestDocumentsTableView:
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_documents_table_guest_restriction(self, authenticated_web_client, sample_document_component, guest_user):
@@ -343,8 +352,10 @@ class TestDocumentsTableView:
             "documents:documents_table",
             kwargs={"component_id": sample_document_component.id},
         )
-        response = authenticated_web_client.get(url)
+        response = authenticated_web_client.get(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 302  # Redirect to workspace public
+        # A plain visit is a 404 for a guest too: the URL is a fragment, not a page.
+        assert authenticated_web_client.get(url).status_code == 404
 
     def test_documents_table_post_requires_auth(self, client, public_document_component):
         """Test that POST actions require authentication even on public view."""

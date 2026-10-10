@@ -1,7 +1,7 @@
 {% load humanize %}
 <c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
 {% url 'core:product_details_public' product.id as product_public_url %}
-<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" x-data="publicSharing('{{ product_public_url|escapejs }}')">
+<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" x-data="publicSharing('{{ product_public_url|escapejs }}')">
 <c-slot name="subtitle">
 {% if product.has_crud_permissions %}
     {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.description|default:'' field_name='description' field_type='textarea' placeholder='Add a description' %}

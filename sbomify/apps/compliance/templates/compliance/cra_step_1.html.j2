@@ -68,11 +68,11 @@
                     </div>
                     {# Harmonised standard confirmation for Class I + Module A (CRA Art 32(2)) #}
                     <c-feedback.callout variant="warning" class="mt-2" x-show="category === 'class_i' && conformityAssessmentProcedure === 'module_a'" x-cloak role="status" aria-live="polite">
-                    {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-shield-halved" title="Harmonised standard required" pill_label="CRA Art 32(2)" pill_href=cra_oj_url description="Class I products may only use Module A (self-assessment) when a harmonised standard covering all relevant requirements has been applied." %}
+                    {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-shield-halved" title="Harmonized standard required" pill_label="CRA Art 32(2)" pill_href=cra_oj_url description="Class I products may only use Module A (self-assessment) when a harmonized standard covering all relevant requirements has been applied." %}
                     <c-feedback.callout-body>
                     <label class="flex items-start gap-3 cursor-pointer">
                         <c-forms.checkbox-input id="harmonised-standard" x-model="harmonisedStandardApplied" class="mt-0.5" />
-                        <span class="text-sm text-text">I confirm a harmonised standard has been applied to this product.</span>
+                        <span class="text-sm text-text">I confirm a harmonized standard has been applied to this product.</span>
                     </label>
                     </c-feedback.callout-body>
                     </c-feedback.callout>
@@ -80,7 +80,7 @@
             </div>
             </c-layout.form-section>
             {# Harmonised Standards Applicability (EN 18031 opt-in — issue #905) #}
-            <c-layout.form-section stacked title="Harmonised Standards Applicability" description="Optional. Tick the boxes that apply to claim presumption of conformity under the EN 18031 harmonised standards on the Declaration of Conformity.">
+            <c-layout.form-section stacked title="Harmonized Standards Applicability" description="Optional. Check the boxes that apply to claim presumption of conformity under the EN 18031 harmonized standards on the Declaration of Conformity.">
             <div class="flex flex-col gap-4">
                 <c-layout.select-row>
                 <c-forms.checkbox-input x-model="isRadioEquipment" class="mt-0.5" />
@@ -93,7 +93,7 @@
                 <c-forms.checkbox-input x-model="processesPersonalData" ::disabled="!isRadioEquipment" class="mt-0.5" />
                 <span class="flex-1">
                     <span class="text-text font-medium block">Processes personal data</span>
-                    <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)): data minimisation, GDPR alignment. Requires RED.</span>
+                    <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)): data minimization, GDPR alignment. Requires RED.</span>
                 </span>
                 </c-layout.select-row>
                 <c-layout.select-row>
@@ -184,7 +184,7 @@
                 assessment starts in, and it is recorded rather than guessed.
                 The declaration cannot be exported while it is unanswered.
             {% endcomment %}
-            <c-layout.form-section stacked title="EU establishment" description="CRA Art. 22. A manufacturer without an establishment in the Union must appoint an Authorised Representative before placing the product on the market.">
+            <c-layout.form-section stacked title="EU establishment" description="CRA Art. 22. A manufacturer without an establishment in the Union must appoint an Authorized Representative before placing the product on the market.">
             <div class="flex flex-col gap-4">
                 <fieldset>
                     <c-forms.label>Is the manufacturer established in the EU?</c-forms.label>
@@ -203,7 +203,7 @@
                      x-cloak
                      class="pt-2 border-t border-border space-y-4">
                     <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation">
-                    An Authorised Representative is required. Name, address, contact email
+                    An Authorized Representative is required. Name, address, contact email
                     and mandate date must all be recorded before this step will save.
                     </c-feedback.alert>
                     <div class="flex flex-col gap-4">

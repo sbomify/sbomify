@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
@@ -21,7 +21,7 @@ from .services.new_plugins import plugins_added_since_last_save
 logger = getLogger(__name__)
 
 
-class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing team plugin settings."""
 
     allowed_roles = list(ADMINISTER)
@@ -170,7 +170,7 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return render(request, "plugins/plugins_page.html.j2", {"catalogue_shape": shape.value})
 
 
-class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class PluginsSummaryView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
     allowed_roles = list(ADMINISTER)
@@ -247,6 +247,11 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
+                # The pager's links reset to page 1; a refresh must not. This
+                # keeps the page the reader is on as well as the filters, so
+                # re-rendering the panel after a triage lands them back where
+                # they were.
+                "findings_refresh_query": query_string(query, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
                 # A short check list reads whole; search and paging only earn
                 # their place once it runs past one page.

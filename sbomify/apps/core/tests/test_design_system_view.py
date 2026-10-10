@@ -68,3 +68,14 @@ class TestDesignSystemView:
         response = client.get(reverse("core:design_system"))
         assert response.status_code == 200
         assert b"sbomify Design System" in response.content
+
+    def test_the_inventory_tabs_are_shown_through_their_component(self, debug_mode, sample_team_with_owner_member):
+        """The gallery renders c-inventory.tab-link with real tab data, so its contract stays visible."""
+        member = sample_team_with_owner_member
+        client = Client()
+        setup_authenticated_client_session(client, member.team, member.user)
+        html = client.get(reverse("core:design_system")).content.decode()
+
+        for kind, heading in (("products", "Products"), ("releases", "Releases"), ("components", "Components")):
+            assert f'id="inventory-tab-{kind}"' in html
+            assert f'data-inventory-heading="{heading}"' in html

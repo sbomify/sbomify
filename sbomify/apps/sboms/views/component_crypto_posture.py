@@ -4,13 +4,14 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.services.sboms import get_crypto_inventory
 
 POSTURE_TEMPLATE = "sboms/components/crypto_posture_card.html.j2"
 
 
-class ComponentCryptoPostureView(View):
+class ComponentCryptoPostureView(HtmxFragmentMixin, View):
     """Lazy-loaded (hx-get) component-level post-quantum posture card.
 
     Shows the overall PQC readiness of the component's newest crypto-bearing

@@ -33,7 +33,7 @@ def test_component_foregrounds_match_the_palette(authenticated_page: Page, theme
     page = authenticated_page
     page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
     page.goto("/design-system/")
-    expect(page.get_by_role("heading", name="Colour tokens", exact=True)).to_be_attached()
+    expect(page.get_by_role("heading", name="Color tokens", exact=True)).to_be_attached()
 
     # The value is read, so it takes the ink. The icon is decorative and
     # aria-hidden, a soft mark on a tint of the same accent, so it keeps the

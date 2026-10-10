@@ -1,3 +1,0 @@
-{% comment %}The name of the inventory page, for the document title. Three tabs open must not read as three identical tabs, so the tab leads, the way Trends does under Overview. One file, because a tab swap renames the page from a fragment and a full render names it from the title block.{% endcomment %}
-{% if inventory.kind != 'products' %}{{ inventory.kind|title }} ·{% endif %}
-Products · sbomify
