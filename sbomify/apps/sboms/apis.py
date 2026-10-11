@@ -560,8 +560,8 @@ def sbom_upload_cyclonedx(
         # ``sbomify.apps.oidc.permissions.is_authorised_for_component``.
         if not can(request, "artifact:publish", component):
             return 403, {"detail": "Forbidden"}
-        # A VEX rewrites the workspace's stored vulnerability posture, so it takes
-        # the stricter publish tier (guests are excluded).
+        # publish_vex is the looser tier and does not imply upload: the
+        # artifact:publish check above is what keeps operators out of VEX file upload.
         if bom_type == SBOM.BomType.VEX.value and not can(request, "artifact:publish_vex", component):
             return 403, {"detail": "Forbidden"}
         if not is_authorised_for_component(request, component):
@@ -767,8 +767,8 @@ def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, d
             return 404, {"detail": "Component not found"}
         if not can(request, "artifact:publish", component):
             return 403, {"detail": "Forbidden"}
-        # A VEX rewrites the workspace's stored vulnerability posture, so it takes
-        # the stricter publish tier (guests are excluded).
+        # publish_vex is the looser tier and does not imply upload: the
+        # artifact:publish check above is what keeps operators out of VEX file upload.
         if not can(request, "artifact:publish_vex", component):
             return 403, {"detail": "Forbidden"}
         if not is_authorised_for_component(request, component):
