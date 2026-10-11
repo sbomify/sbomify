@@ -826,7 +826,7 @@ def _get_product_with_instance(
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response_payload = _build_item_response(request, product, "product")
@@ -872,7 +872,7 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
     # wrong here. Readiness lists the product's unresolved critical and high
     # findings by advisory id, which is internal remediation state and not
     # something being publicly listed makes public.
-    if not can(request, "product:manage", result.instance):
+    if not can(request, "product:read", result.instance):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     readiness = eol_readiness(result.instance)
@@ -1173,7 +1173,7 @@ def list_product_identifiers(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1478,7 +1478,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1871,7 +1871,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal", component):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response = component if return_instance else _build_item_response(request, component, "component")
@@ -2512,7 +2512,7 @@ def list_component_releases(
                 "detail": "Authentication required for private components",
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
-        if not can(request, "component:manage", component):
+        if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Whether the caller is internal to THIS component's workspace. Distinct from
@@ -2767,7 +2767,7 @@ def download_product_sbom(
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Normalize format early
@@ -2822,7 +2822,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     release = Release.get_or_create_latest_release(product)
@@ -3347,7 +3347,7 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:manage", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_release_response(request, release, include_artifacts=True)

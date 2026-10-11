@@ -153,16 +153,66 @@ _PAGE_SQL = """
 _POSITION = "_position"
 
 
-def _projected_findings(run_id: UUID, table: str) -> list[dict[str, Any]]:
+def _stored_findings(run: Any) -> dict[int, dict[str, Any]] | None:
+    """An offloaded run's findings by position in the stored array; ``None`` for an inline run.
+
+    The two queries above read the ``result`` column, which an offloaded run no
+    longer holds, so its page is cut from the payload itself, fetched once.
+    Positions skip what is not an object, the rule the queries apply. Raises
+    :class:`ResultObjectMissing` rather than reading an unreachable payload as
+    a run that found nothing.
+    """
+    from sbomify.apps.plugins.result_store import get_result
+
+    if not run.result_object_key:
+        return None
+    findings = get_result(run.result_object_key).get("findings")
+    if not isinstance(findings, list):
+        return {}
+    return {position: finding for position, finding in enumerate(findings) if isinstance(finding, dict)}
+
+
+def _text(value: Any) -> str | None:
+    """A JSON value as ``->>`` reads it: a string as it is, anything else as its JSON."""
+    if value is None:
+        return None
+    return value if isinstance(value, str) else json.dumps(value)
+
+
+def _projection_row(position: int, finding: dict[str, Any]) -> tuple[Any, ...]:
+    """The projection query's row for a finding already in memory."""
+    component = finding.get("component")
+    component = component if isinstance(component, dict) else {}
+    aliases = finding.get("aliases")
+    return (
+        position,
+        _text(finding.get("id")),
+        _text(finding.get("status")),
+        [_text(alias) for alias in aliases] if isinstance(aliases, list) else [],
+        _text(finding.get("severity")),
+        _text(finding.get("analysis_state")),
+        _text(component.get("name")),
+        _text(component.get("ecosystem")),
+        _text(finding.get("title")) or _text(finding.get("summary")),
+        _text(component.get("version")),
+    )
+
+
+def _projected_findings(
+    run_id: UUID, table: str, stored: dict[int, dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
     """One dict per stored finding, holding the projection and its position.
 
     ``table`` is formatted into the statement because a table name cannot be a
     bound parameter. It comes from the model's own ``_meta``, never from the
-    request.
+    request. ``stored`` is an offloaded run's findings, projected in memory.
     """
-    with connection.cursor() as cursor:
-        cursor.execute(_PROJECTION_SQL.format(table=table), [str(run_id)])
-        rows = cursor.fetchall()
+    if stored is not None:
+        rows = [_projection_row(position, finding) for position, finding in stored.items()]
+    else:
+        with connection.cursor() as cursor:
+            cursor.execute(_PROJECTION_SQL.format(table=table), [str(run_id)])
+            rows = cursor.fetchall()
 
     return [
         {
@@ -186,6 +236,7 @@ def _findings_at(
     kev_ids: frozenset[str],
     euvd_ids: frozenset[str],
     is_security: bool,
+    stored: dict[int, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """The full findings at ``positions``, stamped and in that order.
 
@@ -204,12 +255,15 @@ def _findings_at(
     if not positions:
         return []
 
-    with connection.cursor() as cursor:
-        cursor.execute(_PAGE_SQL.format(table=table), [str(run_id), positions])
-        # json.loads because this one is a jsonb column read through a raw
-        # cursor, which arrives as the JSON source rather than as a dict. The
-        # statement returns objects only, so there is nothing else to get back.
-        by_position = {position: json.loads(finding) for position, finding in cursor.fetchall()}
+    if stored is not None:
+        by_position = {position: stored[position] for position in positions if position in stored}
+    else:
+        with connection.cursor() as cursor:
+            cursor.execute(_PAGE_SQL.format(table=table), [str(run_id), positions])
+            # json.loads because this one is a jsonb column read through a raw
+            # cursor, which arrives as the JSON source rather than as a dict.
+            # The statement returns objects only, so there is nothing else.
+            by_position = {position: json.loads(finding) for position, finding in cursor.fetchall()}
 
     findings = [by_position[position] for position in positions if position in by_position]
     if is_security:
@@ -229,6 +283,7 @@ def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> Se
     """
     from sbomify.apps.plugins.apis import _readable_sbom
     from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.result_store import ResultObjectMissing
     from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_findings
     from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization, stamp_exploited
@@ -257,7 +312,11 @@ def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> Se
     euvd_ids = euvd_ids_for_serialization() if is_security else frozenset()
 
     table = AssessmentRun._meta.db_table
-    findings = _projected_findings(run.id, table)
+    try:
+        stored = _stored_findings(run)
+    except ResultObjectMissing:
+        return ServiceResult.failure("This run's findings could not be loaded.", status_code=503)
+    findings = _projected_findings(run.id, table, stored)
     if is_security:
         # Scanner status markers ride the same array and are not
         # vulnerabilities, the filter the eager list used to apply. Both signals
@@ -275,7 +334,7 @@ def build_run_findings_page(request: Any, run_id: str, params: Any = None) -> Se
     query = parse_finding_query(params if params is not None else {}, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE)
     panel = browse_finding_rows([_filterable(finding) for finding in findings], query)
     positions = [row[_POSITION] for row in panel["rows"]]
-    panel["rows"] = _findings_at(run.id, table, positions, kev_ids, euvd_ids, is_security)
+    panel["rows"] = _findings_at(run.id, table, positions, kev_ids, euvd_ids, is_security, stored)
     return ServiceResult.success(
         RunFindingsPage(
             run=run,

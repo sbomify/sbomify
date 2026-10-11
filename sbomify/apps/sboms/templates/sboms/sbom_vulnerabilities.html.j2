@@ -64,7 +64,7 @@
             {% endif %}
         </div>
         <c-cards.card id="scan-results-card" title="Scan results" :flush="scan_panel">
-        {% if can_triage %}
+        {% if can_upload_vex %}
             <c-slot name="header">
             <c-cards.header title="Scan results" class="flex flex-wrap items-center justify-between gap-3">
             <c-buttons.secondary size="sm" @click="$dispatch('open-upload')">
@@ -121,6 +121,8 @@
     </div>
     {% if can_triage %}
         {% include "plugins/components/triage_modal.html.j2" %}
+    {% endif %}
+    {% if can_upload_vex %}
         {% include "sboms/components/sbom_upload.html.j2" with upload_title="Upload VEX" upload_bom_type="vex" %}
     {% endif %}
 {% endblock %}
