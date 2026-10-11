@@ -160,8 +160,27 @@ def _result_with_kev(
     bound below applies to every category, because a compliance plugin checks
     each component and reports per component, so its list grows with the SBOM
     exactly as a scanner's does.
+
+    The payload is loaded through the result store rather than read off the
+    field, because a superseded run's payload may have been demoted to object
+    storage. An unreadable one degrades to no payload — the run's status, plugin
+    metadata and stored counts still render, the same treatment a result that
+    fails schema validation already gets — rather than raising and blanking the
+    whole response. A missing payload must never be shown as a run that found
+    nothing, which is why the counts on every other surface come from
+    ``result_summary`` and not from here.
     """
-    result = run.result
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, load_result
+
+    try:
+        result = load_result(run)
+    except ResultObjectMissing:
+        logger.warning(
+            "AssessmentRun %s (plugin %s) has an offloaded result that could not be read; serialising without it",
+            run.id,
+            run.plugin_name,
+        )
+        return None
     if not isinstance(result, dict):
         return result
     findings = result.get("findings")
@@ -365,8 +384,18 @@ def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
         .prefetch_related("releases")
     }
     runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, get_result
+
     for run in runs:
         envelope = getattr(run, "envelope", None)
+        if envelope is None and run.result_object_key:
+            # A moved run's column is empty, so its envelope is the stored
+            # payload's. Cut here like the inline ones: left as None, the
+            # serializer would load the payload again, findings and all.
+            try:
+                envelope = get_result(run.result_object_key)
+            except ResultObjectMissing:
+                envelope = None
         run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
     return runs
 
