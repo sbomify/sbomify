@@ -45,7 +45,7 @@ drawer dismissed while it opens leaves focus alone.
         <c-chrome.nav-group label="Monitor">
         <c-chrome.nav-item href="{% url 'core:dashboard' %}" label="Overview" icon="fas fa-border-all" match="core:dashboard" />
         {% if team %}
-            <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' team.key %}" label="Vulnerability scans" icon="fas fa-bullseye" match="vulnerability_scanning:" />
+            <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' team.key %}" label="Vulnerabilities" icon="fas fa-bullseye" match="vulnerability_scanning:" />
             {% if can_read_internal %}
                 {# can_read_internal is every internal role, which is who WorkspaceCryptoView admits: every role but guest, and bot, which never holds a session. #}
                 <c-chrome.nav-item href="{% url 'sboms:workspace_crypto' team.key %}" label="Cryptography" icon="fas fa-lock" match="sboms:workspace_crypto" />

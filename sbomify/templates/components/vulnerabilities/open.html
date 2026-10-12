@@ -1,0 +1,84 @@
+{% load humanize %}
+{% comment %}
+What a version still has open, worst first, for one table cell. It answers the
+question a reader brings to the row ("is this safe, and is it getting worse?")
+rather than drawing the severity mix: a lone critical among thirty findings is
+the most important thing in the row, and a proportional bar shrinks it to a
+sliver.
+
+summary is a dict with state:
+  open             critical, high, other, and new (int, or None when there is
+                   nothing to compare against)
+  none             scanned, nothing open
+  nothing_scanned  every scanner skipped it; this is not a clean result
+  not_scanned      no scan has completed
+  not_applicable   nothing here is scanned (a VEX or CBOM on its own)
+
+The headline is the critical and high counts, in their severity ink, which
+both themes set to text contrast. Everything else waits on the second line:
+how many of the open findings this version introduced, then the rest as one
+"other" figure, since medium, low and unknown rarely decide the next step.
+
+Rows that Alpine builds (the file history) pass bind instead: the expression
+for one file's counts ({total, critical, high, scanned_nothing}, or null when
+nothing has scanned it). Files are not compared with each other, so there is
+no "new" line.
+{% endcomment %}
+<c-vars summary bind />
+{% if bind %}
+    <span class="flex flex-col gap-0.5"
+          x-data="{ get counts() { return {{ bind }} } }"
+          {{ attrs }}>
+        <span class="text-sm text-text-muted" x-show="!counts">Not scanned</span>
+        <template x-if="counts && !counts.total">
+            <span>
+                <span x-show="counts.scanned_nothing"
+                      title="Every scanner skipped this file. Open it to see why."><c-feedback.status tone="warning" label="Nothing scanned" /></span>
+                <span x-show="!counts.scanned_nothing"><c-feedback.status tone="success" label="None open" /></span>
+            </span>
+        </template>
+        <template x-if="counts && counts.total">
+            <span class="flex flex-col gap-0.5">
+                {# inline-flex drops the whitespace between these spans, so the comma's space is its own. #}
+                <span class="inline-flex text-sm whitespace-nowrap">
+                    <span class="font-semibold text-severity-critical"
+                          x-show="counts.critical"
+                          x-text="$number(counts.critical) + ' critical'"></span>
+                    <span class="text-text-muted" x-show="counts.critical && counts.high">,&nbsp;</span>
+                    <span class="font-semibold text-severity-high"
+                          x-show="counts.high"
+                          x-text="$number(counts.high) + ' high'"></span>
+                    <span class="text-text"
+                          x-show="!counts.critical && !counts.high"
+                          x-text="$number(counts.total) + ' other'"></span>
+                </span>
+                <span class="text-xs text-text-muted whitespace-nowrap"
+                      x-show="(counts.critical || counts.high) && counts.total - (counts.critical || 0) - (counts.high || 0) > 0"
+                      x-text="$number(counts.total - (counts.critical || 0) - (counts.high || 0)) + ' other'"></span>
+            </span>
+        </template>
+    </span>
+{% elif summary.state == "open" %}
+    <span class="flex flex-col gap-0.5" {{ attrs }}>
+        {# djlint:off #}
+        {# Each line is one sentence, kept on one line so no template whitespace lands before a comma. #}
+        {% if summary.critical or summary.high %}
+            <span class="text-sm whitespace-nowrap">{% if summary.critical %}<span class="font-semibold text-severity-critical">{{ summary.critical|intcomma }} critical</span>{% endif %}{% if summary.critical and summary.high %}<span class="text-text-muted">, </span>{% endif %}{% if summary.high %}<span class="font-semibold text-severity-high">{{ summary.high|intcomma }} high</span>{% endif %}</span>
+            {% if summary.new or summary.other %}
+                <span class="text-xs text-text-muted whitespace-nowrap">{% if summary.new %}{{ summary.new|intcomma }} new{% endif %}{% if summary.new and summary.other %} · {% endif %}{% if summary.other %}{{ summary.other|intcomma }} other{% endif %}</span>
+            {% endif %}
+        {% else %}
+            <span class="text-sm text-text whitespace-nowrap">{{ summary.other|intcomma }} other</span>
+            {% if summary.new %}<span class="text-xs text-text-muted whitespace-nowrap">{{ summary.new|intcomma }} new</span>{% endif %}
+        {% endif %}
+        {# djlint:on #}
+    </span>
+{% elif summary.state == "none" %}
+    <c-feedback.status tone="success" label="None open" />
+{% elif summary.state == "nothing_scanned" %}
+    <c-feedback.status tone="warning" label="Nothing scanned" title="Every scanner skipped this version. Open it to see why." />
+{% elif summary.state == "not_applicable" %}
+    <span class="text-sm text-text-muted" {{ attrs }}>—</span>
+{% else %}
+    <span class="text-sm text-text-muted" {{ attrs }}>Not scanned</span>
+{% endif %}
