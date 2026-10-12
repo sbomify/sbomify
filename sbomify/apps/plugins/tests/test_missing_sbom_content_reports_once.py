@@ -14,8 +14,12 @@ stays out of the tracker, since events are raised there from error level.
 from __future__ import annotations
 
 import logging
+import threading
+from datetime import timedelta
 
 import pytest
+from django.db import connection, transaction
+from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.plugins.models import AssessmentRun
@@ -80,7 +84,9 @@ def _fetch_errors(records: list[logging.LogRecord]) -> list[logging.LogRecord]:
 
 
 def _run(sbom: SBOM) -> AssessmentRun:
-    run = PluginOrchestrator().run_assessment(sbom_id=sbom.id, plugin=MockPlugin(), run_reason=RunReason.SCHEDULED_REFRESH)
+    run = PluginOrchestrator().run_assessment(
+        sbom_id=sbom.id, plugin=MockPlugin(), run_reason=RunReason.SCHEDULED_REFRESH
+    )
     assert run is not None
     return run
 
@@ -142,3 +148,97 @@ def test_a_different_earlier_failure_does_not_silence_it(sbom, object_missing, c
 
     _run(sbom)
     assert len(_fetch_errors(captured)) == 1
+
+
+def _missing_message(sbom: SBOM) -> str:
+    with pytest.raises(SBOMContentMissingError) as raised:
+        get_sbom_data_bytes(sbom.id)
+    return str(raised.value)
+
+
+def _settled_run(sbom: SBOM, status: str, created_at, completed_at, error_message: str = "") -> AssessmentRun:
+    run = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="mock-plugin",
+        plugin_version="1.0.0",
+        category="compliance",
+        run_reason=RunReason.SCHEDULED_REFRESH.value,
+        status=status,
+        error_message=error_message,
+    )
+    # created_at is set on insert, so the clock is moved afterwards.
+    AssessmentRun.objects.filter(pk=run.pk).update(created_at=created_at, completed_at=completed_at)
+    return run
+
+
+@pytest.mark.django_db
+def test_preceding_means_settled_last_not_enqueued_last(sbom, object_missing, captured) -> None:
+    """Overlapping runs can finish out of order; the one that settled last counts.
+
+    The missing-content failure was enqueued after the success but settled
+    before it, so the object was back when the last verdict was reached and
+    a fresh loss has to report.
+    """
+    now = timezone.now()
+    _settled_run(
+        sbom,
+        RunStatus.FAILED.value,
+        created_at=now - timedelta(minutes=50),
+        completed_at=now - timedelta(minutes=40),
+        error_message=_missing_message(sbom),
+    )
+    _settled_run(
+        sbom,
+        RunStatus.COMPLETED.value,
+        created_at=now - timedelta(minutes=60),
+        completed_at=now - timedelta(minutes=30),
+    )
+
+    _run(sbom)
+    assert len(_fetch_errors(captured)) == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_concurrent_worker_waits_for_the_first_report(sbom, object_missing, captured) -> None:
+    """Two workers hitting the same loss together still report it once.
+
+    The other worker holds the report lock with its failure written but not
+    yet committed, the window in which an unlocked check would read nothing
+    and report a second time. This run has to wait for that commit and then
+    see the failure.
+    """
+    message = _missing_message(sbom)
+    holding = threading.Event()
+    release = threading.Event()
+    failures: list[BaseException] = []
+
+    def other_worker() -> None:
+        try:
+            with transaction.atomic():
+                now = timezone.now()
+                run = _settled_run(
+                    sbom, RunStatus.FAILED.value, created_at=now, completed_at=now, error_message=message
+                )
+                PluginOrchestrator._lock_missing_content_report(run)
+                holding.set()
+                release.wait(timeout=10)
+        except BaseException as e:  # surfaced to the test thread below
+            failures.append(e)
+            holding.set()
+        finally:
+            connection.close()
+
+    worker = threading.Thread(target=other_worker)
+    worker.start()
+    try:
+        assert holding.wait(timeout=10)
+        # Let the other worker commit only once this run is blocked on the lock.
+        threading.Timer(0.5, release.set).start()
+        _run(sbom)
+    finally:
+        release.set()
+        worker.join(timeout=10)
+
+    assert failures == []
+    assert _fetch_errors(captured) == []
+    assert any(r.levelno == logging.WARNING and "still missing" in r.getMessage() for r in captured)

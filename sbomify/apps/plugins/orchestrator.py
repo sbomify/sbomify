@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from django.db import connection, transaction
+from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
@@ -426,11 +429,19 @@ class PluginOrchestrator:
             # sweep, which retries a failed run once a day indefinitely. One
             # report is worth having -- it is data loss -- so the first failure
             # is an error and each identical repeat after it is a warning.
-            if self._previous_run_failed_with(assessment_run, str(e)):
-                logger.warning(f"[PLUGIN] SBOM content still missing for run {assessment_run.id}: {e}")
-            else:
-                logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
-            self._mark_failed(assessment_run, str(e))
+            #
+            # Nothing upstream serialises runs for one SBOM and plugin (an
+            # upload, the sweep and a manual rerun can overlap), so the check
+            # and the write that the next check reads are made under one lock.
+            # A second worker waits here until the first has committed its
+            # failure, and then sees it.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                if self._previous_run_failed_with(assessment_run, str(e)):
+                    logger.warning(f"[PLUGIN] SBOM content still missing for run {assessment_run.id}: {e}")
+                else:
+                    logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
+                self._mark_failed(assessment_run, str(e))
 
         except SBOMDataError as e:
             # SBOM fetch error
@@ -455,18 +466,28 @@ class PluginOrchestrator:
 
         return assessment_run
 
+    @staticmethod
+    def _lock_missing_content_report(assessment_run: AssessmentRun) -> None:
+        """Hold the SBOM and plugin's report lock until the current transaction ends."""
+        key = f"plugin-missing-content:{assessment_run.sbom_id}:{assessment_run.plugin_name}"
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [key])
+
     def _previous_run_failed_with(self, assessment_run: AssessmentRun, error_message: str) -> bool:
         """Whether the run before this one, for the same SBOM and plugin,
         failed with exactly this error.
 
         Only the immediately preceding terminal run counts, so a success in
         between -- the object restored -- makes the next loss report again.
+        "Preceding" is by when a run settled, not when it was enqueued: runs
+        can overlap and finish out of order. This is the same ordering, and
+        the same index, as the failure-backoff probe in ``tasks``.
         """
         previous = (
             AssessmentRun.objects.filter(sbom_id=assessment_run.sbom_id, plugin_name=assessment_run.plugin_name)
             .exclude(id=assessment_run.id)
             .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
-            .order_by("-created_at", "-id")
+            .order_by(Coalesce("completed_at", "created_at").desc(), F("id").desc())
             .values_list("status", "error_message")
             .first()
         )
