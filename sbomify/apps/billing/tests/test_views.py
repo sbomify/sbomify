@@ -153,6 +153,61 @@ def test_a_downgrade_the_workspace_has_outgrown_is_refused(
 
 
 @pytest.mark.django_db
+def test_selecting_community_is_refused_when_the_sync_with_stripe_fails(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A sync that fails must not leave the stale stored status to decide.
+
+    The workspace reads canceled and Stripe has the subscription active, but the
+    sync's read fails transiently. Carried on, the guard would skip the check on
+    the stored status and the canceled branch would move an over-limit workspace
+    to Community while Stripe keeps billing it.
+    """
+    from sbomify.apps.core.models import Product
+
+    modified: list[str] = []
+    calls: list[str] = []
+
+    def flaky_retrieve(subscription_id: str, **kwargs) -> stripe.Subscription:
+        calls.append(subscription_id)
+        if len(calls) == 1:
+            raise stripe.error.APIConnectionError("Network blip")
+        return stripe.Subscription.construct_from(
+            {"id": subscription_id, "status": "active", "cancel_at_period_end": False, "cancel_at": None}, "sk_test"
+        )
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", flaky_retrieve)
+    monkeypatch.setattr(
+        stripe.Subscription, "modify", lambda subscription_id, **kwargs: modified.append(subscription_id)
+    )
+    team_with_business_plan.billing_plan_limits = {
+        **team_with_business_plan.billing_plan_limits,
+        "subscription_status": "canceled",
+    }
+    team_with_business_plan.save()
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Could not read the subscription before changing the plan. Please try again."
+    ]
+    assert modified == []
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
 def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
     client: Client,
     sample_user: AbstractBaseUser,
@@ -252,7 +307,12 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
     client.force_login(sample_user)
 
     # Mock create_billing_portal_session on the CLASS
-    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+    # The sync before the guard reads Stripe through its own client. Stubbed as a
+    # sync that found nothing to change; a failed sync is its own test above.
+    with (
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+    ):
         mock_session = MagicMock()
         mock_session.url = "https://billing.stripe.com/p/session/test_portal_123"
         mock_create_portal.return_value = mock_session
@@ -427,7 +487,12 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
     client.force_login(sample_user)
 
     # Expect create_billing_portal_session to be called instead of checkout
-    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+    # The sync before the guard reads Stripe through its own client. Stubbed as a
+    # sync that found nothing to change; a failed sync is its own test above.
+    with (
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+    ):
         mock_session = MagicMock()
         mock_session.url = "https://billing.stripe.com/p/session/test_portal_456"
         mock_create_portal.return_value = mock_session

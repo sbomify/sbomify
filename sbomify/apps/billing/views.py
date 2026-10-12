@@ -377,7 +377,13 @@ class SelectPlanView(LoginRequiredMixin, View):
         if plan.key == BillingPlan.KEY_ENTERPRISE:
             return redirect("billing:enterprise_contact")
 
-        sync_subscription_from_stripe(team, force_refresh=True)
+        # A sync that fails leaves the stored status standing, so it refuses the
+        # change rather than let a stale "canceled" skip the check below and move
+        # a workspace Stripe still bills to Community.
+        has_subscription = bool((team.billing_plan_limits or {}).get("stripe_subscription_id"))
+        if has_subscription and not sync_subscription_from_stripe(team, force_refresh=True):
+            messages.error(request, "Could not read the subscription before changing the plan. Please try again.")
+            return redirect("billing:select_plan", team_key=team_key)
         team.refresh_from_db()
 
         downgrade = check_downgrade(team, plan)
