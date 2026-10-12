@@ -148,6 +148,12 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
 def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
     from .services.plan_selection import check_downgrade
+    from .stripe_sync import sync_subscription_from_stripe
+
+    # Stripe's state first, as the plan page does, and before the lock: a stored
+    # status that missed a reactivation would skip the check below, and one that
+    # outlived its subscription would refuse a move with nothing left to cancel.
+    sync_subscription_from_stripe(team, force_refresh=True)
 
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
