@@ -380,30 +380,53 @@ def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tu
 
     Nested inside an outer transaction the lock is simply held until that one
     commits, which is the behaviour wanted either way.
+
+    Whether Stripe still holds a scheduled cancel is read before the lock, as
+    ``core.apis._enforce_limit_under_lock`` does for products and components: it
+    can be an HTTPS round trip, and every write that takes this lock would wait
+    on it. That gives nothing back to the race the lock closes. The lock
+    serialises the seat count against concurrent inserts, and the count stays
+    inside it; the cancel is Stripe's state, which no row lock protects.
     """
+    cancel_due = None if is_joining_via_invite else _cancel_still_due(team)
     with transaction.atomic():
         locked = Team.objects.select_for_update().get(pk=team.pk)
-        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite, cancel_due=cancel_due)
 
 
-def _scheduled_downgrade_plan(team: Team) -> BillingPlan | None:
+def _cancel_still_due(team: Team) -> bool:
+    """Whether Stripe still holds the cancel ``team``'s stored limits record.
+
+    With no cancel recorded there is nothing to ask, and True leaves the answer
+    to the stored row, so a cancel written after this read counts as due: the
+    same answer an unreachable Stripe gets.
+    """
+    limits = team.billing_plan_limits or {}
+    if not (limits.get("cancel_at_period_end") and limits.get("scheduled_downgrade_plan")):
+        return True
+    subscription_id = str(limits.get("stripe_subscription_id") or "")
+    return get_subscription_cancel_at_period_end(subscription_id, team.key or "", fallback_value=True)
+
+
+def _scheduled_downgrade_plan(team: Team, cancel_due: bool | None = None) -> BillingPlan | None:
     """The plan a cancelled subscription drops to, while that cancel is still due.
 
     Products and components stop at this plan's limits for the rest of the
     billing period, so the downgrade cannot land over them. Seats follow the
-    same rule.
+    same rule. ``cancel_due`` is Stripe's answer read earlier; None asks now.
     """
     limits = team.billing_plan_limits or {}
     key = limits.get("scheduled_downgrade_plan")
     if not (limits.get("cancel_at_period_end") and key):
         return None
-    subscription_id = str(limits.get("stripe_subscription_id") or "")
-    if not get_subscription_cancel_at_period_end(subscription_id, team.key or "", fallback_value=True):
+    if not (_cancel_still_due(team) if cancel_due is None else cancel_due):
         return None
     return BillingPlan.objects.filter(key=key).first()
 
 
-def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
+def can_add_user_to_team(
+    team: Team, is_joining_via_invite: bool = False, cancel_due: bool | None = None
+) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
 
@@ -412,6 +435,8 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         is_joining_via_invite: If True, we are checking if an existing pending user can join.
                                In this case, we allow joining if total_users <= max_users
                                (because the pending user is already counted in total_users).
+        cancel_due: Whether Stripe still holds the scheduled cancel, read before a
+                    row lock was taken. None reads it here, which can reach Stripe.
 
     Returns:
         Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
@@ -449,7 +474,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
 
         # A pending invitee already holds the seat it joins with, so only a new
         # seat is weighed against the plan the workspace is moving to.
-        scheduled = None if is_joining_via_invite else _scheduled_downgrade_plan(team)
+        scheduled = None if is_joining_via_invite else _scheduled_downgrade_plan(team, cancel_due)
         if scheduled is not None and scheduled.max_users is not None:
             if get_team_user_counts(team.id)[2] >= scheduled.max_users:
                 return (
