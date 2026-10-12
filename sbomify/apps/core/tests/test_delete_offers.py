@@ -121,3 +121,23 @@ def test_the_documents_table_offers_deletion_only_to_a_role_that_can_delete(role
     assert "open-edit-document-modal" in page
     assert ("open-delete-document-modal" in page) is offered
     assert ('id="delete-document-modal"' in page) is offered
+
+
+@pytest.mark.parametrize(
+    ("route", "key", "noun"),
+    [
+        ("api-1:delete_product", "product_id", "products"),
+        ("api-1:delete_component", "component_id", "components"),
+        ("api-1:delete_release", "release_id", "releases"),
+        ("api-1:delete_sbom", "sbom_id", "SBOMs"),
+        ("api-1:delete_document", "document_id", "documents"),
+    ],
+)
+def test_a_refused_delete_names_the_roles_that_may(route, key, noun, items) -> None:
+    """Admins delete too, so "only owners" sent people to the wrong person."""
+    client = _client(items["team"], "member")
+
+    response = client.delete(reverse(route, kwargs={key: items[key]}))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == f"Only workspace owners and admins can delete {noun}"

@@ -132,7 +132,7 @@ def delete_document_record(request: HttpRequest, document_id: str) -> ServiceRes
         return ServiceResult.failure("Document not found", status_code=404)
 
     if not can(request, "document:delete", document.component):
-        return ServiceResult.failure("Only owners can delete documents", status_code=403)
+        return ServiceResult.failure("Only workspace owners and admins can delete documents", status_code=403)
 
     # Capture info for broadcast before deleting
     workspace_key: str = document.component.team.key  # type: ignore[assignment]
