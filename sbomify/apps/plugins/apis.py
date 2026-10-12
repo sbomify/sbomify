@@ -160,8 +160,27 @@ def _result_with_kev(
     bound below applies to every category, because a compliance plugin checks
     each component and reports per component, so its list grows with the SBOM
     exactly as a scanner's does.
+
+    The payload is loaded through the result store rather than read off the
+    field, because a superseded run's payload may have been demoted to object
+    storage. An unreadable one degrades to no payload — the run's status, plugin
+    metadata and stored counts still render, the same treatment a result that
+    fails schema validation already gets — rather than raising and blanking the
+    whole response. A missing payload must never be shown as a run that found
+    nothing, which is why the counts on every other surface come from
+    ``result_summary`` and not from here.
     """
-    result = run.result
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, load_result
+
+    try:
+        result = load_result(run)
+    except ResultObjectMissing:
+        logger.warning(
+            "AssessmentRun %s (plugin %s) has an offloaded result that could not be read; serialising without it",
+            run.id,
+            run.plugin_name,
+        )
+        return None
     if not isinstance(result, dict):
         return result
     findings = result.get("findings")
@@ -275,7 +294,7 @@ def _run_to_schema(
         if not all((err.get("loc") or (None,))[0] == "result" for err in e.errors()):
             raise
         logger.warning(
-            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serialising without it",
+            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serializing without it",
             run.id,
             run.plugin_name,
         )
@@ -365,8 +384,18 @@ def _history_runs(run_ids: list[UUID]) -> list[AssessmentRun]:
         .prefetch_related("releases")
     }
     runs: list[AssessmentRun] = [by_id[run_id] for run_id in run_ids if run_id in by_id]
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, get_result
+
     for run in runs:
         envelope = getattr(run, "envelope", None)
+        if envelope is None and run.result_object_key:
+            # A moved run's column is empty, so its envelope is the stored
+            # payload's. Cut here like the inline ones: left as None, the
+            # serializer would load the payload again, findings and all.
+            try:
+                envelope = get_result(run.result_object_key)
+            except ResultObjectMissing:
+                envelope = None
         run.result = {**envelope, "findings": []} if isinstance(envelope, dict) else None
     return runs
 
@@ -395,7 +424,7 @@ def get_sbom_assessments(
     is a 504 at the gateway before the page is ever written.
 
     ``include_history`` drops ``all_runs``. Every finding was otherwise stamped,
-    validated and serialised twice, once for the latest run per plugin and again
+    validated and serialized twice, once for the latest run per plugin and again
     for the same run inside the history, and the artifact page reads only the
     former.
 
@@ -829,7 +858,7 @@ def update_team_plugin_settings(
 
 
 class AssessmentRerunResponse(BaseModel):
-    """Acknowledgement that a re-run was accepted onto the queue."""
+    """Acknowledgment that a re-run was accepted onto the queue."""
 
     sbom_id: str
     plugin_name: str

@@ -1,10 +1,10 @@
 from typing import Any
 
-from django.http import HttpRequest, HttpResponse, HttpResponseBase
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response, refuse_direct_read
 from sbomify.apps.documents.services.documents_table import (
     build_documents_table_context,
     delete_document_from_request,
@@ -12,8 +12,10 @@ from sbomify.apps.documents.services.documents_table import (
 )
 
 
-class DocumentsTableView(View):
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+class DocumentsTableView(HtmxFragmentMixin, View):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        # A direct visit is a 404 before the access gate below, whoever asks.
+        refuse_direct_read(request)
         # Get is_public_view from kwargs (set by URL configuration)
         is_public_view = kwargs.get("is_public_view", False)
 

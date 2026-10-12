@@ -68,6 +68,21 @@ export function morphPreservingMarkedSubtrees(
     },
   });
 
+  // htmx takes each preserved element off the page before calling this. With
+  // moveBefore it waits in a pantry that htmx restores from afterwards; without
+  // it, htmx moves the reader's element into the response, and the morph above
+  // has just rebuilt it from markup. Put the response's element back over that
+  // copy, so the page keeps the reader's node: its listeners, its Alpine state
+  // and any refresh it has in flight. The contains check skips a copy whose
+  // preserved ancestor was already put back.
+  const kept = new Map(Array.from(incoming.querySelectorAll('[hx-preserve][id]'), (el) => [el.id, el]));
+  for (const copy of Array.from(target.querySelectorAll('[hx-preserve][id]'))) {
+    const original = kept.get(copy.id);
+    if (original && original !== copy && target.contains(copy)) {
+      copy.replaceWith(original);
+    }
+  }
+
   return [target];
 }
 

@@ -17,7 +17,7 @@ from sbomify.apps.controls.services.catalog_service import (
 from sbomify.apps.controls.services.page_context import build_product_controls, controls_table_context
 from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.models import Team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
@@ -29,7 +29,7 @@ def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool
     return current_team_key == team_key
 
 
-class ProductControlsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ProductControlsView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Load the same controls tables with product-specific overrides."""
 
     def get(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:

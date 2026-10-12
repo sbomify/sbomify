@@ -60,15 +60,13 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
         company_nda_id = None
         gated_visibility_allowed = False
-        team_key = current_team.get("key")
+        team_key = rights.team_key
         team_id = component.get("team_id")
         if team_id:
             from sbomify.apps.teams.models import Team
 
             try:
                 team = Team.objects.get(pk=team_id)
-                if not team_key:
-                    team_key = team.key
                 company_nda = team.get_company_nda_document()
                 if company_nda:
                     company_nda_id = company_nda.id

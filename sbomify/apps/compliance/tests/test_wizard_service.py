@@ -257,7 +257,7 @@ class TestSaveStepData:
         result = save_step_data(assessment, 1, {"product_category": "class_i"}, sample_user)
         assert not result.ok
         assert result.status_code == 400
-        assert "harmonised standard" in result.error.lower()
+        assert "harmonized standard" in result.error.lower()
 
     def test_step_1_invalid_category_rejected(self, assessment, sample_user):
         result = save_step_data(assessment, 1, {"product_category": "invalid"}, sample_user)
@@ -355,7 +355,7 @@ class TestSaveStepData:
         )
         assert not second.ok
         assert second.status_code == 400
-        assert "harmonised standard" in (second.error or "").lower()
+        assert "harmonized standard" in (second.error or "").lower()
 
     def test_step_1_support_period_justification_cleared_after_gate(self, assessment, sample_user):
         """CRA Art 13(8) audit-trail bypass regression (P0). A payload

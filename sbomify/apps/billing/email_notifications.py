@@ -131,7 +131,7 @@ def notify_payment_failed(team: Team, member: Member, invoice_id: str | None) ->
 
 def notify_subscription_cancelled(team: Team, member: Member) -> None:
     """Notify team owner about subscription cancellation."""
-    subject = "Your sbomify subscription has been cancelled"
+    subject = "Your sbomify subscription has been canceled"
     send_billing_email(team, member, subject, "subscription_cancelled", {})
 
 

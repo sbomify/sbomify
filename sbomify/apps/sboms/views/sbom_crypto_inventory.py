@@ -6,6 +6,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.htmx import HtmxFragmentMixin
 from sbomify.apps.sboms.services.sboms import get_crypto_inventory
 
 CARD_TEMPLATE = "sboms/components/crypto_inventory_card.html.j2"
@@ -42,7 +43,7 @@ def _attach_relations(inventory: dict[str, Any]) -> None:
         asset["relations"] = lines.get(asset.get("bom_ref") or "", [])
 
 
-class SbomCryptoInventoryView(View):
+class SbomCryptoInventoryView(HtmxFragmentMixin, View):
     """Lazy-loaded (hx-get) crypto-asset inventory card for one SBOM.
 
     Rendered as an HTMX partial so the per-SBOM artifact read does not block the

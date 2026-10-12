@@ -68,7 +68,7 @@
       "url_name": "plugins:plugins_page",
       "section": "navigate",
       "icon": "fa-plug",
-      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments"],
+      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments", "assessment summary", "plugin results", "checks overview"],
       "roles": ["owner", "admin"]
     },
     {
@@ -94,15 +94,7 @@
       "section": "navigate",
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
-      "roles": ["owner", "admin", "member"]
-    },
-    {
-      "title": "Plugin summary",
-      "url_name": "plugins:plugins_summary",
-      "section": "navigate",
-      "icon": "fa-list-check",
-      "keywords": ["assessment summary", "plugin results", "checks overview"],
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Access requests",
@@ -198,7 +190,7 @@
       "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
       "args": ["team_key"],
       "fragment": "tokens",
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "MCP server (AI agents)",
@@ -300,7 +292,7 @@
       "icon": "fa-bug",
       "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
       "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Cryptography",
@@ -309,7 +301,7 @@
       "icon": "fa-lock",
       "keywords": ["crypto", "cryptography", "crypto readiness", "quantum", "post-quantum", "pqc", "algorithms", "certificates", "cbom"],
       "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Public Trust Center page",

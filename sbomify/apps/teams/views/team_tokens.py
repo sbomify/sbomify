@@ -17,9 +17,9 @@ from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
-from sbomify.apps.core.authz import MANAGE
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.forms import CreateAccessTokenForm
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -29,14 +29,14 @@ from sbomify.apps.teams.services.settings_page import tokens_context
 
 
 @method_decorator(never_cache, name="dispatch")
-class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
-    # Tokens are personal: this page only ever lists, creates and revokes the
-    # caller's own, scoped to this workspace. So it is the MANAGE tier rather
-    # than ADMINISTER — a member who can upload artifacts needs a token to do it
-    # from CI, and a token can never exceed its holder's role.
-    allowed_roles = list(MANAGE)
+    # READ_INTERNAL, the same tier as the tab registry: tokens are personal, and
+    # this view only ever lists, creates and revokes the caller's own, scoped to
+    # this workspace. A member needs one to upload from CI and an operator needs
+    # one to reach the triage API, and a token can never exceed its holder's role.
+    allowed_roles = list(READ_INTERNAL)
 
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None

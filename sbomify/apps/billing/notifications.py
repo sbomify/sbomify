@@ -85,7 +85,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
         return NotificationSchema(
             id=f"billing_subscription_cancelled_{team.key}",
             type="billing_subscription_cancelled",
-            message="Your subscription has been cancelled and will end at the end of the billing period.",
+            message="Your subscription has been canceled and will end at the end of the billing period.",
             severity="warning",
             created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),

@@ -106,6 +106,10 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         {
             **(table.value or {}),
             "product": product,
+            "breadcrumb_items": [
+                {"label": "Products", "url": reverse("core:products_dashboard")},
+                {"label": product["name"]},
+            ],
             "metrics": metrics,
             "has_sboms": any(row["has_sbom"] for row in rows),
             "release_editor_data": release_rows,
@@ -115,7 +119,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
                 "scope_product": product_id,
                 "rows": release_rows,
                 "total": release_query.count(),
-                "headers": [{"label": label} for _, label in COLUMNS["releases"]],
+                "headers": [{"key": key, "label": label} for key, label in COLUMNS["releases"]],
             },
             "available_components": list(
                 Component.objects.filter(team=workspace, is_global=False)
@@ -200,6 +204,7 @@ def build_product_releases_context(request: HttpRequest, product_id: str) -> Ser
             "product": product,
             "release_editor_data": (result.value or {})["inventory"]["rows"],
             "breadcrumb_items": [
+                {"label": "Products", "url": reverse("core:products_dashboard")},
                 {"label": product["name"], "url": reverse("core:product_details", args=[product_id])},
                 {"label": "Releases"},
             ],

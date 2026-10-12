@@ -546,9 +546,11 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 302
+        # A plain visit is a 404 signed out too: the URL is a fragment, not a page.
+        assert client.get(url).status_code == 404
 
     def test_public_table_stays_open_to_anonymous(self, client, sample_component):  # noqa: F811
         """The guard must not gate the route that is meant to be anonymous."""
@@ -556,7 +558,7 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table_public", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200
 
@@ -568,6 +570,6 @@ class TestSbomsTableViewAnonymousAccess:
         setup_test_session(client, sample_component.team, sample_user)
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200

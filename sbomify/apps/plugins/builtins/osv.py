@@ -755,7 +755,7 @@ class OSVPlugin(AssessmentPlugin):
         """
         finding = Finding(
             id="osv:no-packages",
-            title="No Packages Recognised",
+            title="No Packages Recognized",
             description=(
                 "None of the packages in this SBOM could be matched against an advisory "
                 "source, so it was not scanned. OSV matches on package URL (purl). SBOMs "

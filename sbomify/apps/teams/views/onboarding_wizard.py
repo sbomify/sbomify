@@ -102,7 +102,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             "low",
             "default_support_period_years",
         }
-        setup_step = "security" if form.errors and not (set(form.errors) - security_fields) else "organisation"
+        setup_step = "security" if form.errors and not (set(form.errors) - security_fields) else "organization"
         context = {
             "form": form,
             "wizard_config": {"step": setup_step, "addressExpanded": bool(form["address"].value())},

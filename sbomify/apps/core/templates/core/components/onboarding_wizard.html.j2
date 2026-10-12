@@ -18,7 +18,7 @@
         <c-navigation.stepper class="mx-auto w-full max-w-2xl" role="list" aria-label="Setup progress">
         <c-navigation.stepper-step compact label="Why" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'welcome' ? 'active' : 'completed'" ::aria-current="step === 'welcome' ? 'step' : null" />
         <c-navigation.stepper-connector compact />
-        <c-navigation.stepper-step compact label="Your organisation" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'organisation' ? 'active' : step === 'welcome' ? '' : 'completed'" ::aria-current="step === 'organisation' ? 'step' : null" />
+        <c-navigation.stepper-step compact label="Your organization" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'organization' ? 'active' : step === 'welcome' ? '' : 'completed'" ::aria-current="step === 'organization' ? 'step' : null" />
         <c-navigation.stepper-connector compact />
         <c-navigation.stepper-step compact label="Security promises" label_class="hidden sm:inline" role="listitem" ::data-state="step === 'security' ? 'active' : step === 'complete' || step === 'plan' ? 'completed' : ''" ::aria-current="step === 'security' ? 'step' : null" />
         {% if billing_enabled %}
@@ -71,8 +71,8 @@
                         Welcome
                     {% endif %}
                     </c-forms.hint>
-                    <c-layout.page-header title="Set up your security workspace" subtitle="Add your organisation and security commitments once. Use them when generating artifacts and preparing product assessments." />
-                    <c-onboarding.reason number="01" icon="fas fa-building" title="Who you are" description="Record your organisation and the person responsible for your artifacts. These details form your default contact profile." />
+                    <c-layout.page-header title="Set up your security workspace" subtitle="Add your organization and security commitments once. Use them when generating artifacts and preparing product assessments." />
+                    <c-onboarding.reason number="01" icon="fas fa-building" title="Who you are" description="Record your organization and the person responsible for your artifacts. These details form your default contact profile." />
                     <c-onboarding.reason number="02" icon="fas fa-shield-halved" title="Where to report a vulnerability" description="Give security researchers a contact email. You can publish it through your Trust Center's security.txt." />
                     <c-onboarding.reason number="03" icon="fas fa-clock" title="How you support your software" description="Choose a default support period and patch targets so you can track progress against your commitments." />
                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -89,18 +89,18 @@
                         {% if form.non_field_errors %}
                             <c-feedback.alert variant="danger">{{ form.non_field_errors }}</c-feedback.alert>
                         {% endif %}
-                        <div x-ref="organisation"
-                             x-show="step === 'organisation'"
+                        <div x-ref="organization"
+                             x-show="step === 'organization'"
                              class="flex flex-col gap-6">
-                            <c-layout.page-header title="Who are you?" subtitle="These details identify your organisation. You can change them later. Uploaded artifacts always keep their original content." tabindex="-1" x-ref="organisationTitle" />
-                            <c-forms.field label="Organisation name" for="id_company_name" required hint="Names your workspace and identifies your organisation." :error="form.company_name.errors">
+                            <c-layout.page-header title="Who are you?" subtitle="These details identify your organization. You can change them later. Uploaded artifacts always keep their original content." tabindex="-1" x-ref="organizationTitle" />
+                            <c-forms.field label="Organization name" for="id_company_name" required hint="Names your workspace and identifies your organization." :error="form.company_name.errors">
                             <c-forms.input id="id_company_name" name="company_name" required maxlength="255" autocomplete="organization" value="{{ form.company_name.value|default:'' }}" />
                             </c-forms.field>
                             <c-forms.field label="Your name" for="id_contact_name" required hint="The person responsible for your artifacts." :error="form.contact_name.errors">
                             <c-forms.input id="id_contact_name" name="contact_name" required maxlength="255" autocomplete="name" value="{{ form.contact_name.value|default:'' }}" />
                             </c-forms.field>
                             <div class="grid gap-5 sm:grid-cols-2">
-                                <c-forms.field label="Website" for="id_website" hint="Optional. Your organisation's website." :error="form.website.errors">
+                                <c-forms.field label="Website" for="id_website" hint="Optional. Your organization's website." :error="form.website.errors">
                                 <c-forms.input id="id_website" name="website" type="url" autocomplete="url" maxlength="200" value="{{ form.website.value|default:'' }}" placeholder="https://example.com" />
                                 </c-forms.field>
                                 <c-forms.field label="Contact email" for="id_email" hint="We suggest this as your security contact next." :error="form.email.errors">
@@ -109,7 +109,7 @@
                             </div>
                             <div class="flex flex-col items-start gap-3">
                                 <c-buttons.secondary size="sm" @click="addressExpanded = !addressExpanded" ::aria-expanded="addressExpanded" aria-controls="registered-address"><i class="fas fa-plus" aria-hidden="true"></i>Registered address</c-buttons.secondary>
-                                <c-forms.field id="registered-address" class="w-full" x-show="addressExpanded" x-cloak label="Registered address" for="id_address" hint="Optional. The organisation's postal address." :error="form.address.errors">
+                                <c-forms.field id="registered-address" class="w-full" x-show="addressExpanded" x-cloak label="Registered address" for="id_address" hint="Optional. The organization's postal address." :error="form.address.errors">
                                 <c-forms.textarea id="id_address" name="address" autocomplete="street-address" maxlength="2000" rows="3" value="{{ form.address.value|default:'' }}" />
                                 </c-forms.field>
                             </div>
@@ -177,8 +177,8 @@
                     <aside aria-label="What this gives you">
                         <c-cards.card flush>
                         <c-cards.header compact title="What this gives you" hint="A reusable starting point for your workspace." />
-                        <c-onboarding.checklist-item title="Organisation identity" description="Your default manufacturer and supplier profile." :complete="setup_saved" ::data-active="step === 'organisation'" />
-                        <c-onboarding.checklist-item title="An artifact contact" description="The person responsible for SBOM inquiries." :complete="setup_saved" ::data-active="step === 'organisation'" />
+                        <c-onboarding.checklist-item title="Organization identity" description="Your default manufacturer and supplier profile." :complete="setup_saved" ::data-active="step === 'organization'" />
+                        <c-onboarding.checklist-item title="An artifact contact" description="The person responsible for SBOM inquiries." :complete="setup_saved" ::data-active="step === 'organization'" />
                         <c-onboarding.checklist-item title="A security contact" description="Where researchers can report vulnerabilities." :complete="security_contact_saved" ::data-active="step === 'security'" />
                         <c-onboarding.checklist-item title="A support default" description="A starting point for future product assessments." :complete="support_default_saved" ::data-active="step === 'security'" />
                         <c-onboarding.checklist-item title="Measurable patch targets" description="Track time to fix against your chosen targets." :complete="setup_saved" ::data-active="step === 'security'" />

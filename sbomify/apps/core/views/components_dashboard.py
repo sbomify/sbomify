@@ -10,7 +10,7 @@ from sbomify.apps.core.apis import create_component
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import ComponentCreateForm
 from sbomify.apps.core.schemas import ComponentCreateSchema
-from sbomify.apps.core.views.products_dashboard import InventoryView, ProductsTableView
+from sbomify.apps.core.views.products_dashboard import InventoryView
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
@@ -60,7 +60,3 @@ class ComponentCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         return _create_component(request)
-
-
-class ComponentsTableView(ProductsTableView):
-    inventory_kind = "components"

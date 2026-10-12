@@ -936,8 +936,8 @@ def _save_step_1(
         and not assessment.harmonised_standard_applied
     ):
         return ServiceResult.failure(
-            "Class I products may only use Module A when a harmonised standard has been applied "
-            "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
+            "Class I products may only use Module A when a harmonized standard has been applied "
+            "(CRA Art 32(2)). Either select a different procedure or confirm harmonized standard.",
             status_code=400,
         )
     assessment.conformity_assessment_procedure = chosen

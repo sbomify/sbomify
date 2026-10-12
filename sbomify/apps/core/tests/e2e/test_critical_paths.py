@@ -165,7 +165,7 @@ class TestCriticalPaths:
         )
 
         # Verify token appears in list on a fresh fetch
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content
@@ -215,7 +215,7 @@ class TestCriticalPaths:
 
         # Test sboms pages
         response = client.get(reverse("core:components_dashboard"))
-        assert "<title> Products · sbomify </title>" in " ".join(response.content.decode().split())
+        assert "<title> Components · sbomify </title>" in " ".join(response.content.decode().split())
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
         assert f"sbomify Component: {component.name}" in response.content.decode()

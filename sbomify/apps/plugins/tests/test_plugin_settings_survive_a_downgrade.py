@@ -177,7 +177,7 @@ class TestTheSettingsPage:
         client = _client(team_with_community_plan, sample_user)
         url = reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_community_plan.key})
 
-        body = client.get(url).content.decode()
+        body = client.get(url, HTTP_HX_REQUEST="true").content.decode()
 
         assert "Paused by your plan" in body
 
@@ -188,7 +188,7 @@ class TestTheSettingsPage:
         client = _client(team_with_community_plan, sample_user)
         url = reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_community_plan.key})
 
-        body = client.get(url).content.decode()
+        body = client.get(url, HTTP_HX_REQUEST="true").content.decode()
 
         assert "Paused by your plan" not in body
         assert "Business plan required" in body

@@ -256,3 +256,17 @@ class TestWorkspaceSettingsScope:
         assert response.status_code == 200
         bound.refresh_from_db()
         assert bound.name == "Renamed WS"
+
+
+@pytest.mark.django_db
+class TestBulkTriageScope:
+    def test_scoped_token_cannot_bulk_triage_another_workspace(self, owner_of_two_workspaces, scoped_token):
+        """``other`` holds no components, so no per-component check runs: the workspace check must refuse it."""
+        _, _, other = owner_of_two_workspaces
+        response = _post_json(
+            Client(),
+            "/api/v1/vulnerability-scanning/triage/bulk",
+            {"vuln_id": "CVE-2026-0001", "state": "in_triage", "team_key": other.key},
+            scoped_token,
+        )
+        assert response.status_code == 403

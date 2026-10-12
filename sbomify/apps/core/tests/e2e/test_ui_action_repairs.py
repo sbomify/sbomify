@@ -330,6 +330,8 @@ def test_catalog_import_and_deletion(authenticated_page: Page, team_with_busines
     page.get_by_role("button", name="Deactivate Imported audit", exact=True).click()
     page.get_by_role("button", name="Activate Imported audit", exact=True).click()
     expect(page.get_by_role("button", name="Deactivate Imported audit", exact=True)).to_be_visible()
+    # The toggle reloads the page, which shows Delete before Alpine binds it; a click before then is dropped.
+    page.wait_for_load_state()
     page.get_by_role("button", name="Delete Imported audit", exact=True).click()
     deletion = page.get_by_role("alertdialog", name="Delete catalog", exact=True)
     deletion.get_by_role("button", name="Cancel", exact=True).click()

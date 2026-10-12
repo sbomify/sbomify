@@ -2,15 +2,15 @@ import Alpine from 'alpinejs';
 import type { AlpineComponent } from 'alpinejs';
 
 interface OnboardingWizardConfig {
-    step: 'organisation' | 'security';
+    step: 'organization' | 'security';
     addressExpanded: boolean;
 }
 
 interface OnboardingWizard {
-    step: 'organisation' | 'security';
+    step: 'organization' | 'security';
     addressExpanded: boolean;
     isSubmitting: boolean;
-    validate(step: 'organisation' | 'security'): boolean;
+    validate(step: 'organization' | 'security'): boolean;
     focusStep(): void;
     next(): void;
     back(): void;
@@ -48,7 +48,7 @@ export function onboardingWizard(config: OnboardingWizardConfig): AlpineComponen
         },
 
         next() {
-            if (!this.validate('organisation')) return;
+            if (!this.validate('organization')) return;
             const email = this.$refs.email as HTMLInputElement;
             const securityEmail = this.$refs.securityEmail as HTMLInputElement;
             if (!securityEmail.value) securityEmail.value = email.value;
@@ -57,17 +57,17 @@ export function onboardingWizard(config: OnboardingWizardConfig): AlpineComponen
         },
 
         back() {
-            this.step = 'organisation';
+            this.step = 'organization';
             this.focusStep();
         },
 
         submit(event) {
-            if (this.step === 'organisation') {
+            if (this.step === 'organization') {
                 event.preventDefault();
                 this.next();
                 return;
             }
-            if (this.isSubmitting || !this.validate('organisation') || !this.validate('security')) {
+            if (this.isSubmitting || !this.validate('organization') || !this.validate('security')) {
                 event.preventDefault();
                 return;
             }

@@ -31,8 +31,8 @@
             <c-cards.header compact title="Colors"><c-buttons.ghost size="sm" @click="setDefaultColors">Reset</c-buttons.ghost></c-cards.header>
             <c-cards.body>
             <div class="space-y-4">
-                <c-forms.color-field size="sm" id="brand-color" name="brand_color" label="Brand color" hint="Your workspace's primary brand color." colour="uiColors.brand_color" on_input="updateColor('brand_color', $event.target.value)" submit_value="localBrandingInfo.brand_color || ''" />
-                <c-forms.color-field size="sm" id="accent-color" name="accent_color" label="Accent color" hint="Highlights on your public pages." colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" submit_value="localBrandingInfo.accent_color || ''" />
+                <c-forms.color-field size="sm" id="brand-color" name="brand_color" label="Brand color" hint="Your workspace's primary brand color." color="uiColors.brand_color" on_input="updateColor('brand_color', $event.target.value)" submit_value="localBrandingInfo.brand_color || ''" />
+                <c-forms.color-field size="sm" id="accent-color" name="accent_color" label="Accent color" hint="Highlights on your public pages." color="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" submit_value="localBrandingInfo.accent_color || ''" />
             </div>
             </c-cards.body>
             </c-cards.card>

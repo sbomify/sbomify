@@ -85,7 +85,9 @@ def test_inventory_card_renders_tabs_and_drilldown(sample_sbom: SBOM, mocker: Mo
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    response = client.get(reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}))
+    response = client.get(
+        reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}), HTTP_HX_REQUEST="true"
+    )
 
     assert response.status_code == 200
     html = response.content.decode()
