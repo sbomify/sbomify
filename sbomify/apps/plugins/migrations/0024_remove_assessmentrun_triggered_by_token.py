@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("plugins", "0021_assessmentrun_plugins_run_sbom_settled_idx"),
+        ("plugins", "0023_assessmentrun_plugins_ar_offload_idx"),
     ]
 
     operations = [
