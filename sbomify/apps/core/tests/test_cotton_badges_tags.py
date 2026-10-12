@@ -31,7 +31,7 @@ def _badge(rendered: str, label: str) -> str:
     ("label", "recipe_bit"),
     [
         ("Bare", "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)]"),
-        ("Primary", "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
+        ("Primary", "text-primary-ink bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
         ("Secondary", "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]"),
         ("Success", "text-success-ink bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
         ("Warning", "text-warning-ink bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
@@ -225,7 +225,7 @@ def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:
     ("label", "recipe_bit"),
     [
         ("Neutral", "text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]"),
-        ("Tag primary", "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
+        ("Tag primary", "text-primary-ink bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]"),
         ("Tag success", "text-success-ink bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)]"),
         ("Tag warning", "text-warning-ink bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]"),
         ("Tag danger", "text-danger-ink bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
@@ -284,7 +284,7 @@ def test_remove_click_carries_the_alpine_handler(rendered: str) -> None:
 
 def test_removable_travels_through_a_variant_file(rendered: str) -> None:
     ada = _span_holding(rendered, "Ada Lovelace")
-    assert "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in ada
+    assert "text-primary-ink bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in ada
     assert "<button" in ada
 
 
