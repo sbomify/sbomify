@@ -21,7 +21,7 @@ the value with a leading newline.
 <c-cards.header compact title="What to fix first" hint="{% if dashboard.needs_attention_total > dashboard.needs_attention|length %}Top {{ dashboard.needs_attention|length|intcomma }} of {{ dashboard.needs_attention_total|intcomma }}, ranked by exploitation and patch SLA{% elif dashboard.needs_attention %}Ranked by exploitation and patch SLA{% endif %}">
 {# djlint:on #}
 {% if workspace_key %}
-    <c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerability scans<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+    <c-buttons.ghost size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' workspace_key %}">View vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
 {% endif %}
 </c-cards.header>{% if dashboard.needs_attention %}
     <c-overview.table aria-label="Priority vulnerabilities">
