@@ -4985,6 +4985,7 @@ def list_component_sboms(
                             "status": plugin_status,
                             "findings_count": findings_count,
                             "fail_count": (run.result or {}).get("summary", {}).get("fail_count", 0),
+                            "category": run.category,
                         }
                     )
 
