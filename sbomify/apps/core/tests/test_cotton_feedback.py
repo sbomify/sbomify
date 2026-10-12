@@ -325,20 +325,35 @@ def test_toast_shell_and_accent(rendered: str) -> None:
     assert "w-[min(28rem,calc(100vw-2rem))]" in success
     assert "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
     assert "[--toast-accent:var(--color-success)]" in success
-    assert 'role="alert"' in success
-    assert "[--toast-accent:var(--color-danger)]" in _probe(rendered, "toast-danger")
+    # Only a danger toast interrupts; every other kind is a status.
+    assert 'role="status"' in success
+    danger = _probe(rendered, "toast-danger")
+    assert "[--toast-accent:var(--color-danger)]" in danger
+    assert 'role="alert"' in danger
 
 
 def test_toast_icon_tint_reads_the_accent(rendered: str) -> None:
     icon = _section(rendered, "toast-success")
-    assert "fas fa-check-circle" in icon
+    assert '<i class="fas fa-check-circle"' in icon
     assert "bg-[color-mix(in_oklab,var(--toast-accent,var(--color-primary))_12%,transparent)]" in icon
+
+
+def test_toast_icon_tile_wraps_the_glyph(rendered: str) -> None:
+    """Font Awesome styles its own <i>, so the tile is a span the glyph sits in."""
+    body = _section(rendered, "toast-success")
+    tile = body[body.index("<span") : body.index("</span>")]
+    assert "w-8 h-8" in tile
+    assert '<i class="fas fa-check-circle"' in tile
 
 
 def test_toast_title_and_message(rendered: str) -> None:
     body = _section(rendered, "toast-success")
-    assert '<p class="text-[0.9375rem] font-semibold text-text mb-0.5">Saved</p>' in body
-    assert '<p class="text-sm leading-[1.4] text-text-muted">Component updated.</p>' in body
+    assert '<p class="text-[0.9375rem] font-semibold text-text mb-0.5 empty:hidden" data-toast-title>Saved</p>' in body
+    # Muted under a title, full ink when the message is the only line.
+    assert (
+        '<p class="text-sm leading-[1.4] text-text [[data-toast-title]:not(:empty)+&]:text-text-muted">'
+        "Component updated.</p>"
+    ) in body
 
 
 def test_toast_close_is_on_by_default_and_can_be_turned_off(rendered: str) -> None:
@@ -358,6 +373,7 @@ def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> 
     assert 'aria-live="polite"' in body
     assert '<template x-for="toast in toasts" :key="toast.id">' in body
     assert 'x-transition:enter-start="opacity-0 translate-x-8"' in body
+    assert 'x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"' in body
     assert 'x-text="toast.title"' in body
     assert '@click="show = false; $nextTick(() => removeToast(toast.id))"' in body
 
@@ -367,6 +383,8 @@ def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> N
     assert ':data-variant="toast.type"' in body
     assert "data-[variant=success]:[--toast-accent:var(--color-success)]" in body
     assert ":class=\"{success: 'fas fa-check-circle'" in body
+    # The region is polite; only an error row takes the alert role.
+    assert ":role=\"toast.type === 'error' ? 'alert' : null\"" in body
     # The surface itself is static, exactly as c-feedback.toast renders it.
     assert "flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
     assert "pointer-events-auto" in body
@@ -375,7 +393,14 @@ def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> N
 def test_toast_container_surface_matches_the_toast_component(rendered: str) -> None:
     shared = (
         "bg-surface rounded-xl border border-solid border-border "
-        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))] "
-        "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))]"
     )
     assert rendered.count(shared) == 3  # two toasts and the container's template
+
+
+def test_live_toasts_enter_once(rendered: str) -> None:
+    """The container animates its rows, so the surface's own entrance stays off there."""
+    entrance = "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+    container = rendered[rendered.index('id="toast-container"') :]
+    assert entrance not in container
+    assert rendered.count(entrance) == 2  # the two static toasts
