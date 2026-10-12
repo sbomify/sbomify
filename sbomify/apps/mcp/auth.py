@@ -31,7 +31,7 @@ through the ``Principal``. What they need of it:
 * ``.pk`` — stable per credential; what the rate-limit window keys on.
 
 Those two, and no more. ``oidc.permissions.request_is_oidc_authed`` also reads
-``.encoded_token`` and ``.user_id``, and it runs on the component-scoped upload
+``.token_type`` and ``.user_id``, and it runs on the component-scoped upload
 endpoints ``upload_artifact`` and ``create_release`` delegate into, to decide
 whether the caller is a Trusted Publishing bot confined to its bound component.
 It reads both defensively: a credential carrying neither is not a bot, which is
@@ -155,8 +155,9 @@ def _credential_kind(stub: HttpRequest) -> str:
     call including read-only ones that never touch the binding otherwise. A
     label is not worth a query per request.
 
-    The claim is HMAC-covered, so it cannot be forged without ``SECRET_KEY``,
-    and the decode is memoised on the row. The narrow cost is that a bot whose
+    It reads the row's stored ``token_type``, which authentication only matches
+    against the HMAC-covered claim, so it cannot be forged without
+    ``SECRET_KEY`` and costs no query. The narrow cost is that a bot whose
     JWT claim was somehow stripped while its binding survived is labelled
     ``pat`` here while the upload path still confines it, which is the safe
     direction for the two to disagree in.

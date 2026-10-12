@@ -260,7 +260,7 @@ class TestTheCredentialContractHolds:
     """The documented contract is `.scopes` and `.pk`. This is what enforces it.
 
     The upload path reaches `oidc.permissions.request_is_oidc_authed`, which
-    also wants `.encoded_token` and `.user_id`. Before, a credential carrying
+    also reads `.token_type` and `.user_id`, both through `getattr`. Before, a credential carrying
     only the two documented attributes raised AttributeError on its first
     `upload_artifact` or `create_release`. In `create_release` that call sits
     outside the view's try, so it propagated: audited as `outcome="error"` with
