@@ -540,3 +540,35 @@ async def test_a_guest_members_token_is_refused(mcp_owner, make_token, product_i
         response = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
 
     assert "Guest members" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_an_operator_token_reads_the_workspace_but_cannot_change_it(
+    mcp_owner, make_token, product_in_bound_workspace
+):
+    """An operator passes the guest gate and gets exactly what can() gives it.
+
+    It reads the workspace like a member, and holds no write tier beyond triage,
+    so a write tool is refused rather than carried out.
+    """
+    from sbomify.apps.core.models import Release
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+    await sync_to_async(Member.objects.filter(user=user, team=bound).update)(role="operator")
+
+    async with mcp_http() as client:
+        listed = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
+        created = await call(
+            client,
+            "tools/call",
+            token=token.encoded_token,
+            name="create_release",
+            arguments={"product_id": product_in_bound_workspace.id, "name": "v1.0.0", "version": "1.0.0"},
+        )
+
+    assert "Bound Product" in json.dumps(parse(listed))
+    assert parse(created)["result"].get("isError") is True
+    assert not await sync_to_async(Release.objects.filter(product=product_in_bound_workspace).exists)()
