@@ -117,9 +117,19 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
 
         cbom_issues = build_latest_cbom_issues(component_id) if is_bom_component else CbomIssuesContext()
 
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.core.models import Component
+
+        # The danger zone's two actions, delete and transfer, both need owner or
+        # admin, and of the component's own workspace, not the session's.
+        can_delete_component = bool(
+            can(request, "component:delete", Component.objects.select_related("team").get(pk=component_id))
+        )
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "can_delete_component": can_delete_component,
             # The page header's copy chip is a list, like every other detail
             # page's, so the header component reads the same shape everywhere.
             "header_copy_values": [{"value": component_id, "title": f"Component ID: {component_id} (click to copy)"}],
