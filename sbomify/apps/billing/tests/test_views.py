@@ -437,6 +437,68 @@ def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("path", ["portal-known-cancellation", "portal-stripe-already-scheduled", "plan-page"])
+def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    path: str,
+):
+    """Each write of Community as the scheduled plan branched on a cancelling
+    subscription read before the workspace lock. A checkout that replaces it in
+    between leaves a live subscription on the row, which the schedule must not
+    reach: the locked row is compared with what the caller branched on."""
+    from types import SimpleNamespace
+
+    from django.db import transaction
+
+    from sbomify.apps.billing.stripe_client import StripeError
+
+    team_key = team_with_business_plan.key
+    team_with_business_plan.billing_plan_limits["cancel_at_period_end"] = path != "portal-stripe-already-scheduled"
+    team_with_business_plan.save()
+    replacement = {
+        **team_with_business_plan.billing_plan_limits,
+        "stripe_subscription_id": "sub_replacement",
+        "subscription_status": "active",
+        "cancel_at_period_end": False,
+    }
+    real_atomic = transaction.atomic
+
+    def replace_then_lock(*args, **kwargs):
+        # The checkout lands just before the view takes the workspace lock.
+        Team.objects.filter(pk=team_with_business_plan.pk).update(billing_plan_limits=replacement)
+        return real_atomic(*args, **kwargs)
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+        patch(
+            "sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session",
+            side_effect=StripeError("This subscription is already set to be canceled."),
+        ),
+        patch("sbomify.apps.billing.views.transaction", SimpleNamespace(atomic=replace_then_lock)),
+    ):
+        if path == "plan-page":
+            response = client.post(
+                reverse("billing:select_plan", kwargs={"team_key": team_key}), {"plan": community_plan.key}
+            )
+        else:
+            response = client.get(
+                reverse("billing:create_portal_session", kwargs={"team_key": team_key})
+                + "?flow_type=subscription_cancel"
+            )
+
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Your subscription changed while the downgrade was being scheduled. Please review it and try again."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits == replacement
+
+
+@pytest.mark.django_db
 def test_select_business_plan_new_checkout(
     client: Client,
     sample_user: AbstractBaseUser,

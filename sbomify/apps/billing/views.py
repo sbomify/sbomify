@@ -206,6 +206,25 @@ def _community_refusal(team: Team) -> str | None:
     return None
 
 
+def _scheduled_community_refusal(team: Team, subscription_id: Any, cancel_at_period_end: bool) -> str | None:
+    """Why Community cannot be recorded as ``team``'s scheduled plan now, or None.
+
+    Asked under the workspace lock, with the subscription and cancellation state
+    the caller branched on before taking it. A checkout or webhook that replaced
+    or ended that subscription in between must not receive the schedule, so a
+    row that no longer matches is refused before usage is counted.
+    """
+    limits = team.billing_plan_limits or {}
+    if (
+        not subscription_id
+        or limits.get("stripe_subscription_id") != subscription_id
+        or bool(limits.get("cancel_at_period_end", False)) != cancel_at_period_end
+        or limits.get("subscription_status") in TERMINAL_SUBSCRIPTION_STATUSES
+    ):
+        return "Your subscription changed while the downgrade was being scheduled. Please review it and try again."
+    return _community_refusal(team)
+
+
 class CreatePortalSessionView(LoginRequiredMixin, View):
     """Create a Stripe Billing Portal session and redirect to it."""
 
@@ -267,7 +286,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
-                            if refusal := _community_refusal(team):
+                            if refusal := _scheduled_community_refusal(team, sub_id, True):
                                 messages.error(request, refusal)
                                 return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
@@ -296,11 +315,13 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                     sync_subscription_from_stripe(team, force_refresh=True)
                     team.refresh_from_db()
                     billing_limits = team.billing_plan_limits or {}
+                    synced_sub_id = billing_limits.get("stripe_subscription_id")
+                    synced_cancel = bool(billing_limits.get("cancel_at_period_end", False))
 
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
                             team = Team.objects.select_for_update().get(pk=team.pk)
-                            if refusal := _community_refusal(team):
+                            if refusal := _scheduled_community_refusal(team, synced_sub_id, synced_cancel):
                                 messages.error(request, refusal)
                                 return redirect("billing:select_plan", team_key=team.key)
                             billing_limits = team.billing_plan_limits or {}
@@ -426,8 +447,6 @@ class SelectPlanView(LoginRequiredMixin, View):
         self, team: Team, team_key: str, plan: BillingPlan, scheduled_downgrade_plan: Any, request: HttpRequest
     ) -> HttpResponse:
         """Handle case where subscription already has cancel_at_period_end set."""
-        from .services.plan_selection import check_downgrade
-
         if scheduled_downgrade_plan:
             messages.info(
                 request,
@@ -435,12 +454,13 @@ class SelectPlanView(LoginRequiredMixin, View):
                 "Your current plan will remain active until the end of your billing period.",
             )
         else:
+            sub_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
-                # Checked again under the workspace lock, as the immediate move does.
-                downgrade = check_downgrade(team, plan)
-                if not downgrade.ok:
-                    messages.error(request, downgrade.error or "Reduce usage to choose this plan.")
+                # Checked again under the workspace lock, as the immediate move does,
+                # against the cancelling subscription this branch was chosen for.
+                if refusal := _scheduled_community_refusal(team, sub_id, True):
+                    messages.error(request, refusal)
                     return redirect("billing:select_plan", team_key=team_key)
                 billing_limits = team.billing_plan_limits or {}
                 billing_limits["scheduled_downgrade_plan"] = "community"
