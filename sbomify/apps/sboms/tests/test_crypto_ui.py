@@ -85,7 +85,9 @@ def test_inventory_card_renders_tabs_and_drilldown(sample_sbom: SBOM, mocker: Mo
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    response = client.get(reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}))
+    response = client.get(
+        reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}), HTTP_HX_REQUEST="true"
+    )
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -247,7 +249,7 @@ def test_workspace_crypto_page_blocks_guests_of_url_workspace(sample_sbom: SBOM,
     # The bypass: session's current team unset (or another workspace) makes the
     # mixin a no-op; the view's own role check must still reject the guest.
     session = guest.session
-    session["current_team"] = {}
+    session["current_workspace"] = {}
     session.save()
     response = guest.get(reverse("sboms:workspace_crypto", kwargs={"team_key": team.key}))
 

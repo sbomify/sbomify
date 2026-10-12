@@ -259,7 +259,7 @@ def test_the_supplier_list_page_renders(client: Client, sample_team_with_owner_m
 
 class TestTheUrlWorkspaceIsWhatGetsAuthorized:
     """The page authorizes against the workspace in the URL, not the one in the
-    session. TeamRoleRequiredMixin reads ``session["current_team"]``, so a view
+    session. TeamRoleRequiredMixin reads ``session["current_workspace"]``, so a view
     that then resolves the URL's workspace by membership alone lets an owner of
     one workspace act on another where they are only a guest.
     """

@@ -33,6 +33,7 @@ class CbomIssuesContext:
 
 
 def build_latest_cbom_issues(component_id: str) -> CbomIssuesContext:
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
     from sbomify.apps.sboms.models import SBOM
 
@@ -47,11 +48,11 @@ def build_latest_cbom_issues(component_id: str) -> CbomIssuesContext:
         return CbomIssuesContext()
     item_type = "cbom" if artifact["bom_type"] == SBOM.BomType.CBOM else "sboms"
 
+    latest_ids = latest_run_ids(
+        AssessmentRun.objects.filter(category="compliance", status="completed"), [artifact["id"]]
+    )
     results = list(
-        AssessmentRun.objects.filter(sbom_id=artifact["id"], category="compliance", status="completed")
-        .order_by("plugin_name", "-created_at")
-        .distinct("plugin_name")
-        .values_list("plugin_name", "result")
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("plugin_name", "result")
     )
     if not results:
         return CbomIssuesContext(
@@ -123,6 +124,7 @@ def build_component_vulnerabilities(
     across requests. What made the page time out was handing the template 2,390
     rows to show five of, and that is what paging removes.
     """
+    from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
@@ -144,14 +146,12 @@ def build_component_vulnerabilities(
         return ComponentVulnerabilitiesContext()
 
     sbom_id = latest_sbom["id"]
-    # One query, ordered so the newest run of each provider comes first, and the
-    # blob is only pulled for those. The first row also answers "did anything
-    # scan this at all", which is what the summary fallback needs.
+    # The newest run of each provider, and the blob only for those. An empty
+    # list also answers "did anything scan this at all", which is what the
+    # summary fallback needs.
+    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id])
     provider_results = list(
-        AssessmentRun.objects.filter(sbom_id=sbom_id, category="security", status="completed")
-        .order_by("plugin_name", "-created_at")
-        .distinct("plugin_name")
-        .values_list("result", flat=True)
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("result", flat=True)
     )
     if not provider_results:
         return ComponentVulnerabilitiesContext(sbom_id=sbom_id, version=latest_sbom["version"])
@@ -214,10 +214,12 @@ def viewer_manages_component(request: Any, component_id: str) -> bool:
     its trust center is not publishing its CVE inventory, its VEX dispositions
     or which of its findings are known-exploited.
 
-    ``component:manage`` is the capability the private component page is for,
-    and the one the standalone scan report already requires (`sbom:manage`
-    resolves to the same workspace tiers), so this puts the panel and the page
-    that links to it on the same footing.
+    ``component:read_internal`` is the capability the private component page
+    is for: seeing the internal picture is a read, and gating it on
+    ``component:manage`` meant the one role that exists to read it -- the
+    ``operator``, whose single write is ``artifact:publish_vex`` -- fell
+    through to the public page. Its ``may_triage`` was then unreachable from
+    any screen.
     """
     return viewer_rights(request, component_id).may_see
 
@@ -232,10 +234,14 @@ class ViewerRights:
     query on every filter change and page turn.
     """
 
-    #: ``component:manage``: may see the internal security picture at all.
+    #: ``component:read_internal``: may see the internal security picture at
+    #: all. A read, deliberately: an operator may look without being able to
+    #: change anything but a VEX decision.
     may_see: bool
     #: ``artifact:publish_vex``: may record a VEX decision on what they see.
     may_triage: bool
+    #: The component's own workspace, which a page may not share with the session.
+    team_key: str = ""
 
 
 def viewer_rights(request: Any, component_id: str) -> ViewerRights:
@@ -243,10 +249,16 @@ def viewer_rights(request: Any, component_id: str) -> ViewerRights:
     from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Component
 
-    component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
+    component = (
+        Component.objects.filter(pk=component_id)
+        .select_related("team")
+        .only("id", "team_id", "visibility", "team__key")
+        .first()
+    )
     if component is None:
         return ViewerRights(may_see=False, may_triage=False)
     return ViewerRights(
-        may_see=bool(can(request, "component:manage", component)),
+        may_see=bool(can(request, "component:read_internal", component)),
         may_triage=bool(can(request, "artifact:publish_vex", component)),
+        team_key=component.team.key or "",
     )

@@ -31,7 +31,7 @@
                 <template x-for="artifact in filteredArtifacts" :key="artifact.id">
                     <c-tables.row>
                     <c-tables.cell nowrap>
-                    <span class="w-8 h-8 rounded flex items-center justify-center"
+                    <span class="w-8 h-8 rounded-[var(--radius-sm)] flex items-center justify-center"
                           :class="effType(artifact) === 'sbom' ? 'bg-primary/10 text-primary' : effType(artifact) === 'vex' ? 'bg-info/10 text-info' : effType(artifact) === 'cbom' ? 'bg-success/10 text-success' : effType(artifact) === 'document' ? 'bg-warning/10 text-warning' : 'bg-border/30 text-text-muted'">
                         <i :class="effType(artifact) === 'sbom' ? 'fas fa-file-code' : effType(artifact) === 'vex' ? 'fas fa-file-contract' : effType(artifact) === 'cbom' ? 'fas fa-key' : effType(artifact) === 'document' ? 'fas fa-file-alt' : 'fas fa-file'"></i>
                     </span>
@@ -39,7 +39,7 @@
                     <c-tables.cell nowrap>
                     <span class="font-medium text-text"
                           x-text="artifact.artifact_name || 'Unnamed artifact'"></span>
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wide"
+                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] text-xs font-semibold uppercase tracking-wide"
                           :class="typeBadgeClass(artifact)"
                           x-text="effType(artifact)"></span>
                     {% comment %}

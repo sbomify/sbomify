@@ -102,7 +102,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             "low",
             "default_support_period_years",
         }
-        setup_step = "security" if form.errors and not (set(form.errors) - security_fields) else "organisation"
+        setup_step = "security" if form.errors and not (set(form.errors) - security_fields) else "organization"
         context = {
             "form": form,
             "wizard_config": {"step": setup_step, "addressExpanded": bool(form["address"].value())},
@@ -273,7 +273,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
 
     @staticmethod
     def _get_current_team(request: HttpRequest) -> Team | None:
-        team_key = request.session.get("current_team", {}).get("key")
+        team_key = request.session.get("current_workspace", {}).get("key")
         if team_key:
             team = Team.objects.filter(key=team_key).first()
             if team:

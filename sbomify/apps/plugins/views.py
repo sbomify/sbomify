@@ -3,23 +3,24 @@
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+from .services.new_plugins import plugins_added_since_last_save
 
 logger = getLogger(__name__)
 
 
-class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing team plugin settings."""
 
     allowed_roles = list(ADMINISTER)
@@ -38,8 +39,17 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         enabled_plugins = plugin_settings.get("enabled_plugins", [])
         plugin_configs = plugin_settings.get("plugin_configs", {})
         plugins = plugin_settings.get("available_plugins", [])
+        new_plugins = plugins_added_since_last_save(team_key).value or set()
         for plugin in plugins:
             plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
+            # Enabled while the plan still included it, and kept across the downgrade.
+            # Its checkbox is disabled and unchecked, so without saying so the row reads
+            # as "off" when the stored setting is really "on, not running" — and the row
+            # would look unchanged by an upgrade that in fact restarts the plugin.
+            plugin["is_paused_by_plan"] = plugin["name"] in enabled_plugins and not plugin.get("has_access", False)
+            plugin["is_new"] = (
+                plugin["name"] in new_plugins and plugin.get("has_access", False) and not plugin["is_enabled"]
+            )
             schema = plugin.get("config_schema") or []
             for field in schema:
                 field["current_value"] = plugin_configs.get(plugin["name"], {}).get(field.get("key", ""), "")
@@ -157,14 +167,14 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return render(request, "plugins/plugins_page.html.j2")
 
 
-class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class PluginsSummaryView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
-        team_data = request.session.get("current_team", {})
+        team_data = request.session.get("current_workspace", {})
         team_key = team_data.get("key", "")
 
         context: dict[str, Any] = {}
@@ -203,7 +213,7 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         result = build_run_findings_page(request, run_id, request.GET)
         if not result.ok or result.value is None:
-            return HttpResponseNotFound(result.error or "Assessment run not found")
+            return HttpResponse(result.error or "Assessment run not found", status=result.status_code or 404)
         found = result.value
 
         # The header rather than django-htmx's request.htmx, the same reading the
@@ -234,6 +244,11 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
+                # The pager's links reset to page 1; a refresh must not. This
+                # keeps the page the reader is on as well as the filters, so
+                # re-rendering the panel after a triage lands them back where
+                # they were.
+                "findings_refresh_query": query_string(query, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 "panel": found.panel,
                 # A short check list reads whole; search and paging only earn
                 # their place once it runs past one page.

@@ -12,7 +12,7 @@ from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
@@ -29,7 +29,7 @@ from sbomify.apps.teams.utils import (
 logger = logging.getLogger(__name__)
 
 
-class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing workspace general settings (name, default, deletion).
 
     Gated at the ``ADMINISTER`` tier (owners and admins). Workspace *deletion* is
@@ -120,9 +120,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # until the cache expires on its own.
             update_user_teams_session(request, cast(User, request.user))
 
-            return htmx_success_response(
-                "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}
-            )
+            return htmx_success_response("Workspace settings updated", triggers={"refreshTeamGeneral": True})
 
         except Team.DoesNotExist:
             return htmx_error_response("Workspace not found")
@@ -205,20 +203,20 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     logger.error("Target workspace %s not found after deletion", target_team_key)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
-                    request.session["current_team"] = {"key": target_team_key, **target_team_data}
+                    request.session["current_workspace"] = {"key": target_team_key, **target_team_data}
                     request.session.modified = True
                     request.session.save()
                 except Exception as e:
                     logger.error("Error switching workspace after deletion: %s", e, exc_info=True)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
-                    request.session["current_team"] = {"key": target_team_key, **target_team_data}
+                    request.session["current_workspace"] = {"key": target_team_key, **target_team_data}
                     request.session.modified = True
                     request.session.save()
             else:
                 # No workspaces left - this shouldn't happen if validation is correct
                 logger.warning("User %s has no workspaces after deleting %s", request.user.id, team_key)
-                request.session.pop("current_team", None)
+                request.session.pop("current_workspace", None)
                 request.session.modified = True
                 request.session.save()
 

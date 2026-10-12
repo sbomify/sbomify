@@ -24,7 +24,7 @@ The rows are the slot, landing on c-cards.dangerzone-body so the collapse
 sits on the padded element itself; the confirm modal a row opens belongs to
 the caller, next to this tag, because only the caller knows what it deletes.
 {% endcomment %}
-<c-vars state="isExpanded" title="Danger Zone" subtitle="Actions here cannot be undone." class />
+<c-vars state="isExpanded" title="Danger zone" subtitle="Actions here cannot be undone." class />
 <c-cards.dangerzone flush class="{{ class }}" :attrs="attrs">
 <c-slot name="header">
 <c-cards.dangerzone-header class="cursor-pointer select-none justify-between gap-4 transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-danger)_4%,transparent)]" role="button" tabindex="0" ::aria-expanded="{{ state }}" @click="{{ state }} = !{{ state }}" @keydown.enter.prevent="{{ state }} = !{{ state }}" @keydown.space.prevent="{{ state }} = !{{ state }}">

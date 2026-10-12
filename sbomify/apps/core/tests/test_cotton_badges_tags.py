@@ -119,7 +119,9 @@ def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, to
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
     critical = _badge(rendered, "Critical")
     assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in critical
-    assert "rounded" in critical
+    # Not bare `rounded`: the legacy sheet's .rounded carries !important at a
+    # different radius, so the severity corner states the token it wants.
+    assert "rounded-[var(--radius-sm)]" in critical
     assert "rounded-full" not in critical
     assert "px-3" not in critical
     assert "tracking-[0.01em]" not in critical
@@ -398,7 +400,69 @@ def test_the_other_badges_stay_spans(rendered: str) -> None:
         "Low",
         "Unknown",
         "Runtime critical",
+        # The members table is where a wrapped label was first noticed, so the
+        # role badge belongs in this guard too.
+        "Owner role",
+        "Off ladder role",
     ],
 )
 def test_badge_labels_never_wrap(rendered: str, label: str) -> None:
     assert "whitespace-nowrap" in _badge(rendered, label)
+
+
+ROLE_NEUTRAL = (
+    "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] "
+    "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "role", "ink", "token"),
+    [
+        ("Owner role", "owner", "text-primary", "var(--color-primary)"),
+        ("Admin role", "admin", "text-warning", "var(--color-warning)"),
+    ],
+)
+def test_role_badge_keys_the_privileged_accents_off_the_attribute(
+    rendered: str, label: str, role: str, ink: str, token: str
+) -> None:
+    badge = _badge(rendered, label)
+    assert f'data-role="{role}"' in badge
+    assert f"data-[role={role}]:{ink}" in badge
+    assert f"data-[role={role}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
+    assert f"data-[role={role}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
+
+
+@pytest.mark.parametrize(
+    ("label", "role"),
+    [
+        ("Member role", "member"),
+        ("Guest role", "guest"),
+        ("Off ladder role", "not-a-role"),
+    ],
+)
+def test_role_badge_rests_on_neutral_for_everything_else(rendered: str, label: str, role: str) -> None:
+    """A role the ladder does not know renders neutral rather than unstyled, so
+    an unrecognised value can never leave the badge without a recipe."""
+    badge = _badge(rendered, label)
+    assert f'data-role="{role}"' in badge
+    assert ROLE_NEUTRAL in badge
+
+
+def test_role_badge_shares_the_badge_shell_and_default_shape(rendered: str) -> None:
+    badge = _badge(rendered, "Owner role")
+    assert "inline-flex items-center font-semibold" in badge
+    assert "uppercase tracking-[0.04em]" not in badge
+
+
+def test_role_badge_forwards_size_and_pill(rendered: str) -> None:
+    badge = _badge(rendered, "Rounded owner role")
+    assert "rounded-full" in badge
+    assert 'data-role="owner"' in badge
+
+
+def test_role_badge_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> None:
+    badge = _badge(rendered, "Runtime role")
+    assert "shrink-0" in badge
+    assert ':data-role="m.role"' in badge
+    assert 'x-text="m.role"' in badge

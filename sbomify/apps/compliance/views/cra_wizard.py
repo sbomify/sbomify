@@ -102,7 +102,7 @@ class CRAStepView(LoginRequiredMixin, View):
             "step_names": _STEP_NAMES,
             "step_urls": step_urls,
             "completed_steps": assessment.completed_steps,
-            "current_team": request.session.get("current_team", {}),
+            "current_team": request.session.get("current_workspace", {}),
             # Step 3: security.txt status for CRA Annex I Part II §5
             "security_txt_enabled": step_data.get("security_txt_enabled", False),
             "team": {"key": assessment.product.team.key},
@@ -161,7 +161,7 @@ class CRAScopeScreeningView(LoginRequiredMixin, View):
                 "save": reverse("compliance:cra_scope_screening", kwargs={"product_id": product.id}),
                 "start_assessment": reverse("compliance:cra_start_assessment", kwargs={"product_id": product.id}),
             },
-            "current_team": request.session.get("current_team", {}),
+            "current_team": request.session.get("current_workspace", {}),
         }
         return render(request, "compliance/cra_scope_screening.html.j2", context)
 

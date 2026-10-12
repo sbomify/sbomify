@@ -1064,7 +1064,7 @@ class CISA2025MinimumElementsPlugin(AssessmentPlugin):
                     "with value: design, pre-build, build, post-build, operations, "
                     "discovery, or decommission. Alternatively, add property "
                     "'internal:sbom:generationContext' in metadata.properties. Note: "
-                    "the legacy 'cdx:sbom:generationContext' name is still recognised "
+                    "the legacy 'cdx:sbom:generationContext' name is still recognized "
                     "for backward compatibility but is deprecated. Unofficial names "
                     "must not be used under the cdx: namespace."
                 ),

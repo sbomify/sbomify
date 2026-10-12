@@ -74,14 +74,14 @@ def test_following_it_selects_the_viewed_workspace(
     ``Settings -> Plugins`` link met in the same way.
     """
     viewed, selected, client = two_workspaces
-    assert client.session["current_team"]["key"] == selected.key
+    assert client.session["current_workspace"]["key"] == selected.key
 
     plugins = reverse("plugins:plugins_page")
     response = client.get(f"{reverse('teams:switch_team', kwargs={'team_key': viewed.key})}?next={plugins}")
 
     assert response.status_code == 302
     assert response.headers["Location"] == plugins
-    assert client.session["current_team"]["key"] == viewed.key
+    assert client.session["current_workspace"]["key"] == viewed.key
 
 
 @pytest.mark.django_db
@@ -98,14 +98,14 @@ def test_switching_to_a_workspace_missing_from_a_stale_session(
     """
     viewed, _selected, client = two_workspaces
     session = client.session
-    session["user_teams"] = {k: v for k, v in session["user_teams"].items() if k != viewed.key}
+    session["user_workspaces"] = {k: v for k, v in session["user_workspaces"].items() if k != viewed.key}
     session.save()
-    assert viewed.key not in client.session["user_teams"]
+    assert viewed.key not in client.session["user_workspaces"]
 
     response = client.get(reverse("teams:switch_team", kwargs={"team_key": viewed.key}))
 
     assert response.status_code == 302
-    assert client.session["current_team"]["key"] == viewed.key
+    assert client.session["current_workspace"]["key"] == viewed.key
 
 
 @pytest.mark.django_db
@@ -123,4 +123,4 @@ def test_switching_to_a_workspace_the_user_does_not_belong_to(
     response = client.get(reverse("teams:switch_team", kwargs={"team_key": stranger.key}))
 
     assert response.status_code == 302
-    assert client.session["current_team"]["key"] != stranger.key
+    assert client.session["current_workspace"]["key"] != stranger.key

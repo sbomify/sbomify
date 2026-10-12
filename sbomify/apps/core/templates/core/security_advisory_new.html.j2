@@ -29,7 +29,7 @@
             <c-layout.choice-group name="remediation_status" label="Status" :options="status_options" selected="identified" hint="Where the work stands now." />
         </div>
         </c-layout.form-section>
-        <c-layout.form-section step="2" title="What it affects" description="Tick a product to cover every version. Open one to pick versions.">
+        <c-layout.form-section step="2" title="What it affects" description="Check a product to cover every version. Open one to pick versions.">
         <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
         </c-layout.form-section>
         <c-layout.form-section step="3" accent="neutral" title="What else is known" description="Optional. You can add these later.">

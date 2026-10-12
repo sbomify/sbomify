@@ -64,7 +64,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
 {% endblock %}
 {% block content %}
     {% if advisory.is_withdrawn %}
-        <div class="tw-alert tw-alert-warning mb-5">
+        <div class="tw-alert tw-alert-warning mb-[1.25rem]">
             <i class="fas fa-rotate-left tw-alert-icon" aria-hidden="true"></i>
             <div class="tw-alert-content">
                 <p class="text-sm m-0">
@@ -128,7 +128,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
             {% for vulnerability in advisory.vulnerabilities %}
                 <div class="tc-panel">
                     <h2 class="tc-panel-title">{{ vulnerability.cve_id|default:vulnerability.title }}</h2>
-                    <div class="flex items-center gap-2 flex-wrap mb-3">
+                    <div class="flex items-center gap-2 flex-wrap mb-[0.75rem]">
                         {% if vulnerability.severity %}
                             <c-badges.severity level="{{ vulnerability.severity }}">{{ vulnerability.severity }}</c-badges.severity>
                         {% endif %}
@@ -139,7 +139,14 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                     </div>
                     {% if vulnerability.description %}<div class="tc-prose">{{ vulnerability.description }}</div>{% endif %}
                     {% if vulnerability.recommendation %}
-                        <p class="tc-fact-label mt-4">Recommendation</p>
+                        {% comment %}
+                            mt-[1rem]! and not mt-4: .mt-4 in the legacy
+                            static/css/utilities.css is !important at 1.5rem.
+                            The ! is for .tc-fact-label itself, which sets the
+                            margin shorthand unlayered, so a layered utility
+                            would leave no gap at all above this label.
+                        {% endcomment %}
+                        <p class="tc-fact-label mt-[1rem]!">Recommendation</p>
                         <div class="tc-prose">{{ vulnerability.recommendation }}</div>
                     {% endif %}
                 </div>

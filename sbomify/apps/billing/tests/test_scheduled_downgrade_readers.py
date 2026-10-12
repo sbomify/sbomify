@@ -65,7 +65,7 @@ def _run_decorator(team):
         return None
 
     request = RequestFactory().post("/")
-    request.session = {"current_team": {"key": team.key}}
+    request.session = {"current_workspace": {"key": team.key}}
     view(request)
 
 

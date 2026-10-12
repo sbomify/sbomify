@@ -59,11 +59,11 @@
   --spacing-2xl: 3rem;
 
   /* ===== BORDER RADIUS ===== */
-  --radius-sm: 0.2rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 1rem;
-  --radius-full: 9999px;
+  /* Declared in sbomify/assets/css/tailwind.src.css, not here. This sheet is
+     unlayered and Tailwind's theme is not, so a --radius-* here would beat the
+     one every rounded-* utility reads, on the public pages that load this file
+     and nowhere else. The rules below still read var(--radius-*); they resolve
+     against the one scale. */
 
   /* ===== SHADOWS ===== */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);

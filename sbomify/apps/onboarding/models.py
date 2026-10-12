@@ -295,6 +295,13 @@ class OnboardingEmail(models.Model):
         PENDING = "pending", "Pending"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed"
+        #: The address itself was refused with a 5xx. Distinct from FAILED
+        #: because the two want opposite things from the next batch pass: a
+        #: FAILED row is deleted and tried again, which is right for a broken
+        #: template or a misconfigured relay and wrong here. Nothing we fix on
+        #: our side makes a nonexistent mailbox exist, so re-sending daily only
+        #: earns bounces against our sending reputation.
+        UNDELIVERABLE = "undeliverable", "Undeliverable"
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     user = models.ForeignKey("core.User", on_delete=models.CASCADE, related_name="onboarding_emails")
@@ -306,6 +313,18 @@ class OnboardingEmail(models.Model):
     # Email metadata
     subject = models.CharField(max_length=255, blank=True)
     error_message = models.TextField(blank=True)
+    #: The address the refusal in ``UNDELIVERABLE`` was about. A user can
+    #: correct a mistyped address, and the profile sync writes a new one from
+    #: Keycloak; without this the guard would go on suppressing onboarding for
+    #: an address that is no longer theirs and that nobody ever refused.
+    attempted_address = models.CharField(max_length=254, blank=True, default="")
+    #: Stamped immediately before the message is handed to the mailer, and
+    #: never cleared. A ``PENDING`` row carrying this is one whose outcome was
+    #: never recorded: SMTP may well have accepted it and the process then died
+    #: before ``mark_sent`` could run. Without it such a row is
+    #: indistinguishable from one whose worker died *before* sending, and the
+    #: abandonment sweep re-sends a message the recipient already has.
+    handed_to_mailer_at = models.DateTimeField(null=True, blank=True)
     retry_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -322,11 +341,34 @@ class OnboardingEmail(models.Model):
         """Create a new onboarding email record."""
         return cls.objects.create(user=user, email_type=email_type, subject=subject)
 
+    def mark_handed_to_mailer(self) -> None:
+        """Record that the message is about to be given to the mailer.
+
+        Written before the send rather than after it, which is the whole point:
+        the gap this closes is the one where SMTP accepts a message and the
+        process dies before anything records that it did.
+        """
+        self.handed_to_mailer_at = timezone.now()
+        self.save(update_fields=["handed_to_mailer_at"])
+
     def mark_sent(self) -> None:
         """Mark email as successfully sent."""
         self.status = self.EmailStatus.SENT
         self.sent_at = timezone.now()
         self.save(update_fields=["status", "sent_at"])
+
+    @property
+    def handoff_unresolved(self) -> bool:
+        """Whether this row is between the mailer handoff and its outcome.
+
+        Every path that finishes a send moves the row off ``PENDING`` -- sent,
+        failed, undeliverable -- so a stamped row still pending is one where
+        nothing has got to run after the handoff *yet*. "Yet" is the whole of
+        the difference between a live send and an orphaned one, and this
+        property does not know which: see ``HANDOFF_SETTLES_AFTER`` in the
+        services module, which is what tells them apart.
+        """
+        return self.status == self.EmailStatus.PENDING and self.handed_to_mailer_at is not None
 
     def mark_failed(self, error_message: str = "") -> None:
         """Mark email as failed with optional error message."""
@@ -334,3 +376,25 @@ class OnboardingEmail(models.Model):
         self.error_message = error_message
         self.retry_count += 1
         self.save(update_fields=["status", "error_message", "retry_count"])
+
+    def mark_undeliverable(self, address: str, error_message: str = "") -> None:
+        """Record that ``address`` was refused, so nothing tries *it* again."""
+        self.status = self.EmailStatus.UNDELIVERABLE
+        self.error_message = error_message
+        self.attempted_address = address or ""
+        self.retry_count += 1
+        self.save(update_fields=["status", "error_message", "attempted_address", "retry_count"])
+
+    def suppresses(self, address: str) -> bool:
+        """Whether this row is a standing refusal of ``address``.
+
+        A refusal is about an address, not about a user. An older row with no
+        address recorded is honoured as-is rather than reopened: it predates
+        this field, and guessing that it referred to the current address would
+        re-send to whatever refused it.
+        """
+        if self.status != self.EmailStatus.UNDELIVERABLE:
+            return False
+        if not self.attempted_address:
+            return True
+        return self.attempted_address == address

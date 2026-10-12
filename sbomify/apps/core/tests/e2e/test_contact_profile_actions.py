@@ -9,8 +9,8 @@ from sbomify.apps.teams.models import ContactEntity, ContactProfile, Team
 def test_cannot_create_profile_without_entities(authenticated_page: Page, team_with_business_plan: Team) -> None:
     page = authenticated_page
     page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
-    expect(page.get_by_text("No contact profiles yet", exact=True)).to_be_visible()
-    page.get_by_role("button", name="Add profile", exact=True).click()
+    expect(page.get_by_text("No parties yet", exact=True)).to_be_visible()
+    page.get_by_role("button", name="Add party", exact=True).click()
     page.locator('.profile-form input[name="name"]').fill("Empty profile")
 
     expect(page.locator('.profile-form button[type="submit"]')).to_be_disabled()
@@ -28,9 +28,9 @@ def test_delete_empty_or_incomplete_profile(
 
     page = authenticated_page
     page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
-    page.get_by_role("button", name="Profile actions").click()
-    page.get_by_role("menuitem", name="Delete profile", exact=True).click()
-    page.get_by_role("button", name="Delete profile", exact=True).click()
+    page.get_by_role("button", name="Party actions").click()
+    page.get_by_role("menuitem", name="Delete party", exact=True).click()
+    page.get_by_role("button", name="Delete party", exact=True).click()
 
-    expect(page.get_by_text("No contact profiles yet", exact=True)).to_be_visible()
+    expect(page.get_by_text("No parties yet", exact=True)).to_be_visible()
     assert not ContactProfile.objects.filter(pk=profile.pk).exists()

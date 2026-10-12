@@ -8,14 +8,14 @@
         vulnerabilities faster.
     </p>
     <p>
-        You can assign roles (owner, admin, or member) to control who can do what.
+        You can assign roles (owner, admin, member, or operator) to control who can do what.
         And with your <strong>Trust Center</strong>, you can share your compliance
         status with customers and partners too.
     </p>
     {% comment %}
     Straight to the members tab when we know the workspace. The bare
     /workspaces/settings/ redirect this used to point at reads
-    request.session["current_team"], which an email click cannot rely on.
+    request.session["current_workspace"], which an email click cannot rely on.
     {% endcomment %}
     <p style="text-align: center; margin: 32px 0;">
         {% if workspace_key %}

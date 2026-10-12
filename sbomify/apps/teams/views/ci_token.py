@@ -57,7 +57,7 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
         # Authorize against the workspace in the URL, which is the one being
-        # minted for. TeamRoleRequiredMixin above reads session["current_team"],
+        # minted for. TeamRoleRequiredMixin above reads session["current_workspace"],
         # so on its own it answers a different question: whether the caller is
         # an owner or admin of whatever workspace they happen to have selected.
         #

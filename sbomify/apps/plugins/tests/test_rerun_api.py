@@ -58,7 +58,7 @@ def owner_client(sample_sbom, sample_user):  # noqa: F811
     client = Client()
     client.force_login(sample_user)
     session = client.session
-    session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+    session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
     session.save()
     return client
 

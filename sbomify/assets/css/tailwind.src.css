@@ -192,6 +192,32 @@
   --color-severity-low-fill: rgb(10 109 129);      /* 5.97 */
   --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
 
+  /* The radius scale, and the only place it is declared. The values are
+     Tailwind's own defaults, restated so that this file owns the scale outright.
+
+     Public pages load tokens.css and six other legacy sheets before this one,
+     all unlayered, while Tailwind publishes its theme inside @layer theme. An
+     unlayered declaration beats a layered one whatever the source order, so a
+     --radius-* redeclared in any of those sheets silently forked every
+     rounded-* utility on the public side: rounded-xl measured 16px there
+     against 12px in the app, on every card, table frame, stat card and alert.
+     Declaring the scale here, unlayered and last, is what closes that.
+
+     This plain :root block rather than @theme, for the reason the severity
+     fills above give: static/css/*.css is not processed by Tailwind, and an
+     @theme variable no scanned source mentions is tree-shaken out of the
+     build, so the var(--radius-*) rules in pages.css and public-pages.css
+     would fall back to nothing. Theme-independent, so not redeclared under
+     :root.light.
+
+     --radius-full has no Tailwind counterpart, because rounded-full compiles
+     to a literal calc(infinity * 1px). It is here for public-pages.css. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
   /* Primary Brand Colors */
 
   /* Background Layers (darkest to lightest for depth) */

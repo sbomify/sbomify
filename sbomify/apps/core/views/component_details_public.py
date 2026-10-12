@@ -239,7 +239,7 @@ class ComponentDetailsPublicView(View):
 
         brand = build_branding_context(team)
 
-        current_team = request.session.get("current_team") or {}
+        current_team = request.session.get("current_workspace") or {}
         team_billing_plan = getattr(team, "billing_plan", None) or current_team.get("billing_plan")
 
         context.update(

@@ -292,7 +292,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                 {% endfor %}
             </tbody>
             </c-tables.table>
-            <p class="pt-3 text-xs text-text-muted m-0">Sorted by expiry, soonest first.</p>
+            <p class="pt-[0.75rem] text-xs text-text-muted m-0">Sorted by expiry, soonest first.</p>
         </div>
     {% endif %}
     {% if protocols %}
@@ -309,7 +309,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                         {% endif %}
                     </div>
                     {% if view.cipher_suites %}
-                        <div class="flex flex-wrap gap-2 mt-3">
+                        <div class="flex flex-wrap gap-2 mt-[0.75rem]">
                             {% for suite in view.cipher_suites %}
                                 {% if suite.weaknesses %}
                                     <c-tags.danger class="font-mono" title="{{ suite.weaknesses|join:'; ' }}">{{ suite.name|default:"?" }}</c-tags.danger>

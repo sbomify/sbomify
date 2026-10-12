@@ -351,14 +351,14 @@ class TestSignedURLs:
         """#1008: revocation is enforced from LIVE DB state, never a stale
         session role-cache. A revoked user who is still logged in (their
         session still lists them as owner) must still get 403 — verify_item_access
-        short-circuits on session["user_teams"], so the re-check must not run
+        short-circuits on session["user_workspaces"], so the re-check must not run
         against that cache.
         """
         from sbomify.apps.teams.models import Member
 
         self.client.force_login(self.user)
         session = self.client.session
-        session["user_teams"] = {self.team.key: {"role": "owner"}}
+        session["user_workspaces"] = {self.team.key: {"role": "owner"}}
         session.save()
         Member.objects.filter(team=self.team, user=self.user).delete()
 
@@ -376,7 +376,7 @@ class TestSignedURLs:
 
         self.client.force_login(self.user)
         session = self.client.session
-        session["user_teams"] = {self.team.key: {"role": "owner"}}
+        session["user_workspaces"] = {self.team.key: {"role": "owner"}}
         session.save()
         Member.objects.filter(team=self.team, user=self.user).delete()
 

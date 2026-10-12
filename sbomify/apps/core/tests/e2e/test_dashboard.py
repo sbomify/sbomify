@@ -10,6 +10,7 @@ from pytest_django.fixtures import SettingsWrapper
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.e2e.utils import take_screenshot
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 
 
 @pytest.mark.django_db
@@ -38,6 +39,7 @@ def overview_dashboard(dashboard: dict[str, Any]) -> dict[str, Any]:
     from sbomify.apps.plugins.models import AssessmentRun, VulnerabilityLifecycle
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
+    register_plugin("overview-review")
     run = AssessmentRun.objects.create(
         sbom=dashboard["sboms"][0],
         plugin_name="overview-review",
@@ -377,6 +379,8 @@ def test_dashboard_view_switch_and_trend_filters(
                 getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
         }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
+    # HTMX binds a swapped-in control during the settle phase; a change before then is dropped.
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
         "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
@@ -387,6 +391,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(page.get_by_role("heading", name="No vulnerability data")).to_be_visible()
     page.wait_for_function("Object.keys(Chart.instances).length === 0")
     expect(page.get_by_role("combobox", name="Product", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][0].id)
     expect(chart).to_be_visible()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")

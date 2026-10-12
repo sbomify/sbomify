@@ -100,6 +100,12 @@ class TestTheResultItProduces:
         assert "purl" in finding["description"]
         assert "CPE" in finding["description"]
 
+    def test_it_names_the_scanner_that_can(self, plugin: OSVPlugin) -> None:
+        """Dependency Track matches CPEs against NVD, which is how a Yocto SBOM gets findings."""
+        finding = _as_dict(plugin._create_no_packages_result())["findings"][0]
+
+        assert "Dependency Track matches packages by CPE" in finding["description"]
+
 
 @pytest.mark.django_db
 class TestItDoesNotRenderAsPassing:

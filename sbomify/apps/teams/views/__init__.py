@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing
 from typing import Any, cast
 
-from sbomify.apps.core.url_utils import get_base_url
 from sbomify.logging import getLogger
 
 if typing.TYPE_CHECKING:
@@ -12,8 +11,6 @@ if typing.TYPE_CHECKING:
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
-from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.forms import ChoiceField
 from django.http import (
@@ -22,7 +19,6 @@ from django.http import (
     HttpResponseNotFound,
 )
 from django.shortcuts import redirect, render
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
@@ -41,7 +37,9 @@ from sbomify.apps.teams.models import (
 )
 from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members, invitation_email
+from sbomify.apps.teams.services.invitations import invite_member, revoke_invitation
 from sbomify.apps.teams.utils import (
+    find_invitation_by_token,
     redirect_to_team_settings,
     switch_active_workspace,
     update_user_teams_session,
@@ -150,7 +148,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     # from a live membership check, and could ask for one that is not.
     # Re-reading before giving up turns a KeyError 500 into the switch the user
     # asked for.
-    user_teams: dict[str, Any] = request.session.get("user_teams") or {}
+    user_teams: dict[str, Any] = request.session.get("user_workspaces") or {}
     if team_key not in user_teams:
         from sbomify.apps.teams.utils import get_user_teams
 
@@ -159,14 +157,14 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
         # matches — the cache being consulted is the thing suspected of being
         # wrong. The refreshed map is written back so the next reader benefits.
         user_teams = get_user_teams(user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
         request.session.modified = True
     if team_key not in user_teams:
         messages.add_message(request, messages.ERROR, "You are not a member of that workspace")
         return redirect("core:dashboard")
 
     team = dict(key=team_key, **user_teams[team_key])
-    request.session["current_team"] = team
+    request.session["current_workspace"] = team
 
     # Check if user is a guest member of the newly switched workspace
     from sbomify.apps.teams.models import Member
@@ -246,8 +244,8 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
         # Advisory, so the limit shows as a form error rather than as a refusal
         # after the user has filled the form in. The authoritative check is taken
-        # under a lock at the point the invitation is written, below.
-        from sbomify.apps.teams.utils import can_add_user_to_team, user_seat
+        # under a lock at the point the invitation is written, in invite_member.
+        from sbomify.apps.teams.utils import can_add_user_to_team
 
         can_add, error_message = can_add_user_to_team(team)
 
@@ -255,91 +253,14 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             # Add form error instead of redirecting
             invite_user_form.add_error(None, error_message)
         elif invite_user_form.is_valid():
-            # Check if we already have an invitation and if it's expired or not
-            try:
-                existing_invitation: Invitation = Invitation.objects.get(
-                    email=invite_user_form.cleaned_data["email"], team_id=team_id
-                )
-
-                if existing_invitation:
-                    if existing_invitation.has_expired:
-                        existing_invitation.delete()
-                    else:
-                        invite_user_form.add_error(
-                            "email", f"Invitation already sent to {invite_user_form.cleaned_data['email']}"
-                        )
-                        context["invite_user_form"] = invite_user_form
-                        return render(request, "teams/invite.html.j2", context)
-
-            except Invitation.DoesNotExist:
-                # Invitation doesn't exist, proceed with creating new one
-                pass
-
-            # Counted and written under one lock. The advisory check above ran
-            # before the form was even validated, so by here another invitation
-            # may have taken the last seat. The email is sent afterwards, on
-            # purpose: an SMTP round trip has no business inside a row lock.
-            with user_seat(team) as (seat_available, seat_error):
-                if not seat_available:
-                    invite_user_form.add_error(None, seat_error)
-                    context["invite_user_form"] = invite_user_form
-                    return render(request, "teams/invite.html.j2", context)
-
-                invitation = Invitation(
-                    team_id=team_id,
-                    email=invite_user_form.cleaned_data["email"],
-                    role=invite_user_form.cleaned_data["role"],
-                    invited_by=cast(User, request.user),
-                )
-                invitation.save()
-
-            email_context = {
-                "team": team,
-                "invitation": invitation,
-                "user": request.user,
-                "base_url": get_base_url(),
-            }
-            email = EmailMultiAlternatives(
-                subject=f"You're invited to join {team.name} on sbomify",
-                body=render_to_string("teams/emails/team_invite_email.txt", email_context),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[invite_user_form.cleaned_data["email"]],
-                reply_to=["hello@sbomify.com"],
+            email = invite_user_form.cleaned_data["email"]
+            result = invite_member(request, team, email, invite_user_form.cleaned_data["role"])
+            if result.ok:
+                messages.add_message(request, messages.SUCCESS, f"Invite sent to {email}")
+                return redirect_to_team_settings(team_key, "members")
+            invite_user_form.add_error(
+                "email" if result.status_code == 409 else None, result.error or "The invitation was not sent"
             )
-            email.attach_alternative(
-                render_to_string("teams/emails/team_invite_email.html.j2", email_context), "text/html"
-            )
-            email.send()
-
-            # Capture AFTER email.send() — if SMTP fails (transient outage,
-            # template render error) the request raises and we want the
-            # funnel to reflect "no invite shipped", not an inflated
-            # "invite_sent" count. Ship the email DOMAIN only — never the
-            # local-part. The local-part identifies a person; the domain
-            # identifies a B2B prospect / cohort which is the analytics
-            # value here. A drive-by edit to ship the full email would
-            # leak PII to PostHog. Domain alone can still be sensitive for
-            # some B2B (e.g. an internal subsidiary) — acceptable trade-off
-            # for the funnel metric.
-            invited_email = invite_user_form.cleaned_data["email"]
-            email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
-            captured_role = invite_user_form.cleaned_data["role"]
-            captured_team_key = team.key
-            transaction.on_commit(
-                lambda: capture_for_request(
-                    request,
-                    "team:member_invited",
-                    {
-                        "role": captured_role,
-                        "invited_email_domain": email_domain,
-                    },
-                    team_key=captured_team_key,
-                )
-            )
-
-            messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
-
-            return redirect_to_team_settings(team_key, "members")
 
         # If form has errors, fall through to render the form with errors
         context["invite_user_form"] = invite_user_form
@@ -352,10 +273,13 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
 @require_http_methods(["GET", "POST"])
 def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFound | HttpResponse:
-    try:
-        invitation = Invitation.objects.filter(token=invite_token).first()
-    except ValidationError:
-        return error_response(request, HttpResponseNotFound("Unknown invitation"))
+    # find_invitation_by_token rejects a token the UUIDField cannot coerce
+    # before it reaches the ORM, so no ValidationError escapes the query: a
+    # mangled link is a missing invitation, which the branch below answers.
+    # It does not accept a primary key in place of a token -- an invitation id
+    # is guessable and a token is not -- and it logs nothing, so the token
+    # stays out of the log.
+    invitation = find_invitation_by_token(invite_token)
 
     if invitation is None:
         # If user is not authenticated, store token and redirect to login
@@ -678,7 +602,7 @@ def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
         )
 
     messages.add_message(request, messages.INFO, f"Invitation for {invitation.email} deleted")
-    invitation.delete()
+    revoke_invitation(invitation.team, invitation.pk)
 
     return redirect_to_team_settings(invitation.team.key or "", "members")
 
@@ -689,7 +613,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
     Redirect /workspace/settings/ to the current team's settings page.
     This provides backward compatibility for the old URL structure.
     """
-    current_team = request.session.get("current_team")
+    current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
         return redirect("teams:team_settings", team_key=current_team["key"])
     else:

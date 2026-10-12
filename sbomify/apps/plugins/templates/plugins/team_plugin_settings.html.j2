@@ -19,7 +19,7 @@
             <c-badges.secondary>{{ group.list|length|intcomma }}</c-badges.secondary>
             </c-cards.header>
             {% for plugin in group.list %}
-                <c-layout.select-row divided toggle_ref="toggle" :disabled="plugin.requires_upgrade" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
+                <c-layout.select-row divided toggle_ref="toggle" x_data="{ enabled: {{ plugin.is_enabled|yesno:'true,false' }} }">
                 <c-forms.checkbox-input name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" aria-label="Enable {{ plugin.display_name|default:plugin.name }}" x-ref="toggle" x-model="enabled" :checked="plugin.is_enabled" :disabled="plugin.requires_upgrade" />
                 <div class="flex min-w-0 flex-1 flex-col gap-3">
                     <div class="flex min-w-0 flex-col gap-2">
@@ -29,9 +29,13 @@
                             {% for bom_type in plugin.supported_bom_types %}
                                 <c-badges.secondary title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type|upper }}</c-badges.secondary>
                             {% endfor %}
+                            {% if plugin.is_new %}<c-badges.success title="Added since this page was last saved">New</c-badges.success>{% endif %}
                             {% if plugin.is_beta %}<c-badges.info>Beta</c-badges.info>{% endif %}
                             {% if plugin.requires_upgrade %}
                                 <c-badges.warning>{{ plugin.required_plan }} plan required</c-badges.warning>
+                            {% endif %}
+                            {% if plugin.is_paused_by_plan %}
+                                <c-badges.info title="You had this enabled on a previous plan. Nothing runs it now. The setting is kept, so it starts again if you upgrade.">Paused by your plan</c-badges.info>
                             {% endif %}
                         </div>
                         <c-forms.hint compact>{{ plugin.description }}</c-forms.hint>

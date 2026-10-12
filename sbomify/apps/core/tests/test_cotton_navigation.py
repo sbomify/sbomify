@@ -374,14 +374,14 @@ def test_density_marks_the_container_and_the_items_read_it(rendered: str) -> Non
 
 
 def test_items_are_divided_and_the_last_one_is_not(rendered: str) -> None:
-    item = _chunk(rendered, "div", "Organisational controls")
+    item = _chunk(rendered, "div", "Organizational controls")
     assert (
         "border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] last:border-b-0" in item
     )
 
 
 def test_trigger_is_a_real_button_bound_to_the_open_state(rendered: str) -> None:
-    trigger = _chunk(rendered, "button", "Organisational controls")
+    trigger = _chunk(rendered, "button", "Organizational controls")
     assert 'type="button"' in trigger
     assert TRIGGER in trigger
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in trigger
@@ -393,7 +393,7 @@ def test_trigger_is_a_real_button_bound_to_the_open_state(rendered: str) -> None
 
 
 def test_trigger_turns_the_chevron_over_from_its_own_state(rendered: str) -> None:
-    trigger = _chunk(rendered, "button", "Organisational controls")
+    trigger = _chunk(rendered, "button", "Organizational controls")
     chevron = "fas fa-chevron-down text-text-muted transition-transform duration-300 group-aria-expanded:rotate-180"
     assert chevron in trigger
 
@@ -410,7 +410,7 @@ def test_label_class_lands_on_the_label_and_nowhere_else(rendered: str) -> None:
     assert '<span class="flex flex-1 items-center justify-between gap-3 min-w-0 mr-3">' in trigger
     assert "flex-1" not in trigger[: trigger.index("<span")]
     # A label with no class of its own carries no class attribute at all.
-    assert "<span >Organisational controls</span>" in _chunk(rendered, "button", "Organisational controls")
+    assert "<span >Organizational controls</span>" in _chunk(rendered, "button", "Organizational controls")
 
 
 def test_panel_collapses_on_the_same_expression(rendered: str) -> None:

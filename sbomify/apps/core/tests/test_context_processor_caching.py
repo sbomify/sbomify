@@ -34,7 +34,7 @@ def counted() -> Any:
 def _request(member: Member, *, with_team: bool = True) -> Any:
     request = RequestFactory().get("/")
     request.user = member.user
-    request.session = {"current_team": {"key": member.team.key}} if with_team else {}
+    request.session = {"current_workspace": {"key": member.team.key}} if with_team else {}
     return request
 
 

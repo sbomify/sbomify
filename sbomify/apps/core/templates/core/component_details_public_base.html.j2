@@ -51,7 +51,7 @@
 {% endblock %}
 {% block content %}
     {% if component.visibility == 'gated' %}
-        <div class="mb-5"
+        <div class="mb-[1.25rem]"
              {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
             {% if needs_nda_signing %}
                 <c-feedback.alert variant="warning" icon="fas fa-file-signature">

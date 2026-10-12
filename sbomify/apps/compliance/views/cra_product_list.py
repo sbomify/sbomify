@@ -23,7 +23,7 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         team_id = get_team_id_from_session(request)
 
         # Use session billing plan key — no Team DB query needed

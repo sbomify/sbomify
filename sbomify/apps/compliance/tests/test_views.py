@@ -491,7 +491,7 @@ class TestCRAStartPicker:
     def test_billing_gate_hides_picker(self, web_client: Client, settings: Any) -> None:
         settings.BILLING = True
         session = web_client.session
-        session["current_team"]["billing_plan"] = "community"
+        session["current_workspace"]["billing_plan"] = "community"
         session.save()
         response = web_client.get(reverse("compliance:cra_product_list"))
         assert response.status_code == 200

@@ -294,7 +294,7 @@ def test_scoped_token_same_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }
@@ -319,7 +319,7 @@ def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_b.key: {"role": "owner", "name": team_b.name, "is_default_team": False, "team_id": team_b.id}
         }
     }
@@ -342,7 +342,7 @@ def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }

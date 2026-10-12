@@ -178,7 +178,7 @@ class OnboardingComponentForm(forms.Form):
 
 
 class OnboardingCompanyForm(PatchSLAForm):
-    """Organisation and security settings saved together at the end of setup."""
+    """Organization and security settings saved together at the end of setup."""
 
     mode = forms.ChoiceField(
         choices=[("recommended", "Recommended"), ("custom", "Custom")], required=False, initial="recommended"

@@ -70,7 +70,7 @@ def _is_team_member(request: HttpRequest, team_id: int) -> bool:
     # Session cache first (avoids the DB round-trip on the hot path).
     # The session's ``user_teams`` map is keyed by team key; fall back
     # to a DB check only if it isn't populated.
-    user_teams = request.session.get("user_teams") or {}
+    user_teams = request.session.get("user_workspaces") or {}
     for payload in user_teams.values():
         if payload.get("id") == team_id or payload.get("team_id") == team_id:
             return True

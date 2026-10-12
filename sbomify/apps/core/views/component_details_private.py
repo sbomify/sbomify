@@ -54,21 +54,19 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             public = ComponentDetailsPublicView.as_view()(request, component_id=component_id)
             return cast("HttpResponse", public)
 
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
         billing_plan = current_team.get("billing_plan")
 
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
         company_nda_id = None
         gated_visibility_allowed = False
-        team_key = current_team.get("key")
+        team_key = rights.team_key
         team_id = component.get("team_id")
         if team_id:
             from sbomify.apps.teams.models import Team
 
             try:
                 team = Team.objects.get(pk=team_id)
-                if not team_key:
-                    team_key = team.key
                 company_nda = team.get_company_nda_document()
                 if company_nda:
                     company_nda_id = company_nda.id

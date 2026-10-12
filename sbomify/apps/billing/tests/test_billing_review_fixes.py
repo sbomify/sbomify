@@ -184,7 +184,7 @@ class TestPlanKeyInCheckoutMetadata:
         client.force_login(sample_user)
 
         session = client.session
-        session["current_team"] = {"key": team_with_community_plan.key}
+        session["current_workspace"] = {"key": team_with_community_plan.key}
         session.save()
 
         mock_session = MagicMock()

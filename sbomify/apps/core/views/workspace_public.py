@@ -19,6 +19,7 @@ from sbomify.apps.core.url_utils import (
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.documents.services.trust_center_badges import public_certification_badges
 from sbomify.apps.plugins.models import TeamPluginSettings
+from sbomify.apps.plugins.services.access import plugins_within_plan
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.security_advisories.services.trust_center import public_advisory_summary
 from sbomify.apps.teams.branding import build_branding_context
@@ -63,7 +64,7 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
 
         return 200, team
 
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     team_id = current_team.get("id") or current_team.get("team_id")  # type: ignore[assignment]
     if not team_id and current_team.get("key"):
         try:
@@ -186,7 +187,10 @@ class WorkspacePublicView(View):
         if is_workspace_admin:
             try:
                 plugin_settings = TeamPluginSettings.objects.get(team=team)
-                has_vulnerability_plugin = bool(set(plugin_settings.enabled_plugins) & {"osv", "dependency-track"})
+                # What the plan actually runs, not what the workspace has on file: a
+                # plugin it no longer includes stays stored so it resumes on upgrade.
+                running = set(plugins_within_plan(team, plugin_settings.enabled_plugins or []))
+                has_vulnerability_plugin = bool(running & {"osv", "dependency-track"})
             except TeamPluginSettings.DoesNotExist:
                 pass
 

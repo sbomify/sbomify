@@ -28,9 +28,9 @@ def billing_session(browser_context: Any) -> None:
     """Exercise paid identifier controls with the browser's real workspace plan."""
     for row in Session.objects.all():
         session = SessionStore(session_key=row.session_key)
-        current = session.get("current_team") or {}
+        current = session.get("current_workspace") or {}
         current["billing_plan"] = "business"
-        session["current_team"] = current
+        session["current_workspace"] = current
         session.save()
 
 
@@ -198,8 +198,8 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
         settings.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
     expect(settings.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
-    settings.get_by_role("button", name="Add profile", exact=True).click()
-    settings.get_by_role("button", name="Back to profiles", exact=True).click()
+    settings.get_by_role("button", name="Add party", exact=True).click()
+    settings.get_by_role("button", name="Back to parties", exact=True).click()
     expect(settings.locator("#contact-profiles-content")).to_be_visible()
     settings.close()
     expect(page).to_have_url(re.compile(re.escape(wizard_url) + "$"))
@@ -330,6 +330,8 @@ def test_catalog_import_and_deletion(authenticated_page: Page, team_with_busines
     page.get_by_role("button", name="Deactivate Imported audit", exact=True).click()
     page.get_by_role("button", name="Activate Imported audit", exact=True).click()
     expect(page.get_by_role("button", name="Deactivate Imported audit", exact=True)).to_be_visible()
+    # The toggle reloads the page, which shows Delete before Alpine binds it; a click before then is dropped.
+    page.wait_for_load_state()
     page.get_by_role("button", name="Delete Imported audit", exact=True).click()
     deletion = page.get_by_role("alertdialog", name="Delete catalog", exact=True)
     deletion.get_by_role("button", name="Cancel", exact=True).click()

@@ -444,8 +444,8 @@ def test_crud_operations_default_billing_plan_behavior(
 
     # Explicitly clear any team session data that might have been set up
     session = client.session
-    session.pop("current_team", None)
-    session.pop("user_teams", None)
+    session.pop("current_workspace", None)
+    session.pop("user_workspaces", None)
     session.save()
 
     # Ensure team has no billing plan

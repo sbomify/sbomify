@@ -34,7 +34,7 @@ def test_product_creation_within_limit(team_with_business_plan: Team, business_p
 
     request = HttpRequest()
     request.method = "POST"
-    request.session = {"current_team": {"key": team_with_business_plan.key}}
+    request.session = {"current_workspace": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("product")
     def dummy_view(request):
@@ -56,7 +56,7 @@ def test_product_creation_over_limit(team_with_business_plan: Team, community_pl
 
     request = HttpRequest()
     request.method = "POST"
-    request.session = {"current_team": {"key": team_with_business_plan.key}}
+    request.session = {"current_workspace": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("product")
     def dummy_view(request):
@@ -89,7 +89,7 @@ def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, 
 
     request = HttpRequest()
     request.method = "POST"
-    request.session = {"current_team": {"key": team_with_business_plan.key}}
+    request.session = {"current_workspace": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("component")
     def dummy_view(request):
@@ -108,7 +108,7 @@ def test_component_creation_no_plan(team_with_business_plan: Team):
 
     request = HttpRequest()
     request.method = "POST"
-    request.session = {"current_team": {"key": team_with_business_plan.key}}
+    request.session = {"current_workspace": {"key": team_with_business_plan.key}}
 
     @check_billing_limits("component")
     def dummy_view(request):

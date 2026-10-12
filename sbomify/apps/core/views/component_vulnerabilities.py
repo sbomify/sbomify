@@ -28,7 +28,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.services.component_security import (
     ComponentVulnerabilitiesContext,
     build_component_vulnerabilities,
@@ -71,6 +71,10 @@ def vulnerabilities_panel_context(
 
     query = panel["query"]
     context["vuln_query_string"] = query_string(query, page=1)
+    # The pager's links reset to page 1; a refresh must not. This keeps the page
+    # the reader is on as well as the filters, so re-rendering the panel after a
+    # triage lands them back where they were.
+    context["vuln_refresh_query"] = query_string(query)
     return context
 
 
@@ -115,11 +119,12 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
         )
 
 
-class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Load the selected occurrence's current decision only when triage is opened."""
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        if not viewer_rights(request, component_id).may_triage:
+        rights = viewer_rights(request, component_id)
+        if not rights.may_triage:
             return htmx_error_response("Component not found")
         identity = (
             request.GET.get("advisory", ""),
@@ -137,7 +142,7 @@ class ComponentTriageModalView(GuestAccessBlockedMixin, LoginRequiredMixin, View
             "core/components/priority_triage_modal.html.j2",
             {
                 "component_id": component_id,
-                "team_key": request.session.get("current_team", {}).get("key", ""),
+                "team_key": rights.team_key,
                 "triage_payload": {
                     "id": finding["id"],
                     "purl": finding["purl"],

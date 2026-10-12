@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from django.utils.html import strip_tags
 
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
 SKIPPED = {"summary": {"total_findings": 1, "warning_count": 1}, "metadata": {"skipped": True}}
@@ -57,6 +58,7 @@ class TestTheRowStatus:
         component = Component.objects.create(name="Library", team=workspace)
         sbom = SBOM.objects.create(name="bom", component=component, format="cyclonedx")
         for index, result in enumerate(results):
+            register_plugin(f"scanner-{index}")
             run = AssessmentRun.objects.create(
                 sbom=sbom, plugin_name=f"scanner-{index}", category="security", status="completed", result=result
             )
@@ -125,6 +127,7 @@ class TestOnlyWhenEveryProviderSkipped:
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
+        register_plugin(plugin_name)
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name=plugin_name,
@@ -170,6 +173,7 @@ class TestTheSbomPages:
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
+        register_plugin(plugin_name)
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name=plugin_name,

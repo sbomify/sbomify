@@ -24,6 +24,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from django.db import transaction
 from django.utils import timezone
 
 from sbomify.logging import getLogger
@@ -47,16 +48,19 @@ def prunable_run_ids(
     Returns ids rather than deleting them, so the policy can be counted or
     dry-run without being welded to the deletion.
 
-    One pass over every run, newest first within each (sbom, plugin). The sort
-    breaks ties on id, because runs created in the same transaction can share a
-    timestamp and an unstable order there would let a newer row rank below an
-    older one and be pruned. Ranking
+    One window query ranks every run, newest first within each (sbom, plugin),
+    and returns only the doomed ids. The sort breaks ties on id, because runs
+    created in the same transaction can share a timestamp and an unstable order
+    there would let a newer row rank below an older one and be pruned. Ranking
     against *all* runs rather than only the old ones is what makes the two rules
     compose: a pair whose quota is already filled by recent runs has its older
     ones prunable, while a pair with few runs keeps them however old they are.
-    Only the four small columns are selected, so the fat ``result`` blob is
-    never fetched.
+    That is why the age test wraps the ranked query instead of joining its
+    filter, where Django would apply it before ranking.
     """
+    from django.db.models import F, Window
+    from django.db.models.functions import RowNumber
+
     from sbomify.apps.plugins.models import AssessmentRun
 
     # A quota of 0 would make rank>=0 true for the newest run, contradicting the
@@ -68,24 +72,21 @@ def prunable_run_ids(
 
     cutoff = timezone.now() - timedelta(days=min_age_days)
 
-    rows = (
-        AssessmentRun.objects.order_by("sbom_id", "plugin_name", "-created_at", "-id")
-        .values_list("id", "sbom_id", "plugin_name", "created_at")
-        .iterator()
+    beyond_quota = (
+        AssessmentRun.objects.order_by()
+        .annotate(
+            rank=Window(
+                RowNumber(),
+                partition_by=[F("sbom_id"), F("plugin_name")],
+                order_by=[F("created_at").desc(), F("id").desc()],
+            )
+        )
+        .filter(rank__gt=keep_per_plugin)
+        .values("id")
     )
-
-    doomed: list[Any] = []
-    current_pair: tuple[str, str] | None = None
-    rank = 0
-    for run_id, sbom_id, plugin_name, created_at in rows:
-        pair = (sbom_id, plugin_name)
-        if pair != current_pair:
-            current_pair, rank = pair, 0
-        else:
-            rank += 1
-        if rank >= keep_per_plugin and created_at < cutoff:
-            doomed.append(run_id)
-    return doomed
+    return list(
+        AssessmentRun.objects.order_by().filter(created_at__lt=cutoff, id__in=beyond_quota).values_list("id", flat=True)
+    )
 
 
 def prune_assessment_runs(
@@ -102,6 +103,7 @@ def prune_assessment_runs(
     original #1120 migration unrunnable on staging.
     """
     from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.result_store import delete_result_objects
 
     doomed = prunable_run_ids(keep_per_plugin=keep_per_plugin, min_age_days=min_age_days)
     if dry_run:
@@ -112,10 +114,30 @@ def prune_assessment_runs(
     removed = 0
     for start in range(0, len(doomed), batch_size):
         batch = doomed[start : start + batch_size]
-        # Count what the delete actually removed, not what was asked for: a
-        # concurrent sweep may already have taken some of these rows.
-        _, per_model = AssessmentRun.objects.filter(id__in=batch).delete()
+        with transaction.atomic():
+            # A run whose payload was offloaded is the only pointer to its
+            # objects, so they go once the row has: never a row pointing at a
+            # deleted object. If deleting them fails after the commit, the
+            # orphan sweep in the daily task collects them by run id. Every row of the batch is locked while its key is
+            # read and the row deleted, not only rows already offloaded: an
+            # offload writes its key in one UPDATE that waits on the same lock,
+            # so one landing mid-batch is either seen here or finds the row gone
+            # and writes nothing, deleting what it stored.
+            offloaded = [
+                run_id
+                for run_id, key in AssessmentRun.objects.select_for_update()
+                .filter(id__in=batch)
+                .values_list("id", "result_object_key")
+                if key
+            ]
+            # Count what the delete actually removed, not what was asked for: a
+            # concurrent sweep may already have taken some of these rows. Only
+            # the id is loaded: the collector would otherwise read every doomed
+            # run whole, findings blob included, just to delete it.
+            _, per_model = AssessmentRun.objects.filter(id__in=batch).only("id").delete()
         removed += per_model.get("plugins.AssessmentRun", 0)
+        for run_id in offloaded:
+            delete_result_objects(run_id)
     if removed:
         logger.info(f"[RETENTION] pruned {removed} assessment runs")
     return removed

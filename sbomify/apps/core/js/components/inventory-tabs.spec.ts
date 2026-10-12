@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { inventoryTabs } from './inventory-tabs';
 
+// The controller retitles the page; bun runs these without a DOM.
+const page = globalThis as { document?: { title: string } };
+page.document ??= { title: '' };
+
 type RequestDetail = Parameters<ReturnType<typeof inventoryTabs>['begin']>[0]['detail'];
 const event = (detail: RequestDetail) => ({ detail }) as CustomEvent<RequestDetail>;
 const request = (kind: string, xhr: XMLHttpRequest) => event({
@@ -12,14 +16,29 @@ const request = (kind: string, xhr: XMLHttpRequest) => event({
 const instances: ReturnType<typeof inventoryTabs>[] = [];
 afterEach(() => { instances.splice(0).forEach(tabs => tabs.destroy?.()); });
 
+const KINDS = ['products', 'releases', 'components'];
+const heading = (kind: string) => kind.charAt(0).toUpperCase() + kind.slice(1);
+
 function setup(kind = 'products') {
     const panel = { dataset: { inventoryKind: kind } };
+    const links = KINDS.map(name => ({
+        href: `/${name}/`,
+        dataset: {
+            inventoryTab: name,
+            inventoryHeading: heading(name),
+            inventorySubtitle: `Every ${name.slice(0, -1)} here.`,
+            inventoryTitle: `${heading(name)} · sbomify`,
+        },
+    }));
     const tabs = Object.assign(inventoryTabs(), {
-        $el: { querySelector: () => panel } as unknown as HTMLElement,
+        $el: {
+            querySelector: () => panel,
+            querySelectorAll: () => links,
+        } as unknown as HTMLElement,
     });
     tabs.init?.();
     instances.push(tabs);
-    return { tabs, panel };
+    return { tabs, panel, links };
 }
 
 describe('inventory panel navigation', () => {
@@ -78,6 +97,38 @@ describe('inventory panel navigation', () => {
         tabs.begin(request('releases', {} as XMLHttpRequest));
         tabs.confirm({ detail: { elt: tabs.$el }, preventDefault: () => { prevented = true; } } as CustomEvent<RequestDetail>);
         expect(prevented).toBe(true);
+    });
+});
+
+
+describe('inventory headings follow the open tab', () => {
+    test('the heading starts on the panel on screen, titling a restored one', () => {
+        // Back restores a panel under whatever title the page was left with.
+        document.title = 'Components · sbomify';
+        const { tabs } = setup('releases');
+        expect(tabs.heading).toBe('Releases');
+        expect(tabs.headingSubtitle).toBe('Every release here.');
+        expect(document.title).toBe('Releases · sbomify');
+    });
+
+    test('selecting a tab retitles the page before its panel arrives', () => {
+        const { tabs, panel } = setup();
+        const xhr = {} as XMLHttpRequest;
+        tabs.begin(request('components', xhr));
+        expect(tabs.heading).toBe('Components');
+        expect(document.title).toBe('Components · sbomify');
+        panel.dataset.inventoryKind = 'components';
+        tabs.swapped(request('components', xhr));
+        expect(tabs.heading).toBe('Components');
+    });
+
+    test('a failed tab restores the heading of the panel still on screen', () => {
+        const { tabs } = setup('products');
+        const xhr = {} as XMLHttpRequest;
+        tabs.begin(request('releases', xhr));
+        tabs.finish(event({ xhr, successful: false }));
+        expect(tabs.heading).toBe('Products');
+        expect(document.title).toBe('Products · sbomify');
     });
 });
 

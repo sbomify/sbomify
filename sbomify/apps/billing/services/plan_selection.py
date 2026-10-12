@@ -11,14 +11,24 @@ from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.queries import get_team_user_counts
 
 
 def build_plan_selection_context(
     request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
 ) -> ServiceResult[dict[str, Any]]:
     order = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
+    # Two different numbers on purpose, matching what the rest of the product
+    # already does with them. The usage card reports people, so it counts
+    # members the way the members tab does. The downgrade guard has to agree
+    # with the invite path instead, and that counts an unexpired invitation as
+    # a seat already taken and ignores the synthetic bot members OIDC creates.
+    # Reading members.count() for the guard got both ends wrong: a workspace one
+    # invitation over the cap was waved onto a plan it could not fit, and a bot
+    # blocked a downgrade it holds no seat in.
+    member_count, _pending_invites, seats_taken = get_team_user_counts(workspace.id)
     usage = {
-        "users": workspace.members.count(),
+        "users": member_count,
         "products": Product.objects.filter(team=workspace).count(),
         "components": Component.objects.filter(team=workspace).count(),
     }
@@ -35,10 +45,20 @@ def build_plan_selection_context(
         pricing.setdefault("promo_message", plan.promo_message)
         exceeded = []
         if is_subscribed and order.get(key, 99) < order.get(current_plan, 99):
-            for resource, limit in (("products", plan.max_products), ("components", plan.max_components)):
-                if limit is not None and usage[resource] > limit:
-                    exceeded.append(f"{usage[resource]} {resource} (limit: {limit})")
+            # Members belongs here with the other two. max_users is enforced on
+            # invite, the cards advertise it as a quota, and leaving it out let a
+            # workspace pick a plan it could not fit its people into. "members"
+            # is the word the cards use for max_users, so the warning keeps it
+            # even though the number it counts is seats.
+            for resource, used, limit in (
+                ("members", seats_taken, plan.max_users),
+                ("products", usage["products"], plan.max_products),
+                ("components", usage["components"], plan.max_components),
+            ):
+                if limit is not None and used > limit:
+                    exceeded.append(f"{used} {resource} (limit: {limit})")
         downgrade_limits[key] = {"exceeds": bool(exceeded), "resources": exceeded}
+        is_downgrade = is_subscribed and order.get(key, 99) < order.get(current_plan, 99)
         prices = []
         if key == BillingPlan.KEY_BUSINESS:
             annual_savings_percent = pricing.get("annual_savings_percent")
@@ -63,6 +83,7 @@ def build_plan_selection_context(
                 "description": plan.description,
                 "features": PLAN_FEATURES.get(key, ()),
                 "current": key == current_plan,
+                "downgrade": is_downgrade,
                 "prices": prices,
                 "limits": [
                     {"label": "member", "count": plan.max_users},

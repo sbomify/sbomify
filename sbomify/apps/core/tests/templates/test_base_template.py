@@ -28,8 +28,8 @@ class TestBaseTemplate:
         # Set up session with completed wizard
         user_teams = get_user_teams(sample_user)
         session = client.session
-        session["user_teams"] = user_teams
-        session["current_team"] = {"key": team.key, **user_teams[team.key]}
+        session["user_workspaces"] = user_teams
+        session["current_workspace"] = {"key": team.key, **user_teams[team.key]}
         session.save()
 
         response = client.get(reverse("core:dashboard"))
@@ -73,10 +73,10 @@ class TestBaseTemplate:
         # Properly set up session data using the utility function
         user_teams = get_user_teams(sample_user)
         session = client.session
-        session["user_teams"] = user_teams
+        session["user_workspaces"] = user_teams
 
         # Set current team to the team we just created
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             **user_teams[team.key]
         }

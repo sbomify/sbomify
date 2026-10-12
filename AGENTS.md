@@ -77,6 +77,26 @@ can interfere with focus and overwrite emulated motion preferences.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
 ```
 
+CI splits this suite across six matrix groups with pytest-split, weighted by
+`.github/e2e-test-durations.json`, because serially it is the pipeline's critical
+path. To reproduce one CI group locally, pass the same flags:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  --splits 6 --group 3 --durations-path .github/e2e-test-durations.json \
+  sbomify/apps/core/tests/e2e/
+```
+
+A test with no entry in that file is scheduled at the average, so adding one
+never drops it from a group, it only skews the balance. Refresh the weights when
+the suite's shape changes materially:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  sbomify/apps/core/tests/e2e/ --store-durations \
+  --durations-path .github/e2e-test-durations.json
+```
+
 Frontend tests:
 
 ```bash
@@ -279,6 +299,16 @@ overrides). Use token utilities (`bg-surface`, `text-text-muted`,
 (`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
 in a diff is a review blocker.
 
+**That file is the only place a token may be declared.** The public pages load
+`static/css/tokens.css` and six other legacy sheets, all unlayered, and Tailwind
+publishes its theme inside `@layer theme`. An unlayered declaration beats a
+layered one whatever the source order, so a `--radius-*` or `--shadow-*`
+restated in any of those sheets does not shade a token, it forks the scale every
+utility reading it computes from, on the public side only and with no class name
+to grep for. `rounded-xl` shipped at 16px there against 12px in the app this
+way. `test_only_the_tailwind_entrypoint_declares_the_radius_scale` holds the
+radius line.
+
 #### The things that actually break
 
 - **Two utilities for one CSS property.** Tailwind resolves them by stylesheet
@@ -313,9 +343,10 @@ Read them when changing shared components, page structure or interaction flows.
 
 - **Small visual changes can affect many test suites.** Search component callers,
   template includes, labels, selectors and old assertions across `sbomify/apps/`.
-  Follow the app groups in [CI](.github/workflows/ci-cd.yml), including the backend
-  tests that render HTML. The design-system gallery and a browser screenshot are
-  only part of validation.
+  [CI](.github/workflows/ci-cd.yml) runs every app's tests in one job, so a change
+  to a shared component is checked against every consumer at once, including the
+  backend tests that render HTML. The design-system gallery and a browser
+  screenshot are only part of validation.
 - **Keep behavior and accessibility intact.** Preserve routes, permissions, IDs,
   HTMX targets, Alpine state and filter parameters. When presentation intentionally
   changes, update tests to verify the user-visible result and interaction. Do not
@@ -378,10 +409,42 @@ scope, a widget, an email preview or one card on a page the root does not brand.
 
 Class names need more care here than in the main library: these render on public
 pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
-`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
-`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`shadow-sm`, `w-50` and `text-muted` all lose there. Stay on `px-*`, `py-*`,
+`gap-*`, `rounded-xl`, arbitrary values and the token utilities.
 `test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
 needs `data-button` or the legacy sheet repaints it.
+
+**The same care applies to any component a public page renders**, which is most
+of the main library: a trust centre is built out of `c-tables.*`, `c-forms.*`,
+`c-buttons.*` and `c-feedback.*`, and those lose the same way. The branded set
+must name none of the 154, because it exists for those pages; outside it the
+guard forbids only the names that genuinely compute differently, and a
+variant-prefixed utility such as `first:pl-4` is safe because the class name
+keeps its prefix and the legacy bare selector cannot match it. A spacing step
+that cannot diverge today (`mt-1`, `p-2`) is forgiven by arithmetic the guard
+re-derives from `tokens.css`, not by an allowlist, so retuning that scale turns
+the guard red rather than silently invalidating it. The replacement for a
+divergent name is an arbitrary value carrying Tailwind's own measurement:
+`mb-[1rem]` for `mb-4`, `pt-[1.25rem]` for `pt-5`,
+`rounded-[var(--radius-sm)]` for `rounded`. `tables/cell.html` is the worked
+example.
+
+Two things that forgiveness does not extend to:
+
+- **A shorthand is only harmless alone.** `.m-0` is `margin: 0 !important`, so
+  on `class="m-0 mt-0.5"` it zeroes the top margin the longhand asked for, even
+  though `m-0` and Tailwind's `m-0` agree. Write the sides you mean
+  (`mb-0 mt-0.5`), not the shorthand plus an exception.
+- **`!important` was doing two jobs.** Dropping a legacy class also drops its
+  win over the *other* unlayered rules on the page. `static/css/base.css` styles
+  `h1..h6` and `trust-center.css` styles `.tc-fact-label`, both unlayered, so a
+  plain utility on those elements loses to them too. Where that happens, the
+  replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
+
+**Scope follows `hx-get`, not just `include`.** Half a public page arrives over
+HTMX, naming a URL rather than a template, so the guard walks the resolver to
+the view and takes the templates its module renders. A partial is on a public
+page the moment a public page fetches it.
 
 **Which library a trust-centre control belongs to.** Not everything on a branded
 page is branded. The brand goes on what the page *is*, not on the machinery for
@@ -465,16 +528,22 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"operator"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
 
 **`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
 
-1. **The ladder stays linear** — `guest ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+1. **The ladder stays linear** — `guest ⊂ operator ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
 2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
 
-Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
+Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` (+ member). On the read/triage side: `READ_INTERNAL` (owner + admin + member + operator).
 
-`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+`PUBLISH` (`MANAGE` + bot), `READ_INTERNAL_OR_BOT` (`READ_INTERNAL` + bot) and `TRIAGE` (`READ_INTERNAL` + bot) each add the synthetic `bot` to one of those. They are **not** further rungs on the ladder: `bot` is an orthogonal CI identity, not a more-privileged role, so reading these as a linear chain says a bot outranks an owner. `READ_INTERNAL_OR_BOT` and `TRIAGE` are the **same tuple** today — they are named separately because they answer different questions (may this identity read internal state, may it record a triage decision), and a future change to one should not silently move the other. `test_role_ladder_is_upward_closed` is what enforces the ladder; nothing enforces a relationship between these three, because there is none to enforce.
+
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities.
+
+`operator` is the read-mostly security role: it reads everything internal (`READ_INTERNAL`) and holds exactly one write, `artifact:publish_vex`, which is the `TRIAGE` tier. That lets it record triage decisions in the app and through the triage API, and nothing else — no products, no components, no releases, no uploads, no settings. The VEX **file upload** endpoints pair `artifact:publish_vex` with `artifact:publish`, which operators do not have, so uploading an artifact stays with members, admins and CI bots. The split mirrors Dependency-Track's `VULNERABILITY_ANALYSIS` vs `BOM_UPLOAD`.
+
+Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
@@ -487,7 +556,7 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 **`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
 
-**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
+**Templates must not branch on `request.session.current_workspace.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `can_read_internal`, `can_triage_vulnerabilities`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
 ## This repository is public
 
@@ -572,7 +641,7 @@ does settle is which word new code and new copy use.
 | Tenant | workspace | `team` survives in models and storage, not in new code |
 | Tenant key, the external identifier | `workspace_key` | not the PK; Team's PK is an integer, `key` is derived from it |
 | Person in a workspace | member | |
-| Roles | owner, admin, member, guest, bot | see the authz section |
+| Roles | owner, admin, member, operator, guest, bot | see the authz section |
 | Mixed BOM or document unit | **artifact** in UI; in code an SBOM row (typed by `bom_type`) or a Document row | the `/api/v1/sboms` prefix is frozen |
 | One specific BOM kind | SBOM, CBOM, HBOM, AI BOM, VEX | only when the type is the point |
 | The advisory itself, and security counts | **vulnerability** | the user-facing word |

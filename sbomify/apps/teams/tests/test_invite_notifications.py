@@ -71,7 +71,7 @@ def test_the_notification_links_to_where_invitations_are_accepted(invited_user: 
     request = RequestFactory().get("/")
     request.user = invited_user
     request.session = SessionStore()
-    request.session["current_team"] = {"key": other_team.key, "role": "owner"}
+    request.session["current_workspace"] = {"key": other_team.key, "role": "owner"}
 
     notifications = get_notifications(request)
 

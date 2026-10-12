@@ -1,1 +1,3 @@
 <c-inventory.list-results :inventory="inventory" />
+{% comment %}The row stays mounted through a results swap, so its links follow the slice out of band.{% endcomment %}
+{% for tab in inventory.tabs %}<c-inventory.tab-link :tab="tab" oob />{% endfor %}

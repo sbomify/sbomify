@@ -30,7 +30,7 @@ RELEASE_PREVIEW_SIZE = 5
 
 def build_product_page_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
     """Keep the route's workspace boundary independent of table query parameters."""
-    workspace_key = (request.session.get("current_team") or {}).get("key")
+    workspace_key = (request.session.get("current_workspace") or {}).get("key")
     instance = Product.objects.select_related("team").filter(id=product_id, team__key=workspace_key).first()
     if instance is None or not can(request, "product:read", instance):
         return ServiceResult.failure("Product not found", status_code=404)
@@ -106,6 +106,10 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         {
             **(table.value or {}),
             "product": product,
+            "breadcrumb_items": [
+                {"label": "Products", "url": reverse("core:products_dashboard")},
+                {"label": product["name"]},
+            ],
             "metrics": metrics,
             "has_sboms": any(row["has_sbom"] for row in rows),
             "release_editor_data": release_rows,
@@ -115,7 +119,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
                 "scope_product": product_id,
                 "rows": release_rows,
                 "total": release_query.count(),
-                "headers": [{"label": label} for _, label in COLUMNS["releases"]],
+                "headers": [{"key": key, "label": label} for key, label in COLUMNS["releases"]],
             },
             "available_components": list(
                 Component.objects.filter(team=workspace, is_global=False)
@@ -125,7 +129,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
             )
             if can(request, "product:manage", instance)
             else [],
-            "current_team": request.session.get("current_team", {}),
+            "current_team": request.session.get("current_workspace", {}),
             "header_copy_values": copy_values,
             "product_tei": product_tei,
             "has_cra_access": has_cra_access,
@@ -137,7 +141,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
 
 def update_product_page(request: HttpRequest, product_id: str) -> ServiceResult[str]:
     """Apply one relationship change to the current membership, never a browser's stale list."""
-    workspace_key = (request.session.get("current_team") or {}).get("key")
+    workspace_key = (request.session.get("current_workspace") or {}).get("key")
     with transaction.atomic():
         product = Product.objects.select_for_update().filter(id=product_id, team__key=workspace_key).first()
         if product is None:
@@ -175,7 +179,7 @@ def update_product_page(request: HttpRequest, product_id: str) -> ServiceResult[
 
 def build_product_releases_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:
     """The product's full release history uses the workspace inventory's table."""
-    workspace_key = (request.session.get("current_team") or {}).get("key")
+    workspace_key = (request.session.get("current_workspace") or {}).get("key")
     instance = Product.objects.select_related("team").filter(id=product_id, team__key=workspace_key).first()
     if instance is None or not can(request, "product:read", instance):
         return ServiceResult.failure("Product not found", status_code=404)
@@ -200,6 +204,7 @@ def build_product_releases_context(request: HttpRequest, product_id: str) -> Ser
             "product": product,
             "release_editor_data": (result.value or {})["inventory"]["rows"],
             "breadcrumb_items": [
+                {"label": "Products", "url": reverse("core:products_dashboard")},
                 {"label": product["name"], "url": reverse("core:product_details", args=[product_id])},
                 {"label": "Releases"},
             ],

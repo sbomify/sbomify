@@ -826,7 +826,7 @@ def _get_product_with_instance(
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response_payload = _build_item_response(request, product, "product")
@@ -872,7 +872,7 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
     # wrong here. Readiness lists the product's unresolved critical and high
     # findings by advisory id, which is internal remediation state and not
     # something being publicly listed makes public.
-    if not can(request, "product:manage", result.instance):
+    if not can(request, "product:read", result.instance):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     readiness = eol_readiness(result.instance)
@@ -1173,7 +1173,7 @@ def list_product_identifiers(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1478,7 +1478,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1871,7 +1871,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal", component):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response = component if return_instance else _build_item_response(request, component, "component")
@@ -2512,7 +2512,7 @@ def list_component_releases(
                 "detail": "Authentication required for private components",
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
-        if not can(request, "component:manage", component):
+        if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Whether the caller is internal to THIS component's workspace. Distinct from
@@ -2767,7 +2767,7 @@ def download_product_sbom(
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Normalize format early
@@ -2822,7 +2822,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     release = Release.get_or_create_latest_release(product)
@@ -3347,7 +3347,7 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:manage", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_release_response(request, release, include_artifacts=True)
@@ -4822,9 +4822,11 @@ def list_component_sboms(
 
         # Import assessment helpers
         from sbomify.apps.plugins.apis import _compute_status_summary, _is_run_failing, _is_run_skipped
+        from sbomify.apps.plugins.latest import latest_run_ids
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
+        from sbomify.apps.plugins.services.access import plugins_within_plan
         from sbomify.apps.vulnerability_scanning.utils import (
             reconstruct_result_summary,
         )
@@ -4837,13 +4839,17 @@ def list_component_sboms(
         sbom_ids = [str(s.id) for s in paginated_sboms]
 
         # 1. Team-level plugin enablement (already a single query)
+        # Only the plugins the plan includes count: an entry it excludes is kept across
+        # a downgrade so it resumes on upgrade, and nothing runs it meanwhile, so
+        # "no_plugins_enabled" is the honest default status for a workspace holding
+        # only those.
         team_has_enabled_plugins = False
         try:
             team = component.team
             if team:
                 plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
                 if plugin_settings:
-                    team_has_enabled_plugins = bool(plugin_settings.enabled_plugins)
+                    team_has_enabled_plugins = bool(plugins_within_plan(team, plugin_settings.enabled_plugins or []))
         except Exception as e:
             team_id = getattr(component, "team_id", None) or "unknown"
             log.warning(f"Error checking plugin settings for team {team_id}: {e}")
@@ -4859,6 +4865,9 @@ def list_component_sboms(
                     status="completed",
                     created_at__gte=recent_threshold,
                 )
+                # Unsorted, or the default -created_at joins the DISTINCT and
+                # every scan of the last day comes back, not one row per SBOM.
+                .order_by()
                 .values_list("sbom_id", flat=True)
                 .distinct()
             )
@@ -4889,34 +4898,16 @@ def list_component_sboms(
             log.warning(f"Database error fetching release artifacts for component {component_id}: {db_err}")
 
         # 4. Latest AssessmentRun per (sbom_id, plugin_name) across ALL SBOMs.
-        # ``DISTINCT ON`` is Postgres-specific but the project standardises on
-        # Postgres 17 (see CLAUDE.md). The same index that backed the prior
-        # per-SBOM subquery — ``(sbom, plugin_name, -created_at)`` — covers
-        # this batched form too.
         runs_by_sbom: dict[str, list[AssessmentRun]] = defaultdict(list)
         plugin_names_seen: set[str] = set()
         try:
             # Two-phase on purpose: the summary annotations extract JSON keys
-            # from ``result``, and computing them on the DISTINCT ON input made
+            # from ``result``, and computing them across the run history made
             # Postgres de-TOAST every historical run's multi-MB blob only to
-            # discard the losers — >100s for a component with hundreds of SBOM
-            # versions. Phase 1 picks the winning run ids touching no JSON;
-            # phase 2 annotates just those winners.
-            #
-            # The ids are materialised deliberately: passed lazily to ``id__in``,
-            # Django strips the subquery's ORDER BY, and DISTINCT ON without its
-            # ORDER BY returns an arbitrary row per group instead of the latest.
-            # The list is bounded by (sboms x plugins), the same magnitude as the
-            # ``sbom_ids`` IN-list already used above.
-            winner_ids = list(
-                AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-                # -id breaks created_at ties deterministically (newest row wins),
-                # matching vulnerability_trends so both surfaces agree on which
-                # run is "latest" when two share a timestamp.
-                .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-                .distinct("sbom_id", "plugin_name")
-                .values_list("id", flat=True)
-            )
+            # discard the losers, >100s for a component with hundreds of SBOM
+            # versions. Phase 1 picks the winning run ids, one probe per pair,
+            # touching no JSON; phase 2 annotates just those winners.
+            winner_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")
@@ -5192,7 +5183,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     - Personal access tokens revoked
     - Pending invitations removed
     - Workspaces where you are the sole member will be deleted
-    - Stripe subscriptions for deleted workspaces will be cancelled
+    - Stripe subscriptions for deleted workspaces will be canceled
 
     **After 14 days:**
     - Account permanently deleted

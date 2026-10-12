@@ -100,7 +100,7 @@ class TestAccessRequestCreation:
         # Switch to guest user
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": None,  # Not a member yet
             "name": team_with_business_plan.name,
@@ -907,7 +907,7 @@ class TestNotificationSystem:
         request = factory.get("/")
         request.user = sample_user
         request.session = {}
-        request.session["current_team"] = {
+        request.session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "owner",
             "name": team_with_business_plan.name,
@@ -989,7 +989,7 @@ class TestGatedComponentAccess:
         client.force_login(guest_user)
         # Set up session for proper access check
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
@@ -1113,7 +1113,7 @@ class TestAccessRequestQueueView:
         """Test that queue view requires admin/owner role."""
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
@@ -1223,7 +1223,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = guest_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "guest",
                 "name": team_with_business_plan.name,
@@ -1256,7 +1256,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = sample_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,
@@ -1297,7 +1297,7 @@ class TestAccessRequestNotificationProvider:
         request.user = sample_user
         notification_id = f"access_request_pending_{team_with_business_plan.key}"
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,

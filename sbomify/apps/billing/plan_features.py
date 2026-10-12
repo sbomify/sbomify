@@ -18,7 +18,7 @@ PLAN_FEATURES: dict[str, tuple[str, ...]] = {
         "Private products and components",
         "NTIA Minimum Elements check",
         "Vulnerability scans every 12 hours",
-        "Product identifiers",
+        "Product identifiers (SKUs and barcodes)",
         "Priority support",
         "Custom Trust Center domain",
     ),

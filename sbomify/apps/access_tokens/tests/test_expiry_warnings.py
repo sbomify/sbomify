@@ -55,7 +55,7 @@ class TestBellProvider:
         request.user = user
         request.session = {}
         if team is not None:
-            request.session["current_team"] = {"key": team.key, "role": role}
+            request.session["current_workspace"] = {"key": team.key, "role": role}
         return request
 
     def test_own_expiring_token_warns(self, rf: Any, sample_team_with_owner_member: Any) -> None:
@@ -149,7 +149,7 @@ class TestShortLivedTokensAreNotNagged:
     def _request(self, rf: Any, user: Any, team: Any) -> Any:
         request = rf.get("/")
         request.user = user
-        request.session = {"current_team": {"key": team.key, "role": "owner"}}
+        request.session = {"current_workspace": {"key": team.key, "role": "owner"}}
         return request
 
     def test_a_freshly_minted_ci_token_does_not_warn(self, rf: Any, sample_team_with_owner_member: Any) -> None:

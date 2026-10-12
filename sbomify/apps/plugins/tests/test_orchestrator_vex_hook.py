@@ -215,3 +215,47 @@ class TestOrchestratorVexHook:
         states = {f["id"]: f.get("analysis_state") for f in run.result["findings"]}
         assert states["CVE-2026-1111"] == "not_affected"
         assert states["CVE-2026-2222"] is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_scan_is_seen_completed_only_with_its_rows_and_releases(sbom, scan_sbom_bytes, mocker):
+    """The VEX re-apply picks completed runs. If it could see a run marked
+    completed before the scan's finding rows and release set were written, it
+    would annotate the run against the wrong release context and the scan's own
+    projection would then overwrite its rows. The task stores the three in one
+    transaction, so another connection sees nothing completed until all of it is
+    in place."""
+    import threading
+
+    from django.db import connection
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.tasks import run_assessment_task
+    from sbomify.apps.vulnerability_scanning import findings
+
+    mocker.patch("sbomify.apps.plugins.orchestrator.get_sbom_data_bytes", return_value=(sbom, scan_sbom_bytes))
+    mocker.patch.object(PluginOrchestrator, "get_plugin_instance", return_value=SecurityMockPlugin())
+    project = findings.sync_findings_safely
+    seen_completed_elsewhere: list[bool] = []
+
+    def project_then_look(run, statements=None):
+        project(run, statements)
+
+        def look() -> None:
+            try:
+                seen_completed_elsewhere.append(
+                    AssessmentRun.objects.filter(pk=run.pk, status=RunStatus.COMPLETED.value).exists()
+                )
+            finally:
+                connection.close()
+
+        other = threading.Thread(target=look)
+        other.start()
+        other.join(10)
+
+    mocker.patch.object(findings, "sync_findings_safely", project_then_look)
+
+    run_assessment_task(sbom.id, "mock-security", RunReason.ON_UPLOAD.value)
+
+    assert seen_completed_elsewhere == [False]
+    assert AssessmentRun.objects.get(sbom=sbom, plugin_name="mock-security").status == RunStatus.COMPLETED.value

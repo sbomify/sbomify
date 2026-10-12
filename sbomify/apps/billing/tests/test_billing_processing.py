@@ -597,7 +597,7 @@ def test_billing_disabled_bypass():
     # Create a test request
     request = MagicMock()
     request.method = "POST"
-    request.session = {"current_team": {"key": "test-team"}}
+    request.session = {"current_workspace": {"key": "test-team"}}
 
     # Create a test view function
     @billing_processing.check_billing_limits("product")
@@ -655,7 +655,7 @@ def test_billing_enabled_checks():
     # Create a test request
     request = MagicMock()
     request.method = "POST"
-    request.session = {"current_team": {"key": "test-team"}}
+    request.session = {"current_workspace": {"key": "test-team"}}
 
     # Create a test view function decorated with billing limits
     @billing_processing.check_billing_limits("product")
@@ -700,7 +700,7 @@ def test_payment_failure_grace_period():
     # Setup request
     request = MagicMock()
     request.method = "POST"
-    request.session = {"current_team": {"key": "test-team-grace"}}
+    request.session = {"current_workspace": {"key": "test-team-grace"}}
     request.headers = {}
     request.META = {}
 

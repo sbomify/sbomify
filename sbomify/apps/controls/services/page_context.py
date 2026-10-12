@@ -83,7 +83,7 @@ def build_controls_settings(request: HttpRequest, workspace_key: str) -> Service
 
 
 def build_product_controls(request: HttpRequest, workspace_key: str, product_id: str) -> ServiceResult[dict[str, Any]]:
-    current_key = (request.session.get("current_team") or {}).get("key")
+    current_key = (request.session.get("current_workspace") or {}).get("key")
     product = Product.objects.select_related("team").filter(pk=product_id, team__key=workspace_key).first()
     if current_key != workspace_key or product is None or not can(request, "product:read", product):
         return ServiceResult.failure("Product not found", status_code=404)

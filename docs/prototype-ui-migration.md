@@ -128,12 +128,34 @@ continue through the existing HTMX endpoints.
 Browser coverage checks saving and reloading every field type, keyboard selection,
 the upgrade link and empty state. Responsive screenshots cover four widths.
 
+## Artifact details and security surfaces
+
+Artifact detail pages compose the shared page header, metric chips, stat cards
+and tables. One page serves SBOM, CBOM, VEX and document artifacts; the download
+control names the format and the kind, so three artifact types no longer share
+one label. Release artifact rows and the Add artifact picker take URLs reversed
+by Django for all four types, and both report a CBOM as a CBOM.
+
+Assessment results are a flat section rather than a nested card. Status badges
+carry their verdict: passed, issues, warnings, error, and a distinct state for a
+run whose stored result could not be read, which previously reported the same
+"warnings only" as a real verdict.
+
+Vulnerability reports share one filter, table, triage action and pager across
+the component panel, the full artifact report and per-run findings. Recording a
+triage decision refreshes the panel it was recorded in, keeping the reader's
+filters, page and scroll position, and refreshes again when the background
+re-apply broadcasts. Nothing on these surfaces reloads the page.
+
+The findings list inside an expanded assessment card is the one region here
+still on pre-migration markup and its own stylesheet. It is listed below.
+
 ## Remaining migration order
 
 | Group | Remaining work |
 | --- | --- |
-| Release and component details | Release artifact table and collection metadata; BOM/document component pages, uploads, setup, memberships and artifact details. |
-| Security | Vulnerability queue, artifact vulnerability detail, scan history, crypto assessments and trends. |
+| Assessment findings list | The list inside an expanded assessment card, plus `static/css/components/assessment-results-card.css`, which still carries raw hex values and rules for classes no page renders. |
+| Document artifact detail | The page states only that the file was stored. It has no delete control, unlike its SBOM, CBOM and VEX siblings, which offer one. |
 | Posture | Product CRA list, scope screening and assessment steps, retaining the production classification and evidence workflow. |
 | Trust Center and advisories | Internal landing and management flows, advisory list/detail/editor, and customer-facing pages where they still differ from the prototype. |
 | Supporting pages | Workspace selection/invitations, onboarding, billing and creation flows that remain outside the migrated settings and inventory surfaces. |

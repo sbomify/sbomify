@@ -393,7 +393,7 @@ class TestSyncIntegration:
         factory = RequestFactory()
         request = factory.get("/")
         request.user = sample_user
-        request.session = {"current_team": {"key": team_with_subscription.key}}
+        request.session = {"current_workspace": {"key": team_with_subscription.key}}
 
         context = team_context(request)
         assert context["team"] == team_with_subscription
@@ -413,7 +413,7 @@ class TestSyncIntegration:
         factory = RequestFactory()
         request = factory.get("/")
         request.user = sample_user
-        request.session = {"current_team": {"key": team_with_subscription.key}}
+        request.session = {"current_workspace": {"key": team_with_subscription.key}}
 
         mocker.patch(
             "sbomify.apps.teams.models.Member.objects.filter",
