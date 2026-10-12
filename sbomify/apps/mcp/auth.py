@@ -288,7 +288,7 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         workspace=record.team,
         scopes=record.scopes,
         credential_id=str(record.pk),
-        credential_kind=await sync_to_async(_credential_kind)(stub),
+        credential_kind=_credential_kind(stub),
     )
 
     throttle = AccessTokenRateThrottle()

@@ -129,12 +129,14 @@ def test_a_principal_answers_without_reaching_for_a_token_row(make_token):
     through. Holding the facts here rather than the row is what lets the next
     credential fill them without teaching four consumers about it.
     """
+    from django.http import HttpRequest
+
     from sbomify.apps.mcp.auth import Principal
 
     record = make_token(["sbom:read"])
     principal = Principal(
         user=record.user,
-        request=fake_request(""),
+        request=HttpRequest(),
         workspace=record.team,
         scopes=record.scopes,
         credential_id=str(record.pk),
