@@ -160,7 +160,7 @@
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
     </div>
     {# Danger Zone #}
-    {% if release.has_crud_permissions and not release.is_latest %}
+    {% if can_delete_release %}
         <div>
             {% include 'components/release_danger_zone.html.j2' with release_id=release.id product_id=release.product.id release_name=release.name %}
         </div>

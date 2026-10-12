@@ -75,6 +75,8 @@
                 <c-dropdowns.item icon="fas fa-edit" @click="$dispatch('open-edit-document-modal'); editDocument(item.document.id)">
                 Edit
                 </c-dropdowns.item>
+            {% endif %}
+            {% if can_delete_document %}
                 <c-dropdowns.item-danger icon="fas fa-trash" @click="$dispatch('open-delete-document-modal', { displayName: item.document.name, formData: { document_id: item.document.id } })">
                 Delete
                 </c-dropdowns.item-danger>

@@ -128,9 +128,9 @@
     {% block upload_section %}{% endblock %}
     {% block table_section %}{% endblock %}
     {# Danger Zone #}
-    {% if component.has_crud_permissions %}
+    {% if can_delete_component %}
         <div>
-            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete %}
+            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete_component %}
         </div>
     {% endif %}
     </c-layout.frame>
