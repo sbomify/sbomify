@@ -50,7 +50,13 @@ def _downgrade(team: Team, user, stripe: MagicMock):
     client.force_login(user)
     token = get_token(RequestFactory().get("/"))
     client.cookies["csrftoken"] = token
-    with patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe):
+    # The sync before the guard reads Stripe through its own client. Stubbed as a
+    # sync that found nothing to change, so these tests reach the read and write
+    # they are about; a failed sync is test_api's.
+    with (
+        patch("sbomify.apps.billing.apis.get_stripe_client", return_value=stripe),
+        patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True),
+    ):
         return client.post(
             reverse("api-1:change_plan"),
             json.dumps({"plan": "community", "team_key": team.key}),

@@ -153,7 +153,12 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
     # Stripe's state first, as the plan page does, and before the lock: a stored
     # status that missed a reactivation would skip the check below, and one that
     # outlived its subscription would refuse a move with nothing left to cancel.
-    sync_subscription_from_stripe(team, force_refresh=True)
+    # A sync that fails leaves the stored status standing, so it refuses the move
+    # rather than let a stale "canceled" skip the check while the read below finds
+    # the subscription live and schedules the downgrade at Stripe.
+    has_subscription = bool((team.billing_plan_limits or {}).get("stripe_subscription_id"))
+    if has_subscription and not sync_subscription_from_stripe(team, force_refresh=True):
+        raise BillingRetryableError("Could not read the subscription before checking the downgrade.")
 
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)

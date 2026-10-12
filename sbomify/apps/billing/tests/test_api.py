@@ -541,6 +541,56 @@ def test_change_plan_to_community_settles_a_subscription_stripe_no_longer_has(
 
 
 @pytest.mark.django_db
+def test_change_plan_to_community_refuses_when_the_sync_with_stripe_fails(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_live_at_stripe: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A sync that fails must not leave the stale stored status to decide.
+
+    The workspace reads canceled and Stripe has the subscription active, but the
+    sync's read fails transiently and the next one succeeds. Carried on, the
+    guard would skip the check on the stored status and the live branch would
+    schedule an over-limit downgrade at Stripe.
+    """
+    from sbomify.apps.core.models import Product
+
+    live_retrieve = stripe.Subscription.retrieve
+    calls: list[str] = []
+
+    def flaky_retrieve(subscription_id: str, **kwargs) -> stripe.Subscription:
+        calls.append(subscription_id)
+        if len(calls) == 1:
+            raise stripe.error.APIConnectionError("Network blip")
+        return live_retrieve(subscription_id, **kwargs)
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", flaky_retrieve)
+    team_with_business_plan.billing_plan_limits = {
+        **team_with_business_plan.billing_plan_limits,
+        "subscription_status": "canceled",
+    }
+    team_with_business_plan.save()
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 503, response.content
+    assert subscription_live_at_stripe == []
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
 def test_changing_to_community_makes_sboms_public(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811

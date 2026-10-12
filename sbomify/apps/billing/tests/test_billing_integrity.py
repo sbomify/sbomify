@@ -35,7 +35,8 @@ def test_community_downgrade_uses_stored_subscription_id():
     stripe = MagicMock()
     stripe.get_subscription.return_value = MagicMock(id="sub_abc", status="active")
 
-    status, _body = _handle_community_downgrade(team, stripe)
+    with patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True):
+        status, _body = _handle_community_downgrade(team, stripe)
 
     assert status == 200
     stripe.get_subscription.assert_called_once_with("sub_abc")
