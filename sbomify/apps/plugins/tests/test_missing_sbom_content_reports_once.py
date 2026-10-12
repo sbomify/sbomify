@@ -242,3 +242,47 @@ def test_a_concurrent_worker_waits_for_the_first_report(sbom, object_missing, ca
     assert failures == []
     assert _fetch_errors(captured) == []
     assert any(r.levelno == logging.WARNING and "still missing" in r.getMessage() for r in captured)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_success_settles_under_the_report_lock(sbom, object_missing) -> None:
+    """A success has to wait for a missing-content check in flight.
+
+    Otherwise it can settle between that check's read of the preceding run and
+    the failure's own completed_at, and the failure is then ordered after a
+    success it never saw, which silences the loss that follows a restore.
+    """
+    object_missing.return_value = b'{"bomFormat": "CycloneDX", "specVersion": "1.5"}'
+    holding = threading.Event()
+    release = threading.Event()
+    released_at: list = []
+    failures: list[BaseException] = []
+
+    def checking_worker() -> None:
+        try:
+            with transaction.atomic():
+                now = timezone.now()
+                run = _settled_run(sbom, RunStatus.RUNNING.value, created_at=now, completed_at=None)
+                PluginOrchestrator._lock_missing_content_report(run)
+                holding.set()
+                release.wait(timeout=10)
+                released_at.append(timezone.now())
+        except BaseException as e:  # surfaced to the test thread below
+            failures.append(e)
+            holding.set()
+        finally:
+            connection.close()
+
+    worker = threading.Thread(target=checking_worker)
+    worker.start()
+    try:
+        assert holding.wait(timeout=10)
+        threading.Timer(0.5, release.set).start()
+        run = _run(sbom)
+    finally:
+        release.set()
+        worker.join(timeout=10)
+
+    assert failures == []
+    assert run.status == RunStatus.COMPLETED.value
+    assert run.completed_at >= released_at[0]

@@ -362,15 +362,22 @@ class PluginOrchestrator:
             assessment_run.result = result.to_dict()
             assessment_run.result_schema_version = result.schema_version
             assessment_run.status = RunStatus.COMPLETED.value
-            assessment_run.completed_at = timezone.now()
-            assessment_run.save(
-                update_fields=[
-                    "result",
-                    "result_schema_version",
-                    "status",
-                    "completed_at",
-                ]
-            )
+            # Settled under the missing-content report lock, so a check that
+            # is reading the preceding run either sees this success or settles
+            # before it. Without it, this could land between that read and the
+            # failure's own completed_at, and the failure would be ordered
+            # after a success it never saw.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                assessment_run.completed_at = timezone.now()
+                assessment_run.save(
+                    update_fields=[
+                        "result",
+                        "result_schema_version",
+                        "status",
+                        "completed_at",
+                    ]
+                )
 
             # Fold the run into the component's vulnerability lifecycle. The
             # stored run stays immutable (ADR-004); this is a separate index
@@ -468,7 +475,12 @@ class PluginOrchestrator:
 
     @staticmethod
     def _lock_missing_content_report(assessment_run: AssessmentRun) -> None:
-        """Hold the SBOM and plugin's report lock until the current transaction ends."""
+        """Hold the SBOM and plugin's report lock until the current transaction ends.
+
+        Every terminal transition takes it before stamping ``completed_at``,
+        so the missing-content check's read of the preceding run and the
+        order runs settle in are serialised together.
+        """
         key = f"plugin-missing-content:{assessment_run.sbom_id}:{assessment_run.plugin_name}"
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [key])
@@ -502,8 +514,13 @@ class PluginOrchestrator:
         """
         assessment_run.status = RunStatus.FAILED.value
         assessment_run.error_message = error_message
-        assessment_run.completed_at = timezone.now()
-        assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+        # Any failure resets the missing-content report just as a success
+        # does, so it settles under the same lock. Advisory locks stack, so
+        # the missing-content handler, which already holds it, is unaffected.
+        with transaction.atomic():
+            self._lock_missing_content_report(assessment_run)
+            assessment_run.completed_at = timezone.now()
+            assessment_run.save(update_fields=["status", "error_message", "completed_at"])
 
     def finalize_retry_exhausted(self, run_id: str, error_message: str) -> AssessmentRun | None:
         """Settle a run that has burnt through every ``RetryLaterError`` slot.
