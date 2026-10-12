@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
+from sbomify.apps.sboms.utils import SBOMContentMissingError, SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -421,6 +421,17 @@ class PluginOrchestrator:
                 f"with {result.summary.total_findings} findings"
             )
 
+        except SBOMContentMissingError as e:
+            # The stored document is gone, and it will still be gone on the next
+            # sweep, which retries a failed run once a day indefinitely. One
+            # report is worth having -- it is data loss -- so the first failure
+            # is an error and each identical repeat after it is a warning.
+            if self._previous_run_failed_with(assessment_run, str(e)):
+                logger.warning(f"[PLUGIN] SBOM content still missing for run {assessment_run.id}: {e}")
+            else:
+                logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
+            self._mark_failed(assessment_run, str(e))
+
         except SBOMDataError as e:
             # SBOM fetch error
             logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
@@ -443,6 +454,23 @@ class PluginOrchestrator:
             self._mark_failed(assessment_run, str(e))
 
         return assessment_run
+
+    def _previous_run_failed_with(self, assessment_run: AssessmentRun, error_message: str) -> bool:
+        """Whether the run before this one, for the same SBOM and plugin,
+        failed with exactly this error.
+
+        Only the immediately preceding terminal run counts, so a success in
+        between -- the object restored -- makes the next loss report again.
+        """
+        previous = (
+            AssessmentRun.objects.filter(sbom_id=assessment_run.sbom_id, plugin_name=assessment_run.plugin_name)
+            .exclude(id=assessment_run.id)
+            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+            .order_by("-created_at", "-id")
+            .values_list("status", "error_message")
+            .first()
+        )
+        return previous == (RunStatus.FAILED.value, error_message)
 
     def _mark_failed(self, assessment_run: AssessmentRun, error_message: str) -> None:
         """Mark an assessment run as failed.
