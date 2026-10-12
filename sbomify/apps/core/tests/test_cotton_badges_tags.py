@@ -432,8 +432,8 @@ ROLE_NEUTRAL = (
 @pytest.mark.parametrize(
     ("label", "role", "ink", "token"),
     [
-        ("Owner role", "owner", "text-primary", "var(--color-primary)"),
-        ("Admin role", "admin", "text-warning", "var(--color-warning)"),
+        ("Owner role", "owner", "text-primary-ink", "var(--color-primary)"),
+        ("Admin role", "admin", "text-warning-ink", "var(--color-warning)"),
     ],
 )
 def test_role_badge_keys_the_privileged_accents_off_the_attribute(

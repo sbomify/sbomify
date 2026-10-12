@@ -336,6 +336,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "primary",
                 "primary-dark",
                 "primary-light",
+                "primary-ink",
                 "accent",
                 "accent-ink",
                 "accent-pink",

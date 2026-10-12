@@ -141,9 +141,10 @@ MEASURE_JS = r"""
 # over a tint of that state. These are the recipes the ink tokens exist for, so
 # anything painting an ink is in scope too: the fixed badges and tags, the stat
 # card's value and the metric chip carry no data attribute to select them by.
+# The role badge tints owner and admin the same way, keyed off data-role.
 STATUS_SCOPE = (
-    "[data-level], [data-status], [data-format], [data-variant], [class*='-ink'], "
-    "[data-level] *, [data-status] *, [data-format] *, [data-variant] *, [class*='-ink'] *"
+    "[data-level], [data-status], [data-format], [data-variant], [data-role], [class*='-ink'], "
+    "[data-level] *, [data-status] *, [data-format] *, [data-variant] *, [data-role] *, [class*='-ink'] *"
 )
 
 
