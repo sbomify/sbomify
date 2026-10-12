@@ -7,19 +7,31 @@ release and component inventory tabs. Capability flags are live, so this compone
      @click="sidebarMobileOpen = false"
      class="fixed inset-0 bg-navy/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
+{% comment %}
+The drawer moves focus to its own close button when it opens. x-trap arms on
+the open state and hides the page behind with aria-hidden, but its own first
+focus runs before anything in the rail can take it: under reduced motion
+focus stayed on the toggle, outside the drawer, and otherwise it landed on
+the home link. The rail's children transition the visibility they inherit,
+and an element still turning visible ignores focus(). So the trap does not
+place focus, and the effect checks each animation frame, up to 60, for the
+close button to be visible. It re-reads the open state every frame, so a
+drawer dismissed while it opens leaves focus alone.
+{% endcomment %}
 <aside id="sidebar"
        aria-label="Main navigation"
        :data-mobile-open="sidebarMobileOpen"
-       x-trap.inert.noscroll="sidebarMobileOpen"
+       x-trap.inert.noscroll.noautofocus="sidebarMobileOpen"
+       x-effect="if (sidebarMobileOpen) { const close = $refs.drawerClose; const place = (frames) => { if (!sidebarMobileOpen) return; if (getComputedStyle(close).visibility === 'visible') close.focus(); else if (frames) requestAnimationFrame(() => place(frames - 1)); }; place(60); }"
        class="invisible lg:visible data-[mobile-open=true]:visible fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] -translate-x-full data-[mobile-open=true]:translate-x-0 lg:translate-x-0 transition-transform duration-200 bg-surface border-r border-border flex flex-col">
     <div class="h-16 flex items-center px-6 shrink-0">
         <a href="{% url 'core:dashboard' %}"
            aria-label="sbomify home"
-           class="inline-flex items-center max-lg:min-h-11">
+           class="inline-flex items-center max-lg:min-h-11 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             {% include 'core/components/brand/logo.html.j2' with class='h-6 w-auto text-text' %}
         </a>
         <div class="lg:hidden ml-auto">
-            <c-buttons.icon label="Close sidebar" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
+            <c-buttons.icon label="Close sidebar" x-ref="drawerClose" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
         </div>
     </div>
     <div class="px-3 pb-2">

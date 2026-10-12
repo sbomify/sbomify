@@ -70,14 +70,17 @@ def test_default_size_segment(rendered: str) -> None:
 
 
 def test_small_and_large_size_segments(rendered: str) -> None:
-    assert "px-3.5 py-2 min-h-9 text-xs rounded-md" in _button_holding(rendered, "New release")
+    assert "px-3.5 py-2 min-h-9 max-sm:min-h-11 text-xs rounded-md" in _button_holding(rendered, "New release")
     assert "px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]" in _button_holding(rendered, "Big submit")
 
 
 def test_size_and_variant_segments_never_conflict(rendered: str) -> None:
     small = _button_holding(rendered, "New release")
-    assert "px-5" not in small
-    assert "min-h-11" not in small
+    classes = small.split('class="', 1)[1].split('"', 1)[0].split()
+    assert "px-5" not in classes
+    # The small segment states its own phone floor (max-sm:min-h-11); what it
+    # must never carry is the default segment's unprefixed min-h-11.
+    assert "min-h-11" not in classes
 
 
 def test_attrs_pass_through_variant_and_base_untouched(rendered: str) -> None:
@@ -108,7 +111,7 @@ def test_disabled_prop_disables_the_shell(rendered: str) -> None:
 
 def test_icon_button_variant_size_label_and_stretch_segments(rendered: str) -> None:
     actions = _button_holding(rendered, 'aria-label="Product actions"')
-    assert "w-9 h-9 text-sm rounded-md" in actions
+    assert "w-9 h-9 max-sm:min-w-11 max-sm:min-h-11 text-sm rounded-md" in actions
     assert "color-mix(in_oklab,var(--color-danger)_12%,transparent)" in actions
     assert '@click="menu()"' in actions
     stretchy = _button_holding(rendered, 'aria-label="Stretchy"')
@@ -121,7 +124,7 @@ def test_icon_button_with_href_renders_an_anchor(rendered: str) -> None:
     assert anchors, "the icon button's href branch did not render an anchor"
     anchor = anchors[0].split(">")[0]
     assert 'href="/sbom/download/1"' in anchor
-    assert "w-9 h-9 text-sm rounded-md" in anchor
+    assert "w-9 h-9 max-sm:min-w-11 max-sm:min-h-11 text-sm rounded-md" in anchor
     assert "bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary" in anchor
     # An anchor cannot be disabled, so the affordance stays on the button branch.
     assert "disabled" not in anchor
@@ -134,6 +137,6 @@ def test_variant_with_href_renders_an_anchor(rendered: str) -> None:
     anchor = anchors[0]
     assert 'href="/releases/new"' in anchor
     assert "hover:bg-surface" in anchor
-    assert "px-3.5 py-2 min-h-9" in anchor
+    assert "px-3.5 py-2 min-h-9 max-sm:min-h-11" in anchor
     assert 'target="_blank"' in anchor
     assert "disabled" not in anchor.split(">")[0]
