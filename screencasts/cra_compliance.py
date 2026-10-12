@@ -157,7 +157,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         "Manufactured exclusively for own use",
         "Testing or pre-release version",
         "Covered by exempted EU legislation",
-        "Dual-use (civilian + defence)",
+        "Dual-use (civilian + defense)",
     ]
     for q in screening_questions:
         page.locator(f"span:has-text('{q}')").first.evaluate(
@@ -220,7 +220,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     step_1_sections = [
         "Product Information",
         "CRA Classification",
-        "Harmonised Standards Applicability",
+        "Harmonized Standards Applicability",
         "Target EU Markets",
         "Support Period",
         "Intended Use",

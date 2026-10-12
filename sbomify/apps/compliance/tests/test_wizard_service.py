@@ -19,8 +19,8 @@ from sbomify.apps.compliance.services.wizard_service import (
     get_step_context,
     save_step_data,
 )
-from sbomify.apps.core.models import Product
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+from sbomify.apps.core.models import Product, User
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member
 
 
 @pytest.fixture
@@ -257,7 +257,7 @@ class TestSaveStepData:
         result = save_step_data(assessment, 1, {"product_category": "class_i"}, sample_user)
         assert not result.ok
         assert result.status_code == 400
-        assert "harmonised standard" in result.error.lower()
+        assert "harmonized standard" in result.error.lower()
 
     def test_step_1_invalid_category_rejected(self, assessment, sample_user):
         result = save_step_data(assessment, 1, {"product_category": "invalid"}, sample_user)
@@ -355,7 +355,7 @@ class TestSaveStepData:
         )
         assert not second.ok
         assert second.status_code == 400
-        assert "harmonised standard" in (second.error or "").lower()
+        assert "harmonized standard" in (second.error or "").lower()
 
     def test_step_1_support_period_justification_cleared_after_gate(self, assessment, sample_user):
         """CRA Art 13(8) audit-trail bypass regression (P0). A payload
@@ -994,3 +994,34 @@ class TestStep1EuRepresentation:
 
         assert not result.ok
         assert "boolean" in (result.error or "")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("years", [5, 7, 10])
+def test_new_assessment_uses_support_default_without_overwriting_existing(
+    sample_team_with_owner_member: Member, sample_user: User, years: int
+) -> None:
+    workspace = sample_team_with_owner_member.team
+    workspace.default_support_period_years = years
+    workspace.save(update_fields=["default_support_period_years"])
+    product = Product.objects.create(name="Example product", team=workspace, release_date=datetime.date(2024, 2, 29))
+    result = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert result.ok
+    assert result.value.support_period_end == datetime.date(2024 + years, 2, 28)
+    workspace.default_support_period_years = 20
+    workspace.save(update_fields=["default_support_period_years"])
+    existing = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert existing.value.support_period_end == result.value.support_period_end
+
+
+@pytest.mark.django_db
+def test_product_support_date_takes_precedence_over_workspace_default(
+    sample_team_with_owner_member: Member, sample_user: User
+) -> None:
+    workspace = sample_team_with_owner_member.team
+    workspace.default_support_period_years = 10
+    workspace.save(update_fields=["default_support_period_years"])
+    product = Product.objects.create(name="Example product", team=workspace, end_of_support=datetime.date(2031, 6, 1))
+    result = get_or_create_assessment(product.pk, sample_user, workspace)
+    assert result.ok
+    assert result.value.support_period_end == product.end_of_support

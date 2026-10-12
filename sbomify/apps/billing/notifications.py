@@ -85,7 +85,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
         return NotificationSchema(
             id=f"billing_subscription_cancelled_{team.key}",
             type="billing_subscription_cancelled",
-            message="Your subscription has been cancelled and will end at the end of the billing period.",
+            message="Your subscription has been canceled and will end at the end of the billing period.",
             severity="warning",
             created_at=datetime.now(timezone.utc).isoformat(),
             action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
@@ -197,11 +197,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     """Main notification provider for billing app - handles all billing-related notifications"""
     notifications: list[NotificationSchema] = []
 
-    if "current_team" not in request.session:
+    if "current_workspace" not in request.session:
         logger.debug("No current_team in session, skipping notifications")
         return notifications
 
-    team_key = request.session["current_team"]["key"]
+    team_key = request.session["current_workspace"]["key"]
     logger.debug("get_notifications called for team")
     try:
         team = Team.objects.get(key=team_key)

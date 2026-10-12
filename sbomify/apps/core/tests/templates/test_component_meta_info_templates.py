@@ -13,7 +13,7 @@ class TestComponentMetaInfoTemplates:
         # Setup
         request = rf.get("/")
         request.user = AnonymousUser()
-        request.session = {"current_team": {"key": "test-team"}}
+        request.session = {"current_workspace": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory(
             "Test Component",
@@ -63,7 +63,7 @@ class TestComponentMetaInfoTemplates:
         # Setup
         request = rf.get("/")
         request.user = AnonymousUser()
-        request.session = {"current_team": {"key": "test-team"}}
+        request.session = {"current_workspace": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory("Test Component", product=product)
         

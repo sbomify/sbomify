@@ -110,8 +110,8 @@ class TestContactProfileFormSnapshot:
         authenticated_page.wait_for_load_state("networkidle")
         authenticated_page.wait_for_selector("text=Default Profile")
 
-        authenticated_page.get_by_role("button", name="Profile actions").first.click()
-        authenticated_page.get_by_role("menuitem", name="Edit profile").click()
+        authenticated_page.get_by_role("button", name="Party actions").first.click()
+        authenticated_page.get_by_role("menuitem", name="Edit party").click()
         authenticated_page.wait_for_selector(".profile-form")
         authenticated_page.wait_for_selector(".entity-card")
         authenticated_page.wait_for_load_state("networkidle")

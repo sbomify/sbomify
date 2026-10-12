@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 from sbomify.apps.teams.services.security_txt import generate_security_txt
@@ -622,3 +622,56 @@ class TestBsiTr03183Layout:
 
         assert "Contact: mailto:psirt@example.com" in result
         assert result.splitlines()[-1].startswith("Expires: ")
+
+
+@pytest.mark.django_db
+class TestCsafField:
+    """RFC 9116 CSAF field: derived from the workspace's own provider metadata."""
+
+    trust_center = override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
+
+    @pytest.fixture(autouse=True)
+    def _domain(self):
+        """A workspace only has a CSAF URL once it has a domain to serve it on."""
+        with self.trust_center:
+            yield
+
+    def _enabled(self, team, **config):
+        _create_security_contact(team)
+        team.security_txt_config = {"enabled": True, **config}
+        team.save(update_fields=["security_txt_config"])
+        return team
+
+    def test_points_at_the_workspaces_own_provider_metadata(self, sample_team_with_owner_member) -> None:
+        team = self._enabled(sample_team_with_owner_member.team)
+
+        content = generate_security_txt(team)
+
+        assert "CSAF: " in content
+        assert "/.well-known/csaf/provider-metadata.json" in content
+
+    def test_explicit_config_still_wins(self, sample_team_with_owner_member) -> None:
+        """A workspace whose CSAF lives elsewhere keeps pointing there."""
+        team = self._enabled(
+            sample_team_with_owner_member.team,
+            csaf_url="https://example.com/.well-known/csaf/provider-metadata.json",
+        )
+
+        assert "CSAF: https://example.com/.well-known/csaf/provider-metadata.json" in generate_security_txt(team)
+
+    def test_absent_for_a_private_workspace(self, sample_team_with_owner_member) -> None:
+        """The endpoint 404s for a private workspace, so the field must not promise it."""
+        team = self._enabled(sample_team_with_owner_member.team)
+        team.billing_plan = "business"
+        team.is_public = False
+        team.save(update_fields=["billing_plan", "is_public"])
+        assert team.is_public is False
+
+        assert "CSAF:" not in generate_security_txt(team)
+
+    def test_absent_without_a_public_domain(self, sample_team_with_owner_member) -> None:
+        """No trust center domain and no BYOD domain means no URL to promise."""
+        team = self._enabled(sample_team_with_owner_member.team)
+
+        with override_settings(TRUST_CENTER_DOMAIN=""):
+            assert "CSAF:" not in generate_security_txt(team)

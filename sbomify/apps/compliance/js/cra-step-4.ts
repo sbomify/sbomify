@@ -1,3 +1,4 @@
+import { focusRequiredField, type RequiredField } from './cra-validation';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
 import { getAssessmentId, saveStepAndNavigate } from './cra-shared';
 
@@ -14,7 +15,7 @@ const PRODUCT_TYPE_TEMPLATES: Record<string, Record<string, string>> = {
   api: { update_frequency: 'regular', update_method: 'Automatic server-side', support_hours: '24/7 via status page' },
 };
 
-function craStep4() {
+export function craStep4() {
   return {
     assessmentId: '',
     stepData: {} as Record<string, unknown>,
@@ -58,12 +59,27 @@ function craStep4() {
       }
     },
 
-    get canContinue(): boolean {
-      return !!(this.updateMethod && (this.supportEmail || this.supportUrl) && this.dataDeletionInstructions);
+    get missingFields(): RequiredField[] {
+      const fields: RequiredField[] = [];
+      if (!this.updateMethod.trim()) fields.push({ target: 'update-method', message: 'Describe how users receive updates.' });
+      if (!this.supportEmail.trim() && !this.supportUrl.trim()) fields.push({ target: 'support-email', message: 'Add a support email or support portal.' });
+      if (!this.dataDeletionInstructions.trim()) fields.push({ target: 'data-deletion', message: 'Add data deletion instructions.' });
+      return fields;
     },
 
+    get canContinue(): boolean {
+      return this.missingFields.length === 0;
+    },
+
+    focusRequiredField,
+
+
     async save(): Promise<void> {
-      if (!this.canContinue || this.isSaving) return;
+      if (this.isSaving) return;
+      if (!this.canContinue) {
+        this.focusRequiredField(this.missingFields[0].target);
+        return;
+      }
       await saveStepAndNavigate(this.assessmentId, 4, {
         update_frequency: this.updateFrequency,
         update_method: this.updateMethod,

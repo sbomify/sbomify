@@ -1,0 +1,18 @@
+{% comment %}
+One private app frame for normal and HTMX pages. The fixed rail width drives
+header, content and footer together. Mobile uses a drawer and a two-row header;
+one height sets both the header and the content offset.
+{% endcomment %}
+<div class="min-h-screen flex flex-col bg-background [--app-header-height:7.5rem] sm:[--app-header-height:4rem]"
+     x-data="{ sidebarMobileOpen: false }"
+     @keydown.escape.window="sidebarMobileOpen = false"
+     @resize.window="if (window.innerWidth >= 1024) sidebarMobileOpen = false">
+    <c-chrome.sidebar />
+    <c-chrome.header />
+    <main id="main-content"
+          tabindex="-1"
+          class="flex-1 min-w-0 pt-[var(--app-header-height)] lg:pl-[var(--sidebar-width)]">
+        <c-layout.frame class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-8">{{ slot }}</c-layout.frame>
+    </main>
+    <c-chrome.footer />
+</div>

@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
     _get_team_and_membership_role,
     _get_team_owner_email,
@@ -35,6 +35,7 @@ from sbomify.apps.teams.schemas import (
     ContactProfileCreateSchema,
     ContactProfileUpdateSchema,
 )
+from sbomify.apps.teams.services.settings_page import profiles_context
 
 
 class ValidationError(Exception):
@@ -71,7 +72,7 @@ def _format_formset_errors(formset: Any) -> str:
     return " ".join(messages) if messages else "Validation failed"
 
 
-class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class ContactProfileView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
@@ -83,30 +84,12 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(profiles.get("detail", "Failed to load contact profiles"))
 
-        profiles_list = []
-        for profile_schema in profiles:
-            # Convert Pydantic model to dict to allow .get() and modification
-            profile = profile_schema.model_dump()
-
-            entities = profile.get("entities", [])
-            authors = profile.get("authors", [])
-            profile["entity_count"] = len(entities)
-            profile["author_count"] = len(authors)
-            # Calculate total contact count across all entities
-            total_contacts = sum(len(entity.get("contacts", [])) for entity in entities)
-            profile["contact_count"] = total_contacts
-            # Get manufacturer and supplier entities
-            profile["manufacturer"] = next((e for e in entities if e.get("is_manufacturer")), None)
-            profile["supplier"] = next((e for e in entities if e.get("is_supplier")), None)
-            profiles_list.append(profile)
-
         return render(
             request,
             "teams/contact_profiles/profile_list.html.j2",
             {
                 "team": team,
-                "profiles": profiles_list,
-                "form": ContactProfileForm(),
+                **profiles_context(profiles),
             },
         )
 
@@ -148,7 +131,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return htmx_success_response(f"'{profile.name}' set as default profile", triggers={"refreshProfileList": True})
 
 
-class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str, profile_id: str | None = None) -> HttpResponse:

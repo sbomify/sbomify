@@ -1,0 +1,5 @@
+{% comment %}A single grouped surface for whole-row action targets; it stacks naturally on phones.{% endcomment %}
+<nav aria-label="Quick actions"
+     class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 overflow-hidden rounded-xl border border-border bg-[color-mix(in_oklab,var(--color-info)_3%,var(--color-surface))] shadow-[var(--shadow-card)] divide-y xl:divide-y-0 xl:divide-x divide-border">
+    {{ slot }}
+</nav>

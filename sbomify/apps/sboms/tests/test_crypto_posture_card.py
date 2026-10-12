@@ -37,7 +37,7 @@ def _owner_client(sbom: SBOM) -> Client:
 def test_posture_renders_for_component_with_crypto(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
     component_id = sample_sbom.component.id
-    response = _owner_client(sample_sbom).get(_posture_url(component_id))
+    response = _owner_client(sample_sbom).get(_posture_url(component_id), HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -50,7 +50,7 @@ def test_posture_renders_for_component_with_crypto(sample_sbom: SBOM, mocker: Mo
 @pytest.mark.django_db
 def test_posture_collapses_for_non_crypto(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, json.dumps({"specVersion": "1.6", "components": [{"type": "library", "name": "x"}]}).encode())
-    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert response.content.decode().strip() == ""
 
@@ -61,7 +61,7 @@ def test_posture_collapses_for_component_without_sboms(sample_team_with_owner_me
     component = Component.objects.create(name="No SBOMs", team=team, component_type=Component.ComponentType.BOM)
     client = Client()
     setup_test_session(client, team, sample_team_with_owner_member.user)
-    response = client.get(_posture_url(component.id))
+    response = client.get(_posture_url(component.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert response.content.decode().strip() == ""
 
@@ -69,7 +69,7 @@ def test_posture_collapses_for_component_without_sboms(sample_team_with_owner_me
 @pytest.mark.django_db
 def test_posture_does_not_leak_private_to_anonymous(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
-    response = Client().get(_posture_url(sample_sbom.component.id))  # anon, component private
+    response = Client().get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")  # anon, component private
     assert response.status_code == 200
     assert "At risk" not in response.content.decode()
 
@@ -94,7 +94,7 @@ def test_posture_survives_newer_vex_upload(sample_sbom: SBOM, mocker: MockerFixt
     _newer_artifact(sample_sbom, SBOM.BomType.VEX)
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
 
-    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     assert "Post-Quantum Posture" in response.content.decode()
 
@@ -106,7 +106,7 @@ def test_posture_prefers_cbom_over_newer_sbom(sample_sbom: SBOM, mocker: MockerF
     _newer_artifact(sample_sbom, SBOM.BomType.SBOM)
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
 
-    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")
     assert response.status_code == 200
     html = response.content.decode()
     assert "Post-Quantum Posture" in html
@@ -124,7 +124,7 @@ def test_posture_skips_newer_crypto_free_sbom(sample_sbom: SBOM, mocker: MockerF
     newer.save(update_fields=["has_crypto_assets"])
     _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
 
-    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -141,7 +141,7 @@ def test_posture_collapses_without_s3_read_when_all_sboms_crypto_free(
     sample_sbom.save(update_fields=["has_crypto_assets"])
     s3 = mocker.patch(_S3_TARGET)
 
-    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id), HTTP_HX_REQUEST="true")
 
     assert response.status_code == 200
     assert response.content.decode().strip() == ""

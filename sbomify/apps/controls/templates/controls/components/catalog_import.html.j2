@@ -1,0 +1,27 @@
+<div x-data="catalogImport('{% url 'api-1:import_oscal' %}')"
+     @open-catalog-import.window="error = ''; open = true">
+    <c-modal teleport="false" id="import-catalog" title="Import OSCAL catalog" show="open" icon="fas fa-file-import">
+    <form id="catalog-import-form"
+          class="flex flex-col gap-4"
+          @submit.prevent="importCatalog($refs.file.files[0])">
+        <c-forms.hint>Import a catalog in OSCAL JSON format from a file or a public URL.</c-forms.hint>
+        <c-forms.field label="Import from" for="catalog-import-mode">
+        <c-forms.select id="catalog-import-mode" x-model="mode" ::disabled="importing">
+        <option value="file">File</option>
+        <option value="url">URL</option>
+        </c-forms.select>
+        </c-forms.field>
+        <c-forms.field label="OSCAL JSON file" for="catalog-import-file" x-show="mode === 'file'">
+        <c-forms.input type="file" id="catalog-import-file" accept=".json,application/json" x-ref="file" ::disabled="importing || mode !== 'file'" ::required="mode === 'file'" />
+        </c-forms.field>
+        <c-forms.field label="Catalog URL" for="catalog-import-url" x-show="mode === 'url'" x-cloak>
+        <c-forms.input type="url" id="catalog-import-url" x-model="url" placeholder="https://example.com/catalog.json" ::disabled="importing || mode !== 'url'" ::required="mode === 'url'" />
+        </c-forms.field>
+        <c-feedback.alert variant="danger" x-show="error" x-cloak><span x-text="error"></span></c-feedback.alert>
+    </form>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="open = false" ::disabled="importing">Cancel</c-buttons.ghost>
+    <c-buttons.primary type="submit" form="catalog-import-form" ::disabled="importing"><span x-text="importing ? 'Importing…' : 'Import catalog'"></span></c-buttons.primary>
+    </c-slot>
+    </c-modal>
+</div>

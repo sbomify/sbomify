@@ -220,7 +220,7 @@ TEAM_ROLE_CHANGED = _register(
 TEAM_BRANDING_UPDATED = _register(
     EventSpec(
         name="team:branding_updated",
-        description="Workspace branding (colours, logo, icon) was updated.",
+        description="Workspace branding (colors, logo, icon) was updated.",
         distinct_id_kind="workspace",
     )
 )

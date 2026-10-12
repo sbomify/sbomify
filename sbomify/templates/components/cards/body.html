@@ -3,8 +3,9 @@ The card body: the padded region content lives in. Standalone, for a card built
 from its parts. variant_class carries a variant's tint (the danger zone washes
 the body); the default is bare, so the segment is empty unless a variant fills
 it.
+density="compact" is the shorter band for instructions and action rows.
 {% endcomment %}
-<c-vars variant_class class />
-<div class="p-6{% if variant_class %} {{ variant_class }}{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars variant_class density class />
+<div class="{% if density == 'compact' %}px-5 py-4 sm:px-6{% else %}p-6{% endif %}{% if variant_class %} {{ variant_class }}{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>{{ slot }}
 </div>

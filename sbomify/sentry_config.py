@@ -1,7 +1,12 @@
-"""Pure helpers for Sentry startup wiring.
+"""Pure helpers for Sentry startup wiring and self-healing-notice throttling.
 
 Extracted from ``settings.py`` so regression tests can pin the actual
 resolution logic instead of duplicating it locally.
+
+The throttle below started as a Sentry ``before_send`` hook and now serves the
+log stream as well; it lives here rather than in ``logging_filters`` because
+what it needs is the fault taxonomy at the bottom of this module, not the
+filter plumbing.
 """
 
 from __future__ import annotations
@@ -77,6 +82,10 @@ _SELF_HEALING_NOTICES = (
     ("sbomify.cache", "Exception ignored"),
 )
 
+# Keys are namespaced by consumer ("sentry:…", "log:…"). Sentry and the log
+# handler are different consumers of the same taxonomy and must not share a
+# window: a filter on the console handler cannot see what Sentry decided, and a
+# shared window would mean whichever one asked first spent the other's report.
 _last_reported: dict[str, float] = {}
 _last_reported_lock = threading.Lock()
 
@@ -116,13 +125,177 @@ def _self_healing_notice_key(record: logging.LogRecord) -> str | None:
     return None
 
 
+# Where the "this one did not recover" signal goes. Deliberately its own logger,
+# outside the taxonomy above: it must never be throttled by the machinery that
+# produced it, and Graylog alerts on it by name.
+_SUSTAINED_LOGGER = logging.getLogger("sbomify.resilience")
+
+# A report whose predecessor is older than two windows opens a new episode
+# rather than continuing one. Production's dramatiq consumers drop their Redis
+# connection on a ~15.5-hour cycle and recover within the same second; without
+# this bound, the next cycle would read as the same outage still running half a
+# day later.
+_EPISODE_CONTINUES_WITHIN_SECONDS = 2 * _OUTAGE_REPORT_INTERVAL_SECONDS
+
+
+def _open_window(key: str) -> tuple[bool, bool]:
+    """``(report, still_failing)`` for one fault.
+
+    ``report`` is ``False`` while the window opened by the last report is still
+    running. ``still_failing`` says the last report was recent enough that the
+    fault never stopped in between, so it has now outlived a full window.
+    """
+    now = time.monotonic()
+    with _last_reported_lock:
+        previous = _last_reported.get(key)
+        if previous is not None and now - previous < _OUTAGE_REPORT_INTERVAL_SECONDS:
+            return False, False
+        _last_reported[key] = now
+    return True, previous is not None and now - previous < _EPISODE_CONTINUES_WITHIN_SECONDS
+
+
+#: Dramatiq actors that should raise a Sentry issue only once their retry
+#: budget is gone, not on every attempt along the way.
+#:
+#: Each of these retries a transient failure -- an SMTP 4xx, a database that
+#: went away -- and the retry is expected to fix it. Lowering the *log* level
+#: for those attempts removes the LoggingIntegration event but not
+#: DramatiqIntegration's: that one captures the exception every time the actor
+#: raises, which is every attempt, because leaving by ``raise`` is how the
+#: Retries middleware is told to try again. So four attempts meant four issues
+#: for one delivery that then succeeded.
+#:
+#: Named explicitly rather than applied to every actor. Suppressing the first
+#: failure of anything that happens to be retryable is a much wider change
+#: than these senders, and for an actor whose retries are not expected to
+#: succeed the per-attempt event is the signal.
+REPORT_ON_RETRY_EXHAUSTION_ONLY = frozenset(
+    {
+        "send_welcome_email_task",
+        "send_quick_start_email_task",
+        "send_first_component_email_task",
+        "send_first_sbom_email_task",
+        "send_collaboration_email_task",
+    }
+)
+
+#: What dramatiq's own default is when an actor names no ``max_retries``.
+_DRAMATIQ_DEFAULT_MAX_RETRIES = 20
+
+
+def _actor_max_retries(actor_name: str) -> int | None:
+    """``max_retries`` for ``actor_name``, or None if it cannot be determined."""
+    try:
+        import dramatiq
+
+        actor = dramatiq.get_broker().get_actor(actor_name)
+    except Exception:
+        # No broker in this process, or an actor this process never declared.
+        # Either way there is nothing to decide with, so report the event.
+        return None
+    configured = actor.options.get("max_retries", _DRAMATIQ_DEFAULT_MAX_RETRIES)
+    return configured if isinstance(configured, int) else None
+
+
+def _dramatiq_will_retry(event: Any) -> bool:
+    """Whether dramatiq is going to try this message again.
+
+    Read off the message state the event already carries, because by the time
+    this runs the verdict has been reached. ``Broker.emit_after`` walks
+    middleware in *reverse*, and DramatiqIntegration inserts itself at index
+    0, so its ``after_process_message`` -- the thing that captured this event
+    -- runs after the Retries middleware has decided.
+
+    Retries increments ``options["retries"]`` unconditionally and then gives
+    up when the pre-increment count has reached ``max_retries``. So the count
+    on the event is one higher than the number Retries compared, and
+    "it gave up" is ``retries > max_retries``.
+    """
+    exceptions = ((event or {}).get("exception") or {}).get("values") or []
+    if not any((value.get("mechanism") or {}).get("type") == "dramatiq" for value in exceptions):
+        return False
+
+    message = (((event or {}).get("contexts") or {}).get("dramatiq") or {}).get("data")
+    if not isinstance(message, dict):
+        return False
+
+    actor_name = message.get("actor_name")
+    if actor_name not in REPORT_ON_RETRY_EXHAUSTION_ONLY:
+        return False
+
+    max_retries = _actor_max_retries(actor_name)
+    if max_retries is None:
+        return False
+
+    # The count has to be explicitly there. Defaulting a missing key to 0 made
+    # "we cannot tell" indistinguishable from "this is the first attempt", and
+    # 0 <= max_retries drops the event -- so if the Retries middleware were
+    # absent, or Sentry stopped serializing this key, every event for a listed
+    # actor would be suppressed including the terminal one, which is the only
+    # one worth reading. Every other unreadable field here reports; this one
+    # has to as well.
+    #
+    # 0 is not a value that occurs anyway: Retries does
+    # ``setdefault("retries", 0)`` and then increments, both before this
+    # middleware captures, so a real count is always 1 or more. Defaulting to
+    # it was picking an impossible value that happened to mean "drop".
+    options = message.get("options")
+    if not isinstance(options, dict) or "retries" not in options:
+        return False
+
+    retries = options["retries"]
+    # bool is an int in Python, and a True here would compare as 1.
+    if not isinstance(retries, int) or isinstance(retries, bool):
+        return False
+
+    return retries <= max_retries
+
+
+#: The logger dramatiq's worker writes "Failed to process message ... with
+#: unhandled exception" on, at error level, for every attempt that raises.
+_DRAMATIQ_WORKER_LOGGER = "dramatiq.worker.WorkerThread"
+
+
+def _duplicates_the_dramatiq_event(event: Any) -> bool:
+    """Whether this is the worker's log line about an exception already captured.
+
+    ``DramatiqIntegration`` captures the exception itself; the worker then logs
+    that it failed, and ``LoggingIntegration`` is wired at ``event_level=ERROR``
+    in ``settings.py``, so the same failure arrives twice. Filtering only the
+    first left four of these per outage: the integrations have to be considered
+    together, which is why the regression test for this wires both rather than
+    the one under discussion.
+
+    Dropped on every attempt, not only the retried ones. On the attempt that
+    gives up, the captured exception is the better of the two copies -- it
+    carries the traceback rather than a sentence about it -- so this one is
+    redundant there as well.
+
+    Scoped to the same actors as ``REPORT_ON_RETRY_EXHAUSTION_ONLY``: elsewhere
+    a per-attempt line is still how an actor's failures are seen.
+    """
+    if (event or {}).get("logger") != _DRAMATIQ_WORKER_LOGGER:
+        return False
+
+    message = (((event or {}).get("contexts") or {}).get("dramatiq") or {}).get("data")
+    if not isinstance(message, dict):
+        return False
+
+    return message.get("actor_name") in REPORT_ON_RETRY_EXHAUSTION_ONLY
+
+
 def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     """``before_send`` hook: report a recovering outage once, not once a second.
 
     Returns the event to send it, or ``None`` to drop it. Only the notices
-    listed above are ever throttled; everything else is returned untouched, so
-    this cannot quietly swallow a real error.
+    listed above, the retry attempts of the actors in
+    ``REPORT_ON_RETRY_EXHAUSTION_ONLY``, and the worker's own log line about an
+    exception already captured for those actors are ever dropped; everything
+    else is returned untouched, so this cannot quietly swallow a real error.
     """
+    if _dramatiq_will_retry(event) or _duplicates_the_dramatiq_event(event):
+        return None
+
     record = (hint or {}).get("log_record")
     if not isinstance(record, logging.LogRecord):
         return event
@@ -131,10 +304,64 @@ def throttle_self_healing_notices(event: Any, hint: Any) -> Any:
     if key is None:
         return event
 
-    now = time.monotonic()
-    with _last_reported_lock:
-        previous = _last_reported.get(key)
-        if previous is not None and now - previous < _OUTAGE_REPORT_INTERVAL_SECONDS:
-            return None
-        _last_reported[key] = now
-    return event
+    report, _ = _open_window(f"sentry:{key}")
+    return event if report else None
+
+
+def is_repeat_self_healing_notice(record: logging.LogRecord) -> bool:
+    """``True`` for a self-healing notice already written inside this window.
+
+    The same throttle as the Sentry hook, applied to stdout, because stdout is
+    where the on-call signal actually comes from: the container logs ship to
+    Graylog and Graylog alerts Slack on error-level volume. Throttling only the
+    Sentry copy left that path seeing every line, so one Redis blip — one fault,
+    self-healing, already recovered by the time anyone looked — arrived as
+    hundreds of error-level lines and cleared the alert threshold on its own.
+
+    Keeping the first line of each fault per window is what makes this safe to
+    put on a handler: an outage that lasts is still reported, once every five
+    minutes, for as long as it lasts.
+
+    Opening a window is also where a fault is found to have *not* recovered, so
+    that is where the sustained-fault signal is raised. Nothing else in the
+    process knows: a log line says a fault happened, and only the gap between
+    two of them says it is still happening.
+    """
+    # Both notices are logged at ERROR or above, so this skips formatting the
+    # message for the INFO/WARNING records that make up the bulk of the stream.
+    if record.levelno < logging.ERROR:
+        return False
+
+    key = _self_healing_notice_key(record)
+    if key is None:
+        return False
+
+    report, still_failing = _open_window(f"log:{key}")
+    if still_failing:
+        _raise_sustained_fault(key)
+    return not report
+
+
+def _raise_sustained_fault(key: str) -> None:
+    """Log the one line that means *this did not recover*.
+
+    Why a separate line rather than counting the throttled notices: the throttle
+    window is per process, and there is no shared state to make it otherwise -
+    the fault being throttled is "Redis is unreachable", so a Redis-backed lock
+    is exactly the thing that cannot be relied on here. Production runs two web
+    containers with two gunicorn workers each plus two dramatiq workers, so a
+    blip lasting under a second still produces one "first line" from every
+    process that saw it. Counting lines therefore cannot tell six processes
+    noticing one blip apart from one process seeing six windows of a real
+    outage, unless the threshold hardcodes the replica count.
+
+    Duration can tell them apart, and each process can measure it alone. Replayed
+    over a week of production this is silent through all ten reconnect blips and
+    raises seven lines during the one real Redis incident, which is the whole
+    point: the alert on it needs no threshold at all.
+    """
+    _SUSTAINED_LOGGER.error(
+        "Dependency still failing %d minutes after the first report: %s",
+        _OUTAGE_REPORT_INTERVAL_SECONDS // 60,
+        key,
+    )

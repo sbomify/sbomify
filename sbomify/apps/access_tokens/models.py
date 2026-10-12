@@ -2,6 +2,11 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .utils import TOKEN_TYPE_PAT, hash_token
+
+# What hash_token returns: a SHA-256 in lowercase hex. The column holds nothing else.
+SHA256_HEX = r"^[0-9a-f]{64}$"
+
 
 class AccessToken(models.Model):
     class Meta:
@@ -19,8 +24,22 @@ class AccessToken(models.Model):
                 condition=models.Q(expires_at__isnull=False),
             ),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(token_hash__regex=SHA256_HEX),
+                name="access_token_stores_a_hash",
+            ),
+        ]
 
-    encoded_token = models.CharField(max_length=1000, null=False, unique=True)
+    # The token itself is never stored. The row keeps its hash for lookup, and
+    # the holder sees the token once, when it is minted.
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    token_type = models.CharField(
+        max_length=4,
+        default=TOKEN_TYPE_PAT,
+        editable=False,
+        help_text="The token_type claim of the JWT, pat or oidc. Authentication refuses a token whose claim differs.",
+    )
     description = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -55,6 +74,21 @@ class AccessToken(models.Model):
             "spot stale or leaked tokens to revoke."
         ),
     )
+
+    # Tests build rows by assigning the token, which stores its hash and keeps
+    # the token on this instance alone. Production code passes token_hash.
+    _encoded_token: str | None = None
+
+    @property
+    def encoded_token(self) -> str:
+        if self._encoded_token is None:
+            raise AttributeError("Only the token's hash is stored. The token exists on the instance that minted it.")
+        return self._encoded_token
+
+    @encoded_token.setter
+    def encoded_token(self, token: str) -> None:
+        self._encoded_token = token
+        self.token_hash = hash_token(token)
 
     def __str__(self) -> str:
         return f"{self.user_id} - {self.description}"

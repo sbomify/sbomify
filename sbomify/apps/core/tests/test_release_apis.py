@@ -2014,3 +2014,142 @@ def test_download_filename_sanitizes_user_names():
     assert "\r" not in dirty and "\n" not in dirty and '"' not in dirty
     assert dirty.endswith(".cdx.json")
     assert _download_filename("", "", ".cdx.json") == "release.cdx.json"
+
+
+class TestReleaseDeleteKeepsLifecycleHistory:
+    """A release's CLE records are its published lifecycle trail.
+
+    Both foreign keys into Release cascade, so deleting a release used to take
+    that trail with it and say nothing. The refusal lives in the endpoint rather
+    than on the keys: PROTECT would block workspace deletion, which cascades
+    through product to release, and a nullable key would push a release-less
+    event into every reader.
+    """
+
+    @staticmethod
+    def _event(release, event_id=1):
+        from django.utils import timezone
+
+        from sbomify.apps.sboms.models import CLEEventType, ReleaseCLEEvent
+
+        return ReleaseCLEEvent.objects.create(
+            release=release,
+            event_id=event_id,
+            event_type=CLEEventType.RELEASED,
+            effective=timezone.now(),
+        )
+
+    @staticmethod
+    def _as_owner(client, product):
+        assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+        setup_test_session(client, product.team, product.team.members.first())
+
+    @pytest.mark.django_db
+    def test_a_release_carrying_lifecycle_records_is_not_deleted(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 400
+        assert "lifecycle record" in response.json()["detail"]
+        assert Release.objects.filter(id=release.id).exists()
+        assert ReleaseCLEEvent.objects.filter(release=release).count() == 1
+
+    @pytest.mark.django_db
+    def test_a_release_without_them_still_deletes(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        """The guard must not become a blanket refusal."""
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 204
+        assert not Release.objects.filter(id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_deleting_the_product_still_removes_both(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """Deleting a product is a deliberate act about its whole history.
+
+        The cascade has to keep working, or the guard would strand products
+        that can never be removed.
+        """
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        # Its own product, so tearing it down does not fight the fixture's.
+        doomed = Product.objects.create(name="doomed-product", team=sample_product.team)
+        release = Release.objects.create(product=doomed, name="v1.0.0")
+        self._event(release)
+
+        doomed.delete()
+
+        assert not Release.objects.filter(id=release.id).exists()
+        assert not ReleaseCLEEvent.objects.filter(release_id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_deleting_the_workspace_still_works(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The ripple that rules out PROTECT.
+
+        Account deletion hard deletes an orphaned workspace, and that cascade
+        runs workspace to product to release to event. A protected key would
+        raise here and leave a user unable to delete their account.
+        """
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        team = sample_product.team
+
+        team.delete()
+
+        assert not Release.objects.filter(id=release.id).exists()
+        assert not ReleaseCLEEvent.objects.filter(release_id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_a_support_definition_alone_is_enough_to_refuse(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        """The other cascading key counts too, not just events."""
+        from sbomify.apps.sboms.models import ReleaseCLESupportDefinition
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        ReleaseCLESupportDefinition.objects.create(
+            release=release, support_id="std", description="Standard support window"
+        )
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 400
+        assert Release.objects.filter(id=release.id).exists()

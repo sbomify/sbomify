@@ -1,0 +1,12 @@
+{% comment %}
+A value a form row shows but the user cannot change here: a name or email that
+comes from the sign-in provider, an identifier set once at creation.
+
+It is text, not a read-only input. A read-only input keeps the border and fill
+of an editable one, so people click it, type, and nothing happens. The slot is
+the value; it wraps rather than overflows, since an email address has no spaces.
+In a horizontal c-forms.field it lines up with the controls on the other rows.
+{% endcomment %}
+<c-vars class />
+<p class="m-0 text-sm font-medium text-text [overflow-wrap:anywhere] md:text-right{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>{{ slot }}</p>

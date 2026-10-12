@@ -1,3 +1,4 @@
+{% load humanize %}
 {% load public_url_tags %}
 {% comment %}
 One advisory as the trust center lists it.
@@ -24,7 +25,7 @@ two cannot drift. Expects `advisory` (a trust_center projection) and
 {% endif %}
 {% for product in advisory.products %}<c-branded.badge>{{ product.name }}</c-branded.badge>{% endfor %}
 {% if advisory.withheld_product_count %}
-    <c-branded.badge title="Products you do not have access to are not listed">+{{ advisory.withheld_product_count }} not shown</c-branded.badge>
+    <c-branded.badge title="Products you do not have access to are not listed">+{{ advisory.withheld_product_count|intcomma }} not shown</c-branded.badge>
 {% endif %}
 </c-slot>
 <c-slot name="side">

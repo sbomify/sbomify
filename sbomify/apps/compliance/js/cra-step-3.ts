@@ -1,3 +1,4 @@
+import { formatNumber } from '../../core/js/number-format';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
 import { getCsrfToken } from '../../core/js/csrf';
 import { showError } from '../../core/js/alerts';
@@ -97,7 +98,7 @@ export function craStep3() {
 
     groupCompletionCount(group: ControlGroup): string {
       const answered = group.controls.filter(c => c.status !== 'unanswered').length;
-      return `${answered}/${group.controls.length}`;
+      return `${formatNumber(answered)}/${formatNumber(group.controls.length)}`;
     },
 
     async setFindingStatus(finding: Finding, status: string): Promise<void> {

@@ -1,0 +1,10 @@
+{% comment %}A page body whose sections arrive together, below an already rendered page header. Reuses card and loading bodies; the outer status is the only announcement. It is a placeholder, not a navigation overlay.{% endcomment %}
+<c-vars message="Loading page..." class="" />
+<c-feedback.loading message="{{ message }}" variant_class="flex min-w-0 flex-col gap-6" class="{{ class }}" :attrs="attrs">
+{% for section in "12" %}
+    <c-cards.card flush>
+    <c-feedback.loading />
+    <c-feedback.loading-list rows="2" />
+    </c-cards.card>
+{% endfor %}
+</c-feedback.loading>

@@ -162,3 +162,21 @@ def test_validate_expression_invalid_request(authenticated_api_client):
         **headers
     )
     assert response.status_code == 422  # Validation error
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("expression", ["", "   "])
+def test_validate_expression_empty(authenticated_api_client, expression):
+    """An empty expression is bad input, answered like a syntax error."""
+    client, access_token = authenticated_api_client
+
+    response = client.post(
+        "/api/v1/licensing/license-expressions/validate",
+        {"expression": expression},
+        content_type="application/json",
+        **get_api_headers(access_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == 400
+    assert response.json()["error"] == "Empty expression"

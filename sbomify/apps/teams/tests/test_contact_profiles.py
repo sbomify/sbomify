@@ -894,7 +894,7 @@ def test_update_contact_profile_entities_duplicate_name_returns_400(
 
     response = client.post(
         f"/api/v1/workspaces/{team.key}/contact-profiles",
-        json.dumps({"name": "Seed Profile"}),
+        json.dumps({"name": "Seed Profile", "company": "Seed Company"}),
         content_type="application/json",
         **headers,
     )

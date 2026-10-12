@@ -7,11 +7,9 @@ import { initThemeManager } from './theme-manager';
 initThemeManager();
 
 import './layout-interactions';
-import './navbar-search';
+import './table-stack';
 import './notifications-modal';
 
-// Shared Chart.js setup (makes window.Chart available)
-import './chart-setup';
 import Alpine from 'alpinejs';
 import './alerts-global';
 import './clipboard-global';
@@ -25,12 +23,10 @@ import {
 } from './utils';
 
 // Centralized Alpine components and HTMX lifecycle
-import { registerAllComponents } from './alpine-components';
 import { initHtmxLifecycle } from './htmx-lifecycle';
 import { registerHtmxConfig } from './htmx-config';
 import { initializeAlpine } from './alpine-init';
-
-import '../../vulnerability_scanning/js/vulnerability-chart';
+import { initDjangoMessages } from './django-messages';
 
 // Make globals available
 declare global {
@@ -55,13 +51,10 @@ window.sbomifyFormatCompactRelativeDate = formatCompactRelativeDate;
 // Register HTMX config
 registerHtmxConfig();
 
-// Register all Alpine components from central registry
-registerAllComponents();
-
 // Initialize centralized HTMX lifecycle handler
 initHtmxLifecycle();
 
 // Initialize Alpine
-void initializeAlpine();
+void initializeAlpine().then(initDjangoMessages);
 
 export { };

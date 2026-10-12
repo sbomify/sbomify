@@ -1,0 +1,66 @@
+{% comment %}
+The shared inventory table, including rows, empty states and server pagination.
+A preview uses the same columns and actions without interactive sorting or a
+pager. Its parent supplies the link to the full list. Empty tables omit column
+headings so their minimum widths cannot clip the empty state on a small screen.
+{% endcomment %}
+<c-vars inventory preview />
+<c-tables.shell>
+{% if inventory.rows %}
+    {# djlint:off #}
+<c-tables.table sized variant_class="min-w-288" aria-label="{{ inventory.kind|title }}">
+    {# djlint:on #}
+    <thead>
+        <tr>
+            {% for header in inventory.headers %}
+                {# Keep conditional attribute values intact; whitespace changes sort keys. #}
+                {# djlint:off #}
+                <c-tables.header-cell compact nowrap
+                    href="{% if not preview %}{{ header.href }}{% endif %}"
+                    order="{{ header.order }}"
+                    sort="{% if not preview %}{{ header.key }}{% endif %}"
+                    class="{% if header.key == 'name' %}{% elif header.key == 'vulnerabilities' %}w-48{% elif header.key == 'past_sla' %}w-24{% elif header.key == 'stale' or header.key == 'scan_label' %}w-36{% elif header.key == 'created_at' or header.key == 'freshness_label' %}w-32{% else %}w-28{% endif %}">{{ header.label }}</c-tables.header-cell>
+                {# djlint:on #}
+            {% endfor %}
+            <c-tables.actions-cell as="th" compact pinned />
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in inventory.rows %}
+            <c-inventory.row :row="row" kind="{{ inventory.kind }}" scope_product="{{ inventory.scope_product }}" />
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+{% else %}
+    {% if inventory.total %}
+        <c-feedback.empty-state :compact="preview" icon="fas fa-cube" title="No matching {{ inventory.kind }}" message="Try another search or clear the filters.">
+        <c-buttons.secondary href="{{ inventory.reset_url }}" hx-boost="true" hx-target="#{{ inventory.content_id }}">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% else %}
+        <c-feedback.empty-state :compact="preview" icon="fas fa-cube" title="No {{ inventory.kind }} yet" message="
+        {% if inventory.scope_product and inventory.kind == 'components' %}
+            Assign a component to get started.
+        {% else %}
+            Create a {{ inventory.singular }} to get started.
+        {% endif %}
+        ">
+        {% if can_manage %}
+            {% if inventory.kind == 'products' %}
+                <c-buttons.primary href="{% url 'core:product_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create product</c-buttons.primary>
+            {% elif inventory.kind == 'components' %}
+                {% if inventory.scope_product %}
+                    <c-buttons.primary @click="assignOpen = true"><i class="fas fa-plus" aria-hidden="true"></i>Assign component</c-buttons.primary>
+                {% else %}
+                    <c-buttons.primary href="{% url 'core:component_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create component</c-buttons.primary>
+                {% endif %}
+            {% elif inventory.kind == 'releases' %}
+                {# djlint:off #}
+                <c-buttons.primary href="{% url 'core:release_new' %}{% if inventory.scope_product %}?product={{ inventory.scope_product }}{% endif %}"><i class="fas fa-plus" aria-hidden="true"></i>Create release</c-buttons.primary>
+                {# djlint:on #}
+            {% endif %}
+        {% endif %}
+        </c-feedback.empty-state>
+    {% endif %}
+{% endif %}
+{% if not preview %}<c-inventory.footer :inventory="inventory" />{% endif %}
+</c-tables.shell>

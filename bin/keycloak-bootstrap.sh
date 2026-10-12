@@ -78,8 +78,18 @@ fi
 # Always enable user registration after all other steps.
 # resetPasswordAllowed matches what create_realm sets in core/keycloak_utils.py;
 # without it the "Forgot password?" link never renders and the reset flow is
-# unreachable.
-/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true -s resetPasswordAllowed=true
+# unreachable. verifyEmail comes with open registration: sbomify links an
+# account or accepts an invitation by email only when the token says the
+# address was confirmed.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true -s resetPasswordAllowed=true -s verifyEmail=true
+
+# In development the confirmation mail goes to Mailpit, http://localhost:8025.
+if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+  /opt/keycloak/bin/kcadm.sh update "realms/$REALM" \
+    -s 'smtpServer.host=mailpit' \
+    -s 'smtpServer.port=1025' \
+    -s 'smtpServer.from=keycloak@example.com'
+fi
 
 # Email action links must survive real-world mailbox delays: verification
 # links live 3 days, credential resets 1 hour (the Keycloak default of
@@ -121,6 +131,13 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
 
   # Set password for second test user
   /opt/keycloak/bin/kcadm.sh set-password -r "$REALM" --username ssmith --new-password foobar123
+
+  # The test users stand for people who confirmed their address at sign-up,
+  # in realms an earlier version of this script created too.
+  for DEV_USER in jdoe ssmith; do
+    DEV_USER_ID=$(/opt/keycloak/bin/kcadm.sh get users -r "$REALM" -q "username=$DEV_USER" --fields id --format csv --noquotes | head -n1)
+    /opt/keycloak/bin/kcadm.sh update "users/$DEV_USER_ID" -r "$REALM" -s emailVerified=true
+  done
 fi
 
 echo "Keycloak client secret for $CLIENT_ID: $CLIENT_SECRET"

@@ -35,8 +35,8 @@ def two_hatted_user(db, django_user_model, home, other):
 
 def _session_for(client, team, role):
     session = client.session
-    session["current_team"] = {"key": team.key, "name": team.name, "role": role, "id": team.id}
-    session["user_teams"] = {team.key: {"role": role, "name": team.name}}
+    session["current_workspace"] = {"key": team.key, "name": team.name, "role": role, "id": team.id}
+    session["user_workspaces"] = {team.key: {"role": role, "name": team.name}}
     session.save()
 
 

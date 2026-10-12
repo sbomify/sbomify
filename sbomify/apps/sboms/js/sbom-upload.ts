@@ -10,7 +10,8 @@ interface VexPreview {
     would_suppress: number
     already_suppressed: number
     unmatched_statements: number
-    matched: Array<{ id: string; package: string | null; version: string | null; state: string }>
+    // state is the document's own VEX code; state_label is the wording to show.
+    matched: Array<{ id: string; package: string | null; version: string | null; state: string; state_label: string }>
 }
 
 interface SbomUploadState {
@@ -36,13 +37,13 @@ interface SbomUploadState {
 }
 
 export function registerSbomUpload(): void {
-    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false): SbomUploadState => ({
+    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false, initialBomType: UploadBomType = 'sbom'): SbomUploadState => ({
         expanded: !hasSboms,
         isDragOver: false,
         isUploading: false,
         isPreviewing: false,
         componentId: componentId,
-        bomType: 'sbom' as UploadBomType,
+        bomType: initialBomType,
         preview: null,
         pendingFile: null,
         abortController: null,
@@ -109,7 +110,7 @@ export function registerSbomUpload(): void {
             } catch (error) {
                 if (error instanceof Error) {
                     if (error.name === 'AbortError') {
-                        showError('Upload was cancelled.')
+                        showError('Upload was canceled.')
                     } else {
                         showError(`Network error: ${error.message}`)
                     }

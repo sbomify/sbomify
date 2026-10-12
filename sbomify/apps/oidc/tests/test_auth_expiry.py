@@ -216,6 +216,7 @@ class TestJWTLevelExpiry:
         # / migration-bug scenario the JWT-level gate guards against.
         AccessToken.objects.create(
             encoded_token=encoded,
+            token_type="oidc",
             description="tamper sim",
             user=user,
             expires_at=None,  # tampered / wiped
@@ -251,6 +252,7 @@ class TestJWTLevelExpiry:
 
         AccessToken.objects.create(
             encoded_token=bad_jwt,
+            token_type="oidc",
             description="wrong aud",
             user=user,
             expires_at=future,

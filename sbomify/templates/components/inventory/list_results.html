@@ -1,0 +1,9 @@
+{% comment %}Replace results without recreating the inventory filters. Sort state travels with the results so subsequent filter submissions retain it.{% endcomment %}
+<c-vars inventory />
+<div id="{{ inventory.content_id }}-results">
+    <input type="hidden" name="sort" value="{{ inventory.params.sort }}">
+    <input type="hidden"
+           name="direction"
+           value="{{ inventory.params.direction }}">
+    <c-inventory.results :inventory="inventory" />
+</div>

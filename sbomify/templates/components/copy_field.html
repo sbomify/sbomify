@@ -1,0 +1,13 @@
+{% comment %}
+A selectable, read-only value with the shared copy action. Long URLs scroll
+inside the input without widening a settings row. The slot takes optional
+adjacent actions, such as opening the URL, without duplicating the copy logic.
+{% endcomment %}
+<c-vars value label="Value to copy" id class />
+<div class="flex items-center gap-2 min-w-0 w-full max-w-full{% if class %} {{ class }}{% endif %}"
+     x-data
+     {{ attrs }}>
+    <c-forms.input size="sm" id="{{ id }}" value="{{ value }}" readonly class="min-w-0 flex-1 font-mono" aria-label="{{ label }}" title="{{ value }}" @focus="$el.select()" />
+    <c-copy-button value="{{ value }}" label="Copy" copy_label="Copy {{ label }}" />
+    {{ slot }}
+</div>

@@ -1,9 +1,10 @@
 {# Component metadata — a modal opened from the component header ⋮ menu (open-metadata window event), not a body card. #}
-<div x-data="{ metaOpen: false }"
+<div class="contents"
+     x-data="{ metaOpen: false }"
      @open-metadata.window="metaOpen = true"
      @keydown.escape.window="if (metaOpen) metaOpen = false">
     <c-modal show="metaOpen" size="wide" title="Component Metadata" icon="fas fa-address-card" aria-label="Component metadata">
-    <div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+    <div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_workspace.key }}', allowEdit:
         {% if component.has_crud_permissions %}
             true
         {% else %}

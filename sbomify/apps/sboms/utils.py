@@ -15,6 +15,7 @@ from django.core import signing
 from django.db import DatabaseError, IntegrityError, OperationalError
 from django.utils import timezone
 
+from sbomify.apps.access_tokens.utils import token_fingerprint
 from sbomify.apps.core.models import Component, Product
 
 # StorageClient import moved to function level to support test mocking
@@ -832,10 +833,10 @@ def spdx3_member_import(
     ``root_element_uri`` in its ``describes`` relationship; ``externalSpdxId`` and
     that referenced URI are identical so the cross-document reference resolves.
     """
-    is_spdx3 = "@graph" in sbom_data or (
-        str(sbom_data.get("spdxVersion", "")).startswith("SPDX-3.") and "elements" in sbom_data
-    )
-    if not is_spdx3:
+    # Function-local: sboms may not take a module-level edge into plugins.
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    if not is_spdx3(sbom_data):
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
     if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest
@@ -1581,11 +1582,11 @@ def verify_download_token(token: str, max_age: int = SIGNED_URL_MAX_AGE) -> dict
     try:
         payload: dict[str, Any] = get_signer().unsign_object(token, max_age=max_age)
         return payload
-    except signing.BadSignature:
-        log.warning(f"Invalid signature in download token: {token}")
-        return None
     except signing.SignatureExpired:
-        log.warning(f"Expired download token: {token}")
+        log.warning(f"Expired download token (fingerprint {token_fingerprint(token)})")
+        return None
+    except signing.BadSignature:
+        log.warning(f"Invalid signature in download token (fingerprint {token_fingerprint(token)})")
         return None
     except Exception as e:
         log.error(f"Error verifying download token: {e}")

@@ -31,7 +31,7 @@
                 <div class="tc-detail-meta">
                     <span class="tc-detail-meta-item">
                         <i class="fas fa-tags" aria-hidden="true"></i>
-                        {{ releases|length }} release{{ releases|length|pluralize }}
+                        {{ releases|length|intcomma }} release{{ releases|length|pluralize }}
                     </span>
                 </div>
             {% endif %}

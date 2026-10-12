@@ -159,3 +159,34 @@ describe('Product Identifiers Barcodes', () => {
         })
     })
 })
+
+describe('barcode rendering', () => {
+    test('renders through the loaded library and skips a removed SVG', async () => {
+        const originalDocument = globalThis.document;
+        const svg = { isConnected: true };
+        globalThis.document = { querySelector: () => svg } as unknown as Document;
+        try {
+            const { registerProductIdentifiersBarcodes } = await import('./product-identifiers-barcodes');
+            mockAlpineData.mockClear();
+            mockJsBarcode.mockClear();
+            registerProductIdentifiersBarcodes();
+            const create = mockAlpineData.mock.calls[0][1];
+            const component = Object.assign(create() as {
+                renderBarcode(id: string, value: string, type: string): Promise<void>;
+                barcodeRendered: Record<string, boolean>;
+            }, { $nextTick: async () => {} });
+            await component.renderBarcode('first', '5901234123457', 'gtin_13');
+            expect(mockJsBarcode).toHaveBeenCalledTimes(1);
+            expect(mockJsBarcode.mock.calls[0][2].format).toBe('EAN13');
+            expect(component.barcodeRendered.first).toBe(true);
+            await component.renderBarcode('first', '5901234123457', 'gtin_13');
+            expect(mockJsBarcode).toHaveBeenCalledTimes(1);
+            svg.isConnected = false;
+            await component.renderBarcode('removed', '5901234123457', 'gtin_13');
+            expect(mockJsBarcode).toHaveBeenCalledTimes(1);
+            expect(component.barcodeRendered.removed).toBe(false);
+        } finally {
+            globalThis.document = originalDocument;
+        }
+    });
+});

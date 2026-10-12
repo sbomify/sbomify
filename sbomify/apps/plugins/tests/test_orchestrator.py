@@ -677,7 +677,7 @@ class TestFinalizeRetryExhausted:
         run.refresh_from_db()
         assert run.status == RunStatus.COMPLETED.value
         assert run.completed_at is not None
-        assert run.error_message and "Retry budget exhausted" in run.error_message
+        assert run.error_message and run.error_message.startswith("Retry budget exhausted: ")
 
         # Synthesised payload shape — exactly what BSI's gate consumes.
         assert run.result is not None
@@ -694,9 +694,11 @@ class TestFinalizeRetryExhausted:
 
         finding = run.result["findings"][0]
         assert finding["id"] == "sbom-verification:retry-exhausted"
+        assert finding["title"] == "Assessment Retry Budget Exhausted"
         assert finding["status"] == "error"
         assert "GitHub returned 404" in finding["description"]
-        assert finding["metadata"]["retry_exhausted"] is True
+        assert finding["metadata"] == {"retry_exhausted": True, "last_error": "GitHub returned 404 for sha256:abc..."}
+        assert run.result["metadata"] == {"retry_exhausted": True}
 
     def test_finalised_run_satisfies_check_one_of_query(self, test_sbom, db) -> None:
         """After finalising, BSI's ``_check_one_of`` sees the run as failed_plugins.
@@ -845,3 +847,32 @@ class TestSkippedPluginPendingCleanup:
 
         assert result["status"] == "skipped"
         assert not AssessmentRun.objects.filter(id=run_id).exists()
+
+
+@pytest.mark.django_db
+def test_a_reused_pending_row_records_the_version_that_ran(test_sbom, mock_sbom_data, mocker) -> None:
+    """The eager row copies the registry's version. The page compares the run's
+    version with the current one, so it must name the code that produced it."""
+    mocker.patch(
+        "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+        return_value=(test_sbom, mock_sbom_data),
+    )
+    pending = AssessmentRun.objects.create(
+        sbom=test_sbom,
+        plugin_name="mock-plugin",
+        plugin_version="0.9.0",
+        category="compliance",
+        run_reason=RunReason.ON_UPLOAD.value,
+        status=RunStatus.PENDING.value,
+    )
+
+    run = PluginOrchestrator().run_assessment(
+        sbom_id=test_sbom.id,
+        plugin=MockPlugin(),
+        run_reason=RunReason.ON_UPLOAD,
+        existing_run_id=str(pending.id),
+    )
+
+    assert run is not None
+    run.refresh_from_db()
+    assert run.plugin_version == "1.0.0"

@@ -1,13 +1,12 @@
 """Tests for plugins template tags and filters."""
 
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.templatetags.plugins_extras import (
+    RUN_REASONS,
     advisory_prose,
     format_finding_description,
     format_run_reason,
     has_compliance_failures,
-    status_border_class,
-    status_icon,
-    status_text_class,
 )
 
 
@@ -29,74 +28,22 @@ class TestFormatRunReason:
     def test_migration(self) -> None:
         assert format_run_reason("migration") == "Migration"
 
-    def test_unknown_returns_original(self) -> None:
-        assert format_run_reason("unknown_reason") == "unknown_reason"
+    def test_every_sdk_reason_has_an_explicit_label(self) -> None:
+        """A RunReason the SDK defines must be worded here, not left to the fallback.
 
+        Asserted against the map rather than against the rendered string:
+        humanize_token would de-underscore an unmapped reason too, so a
+        rendering check alone would pass for a reason nobody wrote wording
+        for, and "On Release Association" is not what that trigger is called.
+        """
+        missing = [reason.value for reason in RunReason if reason.value not in RUN_REASONS]
+        assert not missing, f"RunReason values with no label: {missing}"
 
-class TestStatusBorderClass:
-    """Tests for status_border_class filter."""
+    def test_unknown_is_humanized_not_printed_raw(self) -> None:
+        assert format_run_reason("unknown_reason") == "Unknown Reason"
 
-    def test_pass(self) -> None:
-        assert status_border_class("pass") == "border-success"
-
-    def test_fail(self) -> None:
-        assert status_border_class("fail") == "border-warning"
-
-    def test_error(self) -> None:
-        assert status_border_class("error") == "border-danger"
-
-    def test_warning(self) -> None:
-        assert status_border_class("warning") == "border-info"
-
-    def test_info(self) -> None:
-        assert status_border_class("info") == "border-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_border_class("unknown") == "border-secondary"
-
-
-class TestStatusTextClass:
-    """Tests for status_text_class filter."""
-
-    def test_pass(self) -> None:
-        assert status_text_class("pass") == "text-success"
-
-    def test_fail(self) -> None:
-        assert status_text_class("fail") == "text-warning"
-
-    def test_error(self) -> None:
-        assert status_text_class("error") == "text-danger"
-
-    def test_warning(self) -> None:
-        assert status_text_class("warning") == "text-info"
-
-    def test_info(self) -> None:
-        assert status_text_class("info") == "text-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_text_class("unknown") == "text-secondary"
-
-
-class TestStatusIcon:
-    """Tests for status_icon filter."""
-
-    def test_pass(self) -> None:
-        assert status_icon("pass") == "fas fa-check-circle"
-
-    def test_fail(self) -> None:
-        assert status_icon("fail") == "fas fa-times-circle"
-
-    def test_warning(self) -> None:
-        assert status_icon("warning") == "fas fa-exclamation-circle"
-
-    def test_error(self) -> None:
-        assert status_icon("error") == "fas fa-exclamation-triangle"
-
-    def test_info(self) -> None:
-        assert status_icon("info") == "fas fa-info-circle"
-
-    def test_unknown_returns_info(self) -> None:
-        assert status_icon("unknown") == "fas fa-info-circle"
+    def test_empty_stays_empty(self) -> None:
+        assert format_run_reason("") == ""
 
 
 class TestFormatFindingDescription:

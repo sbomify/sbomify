@@ -1,0 +1,21 @@
+{% extends "core/auth_base.html.j2" %}
+{% comment %}
+The shell every allauth page renders inside.
+
+allauth ships its own layouts/base.html: a bare <!DOCTYPE html> with no
+stylesheet and no script. Only login and account_deactivated were overridden
+here, so every other auth page rendered through that one, unstyled. Password
+reset, set password, email confirmation and reauthenticate are all pages a user
+reaches from a link in an email, and all of them arrived looking like nothing.
+
+Overriding the layout rather than the pages fixes them together, and keeps any
+allauth page added later inside the same shell. Django finds this first because
+settings.TEMPLATES puts sbomify/templates ahead of the app directories.
+
+allauth names its blocks head_title and content; auth_base names them title and
+login_content. This is where the two meet, so no allauth template needs editing.
+{% endcomment %}
+{% block title %}{% block head_title %}{% endblock head_title %}{% endblock title %}
+{% block login_content %}
+    {% block content %}{% endblock content %}
+{% endblock login_content %}

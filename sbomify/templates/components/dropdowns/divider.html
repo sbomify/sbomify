@@ -1,7 +1,9 @@
 {% comment %}
-The hairline between two groups of items inside a panel.
+The hairline between two groups of items inside a panel. It carries
+role="separator" so a role="menu" panel owns it rather than an anonymous div.
 {% endcomment %}
 <c-vars class />
 <div class="h-px my-1.5 bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+     role="separator"
      {{ attrs }}>
 </div>

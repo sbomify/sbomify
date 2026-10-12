@@ -1,5 +1,5 @@
 import pytest
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
@@ -304,7 +304,39 @@ class TestWorkspaceCryptoSnapshot:
         authenticated_page.goto(f"/workspaces/{sbom_component_details.team.key}/crypto/")
         authenticated_page.wait_for_load_state("networkidle")
 
+        expect(authenticated_page.locator("dl").filter(has_text="At risk").locator("dd")).to_have_text("1")
+        expect(authenticated_page.locator("dl").filter(has_text="Expired certs").locator("dd")).to_have_text("1")
+
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [375, 1920])
+@pytest.mark.parametrize("kind", ["artifacts", "documents"])
+def test_empty_artifact_search_can_be_cleared(
+    authenticated_page: Page,
+    request: pytest.FixtureRequest,
+    width: int,
+    kind: str,
+) -> None:
+    page = authenticated_page
+    component: Component = request.getfixturevalue(
+        "sbom_component_details" if kind == "artifacts" else "document_component_details"
+    )
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/component/{component.id}/artifacts/" if kind == "artifacts" else f"/component/{component.id}/")
+    search = page.get_by_role("searchbox", name=f"Search {kind}")
+    search.fill("no-artifact-has-this-name")
+    panel = page.locator("[data-empty-state]").filter(has=page.get_by_role("heading", name=f"No matching {kind}"))
+    expect(panel).to_be_visible()
+    expect(page.get_by_role("table", name=kind.title(), exact=True)).to_be_hidden()
+    bounds = panel.bounding_box()
+    assert bounds is not None
+    assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
+    panel.get_by_role("button", name="Clear filters" if kind == "artifacts" else "Clear search").click()
+    expect(search).to_have_value("")
+    expect(panel).to_be_hidden()
+    expect(page.get_by_role("table", name=kind.title(), exact=True)).to_be_visible()

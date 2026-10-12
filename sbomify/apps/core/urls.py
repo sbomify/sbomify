@@ -8,11 +8,24 @@ from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
+from .views.component_vulnerabilities import ComponentTriageModalView
+from .views.repository_setup import RepositorySetupInstructionsView, RepositorySetupTokenView
 
 app_name = "core"
 urlpatterns = [
+    path(
+        "component/<str:component_id>/triage/modal/", ComponentTriageModalView.as_view(), name="component_triage_modal"
+    ),
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    path("dashboard/trends/", views.DashboardView.as_view(show_trends=True), name="dashboard_trends"),
+    path("getting-started/", views.DashboardView.as_view(show_setup=True), name="repository_setup"),
+    path("setup.md", RepositorySetupInstructionsView.as_view(), name="repository_setup_instructions"),
+    path(
+        "workspaces/<str:workspace_key>/setup-token/",
+        RepositorySetupTokenView.as_view(),
+        name="repository_setup_token",
+    ),
     path("settings", views.user_settings, name="settings"),
     path(
         "settings/invitations/<int:invitation_id>/accept/",
@@ -47,7 +60,6 @@ urlpatterns = [
     # Main URLs
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path("products/new/", views.ProductCreateView.as_view(), name="product_new"),
-    path("products/table/", views.ProductsTableView.as_view(), name="products_table"),
     path(
         "product/<str:product_id>/",
         views.ProductDetailsPrivateView.as_view(),
@@ -80,7 +92,6 @@ urlpatterns = [
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path("components/new/", views.ComponentCreateView.as_view(), name="component_new"),
-    path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
     path(
         "component/<str:component_id>/",
         views.ComponentDetailsPrivateView.as_view(),
@@ -91,8 +102,13 @@ urlpatterns = [
         views.ComponentScopeView.as_view(),
         name="component_scope",
     ),
+    path(
+        "component/<str:component_id>/vulnerabilities/panel/",
+        views.ComponentVulnerabilitiesPanelView.as_view(),
+        name="component_vulnerabilities_panel",
+    ),
+    path("releases/new/", views.ReleaseCreateView.as_view(), name="release_new"),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
-    path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
         "security-advisories/",
         views.SecurityAdvisoriesDashboardView.as_view(),

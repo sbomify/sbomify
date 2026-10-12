@@ -47,10 +47,10 @@ def setup_test_session(client: Client, team: Team, user) -> None:
 
     # Set up session data with team ID for API compatibility
     session = client.session
-    session["user_teams"] = {
+    session["user_workspaces"] = {
         team.key: {"role": role, "name": team.name, "is_default_team": member.is_default_team, "team_id": team.id}
     }
-    session["current_team"] = {
+    session["current_workspace"] = {
         "key": team.key,
         "role": role,
         "name": team.name,
@@ -88,7 +88,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
     # Authenticate with team context
     client.force_login(team.members.first())
     session = client.session
-    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session["current_workspace"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
     # Test authenticated access
@@ -110,7 +110,7 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
 
     client.force_login(team.members.first())
     session = client.session
-    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session["current_workspace"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
     response = client.get(reverse("core:products_dashboard"))
@@ -119,7 +119,7 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     # Check that the page contains the expected elements. Creation moved to its
     # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
-    assert 'id="products-table-container"' in content
+    assert 'id="inventory-content"' in content
     assert reverse("core:product_new") in content
     assert 'id="addProductForm"' not in content
 
@@ -135,7 +135,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
 
     client.force_login(team.members.first())
     session = client.session
-    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
+    session["current_workspace"] = {"id": team.id, "role": "owner", "key": team.key}
     session.save()
 
     response = client.get(reverse("core:components_dashboard"))
@@ -144,7 +144,7 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
     # Check that the page contains the expected elements. Creation moved to its
     # own page, so the dashboard links there instead of holding a modal form.
     content = response.content.decode()
-    assert 'id="components-table-container"' in content
+    assert 'id="inventory-content"' in content
     assert reverse("core:component_new") in content
     assert 'id="addComponentForm"' not in content
 
@@ -435,7 +435,7 @@ def test_sbom_download_product_private_authorized(
     # Login and set session data
     client.force_login(sample_user)
     session = client.session
-    session["current_team"] = {"role": "admin"}
+    session["current_workspace"] = {"role": "admin"}
     session.save()
 
     mock_zip_content = b"mock sbom content"
@@ -546,9 +546,11 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 302
+        # A plain visit is a 404 signed out too: the URL is a fragment, not a page.
+        assert client.get(url).status_code == 404
 
     def test_public_table_stays_open_to_anonymous(self, client, sample_component):  # noqa: F811
         """The guard must not gate the route that is meant to be anonymous."""
@@ -556,7 +558,7 @@ class TestSbomsTableViewAnonymousAccess:
         sample_component.save()
 
         url = reverse("sboms:sboms_table_public", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200
 
@@ -568,6 +570,6 @@ class TestSbomsTableViewAnonymousAccess:
         setup_test_session(client, sample_component.team, sample_user)
 
         url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
-        response = client.get(url)
+        response = client.get(url, HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200

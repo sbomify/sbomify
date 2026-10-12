@@ -9,7 +9,7 @@ from django.http import HttpRequest
 from django.urls import reverse
 
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.teams.queries import get_pending_invitations_for_email
+from sbomify.apps.teams.queries import get_pending_invitations_for_email, invitation_email
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -20,7 +20,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     if not request.user.is_authenticated:
         return []
 
-    email = request.user.email
+    email = invitation_email(request.user)
     if not email:
         return []
 

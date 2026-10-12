@@ -42,3 +42,5 @@ declare global {
 window.Chart = Chart;
 
 export { Chart };
+
+export { color } from 'chart.js/helpers';

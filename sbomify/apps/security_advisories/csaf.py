@@ -122,6 +122,20 @@ def _document(
     for index, revision in enumerate(revisions, start=1):
         revision["number"] = str(index)
         revision["summary"] = revision["summary"] or "Updated."
+    # The public timeline is not the whole story: a CVSS correction or a renamed
+    # product changes these bytes and posts no event, and a consumer that
+    # deduplicates by (tracking id, version) would drop the refetched document.
+    # One trailing entry carries every such change, numbered past the timeline so
+    # the sequence stays unique and only ever grows.
+    distribution_revision = projection.get("csaf_revision") or 0
+    if distribution_revision:
+        revisions.append(
+            {
+                "date": _stamp(projection.get("csaf_revision_at")),
+                "number": str(len(revisions) + distribution_revision),
+                "summary": "Updated.",
+            }
+        )
 
     notes = [
         {"category": category, "text": text}

@@ -25,7 +25,7 @@
 <section id="trusted-publishers-section">
 <div class="space-y-4">
 <p class="text-sm text-text-muted m-0">
-Authorise a GitHub repository to push SBOMs and documents to this
+Authorize a GitHub repository to push SBOMs and documents to this
 component without long-lived secrets. Tokens are issued from the
 workflow's OIDC identity and are valid for 15 minutes.
 </p>
@@ -124,14 +124,14 @@ Add publisher
 </form>
 </div>
 <c-navigation.accordion density="sm">
-<c-navigation.disclosure label_class="flex items-center gap-2">
+<c-navigation.accordion-item native label_class="flex items-center gap-2">
 <c-slot name="label">
 <i class="fas fa-code text-text-muted" aria-hidden="true"></i>
 Configure your GitHub Actions workflow
 </c-slot>
 <div class="space-y-3">
 <p class="text-text-muted m-0">
-Add this step to the workflow that should be authorised to push to this
+Add this step to the workflow that should be authorized to push to this
 component. The <c-code-inline>audience</c-code-inline> value must be exactly
 <c-code-inline>{{ oidc_github_audience }}</c-code-inline>. The backend rejects
 tokens minted for any other audience.
@@ -175,7 +175,7 @@ steps:
 The sbomify token expires after 15 minutes. Request a fresh one for each run.
 </p>
 </div>
-</c-navigation.disclosure>
+</c-navigation.accordion-item>
 </c-navigation.accordion>
 </div>
 </section>

@@ -48,9 +48,7 @@ def _recipients(token: "AccessToken") -> list[str]:
     return [token.user.email] if token.user.email else []
 
 
-@cron("0 6 * * *")  # type: ignore[untyped-decorator]  # Daily, before working hours
-@dramatiq.actor(queue_name="token_expiry", max_retries=1, time_limit=300000)
-def warn_expiring_tokens() -> int:
+def send_expiry_warnings() -> int:
     """Send the due expiry warnings. Returns how many emails went out."""
     from datetime import timedelta
 
@@ -142,3 +140,9 @@ def warn_expiring_tokens() -> int:
             ignore_conflicts=True,
         )
     return sent
+
+
+@cron("0 6 * * *")  # type: ignore[untyped-decorator]  # Daily, before working hours
+@dramatiq.actor(queue_name="token_expiry", max_retries=1, time_limit=300000)
+def warn_expiring_tokens() -> None:
+    logger.info("Sent %s token expiry warnings", send_expiry_warnings())

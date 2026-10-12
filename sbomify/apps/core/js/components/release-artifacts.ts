@@ -1,8 +1,10 @@
 import Alpine from 'alpinejs';
+import { artifactLink, type ArtifactRoutes } from './artifact-links';
 import $axios, { formatDate as sharedFormatDate } from '../utils';
 import { showError, showSuccess } from '../alerts';
 
 interface SBOMData {
+    bom_type?: string;
     id: string;
     name: string;
     format?: string;
@@ -62,6 +64,7 @@ interface AvailableArtifact {
 }
 
 interface ReleaseArtifactsParams {
+    routes: ArtifactRoutes;
     releaseId: string;
     productId: string;
     initialArtifacts?: Artifact[];
@@ -80,6 +83,7 @@ export function registerReleaseArtifacts() {
         releaseId,
         productId,
         initialArtifacts = [],
+        routes,
         canEdit = true,
         isLatest = false
     }: ReleaseArtifactsParams) => {
@@ -438,37 +442,24 @@ export function registerReleaseArtifacts() {
             },
 
             getArtifactUrl(artifact: Artifact): string {
-                const isPublicView = window.location.pathname.includes('/public/');
-                if (artifact.sbom) {
-                    const sbomId = artifact.sbom.id;
-                    const componentId = artifact.sbom.component?.id;
-                    if (!sbomId || !componentId) return '#';
-                    return isPublicView ? `/public/components/${componentId}/sboms/${sbomId}/` : `/components/${componentId}/sboms/${sbomId}/`;
-                }
                 if (artifact.document) {
-                    const documentId = artifact.document.id;
-                    const componentId = artifact.document.component?.id;
-                    if (!documentId || !componentId) return '#';
-                    return isPublicView ? `/public/component/${componentId}/document/${documentId}/` : `/component/${componentId}/document/${documentId}/`;
+                    return artifactLink(routes, 'document', artifact.document.component?.id, artifact.document.id);
                 }
-                // Handle flat API response
-                if (artifact.artifact_type === 'sbom' && artifact.sbom_id && artifact.component_id) {
-                    return isPublicView ? `/public/components/${artifact.component_id}/sboms/${artifact.sbom_id}/` : `/components/${artifact.component_id}/sboms/${artifact.sbom_id}/`;
+                if (artifact.sbom) {
+                    return artifactLink(routes, artifact.sbom.bom_type || artifact.bom_type || 'sbom',
+                        artifact.sbom.component?.id, artifact.sbom.id);
                 }
-                if (artifact.artifact_type === 'document' && artifact.document_id && artifact.component_id) {
-                    return isPublicView ? `/public/component/${artifact.component_id}/document/${artifact.document_id}/` : `/component/${artifact.component_id}/document/${artifact.document_id}/`;
-                }
-                return '#';
+                return artifactLink(routes, artifact.artifact_type === 'document' ? 'document' : artifact.bom_type || 'sbom',
+                    artifact.component_id, artifact.document_id || artifact.sbom_id);
             },
 
             getComponentUrl(artifact: Artifact): string {
-                const isPublicView = window.location.pathname.includes('/public/');
                 let componentId: string | undefined;
                 if (artifact.sbom?.component) componentId = artifact.sbom.component.id;
                 else if (artifact.document?.component) componentId = artifact.document.component.id;
                 else componentId = artifact.component_id;
                 if (!componentId) return '#';
-                return isPublicView ? `/public/component/${componentId}/` : `/component/${componentId}/`;
+                return routes.component.replace('__COMPONENT__', encodeURIComponent(componentId));
             },
 
             getTypeIcon(type?: string): string {
@@ -510,24 +501,26 @@ export function registerReleaseArtifacts() {
             // Available artifact methods
             getAvailableArtifactType(artifact: AvailableArtifact): string {
                 if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
+                    // VEX, CBOM and HBOM are SBOM rows carrying a bom_type.
+                    // Report each as itself, exactly as getArtifactType does for
+                    // the collection above, so one artifact does not read as two
+                    // different types on the same page.
+                    const bomType = artifact.bom_type || 'sbom';
+                    return bomType === 'sbom' ? 'sbom' : bomType;
                 }
                 return artifact.artifact_type;
             },
 
             getAvailableTypeIcon(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'fas fa-file-contract' : 'fas fa-file-code';
-                }
-                if (artifact.artifact_type === 'document') return 'fas fa-file-alt';
-                return 'fas fa-file';
+                return this.getTypeIcon(this.getAvailableArtifactType(artifact));
             },
 
             getAvailableArtifactIconClass(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'bg-info/10 text-info' : 'bg-success/10 text-success';
-                }
-                if (artifact.artifact_type === 'document') return 'bg-warning/10 text-warning';
+                const type = this.getAvailableArtifactType(artifact);
+                if (type === 'sbom') return 'bg-success/10 text-success';
+                if (type === 'vex') return 'bg-info/10 text-info';
+                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary';
+                if (type === 'document') return 'bg-warning/10 text-warning';
                 return 'bg-surface text-text-muted';
             },
 
@@ -554,16 +547,8 @@ export function registerReleaseArtifacts() {
             },
 
             getAvailableArtifactUrl(artifact: AvailableArtifact): string {
-                const componentId = artifact.component?.id;
-                if (!componentId) return '#';
-
-                if (artifact.artifact_type === 'sbom') {
-                    return `/components/${componentId}/sboms/${artifact.id}/`;
-                }
-                if (artifact.artifact_type === 'document') {
-                    return `/component/${componentId}/document/${artifact.id}/`;
-                }
-                return '#';
+                return artifactLink(routes, artifact.artifact_type === 'document' ? 'document' : artifact.bom_type || 'sbom',
+                    artifact.component?.id, artifact.id);
             },
 
             // Utility methods

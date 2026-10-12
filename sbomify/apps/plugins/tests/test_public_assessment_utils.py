@@ -73,7 +73,7 @@ def cisa_plugin(db):
             "description": "CISA minimum elements compliance check",
             "category": AssessmentCategory.COMPLIANCE.value,
             "version": "1.0.0",
-            "plugin_class_path": "sbomify.apps.plugins.builtins.cisa.CISAMinimumElementsPlugin",
+            "plugin_class_path": "sbomify.apps.plugins.builtins.cisa_2026.CISAMinimumElementsPlugin",
             "is_enabled": True,
         },
     )

@@ -28,9 +28,15 @@ class CoreConfig(AppConfig):
         # form-urlencoding rules.
         from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
 
-        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client
+        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client, cached_openid_config
 
         OpenIDConnectOAuth2Adapter.client_class = SpaceEncodedOAuth2Client
+
+        # The same fixed adapter class leaves no seam for the discovery
+        # document, which allauth re-reads from Keycloak on every single
+        # sign-in. Backing it with the shared cache is what stops a blip at
+        # the identity provider from turning into a 500 on the login URL.
+        OpenIDConnectOAuth2Adapter.openid_config = property(cached_openid_config)
 
         self._validate_storage_credentials()
 

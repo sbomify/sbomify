@@ -14,7 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from sbomify.apps.sboms.conversion import CYCLONEDX_1_6, ConversionFailed, to_cyclonedx
+from sbomify.apps.sboms.conversion import (
+    CYCLONEDX_1_6,
+    ConversionFailed,
+    _cyclonedx_validator,
+    downgrade_cyclonedx,
+    to_cyclonedx,
+)
 
 OSV_SCANNER = Path("/usr/local/bin/osv-scanner")
 
@@ -240,3 +246,65 @@ class TestTheRealScannerReadsIt:
         assert matched, "osv-scanner matched nothing in the derived copy"
         assert matched[0]["package"]["name"] == "jinja2"
         assert len(matched[0].get("vulnerabilities", [])) > 0
+
+
+TEST_DATA = Path(__file__).parent / "test_data"
+
+
+class TestDowngradingCycloneDX:
+    """A copy at an older spec version, for a scanner that refuses the newer one."""
+
+    @pytest.fixture
+    def sbom_1_7(self) -> bytes:
+        return (TEST_DATA / "sbom_sample_1.7.cdx.json").read_bytes()
+
+    def test_the_fixture_is_valid_1_7_and_not_1_6(self, sbom_1_7: bytes) -> None:
+        document = json.loads(sbom_1_7)
+        assert not list(_cyclonedx_validator("1.7").iter_errors(document))
+        assert list(_cyclonedx_validator("1.6").iter_errors(document))
+
+    @pytest.mark.parametrize("version", ["1.6", "1.5"])
+    def test_the_copy_validates_at_the_target_version(self, sbom_1_7: bytes, version: str) -> None:
+        copy = json.loads(downgrade_cyclonedx(sbom_1_7, version))
+
+        assert copy["specVersion"] == version
+        assert copy["$schema"] == f"http://cyclonedx.org/schema/bom-{version}.schema.json"
+        assert not list(_cyclonedx_validator(version).iter_errors(copy))
+
+    def test_what_1_6_does_not_define_is_dropped(self, sbom_1_7: bytes) -> None:
+        copy = json.loads(downgrade_cyclonedx(sbom_1_7, "1.6"))
+        requests, lodash = copy["components"]
+
+        assert "citations" not in copy
+        assert "distributionConstraints" not in copy["metadata"]
+        assert "isExternal" not in requests
+        assert {"isExternal", "versionRange"}.isdisjoint(lodash)
+        # A hash or reference whose enum value 1.6 does not list loses its
+        # required member, so the entry goes and its siblings stay.
+        assert [h["alg"] for h in requests["hashes"]] == ["SHA-256"]
+        assert [r["type"] for r in requests["externalReferences"]] == ["vcs"]
+
+    def test_what_a_scanner_matches_on_is_kept(self, sbom_1_7: bytes) -> None:
+        original = json.loads(sbom_1_7)
+        copy = json.loads(downgrade_cyclonedx(sbom_1_7, "1.6"))
+
+        assert [c.get("purl") for c in copy["components"]] == [c.get("purl") for c in original["components"]]
+        assert copy["dependencies"] == original["dependencies"]
+        assert copy["metadata"]["component"] == original["metadata"]["component"]
+
+    def test_a_1_7_cbom_validates_at_1_6(self) -> None:
+        copy = json.loads(downgrade_cyclonedx((TEST_DATA / "cbom_sample_1.7.cdx.json").read_bytes(), "1.6"))
+
+        assert not list(_cyclonedx_validator("1.6").iter_errors(copy))
+
+    def test_a_copy_that_would_still_be_invalid_is_refused(self) -> None:
+        broken = json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.7", "components": "not a list"})
+
+        with pytest.raises(ConversionFailed, match="not valid CycloneDX 1.6"):
+            downgrade_cyclonedx(broken.encode(), "1.6")
+
+    def test_only_cyclonedx_json_is_accepted(self) -> None:
+        with pytest.raises(ConversionFailed):
+            downgrade_cyclonedx(json.dumps({"spdxVersion": "SPDX-2.3"}).encode(), "1.6")
+        with pytest.raises(ConversionFailed):
+            downgrade_cyclonedx(b"<bom xmlns='http://cyclonedx.org/schema/bom/1.7'/>", "1.6")

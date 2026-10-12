@@ -1,4 +1,7 @@
 {% comment %}
+required and disabled apply to the file input. input_ref exposes it to Alpine
+when a caller needs to clear or populate the picker.
+size="sm" makes a compact picker. preview is an Alpine image URL expression.
 The drop zone, in plain Tailwind utilities: a dashed panel that is also the
 label for a file input, so clicking anywhere on it opens the picker and the
 keyboard reaches it through the input.
@@ -27,17 +30,27 @@ line of text. The slot is the whole content there, since a status panel has no
 main line, no hint and no input. The panel recipe is written once above and both
 branches read it, so the two shapes cannot drift apart.
 {% endcomment %}
-<c-vars name id accept active on_change icon="fas fa-cloud-arrow-up" hint static class />
-{% with zone="group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl transition-all duration-200" resting="border-dashed border-border bg-background" %}
+<c-vars size preview name id accept required disabled input_ref active on_change icon="fas fa-cloud-arrow-up" hint static class />
+{% with zone="group flex flex-col items-center justify-center border-2 rounded-xl transition-all duration-200" resting="border-dashed border-border bg-background" %}
     {% if static %}
-        <div class="{{ zone }} {{ resting }}{% if class %} {{ class }}{% endif %}"
+        <div class="{{ zone }} {% if size == 'sm' %}px-4 py-5{% else %}px-8 py-10{% endif %} {{ resting }}{% if class %} {{ class }}{% endif %}"
              {{ attrs }}>{{ slot }}
         </div>
     {% else %}
-        <label class="{{ zone }} cursor-pointer hover:border-primary hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]{% if not active %} {{ resting }}{% endif %}{% if class %} {{ class }}{% endif %}"
+        <label class="{{ zone }} {% if size == 'sm' %}px-4 py-5{% else %}px-8 py-10{% endif %} cursor-pointer has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 focus-within:ring-2 focus-within:ring-primary/40 hover:border-primary hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]{% if not active %} {{ resting }}{% endif %}{% if class %} {{ class }}{% endif %}"
                {% if active %}:class="{{ active }} ? 'border-solid border-primary bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)]' : '{{ resting }}'"{% endif %}
                {{ attrs }}>
-            <span class="w-16 h-16 flex items-center justify-center rounded-full bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary mb-4 transition-transform duration-300 group-hover:scale-110">
+            {% if preview %}
+                <template x-if="{{ preview }}">
+                    <img :src="{{ preview }}"
+                         alt="File preview"
+                         width="160"
+                         height="80"
+                         class="max-w-full h-20 object-contain mb-3">
+                </template>
+            {% endif %}
+            <span {% if preview %}x-show="!({{ preview }})"{% endif %}
+                  class="{% if size == 'sm' %}w-10 h-10{% else %}w-16 h-16{% endif %} flex items-center justify-center rounded-full bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary mb-4 transition-transform duration-300 group-hover:scale-110">
                 <i class="{{ icon }} text-2xl" aria-hidden="true"></i>
             </span>
             <span class="text-[0.9375rem] font-medium text-text text-center">{{ slot }}</span>
@@ -47,6 +60,9 @@ branches read it, so the two shapes cannot drift apart.
                    {% if name %}name="{{ name }}"{% endif %}
                    {% if accept %}accept="{{ accept }}"{% endif %}
                    class="sr-only"
+                   {% if required %}required{% endif %}
+                   {% if disabled %}disabled{% endif %}
+                   {% if input_ref %}x-ref="{{ input_ref }}"{% endif %}
                    {% if on_change %}@change="{{ on_change }}"{% endif %}>
         </label>
     {% endif %}

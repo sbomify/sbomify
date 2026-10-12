@@ -56,6 +56,28 @@ def test_registering_a_destructive_tool_is_rejected():
         registry.register("delete_everything", "sbom:delete")
 
 
+def test_owner_grants_and_access_decisions_are_never_exposable():
+    """Inviting an owner is the most damaging standing grant in the system, and
+    deciding an access request makes an outsider a guest of the workspace.
+    Reading the request queue stays exposable: reads are already on the surface."""
+    assert {"member:grant_owner", "access_request:decide"} <= registry.FORBIDDEN_ACTIONS
+    assert "access_request:read" not in registry.FORBIDDEN_ACTIONS
+
+
+@pytest.mark.parametrize(
+    "action", ["sbom:delete", "sbom:bulk_delete", "workspace:force_delete", "component:administer"]
+)
+def test_the_verb_test_refuses_any_form_of_delete_or_administer(action):
+    """A new sbom:bulk_delete has to be refused the day it is added, without
+    anybody listing it, which an exact match on the verb did not do."""
+    assert registry._forbidden_by_verb(action)
+
+
+def test_the_verb_test_leaves_reads_alone():
+    assert not registry._forbidden_by_verb("sbom:read")
+    assert not registry._forbidden_by_verb("access_request:read")
+
+
 def test_forbidden_actions_are_real_actions():
     """Guards against the deny-list silently emptying if authz renames verbs."""
     assert registry.FORBIDDEN_ACTIONS <= ALL_ACTIONS
@@ -518,3 +540,35 @@ async def test_a_guest_members_token_is_refused(mcp_owner, make_token, product_i
         response = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
 
     assert "Guest members" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_an_operator_token_reads_the_workspace_but_cannot_change_it(
+    mcp_owner, make_token, product_in_bound_workspace
+):
+    """An operator passes the guest gate and gets exactly what can() gives it.
+
+    It reads the workspace like a member, and holds no write tier beyond triage,
+    so a write tool is refused rather than carried out.
+    """
+    from sbomify.apps.core.models import Release
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+    await sync_to_async(Member.objects.filter(user=user, team=bound).update)(role="operator")
+
+    async with mcp_http() as client:
+        listed = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
+        created = await call(
+            client,
+            "tools/call",
+            token=token.encoded_token,
+            name="create_release",
+            arguments={"product_id": product_in_bound_workspace.id, "name": "v1.0.0", "version": "1.0.0"},
+        )
+
+    assert "Bound Product" in json.dumps(parse(listed))
+    assert parse(created)["result"].get("isError") is True
+    assert not await sync_to_async(Release.objects.filter(product=product_in_bound_workspace).exists)()

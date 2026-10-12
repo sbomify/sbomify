@@ -188,7 +188,7 @@ class TestTheOtherTwoSurfacesThatTallyRows:
 
     def test_the_product_page_does_not_count_a_suppressed_finding(self, sample_team_with_owner_member: Member) -> None:
         from sbomify.apps.core.models import Product
-        from sbomify.apps.core.services.product_page import build_product_components_rows
+        from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
         from sbomify.apps.sboms.models import ProductComponent
 
         team = sample_team_with_owner_member.team
@@ -216,8 +216,8 @@ class TestTheOtherTwoSurfacesThatTallyRows:
             result=SUPPRESSED_RESULT,
         )
 
-        rows = build_product_components_rows(product.id)["rows"]
+        rows = build_inventory_snapshot(team, "components", product_id=product.id)["rows"]
         row = next(r for r in rows if r["id"] == component.id)
 
-        assert row["vuln"]["total"] == 0, "the product page counted a suppressed finding"
-        assert row["vuln"]["high"] == 0
+        assert row["counts"]["total"] == 0, "the product page counted a suppressed finding"
+        assert row["counts"]["high"] == 0

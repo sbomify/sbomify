@@ -9,6 +9,7 @@ from typing import Any
 
 from django.apps import apps
 from django.db import models
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
@@ -239,6 +240,53 @@ class AssessmentRun(models.Model):
             models.Index(fields=["sbom", "plugin_name", "plugin_config_hash", "-created_at"]),
             models.Index(fields=["category", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
+            # Serves the failure-backoff sweep's per-SBOM probe: for one
+            # plugin and one SBOM, the newest few terminal runs by when they
+            # *settled* -- Coalesce(completed_at, created_at), see
+            # tasks._failure_backed_off_sbom_ids for why the creation time is
+            # the wrong clock there.
+            #
+            # The settled time is an expression, so none of the indexes above
+            # can serve either the range or the ordering, and the sweep would
+            # fall back to reading every run of every SBOM once an hour. With
+            # sbom_id leading the ordered columns, each probe descends
+            # straight to one SBOM's newest run and walks backwards until the
+            # LIMIT, so the sweep's cost follows the number of SBOMs it is
+            # about to enqueue rather than the size of the table.
+            #
+            # ``id`` closes the ordering so the probe never needs a sort to
+            # break a tie: runs written in one transaction can share a settled
+            # time, and the streak has to read them in a stable order.
+            #
+            # Partial on the same terminal-status predicate the probe filters
+            # by, which is what makes its LIMIT exact rather than approximate:
+            # without it the descent walks past whatever in-flight rows sit
+            # above the newest settled one before it has its few. It also keeps
+            # the index off rows that are about to be rewritten anyway -- a
+            # PENDING run is updated twice on its way to a verdict.
+            models.Index(
+                "plugin_name",
+                "sbom_id",
+                Coalesce("completed_at", "created_at").desc(),
+                models.F("id").desc(),
+                name="plugins_run_sbom_settled_idx",
+                condition=~models.Q(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value]),
+            ),
+            # Scan history counts every security run in its window, a million
+            # rows with hourly rescans: per SBOM, from the index, not the heap.
+            models.Index(
+                fields=["sbom", "created_at"],
+                condition=models.Q(category="security", status="completed"),
+                name="plugins_scan_history_idx",
+            ),
+            # The offload sweep pages its candidates oldest first: a range scan
+            # here rather than a scan and sort of the whole table per page. Partial
+            # on an inline payload, so the index shrinks as the sweep moves rows.
+            models.Index(
+                fields=["created_at", "id"],
+                condition=models.Q(result_object_key="", result__isnull=False),
+                name="plugins_ar_offload_idx",
+            ),
         ]
         ordering = ["-created_at"]
 
@@ -369,6 +417,31 @@ class AssessmentRun(models.Model):
         blank=True,
         help_text="S3 key for raw tool output (optional)",
     )
+    # Where ``result`` went once it stopped being the current answer for its
+    # (sbom, plugin, release set). The blob is a document: multiple MB of
+    # scanner output, read on demand and never queried by the database, which is
+    # where every other document in this system already lives. Keeping it in a
+    # JSONB column means paying for it on the primary's disk, in the WAL, on
+    # every replica and in every base backup.
+    #
+    # Empty string means the result is inline in ``result``, which is the state
+    # of every run as it is written. Exactly one of the two holds the payload:
+    # the sweep sets this key and nulls ``result`` in a single UPDATE, so no row
+    # can be seen with neither. A run that never produced a result, one still
+    # pending or one that failed before writing any, has both empty, which is
+    # why the pair is not a constraint. A failed run that carries a synthesised
+    # result holds it like any other run.
+    #
+    # Keyed by content hash under the run's own prefix, so a re-annotated result
+    # is a new object rather than an overwrite and the old bytes stay verifiable
+    # against the hash they are named for.
+    result_object_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        editable=False,
+        help_text="Object-storage key holding the offloaded result payload. Empty when result is inline.",
+    )
 
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
@@ -395,11 +468,17 @@ class AssessmentRun(models.Model):
         rewrite can't leave them stale. Saves that don't write ``result``
         (e.g. status-only updates, deferred-field instances) leave the
         columns untouched — recomputing there would be wasted work and, on
-        a deferred instance, would silently refetch the multi-MB blob.
+        a deferred instance, would silently refetch the multi-MB blob. Nor
+        does a run whose payload has moved to storage: its columns are the
+        only copy of the counts, and the empty payload column would erase them.
         """
         update_fields = kwargs.get("update_fields")
         writes_result = update_fields is None or "result" in update_fields
-        if writes_result and "result" not in self.get_deferred_fields():
+        if (
+            writes_result
+            and "result" not in self.get_deferred_fields()
+            and not (self.result is None and self.result_object_key)
+        ):
             self._populate_result_columns()
             if update_fields is not None:
                 kwargs["update_fields"] = list(set(update_fields) | {"result_summary", "result_skipped"})

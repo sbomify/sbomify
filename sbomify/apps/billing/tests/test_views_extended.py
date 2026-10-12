@@ -33,6 +33,7 @@ class TestBillingReturnView:
         """Set up test environment."""
         self.client = Client()
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
@@ -41,6 +42,7 @@ class TestBillingReturnView:
         mock_get_customer,
         mock_get_subscription,
         mock_get_checkout_session,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
@@ -115,6 +117,7 @@ class TestBillingReturnView:
         # Should redirect to select_plan when payment not paid
         assert "select-plan" in response.url
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
@@ -125,6 +128,7 @@ class TestBillingReturnView:
         mock_get_subscription,
         mock_get_checkout_session,
         mock_sync,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
         team_with_business_plan: Team,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811

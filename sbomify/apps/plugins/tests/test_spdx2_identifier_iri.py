@@ -18,7 +18,8 @@ from typing import Any
 import pytest
 
 from sbomify.apps.plugins.builtins.bsi import BSICompliancePlugin
-from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2026 import CISAMinimumElementsPlugin
+from sbomify.apps.plugins.builtins.cisa_2025 import CISA2025MinimumElementsPlugin
 from sbomify.apps.plugins.builtins.fda_medical_device_cybersecurity import FDAMedicalDevicePlugin
 from sbomify.apps.plugins.builtins.ntia import NTIAMinimumElementsPlugin
 
@@ -30,7 +31,8 @@ CPE = "cpe:2.3:*:openssl:openssl:3.2.3:*:*:*:*:*:*:*"
 #: the extra arguments its _validate_spdx takes. BSI wants the version because
 #: TR-03183-2 grades 2.x and 3.x differently; the rest take the document alone.
 PLUGINS = [
-    pytest.param(CISAMinimumElementsPlugin, "cisa-2025:software-identifiers", (), id="cisa"),
+    pytest.param(CISAMinimumElementsPlugin, "cisa-2026:component-identifiers", (), id="cisa-2026"),
+    pytest.param(CISA2025MinimumElementsPlugin, "cisa-2025:software-identifiers", (), id="cisa-2025"),
     pytest.param(NTIAMinimumElementsPlugin, "ntia-2021:unique-identifiers", (), id="ntia"),
     pytest.param(BSICompliancePlugin, "bsi-tr03183:unique-identifiers", ("2.2",), id="bsi"),
     pytest.param(FDAMedicalDevicePlugin, "fda-2025:ntia:unique-identifiers", (), id="fda"),
@@ -81,7 +83,13 @@ def _document(reference_type: str) -> dict[str, Any]:
 
 
 def _identifier_finding(plugin_cls: type, finding_id: str, extra_args: tuple, reference_type: str):
-    findings = plugin_cls()._validate_spdx(_document(reference_type), *extra_args)
+    plugin = plugin_cls()
+    # Plugins disagree on the name: the 2026 elements score SPDX 2 and SPDX 3
+    # separately, so its entry point is _validate_spdx2. Resolving it here keeps
+    # the table above about what each plugin calls the finding, which is the
+    # thing this test is actually asserting.
+    validate = getattr(plugin, "_validate_spdx", None) or plugin._validate_spdx2
+    findings = validate(_document(reference_type), *extra_args)
     matches = [f for f in findings if getattr(f, "id", None) == finding_id]
     assert matches, (
         f"{plugin_cls.__name__} reported no finding {finding_id!r}; "

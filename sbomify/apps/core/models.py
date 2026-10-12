@@ -8,7 +8,8 @@ from typing import Any
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, QuerySet
+from django.db.models import F, Q, QuerySet
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -58,6 +59,28 @@ class User(AbstractUser):
             models.Index(fields=["email_verified"]),
             models.Index(fields=["deleted_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(Lower("email"), condition=~Q(email=""), name="core_users_email_ci_unique"),
+        ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # One account per address, compared without case. allauth lowercases
+        # the address it looks up and then matches the stored value exactly.
+        # Only when the address is written, so the instance never differs from its row.
+        update_fields = kwargs.get("update_fields")
+        if self.email and (update_fields is None or "email" in update_fields):
+            self.email = self.email.lower()
+        # email_verified is about the stored address. Whatever replaces it, the
+        # Keycloak event poller or allauth's email pages, starts unconfirmed
+        # until the next sign-in reads it from the identity provider again.
+        # A full save of an unconfirmed flag writes False whatever the stored address was.
+        if self.pk and (self.email_verified if update_fields is None else "email" in update_fields):
+            stored = type(self).objects.filter(pk=self.pk).values_list("email", flat=True).first()
+            if stored is not None and stored.lower() != (self.email or "").lower():
+                self.email_verified = False
+                if update_fields is not None:
+                    kwargs["update_fields"] = {*update_fields, "email_verified"}
+        super().save(*args, **kwargs)
 
 
 # Proxy models for sbom entities - provides clean core app interface

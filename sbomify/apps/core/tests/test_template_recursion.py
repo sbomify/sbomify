@@ -138,22 +138,6 @@ class TestSpecificProblematicTemplates:
                 "plugins/components/public_assessment_badge.html.j2",
                 {"assessment": {"category": "compliance", "display_name": "Test"}},
             ),
-            (
-                "core/components/_empty_state.html.j2",
-                {"icon": "fa-test", "title": "Test Title"},
-            ),
-            (
-                "core/components/public_card.html.j2",
-                {"title": "Test Card"},
-            ),
-            (
-                "core/components/_form_field.html.j2",
-                {},  # Will fail with missing field, but shouldn't recurse
-            ),
-            (
-                "core/components/_page_header.html.j2",
-                {"title": "Test Page", "icon": "fa-test"},
-            ),
         ],
     )
     def test_previously_buggy_template_renders(self, django_engine, template_name: str, context: dict) -> None:

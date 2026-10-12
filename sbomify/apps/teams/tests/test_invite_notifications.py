@@ -27,7 +27,9 @@ from sbomify.apps.teams.signals.handlers import _accept_pending_invitations
 
 @pytest.fixture
 def invited_user() -> User:
-    return User.objects.create_user(username="invitee", email="invitee@example.test", password="pw")  # nosec B106
+    return User.objects.create_user(  # nosec B106
+        username="invitee", email="invitee@example.test", password="pw", email_verified=True
+    )
 
 
 @pytest.fixture
@@ -69,7 +71,7 @@ def test_the_notification_links_to_where_invitations_are_accepted(invited_user: 
     request = RequestFactory().get("/")
     request.user = invited_user
     request.session = SessionStore()
-    request.session["current_team"] = {"key": other_team.key, "role": "owner"}
+    request.session["current_workspace"] = {"key": other_team.key, "role": "owner"}
 
     notifications = get_notifications(request)
 

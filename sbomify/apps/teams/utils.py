@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -23,12 +26,12 @@ from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Team, get_team_name_for_user
-from .queries import count_team_members, get_team_user_counts
+from .queries import count_team_members, get_team_user_counts, invitation_email
 
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
 # Kept as literals so a redirect to one cannot carry a request-derived string.
-FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("integrations",)
 
 ALLOWED_TABS = frozenset(
     {
@@ -43,6 +46,23 @@ ALLOWED_TABS = frozenset(
         "branding",
     }
 )
+
+
+def find_invitation_by_token(token: Any, **filters: Any) -> Invitation | None:
+    """Look up an invitation by token, treating an unusable token as no match.
+
+    ``Invitation.token`` is a UUIDField, so a truncated or mangled invite link —
+    mail clients wrap long URLs, and the legacy links carried a numeric id rather
+    than a token — reaches the ORM as a string it cannot coerce and raises
+    ValidationError straight out of the query. A bad link is a missing invitation,
+    which every caller here already handles, not a 500.
+    """
+    try:
+        uuid.UUID(str(token))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+    return Invitation.objects.filter(token=token, **filters).first()
 
 
 def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
@@ -235,14 +255,14 @@ def update_user_teams_session(
     teams = user_teams if user_teams is not None else get_user_teams(user)
     checksum = compute_user_teams_checksum(teams)
     existing_checksum = request.session.get("user_teams_version")
-    existing_teams = request.session.get("user_teams")
+    existing_teams = request.session.get("user_workspaces")
 
     if existing_checksum == checksum and existing_teams:
         request.session["user_teams_checked_at"] = timezone.now().isoformat()
         request.session.modified = True
         return existing_teams  # type: ignore[no-any-return]
 
-    request.session["user_teams"] = teams
+    request.session["user_workspaces"] = teams
     request.session["user_teams_version"] = checksum
     request.session["user_teams_checked_at"] = timezone.now().isoformat()
     request.session.modified = True
@@ -255,11 +275,11 @@ def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
 
     Centralizes session mutation so callers don't manually patch keys.
     """
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     if current_team.get("key") != team.key:
         return
 
-    request.session["current_team"] = {
+    request.session["current_workspace"] = {
         **current_team,
         "id": team.id,
         "key": team.key,
@@ -305,7 +325,7 @@ def switch_active_workspace(request: HttpRequest, team: Team, role: str | None =
         }
 
         user_teams[t_key] = {**existing_entry, **team_entry}
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
     else:
         team_entry = {
             "id": team.id,
@@ -318,7 +338,7 @@ def switch_active_workspace(request: HttpRequest, team: Team, role: str | None =
             "is_public": team.is_public,
         }
 
-    request.session["current_team"] = {"key": team.key, **team_entry}
+    request.session["current_workspace"] = {"key": team.key, **team_entry}
     request.session.modified = True
 
 
@@ -329,6 +349,39 @@ def get_user_default_team(user: User) -> int | None:
         return default_team.team_id
     except Member.DoesNotExist:
         return None
+
+
+@contextmanager
+def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
+    """Hold the workspace row while a seat is counted and then taken.
+
+    ``can_add_user_to_team`` counts and returns a verdict, and a verdict cannot
+    hold a lock past its own return. Every caller wrote afterwards in a separate
+    statement, so two invitations accepted at the same moment both read the same
+    count, both passed, and the workspace went over ``max_users``. This is the
+    same defect the product and component checks had, in the one resource that
+    check does not cover.
+
+    So the count and the write happen under one lock. The caller's write goes
+    inside the ``with`` block, which is what makes the verdict still true when it
+    runs:
+
+        with user_seat(team) as (can_add, error):
+            if not can_add:
+                return refuse(error)
+            Member.objects.create(...)
+
+    ``is_joining_via_invite`` needs this most rather than least. It deliberately
+    allows ``total == max`` because the pending user already occupies a slot, and
+    that reasoning only holds if nobody else can take the slot between the count
+    and the acceptance.
+
+    Nested inside an outer transaction the lock is simply held until that one
+    commits, which is the behaviour wanted either way.
+    """
+    with transaction.atomic():
+        locked = Team.objects.select_for_update().get(pk=team.pk)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
 
 
 def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
@@ -426,13 +479,18 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         return Team.objects.filter(members=user).first()
 
     # Skip auto-creation if the user has an active invitation to another workspace
-    if user.email:
+    if email := invitation_email(user):
         pending_invitations = list(
-            Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related("team")
+            Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related("team")
         )
         if pending_invitations:
             joinable_invites = []
             for invitation in pending_invitations:
+                # Unlocked on purpose. Nothing is written on the strength of
+                # this: it only decides whether to auto-create a personal
+                # workspace, and the real check runs again under a lock when the
+                # invitation is actually accepted. Holding a workspace row for an
+                # advisory read would block the acceptances that matter.
                 can_add, _ = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
                 if can_add:
                     joinable_invites.append(invitation)
@@ -595,17 +653,17 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     user = cast(User, request.user)
 
     # Get the name of the old workspace before we update the session
-    current_team = request.session.get("current_team", {})
+    current_team = request.session.get("current_workspace", {})
     old_team_name = current_team.get("name", "the workspace")
 
     # Refresh user teams from database
     user_teams = get_user_teams(user)
-    request.session["user_teams"] = user_teams
+    request.session["user_workspaces"] = user_teams
 
     if user_teams:
         # User has other workspaces, switch to the first one
         next_team_key, next_team = next(iter(user_teams.items()))
-        request.session["current_team"] = {"key": next_team_key, **next_team}
+        request.session["current_workspace"] = {"key": next_team_key, **next_team}
         request.session.modified = True
         messages.warning(
             request, f"You have been removed from {old_team_name}. You have been switched to your other workspace."
@@ -616,9 +674,9 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     new_team = create_user_team_and_subscription(user)
     if new_team:
         user_teams = get_user_teams(user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
         new_team_key = new_team.key or ""
-        request.session["current_team"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
+        request.session["current_workspace"] = {"key": new_team_key, **user_teams.get(new_team_key, {})}
         request.session.modified = True
         messages.warning(
             request,
@@ -627,7 +685,7 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
         return redirect("core:dashboard")
 
     # Fallback if workspace creation failed
-    request.session.pop("current_team", None)
+    request.session.pop("current_workspace", None)
     request.session.modified = True
     return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
@@ -647,6 +705,19 @@ def on_demand_tls_cache_key(domain_normalized: str) -> str:
     import hashlib
 
     return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
+
+
+def custom_domain_challenge(team_pk: int, domain: str) -> str:
+    """The value this deployment serves on a claimed domain's domain-check path.
+
+    Public on purpose: the verification probe fetches it from the domain through
+    public DNS, and a match shows the domain's operator serves it, normally by
+    pointing the domain here. Keyed on SECRET_KEY, so another deployment serving
+    the same name cannot produce it.
+    """
+    from django.utils.crypto import salted_hmac
+
+    return salted_hmac("sbomify.custom-domain-challenge", f"{team_pk}:{domain}", algorithm="sha256").hexdigest()
 
 
 def invalidate_custom_domain_cache(domain: str | None) -> None:
@@ -769,9 +840,9 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
                 )
                 # Update session with the new workspace
                 user_teams = get_user_teams(current_user)
-                request.session["user_teams"] = user_teams
+                request.session["user_workspaces"] = user_teams
                 new_key = new_team.key or ""
-                request.session["current_team"] = {"key": new_key, **user_teams.get(new_key, {})}
+                request.session["current_workspace"] = {"key": new_key, **user_teams.get(new_key, {})}
                 request.session.modified = True
 
                 return redirect("core:dashboard")
@@ -797,8 +868,8 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
                     ),
                 )
                 # Clear current team as they have none
-                request.session.pop("current_team", None)
-                request.session["user_teams"] = {}
+                request.session.pop("current_workspace", None)
+                request.session["user_workspaces"] = {}
                 request.session.modified = True
                 # Consider redirecting to a dedicated "my invitations" page if/when implemented.
                 return redirect("core:dashboard")
@@ -813,14 +884,14 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     if is_self_removal:
         messages.info(request, f"You have left {removed_team_name}.")
         user_teams = get_user_teams(current_user)
-        request.session["user_teams"] = user_teams
+        request.session["user_workspaces"] = user_teams
 
         # Reset current team to another workspace if available, otherwise clear it
         if user_teams:
             next_team_key, next_team = next(iter(user_teams.items()))
-            request.session["current_team"] = {"key": next_team_key, **next_team}
+            request.session["current_workspace"] = {"key": next_team_key, **next_team}
         else:
-            request.session.pop("current_team", None)
+            request.session.pop("current_workspace", None)
 
         request.session.modified = True
         return redirect("teams:teams_dashboard")

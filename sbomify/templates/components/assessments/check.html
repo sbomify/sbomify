@@ -1,0 +1,29 @@
+{% comment %}
+One compliance check inside an open assessment row: its outcome, title,
+explanation and, when the plugin gives one, how to fix it. Checks sit in a
+plain list divided by hairlines. They are not boxed, because the row they hang
+from is already inside the one frame the section has.
+
+status is the plugin's outcome (fail, error, warning, pass, info). A failed
+check takes the warning ink and an error the danger ink, the same mapping as
+the row's verdict, and the outcome is written out for a screen reader. The
+slot is the explanation; remediation is shown after it as the fix.
+{% endcomment %}
+<c-vars status title remediation class />
+<li class="flex list-none items-start gap-3 border-b border-solid border-[color-mix(in_oklab,var(--color-border)_60%,transparent)] py-3 last:border-b-0{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>
+    <i class="fas {% if status == 'fail' %}fa-circle-xmark text-warning{% elif status == 'error' %}fa-circle-exclamation text-danger{% elif status == 'warning' %}fa-triangle-exclamation text-info{% elif status == 'pass' %}fa-check text-success{% else %}fa-circle-info text-text-muted{% endif %} mt-0.5 w-4 shrink-0 text-center text-sm"
+       aria-hidden="true"></i>
+    <div class="flex min-w-0 flex-1 flex-col gap-1">
+        <p class="m-0 text-sm font-medium text-text">
+            <span class="sr-only">{% if status == 'fail' %}Failed:{% elif status == 'error' %}Error:{% elif status == 'warning' %}Warning:{% elif status == 'pass' %}Passed:{% else %}Info:{% endif %}</span>
+            {{ title }}
+        </p>
+        {% if slot %}<div class="text-sm leading-relaxed text-text-muted">{{ slot }}</div>{% endif %}
+        {% if remediation %}
+            <p class="m-0 text-sm leading-relaxed text-text">
+                <span class="font-semibold">How to fix:</span> {{ remediation }}
+            </p>
+        {% endif %}
+    </div>
+</li>

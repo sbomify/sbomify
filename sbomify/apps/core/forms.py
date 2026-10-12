@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 import requests
 from django import forms
@@ -140,6 +140,36 @@ class CreateAccessTokenForm(forms.Form):
 
 class TogglePublicStatusForm(forms.Form):
     is_public = forms.BooleanField(required=False)
+
+
+class ProductCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    description = forms.CharField(max_length=1000, required=False)
+
+
+class ComponentCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    component_type = forms.ChoiceField(
+        choices=[("bom", "BOM"), ("document", "Document")], initial="bom", required=False
+    )
+    is_global = forms.BooleanField(required=False)
+
+    def clean_component_type(self) -> str:
+        return self.cleaned_data["component_type"] or "bom"
+
+
+class ReleaseCreateForm(forms.Form):
+    product_id = forms.ChoiceField(label="Product")
+    name = forms.CharField(max_length=255, label="Release name")
+    version = forms.CharField(max_length=255, required=False)
+    description = forms.CharField(max_length=1000, required=False)
+    is_prerelease = forms.BooleanField(required=False)
+    created_at = forms.DateTimeField(required=False)
+    released_at = forms.DateTimeField(required=False)
+
+    def __init__(self, *args: Any, products: list[tuple[str, str]], **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        cast(forms.ChoiceField, self.fields["product_id"]).choices = [("", "Choose a product"), *products]
 
 
 class SupportContactForm(forms.Form):

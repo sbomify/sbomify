@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
@@ -221,6 +222,140 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
         args, kwargs = mock_create_portal.call_args
         assert kwargs["flow_data"]["type"] == "subscription_update"
         assert kwargs["flow_data"]["subscription_update"]["subscription"] == "sub_test_456"
+
+
+def _subscription_with_status(status: str) -> stripe.Subscription:
+    return stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "object": "subscription",
+            "customer": "cus_test123",
+            "status": status,
+            "cancel_at_period_end": False,
+            "cancel_at": None,
+            "items": {
+                "object": "list",
+                "data": [{"price": {"id": "price_test_business_monthly"}, "current_period_end": 1893456000}],
+            },
+        },
+        "sk_test_dummy",
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ended_status", ["canceled", "incomplete_expired"])
+def test_portal_sends_an_ended_subscription_to_plan_selection(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    ended_status: str,
+):
+    """Stripe never reopens an ended subscription, one whose first invoice expired unpaid included."""
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "incomplete"
+    team_with_business_plan.save()
+    client.force_login(sample_user)
+
+    with (
+        patch(
+            "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+            return_value=_subscription_with_status(ended_status),
+        ),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+    ):
+        mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_ended"
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+        )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Your subscription has ended. Please select a new plan to continue."
+    ]
+    mock_create_portal.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("unpaid_status", ["past_due", "unpaid"])
+def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    unpaid_status: str,
+):
+    """Stripe can still move these back to active, and the owner pays the invoice in the portal."""
+    client.force_login(sample_user)
+
+    with (
+        patch(
+            "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+            return_value=_subscription_with_status(unpaid_status),
+        ),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+    ):
+        mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_unpaid"
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+        )
+
+    assert response.status_code == 302
+    assert response.url == "https://billing.stripe.com/p/session/test_portal_unpaid"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ended_status", ["canceled", "incomplete_expired"])
+def test_select_community_after_the_subscription_ended_switches_the_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+    ended_status: str,
+):
+    """With the subscription ended there is nothing to cancel at Stripe, so Community applies at once."""
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "incomplete"
+    team_with_business_plan.save()
+    client.force_login(sample_user)
+
+    with patch(
+        "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+        return_value=_subscription_with_status(ended_status),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert response.status_code == 302
+    assert response.url == reverse("core:dashboard")
+    assert [str(m) for m in get_messages(response.wsgi_request)] == ["Successfully switched to Community plan"]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "community"
+    assert team_with_business_plan.billing_plan_limits["max_products"] == community_plan.max_products
+
+
+@pytest.mark.django_db
+def test_select_community_with_a_past_due_invoice_keeps_the_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Team,
+    community_plan: BillingPlan,
+):
+    """Stripe still retries a past-due invoice, so the subscription has not ended."""
+    client.force_login(sample_user)
+
+    with patch(
+        "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+        return_value=_subscription_with_status("past_due"),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert response.status_code == 302
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits["subscription_status"] == "past_due"
+    assert team_with_business_plan.billing_plan == "business"
 
 
 @pytest.mark.django_db
@@ -529,3 +664,36 @@ def test_stripe_webhook_for_a_deleted_workspace_is_acknowledged(factory):
     assert warned.call_count == 1
     assert "Webhook for a workspace that no longer exists (acknowledged)" in warned.call_args.args[0]
     assert errored.call_count == 0, "a deleted workspace is expected, so nothing here should page anyone"
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_that_arrives_too_early_is_retried_quietly(factory):
+    """A checkout's first invoice beating the checkout webhook is redelivered, and pages nobody."""
+    from sbomify.apps.billing import views as billing_views
+    from sbomify.apps.billing.stripe_client import BillingEventTooEarlyError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "invoice.payment_succeeded"
+    mock_event.id = "evt_early12345"
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "invoice.payment_succeeded"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_payment_succeeded",
+            side_effect=BillingEventTooEarlyError("Workspace abc has not stored the subscription for this invoice yet"),
+        ):
+            with patch.object(billing_views.logger, "warning") as warned:
+                with patch.object(billing_views.logger, "error") as errored:
+                    response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 503, "Stripe redelivers only a non-2xx answer"
+    assert warned.call_count == 1
+    assert errored.call_count == 0

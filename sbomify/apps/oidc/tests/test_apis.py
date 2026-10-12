@@ -16,6 +16,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, hash_token
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.oidc.github_api import GitHubResolveError, ResolvedRepository
 from sbomify.apps.oidc.models import OIDCBinding
@@ -128,7 +129,8 @@ class TestSuccessfulExchange:
         assert body["component_id"] == component.id
 
         # AccessToken row exists with expires_at set ~15 min out, owned by bot
-        row = AccessToken.objects.get(encoded_token=body["access_token"])
+        row = AccessToken.objects.get(token_hash=hash_token(body["access_token"]))
+        assert row.token_type == TOKEN_TYPE_OIDC
         assert row.user_id == github_binding.bot_user_id
         assert row.team_id == component.team_id
         assert row.expires_at is not None

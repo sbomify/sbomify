@@ -1,0 +1,6 @@
+{% comment %}
+The overview's compact tables keep readable columns on phones. This variant
+sets a minimum on the real table; the base owns the horizontal scroll box.
+{% endcomment %}
+<c-vars class />
+<c-tables.table variant_class="min-w-[640px]" class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.table>

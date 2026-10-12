@@ -14,7 +14,7 @@ class TestUIWorkflows:
 
         # Mark wizard as completed to avoid redirect to onboarding
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team.key,
             "role": "owner",
             "has_completed_wizard": True,
@@ -37,8 +37,10 @@ class TestUIWorkflows:
         content = response.content.decode()
 
         # Check dashboard page loads with expected content
-        assert "Dashboard" in content
-        assert "space-y-6" in content  # Main dashboard layout class
+        assert response.status_code == 200
+        assert "Overview" in content
+        assert "Set up your first repository" in content
+        assert 'aria-label="Setup method"' in content
 
         # Test API endpoint for stats (new endpoint, no team_key needed in URL)
         response = client.get(reverse("api-1:get_dashboard_summary"))
@@ -66,7 +68,7 @@ class TestUIWorkflows:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Test API-based component creation
@@ -116,7 +118,7 @@ class TestUIWorkflows:
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # First, verify we can access the components dashboard
@@ -183,7 +185,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(
@@ -211,7 +213,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(
@@ -239,7 +241,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(
@@ -267,7 +269,7 @@ class TestUIWorkflows:
         team.save()
 
         session = client.session
-        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         response = client.post(

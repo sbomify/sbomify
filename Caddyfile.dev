@@ -22,7 +22,7 @@
 	handle @django_health {
 		log_skip
 		reverse_proxy sbomify-backend:8000 {
-			header_up X-Real-IP {remote_host}
+			header_up X-Real-IP {client_ip}
 			header_up Host {host}
 			header_down -Server
 		}
@@ -38,7 +38,7 @@
 		}
 		handle @allowed_internal {
 			reverse_proxy sbomify-backend:8000 {
-				header_up X-Real-IP {remote_host}
+				header_up X-Real-IP {client_ip}
 				header_up Host {host}
 				header_down -Server
 			}
@@ -49,8 +49,14 @@
 	# Main reverse proxy to Django backend
 	# Note: Caddy automatically handles WebSocket upgrades (ws/wss) via reverse_proxy
 	reverse_proxy sbomify-backend:8000 {
-		# Headers
-		header_up X-Real-IP {remote_host}
+		# Headers.
+		#
+		# Same placeholder as production so the two configs cannot drift. There
+		# is no trusted_proxies block here, and Caddy only consults the client
+		# IP headers for a trusted peer, so in dev this resolves to the peer
+		# address: identical to the {remote_host} it replaced, and not
+		# spoofable by a header on a local request.
+		header_up X-Real-IP {client_ip}
 		header_up Host {host}
 		header_down -Server
 

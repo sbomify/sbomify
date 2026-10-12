@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken, TokenExpiryWarning
 from sbomify.apps.access_tokens.notifications import get_notifications
-from sbomify.apps.access_tokens.tasks import warn_expiring_tokens
+from sbomify.apps.access_tokens.tasks import send_expiry_warnings
 from sbomify.apps.teams.models import Member
 
 pytestmark = pytest.mark.django_db
@@ -55,7 +55,7 @@ class TestBellProvider:
         request.user = user
         request.session = {}
         if team is not None:
-            request.session["current_team"] = {"key": team.key, "role": role}
+            request.session["current_workspace"] = {"key": team.key, "role": role}
         return request
 
     def test_own_expiring_token_warns(self, rf: Any, sample_team_with_owner_member: Any) -> None:
@@ -149,7 +149,7 @@ class TestShortLivedTokensAreNotNagged:
     def _request(self, rf: Any, user: Any, team: Any) -> Any:
         request = rf.get("/")
         request.user = user
-        request.session = {"current_team": {"key": team.key, "role": "owner"}}
+        request.session = {"current_workspace": {"key": team.key, "role": "owner"}}
         return request
 
     def test_a_freshly_minted_ci_token_does_not_warn(self, rf: Any, sample_team_with_owner_member: Any) -> None:
@@ -188,14 +188,14 @@ class TestShortLivedTokensAreNotNagged:
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=7, lifetime=7)
 
-        assert warn_expiring_tokens.fn() == 0
+        assert send_expiry_warnings() == 0
         assert mail.outbox == []
 
     def test_the_sweep_still_mails_that_token_on_its_final_day(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=1, lifetime=7)
 
-        assert warn_expiring_tokens.fn() == 1
+        assert send_expiry_warnings() == 1
         assert "expires in 1 day" in mail.outbox[0].subject
 
     def test_a_threshold_equal_to_the_lifetime_is_skipped(self, sample_team_with_owner_member: Any) -> None:
@@ -205,7 +205,7 @@ class TestShortLivedTokensAreNotNagged:
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=14, lifetime=14)
 
-        assert warn_expiring_tokens.fn() == 0
+        assert send_expiry_warnings() == 0
         assert mail.outbox == []
 
     def test_an_oidc_publish_token_never_reaches_the_bell(
@@ -244,7 +244,7 @@ class TestShortLivedTokensAreNotNagged:
             expires_at=timezone.now() + timedelta(minutes=15),
         )
 
-        assert warn_expiring_tokens.fn() == 0
+        assert send_expiry_warnings() == 0
         assert mail.outbox == []
 
     def test_the_tighter_thresholds_fire_once_it_has_aged(self, sample_team_with_owner_member: Any) -> None:
@@ -256,7 +256,7 @@ class TestShortLivedTokensAreNotNagged:
         member = sample_team_with_owner_member
         token = _token(member.user, member.team, days=7, lifetime=14)
 
-        assert warn_expiring_tokens.fn() == 1
+        assert send_expiry_warnings() == 1
         assert {w.threshold_days for w in token.expiry_warnings.all()} == {7}
 
 
@@ -265,7 +265,7 @@ class TestEmailSweep:
         member = sample_team_with_owner_member
         token = _token(member.user, member.team, days=5)
 
-        sent = warn_expiring_tokens.fn()
+        sent = send_expiry_warnings()
 
         assert sent == 1
         assert len(mail.outbox) == 1
@@ -274,9 +274,7 @@ class TestEmailSweep:
         # The 7-day warning went out; 14 is marked too so it cannot trail in.
         assert {w.threshold_days for w in token.expiry_warnings.all()} == {14, 7}
 
-    def test_no_reachable_recipient_does_not_burn_the_threshold(
-        self, sample_team_with_owner_member: Any
-    ) -> None:
+    def test_no_reachable_recipient_does_not_burn_the_threshold(self, sample_team_with_owner_member: Any) -> None:
         """A warning nobody could receive must not count as delivered.
 
         Marking the threshold anyway would let the token run to expiry in
@@ -287,7 +285,7 @@ class TestEmailSweep:
         member.user.save(update_fields=["email"])
         token = _token(member.user, member.team, days=5)
 
-        assert warn_expiring_tokens.fn() == 0
+        assert send_expiry_warnings() == 0
         assert mail.outbox == []
         assert token.expiry_warnings.count() == 0
 
@@ -295,25 +293,25 @@ class TestEmailSweep:
         member.user.email = "owner@example.com"
         member.user.save(update_fields=["email"])
 
-        assert warn_expiring_tokens.fn() == 1
+        assert send_expiry_warnings() == 1
         assert [m.to for m in mail.outbox] == [["owner@example.com"]]
 
     def test_the_sweep_is_idempotent(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=5)
 
-        warn_expiring_tokens.fn()
-        assert warn_expiring_tokens.fn() == 0
+        send_expiry_warnings()
+        assert send_expiry_warnings() == 0
         assert len(mail.outbox) == 1
 
     def test_crossing_the_next_threshold_warns_again(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member
         token = _token(member.user, member.team, days=10)
 
-        warn_expiring_tokens.fn()  # 14-day warning
+        send_expiry_warnings()  # 14-day warning
         token.expires_at = timezone.now() + timedelta(hours=12)
         token.save(update_fields=["expires_at"])
-        sent = warn_expiring_tokens.fn()
+        sent = send_expiry_warnings()
 
         assert sent == 1
         assert len(mail.outbox) == 2
@@ -324,7 +322,7 @@ class TestEmailSweep:
         _bot_member(guest_user, member.team)
         _token(guest_user, member.team, days=2, description="release bot")
 
-        warn_expiring_tokens.fn()
+        send_expiry_warnings()
 
         assert len(mail.outbox) == 1
         assert mail.outbox[0].to == [member.user.email]
@@ -355,7 +353,7 @@ class TestEmailSweep:
 
         mocker.patch.object(EmailMultiAlternatives, "send", send_one_then_fail)
 
-        warn_expiring_tokens.fn()
+        send_expiry_warnings()
 
         assert token.expiry_warnings.count() == 0, "a partial delivery must not mark the threshold"
 
@@ -366,5 +364,5 @@ class TestEmailSweep:
             user=member.user, team=member.team, description="forever", encoded_token="tok-eternal"
         )
 
-        assert warn_expiring_tokens.fn() == 0
+        assert send_expiry_warnings() == 0
         assert TokenExpiryWarning.objects.count() == 0

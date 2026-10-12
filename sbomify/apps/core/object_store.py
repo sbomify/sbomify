@@ -11,6 +11,7 @@ import hashlib
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from typing import Any, Literal
 
 import boto3
@@ -46,7 +47,7 @@ class ObjectStoreClient(ABC):
     """Base class for object storage backends."""
 
     @abstractmethod
-    def put_object(self, bucket_name: str, key: str, data: bytes) -> None: ...
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None: ...
 
     @abstractmethod
     def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
@@ -56,6 +57,9 @@ class ObjectStoreClient(ABC):
 
     @abstractmethod
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]: ...
+
+    @abstractmethod
+    def iter_objects(self, bucket_name: str, prefix: str) -> Iterator[str]: ...
 
     @abstractmethod
     def object_exists(self, bucket_name: str, key: str) -> bool: ...
@@ -139,8 +143,9 @@ class S3ObjectStoreClient(ObjectStoreClient):
             f"endpoint_url={self._boto3_kwargs['endpoint_url']!r})"
         )
 
-    def put_object(self, bucket_name: str, key: str, data: bytes) -> None:
-        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data)
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None:
+        extra = {"ContentType": content_type} if content_type else {}
+        self._resource.Bucket(bucket_name).put_object(Key=key, Body=data, **extra)
 
     def get_object(self, bucket_name: str, key: str) -> bytes | None:
         try:
@@ -159,7 +164,12 @@ class S3ObjectStoreClient(ObjectStoreClient):
         self._resource.Object(bucket_name, key).delete()
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
-        return [obj.key for obj in self._resource.Bucket(bucket_name).objects.filter(Prefix=prefix)]
+        return list(self.iter_objects(bucket_name, prefix))
+
+    def iter_objects(self, bucket_name: str, prefix: str) -> Iterator[str]:
+        # The collection pages through the listing as it is walked, so only one
+        # page of keys is held at a time.
+        return (obj.key for obj in self._resource.Bucket(bucket_name).objects.filter(Prefix=prefix))
 
     def object_exists(self, bucket_name: str, key: str) -> bool:
         # HEAD rather than a prefix listing: listing needs the separate
@@ -256,17 +266,25 @@ class StorageClient:
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
         self._store.put_object(bucket_name, object_name, data)
 
-    def upload_media(self, object_name: str, data: bytes) -> None:
+    def upload_media(self, object_name: str, data: bytes, content_type: str) -> None:
         if self.bucket_type != "MEDIA":
             raise ValueError("This method is only for MEDIA bucket")
 
-        self.upload_data_as_file(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data)
+        # The media bucket is served to browsers as-is, so nothing goes in without a type of its own.
+        if not content_type:
+            raise ValueError("Media uploads need a ContentType")
+        self._store.put_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, object_name, data, content_type)
+
+    @staticmethod
+    def sbom_object_name(data: bytes) -> str:
+        """The key ``upload_sbom`` stores ``data`` under: identical bytes share one object."""
+        return hashlib.sha256(data).hexdigest() + ".json"
 
     def upload_sbom(self, data: bytes) -> str:
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
 
-        object_name = hashlib.sha256(data).hexdigest() + ".json"
+        object_name = self.sbom_object_name(data)
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
 
         return object_name
@@ -307,6 +325,12 @@ class StorageClient:
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
         return self._store.list_objects(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, prefix)
+
+    def iter_cached_aggregates(self, prefix: str) -> Iterator[str]:
+        """Object keys under ``prefix``, read one listing page at a time, for a prefix too large to hold."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        return self._store.iter_objects(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, prefix)
 
     def delete_cached_aggregate(self, object_name: str) -> None:
         """Delete one cached-aggregate object by key (for orphan GC)."""

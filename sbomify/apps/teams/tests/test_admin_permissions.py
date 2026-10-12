@@ -43,8 +43,8 @@ def another_owner(db, django_user_model, team):
 def _setup_session(client, team, role):
     """Helper to set up session data for a user after force_login."""
     session = client.session
-    session["current_team"] = {"key": team.key, "name": team.name, "role": role}
-    session["user_teams"] = {team.key: {"role": role, "name": team.name}}
+    session["current_workspace"] = {"key": team.key, "name": team.name, "role": role}
+    session["user_workspaces"] = {team.key: {"role": role, "name": team.name}}
     session.save()
 
 
@@ -130,6 +130,8 @@ def test_an_expired_invitation_does_not_unlock_admin_self_removal(client, admin_
 
 def test_a_live_invitation_still_unlocks_admin_self_removal(client, admin_user, team):
     """The exception itself must keep working — an admin leaving can still go."""
+    admin_user.email_verified = True
+    admin_user.save(update_fields=["email_verified"])
     Invitation.objects.create(
         team=Team.objects.create(name="Somewhere Else"),
         email=admin_user.email,

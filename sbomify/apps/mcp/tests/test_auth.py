@@ -242,6 +242,7 @@ async def test_a_trusted_publishing_bot_is_not_audited_as_a_pat(mcp_owner):
         return AccessToken.objects.create(
             user=user,
             encoded_token=encoded,
+            token_type=TOKEN_TYPE_OIDC,
             team=bound,
             scopes=["artifact:publish"],
             description="trusted publishing bot",

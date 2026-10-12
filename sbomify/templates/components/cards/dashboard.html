@@ -1,9 +1,10 @@
 {% comment %}
 The workspace panel: the card surface, clipped, so nothing a panel draws can
-escape its corners. Everything else comes from c-cards.card.
+escape its corners. Everything else comes from c-cards.card. Pass flush when
+composing continuous sections that supply their own internal padding.
 {% endcomment %}
-<c-vars title subtitle icon body_class class />
-<c-cards.card variant_class="bg-surface border border-solid border-border shadow-[var(--shadow-card)] relative overflow-hidden" title="{{ title }}" subtitle="{{ subtitle }}" icon="{{ icon }}" body_class="{{ body_class }}" class="{{ class }}" :attrs="attrs">
+<c-vars title subtitle icon body_class flush class />
+<c-cards.card variant_class="bg-surface border border-solid border-border shadow-[var(--shadow-card)] relative overflow-hidden" title="{{ title }}" subtitle="{{ subtitle }}" icon="{{ icon }}" body_class="{{ body_class }}" :flush="flush" class="{{ class }}" :attrs="attrs">
 {% if header %}<c-slot name="header">{{ header }}</c-slot>{% endif %}
 {% if footer %}<c-slot name="footer">{{ footer }}</c-slot>{% endif %}
 {{ slot }}</c-cards.card>

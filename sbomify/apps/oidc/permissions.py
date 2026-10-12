@@ -25,10 +25,10 @@ The two checks are independent:
 
 from __future__ import annotations
 
-import contextlib
 from typing import Any
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 
 
 def _lookup_binding(request: Any) -> Any:
@@ -65,55 +65,16 @@ def _cached_binding(request: Any) -> Any:
     return binding
 
 
-def _token_is_oidc_typed(token_record: AccessToken) -> bool:
+def _token_is_oidc_typed(token_record: Any) -> bool:
     """True iff the token's signed JWT carries ``token_type="oidc"``.
 
-    This is the authoritative OIDC signal: the claim is covered by the
-    HMAC signature (so it can't be forged without ``SECRET_KEY``) and is
-    ``"oidc"`` only for OIDC-issued tokens. We re-decode here rather than
-    keying on ``expires_at`` because, since #1007, PATs may also set a
-    DB-row ``expires_at`` (default 90 days) — making that column useless
-    as an OIDC discriminator. The token reaching this point already
-    passed authentication, so the decode succeeds and isn't expired; any
-    decode failure falls through to the binding-based fallback.
-
-    Memoised on the token-record instance: ``request_is_oidc_authed``
-    runs twice per upload request (once in ``is_authorised_for_component``
-    and again in ``bound_component_id_for_request``), and
-    ``request.access_token_record`` is that same per-request instance both
-    times — so the JWT is verified at most once per request without a
-    request-scoped cache attribute (cf. ``_cached_binding``).
+    Authentication only matches a row whose stored ``token_type`` equals the
+    signed claim, so the column is as trustworthy as the HMAC over the claim.
+    PATs can carry an ``expires_at`` too, so that column can't tell them apart.
+    A credential that is not an access-token row stores no type, so it is not
+    OIDC-issued.
     """
-    cached = getattr(token_record, "_is_oidc_typed", None)
-    if cached is not None:
-        return bool(cached)
-
-    from jwt.exceptions import DecodeError
-
-    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, decode_personal_access_token
-
-    # Same reason as _lookup_binding: a credential with no signed sbomify token
-    # cannot carry the ``token_type`` claim, so it is not OIDC-issued. Reading
-    # that as False is correct and keeps the attribute optional.
-    encoded = getattr(token_record, "encoded_token", None)
-    if not encoded:
-        # Returned without memoising. There is nothing to cache — the answer
-        # cost no decode — and the object we would be writing to is exactly the
-        # one whose contract says it need only answer ``.scopes`` and ``.pk``.
-        # A frozen or slot-based credential would raise here, turning a
-        # predicate into the failure it exists to avoid.
-        return False
-
-    try:
-        result = decode_personal_access_token(encoded).get("token_type") == TOKEN_TYPE_OIDC
-    except DecodeError:
-        result = False
-    # Best effort for the same reason the early return does not memoise: the
-    # cache belongs to the row, and a credential that is not one may refuse the
-    # write. Losing the memo costs one extra decode, not correctness.
-    with contextlib.suppress(AttributeError, TypeError):
-        setattr(token_record, "_is_oidc_typed", result)
-    return result
+    return getattr(token_record, "token_type", None) == TOKEN_TYPE_OIDC
 
 
 def token_is_oidc_issued(token_record: Any) -> bool:
@@ -154,13 +115,11 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``token_type`` claim (needs ``SECRET_KEY``) AND delete the
     ``OIDCBinding`` row without taking down the bot user.
 
-    Performance: ``request_is_oidc_authed`` is only reached on the
-    component-scoped upload endpoints, and runs at most one JWT verify
-    plus (for a PAT) one unique-indexed probe on ``OIDCBinding.bot_user_id``
-    per request. Both are memoised — the ``token_type`` decode on the
-    token-record instance (``_token_is_oidc_typed``) and the binding
-    lookup via ``_cached_binding`` — so the second call this predicate
-    receives within a request (``is_authorised_for_component`` then
+    Performance: ``request_is_oidc_authed`` is reached on the upload
+    endpoints and the release endpoints, and for a PAT runs one
+    unique-indexed probe on ``OIDCBinding.bot_user_id`` per request. The
+    binding lookup is memoised via ``_cached_binding``, so the second call
+    this predicate receives within a request (``is_authorised_for_component`` then
     ``bound_component_id_for_request``) is effectively free.
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
@@ -208,3 +167,20 @@ def is_authorised_for_component(request: Any, component: Any) -> bool:
     if bound_id is None:
         return False
     return bound_id == str(component.id)
+
+
+def is_authorised_for_product(request: Any, product: Any) -> bool:
+    """Authorise OIDC tokens for products that contain the bound component only.
+
+    The product-level counterpart of ``is_authorised_for_component``, for
+    release reads, release creation and pinning artifacts into a release:
+    the bot's release capabilities hold across its whole workspace, and a
+    release spans every component of its product. Same contract: ``True``
+    for non-OIDC requests, ``False`` for an orphan bot.
+    """
+    if not request_is_oidc_authed(request):
+        return True
+    bound_id = bound_component_id_for_request(request)
+    if bound_id is None:
+        return False
+    return bool(product.components.filter(id=bound_id).exists())

@@ -19,9 +19,8 @@ def domain_check(request: HttpRequest) -> JsonResponse:
     Used by the domain verification task to confirm DNS points to our server.
 
     Host validation is performed by DynamicHostValidationMiddleware (not Django's
-    ALLOWED_HOSTS, which is set to ``["*"]``). For custom domains,
-    CustomDomainContextMiddleware additionally verifies the host is associated
-    with a team and auto-validates it.
+    ALLOWED_HOSTS, which is set to ``["*"]``). On a workspace's custom domain the
+    response carries that domain's challenge, which the probe compares.
 
     Returns:
         JSON response with domain verification status and metadata
@@ -29,22 +28,24 @@ def domain_check(request: HttpRequest) -> JsonResponse:
     from django.core.exceptions import DisallowedHost
     from django.utils import timezone
 
-    from sbomify.apps.teams.utils import normalize_host
+    from sbomify.apps.teams.utils import custom_domain_challenge, normalize_host
 
     try:
         host = normalize_host(request.get_host())
     except DisallowedHost:
         host = normalize_host(request.META.get("HTTP_HOST", ""))
 
-    return JsonResponse(
-        {
-            "ok": True,
-            "service": "sbomify",
-            "domain": host,
-            "ts": timezone.now().isoformat(),
-            "region": os.environ.get("AWS_REGION", "auto"),
-        }
-    )
+    payload = {
+        "ok": True,
+        "service": "sbomify",
+        "domain": host,
+        "ts": timezone.now().isoformat(),
+        "region": os.environ.get("AWS_REGION", "auto"),
+    }
+    team = getattr(request, "custom_domain_team", None)
+    if team is not None and not getattr(request, "is_trust_center_subdomain", False):
+        payload["challenge"] = custom_domain_challenge(team.pk, team.custom_domain)
+    return JsonResponse(payload)
 
 
 app_name = "teams"

@@ -38,7 +38,7 @@ def _badge(rendered: str, label: str) -> str:
         ("Danger", "text-danger bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)]"),
         ("Info", "text-info bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)]"),
         ("Violet", "text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]"),
-        ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,#CC58BB_100%)]"),
+        ("Accent", "bg-[linear-gradient(135deg,var(--color-primary-dark)_0%,var(--color-accent-pink)_100%)]"),
         ("KEV", "text-white bg-danger"),
     ],
 )
@@ -111,7 +111,7 @@ def test_badge_slot_carries_nested_markup(rendered: str) -> None:
 )
 def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, token: str) -> None:
     badge = _badge(rendered, label)
-    assert f"text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
+    assert f"text-[color:{token}]" in badge
     assert f"bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
     assert f"border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
 
@@ -119,7 +119,9 @@ def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, to
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
     critical = _badge(rendered, "Critical")
     assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in critical
-    assert "rounded" in critical
+    # Not bare `rounded`: the legacy sheet's .rounded carries !important at a
+    # different radius, so the severity corner states the token it wants.
+    assert "rounded-[var(--radius-sm)]" in critical
     assert "rounded-full" not in critical
     assert "px-3" not in critical
     assert "tracking-[0.01em]" not in critical
@@ -142,12 +144,10 @@ def test_pill_rounds_the_severity_shape(rendered: str) -> None:
         ("Runtime low", "low", "var(--color-severity-low)"),
     ],
 )
-def test_severity_dynamic_keys_every_band_off_the_attribute(
-    rendered: str, label: str, level: str, token: str
-) -> None:
+def test_severity_dynamic_keys_every_band_off_the_attribute(rendered: str, label: str, level: str, token: str) -> None:
     badge = _badge(rendered, label)
     assert f'data-level="{level}"' in badge
-    assert f"data-[level={level}]:text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
+    assert f"data-[level={level}]:text-[color:{token}]" in badge
     assert f"data-[level={level}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
     assert f"data-[level={level}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
 
@@ -155,7 +155,7 @@ def test_severity_dynamic_keys_every_band_off_the_attribute(
 def test_severity_dynamic_rests_on_the_unknown_band(rendered: str) -> None:
     badge = _badge(rendered, "Runtime unknown")
     assert 'data-level="unknown"' in badge
-    assert "text-[color-mix(in_oklab,var(--color-text-muted)_70%,var(--color-text))]" in badge
+    assert "text-[color:var(--color-text-muted)]" in badge
     assert "bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)]" in badge
 
 
@@ -175,8 +175,8 @@ def test_severity_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> N
 @pytest.mark.parametrize(
     ("label", "fmt", "recipe_bit"),
     [
-        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-[#0d9488]"),
-        ("SPDX", "spdx", "data-[format=spdx]:text-[#7c3aed]"),
+        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-success"),
+        ("SPDX", "spdx", "data-[format=spdx]:text-accent"),
     ],
 )
 def test_format_prop_writes_the_attribute_that_picks_the_colour(
@@ -189,8 +189,12 @@ def test_format_prop_writes_the_attribute_that_picks_the_colour(
 
 
 def test_format_hover_tint_travels_with_the_variant(rendered: str) -> None:
-    assert "data-[format=cyclonedx]:hover:bg-[rgb(20_184_166/0.15)]" in _badge(rendered, "CycloneDX")
-    assert "data-[format=spdx]:hover:bg-[rgb(139_92_246/0.15)]" in _badge(rendered, "SPDX")
+    assert "data-[format=cyclonedx]:hover:bg-[color-mix(in_oklab,var(--color-success)_15%,transparent)]" in _badge(
+        rendered, "CycloneDX"
+    )
+    assert "data-[format=spdx]:hover:bg-[color-mix(in_oklab,var(--color-accent)_15%,transparent)]" in _badge(
+        rendered, "SPDX"
+    )
 
 
 def test_unknown_format_keeps_the_shape_without_a_tint(rendered: str) -> None:
@@ -200,15 +204,15 @@ def test_unknown_format_keeps_the_shape_without_a_tint(rendered: str) -> None:
     assert 'data-format="swid"' in swid
     classes = swid[swid.index('class="') + 7 :]
     classes = classes[: classes.index('"')]
-    unkeyed = [bit for bit in classes.split() if "rgb(" in bit and not bit.startswith("data-[format=")]
+    unkeyed = [bit for bit in classes.split() if "color-mix(" in bit and not bit.startswith("data-[format=")]
     assert not unkeyed, f"a format tint lands without its attribute: {unkeyed}"
 
 
 def test_format_badge_carries_both_recipes_so_a_bound_value_can_pick_either(rendered: str) -> None:
     """The rows of an artifacts table are built by Alpine, which binds data-format only."""
     badge = _badge(rendered, "SWID")
-    assert "data-[format=cyclonedx]:bg-[rgb(20_184_166/0.1)]" in badge
-    assert "data-[format=spdx]:bg-[rgb(139_92_246/0.1)]" in badge
+    assert "data-[format=cyclonedx]:bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)]" in badge
+    assert "data-[format=spdx]:bg-[color-mix(in_oklab,var(--color-accent)_10%,transparent)]" in badge
 
 
 def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:
@@ -328,7 +332,7 @@ def test_tag_remove_label_binds_the_accessible_name(rendered: str) -> None:
     button = section[section.index("<button") : section.index("</button>")]
     # Autoescaped, which the HTML parser decodes back before Alpine reads it.
     assert ':aria-label="&#x27;Remove &#x27; + tag.name"' in button
-    assert "aria-label=\"Remove \"" not in button
+    assert 'aria-label="Remove "' not in button
     assert 'title="Remove license"' in button
     assert '@click.stop="removeTag(index)"' in button
 
@@ -371,5 +375,94 @@ def test_action_badge_forwards_its_bindings(rendered: str) -> None:
 
 def test_the_other_badges_stay_spans(rendered: str) -> None:
     """type is what makes the shell a button; nothing else asks for one."""
-    assert _badge(rendered, "Secondary").startswith(" class=")
+    assert _badge(rendered, "Secondary").lstrip().startswith("class=")
     assert "<button" not in _badge(rendered, "Secondary")
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Bare",
+        "Primary",
+        "Secondary",
+        "Success",
+        "Warning",
+        "Danger",
+        "Info",
+        "Accent",
+        "Violet",
+        "KEV",
+        "Compact",
+        "Pilled",
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Unknown",
+        "Runtime critical",
+        # The members table is where a wrapped label was first noticed, so the
+        # role badge belongs in this guard too.
+        "Owner role",
+        "Off ladder role",
+    ],
+)
+def test_badge_labels_never_wrap(rendered: str, label: str) -> None:
+    assert "whitespace-nowrap" in _badge(rendered, label)
+
+
+ROLE_NEUTRAL = (
+    "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] "
+    "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]"
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "role", "ink", "token"),
+    [
+        ("Owner role", "owner", "text-primary", "var(--color-primary)"),
+        ("Admin role", "admin", "text-warning", "var(--color-warning)"),
+    ],
+)
+def test_role_badge_keys_the_privileged_accents_off_the_attribute(
+    rendered: str, label: str, role: str, ink: str, token: str
+) -> None:
+    badge = _badge(rendered, label)
+    assert f'data-role="{role}"' in badge
+    assert f"data-[role={role}]:{ink}" in badge
+    assert f"data-[role={role}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
+    assert f"data-[role={role}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
+
+
+@pytest.mark.parametrize(
+    ("label", "role"),
+    [
+        ("Member role", "member"),
+        ("Guest role", "guest"),
+        ("Off ladder role", "not-a-role"),
+    ],
+)
+def test_role_badge_rests_on_neutral_for_everything_else(rendered: str, label: str, role: str) -> None:
+    """A role the ladder does not know renders neutral rather than unstyled, so
+    an unrecognised value can never leave the badge without a recipe."""
+    badge = _badge(rendered, label)
+    assert f'data-role="{role}"' in badge
+    assert ROLE_NEUTRAL in badge
+
+
+def test_role_badge_shares_the_badge_shell_and_default_shape(rendered: str) -> None:
+    badge = _badge(rendered, "Owner role")
+    assert "inline-flex items-center font-semibold" in badge
+    assert "uppercase tracking-[0.04em]" not in badge
+
+
+def test_role_badge_forwards_size_and_pill(rendered: str) -> None:
+    badge = _badge(rendered, "Rounded owner role")
+    assert "rounded-full" in badge
+    assert 'data-role="owner"' in badge
+
+
+def test_role_badge_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> None:
+    badge = _badge(rendered, "Runtime role")
+    assert "shrink-0" in badge
+    assert ':data-role="m.role"' in badge
+    assert 'x-text="m.role"' in badge

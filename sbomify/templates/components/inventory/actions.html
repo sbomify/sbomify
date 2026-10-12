@@ -1,0 +1,31 @@
+{% comment %}Inventory actions lead to existing workflows. Capability checks stay live and downloads keep their existing server authorisation.{% endcomment %}
+<c-vars row kind scope_product />
+<c-actions-menu label="Actions for {{ row.name }}" icon="fas fa-ellipsis" width="w-60">
+<c-dropdowns.item compact href="{{ row.url }}" icon="fas fa-arrow-up-right-from-square">View {{ kind|slice:':-1' }}</c-dropdowns.item>
+{% if kind == 'products' %}
+    <c-dropdowns.item compact href="{% url 'core:product_releases' row.id %}" icon="fas fa-tag">View releases</c-dropdowns.item>
+    {% if can_manage %}
+        <c-dropdowns.item compact icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}?product={{ row.id }}">Add security advisory</c-dropdowns.item>
+    {% endif %}
+    <c-dropdowns.divider />
+    <c-dropdowns.item compact href="{% url 'core:sbom_download_product' row.id %}" icon="fas fa-download">Download CycloneDX</c-dropdowns.item>
+    <c-dropdowns.item compact href="{% url 'core:sbom_download_product' row.id %}?format=spdx" icon="fas fa-download">Download SPDX</c-dropdowns.item>
+    {% if row.visibility == 'public' %}
+        <c-dropdowns.item compact href="{% url 'core:product_details_public' row.id %}" icon="fas fa-globe">View on Trust Center</c-dropdowns.item>
+    {% endif %}
+{% elif kind == 'releases' %}
+    <c-dropdowns.item compact href="{% url 'api-1:download_release' row.id %}" icon="fas fa-download">Download release SBOM</c-dropdowns.item>
+{% endif %}
+{% if kind == 'releases' and scope_product and not row.is_latest %}
+    {% if can_manage %}
+        <c-dropdowns.item compact icon="fas fa-pen" @click="$dispatch('edit-product-release', { id: '{{ row.id }}' })">Edit release</c-dropdowns.item>
+    {% endif %}
+    {% if can_delete %}
+        <c-dropdowns.item-danger compact icon="fas fa-trash" @click="$dispatch('delete-product-release', { id: '{{ row.id }}' })">Delete release</c-dropdowns.item-danger>
+    {% endif %}
+{% endif %}
+{% if kind == 'components' and scope_product and can_manage %}
+    <c-dropdowns.divider />
+    <c-dropdowns.item-danger compact icon="fas fa-unlink" @click="$dispatch('remove-product-component', { id: '{{ row.id }}', name: '{{ row.name|escapejs }}' })">Remove from product</c-dropdowns.item-danger>
+{% endif %}
+</c-actions-menu>

@@ -94,7 +94,11 @@ def component_in_other_workspace(mcp_owner):
 
 @pytest.fixture
 def contact_profile_in_bound_workspace(mcp_owner):
-    from sbomify.apps.teams.models import ContactProfile
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile
 
     _, bound, _ = mcp_owner
-    return ContactProfile.objects.create(name="Bound Supplier", team=bound)
+    # With an entity, as the API now requires of every saved profile: an update
+    # that would leave a profile without one is refused and rolled back.
+    profile = ContactProfile.objects.create(name="Bound Supplier", team=bound)
+    ContactEntity.objects.create(profile=profile, name="Bound Supplier Ltd", email="supplier@example.com", is_supplier=True)
+    return profile

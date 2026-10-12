@@ -1,4 +1,6 @@
 {% comment %}
+    dialog_id gives repeated confirmations distinct accessible labels while
+    modal_id continues to name their local Alpine state.
     The destructive confirmation. It keeps its own centred body rather than the
     dialog's title band: the medallion, the sentence and the warning read as one
     block, and the close control sits over them.
@@ -6,7 +8,8 @@
     The close button is pulled back by half the body's gutter so it lands where
     it always has, an even 1rem inside the panel.
 {% endcomment %}
-<c-modal show="{{ modal_id }}" size="sm" role="alertdialog" x-ref="modalOverlay" tabindex="-1" aria-labelledby="delete-modal-title-{{ modal_id }}" aria-describedby="delete-modal-desc-{{ modal_id }}">
+{% firstof dialog_id modal_id as confirmation_id %}
+<c-modal show="{{ modal_id }}" size="sm" role="alertdialog" x-ref="modalOverlay" tabindex="-1" aria-labelledby="delete-modal-title-{{ confirmation_id }}" aria-describedby="delete-modal-desc-{{ confirmation_id }}">
 <div class="relative text-center">
     <c-buttons.icon label="Close modal" class="absolute -top-2 -right-2" x-ref="closeButton" @click="{{ modal_id }} = false">
     <i class="fas fa-times" aria-hidden="true"></i>
@@ -15,7 +18,7 @@
         <i class="fas fa-exclamation-triangle text-danger text-xl"
            aria-hidden="true"></i>
     </div>
-    <h4 id="delete-modal-title-{{ modal_id }}"
+    <h4 id="delete-modal-title-{{ confirmation_id }}"
         class="text-lg font-semibold text-text tracking-[-0.01em] mb-2">{{ title|default:'Confirm Delete' }}</h4>
     <p class="text-text mb-2">
         {{ message|default:'Are you sure you want to delete' }}
@@ -25,7 +28,8 @@
             <span class="font-semibold text-danger">{{ item_name }}</span>?
         {% endif %}
     </p>
-    <p id="delete-modal-desc-{{ modal_id }}" class="text-text-muted text-sm">
+    <p id="delete-modal-desc-{{ confirmation_id }}"
+       class="text-text-muted text-sm">
         {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
     </p>
 </div>

@@ -11,7 +11,7 @@
  * Saving deliberately marks the existing DoC ``CRAGeneratedDocument``
  * as stale rather than auto-regenerating; the operator confirms by
  * clicking "Generate Declaration of Conformity" afterwards. The
- * "Refresh Stale Documents" button picks the change up automatically.
+ * "Refresh stale documents" button picks the change up automatically.
  */
 import SignaturePad from 'signature_pad';
 

@@ -1,0 +1,76 @@
+<form method="post"
+      action="{% url 'teams:team_settings' team.key %}"
+      class="space-y-4"
+      x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
+    {% csrf_token %}
+    <input type="hidden" name="security_txt_action" value="update">
+    <input type="hidden" name="active_tab" value="trust-center">
+    <input type="hidden" name="security_txt_enabled" value="false">
+    <c-cards.card flush>
+    <c-cards.header compact title="security.txt" hint="Help researchers report vulnerabilities using RFC 9116." />
+    <c-forms.field horizontal label="Enable security.txt" for="security-txt-toggle" hint="Publish security contacts at /.well-known/security.txt on your Trust Center domain.">
+    <c-forms.toggle id="security-txt-toggle" name="security_txt_enabled" value="true" aria-label="Enable security.txt" checked="{{ security_txt_config.enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" x-model="securityTxtEnabled" />
+    </c-forms.field>
+    <div x-show="securityTxtEnabled" x-cloak>
+        <c-forms.field horizontal label="Contact for vulnerability reports" for="security_txt_contact_id" hint="Choose a contact from your saved party profiles.">
+        <c-forms.select size="sm" id="security_txt_contact_id" name="security_txt_contact_id" disabled="{{ can_administer|yesno:',1' }}">
+        <option value="">Auto-detect from default profile</option>
+        {% for contact in security_txt_contacts %}
+            <option value="{{ contact.id }}"
+                    {% if security_txt_config.contact_id == contact.id %}selected{% endif %}>
+                {{ contact.name }} ({{ contact.email }}), {{ contact.entity__profile__name }}
+            </option>
+        {% endfor %}
+        </c-forms.select>
+        </c-forms.field>
+        <c-forms.field horizontal label="CSIRT email" for="security_txt_csirt_email" hint="A second address for security reports.">
+        <c-forms.input size="sm" type="email" id="security_txt_csirt_email" name="security_txt_csirt_email" value="{{ security_txt_config.csirt_email|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Report page URL" for="security_txt_report_url" hint="Where researchers can submit a report.">
+        <c-forms.input size="sm" type="url" id="security_txt_report_url" name="security_txt_report_url" value="{{ security_txt_config.report_url|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Policy URL" for="security_txt_policy_url" hint="Your vulnerability disclosure policy.">
+        <c-forms.input size="sm" type="url" id="security_txt_policy_url" name="security_txt_policy_url" value="{{ security_txt_config.policy_url|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="CSAF provider metadata URL" for="security_txt_csaf_url" hint="Your provider-metadata.json, if you publish CSAF advisories.">
+        <c-forms.input size="sm" type="url" id="security_txt_csaf_url" name="security_txt_csaf_url" value="{{ security_txt_config.csaf_url|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Acknowledgments URL" for="security_txt_acknowledgments_url" hint="Where you credit security researchers.">
+        <c-forms.input size="sm" type="url" id="security_txt_acknowledgments_url" name="security_txt_acknowledgments_url" value="{{ security_txt_config.acknowledgments_url|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Hiring URL" for="security_txt_hiring_url" hint="Security job openings.">
+        <c-forms.input size="sm" type="url" id="security_txt_hiring_url" name="security_txt_hiring_url" value="{{ security_txt_config.hiring_url|default:'' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
+        <c-forms.field horizontal label="Encryption key URLs" hint="Public PGP keys for encrypted reports." x-data="{ urls: window.parseJsonScript('encryption-urls-data') || [] }">
+        <template x-for="(url, index) in urls" :key="index">
+            <div class="flex items-center gap-2">
+                <c-forms.input size="sm" type="url" ::name="'security_txt_encryption_url_' + index" x-model="urls[index]" aria-label="Encryption key URL" disabled="{{ can_administer|yesno:',1' }}" />
+                <c-buttons.icon-quiet size="sm" label="Remove encryption key URL" @click="urls.splice(index, 1)" disabled="{{ can_administer|yesno:',1' }}"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon-quiet>
+            </div>
+        </template>
+        <c-buttons.secondary size="sm" @click="urls.push('')" disabled="{{ can_administer|yesno:',1' }}">Add encryption key URL</c-buttons.secondary>
+        <input type="hidden"
+               name="security_txt_encryption_urls"
+               :value="JSON.stringify(urls)">
+        </c-forms.field>
+        <c-forms.field horizontal label="Preferred languages" for="security_txt_preferred_languages" hint="Comma-separated language codes, such as en, de or fr.">
+        <c-forms.input size="sm" id="security_txt_preferred_languages" name="security_txt_preferred_languages" value="{{ security_txt_config.preferred_languages|default:'en' }}" disabled="{{ can_administer|yesno:',1' }}" />
+        </c-forms.field>
+        <c-forms.field horizontal label="Canonical URL" hint="Set automatically from your Trust Center address.">
+        {% if trust_center_url %}
+            <c-forms.input size="sm" readonly aria-label="Canonical URL" value="{{ trust_center_url }}/.well-known/security.txt" />
+        {% else %}
+            <c-forms.hint>Configure your Trust Center address first.</c-forms.hint>
+        {% endif %}
+        <input type="hidden"
+               name="security_txt_canonical_url"
+               value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
+        </c-forms.field>
+    </div>
+    </c-cards.card>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <c-forms.hint>Saving sets the file's expiry to one year from now.</c-forms.hint>
+        <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">Save security.txt</c-buttons.primary>
+    </div>
+</form>

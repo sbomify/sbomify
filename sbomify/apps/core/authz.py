@@ -41,6 +41,7 @@ from django.http import HttpRequest
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_MEMBER = "member"
+ROLE_OPERATOR = "operator"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
@@ -49,19 +50,19 @@ ROLE_BOT = "bot"
 # and template capability flags all derive from them, so widening a tier widens
 # every gate that uses it.
 #
-# Invariant: the human roles form a linear ladder, guest ⊂ member ⊂ admin ⊂ owner.
-# No role
-# may hold a capability a more-privileged role lacks. ``bot`` sits outside the
-# ladder — it is a synthetic OIDC publishing identity that can publish releases
-# without being able to read most internal data. ``test_role_ladder_is_upward_closed``
+# Invariant: the human roles form a linear ladder,
+# guest ⊂ operator ⊂ member ⊂ admin ⊂ owner. No role may hold a capability a
+# more-privileged role lacks. ``bot`` sits outside the ladder — it is a synthetic
+# OIDC publishing identity that can publish releases without being able to read
+# most internal data. ``test_role_ladder_is_upward_closed``
 # enforces the invariant; keeping it is what stops this degenerating into
 # per-role permission soup where "what can an admin do" needs a codebase search.
 OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
-"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace is
-the only *capability* an admin lacks. The other owner-exclusive rule — an admin
-may not remove an owner — is relational (it depends on the target member's role,
-not just the actor's), so it cannot be expressed as a tier and lives in the
-member-removal guards instead."""
+"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace and
+granting the owner role are the only *capabilities* an admin lacks. The other
+owner-exclusive rule — an admin may not remove an owner — is relational (it
+depends on the target member's role, not just the actor's), so it cannot be
+expressed as a tier and lives in the member-removal guards instead."""
 
 ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Workspace governance: settings, custom domain, trust-center config, branding,
@@ -72,12 +73,32 @@ MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
 """Create/update products, components, releases, and artifact metadata — the
 day-to-day work. Deliberately excludes *making things public*: changing a
 product's or component's visibility is ``ADMINISTER``, because publishing to the
-trust center is an outward-facing decision, not routine maintenance."""
+trust center is an outward-facing decision, not routine maintenance.
+
+This is the line ``operator`` sits below: an operator reads the whole
+inventory and rules on its vulnerabilities, but does not shape the inventory
+itself. Adding a role here hands it product and component creation, so a
+read-mostly role must never be added to this tier."""
 
 DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Deletion of a domain resource (product / component / release / SBOM /
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
+
+TRIAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR, ROLE_BOT)
+"""Rule on a vulnerability finding: record an in-app triage decision (exploitable
+/ not affected / risk accepted) and, for the roles that can also upload, store
+the VEX that decision produces.
+
+The one capability ``operator`` holds beyond reading. Carved out of ``PUBLISH``
+because judging a finding and shipping an artifact are different jobs done by
+different people — the same split every vulnerability-management tool draws
+(Dependency-Track separates ``VULNERABILITY_ANALYSIS`` from ``BOM_UPLOAD``).
+
+Holding this tier is NOT by itself enough to upload a VEX *file*: those endpoints
+require ``artifact:publish`` as well, so an operator triages in the app and
+through the triage API while artifact upload stays with members, admins and CI
+bots."""
 
 PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_BOT)
 """Upload artifacts and cut/tag releases — the CI publish workflow, granted to
@@ -93,7 +114,7 @@ guests holding nothing, it was identical to this tier and has been removed."""
 # Renamed because the tier means "internal roles only, guests excluded", which
 # "READ_MEMBER" no longer conveys once guests are external — and would be
 # actively misleading next to a role literally named ``member`` (#468).
-READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR)
 """Read internal (non-public) workspace data. Internal roles only — a guest is
 an external trust-center visitor and must not be able to enumerate a workspace's
 private inventory. Guests reach restricted content solely through the
@@ -118,15 +139,15 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_OWNER,
         "Owner",
         "Full control of the workspace. Everything an admin can do, plus deleting "
-        "the workspace and removing other owners.",
+        "the workspace, inviting owners and removing other owners.",
     ),
     (
         ROLE_ADMIN,
         "Admin",
         "Runs the workspace day to day: create, edit and delete products, "
         "components and releases; upload artifacts; manage workspace settings, "
-        "the Trust Center, integrations, members and billing. Cannot remove an "
-        "owner or delete the workspace.",
+        "the Trust Center, integrations, members and billing. Cannot invite or "
+        "remove an owner, or delete the workspace.",
     ),
     (
         ROLE_MEMBER,
@@ -137,11 +158,19 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         "or members.",
     ),
     (
+        ROLE_OPERATOR,
+        "Operator",
+        "Reads the workspace and rules on its vulnerabilities: sees every product, "
+        "component, release, SBOM and document, and triages findings as exploitable, "
+        "not affected or risk accepted. Cannot create or edit anything else, upload "
+        "artifacts, or reach workspace settings, billing or members.",
+    ),
+    (
         ROLE_GUEST,
         "Guest",
         "External access, granted through the Trust Center rather than invited "
         "directly. Sees your public pages, plus everything on the gated "
-        "components they have been approved for and signed the NDA for — "
+        "components they have been approved for and signed the NDA for: "
         "documents, SBOMs and vulnerability information alike. Cannot see "
         "anything else in the workspace.",
     ),
@@ -164,6 +193,9 @@ class Decision:
 _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # owner-only
     "workspace:delete": OWNER_ONLY,
+    # Inviting someone as owner. Without it an admin could invite an address
+    # they control and step past "an admin may not remove an owner".
+    "member:grant_owner": OWNER_ONLY,
     # owner + admin governance
     "workspace:administer": ADMINISTER,
     "billing:manage": ADMINISTER,
@@ -185,6 +217,10 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
     # one person. Carved out of component:manage for the same reason.
     "component:manage_publishers": ADMINISTER,
+    # Trust-center access requests: seeing who asked, and approving, rejecting
+    # or revoking. Approval makes the requester a guest of the workspace.
+    "access_request:read": ADMINISTER,
+    "access_request:decide": ADMINISTER,
     # owner + admin management (the dominant capability)
     # Workspace configuration — contact profiles, suppliers. NOT "create a
     # thing in this workspace": that is product:create / component:create.
@@ -208,9 +244,13 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "document:delete": DELETE,
     # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
-    # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard).
-    "artifact:publish_vex": PUBLISH,
+    # Ruling on a finding — the in-app triage decisions, and the VEX they are
+    # written into. Rewrites the workspace's stored vulnerability posture (the
+    # re-annotated scan summaries feed every dashboard), which is why it is a
+    # capability at all rather than part of reading. ``TRIAGE``, not ``PUBLISH``:
+    # this is the ``operator`` role's whole job. The VEX *file upload* endpoints
+    # pair it with ``artifact:publish``, so they stay closed to operators.
+    "artifact:publish_vex": TRIAGE,
     # internal reads — guests are external and hold none of these
     "workspace:read": READ_INTERNAL,
     "component:read_internal": READ_INTERNAL,
@@ -226,8 +266,14 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
 # a Component or expose ``.component``.
 _ABAC_ACTIONS: frozenset[str] = frozenset({"component:access"})
 
+# Actions a signed-in user takes for themselves in a workspace they need not
+# belong to: filing an access request, then reading and signing its NDA. No role
+# applies; only the token's scope and workspace binding can narrow them. The
+# resource is the Team being asked.
+_SELF_ACTIONS: frozenset[str] = frozenset({"access_request:submit"})
+
 # Every action ``can`` understands — the vocabulary a token scope draws from.
-ALL_ACTIONS: frozenset[str] = frozenset(_ROLE_ACTIONS) | _ABAC_ACTIONS
+ALL_ACTIONS: frozenset[str] = frozenset(_ROLE_ACTIONS) | _ABAC_ACTIONS | _SELF_ACTIONS
 # Resource prefixes (the part before ``:``) — the valid targets of a ``<res>:*`` bundle.
 _RESOURCES: frozenset[str] = frozenset(a.split(":", 1)[0] for a in ALL_ACTIONS)
 
@@ -338,6 +384,14 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
         component = getattr(resource, "component", resource)
         result = check_component_access(request, component)
         return Decision(result.has_access, result.reason)
+
+    if action in _SELF_ACTIONS:
+        token_team = getattr(request, "token_team", None)
+        if not request.user.is_authenticated:
+            return Decision(False, "authentication required")
+        if token_team is not None and token_team.pk != resource.pk:
+            return Decision(False, "token is bound to another workspace")
+        return Decision(True)
 
     roles = _ROLE_ACTIONS[action]  # present: validated against ALL_ACTIONS above
     allowed = verify_item_access(request, resource, list(roles))

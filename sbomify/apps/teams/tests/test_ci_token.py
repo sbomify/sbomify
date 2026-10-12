@@ -147,7 +147,7 @@ class TestCsrfIsRequired:
 
 
 class TestItAuthorizesTheWorkspaceInTheUrl:
-    """TeamRoleRequiredMixin reads session["current_team"], so on its own it
+    """TeamRoleRequiredMixin reads session["current_workspace"], so on its own it
     answers whether the caller administers whatever workspace they happen to
     have selected — not the one being minted for.
 

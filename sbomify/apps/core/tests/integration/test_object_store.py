@@ -425,10 +425,16 @@ class TestStorageClient:
 
     def test_upload_media_delegates(self):
         client = StorageClient("MEDIA")
-        client.upload_media("test_object", b"test_data")
+        client.upload_media("test_object", b"test_data", "image/png")
         self.mock_store.put_object.assert_called_once_with(
-            settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "test_object", b"test_data"
+            settings.AWS_MEDIA_STORAGE_BUCKET_NAME, "test_object", b"test_data", "image/png"
         )
+
+    def test_upload_media_refuses_an_empty_content_type(self):
+        client = StorageClient("MEDIA")
+        with pytest.raises(ValueError, match="ContentType"):
+            client.upload_media("test_object", b"test_data", "")
+        self.mock_store.put_object.assert_not_called()
 
     def test_upload_sbom_delegates(self):
         client = StorageClient("SBOMS")
@@ -499,7 +505,7 @@ class TestStorageClient:
             ("get_sbom_data", ("test",), "MEDIA", "only for SBOMS bucket"),
             ("upload_document", (b"data",), "SBOMS", "only for DOCUMENTS bucket"),
             ("get_document_data", ("test",), "SBOMS", "only for DOCUMENTS bucket"),
-            ("upload_media", ("obj", b"data"), "SBOMS", "only for MEDIA bucket"),
+            ("upload_media", ("obj", b"data", "image/png"), "SBOMS", "only for MEDIA bucket"),
         ],
     )
     def test_bucket_type_validation(self, method: str, args: tuple, wrong_type: str, expected_match: str):
@@ -521,4 +527,4 @@ class TestStorageClient:
         )
         client = StorageClient("MEDIA")
         with pytest.raises(ClientError):
-            client.upload_media("test", b"data")
+            client.upload_media("test", b"data", "image/png")

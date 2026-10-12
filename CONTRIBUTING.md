@@ -76,8 +76,8 @@ To prepare your dedicated GitHub repository:
 
 1. How to run tests:
 
-   ```sh
-   # explain tests here
-   ```
+   Follow the [repository test commands](AGENTS.md#testing). For frontend work,
+   also read [UI change considerations and CI](docs/ui-change-considerations.md)
+   for shared component coverage, browser fixtures and screenshot review.
 
 1. Open a new Pull Request to the main repository using your `master` branch

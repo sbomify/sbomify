@@ -104,23 +104,19 @@ class TestBadgeMarkup:
 
     @staticmethod
     def _render(findings: list[dict]) -> str:
-        run = _security_run(findings)
+        # The run card fetches its findings list rather than rendering it inline,
+        # so the badge is asserted against the partial the card asks for.
         return render_to_string(
-            "plugins/components/_assessment_run_item.html.j2",
+            "plugins/components/_assessment_run_findings.html.j2",
             {
-                "run": {
-                    "id": "run1",
-                    "plugin_name": "osv",
-                    "plugin_display_name": "OSV Vulnerability Scanner",
-                    "plugin_version": "1.0.0",
-                    "category": "security",
-                    "status": "completed",
-                    "run_reason": "on_upload",
-                    "release_names": [],
-                    "completed_at": None,
-                    "result": run.result,
-                },
-                "loop_index": 1,
+                "run": {"id": "run1", "category": "security"},
+                "is_security": True,
+                "findings": findings,
+                "can_triage": False,
+                "page": 1,
+                "page_count": 1,
+                "has_prev": False,
+                "has_next": False,
             },
         )
 

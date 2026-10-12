@@ -19,8 +19,11 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import uuid
+from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -28,11 +31,10 @@ from sbomify.apps.plugins.builtins.dependency_track import (
     DependencyTrackPlugin,
     _is_unsupported_spec_version,
 )
+from sbomify.apps.plugins.sdk.base import RetryLaterError
 
 # The message Dependency Track actually returned, from the staging log.
-REAL_REJECTION = Exception(
-    "Dependency Track error (400): The uploaded BOM is invalid: Unrecognized specVersion 1.7"
-)
+REAL_REJECTION = Exception("Dependency Track error (400): The uploaded BOM is invalid: Unrecognized specVersion 1.7")
 
 
 def _as_dict(result: Any) -> dict[str, Any]:
@@ -216,3 +218,131 @@ class TestTheWiringInAssess:
         assert result["metadata"].get("skipped") is not True
         assert result["findings"][0]["id"] == "dependency-track:error"
         assert result["summary"]["error_count"] == 1
+
+
+SBOM_1_7 = Path(__file__).resolve().parents[2] / "sboms" / "tests" / "test_data" / "sbom_sample_1.7.cdx.json"
+
+
+@pytest.mark.django_db
+class TestTheOlderSpecFallback(TestTheWiringInAssess):
+    """A refused spec version is offered again as a copy at an older one.
+
+    Subclassed for the fixture only; the inherited tests still hold here, since
+    the fallback ends in the same skip when every copy is refused.
+    """
+
+    @staticmethod
+    def _uploads(accepts: set[str], failure: Exception | None = None):
+        """An upload that refuses every spec version outside ``accepts``."""
+        sent: list[dict[str, Any]] = []
+
+        def upload(*, sbom_bytes: bytes, **_: Any) -> Any:
+            document = json.loads(sbom_bytes)
+            sent.append(document)
+            if document["specVersion"] not in accepts:
+                raise failure or Exception(
+                    "Dependency Track error (400): The uploaded BOM is invalid: "
+                    f"Unrecognized specVersion {document['specVersion']}"
+                )
+            return SimpleNamespace(dt_project_version_uuid=uuid.uuid4(), dt_project_version="v")
+
+        return upload, sent
+
+    def _assess(self, sbom, path, server, upload) -> Any:
+        with (
+            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
+            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
+            patch.object(DependencyTrackPlugin, "_upload_new_sbom_version", side_effect=upload),
+        ):
+            return DependencyTrackPlugin().assess(str(sbom.id), path)
+
+    def test_a_refused_1_7_is_uploaded_again_as_1_6(self, scannable_sbom) -> None:
+        from sbomify.apps.sboms.conversion import _cyclonedx_validator
+
+        sbom, path, server = scannable_sbom
+        path.write_bytes(SBOM_1_7.read_bytes())
+        upload, sent = self._uploads(accepts={"1.6"})
+
+        with pytest.raises(RetryLaterError):
+            self._assess(sbom, path, server, upload)
+
+        assert [doc["specVersion"] for doc in sent] == ["1.7", "1.6"]
+        assert not list(_cyclonedx_validator("1.6").iter_errors(sent[1]))
+        assert "citations" not in sent[1]
+        assert path.read_bytes() == SBOM_1_7.read_bytes()
+
+    def test_1_5_is_offered_when_1_6_is_refused_too(self, scannable_sbom) -> None:
+        sbom, path, server = scannable_sbom
+        path.write_bytes(SBOM_1_7.read_bytes())
+        upload, sent = self._uploads(accepts={"1.5"})
+
+        with pytest.raises(RetryLaterError):
+            self._assess(sbom, path, server, upload)
+
+        assert [doc["specVersion"] for doc in sent] == ["1.7", "1.6", "1.5"]
+
+    def test_an_accepted_upload_is_sent_once_and_unconverted(self, scannable_sbom) -> None:
+        sbom, path, server = scannable_sbom
+        path.write_bytes(SBOM_1_7.read_bytes())
+        upload, sent = self._uploads(accepts={"1.7"})
+
+        with pytest.raises(RetryLaterError):
+            self._assess(sbom, path, server, upload)
+
+        assert sent == [json.loads(SBOM_1_7.read_bytes())]
+
+    def test_a_copy_that_cannot_be_made_is_a_skip_that_says_so(self, scannable_sbom) -> None:
+        sbom, path, server = scannable_sbom
+        path.write_text(json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.7", "components": "not a list"}))
+        upload, sent = self._uploads(accepts={"1.6"})
+
+        result = _as_dict(self._assess(sbom, path, server, upload))
+
+        assert len(sent) == 1
+        assert result["metadata"]["skipped"] is True
+        assert result["metadata"]["unsupported_input"] is True
+        assert "not valid CycloneDX 1.6" in result["metadata"]["conversion_error"]
+        assert result["findings"][0]["id"] == "dependency-track:unsupported-spec-version"
+        assert "could not be converted to 1.6" in result["findings"][0]["description"]
+
+    def test_another_failure_uploading_the_copy_is_an_error(self, scannable_sbom) -> None:
+        sbom, path, server = scannable_sbom
+        path.write_bytes(SBOM_1_7.read_bytes())
+        refusals = iter([REAL_REJECTION, Exception("Dependency Track error (401): Unauthorized")])
+
+        def upload(**_: Any) -> Any:
+            raise next(refusals)
+
+        result = _as_dict(self._assess(sbom, path, server, upload))
+
+        assert result["findings"][0]["id"] == "dependency-track:error"
+
+    @pytest.mark.parametrize(
+        ("imported", "converted"),
+        [("CycloneDX 1.6", True), ("CycloneDX 1.7", False), (None, False)],
+    )
+    def test_the_result_says_when_a_converted_copy_was_scanned(
+        self, scannable_sbom, imported: str | None, converted: bool
+    ) -> None:
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        sbom, path, server = scannable_sbom
+        path.write_bytes(SBOM_1_7.read_bytes())
+        SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sbom, dt_server=server, dt_project_version=str(sbom.id), dt_project_version_uuid=uuid.uuid4()
+        )
+        client = MagicMock()
+        client.get_project_metrics.return_value = {"components": 2}
+        client.get_project_vulnerabilities.return_value = {"content": []}
+        client.get_project.return_value = {"lastBomImportFormat": imported}
+
+        with patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient", return_value=client):
+            metadata = _as_dict(self._assess(sbom, path, server, upload=None))["metadata"]
+
+        if converted:
+            assert metadata["converted_from"] == "CycloneDX-1.7"
+            assert metadata["converted_to"] == "CycloneDX-1.6"
+            assert metadata["note"].startswith("Scanned a copy converted to CycloneDX 1.6.")
+        else:
+            assert {"converted_from", "converted_to", "note"}.isdisjoint(metadata)

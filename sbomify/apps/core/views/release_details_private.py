@@ -30,7 +30,7 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 request, HttpResponse(status=status_code, content=release.get("detail", "Unknown error"))
             )
 
-        current_team = request.session.get("current_team", {})
+        current_team = request.session.get("current_workspace", {})
 
         # Page-header context per the design system contract: the copy chip and
         # breadcrumb trail are lists built here, and an empty editable type

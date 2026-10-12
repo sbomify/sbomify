@@ -1,8 +1,13 @@
 {% extends "core/base.html.j2" %}
 {% load static %}
 {% block main %}
-    <!-- Login layout -->
-    <div class="bg-background min-h-screen flex items-center">
+    {% comment %}
+    id and <main> for the skip link core/base.html.j2 renders above this block.
+    Without a target it focuses nothing, which it has been doing on every page
+    that uses this shell.
+    {% endcomment %}
+    <main id="main-content"
+          class="bg-background min-h-screen flex items-center">
         <div class="container mx-auto px-4">
             <div class="flex justify-center">
                 <div class="w-full max-w-sm">
@@ -16,5 +21,5 @@
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 {% endblock %}

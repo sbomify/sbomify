@@ -1,5 +1,5 @@
 {% comment %}
-A body cell.
+A body cell. compact uses the dense inventory spacing and type.
 
 end right-aligns it, for a trailing status, visibility or actions column, and
 marks it so an equal-width table leaves its alignment alone. date keeps a date
@@ -45,10 +45,10 @@ white-space inherits, so a second line inside the cell, a description or a
 mobile fallback, stays on one line too and ellipses the same way. That is the
 intent: the column is one line per row.
 {% endcomment %}
-<c-vars end date nowrap muted variant_class class />
+<c-vars compact end date nowrap muted variant_class class />
 {# djlint:off #}
 {# The branch opens the cell's content, so the formatter must not indent it in. #}
-<td class="px-5 py-5 text-[0.875rem] {% if muted %}text-text-muted{% else %}text-text{% endif %} border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+<td class="{% if compact %}px-3 py-3 text-[0.8125rem]{% else %}px-5 py-5 text-[0.875rem]{% endif %} {% if muted %}text-text-muted{% else %}text-text{% endif %} border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
     {{ attrs }}>{% if nowrap %}<div class="truncate max-w-[24rem]">{{ slot }}</div>{% else %}{{ slot }}{% endif %}
 </td>

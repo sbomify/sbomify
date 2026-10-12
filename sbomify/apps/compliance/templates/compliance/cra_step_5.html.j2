@@ -36,7 +36,7 @@
                         </div>
                         <div class="flex-1 text-sm text-text-muted space-y-1">
                             <p>
-                                <span class="font-medium text-text" x-text="satisfiedCount"></span> / <span x-text="totalControls"></span> controls satisfied
+                                <span class="font-medium text-text" x-text="$number(satisfiedCount)"></span> / <span x-text="$number(totalControls)"></span> controls satisfied
                             </p>
                             <p x-show="controlsSummary['not-satisfied']">
                                 <span class="text-danger font-medium"
@@ -52,7 +52,7 @@
                     <div class="mb-6">
                         <div class="flex justify-between text-xs text-text-muted mb-1">
                             <span>Progress</span>
-                            <span x-text="satisfiedCount + ' / ' + totalControls"></span>
+                            <span x-text="$number(satisfiedCount) + ' / ' + $number(totalControls)"></span>
                         </div>
                         <div class="w-full h-2.5 bg-surface-hover rounded-full overflow-hidden">
                             <div class="h-full rounded-full transition-all duration-500"
@@ -155,24 +155,24 @@
                     </div>
                     </c-slot>
                     <c-buttons.secondary @click="refreshStale()" ::disabled="isRefreshing" class="w-full">
-                    <span x-show="!isRefreshing"><i class="fas fa-sync mr-2"></i> Refresh Stale Documents</span>
+                    <span x-show="!isRefreshing"><i class="fas fa-sync mr-2" aria-hidden="true"></i> Refresh stale documents</span>
                     <span x-show="isRefreshing" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Refreshing...</span>
                     </c-buttons.secondary>
                     {# Prominent DoC preview — CRA Article 28 declaration must be reviewed before signing #}
                     <c-buttons.secondary @click="previewDocument('declaration_of_conformity', 'Declaration of Conformity')" data-testid="preview-doc-btn" class="w-full">
-                    <i class="fas fa-eye mr-2"></i> Preview Declaration of Conformity
+                    <i class="fas fa-eye mr-2" aria-hidden="true"></i> Preview declaration
                     </c-buttons.secondary>
                     {# On-demand DoC PDF — sidesteps the full bundle export when an auditor or notified body just wants the signed Article 28 declaration as a PDF #}
                     <c-buttons.secondary @click="downloadDocumentPdf('declaration_of_conformity', 'Declaration of Conformity')" ::disabled="downloadingDocPdf" data-testid="download-doc-pdf-btn" class="w-full">
-                    <span x-show="!downloadingDocPdf"><i class="fas fa-file-pdf mr-2"></i> Download Declaration of Conformity (PDF)</span>
+                    <span x-show="!downloadingDocPdf"><i class="fas fa-file-pdf mr-2" aria-hidden="true"></i> Download declaration (PDF)</span>
                     <span x-show="downloadingDocPdf" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Preparing PDF…</span>
                     </c-buttons.secondary>
                     <c-buttons.primary @click="exportBundle()" ::disabled="isExporting || !exportAvailable" class="w-full">
-                    <span x-show="!isExporting"><i class="fas fa-download mr-2"></i> Export Compliance Bundle</span>
+                    <span x-show="!isExporting"><i class="fas fa-download mr-2" aria-hidden="true"></i> Export compliance bundle</span>
                     <span x-show="isExporting" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Exporting...</span>
@@ -212,7 +212,7 @@
                                     Last Export Bundle
                                 </h2>
                                 <p class="text-sm text-text-muted mt-1">
-                                    <span x-text="lastExport.files?.length || 0"></span> files · format_version
+                                    <span x-text="$number(lastExport.files?.length || 0)"></span> files · format_version
                                     <code class="text-xs" x-text="lastExport.format_version || '—'"></code>
                                 </p>
                             </div>
@@ -246,7 +246,7 @@
                                           title="Excludes the integrity primitives themselves (metadata/manifest.json, metadata/manifest.sha256, metadata/INTEGRITY.md). The ZIP contains three more entries than shown here.">(?)</span>
                                 </span>
                                 <span class="font-mono"
-                                      x-text="(lastExport.files?.length || 0) + ' entries'"></span>
+                                      x-text="$number(lastExport.files?.length || 0) + ' entries'"></span>
                             </div>
                             <div class="divide-y divide-border max-h-64 overflow-y-auto">
                                 <template x-for="f in lastExport.files || []" :key="f.path">
@@ -323,9 +323,7 @@
                         </div>
                         <div class="p-6 overflow-y-auto">
                             <template x-if="isLoadingPreview">
-                                <div class="flex justify-center py-8">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                                </div>
+                                <c-feedback.loading message="Loading document preview..." />
                             </template>
                             <template x-if="!isLoadingPreview">
                                 {% comment %}
@@ -343,7 +341,7 @@
             </template>
         </div>
         {# Footer navigation #}
-        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+        <div class="flex flex-wrap justify-between items-center gap-3 mt-8 pt-6 border-t border-border">
             {% if step > 1 %}
                 <c-buttons.secondary href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}">
                 <i class="fas fa-arrow-left mr-2"></i> Back

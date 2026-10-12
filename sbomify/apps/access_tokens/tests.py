@@ -294,7 +294,7 @@ def test_scoped_token_same_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }
@@ -319,7 +319,7 @@ def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_b.key: {"role": "owner", "name": team_b.name, "is_default_team": False, "team_id": team_b.id}
         }
     }
@@ -342,7 +342,7 @@ def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }
@@ -1014,7 +1014,9 @@ def test_last_used_at_stamped_for_oidc_token(sample_user):  # noqa: F811
     from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 
     token_str = create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
-    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="oidc")
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, token_type=TOKEN_TYPE_OIDC, description="oidc"
+    )
 
     get_user_and_token_record(token_str)
 

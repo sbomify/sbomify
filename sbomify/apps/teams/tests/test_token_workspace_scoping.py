@@ -164,7 +164,7 @@ class TestContactProfileScope:
         client = Client()
         base_url = f"{WORKSPACES_URL}{bound.key}/contact-profiles"
 
-        response = _post_json(client, base_url, {"name": "In scope"}, scoped_token)
+        response = _post_json(client, base_url, {"name": "In scope", "company": "Example Corp"}, scoped_token)
         assert response.status_code == 201
         profile_id = response.json()["id"]
 
@@ -177,7 +177,10 @@ class TestContactProfileScope:
     def test_unscoped_token_can_manage_profiles_in_any_workspace(self, owner_of_two_workspaces, unscoped_token):
         _, _, other = owner_of_two_workspaces
         response = _post_json(
-            Client(), f"{WORKSPACES_URL}{other.key}/contact-profiles", {"name": "Unscoped"}, unscoped_token
+            Client(),
+            f"{WORKSPACES_URL}{other.key}/contact-profiles",
+            {"name": "Unscoped", "company": "Example Corp"},
+            unscoped_token,
         )
         assert response.status_code == 201
         assert ContactProfile.objects.filter(team=other, name="Unscoped").exists()
@@ -253,3 +256,17 @@ class TestWorkspaceSettingsScope:
         assert response.status_code == 200
         bound.refresh_from_db()
         assert bound.name == "Renamed WS"
+
+
+@pytest.mark.django_db
+class TestBulkTriageScope:
+    def test_scoped_token_cannot_bulk_triage_another_workspace(self, owner_of_two_workspaces, scoped_token):
+        """``other`` holds no components, so no per-component check runs: the workspace check must refuse it."""
+        _, _, other = owner_of_two_workspaces
+        response = _post_json(
+            Client(),
+            "/api/v1/vulnerability-scanning/triage/bulk",
+            {"vuln_id": "CVE-2026-0001", "state": "in_triage", "team_key": other.key},
+            scoped_token,
+        )
+        assert response.status_code == 403
