@@ -644,6 +644,15 @@ class PluginOrchestrator:
         }
 
         with transaction.atomic():
+            # Settled under the missing-content report lock like every other
+            # terminal transition, with ``completed_at`` stamped only once the
+            # lock is held. Otherwise this could land between a missing-content
+            # check's read of the preceding run and that failure's own
+            # completed_at, ordering the failure after a run it never saw. The
+            # lock is taken before the row update, as on the other paths.
+            self._lock_missing_content_report(run)
+            now = timezone.now()
+            synthesized_result["assessed_at"] = now.isoformat()
             updated = AssessmentRun.objects.filter(
                 id=run_id,
                 status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),

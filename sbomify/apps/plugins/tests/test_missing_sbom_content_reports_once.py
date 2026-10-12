@@ -286,3 +286,51 @@ def test_a_success_settles_under_the_report_lock(sbom, object_missing) -> None:
     assert failures == []
     assert run.status == RunStatus.COMPLETED.value
     assert run.completed_at >= released_at[0]
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("finalize", ["finalize_retry_exhausted", "finalize_stranded"])
+def test_a_finalized_run_settles_under_the_report_lock(sbom, finalize) -> None:
+    """Settling an unfinished run waits for a missing-content check in flight too.
+
+    A retry-exhausted or stranded run settles as a completed failure, which
+    resets the report as any other verdict does. If it could settle inside a
+    check's window, the check's failure would be ordered after it without
+    having seen it.
+    """
+    now = timezone.now()
+    pending = _settled_run(sbom, RunStatus.PENDING.value, created_at=now, completed_at=None)
+    holding = threading.Event()
+    release = threading.Event()
+    released_at: list = []
+    failures: list[BaseException] = []
+
+    def checking_worker() -> None:
+        try:
+            with transaction.atomic():
+                run = _settled_run(sbom, RunStatus.RUNNING.value, created_at=timezone.now(), completed_at=None)
+                PluginOrchestrator._lock_missing_content_report(run)
+                holding.set()
+                release.wait(timeout=10)
+                released_at.append(timezone.now())
+        except BaseException as e:  # surfaced to the test thread below
+            failures.append(e)
+            holding.set()
+        finally:
+            connection.close()
+
+    worker = threading.Thread(target=checking_worker)
+    worker.start()
+    try:
+        assert holding.wait(timeout=10)
+        threading.Timer(0.5, release.set).start()
+        run = getattr(PluginOrchestrator(), finalize)(str(pending.id), "gone")
+    finally:
+        release.set()
+        worker.join(timeout=10)
+
+    assert failures == []
+    assert run is not None
+    assert run.status == RunStatus.COMPLETED.value
+    assert run.completed_at >= released_at[0]
+    assert run.result["assessed_at"] == run.completed_at.isoformat()
