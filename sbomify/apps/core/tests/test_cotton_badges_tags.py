@@ -424,7 +424,7 @@ def test_badge_labels_never_wrap(rendered: str, label: str) -> None:
 
 
 ROLE_NEUTRAL = (
-    "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] "
+    "text-[color:var(--color-text-muted)] bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] "
     "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]"
 )
 
