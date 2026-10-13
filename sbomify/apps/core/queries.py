@@ -9,16 +9,16 @@ from sbomify.apps.core.services.querysets import (
 
 def get_team_asset_counts(team_id: str) -> dict[str, int]:
     return {
-        "products": Product.objects.filter(team_id=team_id).count(),
-        "components": Component.objects.filter(team_id=team_id).count(),
+        "products": Product.objects.filter(team_id=int(team_id)).count(),
+        "components": Component.objects.filter(team_id=int(team_id)).count(),
     }
 
 
 def get_team_asset_count(team_id: str, resource_type: str) -> int:
     if resource_type == "product":
-        return Product.objects.filter(team_id=team_id).count()
+        return Product.objects.filter(team_id=int(team_id)).count()
     if resource_type == "component":
-        return Component.objects.filter(team_id=team_id).count()
+        return Component.objects.filter(team_id=int(team_id)).count()
     raise ValueError(f"Unknown resource_type: {resource_type}")
 
 

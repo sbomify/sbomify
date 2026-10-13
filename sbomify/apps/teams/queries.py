@@ -16,15 +16,15 @@ def count_team_members(team_id: int | str) -> int:
     # Exclude synthetic ``bot`` Members provisioned by OIDC bindings —
     # they're not human seats and must not inflate the billing counter
     # or any UI that surfaces "members" to workspace admins.
-    return Member.objects.filter(team_id=team_id).exclude(role="bot").count()
+    return Member.objects.filter(team_id=int(team_id)).exclude(role="bot").count()
 
 
 def count_team_owners(team_id: int | str) -> int:
-    return Member.objects.filter(team_id=team_id, role="owner").count()
+    return Member.objects.filter(team_id=int(team_id), role="owner").count()
 
 
 def count_team_pending_invites(team_id: int | str) -> int:
-    return Invitation.objects.filter(team_id=team_id, expires_at__gt=timezone.now()).count()
+    return Invitation.objects.filter(team_id=int(team_id), expires_at__gt=timezone.now()).count()
 
 
 def get_team_user_counts(team_id: int | str) -> tuple[int, int, int]:
@@ -34,7 +34,7 @@ def get_team_user_counts(team_id: int | str) -> tuple[int, int, int]:
 
 
 def get_member_role(user_id: int, team_id: str) -> str | None:
-    return Member.objects.filter(user_id=user_id, team_id=team_id).values_list("role", flat=True).first()
+    return Member.objects.filter(user_id=user_id, team_id=int(team_id)).values_list("role", flat=True).first()
 
 
 def get_member_role_by_key(user: Any, workspace_key: str | None) -> str | None:

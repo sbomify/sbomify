@@ -1385,7 +1385,7 @@ def get_compliance_summary(
 
 def get_assessment_list_for_team(team_id: int | str) -> ServiceResult[list[dict[str, Any]]]:
     """Get CRA assessments for a team, formatted for the product list view."""
-    assessments = CRAAssessment.objects.filter(team_id=team_id).select_related("product").order_by("-updated_at")
+    assessments = CRAAssessment.objects.filter(team_id=int(team_id)).select_related("product").order_by("-updated_at")
     return ServiceResult.success(
         [
             {
@@ -1407,7 +1407,7 @@ def get_products_without_cra_assessment(team_id: int | str) -> ServiceResult[lis
     """Products available to start screening, excluding existing assessments."""
     from sbomify.apps.core.models import Product
 
-    products = Product.objects.filter(team_id=team_id, cra_assessment__isnull=True).order_by("name", "id")
+    products = Product.objects.filter(team_id=int(team_id), cra_assessment__isnull=True).order_by("name", "id")
     return ServiceResult.success([{"id": product.id, "name": product.name} for product in products.only("id", "name")])
 
 

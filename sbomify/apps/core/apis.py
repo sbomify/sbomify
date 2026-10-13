@@ -176,7 +176,7 @@ def _is_guest_member(request: HttpRequest, team_id: str | None = None) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    return Member.objects.filter(user=request.user, team_id=resolved_team_id, role="guest").exists()
+    return Member.objects.filter(user=request.user, team_id=int(resolved_team_id), role="guest").exists()
 
 
 def _is_internal_member(request: HttpRequest) -> bool:
@@ -268,7 +268,7 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    member = Member.objects.filter(user=request.user, team_id=team_id).only("role").first()
+    member = Member.objects.filter(user=request.user, team_id=int(team_id)).only("role").first()
     if not member:
         return False
 
@@ -784,7 +784,7 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         if team is not None and not can(request, "product:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
+        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=int(team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         # Apply pagination
@@ -1743,7 +1743,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                 return validation_error_response(ve, "component")
 
             # Assign default contact profile after validation passes
-            default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
+            default_profile = ContactProfile.objects.filter(team_id=int(team_id), is_default=True).first()
             if default_profile:
                 component.contact_profile = default_profile
 
@@ -1823,7 +1823,9 @@ def list_components(
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
+        components_queryset = with_latest_sbom(
+            optimize_component_queryset(Component.objects.filter(team_id=int(team_id)))
+        )
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -2937,7 +2939,7 @@ def list_all_releases(
                 return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
             # Build the base query for releases belonging to the user's team
-            query = Release.objects.filter(product__team_id=team_id).select_related("product")
+            query = Release.objects.filter(product__team_id=int(team_id)).select_related("product")
 
             # Ensure latest releases exist for all team products when listing all releases
             team_products = Product.objects.filter(team__id=team_id)

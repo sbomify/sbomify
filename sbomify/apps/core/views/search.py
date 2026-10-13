@@ -86,7 +86,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         product_search_filter = Q(name__icontains=query) | Q(description__icontains=query)
         name_search_filter = Q(name__icontains=query)
 
-        products = Product.objects.filter(team_id=team_id).filter(product_search_filter).order_by("name")[:limit]
+        products = Product.objects.filter(team_id=int(team_id)).filter(product_search_filter).order_by("name")[:limit]
         products_data = [
             {
                 "id": p.id,
@@ -97,7 +97,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for p in products
         ]
 
-        components = Component.objects.filter(team_id=team_id).filter(name_search_filter).order_by("name")[:limit]
+        components = Component.objects.filter(team_id=int(team_id)).filter(name_search_filter).order_by("name")[:limit]
         components_data = [
             {
                 "id": c.id,

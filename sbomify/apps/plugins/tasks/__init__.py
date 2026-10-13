@@ -1145,7 +1145,7 @@ def enqueue_assessments_for_sbom(
 
     # Get team settings
     try:
-        settings = TeamPluginSettings.objects.get(team_id=team_id)
+        settings = TeamPluginSettings.objects.get(team_id=int(team_id))
         enabled_plugins = settings.enabled_plugins or []
     except TeamPluginSettings.DoesNotExist:
         # No settings configured, no plugins to run
