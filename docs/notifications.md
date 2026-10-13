@@ -128,7 +128,7 @@ def check_subscription_status(request):
                     "severity": "error",
                     "created_at": datetime.utcnow().isoformat(),
                     "action_url": reverse("billing:select_plan",
-                                       kwargs={"team_key": team.key})
+                                       kwargs={"workspace_key": team.key})
                 })
     return notifications
 ```
