@@ -1,0 +1,38 @@
+{% load humanize %}
+{% comment %}
+A version's compliance as one table cell: the first check it fails, named and
+linked, rather than a pill per check. Nine pills say how many checks ran; the
+name of the one that failed says where to go next, and the link opens the
+version's requirements, where the fix is.
+
+summary is a dict with state:
+  fails     first (a check's name) and more (how many others failed)
+  error     first and more, for checks that could not run; never "fails",
+            because a check that did not run made no claim about the artifact
+  checking  a check is still running and none has failed
+  meets     total, every check that ran passed
+  none      no check other than a security scan has run
+
+href is where the name links: the version's artifact page.
+{% endcomment %}
+<c-vars summary href />
+{% if summary.state == "fails" or summary.state == "error" %}
+    <span class="flex flex-col gap-0.5" {{ attrs }}>
+        <span class="text-xs text-text-muted">
+            {% if summary.state == "fails" %}
+                Fails
+            {% else %}
+                Could not check
+            {% endif %}
+        </span>
+        {# djlint:off #}
+        <span class="text-sm whitespace-nowrap"><a href="{{ href }}" class="font-medium text-text hover:underline">{{ summary.first }}</a>{% if summary.more %}<span class="text-text-muted"> and {{ summary.more|intcomma }} more</span>{% endif %}</span>
+        {# djlint:on #}
+    </span>
+{% elif summary.state == "checking" %}
+    <c-feedback.status label="Checking" />
+{% elif summary.state == "meets" %}
+    <c-feedback.status tone="success" label="Meets all {{ summary.total|intcomma }}" />
+{% else %}
+    <span class="text-sm text-text-muted" {{ attrs }}>—</span>
+{% endif %}

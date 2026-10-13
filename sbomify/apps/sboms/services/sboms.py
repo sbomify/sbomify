@@ -111,7 +111,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
         return ServiceResult.failure("SBOM not found", status_code=404)
 
     if not can(request, "sbom:delete", sbom.component):
-        return ServiceResult.failure("Only owners of the component can delete SBOMs", status_code=403)
+        return ServiceResult.failure("Only workspace owners and admins can delete SBOMs", status_code=403)
 
     # Capture info for broadcast before deleting
     workspace_key = sbom.component.team.key

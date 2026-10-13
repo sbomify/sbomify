@@ -94,7 +94,7 @@ class TestRoleVisibility:
                 for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
                 for r in search_destinations(query, role=role, team_key="AAAAAAAA")
             }
-            assert {"API tokens", "Vulnerability scans", "Vulnerability trends", "Cryptography"} <= titles, role
+            assert {"API tokens", "Vulnerabilities", "Vulnerability trends", "Cryptography"} <= titles, role
 
     def test_an_owner_sees_owner_only_destinations(self):
         titles = [r["title"] for r in search_destinations("billing", role="owner", team_key="AAAAAAAA")]

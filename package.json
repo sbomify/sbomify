@@ -19,7 +19,7 @@
     "@alpinejs/focus": "^3.17.4",
     "@alpinejs/morph": "^3.17.4",
     "@fortawesome/fontawesome-free": "^7.3.1",
-    "@sentry/browser": "^11.4.0",
+    "@sentry/browser": "^11.6.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.2",
@@ -34,7 +34,7 @@
     "signature_pad": "^5.1.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
-    "vite": "^8.3.2"
+    "vite": "^8.3.4"
   },
   "overrides": {
     "esbuild": "0.28.1",
