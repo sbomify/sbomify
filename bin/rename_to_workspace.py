@@ -98,8 +98,12 @@ def _names_url_kwarg(node: ast.Constant, parents: dict[ast.AST, ast.AST], relati
         url_name = first.value if isinstance(first, ast.Constant) else ""
         # A v1 API route keeps {team_key} in its path; v2 already says workspace_key.
         return owner.arg == "kwargs" and not str(url_name).startswith("api-1:")
-    if isinstance(parent, ast.Dict) and isinstance(owner, ast.Assign):
-        return any(ast.unparse(target).endswith("kwargs") for target in owner.targets)
+    if isinstance(parent, ast.Dict):
+        # Climb out of a lookup table of kwargs ({...}[arg]) to what it is assigned to.
+        while isinstance(owner, (ast.Dict, ast.Subscript)):
+            owner = parents.get(owner)
+        if isinstance(owner, ast.Assign):
+            return any(ast.unparse(target).endswith("kwargs") for target in owner.targets)
     if isinstance(parent, ast.Dict) and isinstance(owner, ast.Call):
         return _callee(owner) == "ResolverMatch" and owner.args[2:3] == [parent]
     if isinstance(parent, ast.Subscript):
