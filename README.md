@@ -157,17 +157,30 @@ The API documentation is available at:
 
 #### API versions
 
-v2 serves the same operations as v1 in the product's own words. If you call v1
+v2 serves the v1 operations in the product's own words, apart from the
+internal routes the app uses for itself, which stay on v1 only. If you call v1
 from a script, SDK or CI job, nothing breaks: v1 stays byte for byte as it is,
-and its docs are still at `/api/v1/docs`. When you move to v2:
+and its docs are still at `/api/v1/docs`. The main changes when you move to v2
+are below; the v2 OpenAPI document at `/api/v2/openapi.json` is the full list.
 
 - **Paths:** the `/sboms` prefix becomes `/artifacts`, and the `/sbom/` and
-  `/artifact/` segments under it drop away. Check each path in the v2 docs.
-- **Parameters:** `team_key` becomes `workspace_key`.
+  `/artifact/` segments under it drop away. An artifact's releases move from
+  `/sboms/{sbom_id}/releases` to `/artifacts/{artifact_id}/releases`, and the
+  access request routes move from `/teams/{team_key}/access-request` to
+  `/workspaces/{workspace_key}/access-request`, with their `/nda` and
+  `/sign-nda` children.
+- **Path parameters:** `team_key` becomes `workspace_key` and `sbom_id` becomes
+  `artifact_id`. A hand-written URL keeps the same shape; a generated client's
+  argument names change.
+- **Request and response fields:** `team_id`, `team_key`, `team_name` and
+  `is_default_team` become `workspace_id`, `workspace_key`, `workspace_name` and
+  `is_default_workspace`, in both directions. v1 already sends
+  `is_default_workspace` beside `is_default_team`.
 - **Error codes:** `NO_CURRENT_TEAM`, `TEAM_NOT_FOUND` and `TEAM_MISMATCH`
   become `NO_CURRENT_WORKSPACE`, `WORKSPACE_NOT_FOUND` and `WORKSPACE_MISMATCH`.
-- **Schemas:** `TeamSchema` becomes `WorkspaceSchema`. Read
-  `is_default_workspace`; v1 sends it beside `is_default_team`.
+- **Schema names:** every schema with `Team` in its name says `Workspace`
+  instead, for example `TeamSchema` becomes `WorkspaceSchema` and
+  `TeamPatchSchema` becomes `WorkspacePatchSchema`.
 
 Every v1 response carries a `Deprecation` header and a `Link` to the v2 docs.
 No date for retiring v1 has been set yet. When there is one, v1 responses will
