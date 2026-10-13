@@ -49,6 +49,11 @@ RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     # P2b: spotlight destinations name the URL kwargs they fill.
     (re.compile(r'(?<="args": \[)"team_key"'), '"workspace_key"'),
     (re.compile(r"'team_key'(?= is the only one supported)"), "'workspace_key'"),
+    # P3: string references to the model class, which no alias can follow.
+    (re.compile(r"""(["'])teams\.Team\1"""), r"\1teams.Workspace\1"),
+    (re.compile(r"""(get_model\(\s*["']teams["'],\s*["'])Team(?=["'])"""), r"\1Workspace"),
+    (re.compile(r'(?<=model_name == )"Team"'), '"Workspace"'),
+    (re.compile(r"\bsbomify\.apps\.teams\.models\.Team\b"), "sbomify.apps.teams.models.Workspace"),
 ]
 
 # P2b renames the Python name team_key, except where it is part of the wire:
@@ -150,6 +155,71 @@ def rename_python_name(text: str, tree: ast.AST, keep: set[str], relative: str) 
     return b"".join(lines).decode()
 
 
+# P3 renames the model class Team to Workspace. A module that imports Team from
+# the teams models renames every use of the name, string annotations included;
+# an import that aliases it (`import Team as X`) renames only the imported name.
+OLD_CLASS, NEW_CLASS = "Team", "Workspace"
+MODELS_MODULE = "sbomify.apps.teams.models"
+MODELS_FILE = "sbomify/apps/teams/models.py"
+
+
+def _module_of(node: ast.ImportFrom, relative: str) -> str:
+    if not node.level:
+        return node.module or ""
+    package = relative[: -len(".py")].split("/")[:-1]
+    package = package[: len(package) - (node.level - 1)]
+    return ".".join(package + ([node.module] if node.module else []))
+
+
+def _annotation_strings(tree: ast.AST) -> list[ast.Constant]:
+    roots = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            roots.append(node.annotation)
+        elif isinstance(node, ast.AnnAssign):
+            roots.append(node.annotation)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns is not None:
+            roots.append(node.returns)
+    return [
+        n
+        for root in roots
+        for n in ast.walk(root)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.lineno == n.end_lineno
+    ]
+
+
+def rename_python_class(text: str, relative: str) -> str:
+    tree = ast.parse(text)
+    lines = text.encode().splitlines(keepends=True)
+    binds = relative == MODELS_FILE
+    spans = []  # (line, start byte, the old text, replacement)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and _module_of(node, relative) == MODELS_MODULE:
+            for alias in node.names:
+                if alias.name == OLD_CLASS:
+                    binds = binds or alias.asname is None
+                    spans.append((alias.lineno, alias.col_offset, OLD_CLASS, NEW_CLASS))
+    if binds:
+        word = re.compile(rf"\b{OLD_CLASS}\b")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == OLD_CLASS:
+                spans.append((node.lineno, node.col_offset, OLD_CLASS, NEW_CLASS))
+            elif isinstance(node, ast.ClassDef) and node.name == OLD_CLASS:
+                start = lines[node.lineno - 1].index(f"class {OLD_CLASS}".encode()) + len("class ")
+                spans.append((node.lineno, start, OLD_CLASS, NEW_CLASS))
+        for node in _annotation_strings(tree):
+            old = lines[node.lineno - 1][node.col_offset : node.end_col_offset].decode()
+            if word.search(old):
+                spans.append((node.lineno, node.col_offset, old, word.sub(NEW_CLASS, old)))
+
+    for lineno, start, old, new in sorted(spans, reverse=True):
+        line = lines[lineno - 1]
+        if KEEP.encode() in line or line[start : start + len(old.encode())] != old.encode():
+            continue
+        lines[lineno - 1] = line[:start] + new.encode() + line[start + len(old.encode()) :]
+    return b"".join(lines).decode()
+
+
 def rewrite(text: str) -> str:
     lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
@@ -179,6 +249,7 @@ def main() -> None:
     for path, relative in paths:
         text = path.read_text()
         new = rename_python_name(text, trees[path], keep, relative) if path in trees else text
+        new = rename_python_class(new, relative) if path in trees else new
         new = rewrite(new)
         if new != text:
             path.write_text(new)
