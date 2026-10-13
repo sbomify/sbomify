@@ -152,8 +152,26 @@ bun install
 
 The API documentation is available at:
 
-- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
-- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+- Interactive API docs (Swagger UI): `http://localhost:8000/api/v2/docs`
+- OpenAPI specification: `http://localhost:8000/api/v2/openapi.json`
+
+#### API versions
+
+v2 serves the same operations as v1 in the product's own words. If you call v1
+from a script, SDK or CI job, nothing breaks: v1 stays byte for byte as it is,
+and its docs are still at `/api/v1/docs`. When you move to v2:
+
+- **Paths:** the `/sboms` prefix becomes `/artifacts`, and the `/sbom/` and
+  `/artifact/` segments under it drop away. Check each path in the v2 docs.
+- **Parameters:** `team_key` becomes `workspace_key`.
+- **Error codes:** `NO_CURRENT_TEAM`, `TEAM_NOT_FOUND` and `TEAM_MISMATCH`
+  become `NO_CURRENT_WORKSPACE`, `WORKSPACE_NOT_FOUND` and `WORKSPACE_MISMATCH`.
+- **Schemas:** `TeamSchema` becomes `WorkspaceSchema`. Read
+  `is_default_workspace`; v1 sends it beside `is_default_team`.
+
+Every v1 response carries a `Deprecation` header and a `Link` to the v2 docs.
+No date for retiring v1 has been set yet. When there is one, v1 responses will
+carry a `Sunset` header with it.
 
 The API provides endpoints for managing:
 

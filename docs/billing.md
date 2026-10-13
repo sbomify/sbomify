@@ -109,7 +109,7 @@ class MyCreateView(View):
         # Create logic here
 ```
 
-Limits are stored in `Team.billing_plan_limits` JSONField:
+Limits are stored in `Workspace.billing_plan_limits` JSONField:
 
 - `max_products`, `max_components`
 - When billing is disabled (`BILLING=FALSE`), all teams get unlimited access
@@ -163,7 +163,7 @@ The `notifications.py` module provides billing alerts:
 
 ### Trial Status Fields
 
-The `Team.billing_plan_limits` JSON field contains:
+The `Workspace.billing_plan_limits` JSON field contains:
 
 ```json
 {

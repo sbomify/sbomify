@@ -81,15 +81,15 @@ NOTIFICATION_PROVIDERS = [
 
 ### Workspace Billing Check
 
-> Note: Workspaces are implemented through the `teams` app, so session keys and models still use `team` naming internally.
+> Note: Workspaces live in the `teams` app. The model is `Workspace`, and the foreign key fields that point at it are still named `team`.
 
 ```python
 def check_billing_plan(request):
     """Check if a workspace has a billing plan selected"""
     if "current_workspace" in request.session:
-        team_key = request.session["current_workspace"]["key"]
+        workspace_key = request.session["current_workspace"]["key"]
         try:
-            team = Team.objects.get(key=team_key)
+            team = Workspace.objects.get(key=workspace_key)
             if not team.billing_plan:
                 if team.members.filter(
                     member__user=request.user,
@@ -103,10 +103,10 @@ def check_billing_plan(request):
                         "created_at": datetime.utcnow().isoformat(),
                         "action_url": reverse(
                             "billing:select_plan",
-                            kwargs={"team_key": team_key}
+                            kwargs={"workspace_key": workspace_key}
                         )
                     }
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             pass
     return None
 ```
