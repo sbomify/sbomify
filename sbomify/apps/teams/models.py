@@ -159,8 +159,7 @@ class Workspace(models.Model):
         ENTERPRISE = "enterprise", "Enterprise"
 
     class Meta:
-        # Deliberate half-state: the table says workspace, the Python model
-        # keeps its Team name until the code rename lands as its own change.
+        # The app label is still teams, so the table name is pinned.
         db_table = "workspaces_workspaces"
         indexes = [
             models.Index(fields=["key"]),
@@ -280,7 +279,11 @@ class Workspace(models.Model):
         "contact_id (str), policy_url (str), encryption_urls (list[str]), encryption_url (str, legacy), "
         "acknowledgments_url (str), canonical_url (str), hiring_url (str), preferred_languages (str)",
     )
-    members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
+    # Pinned to the names the Team model gave them, so user.team_set and a
+    # filter(team=...) on users read the same after the rename.
+    members: models.ManyToManyField[User, Any] = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="Member", related_name="team_set", related_query_name="team"
+    )
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
@@ -524,6 +527,10 @@ class Workspace(models.Model):
                   False otherwise.
         """
         return self.get_company_nda_document() is not None
+
+
+# The old name answers until every open branch has re-run bin/rename_to_workspace.py.
+Team = Workspace  # rename-to-workspace: keep
 
 
 class Member(models.Model):
