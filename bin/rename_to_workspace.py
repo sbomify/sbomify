@@ -25,6 +25,7 @@ GLOBS = (
     "sbomify/**/*.ts",
     "AGENTS.md",
     "docs/**/*.md",
+    "docs/**/*.csv",
 )
 SKIP = ("/migrations/", "docs/adr/", "/node_modules/", "/staticfiles/")
 
