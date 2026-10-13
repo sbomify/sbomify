@@ -136,7 +136,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
         # Scope to exactly what this page manages: the caller's tokens in THIS workspace
         # plus the unscoped legacy ones. Without the team filter, crafted ids could revoke
         # the caller's tokens in OTHER workspaces -- tokens this page never shows.
-        # Use the team_key path param (already a valid token) rather than the nullable
+        # Use the workspace_key path param (already a valid token) rather than the nullable
         # team.key DB field, which would 500 on token_to_number if null.
         team_id = token_to_number(workspace_key)
         tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
@@ -165,7 +165,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             # Register inside the atomic block so the event is tied to THIS transaction
             # (registered after it exits, on_commit fires immediately in autocommit mode).
             # Unscoped (team is None) deletions are intentionally not captured, matching
-            # the single-delete convention; partial binds team_key per iteration.
+            # the single-delete convention; partial binds workspace_key per iteration.
             for token_team_key in scoped_team_keys:
                 transaction.on_commit(
                     partial(capture_for_request, request, "api_token:deleted", workspace_key=token_team_key)

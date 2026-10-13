@@ -10,12 +10,12 @@ from sbomify.apps.core.errors import error_response
 
 
 def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
-    """Require one of ``allowed_roles`` in the workspace named by the URL ``team_key``,
+    """Require one of ``allowed_roles`` in the workspace named by the URL ``workspace_key``,
     checked against the database.
 
     Unlike :func:`validate_role_in_current_team`, which authorizes the caller's *active*
     (session) workspace, this authorizes the workspace the request actually acts on. Views
-    that take a URL ``team_key`` must use this — trusting the session workspace lets an owner
+    that take a URL ``workspace_key`` must use this — trusting the session workspace lets an owner
     of workspace A act on workspace B. The DB lookup also avoids honouring a stale cached
     role in the session.
     """

@@ -157,7 +157,7 @@ def capture_for_request(
     to the workspace, not the user. Cross-correlation of users → workspaces
     is exactly what we want to avoid in PostHog.
 
-    Three cases for ``team_key``:
+    Three cases for ``workspace_key``:
 
     * ``None`` (kwarg omitted) — caller declared this is a genuinely
       user-scoped event (e.g. ``user:account_deleted``, where there is
@@ -173,7 +173,7 @@ def capture_for_request(
       workspace-level rollups. The call site should fix its key
       derivation rather than relying on a fallback.
     * truthy string — use as ``distinct_id`` and set
-      ``groups={"workspace": team_key}``.
+      ``groups={"workspace": workspace_key}``.
 
     Short-circuits when PostHog is disabled or the request resolves to
     ``anonymous`` so the cookie/session work in ``get_distinct_id`` is

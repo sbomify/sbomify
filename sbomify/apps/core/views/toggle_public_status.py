@@ -98,7 +98,7 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, new_visibility: str) -> None:
-        # Empty team_key here means the session is missing the
+        # Empty workspace_key here means the session is missing the
         # ``current_team`` shape; ``capture_for_request`` will skip the
         # event entirely rather than mis-attribute it to a user PK (see
         # the empty-string branch in posthog_service.capture_for_request).

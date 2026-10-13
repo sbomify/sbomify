@@ -630,7 +630,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
 @validate_role_in_url_team(list(ADMINISTER))
 def team_settings_redirect(request: HttpRequest, workspace_key: str) -> HttpResponse:
     """
-    Redirect /workspace/{team_key}/settings/ to the unified settings interface.
+    Redirect /workspace/{workspace_key}/settings/ to the unified settings interface.
     This provides backward compatibility for the old URL structure.
     """
     return redirect("workspaces:team_settings", workspace_key=workspace_key)

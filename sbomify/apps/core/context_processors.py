@@ -280,7 +280,7 @@ def team_context(request: Any) -> Any:
         try:
             team = Team.objects.get(key=workspace_key)
         except Team.DoesNotExist:
-            # A ``team_key`` kwarg that names no workspace isn't necessarily a
+            # A ``workspace_key`` kwarg that names no workspace isn't necessarily a
             # workspace key at all. Fall back rather than dropping the whole
             # context and stripping the chrome off the page.
             if not url_team_key or not session_team_key:

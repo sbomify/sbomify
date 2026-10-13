@@ -1,6 +1,6 @@
 """URL configuration for the integrations app.
 
-The callback has no ``team_key`` on purpose: providers register one exact
+The callback has no ``workspace_key`` on purpose: providers register one exact
 redirect URI, so the workspace travels in the session instead. See
 ``oauth.py``.
 """

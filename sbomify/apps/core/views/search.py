@@ -109,7 +109,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for c in components
         ]
 
-        # Empty team_key here means the session is missing the
+        # Empty workspace_key here means the session is missing the
         # ``current_team`` shape; ``capture_for_request`` will skip the
         # event entirely rather than mis-attribute it to a user PK (see
         # the empty-string branch in posthog_service.capture_for_request).

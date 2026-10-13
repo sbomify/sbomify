@@ -70,7 +70,7 @@ def redirect_to_team_settings(workspace_key: str, active_tab: str | None = None)
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
     Args:
-        team_key: The workspace key to redirect
+        workspace_key: The workspace key to redirect
         active_tab: Optional tab name to append as URL fragment (validated against ALLOWED_TABS)
 
     Returns:
@@ -79,7 +79,7 @@ def redirect_to_team_settings(workspace_key: str, active_tab: str | None = None)
     from django.shortcuts import redirect
     from django.urls import reverse
 
-    # Validate team_key exists to prevent open redirect vulnerabilities
+    # Validate workspace_key exists to prevent open redirect vulnerabilities
     if not Team.objects.filter(key=workspace_key).exists():
         return redirect("workspaces:teams_dashboard")
 

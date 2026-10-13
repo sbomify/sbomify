@@ -126,9 +126,9 @@ def _build_plugin_stats(request: HttpRequest, workspace_key: str) -> dict[str, A
     """Build plugin summary stats from the API."""
     status_code, plugin_settings = get_team_plugin_settings(request, workspace_key)
     if status_code != 200:
-        # Intentionally do NOT include team_key in the log message: CodeQL
+        # Intentionally do NOT include workspace_key in the log message: CodeQL
         # flags it as "clear-text logging of sensitive information" because
-        # team_key is a URL path parameter (user-controlled input). Structured
+        # workspace_key is a URL path parameter (user-controlled input). Structured
         # log correlation for this warning is available via the request's
         # standard Django request-id middleware, which already scopes every
         # log entry to the team implicitly through the URL.
