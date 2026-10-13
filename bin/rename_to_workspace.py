@@ -29,7 +29,7 @@ GLOBS = (
     "docs/**/*.md",
     "docs/**/*.csv",
 )
-SKIP = ("/migrations/", "docs/adr/", "/node_modules/", "/staticfiles/")
+SKIP = ("/migrations/", "docs/ADR/", "/node_modules/", "/staticfiles/")
 
 
 def _teams_url_names() -> str:
