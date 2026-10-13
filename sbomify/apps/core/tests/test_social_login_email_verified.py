@@ -365,7 +365,7 @@ class TestInvitations:
         session.save()
 
         client.post(
-            reverse("documents:sign_nda", kwargs={"team_key": team.key, "request_id": access_request.id}),
+            reverse("documents:sign_nda", kwargs={"workspace_key": team.key, "request_id": access_request.id}),
             {"signed_name": "Invitee", "consent": "on"},
         )
 
@@ -408,7 +408,7 @@ class TestInvitations:
         setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
         client.post(
-            reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
             {"action": "invite", "email": invitee.email},
         )
 

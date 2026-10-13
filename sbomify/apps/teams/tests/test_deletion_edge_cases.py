@@ -69,7 +69,7 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     response = client.delete(url)
 
     assert response.status_code == 302
-    assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": team.key})
+    assert response.url == reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
 
     # 3. Verify: User removed
     assert not Member.objects.filter(pk=membership.pk).exists()
@@ -301,7 +301,7 @@ def _delete_workspace_from_settings(client, user, workspace, mocker, capture, se
     _setup_session(client, workspace, "owner")
     with capture(execute=True):
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": workspace.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": workspace.key}),
             {"action": "delete"},
         )
     return response, queued

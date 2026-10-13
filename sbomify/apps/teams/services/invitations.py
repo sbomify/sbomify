@@ -97,13 +97,13 @@ def invite_member(request: HttpRequest, team: Team, email: str, role: str) -> Se
     # some B2B (e.g. an internal subsidiary) — acceptable trade-off
     # for the funnel metric.
     email_domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
-    team_key = team.key
+    workspace_key = team.key
     transaction.on_commit(
         lambda: capture_for_request(
             request,
             "team:member_invited",
             {"role": role, "invited_email_domain": email_domain},
-            team_key=team_key,
+            workspace_key=workspace_key,
         )
     )
     return ServiceResult.success(invitation)

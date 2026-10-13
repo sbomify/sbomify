@@ -148,7 +148,7 @@ def capture_for_request(
     event: str,
     properties: dict[str, Any] | None = None,
     *,
-    team_key: str | None = None,
+    workspace_key: str | None = None,
 ) -> None:
     """Capture an event from a view, applying the standard guards.
 
@@ -183,18 +183,18 @@ def capture_for_request(
     if not is_enabled():
         return
 
-    if team_key is None:
+    if workspace_key is None:
         # Genuinely user-scoped event.
         distinct_id = get_distinct_id(request)
         groups: dict[str, str] | None = None
-    elif team_key == "":
+    elif workspace_key == "":
         # Workspace-intent that failed to resolve a key. Better to drop
         # the event than to mis-attribute it to a user PK.
         logger.debug("Skipping workspace-scoped event %s — empty team_key", event)
         return
     else:
-        distinct_id = team_key
-        groups = {"workspace": team_key}
+        distinct_id = workspace_key
+        groups = {"workspace": workspace_key}
 
     if not distinct_id or distinct_id == "anonymous":
         return

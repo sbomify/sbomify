@@ -411,10 +411,10 @@ class TestSecurityTxtView:
 class TestSecurityTxtSettingsPost:
     """Tests for the _update_security_txt POST handler."""
 
-    def _post_settings(self, client, team_key: str, data: dict, follow: bool = False):
+    def _post_settings(self, client, workspace_key: str, data: dict, follow: bool = False):
         from django.urls import reverse
 
-        url = reverse("workspaces:team_settings", kwargs={"team_key": team_key})
+        url = reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
         post_data = {"security_txt_action": "update", "active_tab": "trust-center", "security_txt_enabled": "false"}
         post_data.update(data)
         return client.post(url, post_data, follow=follow)

@@ -177,16 +177,16 @@ def test_sidebar_links_point_at_the_workspace_the_page_is_about(
     session.save()
     mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
 
-    page = client.get(reverse("vulnerability_scanning:vulnerability_scans", kwargs={"team_key": other.key}))
+    page = client.get(reverse("vulnerability_scanning:vulnerability_scans", kwargs={"workspace_key": other.key}))
 
     assert page.status_code == 200
     sidebar = re.search(r'<aside id="sidebar".*?</aside>', page.content.decode(), re.S)
     assert sidebar
     for url in (
-        reverse("vulnerability_scanning:vulnerability_scans", kwargs={"team_key": other.key}),
-        reverse("sboms:workspace_crypto", kwargs={"team_key": other.key}),
-        reverse("workspaces:team_settings_tab", kwargs={"team_key": other.key, "tab": "tokens"}),
-        reverse("workspaces:team_settings", kwargs={"team_key": other.key}),
+        reverse("vulnerability_scanning:vulnerability_scans", kwargs={"workspace_key": other.key}),
+        reverse("sboms:workspace_crypto", kwargs={"workspace_key": other.key}),
+        reverse("workspaces:team_settings_tab", kwargs={"workspace_key": other.key, "tab": "tokens"}),
+        reverse("workspaces:team_settings", kwargs={"workspace_key": other.key}),
     ):
         assert f'href="{url}"' in sidebar[0], url
         # The switcher lists the session's workspace as current; only these links must not.

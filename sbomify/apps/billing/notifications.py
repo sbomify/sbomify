@@ -30,7 +30,7 @@ def check_billing_plan_exists(team: Team) -> NotificationSchema | None:
             message="Please add your billing information to continue using premium features.",
             severity="warning",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
     return None
 
@@ -45,7 +45,7 @@ def check_billing_info_missing(team: Team) -> NotificationSchema | None:
             message="Please add your billing information to continue using premium features",
             severity="warning",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
     return None
 
@@ -70,7 +70,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
                 ),
                 severity="error",
                 created_at=datetime.now(timezone.utc).isoformat(),
-                action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+                action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
             )
         else:
             return NotificationSchema(
@@ -79,7 +79,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
                 message="Your subscription payment is past due. Please update your payment information.",
                 severity="error",
                 created_at=datetime.now(timezone.utc).isoformat(),
-                action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+                action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
             )
     elif subscription_status == "canceled":
         return NotificationSchema(
@@ -88,7 +88,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
             message="Your subscription has been canceled and will end at the end of the billing period.",
             severity="warning",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
     return None
 
@@ -108,15 +108,15 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
 
     # Fetch real-time subscription data from Stripe to verify cancel_at_period_end status
     sub_id = str(stripe_subscription_id) if stripe_subscription_id else ""
-    team_key = team.key or ""
+    workspace_key = team.key or ""
     real_cancel_at_period_end = get_subscription_cancel_at_period_end(
-        sub_id, team_key, fallback_value=bool(cancel_at_period_end)
+        sub_id, workspace_key, fallback_value=bool(cancel_at_period_end)
     )
 
     # If user cancelled the cancellation (reactivated subscription)
     if not real_cancel_at_period_end:
         if stripe_subscription_id:
-            invalidate_subscription_cache(str(stripe_subscription_id), team_key)
+            invalidate_subscription_cache(str(stripe_subscription_id), workspace_key)
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
@@ -155,7 +155,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
             ),
             severity="error",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
 
     return None
@@ -175,7 +175,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
             message="Upgrade to a paid plan to unlock more features and remove limitations.",
             severity="info",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
 
     # If billing_plan is "community", show upgrade notification
@@ -187,7 +187,7 @@ def check_community_upgrade(team: Team) -> NotificationSchema | None:
             message="Upgrade to a paid plan to unlock more features and remove limitations.",
             severity="info",
             created_at=datetime.now(timezone.utc).isoformat(),
-            action_url=reverse("billing:select_plan", kwargs={"team_key": team.key}),
+            action_url=reverse("billing:select_plan", kwargs={"workspace_key": team.key}),
         )
 
     return None
@@ -201,10 +201,10 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         logger.debug("No current_team in session, skipping notifications")
         return notifications
 
-    team_key = request.session["current_workspace"]["key"]
+    workspace_key = request.session["current_workspace"]["key"]
     logger.debug("get_notifications called for team")
     try:
-        team = Team.objects.get(key=team_key)
+        team = Team.objects.get(key=workspace_key)
         logger.debug("Checking notifications for team")
 
         # Check if user is a member of this team

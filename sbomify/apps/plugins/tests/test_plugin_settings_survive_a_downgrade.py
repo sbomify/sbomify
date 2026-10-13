@@ -54,8 +54,8 @@ def registered_plugins() -> None:
         )
 
 
-def _api_url(team_key: str) -> str:
-    return f"/api/v1/plugins/workspaces/{team_key}/settings"
+def _api_url(workspace_key: str) -> str:
+    return f"/api/v1/plugins/workspaces/{workspace_key}/settings"
 
 
 def _stored(team: Team) -> list[str]:
@@ -161,7 +161,7 @@ class TestTheSettingsPage:
     ):
         _enable(team_with_community_plan, DT, OSV)
         client = _client(team_with_community_plan, sample_user)
-        url = reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_community_plan.key})
+        url = reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team_with_community_plan.key})
 
         # Exactly what the browser posts: the disabled Dependency Track checkbox
         # contributes nothing, the enabled OSV one contributes its value.
@@ -175,7 +175,7 @@ class TestTheSettingsPage:
     ):
         _enable(team_with_community_plan, DT)
         client = _client(team_with_community_plan, sample_user)
-        url = reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_community_plan.key})
+        url = reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team_with_community_plan.key})
 
         body = client.get(url, HTTP_HX_REQUEST="true").content.decode()
 
@@ -186,7 +186,7 @@ class TestTheSettingsPage:
     ):
         _enable(team_with_community_plan, OSV)
         client = _client(team_with_community_plan, sample_user)
-        url = reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_community_plan.key})
+        url = reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team_with_community_plan.key})
 
         body = client.get(url, HTTP_HX_REQUEST="true").content.decode()
 

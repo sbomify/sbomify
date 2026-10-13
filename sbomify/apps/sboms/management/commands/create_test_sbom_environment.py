@@ -39,13 +39,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        team_key = options.get("team_key")
+        workspace_key = options.get("team_key")
         clean = options.get("clean")
 
         # Get or create team
         team: Team
-        if team_key:
-            team = Team.objects.get(key=team_key)
+        if workspace_key:
+            team = Team.objects.get(key=workspace_key)
         else:
             first_team = Team.objects.first()
             if not first_team:

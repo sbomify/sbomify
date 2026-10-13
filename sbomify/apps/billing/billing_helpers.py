@@ -234,17 +234,17 @@ def get_community_plan_limits() -> dict[str, int | None]:
 CHECKOUT_LOCK_TTL = 300  # 5 minutes
 
 
-def acquire_checkout_lock(team_key: str) -> bool:
+def acquire_checkout_lock(workspace_key: str) -> bool:
     """Acquire a cache-based lock to prevent concurrent checkout sessions for a team.
 
     Returns True if lock acquired, False if another checkout is already in progress.
     """
-    return cache.add(f"checkout_lock:{team_key}", 1, CHECKOUT_LOCK_TTL)
+    return cache.add(f"checkout_lock:{workspace_key}", 1, CHECKOUT_LOCK_TTL)
 
 
-def release_checkout_lock(team_key: str) -> None:
+def release_checkout_lock(workspace_key: str) -> None:
     """Release the checkout session lock for a team."""
-    cache.delete(f"checkout_lock:{team_key}")
+    cache.delete(f"checkout_lock:{workspace_key}")
 
 
 # ---------------------------------------------------------------------------

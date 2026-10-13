@@ -101,9 +101,9 @@ def _get_team_key(instance: Any) -> str | None:
 
 def _invalidate_handler(sender: Any, instance: Any, **kwargs: Any) -> None:
     """Generic handler: resolve team key and invalidate TEA cache."""
-    team_key = _get_team_key(instance)
-    if team_key:
-        invalidate_tea_cache(team_key)
+    workspace_key = _get_team_key(instance)
+    if workspace_key:
+        invalidate_tea_cache(workspace_key)
 
 
 # Register signals for all models using loop pattern.

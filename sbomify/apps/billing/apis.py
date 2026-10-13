@@ -210,8 +210,8 @@ def _handle_business_upgrade(
     """Handle upgrade to business plan."""
     user = cast(User, request.user)
 
-    team_key = team.key
-    if not team_key:
+    workspace_key = team.key
+    if not workspace_key:
         return 400, {"detail": "Workspace is not properly configured. Please contact support."}
 
     # A second checkout would start a second subscription next to the live one.
@@ -225,14 +225,14 @@ def _handle_business_upgrade(
     # The customer the workspace already has, so its subscriptions stay together.
     customer_id = billing_limits.get("stripe_customer_id")
     if not customer_id:
-        customer_id = f"c_{team_key}"
+        customer_id = f"c_{workspace_key}"
         try:
             customer = stripe_client.get_customer(customer_id)
         except StripeError:
             customer = stripe_client.create_customer(
                 email=user.email,
                 name=team.name,
-                metadata={"team_key": team_key},
+                metadata={"team_key": workspace_key},
                 id=customer_id,
             )
         customer_id = customer.id
@@ -241,7 +241,7 @@ def _handle_business_upgrade(
     if not price_id:
         return 400, {"detail": "Selected billing option is not available. Please try a different plan or period."}
 
-    if not acquire_checkout_lock(team_key):
+    if not acquire_checkout_lock(workspace_key):
         return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}
 
     try:
@@ -254,10 +254,10 @@ def _handle_business_upgrade(
             price_id=price_id,
             success_url=success_url,
             cancel_url=request.build_absolute_uri("/"),
-            metadata={"team_key": team_key, "plan_key": plan.key},
+            metadata={"team_key": workspace_key, "plan_key": plan.key},
         )
 
         return 200, ChangePlanResponse(redirect_url=session.url)
     except Exception:
-        release_checkout_lock(team_key)
+        release_checkout_lock(workspace_key)
         raise

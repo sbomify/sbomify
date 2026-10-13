@@ -32,7 +32,7 @@ def test_invite_member_captures_team_member_invited(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("workspaces:invite_user", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:invite_user", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"email": "new-colleague@example.com", "role": "admin"},
     )
 
@@ -163,7 +163,7 @@ def test_settings_view_member_remove_also_fires_event(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"_method": "DELETE", "member_id": membership.id, "active_tab": "members"},
     )
 
@@ -297,7 +297,7 @@ def test_create_access_token_captures_api_token_created(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("workspaces:team_tokens", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_tokens", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"description": "test-token"},
     )
 

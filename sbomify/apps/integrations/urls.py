@@ -12,7 +12,7 @@ from .views import IntegrationCallbackView, IntegrationConnectView, Integrations
 app_name = "integrations"
 
 urlpatterns = [
-    path("<team_key>/", IntegrationsView.as_view(), name="panel"),
-    path("<team_key>/connect/<provider>", IntegrationConnectView.as_view(), name="connect"),
+    path("<workspace_key>/", IntegrationsView.as_view(), name="panel"),
+    path("<workspace_key>/connect/<provider>", IntegrationConnectView.as_view(), name="connect"),
     path("oauth/<provider>/callback", IntegrationCallbackView.as_view(), name="callback"),
 ]

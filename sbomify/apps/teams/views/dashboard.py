@@ -66,7 +66,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             f"Workspace {form.instance.name} created successfully",
         )
 
-        return redirect("workspaces:switch_team", team_key=form.instance.key)
+        return redirect("workspaces:switch_team", workspace_key=form.instance.key)
 
     def _patch(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)

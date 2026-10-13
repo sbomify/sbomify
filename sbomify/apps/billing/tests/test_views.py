@@ -42,7 +42,7 @@ def factory():
 @pytest.mark.django_db
 def test_select_plan_requires_login(client: Client, team_with_business_plan: Team):  # noqa: F811
     """Test that plan selection page requires authentication."""
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
@@ -51,7 +51,7 @@ def test_select_plan_requires_login(client: Client, team_with_business_plan: Tea
 def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBaseUser, team_with_business_plan: Team):  # noqa: F811
     """Test that only team owners can access plan selection."""
     client.force_login(guest_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
     messages = list(get_messages(response.wsgi_request))
@@ -68,7 +68,7 @@ def test_select_plan_page(
 ):
     """Test plan selection page display."""
     client.force_login(sample_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
 
     assert response.status_code == 200
 
@@ -87,7 +87,7 @@ def test_select_community_plan_immediate(
 
     client.force_login(sample_user)
     response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}), {"plan": community_plan.key}
     )
 
     assert response.status_code == 302
@@ -123,7 +123,7 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
         mock_create_portal.return_value = mock_session
 
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
@@ -168,7 +168,7 @@ def test_select_business_plan_new_checkout(
 
         # Request to select_plan endpoint
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": business_plan.key, "billing_period": "monthly"},
         )
 
@@ -203,7 +203,7 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
 
         # Switch to annual
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": business_plan.key, "billing_period": "annual"},
         )
 
@@ -264,11 +264,11 @@ def test_portal_sends_an_ended_subscription_to_plan_selection(
     ):
         mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_ended"
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
         )
 
     assert response.status_code == 302
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Your subscription has ended. Please select a new plan to continue."
     ]
@@ -295,7 +295,7 @@ def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
     ):
         mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_unpaid"
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
         )
 
     assert response.status_code == 302
@@ -321,7 +321,7 @@ def test_select_community_after_the_subscription_ended_switches_the_plan(
         return_value=_subscription_with_status(ended_status),
     ):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
@@ -348,7 +348,7 @@ def test_select_community_with_a_past_due_invoice_keeps_the_plan(
         return_value=_subscription_with_status("past_due"),
     ):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 

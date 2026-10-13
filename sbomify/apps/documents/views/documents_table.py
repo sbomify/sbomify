@@ -34,16 +34,16 @@ class DocumentsTableView(HtmxFragmentMixin, View):
         # Block guest members from private views
         if request.user.is_authenticated:
             current_team = request.session.get("current_workspace", {})
-            team_key = current_team.get("key")
-            if team_key:
+            workspace_key = current_team.get("key")
+            if workspace_key:
                 from sbomify.apps.teams.models import Member, Team
 
                 try:
-                    team = Team.objects.get(key=team_key)
+                    team = Team.objects.get(key=workspace_key)
                     Member.objects.get(user=request.user, team=team, role="guest")
                     from django.shortcuts import redirect
 
-                    return redirect("core:workspace_public", workspace_key=team_key)
+                    return redirect("core:workspace_public", workspace_key=workspace_key)
                 except (Member.DoesNotExist, Team.DoesNotExist):
                     pass
 
@@ -63,12 +63,12 @@ class DocumentsTableView(HtmxFragmentMixin, View):
 
         # Block guest members from modifying documents (even on public views)
         current_team = request.session.get("current_workspace", {})
-        team_key = current_team.get("key")
-        if team_key:
+        workspace_key = current_team.get("key")
+        if workspace_key:
             from sbomify.apps.teams.models import Member, Team
 
             try:
-                team = Team.objects.get(key=team_key)
+                team = Team.objects.get(key=workspace_key)
                 Member.objects.get(user=request.user, team=team, role="guest")
                 return htmx_error_response("Guest members cannot modify documents")
             except (Member.DoesNotExist, Team.DoesNotExist):

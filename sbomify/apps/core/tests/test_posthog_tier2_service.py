@@ -90,7 +90,7 @@ def test_capture_for_request_skips_empty_team_key(
     mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
 
     fake_request = mocker.MagicMock()
-    capture_for_request(fake_request, "search:performed", team_key="")
+    capture_for_request(fake_request, "search:performed", workspace_key="")
 
     assert mock_capture.call_count == 0, "Empty team_key must NOT fall back to user PK"
     # We also shouldn't be reaching for the user PK at all in this branch
@@ -110,7 +110,7 @@ def test_capture_for_request_truthy_team_key_uses_workspace_distinct_id(
     mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
 
     fake_request = mocker.MagicMock()
-    capture_for_request(fake_request, "search:performed", {"query_length": 4}, team_key="ws_abc123")
+    capture_for_request(fake_request, "search:performed", {"query_length": 4}, workspace_key="ws_abc123")
 
     assert mock_capture.call_count == 1
     args, kwargs = mock_capture.call_args

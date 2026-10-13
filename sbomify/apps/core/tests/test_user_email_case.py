@@ -143,7 +143,7 @@ def test_trust_center_invite_answers_when_two_accounts_hold_the_address(
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
     response = client.post(
-        reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
         {"action": "invite", "email": "holder@example.com"},
     )
 

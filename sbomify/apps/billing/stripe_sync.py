@@ -167,21 +167,21 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             except (ValueError, AttributeError):
                 pass  # If we can't parse, just use normal flow
 
-        team_key: str = team.key or ""
+        workspace_key: str = team.key or ""
 
         # Fetch subscription from Stripe (uses cache unless force_refresh)
         if should_force_refresh:
-            invalidate_subscription_cache(stripe_sub_id, team_key)
+            invalidate_subscription_cache(stripe_sub_id, workspace_key)
             subscription = stripe_client.get_subscription(stripe_sub_id)
             if subscription:
-                set_cached_subscription(stripe_sub_id, team_key, subscription)
+                set_cached_subscription(stripe_sub_id, workspace_key, subscription)
             logger.debug("Force refreshed subscription")
         else:
-            subscription = get_cached_subscription(stripe_sub_id, team_key)
+            subscription = get_cached_subscription(stripe_sub_id, workspace_key)
             if not subscription:
                 subscription = stripe_client.get_subscription(stripe_sub_id)
                 if subscription:
-                    set_cached_subscription(stripe_sub_id, team_key, subscription)
+                    set_cached_subscription(stripe_sub_id, workspace_key, subscription)
 
         if not subscription:
             logger.warning("Could not fetch subscription")
@@ -251,7 +251,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     updated_fields.append("scheduled_downgrade_plan (set)")
                     logger.info("Detected cancellation, set scheduled_downgrade_plan to community")
                 # Invalidate cache to ensure fresh data on next fetch
-                invalidate_subscription_cache(stripe_sub_id, team_key)
+                invalidate_subscription_cache(stripe_sub_id, workspace_key)
 
             # Handle reactivation (cancellation reversal)
             elif current_cancel_at_period_end and not real_cancel_at_period_end:

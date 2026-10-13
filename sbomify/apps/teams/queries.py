@@ -37,7 +37,7 @@ def get_member_role(user_id: int, team_id: str) -> str | None:
     return Member.objects.filter(user_id=user_id, team_id=team_id).values_list("role", flat=True).first()
 
 
-def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
+def get_member_role_by_key(user: Any, workspace_key: str | None) -> str | None:
     """The user's live role in a workspace, by workspace key.
 
     Use this for anything that decides what to render. ``session["current_workspace"]["role"]``
@@ -46,9 +46,9 @@ def get_member_role_by_key(user: Any, team_key: str | None) -> str | None:
     refreshes — while the handler behind the control enforces the real answer and
     returns 403. The role here comes from the ``Member`` row.
     """
-    if not team_key or not getattr(user, "is_authenticated", False):
+    if not workspace_key or not getattr(user, "is_authenticated", False):
         return None
-    return Member.objects.filter(user=user, team__key=team_key).values_list("role", flat=True).first()
+    return Member.objects.filter(user=user, team__key=workspace_key).values_list("role", flat=True).first()
 
 
 def invitation_email(user: User) -> str:

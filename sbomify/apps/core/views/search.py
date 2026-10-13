@@ -74,7 +74,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # cannot open. ``or ""`` because a membership may carry no role and
             # search_destinations is typed str.
             role=get_member_role_by_key(request.user, current_team.get("key")) or "",
-            team_key=current_team.get("key", ""),
+            workspace_key=current_team.get("key", ""),
         )
 
         team_id = get_team_id_from_session(request)
@@ -115,7 +115,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # the empty-string branch in posthog_service.capture_for_request).
         # This is preferred over silently turning a workspace-scoped
         # event into a user-scoped one.
-        team_key = current_team.get("key", "")
+        workspace_key = current_team.get("key", "")
         result_count = len(products_data) + len(components_data)
         # NEVER include the raw ``query`` string in the event payload — it can
         # contain customer identifiers, internal component names, or secrets
@@ -130,7 +130,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "result_count": result_count,
                 "destination_count": len(destinations),
             },
-            team_key=team_key,
+            workspace_key=workspace_key,
         )
 
         return JsonResponse(

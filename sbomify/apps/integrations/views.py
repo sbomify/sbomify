@@ -36,8 +36,8 @@ logger = getLogger(__name__)
 SETTINGS_TAB = "integrations"
 
 
-def _team_or_none(team_key: str) -> Team | None:
-    return Team.objects.filter(key=team_key).first()
+def _team_or_none(workspace_key: str) -> Team | None:
+    return Team.objects.filter(key=workspace_key).first()
 
 
 class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -45,8 +45,8 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = _team_or_none(team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = _team_or_none(workspace_key)
         if team is None:
             return htmx_error_response("Workspace not found")
 
@@ -59,8 +59,8 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = _team_or_none(team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = _team_or_none(workspace_key)
         if team is None:
             return htmx_error_response("Workspace not found")
 
@@ -134,17 +134,17 @@ class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str, provider: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str, provider: str) -> HttpResponse:
         spec = get_provider(provider)
         if spec is None:
             messages.error(request, "Unknown integration")
-            return redirect_to_team_settings(team_key, SETTINGS_TAB)
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
         if not spec.is_configured:
             messages.error(request, f"{spec.name} is not available on this deployment.")
-            return redirect_to_team_settings(team_key, SETTINGS_TAB)
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
-        return HttpResponseRedirect(oauth.start_authorization(request, spec, team_key))
+        return HttpResponseRedirect(oauth.start_authorization(request, spec, workspace_key))
 
 
 class IntegrationCallbackView(LoginRequiredMixin, View):
@@ -162,8 +162,8 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
             return redirect("core:dashboard")
 
         state = request.GET.get("state", "")
-        team_key = oauth.consume_state(request, spec, state)
-        if team_key is None:
+        workspace_key = oauth.consume_state(request, spec, state)
+        if workspace_key is None:
             messages.error(request, "That connection link has expired. Start again from Settings.")
             return redirect("core:dashboard")
 
@@ -172,14 +172,14 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
         # callback cannot put arbitrary text in front of a user.
         if request.GET.get("error"):
             messages.error(request, f"{spec.name} did not grant access.")
-            return redirect_to_team_settings(team_key, SETTINGS_TAB)
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
         code = request.GET.get("code", "")
         if not code:
             messages.error(request, f"{spec.name} did not return an authorization code.")
-            return redirect_to_team_settings(team_key, SETTINGS_TAB)
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
-        team = _team_or_none(team_key)
+        team = _team_or_none(workspace_key)
         user = cast(User, request.user)
         # Re-checked here rather than trusted from the session: the flow can
         # take as long as the provider's sign-in does, and the role that
@@ -196,7 +196,7 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
         except ExternalServiceError as exc:
             logger.warning("Token exchange failed for %s: %s", spec.key, exc.detail)
             messages.error(request, exc.detail)
-            return redirect_to_team_settings(team_key, SETTINGS_TAB)
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
         integration = connections.save_connection(team, spec, token_set, user)
         sync_integration.send(integration.id)
@@ -205,4 +205,4 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
             request,
             f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
         )
-        return redirect_to_team_settings(team_key, SETTINGS_TAB)
+        return redirect_to_team_settings(workspace_key, SETTINGS_TAB)

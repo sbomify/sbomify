@@ -236,11 +236,11 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_workspace", {}).get("key")
-    if team_key is None:
+    workspace_key = request.session.get("current_workspace", {}).get("key")
+    if workspace_key is None:
         return None
 
-    return token_to_number(team_key)
+    return token_to_number(workspace_key)
 
 
 @lru_cache(maxsize=1)

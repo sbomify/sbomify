@@ -223,12 +223,12 @@ def check_billing_limits(resource_type: str) -> Any:
             if not is_billing_enabled():
                 return view_func(request, *args, **kwargs)
 
-            team_key = request.session.get("current_workspace", {}).get("key")
-            if not team_key:
+            workspace_key = request.session.get("current_workspace", {}).get("key")
+            if not workspace_key:
                 return HttpResponseForbidden("No team selected")
 
             try:
-                team = Team.objects.get(key=team_key)
+                team = Team.objects.get(key=workspace_key)
             except Team.DoesNotExist:
                 return HttpResponseForbidden("Workspace not found")
 
@@ -402,8 +402,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # Distinct_id = team_key matches the Tier 1 signal pattern at
                 # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
                 # consistent workspace-level attribution across tiers.
-                team_key = team.key or ""
-                distinct_id = team_key or "system"
+                workspace_key = team.key or ""
+                distinct_id = workspace_key or "system"
 
                 # Stamp the completion marker FIRST, defer the PostHog capture
                 # via ``transaction.on_commit`` so the marker is durable before
@@ -423,8 +423,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                         lambda: capture(
                             distinct_id,
                             "billing:trial_expired",
-                            {"team_key": team_key},
-                            groups={"workspace": team_key} if team_key else None,
+                            {"team_key": workspace_key},
+                            groups={"workspace": workspace_key} if workspace_key else None,
                         )
                     )
 
@@ -1161,20 +1161,20 @@ def handle_checkout_completed(session: Any) -> None:
         logger.error("Payment status was not valid: %s", session.payment_status)
         return
 
-    team_key = session.metadata.get("team_key")
-    if not team_key:
+    workspace_key = session.metadata.get("team_key")
+    if not workspace_key:
         logger.error("No team key found in session metadata")
         return
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Team.objects.get(key=workspace_key)
 
         # Idempotency: a redelivery of the same checkout session must short-circuit
         # BEFORE the outbound Stripe calls (get_subscription / cancel_subscription),
         # otherwise each retry re-issues them. Keyed on the session id since the view
         # dispatches this handler without an event object.
         if (team.billing_plan_limits or {}).get("last_processed_checkout_session") == session.id:
-            logger.info("Checkout session %s already processed for team %s, skipping", session.id, team_key)
+            logger.info("Checkout session %s already processed for team %s, skipping", session.id, workspace_key)
             return
 
         plan_key = session.metadata.get("plan_key", "business")
@@ -1260,14 +1260,14 @@ def handle_checkout_completed(session: Any) -> None:
             # subsequent customer.subscription.updated event and the trial-sync cron.
             handle_trial_period(subscription, team)
 
-        logger.info("Successfully processed checkout session for team %s", team_key)
+        logger.info("Successfully processed checkout session for team %s", workspace_key)
 
         from sbomify.apps.core.posthog_service import capture, group_identify
 
         amount = session.amount_total / 100.0 if session.amount_total else 0.0
-        if team_key:
+        if workspace_key:
             capture(
-                team_key,
+                workspace_key,
                 "billing:checkout_completed",
                 {
                     "plan": plan.key,
@@ -1275,10 +1275,10 @@ def handle_checkout_completed(session: Any) -> None:
                     "currency": session.currency or "usd",
                     "subscription_status": subscription.status,
                 },
-                groups={"workspace": team_key},
+                groups={"workspace": workspace_key},
             )
             group_identify(
-                "workspace", team_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
+                "workspace", workspace_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
             )
 
     except Exception as e:

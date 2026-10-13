@@ -65,7 +65,7 @@ def find_invitation_by_token(token: Any, **filters: Any) -> Invitation | None:
     return Invitation.objects.filter(token=token, **filters).first()
 
 
-def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
+def redirect_to_team_settings(workspace_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
     """
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
@@ -80,7 +80,7 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from django.urls import reverse
 
     # Validate team_key exists to prevent open redirect vulnerabilities
-    if not Team.objects.filter(key=team_key).exists():
+    if not Team.objects.filter(key=workspace_key).exists():
         return redirect("workspaces:teams_dashboard")
 
     # Each section is its own page, so a known tab is a URL rather than a
@@ -89,9 +89,9 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
     if active_tab and active_tab in TABS_BY_KEY:
-        return redirect("workspaces:team_settings_tab", team_key=team_key, tab=active_tab)
+        return redirect("workspaces:team_settings_tab", workspace_key=workspace_key, tab=active_tab)
 
-    base_url = reverse("workspaces:team_settings", kwargs={"team_key": team_key})
+    base_url = reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
     # The names still in ALLOWED_TABS with no page of their own keep the old
     # fragment, so links to them are not broken by the move.
     #
@@ -231,10 +231,10 @@ def get_user_teams(user: User) -> dict[str, Any]:
     )
 
     for membership in memberships:
-        team_key = membership.team.key
-        if team_key is None:
+        workspace_key = membership.team.key
+        if workspace_key is None:
             continue
-        teams[team_key] = {
+        teams[workspace_key] = {
             "id": membership.team.id,
             "name": membership.team.name,
             "role": membership.role,
@@ -817,7 +817,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
             request,
             "team:member_removed",
             {"role": removed_role, "self_removal": is_self_removal},
-            team_key=removed_team_key,
+            workspace_key=removed_team_key,
         )
     )
 

@@ -22,14 +22,14 @@ logger = getLogger(__name__)
 def _get_billing_portal_url(team: Team) -> str:
     """Get the Stripe billing portal URL for a team (for managing payment methods)."""
     base_url = get_base_url()
-    path = reverse("billing:create_portal_session", kwargs={"team_key": team.key})
+    path = reverse("billing:create_portal_session", kwargs={"workspace_key": team.key})
     return f"{base_url}{path}"
 
 
 def _get_select_plan_url(team: Team) -> str:
     """Get the plan selection URL for a team (for upgrading)."""
     base_url = get_base_url()
-    path = reverse("billing:select_plan", kwargs={"team_key": team.key})
+    path = reverse("billing:select_plan", kwargs={"workspace_key": team.key})
     return f"{base_url}{path}"
 
 

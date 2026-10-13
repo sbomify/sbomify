@@ -21,7 +21,7 @@ stripe_client = get_stripe_client()
 CACHE_TTL = 300
 
 
-def get_cached_subscription(subscription_id: str, team_key: str) -> Any:
+def get_cached_subscription(subscription_id: str, workspace_key: str) -> Any:
     """
     Get subscription from cache or fetch from Stripe.
 
@@ -32,7 +32,7 @@ def get_cached_subscription(subscription_id: str, team_key: str) -> Any:
     Returns:
         Stripe subscription object or None if not found/error
     """
-    cache_key = f"stripe_sub_{subscription_id}_{team_key}"
+    cache_key = f"stripe_sub_{subscription_id}_{workspace_key}"
 
     # Try to get from cache first
     cached_subscription = cache.get(cache_key)
@@ -56,14 +56,14 @@ def get_cached_subscription(subscription_id: str, team_key: str) -> Any:
         return None
 
 
-def set_cached_subscription(subscription_id: str, team_key: str, subscription: Any) -> None:
+def set_cached_subscription(subscription_id: str, workspace_key: str, subscription: Any) -> None:
     """Cache a subscription object."""
-    cache_key = f"stripe_sub_{subscription_id}_{team_key}"
+    cache_key = f"stripe_sub_{subscription_id}_{workspace_key}"
     cache.set(cache_key, subscription, CACHE_TTL)
     logger.debug("Cached subscription data")
 
 
-def invalidate_subscription_cache(subscription_id: str, team_key: str | None = None) -> None:
+def invalidate_subscription_cache(subscription_id: str, workspace_key: str | None = None) -> None:
     """
     Invalidate cache for a subscription.
 
@@ -71,8 +71,8 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str | None = N
         subscription_id: Stripe subscription ID
         team_key: Optional team key. If None, invalidates for all teams (use with caution)
     """
-    if team_key:
-        cache_key = f"stripe_sub_{subscription_id}_{team_key}"
+    if workspace_key:
+        cache_key = f"stripe_sub_{subscription_id}_{workspace_key}"
         cache.delete(cache_key)
         logger.debug("Invalidated cache for subscription")
     else:
@@ -81,7 +81,9 @@ def invalidate_subscription_cache(subscription_id: str, team_key: str | None = N
         logger.warning("Cannot invalidate cache for subscription without team_key")
 
 
-def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, fallback_value: bool = False) -> bool:
+def get_subscription_cancel_at_period_end(
+    subscription_id: str, workspace_key: str, fallback_value: bool = False
+) -> bool:
     """
     Report whether the subscription has a pending cancel (with caching and error handling).
 
@@ -99,7 +101,7 @@ def get_subscription_cancel_at_period_end(subscription_id: str, team_key: str, f
     if not subscription_id:
         return fallback_value
 
-    subscription = get_cached_subscription(subscription_id, team_key)
+    subscription = get_cached_subscription(subscription_id, workspace_key)
     if subscription:
         # A canceled or incomplete_expired subscription keeps no pending cancel to reverse, so what the
         # workspace stored stands until the deleted event settles it.

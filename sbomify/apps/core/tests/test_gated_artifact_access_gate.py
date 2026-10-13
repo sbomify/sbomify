@@ -109,7 +109,7 @@ def _visit_sbom(sbom: SBOM, user: User | None = None, item_type: str = "sboms"):
 
 
 def _request_access_url(team: Team) -> str:
-    return reverse("documents:request_access", kwargs={"team_key": team.key})
+    return reverse("documents:request_access", kwargs={"workspace_key": team.key})
 
 
 def test_anonymous_reader_is_asked_to_request_access(team):

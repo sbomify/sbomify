@@ -164,7 +164,7 @@ def test_nda_workspace_opens_the_access_request_on_confirm(
 
     access_request = AccessRequest.objects.get(team=invitation.team, user=invitee)
     assert response.url == reverse(
-        "documents:sign_nda", kwargs={"team_key": invitation.team.key, "request_id": access_request.id}
+        "documents:sign_nda", kwargs={"workspace_key": invitation.team.key, "request_id": access_request.id}
     )
 
 

@@ -42,7 +42,7 @@ def test_reject_access_request_captures_document_access_denied(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"action": "reject", "request_id": str(access_request.id)},
     )
 

@@ -68,7 +68,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         """Execute the command."""
         dry_run = options["dry_run"]
-        team_key = options["team_key"]
+        workspace_key = options["team_key"]
         stale_trials_only = options["stale_trials_only"]
         verbose = options["verbose"]
 
@@ -80,10 +80,10 @@ class Command(BaseCommand):
 
         # Build queryset
         teams_list: Sequence[Team]
-        if team_key:
-            teams_qs = Team.objects.filter(key=team_key)
+        if workspace_key:
+            teams_qs = Team.objects.filter(key=workspace_key)
             if not teams_qs.exists():
-                self.stdout.write(self.style.ERROR(f"Team with key '{team_key}' not found"))
+                self.stdout.write(self.style.ERROR(f"Team with key '{workspace_key}' not found"))
                 return
             teams_list = list(teams_qs)
         else:

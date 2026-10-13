@@ -156,7 +156,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
             request,
             deleted_event,
             {"component_id": component_id, "sbom_id": sbom_id, "source": source},
-            team_key=workspace_key or "",
+            workspace_key=workspace_key or "",
         )
     )
 

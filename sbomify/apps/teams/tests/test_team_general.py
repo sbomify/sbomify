@@ -29,7 +29,7 @@ class TestTeamGeneralView:
         stale_version = client.session.get("user_teams_version")
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "update_name", "name": "Renamed Workspace"},
         )
 
@@ -53,7 +53,7 @@ class TestTeamGeneralView:
         Member.objects.create(team=other_team, user=user, role="owner", is_default_team=True)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "set_default"},
         )
 
@@ -82,7 +82,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, member_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "set_default"},
         )
 
@@ -110,11 +110,11 @@ class TestTeamGeneralView:
         
         setup_authenticated_client_session(client, team, user)
 
-        team_key = team.key
+        workspace_key = team.key
         team_id = team.id  # Store ID to check deletion
         
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team_key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": workspace_key}),
             {"action": "delete_workspace"},
             follow=False,  # Don't follow redirect to check status code
         )
@@ -126,7 +126,7 @@ class TestTeamGeneralView:
         
         # Verify team is deleted by checking ID (key might be cached)
         assert not Team.objects.filter(id=team_id).exists(), "Team should have been deleted"
-        assert not Team.objects.filter(key=team_key).exists(), "Team should have been deleted"
+        assert not Team.objects.filter(key=workspace_key).exists(), "Team should have been deleted"
 
     def test_delete_default_workspace_fails(
         self, client: Client, sample_team_with_owner_member
@@ -141,7 +141,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "delete_workspace"},
         )
 
@@ -165,7 +165,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, admin_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "delete_workspace"},
         )
 
@@ -200,7 +200,7 @@ class TestTeamGeneralView:
         team_key_to_delete = team.key
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team_key_to_delete}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team_key_to_delete}),
             {"action": "delete_workspace"},
             follow=True,  # Follow redirect to verify session update
         )
@@ -221,7 +221,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": "Updated Team Name"},
         )
 
@@ -250,7 +250,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, admin_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": "Admin Renamed This"},
         )
 
@@ -267,7 +267,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "90"},
         )
 
@@ -286,7 +286,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": ""},
         )
 
@@ -303,7 +303,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "0"},
         )
 
@@ -318,7 +318,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "-5"},
         )
 
@@ -333,7 +333,7 @@ class TestTeamGeneralView:
         team.save(update_fields=["sbom_freshness_days"])
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("workspaces:team_general", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_general", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200
         assert 'data-freshness-days="45"' in response.content.decode()

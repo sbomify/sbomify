@@ -35,8 +35,8 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return []
 
     try:
-        team_key = request.session["current_workspace"]["key"]
-        team = Team.objects.get(key=team_key)
+        workspace_key = request.session["current_workspace"]["key"]
+        team = Team.objects.get(key=workspace_key)
     except (Team.DoesNotExist, KeyError, TypeError):
         return []
 
@@ -68,7 +68,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
 
     pending_count = pending_requests.count()
 
-    notification_id = f"access_request_pending_{team_key}"
+    notification_id = f"access_request_pending_{workspace_key}"
 
     if pending_count > 0:
         # Get the oldest pending request to use its timestamp
@@ -81,7 +81,9 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         request_timestamp = oldest_request.requested_at.isoformat()
 
         # Create notification with link to trust center tab
-        trust_center_url = reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + "#trust-center"
+        trust_center_url = (
+            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + "#trust-center"
+        )
 
         message = f"You have {pending_count} pending access request{'s' if pending_count > 1 else ''} to review."
 

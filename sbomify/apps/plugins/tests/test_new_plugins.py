@@ -37,7 +37,7 @@ def _saved_an_hour_ago(team: Team, enabled: list[str] | None = None) -> None:
 
 def _settings_page(client: Client, team: Team) -> tuple[list[str], bytes]:
     response = client.get(
-        reverse("plugins:team_plugin_settings", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+        reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
     )
     assert response.status_code == 200
     plugins = response.context["plugin_settings"]["available_plugins"]
@@ -85,7 +85,7 @@ def test_settings_page_marks_new_plugins_until_saved(
     assert content.count(NEW_BADGE) == 1
 
     authenticated_web_client.post(
-        reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team_with_business_plan.key}),
         {"enabled_plugins": ["enabled-plugin", "also-newer-enabled"]},
         HTTP_HX_REQUEST="true",
     )

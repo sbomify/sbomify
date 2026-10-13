@@ -46,8 +46,8 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             context.update(extra_context)
         return context
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -57,8 +57,8 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             self._get_team_tokens_context(team, request),
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -68,7 +68,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             return htmx_error_response(first_error)
 
         user = cast(User, request.user)
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
 
         # PAT expiry lives in the DB row (the JWT carries no ``exp``/``aud`` —
         # those are reserved for short-lived OIDC tokens). ``get_user_and_token_record``
@@ -98,7 +98,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             lambda: capture_for_request(
                 request,
                 "api_token:created",
-                team_key=team_key,
+                workspace_key=workspace_key,
             )
         )
 
@@ -110,7 +110,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             self._get_team_tokens_context(team, request, {"new_encoded_access_token": access_token_str}),
         )
 
-    def delete(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def delete(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Bulk-revoke the caller's tokens (#1061).
 
         Owner/admin gate + workspace scoping come from TeamRoleRequiredMixin + get_team.
@@ -119,7 +119,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
         revoke-all targets exactly what this page shows (this team's tokens + the
         unscoped legacy ones).
         """
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             # delete() is called via fetch (JSON), not HTMX -- return a JSON error.
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
@@ -138,7 +138,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
         # the caller's tokens in OTHER workspaces -- tokens this page never shows.
         # Use the team_key path param (already a valid token) rather than the nullable
         # team.key DB field, which would 500 on token_to_number if null.
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
         tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
         if payload.get("all") is not True:
             ids = payload.get("token_ids")
@@ -168,7 +168,7 @@ class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixi
             # the single-delete convention; partial binds team_key per iteration.
             for token_team_key in scoped_team_keys:
                 transaction.on_commit(
-                    partial(capture_for_request, request, "api_token:deleted", team_key=token_team_key)
+                    partial(capture_for_request, request, "api_token:deleted", workspace_key=token_team_key)
                 )
 
         return HttpResponse(status=200)

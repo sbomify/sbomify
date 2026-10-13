@@ -3,7 +3,7 @@
 {% block content %}
     <c-layout.frame class="max-w-xl">
     <c-layout.page-header title="Invite member" subtitle="Add someone to this workspace.">
-    <c-buttons.ghost size="sm" href="{% url 'workspaces:team_settings_tab' team_key=team_key tab='members' %}">
+    <c-buttons.ghost size="sm" href="{% url 'workspaces:team_settings_tab' workspace_key=team_key tab='members' %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to members
     </c-buttons.ghost>
     </c-layout.page-header>

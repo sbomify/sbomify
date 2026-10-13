@@ -738,7 +738,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
                 request,
                 "product:created",
                 {"product_id": captured_product_id, "is_public": captured_is_public},
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -1771,7 +1771,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                     "component_type": captured_component_type,
                     "visibility": captured_visibility,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -2847,7 +2847,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(product.id)},
-        team_key=product.team.key or "",
+        workspace_key=product.team.key or "",
     )
     return response
 
@@ -3289,7 +3289,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                     "product_id": captured_product_id,
                     "is_prerelease": captured_is_prerelease,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -3723,7 +3723,7 @@ def download_release(
                     "product_id": str(release.product_id),
                     "format": format_lower,
                 },
-                team_key=release.product.team.key or "",
+                workspace_key=release.product.team.key or "",
             )
             return response
 
@@ -3806,7 +3806,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
         request,
         events.RELEASE_VEX_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 
@@ -3882,7 +3882,7 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 

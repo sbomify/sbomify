@@ -120,7 +120,7 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
                     request,
                     "team:member_invitation_accepted",
                     {"role": captured_role},
-                    team_key=captured_team_key,
+                    workspace_key=captured_team_key,
                 )
             )
 

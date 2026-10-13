@@ -66,7 +66,7 @@ def test_request_context_follows_workspace_changes(sample_team_with_owner_member
     if scope == "session":
         request.session["current_workspace"]["key"] = workspace.key
     else:
-        request.resolver_match = ResolverMatch(lambda request: None, (), {"team_key": workspace.key})
+        request.resolver_match = ResolverMatch(lambda request: None, (), {"workspace_key": workspace.key})
     context = app_context(request)
     assert context["team"] == workspace
     assert context["can_manage"]

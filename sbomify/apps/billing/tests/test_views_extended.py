@@ -293,7 +293,7 @@ class TestEnterpriseContactView:
         self.client.force_login(sample_user)
 
         response = self.client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": "enterprise"}
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}), {"plan": "enterprise"}
         )
 
         assert response.status_code == 302

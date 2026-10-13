@@ -22,9 +22,9 @@ class WorkspaceCryptoView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     template_name = "sboms/workspace_crypto.html.j2"
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         try:
-            team_id = token_to_number(team_key)
+            team_id = token_to_number(workspace_key)
             team = Team.objects.get(pk=team_id)
         except (ValueError, Team.DoesNotExist):
             return error_response(request, HttpResponseNotFound("Workspace not found"))

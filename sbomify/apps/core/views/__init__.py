@@ -102,9 +102,9 @@ def home(request: HttpRequest) -> HttpResponse:
         from sbomify.apps.teams.models import Team
 
         team = None
-        team_key = current_team.get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+        workspace_key = current_team.get("key")
+        if workspace_key:
+            team = Team.objects.filter(key=workspace_key).first()
 
         if needs_plan_selection(team, request.user):
             return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
@@ -175,7 +175,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         current_team = request.session.get("current_workspace")
         if current_team and current_team.get("key"):
-            return redirect("workspaces:team_settings_tab", team_key=current_team["key"], tab="tokens")
+            return redirect("workspaces:team_settings_tab", workspace_key=current_team["key"], tab="tokens")
 
         messages.add_message(
             request,
@@ -188,7 +188,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     # Check if user has a current workspace - if so, redirect to tokens tab
     current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
-        return redirect("workspaces:team_settings", team_key=current_team["key"])
+        return redirect("workspaces:team_settings", workspace_key=current_team["key"])
 
     # If no current workspace, show pending invitations only (backward compatibility)
     context = _build_settings_context(request.user)
@@ -285,7 +285,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
             request,
             "team:member_invitation_accepted",
             {"role": role},
-            team_key=captured_team_key,
+            workspace_key=captured_team_key,
         )
     )
 
@@ -369,7 +369,9 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
         # legacy and rare; the count of their deletions is not load-
         # bearing for any current funnel.
         if token_team_key:
-            transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "api_token:deleted", workspace_key=token_team_key)
+            )
 
         if is_api_request:
             return HttpResponse(status=200)
@@ -460,8 +462,8 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request"))
 
-    team_key = request.POST.get("team_key")
-    team_id = token_to_number(team_key)  # type: ignore[arg-type]
+    workspace_key = request.POST.get("team_key")
+    team_id = token_to_number(workspace_key)  # type: ignore[arg-type]
 
     try:
         component = Component.objects.get(pk=component_id)
@@ -476,11 +478,11 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     # a window in which a component could still be transferred into it.
     from sbomify.apps.teams.models import Member, Team
 
-    if not Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists():
+    if not Member.objects.filter(user=cast(User, request.user), team__key=workspace_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
     # Existence is checked after the role, so a missing workspace is refused like
     # one the caller does not administer. None here means it was deleted since.
-    target_team = Team.objects.filter(key=team_key).first()
+    target_team = Team.objects.filter(key=workspace_key).first()
     if target_team is None:
         return error_response(request, HttpResponseNotFound("Workspace not found"))
 

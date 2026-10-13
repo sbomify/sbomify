@@ -102,7 +102,7 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # ``current_team`` shape; ``capture_for_request`` will skip the
         # event entirely rather than mis-attribute it to a user PK (see
         # the empty-string branch in posthog_service.capture_for_request).
-        team_key = (request.session.get("current_workspace") or {}).get("key", "")
+        workspace_key = (request.session.get("current_workspace") or {}).get("key", "")
         # Deferred via ``on_commit`` so a rollback in the surrounding
         # ``patch_*`` flow doesn't ship a ghost visibility toggle event.
         transaction.on_commit(
@@ -110,6 +110,6 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 request,
                 "item:visibility_toggled",
                 {"item_type": item_type, "item_id": item_id, "new_visibility": new_visibility},
-                team_key=team_key,
+                workspace_key=workspace_key,
             )
         )

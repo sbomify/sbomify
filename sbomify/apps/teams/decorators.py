@@ -29,12 +29,12 @@ def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
             if not request.user.is_authenticated:
                 return error_response(request, HttpResponseForbidden("Not logged in"))
 
-            team_key = kwargs.get("team_key")
-            if not team_key:
+            workspace_key = kwargs.get("workspace_key")
+            if not workspace_key:
                 return error_response(request, HttpResponseForbidden("No workspace specified"))
 
             try:
-                team_id = token_to_number(team_key)
+                team_id = token_to_number(workspace_key)
             except (ValueError, TypeError):
                 return error_response(request, HttpResponseForbidden("Unknown workspace"))
 
@@ -72,19 +72,19 @@ def validate_role_in_current_team(allowed_roles: list[str]) -> Callable[..., Any
 
             # Get current team from session
             current_team = request.session.get("current_workspace", {})
-            team_key = current_team.get("key", None)
+            workspace_key = current_team.get("key", None)
 
-            if team_key is None:
+            if workspace_key is None:
                 return error_response(request, HttpResponseForbidden("No current workspace selected"))
 
             # Get user teams from session
             user_teams = request.session.get("user_workspaces", {})
 
-            if team_key not in user_teams:
+            if workspace_key not in user_teams:
                 return error_response(request, HttpResponseForbidden("Unknown workspace"))
 
             # Check if user has the required role
-            user_role = user_teams[team_key].get("role", "")
+            user_role = user_teams[workspace_key].get("role", "")
             if user_role not in allowed_roles:
                 return error_response(
                     request,

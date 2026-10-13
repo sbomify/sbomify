@@ -206,7 +206,7 @@ def create_access_request(
                         request,
                         "document:access_requested",
                         {"requires_nda": requires_nda},
-                        team_key=team_key,
+                        workspace_key=team_key,
                     )
                 )
 

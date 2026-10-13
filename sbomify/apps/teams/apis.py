@@ -609,12 +609,12 @@ def upload_branding_file(
 
 
 def _get_team_and_membership_role(
-    request: HttpRequest, team_key: str
+    request: HttpRequest, workspace_key: str
 ) -> tuple[Team | None, str | None, tuple[int, dict[str, str]] | None]:
     user = cast(User, request.user)
 
     try:
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
     except ValueError:
         return None, None, (404, {"detail": "Workspace not found"})
 
@@ -1417,7 +1417,9 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # ``on_commit`` so a rollback in the surrounding flow doesn't
         # ship a ghost event for a domain that wasn't actually persisted.
         if is_first_time_set:
-            transaction.on_commit(lambda: capture_for_request(request, "team:custom_domain_added", team_key=team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "team:custom_domain_added", workspace_key=team_key)
+            )
 
         return 200, {"domain": normalized_domain, "validated": False}
 
@@ -1683,7 +1685,7 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
         return 404
 
 
-def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
+def _supplier_team(request: HttpRequest, workspace_key: str, action: str) -> tuple[int, Any]:
     """Resolve the workspace for a supplier or invitation call, or the error to return.
 
     Every such endpoint needs the same three answers — does the workspace
@@ -1691,7 +1693,7 @@ def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[in
     and getting one of them wrong on one endpoint is how a scoping hole opens.
     """
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
+        team = Team.objects.get(pk=token_to_number(workspace_key))
     except (ValueError, Team.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 

@@ -35,7 +35,7 @@ def client_and_member(sample_team_with_owner_member: Member) -> tuple[Client, Me
 
 
 def _url(member: Member) -> str:
-    return reverse("workspaces:ci_token", kwargs={"team_key": member.team.key})
+    return reverse("workspaces:ci_token", kwargs={"workspace_key": member.team.key})
 
 
 class TestWhatItMints:
@@ -102,7 +102,7 @@ class TestWhenItRefuses:
 
         team = Team.objects.create(name="Someone Else's", key="strangerkey")
 
-        response = Client().post(reverse("workspaces:ci_token", kwargs={"team_key": team.key}))
+        response = Client().post(reverse("workspaces:ci_token", kwargs={"workspace_key": team.key}))
 
         assert response.status_code in (302, 403)
         assert AccessToken.objects.count() == 0
@@ -174,7 +174,7 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
         # The session names the workspace they *do* own.
         setup_authenticated_client_session(client, owned, user)
 
-        response = client.post(reverse("workspaces:ci_token", kwargs={"team_key": other.key}))
+        response = client.post(reverse("workspaces:ci_token", kwargs={"workspace_key": other.key}))
 
         assert response.status_code == 403
         assert not AccessToken.objects.filter(team=other).exists()
@@ -198,7 +198,7 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
         client.force_login(user)
         setup_authenticated_client_session(client, owned, user)
 
-        response = client.post(reverse("workspaces:ci_token", kwargs={"team_key": second.key}))
+        response = client.post(reverse("workspaces:ci_token", kwargs={"workspace_key": second.key}))
 
         assert response.status_code == 200
         assert AccessToken.objects.filter(team=second).count() == 1

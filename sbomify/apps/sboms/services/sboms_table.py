@@ -181,15 +181,15 @@ def build_sboms_table_context(
     }
 
     if not is_public_view:
-        team_key = number_to_random_token(component.get("team_id"))
-        status_code, team = get_team(request, team_key)
+        workspace_key = number_to_random_token(component.get("team_id"))
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return ServiceResult.failure(team.get("detail", "Failed to load team"))
 
         context.update(
             {
                 "team_billing_plan": team.billing_plan,
-                "team_key": team_key,
+                "team_key": workspace_key,
                 "delete_form": SbomDeleteForm(),
             }
         )

@@ -156,7 +156,7 @@ def test_a_token_bound_to_another_workspace_cannot_file_a_request(
 
 
 def _nda_urls(team, access_request):
-    kwargs = {"team_key": team.key, "request_id": access_request.id}
+    kwargs = {"workspace_key": team.key, "request_id": access_request.id}
     return reverse("api-1:get_nda_for_signing", kwargs=kwargs), reverse("api-1:sign_nda", kwargs=kwargs)
 
 

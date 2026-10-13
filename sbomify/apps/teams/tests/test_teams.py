@@ -156,7 +156,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     assert len(team.key) > 0  # nosec
 
     assert response.status_code == 302
-    assert response.url == reverse("workspaces:switch_team", kwargs={"team_key": team.key})
+    assert response.url == reverse("workspaces:switch_team", kwargs={"workspace_key": team.key})
 
     messages = list(get_messages(response.wsgi_request))
 
@@ -169,7 +169,7 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("workspaces:switch_team", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:switch_team", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -192,7 +192,7 @@ def test_only_owners_are_allowed_to_access_team_details(
     client = Client()
 
     # User not logged in
-    uri = reverse("workspaces:team_details", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:team_details", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -205,7 +205,7 @@ def test_only_owners_are_allowed_to_access_team_details(
 
     # team_details now redirects to team_settings for unified interface
     assert response.status_code == 302
-    assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    assert response.url == reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
 
 
 @pytest.mark.django_db
@@ -213,7 +213,7 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
     client = Client()
 
     # User not logged in
-    uri = reverse("workspaces:team_details", kwargs={"team_key": sample_team_with_guest_member.team.key})
+    uri = reverse("workspaces:team_details", kwargs={"workspace_key": sample_team_with_guest_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -344,7 +344,7 @@ def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: 
     client = Client()
 
     # User not logged in - should redirect to login
-    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"workspace_key": sample_team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -357,7 +357,7 @@ def test_team_invitation_form_view(sample_team_with_owner_member: Member):  # no
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 200
@@ -369,7 +369,7 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
     client = Client()
 
     # User not logged in - should redirect to login
-    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"workspace_key": sample_team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
@@ -408,7 +408,7 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     }
     session.save()
 
-    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
@@ -881,7 +881,7 @@ def test_access_team_settings__when_user_is_owner__should_succeed(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team_with_owner_member.team.key})
 
     setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
 
@@ -902,7 +902,7 @@ def test_team_settings_handles_invalid_billing_plan_gracefully(
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 200
@@ -921,7 +921,7 @@ def test_update_visibility_blocks_invalid_billing_plan(
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
     response: HttpResponse = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -941,7 +941,7 @@ def test_access_team_settings__when_user_is_admin__should_succeed(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team_with_admin_member.team.key})
 
     setup_authenticated_client_session(client, sample_team_with_admin_member.team, sample_team_with_admin_member.user)
 
@@ -956,7 +956,7 @@ def test_access_team_settings__when_user_is_guest__should_fail(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team_with_guest_member.team.key})
     setup_authenticated_client_session(client, sample_team_with_guest_member.team, sample_team_with_guest_member.user)
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
@@ -968,7 +968,7 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
     sample_team: Team,
 ):
     client = Client()
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team.key})
 
     # Unauthenticated users get redirected to login
     response: HttpResponse = client.get(uri)
@@ -1012,7 +1012,7 @@ def test_visibility_toggle__owner_can_make_public(
 
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1035,7 +1035,7 @@ def test_visibility_toggle__community_cannot_be_private(
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_community_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -1062,7 +1062,7 @@ def test_visibility_toggle__admin_allowed(
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1086,7 +1086,7 @@ def test_visibility_toggle__guest_blocked(
 
     setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1108,7 +1108,7 @@ def test_visibility_toggle_allowed_when_billing_disabled(
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
 
-    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_community_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -1174,8 +1174,8 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    team_key = sample_team_with_owner_member.team.key
-    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+    workspace_key = sample_team_with_owner_member.team.key
+    base_uri = f"/api/v1/workspaces/{workspace_key}/branding"
 
     # Mock S3 client methods
     mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
@@ -1230,7 +1230,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         data = response.json()
         assert "icon_url" in data
         # Verify the filename uses the new UUID format
-        assert mock_upload.filename.startswith(f"team_{team_key}_icon_")
+        assert mock_upload.filename.startswith(f"team_{workspace_key}_icon_")
         assert mock_upload.filename.endswith(".png")
         assert data["icon"] == mock_upload.filename
 
@@ -1247,7 +1247,7 @@ def test_team_branding_api(sample_team_with_owner_member: Member, mocker):  # no
         assert response.status_code == 200
         data = response.json()
         # Ensure the returned URL contains the correct filename that was just uploaded
-        assert data["logo"].startswith(f"team_{team_key}_logo_")
+        assert data["logo"].startswith(f"team_{workspace_key}_logo_")
         assert data["logo"].endswith(".png")
         assert data["logo"] in data["logo_url"]
 
@@ -1270,8 +1270,8 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    team_key = sample_team_with_owner_member.team.key
-    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+    workspace_key = sample_team_with_owner_member.team.key
+    base_uri = f"/api/v1/workspaces/{workspace_key}/branding"
 
     # Mock S3 client methods
     mock_upload = mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_media")
@@ -1291,7 +1291,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
     # Test 1: Successful upload with old file cleanup for ICON
     team = sample_team_with_owner_member.team
-    team.branding_info = {"icon": f"team_{team_key}_icon_old.png", "logo": "", "brand_color": "", "accent_color": ""}
+    team.branding_info = {"icon": f"team_{workspace_key}_icon_old.png", "logo": "", "brand_color": "", "accent_color": ""}
     team.save()
 
     # Upload new icon
@@ -1306,13 +1306,13 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
         # Verify new file was uploaded with UUID-based filename
         assert len(uploaded_files) == 1
         new_filename = uploaded_files[0]
-        assert new_filename.startswith(f"team_{team_key}_icon_")
+        assert new_filename.startswith(f"team_{workspace_key}_icon_")
         assert new_filename.endswith(".png")
         assert len(new_filename.split("_")) >= 4  # team_KEY_icon_UUID.ext
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == f"team_{team_key}_icon_old.png"
+        assert deleted_files[0] == f"team_{workspace_key}_icon_old.png"
 
         # Verify database was updated
         team.refresh_from_db()
@@ -1328,7 +1328,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
     # Set up existing logo
     team.branding_info = {
         "icon": new_filename,
-        "logo": f"team_{team_key}_logo_old.jpg",
+        "logo": f"team_{workspace_key}_logo_old.jpg",
         "brand_color": "",
         "accent_color": "",
     }
@@ -1345,12 +1345,12 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
         # Verify new file was uploaded with UUID-based filename
         assert len(uploaded_files) == 1
         new_logo_filename = uploaded_files[0]
-        assert new_logo_filename.startswith(f"team_{team_key}_logo_")
+        assert new_logo_filename.startswith(f"team_{workspace_key}_logo_")
         assert new_logo_filename.endswith(".jpg")
 
         # Verify old file was deleted
         assert len(deleted_files) == 1
-        assert deleted_files[0] == f"team_{team_key}_logo_old.jpg"
+        assert deleted_files[0] == f"team_{workspace_key}_logo_old.jpg"
 
         # Verify database was updated
         team.refresh_from_db()
@@ -1380,7 +1380,7 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
         # Verify unique filename
         new_icon_filename = uploaded_files[0]
-        assert new_icon_filename.startswith(f"team_{team_key}_icon_")
+        assert new_icon_filename.startswith(f"team_{workspace_key}_icon_")
         assert new_icon_filename != new_filename  # Different from previous icon
 
     os.remove("test_icon_new.png")
@@ -1445,8 +1445,8 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    team_key = sample_team_with_guest_member.team.key
-    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+    workspace_key = sample_team_with_guest_member.team.key
+    base_uri = f"/api/v1/workspaces/{workspace_key}/branding"
 
     # A guest may not read branding info through the internal API
     response = client.get(base_uri)
@@ -1496,7 +1496,7 @@ def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_ow
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
     team = sample_team_with_owner_member.team
-    team_key = team.key
+    workspace_key = team.key
 
     # Set up branding_info with an NDA document ID
     team.branding_info = {
@@ -1506,7 +1506,7 @@ def test_team_branding_api_preserves_company_nda_document_id(sample_team_with_ow
     }
     team.save()
 
-    base_uri = f"/api/v1/workspaces/{team_key}/branding"
+    base_uri = f"/api/v1/workspaces/{workspace_key}/branding"
 
     # Test PATCH single field - should preserve company_nda_document_id
     response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
@@ -2122,7 +2122,7 @@ def test_team_general_get__when_user_is_owner__should_succeed(
     """Test that owners can access the general settings view."""
     client = Client()
     team = sample_team_with_owner_member.team
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2143,7 +2143,7 @@ def test_team_general_get__when_user_is_admin__should_succeed(
     """
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2159,7 +2159,7 @@ def test_team_general_get__when_user_is_guest__should_fail(
     """Test that guests cannot access the general settings view."""
     client = Client()
     team = sample_team_with_guest_member.team
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
@@ -2177,7 +2177,7 @@ def test_team_general_post__update_name_successfully(
     team = sample_team_with_owner_member.team
     original_name = team.name
     new_name = "Updated Workspace Name"
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2201,7 +2201,7 @@ def test_team_general_post__empty_name_should_fail(
     client = Client()
     team = sample_team_with_owner_member.team
     original_name = team.name
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2226,7 +2226,7 @@ def test_team_general_post__admin_can_update_name(
     """Admins can rename the workspace — workspace settings are ADMINISTER."""
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2249,7 +2249,7 @@ def test_team_general_post__admin_cannot_delete_workspace(
     """
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2273,7 +2273,7 @@ def test_team_general_post__updates_session(
     client = Client()
     team = sample_team_with_owner_member.team
     new_name = "Session Updated Name"
-    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"workspace_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
