@@ -18,14 +18,18 @@
               hx-swap="none">
             {% csrf_token %}
             <c-cards.card>
-            <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">Use custom branding</c-forms.checkbox>
-            <c-forms.hint>Turn off to use the default sbomify appearance. Your colors and assets stay saved.</c-forms.hint>
-            <input type="hidden"
-                   name="branding_enabled"
-                   :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
-            <c-feedback.alert variant="warning" class="mt-4" x-show="!localBrandingInfo.branding_enabled" x-cloak>
-            Custom branding is off, so customers still see the default sbomify look. Your colors and logo below stay saved either way.
-            </c-feedback.alert>
+            <div class="flex flex-col gap-4">
+                <div>
+                    <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">Use custom branding</c-forms.checkbox>
+                    <c-forms.hint>Turn off to use the default sbomify appearance. Your colors and assets stay saved.</c-forms.hint>
+                    <input type="hidden"
+                           name="branding_enabled"
+                           :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
+                </div>
+                <c-feedback.alert variant="warning" x-show="!localBrandingInfo.branding_enabled" x-cloak>
+                Custom branding is off, so customers still see the default sbomify look. Your colors and logo below stay saved either way.
+                </c-feedback.alert>
+            </div>
             </c-cards.card>
             <c-cards.card flush>
             <c-cards.header compact title="Colors"><c-buttons.ghost size="sm" @click="setDefaultColors">Reset</c-buttons.ghost></c-cards.header>
