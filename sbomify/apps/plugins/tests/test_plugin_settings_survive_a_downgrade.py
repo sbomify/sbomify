@@ -26,7 +26,7 @@ from sbomify.apps.core.apis import list_component_sboms
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -58,17 +58,17 @@ def _api_url(workspace_key: str) -> str:
     return f"/api/v1/plugins/workspaces/{workspace_key}/settings"
 
 
-def _stored(team: Team) -> list[str]:
+def _stored(team: Workspace) -> list[str]:
     return TeamPluginSettings.objects.get(team=team).enabled_plugins
 
 
-def _client(team: Team, user) -> Client:
+def _client(team: Workspace, user) -> Client:
     client = Client()
     setup_authenticated_client_session(client, team, user)
     return client
 
 
-def _enable(team: Team, *plugins: str) -> None:
+def _enable(team: Workspace, *plugins: str) -> None:
     TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": list(plugins)})
 
 

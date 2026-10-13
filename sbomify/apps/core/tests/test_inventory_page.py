@@ -15,7 +15,7 @@ from sbomify.apps.core.services.inventory_page import build_inventory_context
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -63,7 +63,7 @@ def test_inventory_distinguishes_unassessed_clear_and_documents(sample_team_with
 def test_product_scope_and_security_rollup(sample_team_with_owner_member: Member) -> None:
     member = sample_team_with_owner_member
     local = Component.objects.create(team=member.team, name="Local")
-    foreign = Component.objects.create(team=Team.objects.create(name="Other"), name="Secret")
+    foreign = Component.objects.create(team=Workspace.objects.create(name="Other"), name="Secret")
     scan(local, "CVE-LOCAL")
     scan(foreign, "CVE-SECRET")
     product = Product.objects.create(team=member.team, name="Local product")
@@ -84,7 +84,7 @@ def test_release_uses_pinned_artifacts_and_excludes_foreign_joins(sample_team_wi
     product = Product.objects.create(team=member.team, name="Product")
     release = Release.objects.create(product=product, name="v1")
     ReleaseArtifact.objects.create(release=release, sbom=old)
-    foreign = Component.objects.create(team=Team.objects.create(name="Other"), name="Secret")
+    foreign = Component.objects.create(team=Workspace.objects.create(name="Other"), name="Secret")
     ReleaseArtifact.objects.bulk_create([ReleaseArtifact(release=release, sbom=scan(foreign, "CVE-FOREIGN"))])
     row = next(r for r in inventory(member, view="releases")["rows"] if r["id"] == release.id)
     assert row["counts"]["high"] == 1

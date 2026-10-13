@@ -4,7 +4,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.apis import _check_billing_limits
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.schemas import ErrorCode
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
@@ -19,7 +19,7 @@ def test_resource_limits_default_plan():
         max_components=1,
     )
 
-    team = Team.objects.create(name="Default Team", billing_plan=None)
+    team = Workspace.objects.create(name="Default Team", billing_plan=None)
 
     can_create, _, _ = _check_billing_limits(str(team.id), "product")
     assert can_create is True
@@ -46,7 +46,7 @@ def test_scheduled_downgrade_checks_the_target_plan_limit(mocker):
     mocker.patch("sbomify.apps.core.apis.get_subscription_cancel_at_period_end", return_value=True)
     BillingPlan.objects.create(key="community", name="Community", max_products=1, max_components=1)
     BillingPlan.objects.create(key="business", name="Business", max_products=5, max_components=5)
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Downgrading Team",
         billing_plan="business",
         billing_plan_limits={

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 
-from .models import Invitation, Member, Team
+from .models import Invitation, Member, Workspace
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
@@ -99,7 +99,7 @@ def get_pending_invitations_for_user(user: User) -> list[dict[str, object]]:
     ]
 
 
-def require_team_member(user: User, team: Team, allowed_roles: list[str] | None = None) -> Member:
+def require_team_member(user: User, team: Workspace, allowed_roles: list[str] | None = None) -> Member:
     member = Member.objects.filter(user=user, team=team).first()
     if not member:
         raise PermissionDeniedError("Access denied")

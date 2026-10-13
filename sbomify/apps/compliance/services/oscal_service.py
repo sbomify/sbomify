@@ -34,7 +34,7 @@ from sbomify.apps.compliance.models import (
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product, User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 _CATALOG_PATH = Path(__file__).resolve().parent.parent / "oscal_data" / "cra-annex-i-catalog.json"
 
@@ -142,7 +142,7 @@ def ensure_cra_catalog() -> OSCALCatalog:
 
 def create_assessment_result(
     catalog: OSCALCatalog,
-    team: Team,
+    team: Workspace,
     product: Product,
     user: User,
 ) -> OSCALAssessmentResult:

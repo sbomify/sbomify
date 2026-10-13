@@ -10,11 +10,11 @@ from sbomify.apps.core.services.results import ServiceResult
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 def export_controls_csv(
-    team: Team,
+    team: Workspace,
     catalog: ControlCatalog,
     product: Product | None = None,
 ) -> ServiceResult[str]:
@@ -72,7 +72,7 @@ def export_controls_csv(
 
 
 def export_controls_summary_csv(
-    team: Team, product: Product | None = None, catalog: ControlCatalog | None = None
+    team: Workspace, product: Product | None = None, catalog: ControlCatalog | None = None
 ) -> ServiceResult[str]:
     """Export category-level compliance summary as a CSV string.
 

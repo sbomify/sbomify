@@ -13,7 +13,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import list_teams
 from sbomify.apps.teams.forms import AddTeamForm, DeleteTeamForm, UpdateTeamForm
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.utils import update_user_teams_session
 
@@ -76,7 +76,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return redirect("workspaces:teams_dashboard")
 
         try:
-            team = Team.objects.get(key=form.cleaned_data["key"])
+            team = Workspace.objects.get(key=form.cleaned_data["key"])
             membership = Member.objects.get(user=user, team=team)
 
             with transaction.atomic():
@@ -93,7 +93,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
 
         return redirect("workspaces:teams_dashboard")
@@ -106,7 +106,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return redirect("workspaces:teams_dashboard")
 
         try:
-            team = Team.objects.get(key=form.cleaned_data["key"])
+            team = Workspace.objects.get(key=form.cleaned_data["key"])
             # TODO move it to permissions
             membership = Member.objects.get(user=user, team=team, role="owner")
 
@@ -131,7 +131,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 update_user_teams_session(request, user)
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
 
         return redirect("workspaces:teams_dashboard")

@@ -17,7 +17,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     Member,
-    Team,
+    Workspace,
     default_patch_sla_days,
 )
 from sbomify.apps.teams.utils import (
@@ -272,10 +272,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return redirect("core:dashboard")
 
     @staticmethod
-    def _get_current_team(request: HttpRequest) -> Team | None:
+    def _get_current_team(request: HttpRequest) -> Workspace | None:
         workspace_key = request.session.get("current_workspace", {}).get("key")
         if workspace_key:
-            team = Team.objects.filter(key=workspace_key).first()
+            team = Workspace.objects.filter(key=workspace_key).first()
             if team:
                 return team
         user = cast(User, request.user)
@@ -283,7 +283,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _can_administer_team(user: Any, team: Team) -> bool:
+    def _can_administer_team(user: Any, team: Workspace) -> bool:
         """The wizard configures the workspace, so it's the ADMINISTER tier."""
         return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 

@@ -16,13 +16,13 @@ from pytest_mock import MockerFixture
 
 from sbomify.apps.core.tests.posthog_helpers import called_events, find_call, patch_capture
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
 def test_search_captures_search_performed(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     mock_capture = patch_capture(mocker)
@@ -40,7 +40,7 @@ def test_search_captures_search_performed(
 @pytest.mark.django_db
 def test_capture_for_request_skips_anonymous_distinct_id(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Capture is skipped when distinct_id resolves to ``anonymous`` AND no team_key is supplied.
@@ -67,7 +67,7 @@ def test_capture_for_request_skips_anonymous_distinct_id(
 @pytest.mark.django_db
 def test_capture_for_request_skips_empty_team_key(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Explicit ``team_key=""`` must skip — never fall back to user PK.
@@ -100,7 +100,7 @@ def test_capture_for_request_skips_empty_team_key(
 @pytest.mark.django_db
 def test_capture_for_request_truthy_team_key_uses_workspace_distinct_id(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """A truthy ``team_key`` becomes the distinct_id and the workspace group."""
@@ -121,7 +121,7 @@ def test_capture_for_request_truthy_team_key_uses_workspace_distinct_id(
 @pytest.mark.django_db
 def test_capture_for_request_skips_when_disabled(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """When ``is_enabled()`` returns False, capture_for_request short-circuits early."""

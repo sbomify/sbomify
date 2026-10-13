@@ -15,13 +15,13 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
-def check_billing_plan_exists(team: Team) -> NotificationSchema | None:
+def check_billing_plan_exists(team: Workspace) -> NotificationSchema | None:
     """Check if a workspace has a billing plan selected"""
     if not team.billing_plan:
         return NotificationSchema(
@@ -35,7 +35,7 @@ def check_billing_plan_exists(team: Team) -> NotificationSchema | None:
     return None
 
 
-def check_billing_info_missing(team: Team) -> NotificationSchema | None:
+def check_billing_info_missing(team: Workspace) -> NotificationSchema | None:
     """Check if billing information is missing for business plan"""
     billing_limits = team.billing_plan_limits or {}
     if team.billing_plan == "business" and not billing_limits.get("stripe_customer_id"):
@@ -50,7 +50,7 @@ def check_billing_info_missing(team: Team) -> NotificationSchema | None:
     return None
 
 
-def check_payment_status(team: Team) -> NotificationSchema | None:
+def check_payment_status(team: Workspace) -> NotificationSchema | None:
     """Check subscription payment status"""
     if team.billing_plan != "business":
         return None
@@ -93,7 +93,7 @@ def check_payment_status(team: Team) -> NotificationSchema | None:
     return None
 
 
-def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
+def check_downgrade_limit_exceeded(team: Workspace) -> NotificationSchema | None:
     """Check if scheduled downgrade would exceed target plan limits"""
     if not is_billing_enabled():
         return None
@@ -118,7 +118,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
         if stripe_subscription_id:
             invalidate_subscription_cache(str(stripe_subscription_id), workspace_key)
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits.pop("scheduled_downgrade_plan", None)
             team.billing_plan_limits = billing_limits
@@ -161,7 +161,7 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
     return None
 
 
-def check_community_upgrade(team: Team) -> NotificationSchema | None:
+def check_community_upgrade(team: Workspace) -> NotificationSchema | None:
     """Check if community plan user should upgrade to paid plan"""
     # Show upgrade notification if billing_plan is None or "community"
     billing_plan = team.billing_plan
@@ -204,7 +204,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     workspace_key = request.session["current_workspace"]["key"]
     logger.debug("get_notifications called for team")
     try:
-        team = Team.objects.get(key=workspace_key)
+        team = Workspace.objects.get(key=workspace_key)
         logger.debug("Checking notifications for team")
 
         # Check if user is a member of this team
@@ -248,7 +248,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
             else:
                 logger.debug("No upgrade notification for team")
 
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         logger.debug("Workspace not found when checking billing notifications")
     except Exception as e:
         logger.exception("Error checking notifications for team: %s", str(e))

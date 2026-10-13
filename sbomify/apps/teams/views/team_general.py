@@ -16,7 +16,7 @@ from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.forms import PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
-from sbomify.apps.teams.models import Member, Team, default_patch_sla_days
+from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.services.settings_page import general_context, update_patch_sla, update_support_period
 from sbomify.apps.teams.utils import (
@@ -108,7 +108,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
 
         try:
             with transaction.atomic():
-                team_obj = Team.objects.select_for_update().get(key=workspace_key)
+                team_obj = Workspace.objects.select_for_update().get(key=workspace_key)
                 team_obj.name = new_name
                 team_obj.sbom_freshness_days = freshness_days
                 team_obj.save(update_fields=["name", "sbom_freshness_days"])
@@ -122,7 +122,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
 
             return htmx_success_response("Workspace settings updated", triggers={"refreshTeamGeneral": True})
 
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             return htmx_error_response("Workspace not found")
         except Exception:
             logger.exception("Failed to update workspace name for team_key=%s", workspace_key)
@@ -190,7 +190,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
 
                 try:
                     # Get the team object and switch to it using the proper function
-                    target_team = Team.objects.get(key=target_team_key)
+                    target_team = Workspace.objects.get(key=target_team_key)
                     switch_active_workspace(request, target_team)
 
                     logger.info(
@@ -199,7 +199,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
                         target_team_key,
                         workspace_key,
                     )
-                except Team.DoesNotExist:
+                except Workspace.DoesNotExist:
                     logger.error("Target workspace %s not found after deletion", target_team_key)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]

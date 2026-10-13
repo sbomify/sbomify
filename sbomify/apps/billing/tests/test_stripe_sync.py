@@ -15,7 +15,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     sample_user,
     team_with_business_plan,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -539,7 +539,7 @@ class TestSyncAfterSubscriptionReplaced:
             "cancel_at_period_end": False,
             "next_billing_date": "2030-01-01T00:00:00+00:00",
         }
-        Team.objects.filter(pk=stale_team.pk).update(billing_plan_limits=new_limits)
+        Workspace.objects.filter(pk=stale_team.pk).update(billing_plan_limits=new_limits)
 
         mock_stripe_subscription.status = "canceled"
         mock_stripe_subscription.cancel_at_period_end = False

@@ -19,7 +19,7 @@ from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 
@@ -54,8 +54,8 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         action = request.POST.get("controls_catalog_action", "")
 
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return redirect_to_team_settings(workspace_key, "controls")
 
@@ -234,8 +234,8 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return redirect_to_team_settings(workspace_key, "controls")
 
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return redirect_to_team_settings(workspace_key, "controls")
 

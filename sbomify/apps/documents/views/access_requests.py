@@ -36,7 +36,7 @@ from sbomify.apps.documents.services.access_emails import (
     notify_admins_of_access_request,
 )
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import (
@@ -53,7 +53,7 @@ ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 logger = logging.getLogger(__name__)
 
 
-def user_has_signed_current_nda(user: User, team: Team) -> bool:
+def user_has_signed_current_nda(user: User, team: Workspace) -> bool:
     """Check if user has signed the current company-wide NDA version.
 
     DEPRECATED: Use _user_has_signed_current_nda from core.services.access_control instead.
@@ -73,7 +73,7 @@ def user_has_signed_current_nda(user: User, team: Team) -> bool:
     return result
 
 
-def _invalidate_access_requests_cache(team: Team) -> None:
+def _invalidate_access_requests_cache(team: Workspace) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
 
@@ -82,7 +82,7 @@ def _invalidate_access_requests_cache(team: Team) -> None:
         cache.delete(cache_key)
 
 
-def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def _get_pending_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get pending access requests for a team, filtering by NDA signature if required.
 
     Args:
@@ -109,7 +109,7 @@ def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
     return base_queryset
 
 
-def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def _get_approved_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get approved access requests for a team.
 
     Args:
@@ -126,7 +126,7 @@ def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
     )
 
 
-def _get_rejected_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def _get_rejected_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get rejected access requests for a team.
 
     Args:
@@ -168,7 +168,7 @@ def _annotate_nda_signature_status(requests: list[AccessRequest], company_nda: D
             req.has_current_nda_signature = True  # type: ignore[attr-defined]
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Workspace) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     # Check if there are any pending requests left
     pending_requests = _get_pending_access_requests(team)
@@ -190,8 +190,8 @@ class AccessRequestView(View):
     def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Show access request form."""
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # Redirect unauthenticated users to login with redirect back to this page
@@ -257,8 +257,8 @@ class AccessRequestView(View):
     def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Create access request."""
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # The same rule as GET: the requester signs in and asks for themselves.
@@ -396,8 +396,8 @@ class NDASigningView(View):
     def get(self, request: HttpRequest, workspace_key: str, request_id: str) -> HttpResponse:
         """Show NDA document for signing."""
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         try:
@@ -443,8 +443,8 @@ class NDASigningView(View):
     def post(self, request: HttpRequest, workspace_key: str, request_id: str) -> HttpResponse:
         """Process NDA signature."""
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         try:
@@ -697,8 +697,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         """
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         if request.headers.get("HX-Request") != "true":
@@ -783,8 +783,8 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         """Approve, reject, or revoke access request."""
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # Verify user is owner or admin

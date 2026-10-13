@@ -40,7 +40,7 @@ from sbomify.apps.core.services.account_deletion import soft_delete_user_account
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.notifications import get_notifications
 from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import get_pending_invitations_for_user
@@ -67,11 +67,11 @@ def _invitee(email_verified: bool, *, with_own_workspace: bool = False) -> User:
     """``with_own_workspace`` stops signing in from auto-accepting, so the path under test does the work."""
     user = User.objects.create_user(username="invitee", email="invitee@example.com", email_verified=email_verified)
     if with_own_workspace:
-        Member.objects.create(user=user, team=Team.objects.create(name="Own Workspace"), role="owner")
+        Member.objects.create(user=user, team=Workspace.objects.create(name="Own Workspace"), role="owner")
     return user
 
 
-def _invite(team: Team, role: str = "member") -> Invitation:
+def _invite(team: Workspace, role: str = "member") -> Invitation:
     return Invitation.objects.create(team=team, email="Invitee@example.com", role=role)
 
 
@@ -280,7 +280,7 @@ class TestInvitations:
     def test_an_invited_sign_up_joins_only_with_a_confirmed_email(
         self, ensure_billing_plans: None, verified: bool
     ) -> None:
-        team = Team.objects.create(name="Inviting Workspace")
+        team = Workspace.objects.create(name="Inviting Workspace")
         Invitation.objects.create(team=team, email="newcomer@example.com", role="member")
 
         request = _sign_in("newcomer@example.com", verified=verified)
@@ -292,7 +292,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_signing_in_auto_accepts_only_for_a_confirmed_email(self, verified: bool) -> None:
         user = _invitee(verified)
-        team = Team.objects.create(name="Inviting Workspace")
+        team = Workspace.objects.create(name="Inviting Workspace")
         _invite(team)
         request = RequestFactory().get("/")
         request.user = user
@@ -305,7 +305,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_the_invitation_link_needs_a_confirmed_email(self, client: Client, verified: bool) -> None:
         user = _invitee(verified, with_own_workspace=True)
-        team = Team.objects.create(name="Inviting Workspace")
+        team = Workspace.objects.create(name="Inviting Workspace")
         invitation = _invite(team)
         client.force_login(user)
         url = reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)})
@@ -318,7 +318,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_accepting_from_settings_needs_a_confirmed_email(self, client: Client, verified: bool) -> None:
         user = _invitee(verified, with_own_workspace=True)
-        team = Team.objects.create(name="Inviting Workspace")
+        team = Workspace.objects.create(name="Inviting Workspace")
         invitation = _invite(team)
         client.force_login(user)
 
@@ -329,7 +329,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_declining_from_settings_needs_a_confirmed_email(self, client: Client, verified: bool) -> None:
         user = _invitee(verified, with_own_workspace=True)
-        invitation = _invite(Team.objects.create(name="Inviting Workspace"))
+        invitation = _invite(Workspace.objects.create(name="Inviting Workspace"))
         client.force_login(user)
 
         client.post(reverse("core:reject_user_invitation", kwargs={"invitation_id": invitation.id}))
@@ -339,7 +339,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_signing_the_nda_accepts_only_for_a_confirmed_email(
-        self, storage: MagicMock, client: Client, team_with_business_plan: Team, verified: bool
+        self, storage: MagicMock, client: Client, team_with_business_plan: Workspace, verified: bool
     ) -> None:
         team = team_with_business_plan
         content = b"NDA"
@@ -376,7 +376,7 @@ class TestInvitations:
         self, ensure_billing_plans: None, verified: bool
     ) -> None:
         user = _invitee(verified)
-        _invite(Team.objects.create(name="Inviting Workspace"))
+        _invite(Workspace.objects.create(name="Inviting Workspace"))
 
         created = create_user_team_and_subscription(user)
 
@@ -385,7 +385,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_deleting_an_account_removes_invitations_only_for_a_confirmed_email(self, verified: bool) -> None:
         user = _invitee(verified)
-        invitation = _invite(Team.objects.create(name="Inviting Workspace"))
+        invitation = _invite(Workspace.objects.create(name="Inviting Workspace"))
 
         with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
             soft_delete_user_account(user)
@@ -395,14 +395,14 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_an_admin_may_leave_for_an_invitation_only_with_a_confirmed_email(self, verified: bool) -> None:
         admin = _invitee(verified)
-        membership = Member.objects.create(user=admin, team=Team.objects.create(name="Current"), role="admin")
-        _invite(Team.objects.create(name="Inviting Workspace"))
+        membership = Member.objects.create(user=admin, team=Workspace.objects.create(name="Current"), role="admin")
+        _invite(Workspace.objects.create(name="Inviting Workspace"))
 
         assert (check_member_removal(admin, membership) is None) is verified
 
     @pytest.mark.parametrize("verified", [True, False])
     def test_a_trust_center_invitation_files_a_request_only_for_a_confirmed_account(
-        self, client: Client, team_with_business_plan: Team, sample_user: User, verified: bool
+        self, client: Client, team_with_business_plan: Workspace, sample_user: User, verified: bool
     ) -> None:
         invitee = _invitee(verified)
         setup_authenticated_client_session(client, team_with_business_plan, sample_user)
@@ -418,7 +418,7 @@ class TestInvitations:
     @pytest.mark.parametrize("verified", [True, False])
     def test_pending_invitations_are_shown_only_for_a_confirmed_email(self, verified: bool) -> None:
         user = _invitee(verified)
-        _invite(Team.objects.create(name="Inviting Workspace"))
+        _invite(Workspace.objects.create(name="Inviting Workspace"))
         request = RequestFactory().get("/")
         request.user = user
         request.session = SessionStore()

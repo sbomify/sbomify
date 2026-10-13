@@ -36,15 +36,15 @@ class DocumentsTableView(HtmxFragmentMixin, View):
             current_team = request.session.get("current_workspace", {})
             workspace_key = current_team.get("key")
             if workspace_key:
-                from sbomify.apps.teams.models import Member, Team
+                from sbomify.apps.teams.models import Member, Workspace
 
                 try:
-                    team = Team.objects.get(key=workspace_key)
+                    team = Workspace.objects.get(key=workspace_key)
                     Member.objects.get(user=request.user, team=team, role="guest")
                     from django.shortcuts import redirect
 
                     return redirect("core:workspace_public", workspace_key=workspace_key)
-                except (Member.DoesNotExist, Team.DoesNotExist):
+                except (Member.DoesNotExist, Workspace.DoesNotExist):
                     pass
 
         return super().dispatch(request, *args, **kwargs)
@@ -65,13 +65,13 @@ class DocumentsTableView(HtmxFragmentMixin, View):
         current_team = request.session.get("current_workspace", {})
         workspace_key = current_team.get("key")
         if workspace_key:
-            from sbomify.apps.teams.models import Member, Team
+            from sbomify.apps.teams.models import Member, Workspace
 
             try:
-                team = Team.objects.get(key=workspace_key)
+                team = Workspace.objects.get(key=workspace_key)
                 Member.objects.get(user=request.user, team=team, role="guest")
                 return htmx_error_response("Guest members cannot modify documents")
-            except (Member.DoesNotExist, Team.DoesNotExist):
+            except (Member.DoesNotExist, Workspace.DoesNotExist):
                 pass
 
         if request.POST.get("_method") == "DELETE":

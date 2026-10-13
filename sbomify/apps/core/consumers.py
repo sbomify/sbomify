@@ -153,9 +153,9 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         the action that decides.
         """
         from sbomify.apps.core.authz import can
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.filter(key=workspace_key).first()
+        team = Workspace.objects.filter(key=workspace_key).first()
         if team is None:
             return False
         return can(user, "workspace:read", team).allowed

@@ -26,7 +26,7 @@ from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import get_provider
 from sbomify.apps.integrations.services import connections
 from sbomify.apps.integrations.tasks import sync_integration
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import redirect_to_team_settings
 from sbomify.logging import getLogger
@@ -36,8 +36,8 @@ logger = getLogger(__name__)
 SETTINGS_TAB = "integrations"
 
 
-def _team_or_none(workspace_key: str) -> Team | None:
-    return Team.objects.filter(key=workspace_key).first()
+def _team_or_none(workspace_key: str) -> Workspace | None:
+    return Workspace.objects.filter(key=workspace_key).first()
 
 
 class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -75,7 +75,7 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
 
         return htmx_error_response("Unknown action")
 
-    def _disconnect(self, request: HttpRequest, team: Team) -> HttpResponse:
+    def _disconnect(self, request: HttpRequest, team: Workspace) -> HttpResponse:
         provider_key = request.POST.get("provider", "")
         provider = get_provider(provider_key)
         if provider is None:
@@ -90,7 +90,7 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             triggers={"refreshIntegrations": True},
         )
 
-    def _sync(self, request: HttpRequest, team: Team) -> HttpResponse:
+    def _sync(self, request: HttpRequest, team: Workspace) -> HttpResponse:
         provider_key = request.POST.get("provider", "")
         provider = get_provider(provider_key)
         if provider is None:
@@ -114,7 +114,7 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             triggers={"refreshIntegrations": True},
         )
 
-    def _publish(self, request: HttpRequest, team: Team) -> HttpResponse:
+    def _publish(self, request: HttpRequest, team: Workspace) -> HttpResponse:
         catalog_id = request.POST.get("catalog_id", "")
         published = request.POST.get("published") == "true"
 

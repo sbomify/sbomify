@@ -17,14 +17,14 @@ from sbomify.apps.billing.services.workspace_status import (
     paying_workspaces,
     trialing_workspaces,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
 class TestPayingWorkspaces:
     def test_a_community_workspace_is_not_paying(self):
         """Built exactly as ``_setup_community_plan`` builds it."""
-        Team.objects.create(
+        Workspace.objects.create(
             name="Community",
             billing_plan="community",
             billing_plan_limits={
@@ -38,7 +38,7 @@ class TestPayingWorkspaces:
         assert paying_workspaces().count() == 0
 
     def test_a_business_workspace_with_a_live_subscription_is_paying(self):
-        Team.objects.create(
+        Workspace.objects.create(
             name="Customer",
             billing_plan="business",
             billing_plan_limits={
@@ -52,7 +52,7 @@ class TestPayingWorkspaces:
 
     def test_enterprise_counts_without_stripe_ids(self):
         """Enterprise is sales-led and may be billed on contract."""
-        Team.objects.create(
+        Workspace.objects.create(
             name="Contract",
             billing_plan="enterprise",
             billing_plan_limits={"subscription_status": "active"},
@@ -61,7 +61,7 @@ class TestPayingWorkspaces:
         assert paying_workspaces().count() == 1
 
     def test_a_trial_is_not_yet_revenue(self):
-        Team.objects.create(
+        Workspace.objects.create(
             name="Trial",
             billing_plan="business",
             billing_plan_limits={"subscription_status": "trialing"},
@@ -71,7 +71,7 @@ class TestPayingWorkspaces:
         assert trialing_workspaces().count() == 1
 
     def test_a_failing_payment_is_counted_separately(self):
-        Team.objects.create(
+        Workspace.objects.create(
             name="Dunning",
             billing_plan="business",
             billing_plan_limits={"subscription_status": "past_due"},
@@ -82,7 +82,7 @@ class TestPayingWorkspaces:
 
     def test_a_cancelled_workspace_is_found_on_the_community_plan(self):
         """Cancelling downgrades the plan, so canceled must not be plan-filtered."""
-        Team.objects.create(
+        Workspace.objects.create(
             name="Left",
             billing_plan="community",
             billing_plan_limits={"subscription_status": "canceled"},
@@ -92,6 +92,6 @@ class TestPayingWorkspaces:
         assert paying_workspaces().count() == 0
 
     def test_a_workspace_with_no_limits_at_all_is_not_paying(self):
-        Team.objects.create(name="Bare", billing_plan="community", billing_plan_limits=None)
+        Workspace.objects.create(name="Bare", billing_plan="community", billing_plan_limits=None)
 
         assert paying_workspaces().count() == 0

@@ -17,7 +17,7 @@ from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 logger = getLogger(__name__)
@@ -27,7 +27,7 @@ RATE_LIMIT = 5
 RATE_LIMIT_PERIOD = 60
 
 
-def require_billing_manager(team: Team, user: Any) -> tuple[bool, str]:
+def require_billing_manager(team: Workspace, user: Any) -> tuple[bool, str]:
     """Check if user may manage the team's billing.
 
     Billing is the ``ADMINISTER`` tier (owners and admins), not owner-only:
@@ -71,7 +71,7 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     return f"{prefix}_noid_{deterministic_hash}"
 
 
-def notify_billing_managers(team: Team, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+def notify_billing_managers(team: Workspace, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Send a notification to everyone who can act on it — owners and admins.
 
     Notifications follow the capability: admins control the subscription, so a
@@ -120,7 +120,7 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
     return count > limit
 
 
-def handle_community_downgrade_visibility(team: Team) -> None:
+def handle_community_downgrade_visibility(team: Workspace) -> None:
     """Set all components and products to PUBLIC when downgrading to community plan.
 
     Logs an audit trail of the visibility change for traceability.
@@ -151,7 +151,7 @@ def handle_community_downgrade_visibility(team: Team) -> None:
         )
 
 
-def apply_community_downgrade(team: Team) -> None:
+def apply_community_downgrade(team: Workspace) -> None:
     """Apply Community's rules to a workspace that has just left a paid plan.
 
     ``team`` must already carry the Community plan: the plugins it keeps are the
@@ -179,12 +179,12 @@ def downgrade_ended_subscription(team_pk: int, subscription_id: str | None = Non
     """
     from django.db import transaction
 
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     from .models import BillingPlan
 
     with transaction.atomic():
-        team = Team.objects.select_for_update().get(pk=team_pk)
+        team = Workspace.objects.select_for_update().get(pk=team_pk)
         if (
             subscription_id is not None
             and (team.billing_plan_limits or {}).get("stripe_subscription_id") != subscription_id

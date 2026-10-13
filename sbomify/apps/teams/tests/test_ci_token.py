@@ -98,9 +98,9 @@ class TestWhenItRefuses:
         assert AccessToken.objects.count() == 0
 
     def test_an_anonymous_caller_mints_nothing(self) -> None:
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.create(name="Someone Else's", key="strangerkey")
+        team = Workspace.objects.create(name="Someone Else's", key="strangerkey")
 
         response = Client().post(reverse("workspaces:ci_token", kwargs={"workspace_key": team.key}))
 
@@ -160,11 +160,11 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
         self, sample_team_with_owner_member: Member
     ) -> None:
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         user = sample_team_with_owner_member.user
         owned = sample_team_with_owner_member.team
-        other = Team.objects.create(name="Another Workspace")
+        other = Workspace.objects.create(name="Another Workspace")
         other.key = number_to_random_token(other.pk)
         other.save(update_fields=["key"])
         Member.objects.create(user=user, team=other, role="member")
@@ -185,11 +185,11 @@ class TestItAuthorizesTheWorkspaceInTheUrl:
         """The check must not break the legitimate case: minting for a
         workspace you own while another is selected."""
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         user = sample_team_with_owner_member.user
         owned = sample_team_with_owner_member.team
-        second = Team.objects.create(name="Second Workspace")
+        second = Workspace.objects.create(name="Second Workspace")
         second.key = number_to_random_token(second.pk)
         second.save(update_fields=["key"])
         Member.objects.create(user=user, team=second, role="owner")

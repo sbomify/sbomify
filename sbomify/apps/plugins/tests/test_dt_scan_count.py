@@ -39,13 +39,13 @@ class TestTrackedObjectCount:
     def test_tracked_object_count(self) -> None:
         """tracked_object_count returns the number of component mappings."""
         from sbomify.apps.core.models import Component
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
         from sbomify.apps.vulnerability_scanning.models import (
             ComponentDependencyTrackMapping,
             DependencyTrackServer,
         )
 
-        team = Team.objects.create(name="Test Team", key="test-team-count", billing_plan="business")
+        team = Workspace.objects.create(name="Test Team", key="test-team-count", billing_plan="business")
         server = DependencyTrackServer.objects.create(
             name="Test Server",
             url="https://dt-count.example.com",
@@ -70,13 +70,13 @@ class TestTrackedObjectCount:
     def test_at_capacity(self) -> None:
         """is_available_for_scan returns False when at capacity."""
         from sbomify.apps.core.models import Component
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
         from sbomify.apps.vulnerability_scanning.models import (
             ComponentDependencyTrackMapping,
             DependencyTrackServer,
         )
 
-        team = Team.objects.create(name="Test Team", key="test-team-cap", billing_plan="business")
+        team = Workspace.objects.create(name="Test Team", key="test-team-cap", billing_plan="business")
         server = DependencyTrackServer.objects.create(
             name="Test Server",
             url="https://dt-cap.example.com",

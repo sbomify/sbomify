@@ -9,17 +9,17 @@ turns guests away, so before it existed this gap had no one to fall through it.
 import pytest
 from django.urls import reverse
 
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
 def home(db):
-    return Team.objects.create(name="Home Workspace")
+    return Workspace.objects.create(name="Home Workspace")
 
 
 @pytest.fixture
 def other(db):
-    return Team.objects.create(name="Other Workspace")
+    return Workspace.objects.create(name="Other Workspace")
 
 
 @pytest.fixture

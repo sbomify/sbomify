@@ -64,7 +64,7 @@ def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
     suffix = 2
     while True:
         if candidate not in RESERVED_SLUGS:
-            qs = Team.objects.filter(slug=candidate)
+            qs = Workspace.objects.filter(slug=candidate)
             if exclude_pk is not None:
                 qs = qs.exclude(pk=exclude_pk)
             if not qs.exists():
@@ -152,7 +152,7 @@ def default_patch_sla_days() -> dict[str, int | None]:
     return dict(CRA_DEFAULT_PATCH_SLA_DAYS)
 
 
-class Team(models.Model):
+class Workspace(models.Model):
     class Plan(models.TextChoices):
         COMMUNITY = "community", "Community"
         BUSINESS = "business", "Business"
@@ -343,9 +343,9 @@ class Team(models.Model):
         if not plan:
             return False
 
-        allowed_plans = {choice.value for choice in Team.Plan}
+        allowed_plans = {choice.value for choice in Workspace.Plan}
         if plan in allowed_plans:
-            return plan != Team.Plan.COMMUNITY
+            return plan != Workspace.Plan.COMMUNITY
 
         # Custom plan keys that exist in BillingPlan are treated as paid/allowed
         if BillingPlan.objects.filter(key__iexact=plan).exists():
@@ -398,7 +398,7 @@ class Team(models.Model):
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()
 
-        is_paid_plan = bool(current_plan) and current_plan != Team.Plan.COMMUNITY
+        is_paid_plan = bool(current_plan) and current_plan != Workspace.Plan.COMMUNITY
 
         # Default paid plans to private only at creation time (opt-in later for upgrades)
         if is_new and is_paid_plan and self.is_public:
@@ -419,10 +419,10 @@ class Team(models.Model):
         old_slug = None
         if not is_new:
             try:
-                old_instance = Team.objects.only("custom_domain", "slug").get(pk=self.pk)
+                old_instance = Workspace.objects.only("custom_domain", "slug").get(pk=self.pk)
                 old_custom_domain = old_instance.custom_domain
                 old_slug = old_instance.slug
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 pass
 
         super().save(*args, **kwargs)
@@ -547,7 +547,7 @@ class Member(models.Model):
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
     role = models.CharField(max_length=255, choices=settings.WORKSPACE_SUPPORTED_ROLES)
     is_default_team = models.BooleanField(default=False, db_column="is_default_workspace")
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -583,7 +583,7 @@ class Invitation(models.Model):
             ),
         ]
 
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     # Invitable roles only — ``bot`` is reserved for synthetic OIDC
@@ -684,7 +684,9 @@ class ContactProfile(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id")
+    team = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id"
+    )
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
     is_component_private = models.BooleanField(
@@ -927,7 +929,7 @@ class Supplier(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
     name = models.CharField(max_length=255, help_text="The vendor organization's name")
     contact_name = models.CharField(
         max_length=255,

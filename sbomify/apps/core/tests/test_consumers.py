@@ -449,27 +449,27 @@ class TestWorkspaceMembershipCheck:
         NDA machinery; treating it as workspace membership handed an outside
         visitor the internal event feed.
         """
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
-        team = Team.objects.create(name="Socket Workspace")
+        team = Workspace.objects.create(name="Socket Workspace")
         guest = self._user(django_user_model, "socket-guest")
         Member.objects.create(user=guest, team=team, role="guest")
 
         assert self._check(guest, team.key) is False
 
     def test_internal_roles_can_listen(self, django_user_model):
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
-        team = Team.objects.create(name="Socket Workspace Internal")
+        team = Workspace.objects.create(name="Socket Workspace Internal")
         for role in ("owner", "admin", "member"):
             user = self._user(django_user_model, f"socket-{role}")
             Member.objects.create(user=user, team=team, role=role)
             assert self._check(user, team.key) is True, f"{role} should be able to listen"
 
     def test_a_non_member_cannot_listen(self, django_user_model):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.create(name="Socket Workspace Outsider")
+        team = Workspace.objects.create(name="Socket Workspace Outsider")
         outsider = self._user(django_user_model, "socket-outsider")
 
         assert self._check(outsider, team.key) is False

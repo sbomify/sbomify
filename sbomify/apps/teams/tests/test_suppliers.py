@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Supplier, Team
+from sbomify.apps.teams.models import Member, Supplier, Workspace
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
     delete_supplier,
@@ -25,8 +25,8 @@ from sbomify.apps.teams.services.suppliers import (
 pytestmark = pytest.mark.django_db
 
 
-def _other_team(name: str = "Other Workspace") -> Team:
-    team = Team.objects.create(name=name)
+def _other_team(name: str = "Other Workspace") -> Workspace:
+    team = Workspace.objects.create(name=name)
     team.key = number_to_random_token(team.pk)
     team.save(update_fields=["key"])
     return team
@@ -176,7 +176,7 @@ class TestSearch:
 
 
 class TestApi:
-    def _url(self, team: Team, suffix: str = "") -> str:
+    def _url(self, team: Workspace, suffix: str = "") -> str:
         return f"/api/v1/workspaces/{team.key}/suppliers{suffix}"
 
     def test_a_member_can_list(self, client: Client, sample_team_with_owner_member):
@@ -264,7 +264,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
     one workspace act on another where they are only a guest.
     """
 
-    def _setup(self, client: Client, sample_team_with_owner_member) -> Team:
+    def _setup(self, client: Client, sample_team_with_owner_member) -> Workspace:
         session_team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         other = _other_team("Someone Else's Workspace")

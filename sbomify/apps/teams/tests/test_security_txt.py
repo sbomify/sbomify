@@ -517,10 +517,10 @@ class TestSecurityTxtSettingsPost:
 
     def test_rejects_contact_from_other_team(self, authenticated_web_client, sample_team_with_owner_member) -> None:
         """contact_id from another team should be rejected."""
-        from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Team
+        from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Workspace
 
         team = sample_team_with_owner_member.team
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         profile = ContactProfile.objects.create(team=other_team, name="Other", is_default=True)
         entity = ContactEntity.objects.create(profile=profile, name="Other Entity", is_author=True)
         other_contact = ContactProfileContact.objects.create(entity=entity, name="Hacker", email="h@evil.com")

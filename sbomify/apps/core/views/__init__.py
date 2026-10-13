@@ -99,12 +99,12 @@ def home(request: HttpRequest) -> HttpResponse:
             return redirect("workspaces:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team = None
         workspace_key = current_team.get("key")
         if workspace_key:
-            team = Team.objects.filter(key=workspace_key).first()
+            team = Workspace.objects.filter(key=workspace_key).first()
 
         if needs_plan_selection(team, request.user):
             return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
@@ -476,13 +476,13 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     # Read the target workspace's role from the live Member row, not the session
     # cache: that copy has a 300s TTL, so a demotion in the target workspace left
     # a window in which a component could still be transferred into it.
-    from sbomify.apps.teams.models import Member, Team
+    from sbomify.apps.teams.models import Member, Workspace
 
     if not Member.objects.filter(user=cast(User, request.user), team__key=workspace_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
     # Existence is checked after the role, so a missing workspace is refused like
     # one the caller does not administer. None here means it was deleted since.
-    target_team = Team.objects.filter(key=workspace_key).first()
+    target_team = Workspace.objects.filter(key=workspace_key).first()
     if target_team is None:
         return error_response(request, HttpResponseNotFound("Workspace not found"))
 

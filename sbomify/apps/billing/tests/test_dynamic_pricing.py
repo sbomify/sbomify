@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -377,7 +377,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
         from sbomify.apps.core.utils import number_to_random_token
 
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         # Ensure team has a valid key
         if not self.team.key or len(self.team.key) < 9:
             self.team.key = number_to_random_token(self.team.id)
@@ -486,7 +486,7 @@ class TestSelectPlanTemplate(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team", key="test-team")
+        self.team = Workspace.objects.create(name="Test Team", key="test-team")
         Member.objects.create(team=self.team, user=self.user, role="owner")
 
         self.business_plan = create_test_plan(
@@ -695,7 +695,7 @@ class TestIntegrationScenarios(TestCase):
         from sbomify.apps.core.utils import number_to_random_token
 
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         # Ensure team has a valid key
         if not self.team.key or len(self.team.key) < 9:
             self.team.key = number_to_random_token(self.team.id)

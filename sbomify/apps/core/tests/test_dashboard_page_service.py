@@ -87,11 +87,11 @@ def test_first_upload_replaces_empty_dashboard_immediately(
 
 
 def test_onboarding_upload_only_targets_workspace_bom_components(sample_team_with_owner_member: Member) -> None:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     workspace = sample_team_with_owner_member.team
     Component.objects.create(name="Documents", team=workspace, component_type="document")
-    other_workspace = Team.objects.create(name="Another workspace")
+    other_workspace = Workspace.objects.create(name="Another workspace")
     Component.objects.create(name="Other workspace component", team=other_workspace)
     assert get_first_component(workspace.id).value is None
 
@@ -178,7 +178,7 @@ def test_digest_recency_breaks_ties_within_severity(sample_team_with_owner_membe
 
 def test_overview_counts_latest_provider_results_and_scopes_products(sample_team_with_owner_member: Member) -> None:
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     workspace = sample_team_with_owner_member.team
     component = Component.objects.create(name="shared", team=workspace)
@@ -189,7 +189,7 @@ def test_overview_counts_latest_provider_results_and_scopes_products(sample_team
     for name in ("First", "Second"):
         product = Product.objects.create(name=name, team=workspace)
         product.components.add(component)
-    other_workspace = Team.objects.create(name="Other")
+    other_workspace = Workspace.objects.create(name="Other")
     Product.objects.create(name="Hidden", team=other_workspace)
     cache.clear()
 

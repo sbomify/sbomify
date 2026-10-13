@@ -11,7 +11,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.sboms.services.crypto_dashboard import build_workspace_crypto_rollup
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -25,8 +25,8 @@ class WorkspaceCryptoView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         try:
             team_id = token_to_number(workspace_key)
-            team = Team.objects.get(pk=team_id)
-        except (ValueError, Team.DoesNotExist):
+            team = Workspace.objects.get(pk=team_id)
+        except (ValueError, Workspace.DoesNotExist):
             return error_response(request, HttpResponseNotFound("Workspace not found"))
 
         # Role check runs against the URL workspace, not the session's current

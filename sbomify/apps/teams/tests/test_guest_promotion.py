@@ -15,14 +15,14 @@ import pytest
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
 def team(db):
-    return Team.objects.create(name="Promotion Workspace")
+    return Workspace.objects.create(name="Promotion Workspace")
 
 
 @pytest.fixture

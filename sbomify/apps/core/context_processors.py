@@ -184,10 +184,10 @@ def pending_access_requests_context(request: Any) -> Any:
 
         from sbomify.apps.core.authz import ADMINISTER
         from sbomify.apps.documents.access_models import AccessRequest
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         # Only show count for owners/admins
-        team = Team.objects.get(key=workspace_key)
+        team = Workspace.objects.get(key=workspace_key)
         member = Member.objects.filter(team=team, user=request.user).first()
 
         if not member or member.role not in ADMINISTER:
@@ -275,17 +275,17 @@ def team_context(request: Any) -> Any:
         return {}
 
     try:
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             # A ``workspace_key`` kwarg that names no workspace isn't necessarily a
             # workspace key at all. Fall back rather than dropping the whole
             # context and stripping the chrome off the page.
             if not url_team_key or not session_team_key:
                 raise
-            team = Team.objects.get(key=session_team_key)
+            team = Workspace.objects.get(key=session_team_key)
 
         # Determine if owner. Billing status (banners/notifications) is read
         # straight from team.billing_plan_limits below; it is NOT synced from

@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 
 from sbomify.apps.billing import email_notifications
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def team(db):
     """Create a test team with a member."""
-    team = Team.objects.create(name="Test Team")
+    team = Workspace.objects.create(name="Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
     user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")

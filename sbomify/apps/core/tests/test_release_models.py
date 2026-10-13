@@ -751,9 +751,9 @@ def test_component_products_clear_refreshes_previous_products_latest_releases(
     a component to workspace-scoped) would leave the previous products with
     stale ``latest`` releases.
     """
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    team = Team.objects.create(name="signal-test-team")
+    team = Workspace.objects.create(name="signal-test-team")
     component = Component.objects.create(name="snapshot-comp", team=team, component_type=Component.ComponentType.BOM)
     p_a = Product.objects.create(name="P-A", team=team)
     p_b = Product.objects.create(name="P-B", team=team)

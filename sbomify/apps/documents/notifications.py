@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -36,8 +36,8 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
 
     try:
         workspace_key = request.session["current_workspace"]["key"]
-        team = Team.objects.get(key=workspace_key)
-    except (Team.DoesNotExist, KeyError, TypeError):
+        team = Workspace.objects.get(key=workspace_key)
+    except (Workspace.DoesNotExist, KeyError, TypeError):
         return []
 
     # Only show notifications to owners and admins

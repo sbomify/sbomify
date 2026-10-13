@@ -164,10 +164,10 @@ def test_the_component_limit_check_runs_locked_inside_the_create_transaction(
 def test_the_limit_itself_still_holds():
     """Moving the check must not stop it refusing."""
     from sbomify.apps.billing.models import BillingPlan
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     BillingPlan.objects.create(key="community", name="Community", description="c", max_products=1, max_components=1)
-    team = Team.objects.create(name="limited", billing_plan="community")
+    team = Workspace.objects.create(name="limited", billing_plan="community")
 
     assert apis._check_billing_limits(str(team.id), "product")[0] is True
     Product.objects.create(name="P1", team=team)
@@ -182,10 +182,10 @@ def test_the_limit_itself_still_holds():
 def test_the_locked_recount_answers_the_same_way():
     """The lock changes concurrency, not the verdict."""
     from sbomify.apps.billing.models import BillingPlan
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     BillingPlan.objects.create(key="community", name="Community", description="c", max_products=1, max_components=1)
-    team = Team.objects.create(name="limited", billing_plan="community")
+    team = Workspace.objects.create(name="limited", billing_plan="community")
 
     with transaction.atomic():
         assert apis._enforce_limit_under_lock(str(team.id), "product")[0] is True

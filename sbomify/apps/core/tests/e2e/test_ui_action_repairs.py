@@ -14,7 +14,7 @@ from playwright.sync_api import Page, expect
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact, User
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytest_plugins = [
     "sbomify.apps.core.tests.e2e.fixtures",
@@ -116,7 +116,7 @@ def test_product_form_errors_preserve_editor(
 def test_component_sharing_does_not_require_visibility_permission(
     authenticated_page: Page,
     component_factory: Callable[..., Component],
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: User,
     role: str,
     component_type: str,
@@ -207,7 +207,7 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
 
 
 def test_controls_navigation_and_product_overrides(
-    authenticated_page: Page, team_with_business_plan: Team, product_factory: Callable[..., Product]
+    authenticated_page: Page, team_with_business_plan: Workspace, product_factory: Callable[..., Product]
 ) -> None:
     page = authenticated_page
     workspace = team_with_business_plan
@@ -307,7 +307,7 @@ def test_unchanged_lifecycle_keeps_the_editor(
     assert product.release_date is not None
 
 
-def test_catalog_import_and_deletion(authenticated_page: Page, team_with_business_plan: Team) -> None:
+def test_catalog_import_and_deletion(authenticated_page: Page, team_with_business_plan: Workspace) -> None:
     page = authenticated_page
     page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
     page.get_by_role("button", name="Import catalog", exact=True).click()
@@ -345,7 +345,7 @@ def test_catalog_import_and_deletion(authenticated_page: Page, team_with_busines
 
 @pytest.mark.parametrize("width,theme", [(1440, "light"), (1440, "dark"), (390, "light"), (390, "dark")])
 def test_controls_settings_snapshot(
-    authenticated_page: Page, team_with_business_plan: Team, snapshot: Any, width: int, theme: str
+    authenticated_page: Page, team_with_business_plan: Workspace, snapshot: Any, width: int, theme: str
 ) -> None:
     catalog = ControlCatalog.objects.create(
         team=team_with_business_plan, name="Access controls", source="custom", version="1"

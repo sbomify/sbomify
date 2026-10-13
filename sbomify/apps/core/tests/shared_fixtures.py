@@ -17,7 +17,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.sboms.tests.test_views import setup_test_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 # ============================================================================
 # Authentication & API Testing Fixtures
@@ -84,7 +84,7 @@ def guest_api_client(guest_user: AbstractBaseUser) -> Generator[tuple[Client, Ac
 
 
 @pytest.fixture
-def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:  # noqa: F811
+def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Workspace, Any, None]:  # noqa: F811
     """Create a team with community billing plan."""
     # Ensure community plan exists
     community_plan, _ = BillingPlan.objects.get_or_create(
@@ -98,7 +98,7 @@ def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, A
         },
     )
 
-    team = Team.objects.create(name="Test Community Team", billing_plan=community_plan.key)
+    team = Workspace.objects.create(name="Test Community Team", billing_plan=community_plan.key)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -112,7 +112,7 @@ def team_with_community_plan(sample_user: AbstractBaseUser) -> Generator[Team, A
 
 
 @pytest.fixture
-def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:  # noqa: F811
+def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Workspace, Any, None]:  # noqa: F811
     """Create a team with business billing plan and trial subscription."""
     # Ensure business plan exists
     business_plan, _ = BillingPlan.objects.get_or_create(
@@ -129,7 +129,7 @@ def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Team, An
         },
     )
 
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Business Team",
         billing_plan=business_plan.key,
         billing_plan_limits={
@@ -153,7 +153,7 @@ def team_with_business_plan(sample_user: AbstractBaseUser) -> Generator[Team, An
 
 
 @pytest.fixture
-def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, Any, None]:  # noqa: F811
+def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Workspace, Any, None]:  # noqa: F811
     """Create a team with enterprise billing plan (unlimited resources)."""
     # Ensure enterprise plan exists
     enterprise_plan, _ = BillingPlan.objects.get_or_create(
@@ -167,7 +167,7 @@ def team_with_enterprise_plan(sample_user: AbstractBaseUser) -> Generator[Team, 
         },
     )
 
-    team = Team.objects.create(name="Test Enterprise Team", billing_plan=enterprise_plan.key)
+    team = Workspace.objects.create(name="Test Enterprise Team", billing_plan=enterprise_plan.key)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -199,7 +199,7 @@ def register_plugin(name: str, category: str = "security") -> None:
 # ============================================================================
 
 
-def setup_authenticated_client_session(client: Client, team: Team, user: AbstractBaseUser) -> None:
+def setup_authenticated_client_session(client: Client, team: Workspace, user: AbstractBaseUser) -> None:
     """
     Set up an authenticated client session with team context.
 
@@ -246,7 +246,7 @@ def setup_authenticated_client_session(client: Client, team: Team, user: Abstrac
 @pytest.fixture
 def authenticated_web_client(
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ) -> Generator[Client, Any, None]:
     """
     Create an authenticated web client with team session setup.
@@ -269,8 +269,8 @@ def authenticated_web_client(
 def team_with_multiple_members(
     sample_user: AbstractBaseUser,  # noqa: F811
     guest_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
-) -> Generator[Team, Any, None]:
+    team_with_business_plan: Workspace,  # noqa: F811
+) -> Generator[Workspace, Any, None]:
     """
     Create a team with multiple members for testing team functionality.
 

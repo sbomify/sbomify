@@ -167,9 +167,9 @@ def test_sidebar_links_point_at_the_workspace_the_page_is_about(
     Built from the session's workspace, they sent an operator on another
     workspace's page to links its flags were never checked against.
     """
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    other = Team.objects.create(name="Other workspace")
+    other = Workspace.objects.create(name="Other workspace")
     Member.objects.create(team=other, user=sample_user, role="operator")
     setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_user)
     session = client.session

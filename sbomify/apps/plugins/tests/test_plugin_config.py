@@ -14,11 +14,11 @@ from sbomify.apps.plugins.apis import (
 )
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     """Create a test team."""
     BillingPlan.objects.get_or_create(
         key="business",
@@ -29,7 +29,7 @@ def test_team(db) -> Team:
             "max_users": 10,
         },
     )
-    team = Team.objects.create(name="Config Test Team", billing_plan="business")
+    team = Workspace.objects.create(name="Config Test Team", billing_plan="business")
     owner = get_user_model().objects.create_user(username=f"cfg-owner-{team.pk}", email=f"cfg{team.pk}@t.test")
     Member.objects.create(team=team, user=owner, role="owner")
     team.owner = owner
@@ -38,7 +38,7 @@ def test_team(db) -> Team:
 
 
 @pytest.fixture
-def enterprise_team(db) -> Team:
+def enterprise_team(db) -> Workspace:
     """Create a test team with enterprise billing plan."""
     BillingPlan.objects.get_or_create(
         key="enterprise",
@@ -49,7 +49,7 @@ def enterprise_team(db) -> Team:
             "max_users": 100,
         },
     )
-    team = Team.objects.create(name="Enterprise Test Team", billing_plan="enterprise")
+    team = Workspace.objects.create(name="Enterprise Test Team", billing_plan="enterprise")
     owner = get_user_model().objects.create_user(username=f"ent-owner-{team.pk}", email=f"ent{team.pk}@t.test")
     Member.objects.create(team=team, user=owner, role="owner")
     team.owner = owner
@@ -243,7 +243,7 @@ class TestResolveConfigSchema:
 class TestResolveDtServers:
     """Tests for _resolve_dt_servers."""
 
-    def test_returns_active_servers_for_enterprise(self, enterprise_team: Team) -> None:
+    def test_returns_active_servers_for_enterprise(self, enterprise_team: Workspace) -> None:
         """Test that active DT servers are returned for enterprise teams."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
@@ -259,7 +259,7 @@ class TestResolveDtServers:
         finally:
             server.delete()
 
-    def test_returns_empty_for_non_enterprise(self, test_team: Team) -> None:
+    def test_returns_empty_for_non_enterprise(self, test_team: Workspace) -> None:
         """Test that non-enterprise teams get no server choices."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
@@ -279,7 +279,7 @@ class TestResolveDtServers:
         """Test that billing_plan='Enterprise' (capitalized) is handled correctly."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
-        team = Team.objects.create(name="Cap Enterprise Team", billing_plan="Enterprise")
+        team = Workspace.objects.create(name="Cap Enterprise Team", billing_plan="Enterprise")
         server = DependencyTrackServer.objects.create(
             name="Cap Server",
             url="https://dt-cap.example.com",
@@ -298,7 +298,7 @@ class TestResolveDtServers:
         result = _resolve_dt_servers()
         assert result == []
 
-    def test_excludes_inactive_servers(self, enterprise_team: Team) -> None:
+    def test_excludes_inactive_servers(self, enterprise_team: Workspace) -> None:
         """Test that inactive DT servers are excluded."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
@@ -314,7 +314,7 @@ class TestResolveDtServers:
         finally:
             server.delete()
 
-    def test_uses_name_as_label(self, enterprise_team: Team) -> None:
+    def test_uses_name_as_label(self, enterprise_team: Workspace) -> None:
         """Test that server name is used as label (never exposing URL)."""
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
@@ -338,7 +338,7 @@ class TestPluginSettingsWithSchema:
     """Tests for plugin settings API including config_schema."""
 
     def test_config_schema_included_in_available_plugins(
-        self, test_team: Team, plugin_with_schema: RegisteredPlugin
+        self, test_team: Workspace, plugin_with_schema: RegisteredPlugin
     ) -> None:
         """Test that config_schema is included in available plugins response."""
         from django.test import RequestFactory
@@ -356,7 +356,7 @@ class TestPluginSettingsWithSchema:
         # choices_source should be resolved (removed)
         assert "choices_source" not in plugin_data["config_schema"][0]
 
-    def test_empty_config_schema(self, test_team: Team) -> None:
+    def test_empty_config_schema(self, test_team: Workspace) -> None:
         """Test that plugins with no config_schema return empty list."""
         plugin = RegisteredPlugin.objects.create(
             name="no-config-plugin",
@@ -400,7 +400,7 @@ class TestViewPostPluginConfig:
         )
         return plugin
 
-    def test_post_handler_parses_config(self, enterprise_team: Team, dt_plugin) -> None:
+    def test_post_handler_parses_config(self, enterprise_team: Workspace, dt_plugin) -> None:
         """Test that plugin config is correctly parsed from POST data for enterprise teams."""
         from django.test import RequestFactory
 
@@ -421,7 +421,7 @@ class TestViewPostPluginConfig:
         assert "dependency-track" in settings.plugin_configs
         assert "dt_server_id" in settings.plugin_configs["dependency-track"]
 
-    def test_post_handler_strips_dt_server_for_non_enterprise(self, test_team: Team, dt_plugin) -> None:
+    def test_post_handler_strips_dt_server_for_non_enterprise(self, test_team: Workspace, dt_plugin) -> None:
         """Test that dt_server_id is stripped from config for non-enterprise teams."""
         from django.test import RequestFactory
 
@@ -442,7 +442,7 @@ class TestViewPostPluginConfig:
         assert "dependency-track" in settings.plugin_configs
         assert "dt_server_id" not in settings.plugin_configs["dependency-track"]
 
-    def test_post_handler_preserves_existing_config(self, enterprise_team: Team, dt_plugin) -> None:
+    def test_post_handler_preserves_existing_config(self, enterprise_team: Workspace, dt_plugin) -> None:
         """Test that config is updated correctly on subsequent saves."""
         from django.test import RequestFactory
 
@@ -530,7 +530,7 @@ class TestDTPluginConfigIntegration:
             selected = plugin._select_dt_server(team)
             assert selected == mock_server
 
-    def test_team_has_dt_enabled_via_plugin_settings(self, test_team: Team) -> None:
+    def test_team_has_dt_enabled_via_plugin_settings(self, test_team: Workspace) -> None:
         """Test _team_has_dt_enabled checks TeamPluginSettings."""
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
@@ -561,7 +561,7 @@ class TestHourlyDTScanTaskPluginSettings:
     """Tests for hourly_dt_scan_task using TeamPluginSettings."""
 
     @pytest.fixture
-    def business_team(self, db) -> Team:
+    def business_team(self, db) -> Workspace:
         """Create a business team."""
         BillingPlan.objects.get_or_create(
             key="business",
@@ -572,11 +572,11 @@ class TestHourlyDTScanTaskPluginSettings:
                 "max_users": 10,
             },
         )
-        team = Team.objects.create(name="DT Task Team", billing_plan="business")
+        team = Workspace.objects.create(name="DT Task Team", billing_plan="business")
         yield team
         team.delete()
 
-    def test_finds_teams_with_dt_plugin_enabled(self, business_team: Team) -> None:
+    def test_finds_teams_with_dt_plugin_enabled(self, business_team: Workspace) -> None:
         """Test that hourly task finds teams via TeamPluginSettings."""
         settings = TeamPluginSettings.objects.create(
             team=business_team,
@@ -595,7 +595,7 @@ class TestHourlyDTScanTaskPluginSettings:
 
         settings.delete()
 
-    def test_ignores_teams_without_dt_plugin(self, business_team: Team) -> None:
+    def test_ignores_teams_without_dt_plugin(self, business_team: Workspace) -> None:
         """Test that hourly task skips teams without DT plugin enabled."""
         settings = TeamPluginSettings.objects.create(
             team=business_team,
@@ -611,7 +611,7 @@ class TestHourlyDTScanTaskPluginSettings:
 
         settings.delete()
 
-    def test_passes_plugin_config_to_enqueue(self, business_team: Team) -> None:
+    def test_passes_plugin_config_to_enqueue(self, business_team: Workspace) -> None:
         """Test that the task passes plugin config when enqueuing."""
         from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
         from sbomify.apps.sboms.models import SBOM
@@ -672,7 +672,7 @@ class TestHourlyDTScanTaskPluginSettings:
 class TestPluginBomTypeBadges:
     """available_plugins carries each plugin's supported BOM types for the badge UI."""
 
-    def test_supported_bom_types_from_plugin_metadata(self, test_team: Team) -> None:
+    def test_supported_bom_types_from_plugin_metadata(self, test_team: Workspace) -> None:
         from django.test import RequestFactory
 
         request = RequestFactory().get("/")
@@ -686,7 +686,7 @@ class TestPluginBomTypeBadges:
         assert by_name["nist-sp800-131a"]["supported_bom_types"] == ["cbom", "sbom"]
         assert by_name["ntia-minimum-elements-2021"]["supported_bom_types"] == ["sbom"]
 
-    def test_unloadable_plugin_class_defaults_to_sbom(self, test_team: Team) -> None:
+    def test_unloadable_plugin_class_defaults_to_sbom(self, test_team: Workspace) -> None:
         from django.test import RequestFactory
 
         RegisteredPlugin.objects.create(

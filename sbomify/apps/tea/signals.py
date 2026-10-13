@@ -43,7 +43,7 @@ _INVALIDATION_SENDERS = [
     "core.ReleaseArtifact",
     "core.ComponentRelease",
     "core.ComponentReleaseArtifact",
-    "teams.Team",
+    "teams.Workspace",
 ]
 
 
@@ -61,7 +61,7 @@ def _get_team_key(instance: Any) -> str | None:
     try:
         # Team model itself
         model_name = type(instance).__name__
-        if model_name == "Team":
+        if model_name == "Workspace":
             return instance.key  # type: ignore[no-any-return]
 
         # Direct team FK (Product, Component, ProductIdentifier)

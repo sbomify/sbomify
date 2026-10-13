@@ -32,7 +32,7 @@ from sbomify.apps.teams.fixtures import (  # noqa: F401
     sample_team_with_owner_member,
     sample_user,
 )
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.schemas import BrandingInfo
 from sbomify.apps.teams.templatetags.teams import user_workspaces
 from sbomify.apps.teams.utils import (
@@ -150,7 +150,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     form_data = urlencode({"_method": "POST", "name": "New Test Team"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
-    team = Team.objects.filter(name="New Test Team").first()
+    team = Workspace.objects.filter(name="New Test Team").first()
     assert team is not None  # nosec
     assert team.key is not None  # nosec
     assert len(team.key) > 0  # nosec
@@ -258,14 +258,14 @@ def test_set_default_team(sample_team_with_owner_member: Member):  # noqa: F811
 def test_delete_team(sample_user: AbstractBaseUser):
     """Test deleting a team"""
     # Create a default team first
-    default_team = Team.objects.create(name="Default Team")
+    default_team = Workspace.objects.create(name="Default Team")
     default_team.key = number_to_random_token(default_team.pk)
     default_team.save()
 
     default_owner = Member.objects.create(team=default_team, user=sample_user, role="owner", is_default_team=True)
 
     # Create a team to delete
-    team = Team.objects.create(name="Temporary Test Team")
+    team = Workspace.objects.create(name="Temporary Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -292,13 +292,13 @@ def test_delete_team(sample_user: AbstractBaseUser):
     assert response.url == reverse("workspaces:teams_dashboard")
 
     # Verify team is deleted
-    assert not Team.objects.filter(pk=team.pk).exists()
+    assert not Workspace.objects.filter(pk=team.pk).exists()
 
     # Verify member is deleted (due to CASCADE)
     assert not Member.objects.filter(pk=owner.pk).exists()
 
     # Verify default team still exists
-    assert Team.objects.filter(pk=default_team.pk).exists()
+    assert Workspace.objects.filter(pk=default_team.pk).exists()
 
     # Check success message
     messages = list(get_messages(response.wsgi_request))
@@ -310,7 +310,7 @@ def test_delete_team(sample_user: AbstractBaseUser):
 def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
     """Test deleting a team without owner permissions fails"""
     # Create a team with a non-owner member
-    team = Team.objects.create(name="Test Team")
+    team = Workspace.objects.create(name="Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -332,7 +332,7 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
     assert response.status_code == 302
 
     # Verify team still exists
-    assert Team.objects.filter(pk=team.pk).exists()
+    assert Workspace.objects.filter(pk=team.pk).exists()
 
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
@@ -340,7 +340,7 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
 
 
 @pytest.mark.django_db
-def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: Team):  # noqa: F811
+def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: Workspace):  # noqa: F811
     client = Client()
 
     # User not logged in - should redirect to login
@@ -365,7 +365,7 @@ def test_team_invitation_form_view(sample_team_with_owner_member: Member):  # no
 
 
 @pytest.mark.django_db
-def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa: F811
+def test_only_owners_are_allowed_to_send_invitation(sample_team: Workspace):  # noqa: F811
     client = Client()
 
     # User not logged in - should redirect to login
@@ -470,7 +470,7 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model, comm
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Invited Workspace")
+    team = Workspace.objects.create(name="Invited Workspace")
     invitation = Invitation.objects.create(team=team, email=invited_user.email, role="admin")
 
     client = Client()
@@ -497,7 +497,7 @@ def test_skip_auto_workspace_creation_for_invited_user(django_user_model, commun
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Host Workspace")
+    team = Workspace.objects.create(name="Host Workspace")
     Invitation.objects.create(team=team, email=invited_user.email, role="guest")
 
     created_team = create_user_team_and_subscription(invited_user)
@@ -514,7 +514,7 @@ def test_pending_invitation_auto_accept_on_login(django_user_model, community_pl
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Invited Team")
+    team = Workspace.objects.create(name="Invited Team")
     Invitation.objects.create(team=team, email=invited_user.email, role="guest")
 
     client = Client()
@@ -540,7 +540,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Test Workspace")
+    team = Workspace.objects.create(name="Test Workspace")
 
     # Create existing guest membership (as if from access request)
     existing_membership = Member.objects.create(
@@ -598,7 +598,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Test Workspace")
+    team = Workspace.objects.create(name="Test Workspace")
 
     # Create an admin user to approve the request
     admin_user = django_user_model.objects.create_user(
@@ -665,7 +665,7 @@ def test_accept_invitation_never_demotes_an_owner(django_user_model, community_p
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Demotion Test Workspace", billing_plan=community_plan.key)
+    team = Workspace.objects.create(name="Demotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=owner_user, role="owner", is_default_team=True)
 
     # An admin re-invites the existing owner at a lower role.
@@ -693,7 +693,7 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
+    team = Workspace.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
     membership = Member.objects.create(team=team, user=user, role="admin", is_default_team=True)
     issuer = django_user_model.objects.create_user(username="promote-issuer", email="issuer@example.com")
     Member.objects.create(team=team, user=issuer, role="owner")
@@ -719,7 +719,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
         password="secret",
         email_verified=True,
     )
-    team = Team.objects.create(name="Test Workspace")
+    team = Workspace.objects.create(name="Test Workspace")
 
     # Create existing admin membership
     existing_membership = Member.objects.create(
@@ -764,7 +764,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
         email_verified=True,
     )
 
-    team = Team.objects.create(name="Capacity Limited Workspace")
+    team = Workspace.objects.create(name="Capacity Limited Workspace")
     Member.objects.create(user=owner, team=team, role="owner", is_default_team=True)
     invitation = Invitation.objects.create(team=team, email=invited_user.email, role="guest")
 
@@ -777,7 +777,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
     assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
 
     availability = response.context["availability"]
-    assert availability["plan_name"] == Team.Plan.COMMUNITY.label
+    assert availability["plan_name"] == Workspace.Plan.COMMUNITY.label
     assert availability["member_limit"] == 1
     assert availability["current_members"] == 1
 
@@ -965,7 +965,7 @@ def test_access_team_settings__when_user_is_guest__should_fail(
 
 @pytest.mark.django_db
 def test_access_team_settings__when_user_is_not_member__should_fail(
-    sample_team: Team,
+    sample_team: Workspace,
 ):
     client = Client()
     uri = reverse("workspaces:team_settings", kwargs={"workspace_key": sample_team.key})
@@ -1002,12 +1002,12 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
 @pytest.mark.django_db
 def test_visibility_toggle__owner_can_make_public(
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     client = Client()
     # Start from private (paid plans default to private on creation)
     team_with_business_plan.is_public = False
-    team_with_business_plan.billing_plan = Team.Plan.BUSINESS
+    team_with_business_plan.billing_plan = Workspace.Plan.BUSINESS
     team_with_business_plan.save(update_fields=["is_public", "billing_plan"])
 
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
@@ -1030,7 +1030,7 @@ def test_visibility_toggle__owner_can_make_public(
 @pytest.mark.django_db
 def test_visibility_toggle__community_cannot_be_private(
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
 ):
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
@@ -1056,7 +1056,7 @@ def test_visibility_toggle__admin_allowed(
     """Workspace visibility is ADMINISTER — admins may change it."""
     client = Client()
     team = sample_team_with_admin_member.team
-    team.billing_plan = Team.Plan.BUSINESS
+    team.billing_plan = Workspace.Plan.BUSINESS
     team.is_public = False
     team.save(update_fields=["billing_plan", "is_public"])
 
@@ -1080,7 +1080,7 @@ def test_visibility_toggle__guest_blocked(
     """Guests hold no governance capability and cannot change visibility."""
     client = Client()
     team = sample_team_with_guest_member.team
-    team.billing_plan = Team.Plan.BUSINESS
+    team.billing_plan = Workspace.Plan.BUSINESS
     team.is_public = False
     team.save(update_fields=["billing_plan", "is_public"])
 
@@ -1103,7 +1103,7 @@ def test_visibility_toggle__guest_blocked(
 @override_settings(BILLING=False)
 def test_visibility_toggle_allowed_when_billing_disabled(
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
 ):
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
@@ -1124,7 +1124,7 @@ def test_visibility_toggle_allowed_when_billing_disabled(
 @pytest.mark.django_db
 @override_settings(BILLING=False)
 def test_model_allows_private_when_billing_disabled():
-    team = Team.objects.create(name="Dev Env Team", billing_plan=None, is_public=False)
+    team = Workspace.objects.create(name="Dev Env Team", billing_plan=None, is_public=False)
     team.refresh_from_db()
     assert team.is_public is False
 
@@ -1133,10 +1133,10 @@ def test_model_allows_private_when_billing_disabled():
 @override_settings(BILLING=False)
 def test_can_be_private_returns_true_when_billing_disabled():
     """When billing is disabled, any team can be private regardless of plan."""
-    team_no_plan = Team.objects.create(name="No Plan", billing_plan=None)
+    team_no_plan = Workspace.objects.create(name="No Plan", billing_plan=None)
     assert team_no_plan.can_be_private() is True
 
-    team_community = Team.objects.create(name="Community", billing_plan="community")
+    team_community = Workspace.objects.create(name="Community", billing_plan="community")
     assert team_community.can_be_private() is True
 
 
@@ -1144,7 +1144,7 @@ def test_can_be_private_returns_true_when_billing_disabled():
 @override_settings(BILLING=False)
 def test_is_payment_restricted_returns_false_when_billing_disabled():
     """When billing is disabled, teams are never payment restricted."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Past Due Team",
         billing_plan="business",
         billing_plan_limits={"subscription_status": "past_due"},
@@ -1157,7 +1157,7 @@ def test_is_payment_restricted_returns_false_when_billing_disabled():
 @override_settings(BILLING=False)
 def test_team_save_does_not_force_public_when_billing_disabled():
     """When billing is disabled, save() should not force is_public=True."""
-    team = Team.objects.create(name="Private Team", billing_plan=None, is_public=False)
+    team = Workspace.objects.create(name="Private Team", billing_plan=None, is_public=False)
     team.refresh_from_db()
     assert team.is_public is False
 
@@ -1606,11 +1606,11 @@ def test_branding_schema_uses_bucket_url_over_endpoint():
 def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
     """Test that you cannot delete the default team"""
     # Create two teams
-    team1 = Team.objects.create(name="Default Team")
+    team1 = Workspace.objects.create(name="Default Team")
     team1.key = number_to_random_token(team1.pk)
     team1.save()
 
-    team2 = Team.objects.create(name="Second Team")
+    team2 = Workspace.objects.create(name="Second Team")
     team2.key = number_to_random_token(team2.pk)
     team2.save()
 
@@ -1637,7 +1637,7 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
     assert response.status_code == 302
 
     # Verify team still exists
-    assert Team.objects.filter(pk=team1.pk).exists()
+    assert Workspace.objects.filter(pk=team1.pk).exists()
 
     # Check error message
     messages = list(get_messages(response.wsgi_request))
@@ -1649,7 +1649,7 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
 def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
     """Test that you cannot delete your last/only team"""
     # Create only one team
-    team = Team.objects.create(name="Only Team")
+    team = Workspace.objects.create(name="Only Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -1672,7 +1672,7 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
     assert response.status_code == 302
 
     # Verify team still exists
-    assert Team.objects.filter(pk=team.pk).exists()
+    assert Workspace.objects.filter(pk=team.pk).exists()
 
     # Check error message
     messages = list(get_messages(response.wsgi_request))
@@ -1684,11 +1684,11 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
 def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBaseUser):
     """Test that you can delete a non-default team when you have multiple teams"""
     # Create two teams
-    team1 = Team.objects.create(name="Default Team")
+    team1 = Workspace.objects.create(name="Default Team")
     team1.key = number_to_random_token(team1.pk)
     team1.save()
 
-    team2 = Team.objects.create(name="Non-Default Team")
+    team2 = Workspace.objects.create(name="Non-Default Team")
     team2.key = number_to_random_token(team2.pk)
     team2.save()
 
@@ -1717,10 +1717,10 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
     assert response.url == reverse("workspaces:teams_dashboard")
 
     # Verify non-default team is deleted
-    assert not Team.objects.filter(pk=team2.pk).exists()
+    assert not Workspace.objects.filter(pk=team2.pk).exists()
 
     # Verify default team still exists
-    assert Team.objects.filter(pk=team1.pk).exists()
+    assert Workspace.objects.filter(pk=team1.pk).exists()
 
     # Check success message
     messages = list(get_messages(response.wsgi_request))
@@ -1748,11 +1748,11 @@ def test_list_teams_api_success(authenticated_api_client, sample_user):  # noqa:
     headers = get_api_headers(access_token)
 
     # Create multiple teams for the user
-    team1 = Team.objects.create(name="Team One", billing_plan="business")
+    team1 = Workspace.objects.create(name="Team One", billing_plan="business")
     team1.key = number_to_random_token(team1.pk)
     team1.save()
 
-    team2 = Team.objects.create(name="Team Two", billing_plan="community")
+    team2 = Workspace.objects.create(name="Team Two", billing_plan="community")
     team2.key = number_to_random_token(team2.pk)
     team2.save()
 
@@ -1813,13 +1813,13 @@ def test_list_teams_api_only_user_teams(authenticated_api_client, sample_user, g
     headers = get_api_headers(access_token)
 
     # Create teams for sample_user
-    user_team = Team.objects.create(name="User Team")
+    user_team = Workspace.objects.create(name="User Team")
     user_team.key = number_to_random_token(user_team.pk)
     user_team.save()
     Member.objects.create(team=user_team, user=sample_user, role="owner")
 
     # Create team for guest_user (sample_user should not see this)
-    other_team = Team.objects.create(name="Other Team")
+    other_team = Workspace.objects.create(name="Other Team")
     other_team.key = number_to_random_token(other_team.pk)
     other_team.save()
     Member.objects.create(team=other_team, user=guest_user, role="owner")
@@ -1839,7 +1839,7 @@ def test_get_team_api_success(authenticated_api_client, sample_user):  # noqa: F
     headers = get_api_headers(access_token)
 
     # Create a team
-    team = Team.objects.create(name="Test Team", billing_plan="business", has_completed_wizard=True)
+    team = Workspace.objects.create(name="Test Team", billing_plan="business", has_completed_wizard=True)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -1894,7 +1894,7 @@ def test_get_team_api_access_denied(authenticated_api_client, sample_user, guest
     headers = get_api_headers(access_token)
 
     # Create a team with a different user as owner
-    team = Team.objects.create(name="Other Team")
+    team = Workspace.objects.create(name="Other Team")
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(team=team, user=guest_user, role="owner")
@@ -1911,7 +1911,7 @@ def test_get_team_api_access_denied(authenticated_api_client, sample_user, guest
 def test_get_team_api_unauthenticated(client):
     """Test that unauthenticated requests are rejected."""
     # Create a team
-    team = Team.objects.create(name="Test Team")
+    team = Workspace.objects.create(name="Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -1924,7 +1924,7 @@ def test_get_team_api_unauthenticated(client):
 def test_get_team_api_different_roles(authenticated_api_client, guest_api_client, sample_user, guest_user):  # noqa: F811
     """Test that guest members cannot access team details."""
     # Create a team
-    team = Team.objects.create(name="Multi-Role Team")
+    team = Workspace.objects.create(name="Multi-Role Team")
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -1954,7 +1954,7 @@ def test_patch_team_toggles_public_flag(authenticated_api_client, sample_user): 
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
-    team = Team.objects.create(name="Visibility Toggle", billing_plan="business")
+    team = Workspace.objects.create(name="Visibility Toggle", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(team=team, user=sample_user, role="owner")
@@ -1980,7 +1980,7 @@ def test_patch_team_private_not_allowed_on_community(authenticated_api_client, s
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
-    team = Team.objects.create(name="Community Team")
+    team = Workspace.objects.create(name="Community Team")
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(team=team, user=sample_user, role="owner")
@@ -2002,31 +2002,31 @@ def test_patch_team_private_not_allowed_on_community(authenticated_api_client, s
 @pytest.mark.django_db
 def test_paid_plans_default_private():
     """Business and Enterprise plans start private by default."""
-    business = Team.objects.create(name="Business Default", billing_plan="business")
+    business = Workspace.objects.create(name="Business Default", billing_plan="business")
     assert business.is_public is False
 
-    enterprise = Team.objects.create(name="Enterprise Default", billing_plan="enterprise")
+    enterprise = Workspace.objects.create(name="Enterprise Default", billing_plan="enterprise")
     assert enterprise.is_public is False
 
 
 @pytest.mark.django_db
 def test_paid_plans_case_insensitive_for_privacy_flag():
     """Paid plans with capitalized keys should still allow private workspaces."""
-    team = Team.objects.create(name="Business Case", billing_plan="Business", is_public=False)
+    team = Workspace.objects.create(name="Business Case", billing_plan="Business", is_public=False)
     assert team.is_public is False
 
 
 @pytest.mark.django_db
 def test_private_workspace_allowed_case_insensitive():
     """API helper treats mixed-case plans as paid."""
-    team = Team.objects.create(name="Enterprise Case", billing_plan="Enterprise", is_public=False)
+    team = Workspace.objects.create(name="Enterprise Case", billing_plan="Enterprise", is_public=False)
     assert _private_workspace_allowed(team) is True
 
 
 @pytest.mark.django_db
 def test_private_workspace_rejects_unknown_plan():
     """Unsupported billing plans should not allow private workspaces."""
-    team = Team(name="Custom Plan", billing_plan="test_plan", is_public=False)
+    team = Workspace(name="Custom Plan", billing_plan="test_plan", is_public=False)
     assert _private_workspace_allowed(team) is False
 
 
@@ -2034,21 +2034,21 @@ def test_private_workspace_rejects_unknown_plan():
 def test_private_workspace_allowed_custom_plan_when_registered():
     """Custom plans that exist in BillingPlan are treated as paid/allowing private workspaces."""
     plan = BillingPlan.objects.create(key="custom_plan", name="Custom Plan", description="Custom Plan Description")
-    team = Team.objects.create(name="Custom Plan Workspace", billing_plan=plan.key, is_public=False)
+    team = Workspace.objects.create(name="Custom Plan Workspace", billing_plan=plan.key, is_public=False)
     assert _private_workspace_allowed(team) is True
 
 
 @pytest.mark.django_db
 def test_community_plan_defaults_public_even_if_set_false():
     """Community plan workspaces cannot end up private."""
-    team = Team.objects.create(name="Community Default", billing_plan="community", is_public=False)
+    team = Workspace.objects.create(name="Community Default", billing_plan="community", is_public=False)
     assert team.is_public is True
 
 
 @pytest.mark.django_db
 def test_community_plan_save_cannot_flip_to_private():
     """Existing community workspaces stay public even if saved with is_public=False."""
-    team = Team.objects.create(name="Community Existing", billing_plan="community", is_public=True)
+    team = Workspace.objects.create(name="Community Existing", billing_plan="community", is_public=True)
 
     team.is_public = False
     team.save()
@@ -2060,7 +2060,7 @@ def test_community_plan_save_cannot_flip_to_private():
 @pytest.mark.django_db
 def test_downgrading_from_paid_to_community_forces_public():
     """Switching from paid plan back to community makes workspace public again."""
-    team = Team.objects.create(name="Paid Workspace", billing_plan="business", is_public=False)
+    team = Workspace.objects.create(name="Paid Workspace", billing_plan="business", is_public=False)
 
     team.billing_plan = "community"
     team.save()
@@ -2076,7 +2076,7 @@ def test_teams_api_response_schema_validation(authenticated_api_client, sample_u
     headers = get_api_headers(access_token)
 
     # Create a team with all possible fields
-    team = Team.objects.create(name="Schema Test Team", billing_plan="enterprise", has_completed_wizard=False)
+    team = Workspace.objects.create(name="Schema Test Team", billing_plan="enterprise", has_completed_wizard=False)
     team.key = number_to_random_token(team.pk)
     team.save()
 
@@ -2256,7 +2256,7 @@ def test_team_general_post__admin_cannot_delete_workspace(
     response: HttpResponse = client.post(uri, {"action": "delete_workspace"})
 
     assert response.status_code == 403
-    assert Team.objects.filter(pk=team.pk).exists()
+    assert Workspace.objects.filter(pk=team.pk).exists()
 
     # ...and the control isn't rendered either — an admin must not be shown a
     # Delete Workspace button that always 403s.
@@ -2341,7 +2341,7 @@ def test_accept_invite_with_an_unparseable_token_is_not_found(django_user_model,
         email="mangled-invite@example.com",
         password="secret",
     )
-    team = Team.objects.create(name="Mangled Invite Workspace", billing_plan=community_plan.key)
+    team = Workspace.objects.create(name="Mangled Invite Workspace", billing_plan=community_plan.key)
     Member.objects.create(team=team, user=user, role="owner", is_default_team=True)
 
     client = Client()

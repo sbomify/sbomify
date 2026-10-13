@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING, Any
 from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
-def get_manufacturer(team: Team) -> ContactEntity | None:
+def get_manufacturer(team: Workspace) -> ContactEntity | None:
     """Return the team's configured manufacturer entity, or None.
 
     Walks ``ContactProfile → ContactEntity`` — the entity is scoped to
@@ -49,7 +49,7 @@ def get_manufacturer(team: Team) -> ContactEntity | None:
     )
 
 
-def get_security_contact(team: Team) -> ContactProfileContact | None:
+def get_security_contact(team: Workspace) -> ContactProfileContact | None:
     """Return the team's designated security contact, or None.
 
     Walks ``ContactProfile → ContactEntity → ContactProfileContact``
@@ -68,7 +68,7 @@ def get_security_contact(team: Team) -> ContactProfileContact | None:
     )
 
 
-def list_workspace_contacts(team: Team) -> list[dict[str, Any]]:
+def list_workspace_contacts(team: Workspace) -> list[dict[str, Any]]:
     """Return contact dicts for every public profile in the team.
 
     Used by the CRA wizard's Step 4 support-contact dropdown. Excludes
@@ -101,7 +101,7 @@ def list_workspace_contacts(team: Team) -> list[dict[str, Any]]:
     ]
 
 
-def contact_belongs_to_team(contact_id: object, team: Team) -> bool:
+def contact_belongs_to_team(contact_id: object, team: Workspace) -> bool:
     """True iff ``contact_id`` identifies a ContactProfileContact in ``team``.
 
     Typed ``object`` deliberately — callers deserialise ``contact_id``

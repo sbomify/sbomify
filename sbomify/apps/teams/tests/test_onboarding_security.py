@@ -8,13 +8,13 @@ from django.urls import reverse
 from pytest_django.fixtures import SettingsWrapper
 
 from sbomify.apps.core.models import Component, Product, User
-from sbomify.apps.teams.models import ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactProfile, ContactProfileContact, Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def setup_client(client: Client, sample_user: User, sample_team_with_owner_member: Member) -> tuple[Client, Team]:
+def setup_client(client: Client, sample_user: User, sample_team_with_owner_member: Member) -> tuple[Client, Workspace]:
     workspace = sample_team_with_owner_member.team
     client.force_login(sample_user)
     session = client.session
@@ -40,7 +40,7 @@ def setup_data(**changes: Any) -> dict[str, Any]:
     }
 
 
-def test_security_setup_is_saved_together(setup_client: tuple[Client, Team], settings: SettingsWrapper) -> None:
+def test_security_setup_is_saved_together(setup_client: tuple[Client, Workspace], settings: SettingsWrapper) -> None:
     settings.BILLING = False
     client, workspace = setup_client
     response = client.post(reverse("workspaces:onboarding_wizard"), setup_data())
@@ -67,7 +67,7 @@ def test_security_setup_is_saved_together(setup_client: tuple[Client, Team], set
     ],
 )
 def test_invalid_security_settings_keep_answers_without_partial_save(
-    setup_client: tuple[Client, Team], invalid: dict[str, str]
+    setup_client: tuple[Client, Workspace], invalid: dict[str, str]
 ) -> None:
     client, workspace = setup_client
     original_name = workspace.name
@@ -82,7 +82,7 @@ def test_invalid_security_settings_keep_answers_without_partial_save(
     assert not ContactProfile.objects.filter(team=workspace).exists()
 
 
-def test_security_contact_does_not_publish_without_opt_in(setup_client: tuple[Client, Team]) -> None:
+def test_security_contact_does_not_publish_without_opt_in(setup_client: tuple[Client, Workspace]) -> None:
     client, workspace = setup_client
     response = client.post(reverse("workspaces:onboarding_wizard"), setup_data(publish_security_txt=""))
     assert response.status_code == 302
@@ -90,7 +90,7 @@ def test_security_contact_does_not_publish_without_opt_in(setup_client: tuple[Cl
     assert not workspace.security_txt_config.get("enabled")
 
 
-def test_support_default_can_be_changed_and_cleared_in_settings(setup_client: tuple[Client, Team]) -> None:
+def test_support_default_can_be_changed_and_cleared_in_settings(setup_client: tuple[Client, Workspace]) -> None:
     client, workspace = setup_client
     url = reverse("workspaces:team_general", args=[workspace.key])
     for value, expected in [("10", 10), ("", None)]:

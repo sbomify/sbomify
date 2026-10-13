@@ -45,7 +45,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     publish_advisory,
     update_advisory,
 )
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 # The kinds the "post an update" control offers. Status-setting kinds write a
@@ -65,7 +65,7 @@ UPDATE_KINDS[NOTE_ONLY_KIND] = {
 }
 
 
-def _current_team(request: HttpRequest) -> Team | None:
+def _current_team(request: HttpRequest) -> Workspace | None:
     """The workspace being viewed, resolved from the session.
 
     Confirmed against a live membership rather than trusted from the session
@@ -117,7 +117,7 @@ def _can_write_advisories(request: HttpRequest) -> bool:
     return Member.objects.filter(user=cast(User, request.user), team__key=key, role__in=_ADVISORY_WRITE_ROLES).exists()
 
 
-def _writable_team(request: HttpRequest) -> Team | None:
+def _writable_team(request: HttpRequest) -> Workspace | None:
     """The workspace, but only for a member who may change its advisories.
 
     The templates hide the edit and compose controls behind

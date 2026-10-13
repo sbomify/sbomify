@@ -309,7 +309,7 @@ class TestOnboardingWizard:
         """What the wizard is actually for is unchanged: the workspace name and
         the manufacturer/contact identity. Removing the entities must not take
         those with it."""
-        from sbomify.apps.teams.models import ContactEntity, Team
+        from sbomify.apps.teams.models import ContactEntity, Workspace
 
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
@@ -327,7 +327,7 @@ class TestOnboardingWizard:
             },
         )
 
-        team = Team.objects.get(pk=team.pk)
+        team = Workspace.objects.get(pk=team.pk)
         assert team.has_completed_wizard is True
         assert "Identity Survives Ltd" in team.name
         entity = ContactEntity.objects.get(profile__team=team, is_manufacturer=True)
@@ -908,12 +908,12 @@ class TestOnboardingWizard:
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan, mocker
     ) -> None:
         """Payment-restricted teams should see an error and be redirected back to the wizard."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
 
-        mocker.patch.object(Team, "is_payment_restricted", new_callable=mocker.PropertyMock, return_value=True)
+        mocker.patch.object(Workspace, "is_payment_restricted", new_callable=mocker.PropertyMock, return_value=True)
 
         session = client.session
         session["current_workspace"] = {

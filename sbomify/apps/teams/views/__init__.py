@@ -33,7 +33,7 @@ from sbomify.apps.teams.forms import InviteUserForm
 from sbomify.apps.teams.models import (
     Invitation,
     Member,
-    Team,
+    Workspace,
 )
 from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members, invitation_email
@@ -50,21 +50,23 @@ log = getLogger(__name__)
 
 def _render_workspace_availability_page(
     request: HttpRequest,
-    team: Team,
+    team: Workspace,
     invitation: Invitation | None,
     error_message: str,
 ) -> HttpResponse:
     """Render a friendly status page when the workspace is at capacity."""
 
-    plan_key = team.billing_plan or Team.Plan.COMMUNITY
-    plan_label = team.get_billing_plan_display() or getattr(Team.Plan.COMMUNITY, "label", str(Team.Plan.COMMUNITY))
+    plan_key = team.billing_plan or Workspace.Plan.COMMUNITY
+    plan_label = team.get_billing_plan_display() or getattr(
+        Workspace.Plan.COMMUNITY, "label", str(Workspace.Plan.COMMUNITY)
+    )
 
     plan_record = BillingPlan.objects.filter(key=plan_key).first()
     member_limit: int | None = None
     if plan_record:
         plan_label = plan_record.name or plan_label
         member_limit = plan_record.max_users
-    elif plan_key == Team.Plan.COMMUNITY:
+    elif plan_key == Workspace.Plan.COMMUNITY:
         member_limit = 1
 
     owners = (
@@ -226,9 +228,9 @@ def invite(request: HttpRequest, workspace_key: str) -> HttpResponseForbidden | 
 
     # Get team for context
     try:
-        team = Team.objects.get(id=team_id)
+        team = Workspace.objects.get(id=team_id)
         context["team"] = team
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
     can_grant_owner = bool(can(request, "member:grant_owner", team))

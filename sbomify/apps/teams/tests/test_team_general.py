@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.mark.django_db
@@ -34,7 +34,7 @@ class TestTeamGeneralView:
         )
 
         assert response.status_code == 200
-        assert Team.objects.get(pk=team.pk).name == "Renamed Workspace"
+        assert Workspace.objects.get(pk=team.pk).name == "Renamed Workspace"
 
         session = client.session
         assert session["current_workspace"]["name"] == "Renamed Workspace"
@@ -49,7 +49,7 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         Member.objects.create(team=other_team, user=user, role="owner", is_default_team=True)
 
         response = client.post(
@@ -96,7 +96,7 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         
         # Create other team as default first
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         from sbomify.apps.core.utils import number_to_random_token
         if not other_team.key:
             other_team.key = number_to_random_token(other_team.pk)
@@ -125,8 +125,8 @@ class TestTeamGeneralView:
             assert response.url == reverse("core:dashboard")
         
         # Verify team is deleted by checking ID (key might be cached)
-        assert not Team.objects.filter(id=team_id).exists(), "Team should have been deleted"
-        assert not Team.objects.filter(key=workspace_key).exists(), "Team should have been deleted"
+        assert not Workspace.objects.filter(id=team_id).exists(), "Team should have been deleted"
+        assert not Workspace.objects.filter(key=workspace_key).exists(), "Team should have been deleted"
 
     def test_delete_default_workspace_fails(
         self, client: Client, sample_team_with_owner_member
@@ -146,7 +146,7 @@ class TestTeamGeneralView:
         )
 
         assert response.status_code == 200
-        assert Team.objects.filter(key=team.key).exists()
+        assert Workspace.objects.filter(key=team.key).exists()
 
     def test_delete_workspace_requires_owner(
         self, client: Client, sample_team_with_owner_member
@@ -170,7 +170,7 @@ class TestTeamGeneralView:
         )
 
         assert response.status_code == 403
-        assert Team.objects.filter(key=team.key).exists()
+        assert Workspace.objects.filter(key=team.key).exists()
 
     def test_delete_workspace_switches_to_default(
         self, client: Client, sample_team_with_owner_member
@@ -180,7 +180,7 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         
         # Create default team first
-        default_team = Team.objects.create(name="Default Team")
+        default_team = Workspace.objects.create(name="Default Team")
         from sbomify.apps.core.utils import number_to_random_token
         if not default_team.key:
             default_team.key = number_to_random_token(default_team.pk)

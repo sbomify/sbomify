@@ -23,7 +23,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
-from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
@@ -122,12 +122,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         wants_fresh_billing = billing_enabled_flag and active_tab.key == "billing"
 
         try:
-            team_obj = Team.objects.get(key=workspace_key)
+            team_obj = Workspace.objects.get(key=workspace_key)
             if wants_fresh_billing:
                 sync_subscription_from_stripe(team_obj)
                 # Refresh team data after sync
                 team_obj.refresh_from_db()
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             team_obj = None
 
         # Built only for the tab that renders it. billing.html.j2 is the sole
@@ -139,7 +139,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # id, and _fetch_invoice_amount when the cached invoice fields are
         # missing. Skipping the call is the only way to be sure a tab with no
         # billing on it does not depend on Stripe.
-        billing_plan = team.billing_plan or Team.Plan.COMMUNITY
+        billing_plan = team.billing_plan or Workspace.Plan.COMMUNITY
         plan_features: list[Any] = []
         plan_pricing: dict[str, Any] = {}
         plan_limits: list[dict[str, str]] = []
@@ -167,8 +167,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # team_obj was already fetched above for sync, reuse it
         if not team_obj:
             try:
-                team_obj = Team.objects.get(key=workspace_key)
-            except Team.DoesNotExist:
+                team_obj = Workspace.objects.get(key=workspace_key)
+            except Workspace.DoesNotExist:
                 team_obj = None
 
         # Convert Pydantic model to dict so we can inject properties
@@ -387,8 +387,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _update_visibility(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -416,8 +416,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _update_trust_center_description(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -450,8 +450,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         """Handle company-wide NDA upload, replace, or delete."""
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -465,7 +465,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         else:
             return self._upload_company_nda(request, workspace_key, team)
 
-    def _upload_company_nda(self, request: HttpRequest, workspace_key: str, team: Team) -> HttpResponse:
+    def _upload_company_nda(self, request: HttpRequest, workspace_key: str, team: Workspace) -> HttpResponse:
         """Upload a new version of company-wide NDA (versioning enabled)."""
         if "company_nda_file" not in request.FILES:
             messages.error(request, "No file provided")
@@ -618,7 +618,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, "Failed to upload company NDA. Please try again.")
             return self._redirect_with_tab(request, workspace_key)
 
-    def _delete_company_nda(self, request: HttpRequest, workspace_key: str, team: Team) -> HttpResponse:
+    def _delete_company_nda(self, request: HttpRequest, workspace_key: str, team: Workspace) -> HttpResponse:
         """Delete company-wide NDA."""
         try:
             company_nda_id = team.branding_info.get("company_nda_document_id")
@@ -652,8 +652,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _update_tea_enabled(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -676,8 +676,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _update_vulnerability_posture(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -705,8 +705,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _update_security_txt(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -825,8 +825,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=workspace_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
             return self._redirect_with_tab(request, workspace_key)
 
@@ -848,7 +848,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # legitimately empty on most workspaces (branding_info defaults to {}, and
         # billing_plan/billing_plan_limits are null on community plans), which made every
         # rename fail with a bare "This field cannot be blank."
-        slug_only_exclude = [field.name for field in Team._meta.fields if field.name != "slug"]
+        slug_only_exclude = [field.name for field in Workspace._meta.fields if field.name != "slug"]
         try:
             team.full_clean(exclude=slug_only_exclude)
         except ValidationError as e:

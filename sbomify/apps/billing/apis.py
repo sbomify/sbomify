@@ -14,7 +14,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from .billing_helpers import (
     RATE_LIMIT,
@@ -69,7 +69,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
         return 404, {"detail": "No team selected"}
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=team_key)
 
         if not team.members.filter(member__user=request.user).exists():
             return 403, {"detail": "You do not have access to this workspace"}
@@ -84,7 +84,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
             components=counts["components"],
             current_plan=team.billing_plan if team.billing_plan else None,
         )
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
 
@@ -111,7 +111,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         return 404, {"detail": "No team selected"}
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=team_key)
 
         # Route through can() rather than require_billing_manager: this endpoint
         # accepts personal access tokens, and can() is the only place token
@@ -135,7 +135,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
 
         return 400, {"detail": "Invalid plan"}
 
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
     except BillingPlan.DoesNotExist:
         return 400, {"detail": "Invalid plan"}
@@ -145,10 +145,10 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         return 400, {"detail": "Invalid request"}
 
 
-def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
+def _handle_community_downgrade(team: Workspace, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
     with transaction.atomic():
-        team = Team.objects.select_for_update().get(pk=team.pk)
+        team = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits = team.billing_plan_limits or {}
 
         # Only a subscription Stripe reports gone or ended moves the workspace
@@ -205,7 +205,7 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
 
 
 def _handle_business_upgrade(
-    team: Team, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
+    team: Workspace, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
 ) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
     user = cast(User, request.user)

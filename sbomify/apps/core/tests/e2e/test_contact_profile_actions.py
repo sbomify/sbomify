@@ -2,11 +2,11 @@ import pytest
 from django.urls import reverse
 from playwright.sync_api import Page, expect
 
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Workspace
 
 
 @pytest.mark.django_db
-def test_cannot_create_profile_without_entities(authenticated_page: Page, team_with_business_plan: Team) -> None:
+def test_cannot_create_profile_without_entities(authenticated_page: Page, team_with_business_plan: Workspace) -> None:
     page = authenticated_page
     page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "contact-profiles"]))
     expect(page.get_by_text("No parties yet", exact=True)).to_be_visible()
@@ -20,7 +20,7 @@ def test_cannot_create_profile_without_entities(authenticated_page: Page, team_w
 @pytest.mark.django_db
 @pytest.mark.parametrize("incomplete_entity", [False, True])
 def test_delete_empty_or_incomplete_profile(
-    authenticated_page: Page, team_with_business_plan: Team, incomplete_entity: bool
+    authenticated_page: Page, team_with_business_plan: Workspace, incomplete_entity: bool
 ) -> None:
     profile = ContactProfile.objects.create(team=team_with_business_plan, name="Empty profile")
     if incomplete_entity:

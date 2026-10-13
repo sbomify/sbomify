@@ -22,14 +22,14 @@ from sbomify.apps.oidc.github_api import GitHubResolveError, ResolvedRepository
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 EXCHANGE_URL = "/api/v1/auth/oidc/github/exchange"
 BINDINGS_URL = "/api/v1/auth/oidc/github/bindings"
 
 
 @pytest.fixture
-def component(db, team_with_business_plan: Team) -> Component:
+def component(db, team_with_business_plan: Workspace) -> Component:
     return Component.objects.create(name="OIDC Exchange Test", team=team_with_business_plan)
 
 

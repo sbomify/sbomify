@@ -5,12 +5,12 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
 def team(ensure_billing_plans):
-    return Team.objects.create(name="Owner Grant Workspace", billing_plan="business")
+    return Workspace.objects.create(name="Owner Grant Workspace", billing_plan="business")
 
 
 @pytest.fixture

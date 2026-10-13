@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
@@ -328,7 +328,7 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
     # Fallback safety net: Ensure every user has a team
     # Note: This should rarely be needed now that both adapters create teams during signup.
     # This exists only for edge cases (manual user creation, data migrations, etc.)
-    if not Team.objects.filter(members=user).exists():
+    if not Workspace.objects.filter(members=user).exists():
         has_pending_invite = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).exists()
 
         if has_pending_invite and not joined_invites:

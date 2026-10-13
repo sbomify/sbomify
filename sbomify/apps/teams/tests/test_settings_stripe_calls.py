@@ -17,7 +17,7 @@ from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.settings_tabs import SETTINGS_TABS
 
 
@@ -43,7 +43,7 @@ def paid_workspace(db, django_user_model):
     user = django_user_model.objects.create_user(
         username="settings-owner", email="settings@test.com", password="password"
     )
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Settings Workspace",
         billing_plan="business",
         billing_plan_limits={

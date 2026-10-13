@@ -16,7 +16,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonRe
 from django.utils import timezone
 
 from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from . import email_notifications
@@ -103,7 +103,7 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     """
     if isinstance(exc, BillingRetryableError):
         raise exc
-    if isinstance(exc, Team.DoesNotExist):
+    if isinstance(exc, Workspace.DoesNotExist):
         # Terminal: a genuinely nonexistent workspace cannot be conjured by a retry.
         raise WorkspaceGoneError(str(exc) or "No workspace found for webhook event") from exc
     if isinstance(exc, StripeError):
@@ -228,15 +228,15 @@ def check_billing_limits(resource_type: str) -> Any:
                 return HttpResponseForbidden("No team selected")
 
             try:
-                team = Team.objects.get(key=workspace_key)
-            except Team.DoesNotExist:
+                team = Workspace.objects.get(key=workspace_key)
+            except Workspace.DoesNotExist:
                 return HttpResponseForbidden("Workspace not found")
 
             if not team.billing_plan:
                 return HttpResponseForbidden("No active billing plan")
 
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
                 subscription_status = billing_limits.get("subscription_status")
 
@@ -336,7 +336,7 @@ def check_billing_limits(resource_type: str) -> Any:
 
 
 @handle_stripe_errors
-def handle_trial_period(subscription: Any, team: Team) -> bool:
+def handle_trial_period(subscription: Any, team: Workspace) -> bool:
     """Handle trial period status and notifications."""
     if subscription.status == "trialing" and subscription.trial_end:
         trial_end_value = subscription.trial_end
@@ -355,7 +355,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
         trial_has_ended = trial_end <= timezone.now()
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits.update(
                 {"is_trial": True, "trial_end": subscription.trial_end, "trial_days_remaining": days_remaining}
@@ -377,7 +377,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             guard = TrialExpiryEmissionGuard()
             now = timezone.now()
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 should_run_side_effects = guard.should_claim(billing_limits, now)
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
@@ -392,7 +392,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # Under the row lock again, and only if the plan is still Community:
                 # an update that restored the paid plan since the claim wins.
                 with transaction.atomic():
-                    locked = Team.objects.select_for_update().get(pk=team.pk)
+                    locked = Workspace.objects.select_for_update().get(pk=team.pk)
                     if locked.billing_plan == BillingPlan.KEY_COMMUNITY:
                         apply_community_downgrade(locked)
                 notify_billing_managers(team, email_notifications.notify_trial_expired)
@@ -411,7 +411,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # marker-then-event (vs. event-then-marker) is the correct
                 # crash-tolerance ordering.
                 with transaction.atomic():
-                    team = Team.objects.select_for_update().get(pk=team.pk)
+                    team = Workspace.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
                     guard.stamp_emitted(billing_limits, timezone.now())
                     team.billing_plan_limits = billing_limits
@@ -495,23 +495,23 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
-def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, Any]]:
+def _resolve_team_from_subscription(subscription: Any) -> tuple[Workspace, dict[str, Any]]:
     """Resolve Team from subscription using multiple lookup strategies.
 
     Returns:
         Tuple of (team, billing_limits)
     """
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        team = Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
         return team, team.billing_plan_limits or {}
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         pass
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
+        team = Workspace.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
         logger.warning("Found team by customer ID instead of subscription ID")
         return team, team.billing_plan_limits or {}
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         pass
 
     # Last resort: recover the team via the Stripe customer's metadata. A *transient*
@@ -535,8 +535,8 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     metadata = getattr(customer, "metadata", None)
     if metadata and "team_key" in metadata:
         try:
-            team = Team.objects.get(key=metadata["team_key"])
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=metadata["team_key"])
+        except Workspace.DoesNotExist:
             pass
         else:
             logger.warning("Found team by customer metadata")
@@ -550,11 +550,11 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
 
     # Definitively unresolved after every strategy → the workspace is gone. Keep the
     # message free of the Stripe subscription id (re-logged by the webhook view).
-    raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
+    raise Workspace.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
 def _update_billing_from_subscription(
-    team: Team, subscription: Any, webhook_id: str, created: int | None
+    team: Workspace, subscription: Any, webhook_id: str, created: int | None
 ) -> tuple[bool, str | None]:
     """Update team billing limits from subscription data within a transaction.
 
@@ -565,7 +565,7 @@ def _update_billing_from_subscription(
         already applied.
     """
     with transaction.atomic():
-        team = Team.objects.select_for_update().get(pk=team.pk)
+        team = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
 
         if _was_applied(billing_limits, webhook_id, created):
@@ -717,7 +717,7 @@ def _update_billing_from_subscription(
     return True, previous_status
 
 
-def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
+def _send_subscription_notifications(team: Workspace, status: str, previous_status: Any) -> None:
     """Send appropriate notifications based on subscription status *transitions*.
 
     A move to active sends nothing: the payment behind it sends its own receipt
@@ -760,7 +760,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             # Decided from the locked row. A checkout cancels the subscription it
             # replaces while holding this lock, and Stripe can send this event before
             # that checkout commits, so the row found above can predate the switch.
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = team.billing_plan_limits or {}
 
             if billing_limits.get("stripe_subscription_id") != subscription.id:
@@ -923,7 +923,7 @@ def _invoice_subscription_id(invoice: Any) -> str | None:
     return subscription_id
 
 
-def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
+def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Workspace:
     """The workspace holding the subscription a paid invoice bills.
 
     A checkout's first invoice (``billing_reason`` ``subscription_create``) can arrive
@@ -933,8 +933,8 @@ def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
     workspace as gone.
     """
     try:
-        return Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
-    except Team.DoesNotExist:
+        return Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+    except Workspace.DoesNotExist:
         if getattr(invoice, "billing_reason", None) != "subscription_create":
             raise
 
@@ -956,7 +956,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+        team = Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) or f"inv_fail_{invoice.id}_{invoice.created}"
@@ -967,7 +967,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             return
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             created = _event_created(event)
             if _was_applied(billing_limits, webhook_id, created):
@@ -1057,7 +1057,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
                 logger.warning(f"Failed to fetch subscription for next billing date: {e}")
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             if _payment_already_recorded(billing_limits, webhook_id):
                 logger.info("Payment succeeded webhook already processed (checked after lock)")
@@ -1123,7 +1123,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
-def get_current_limits(team: Team) -> dict[str, Any]:
+def get_current_limits(team: Workspace) -> dict[str, Any]:
     """
     Get current billing limits for a team.
 
@@ -1167,7 +1167,7 @@ def handle_checkout_completed(session: Any) -> None:
         return
 
     try:
-        team = Team.objects.get(key=workspace_key)
+        team = Workspace.objects.get(key=workspace_key)
 
         # Idempotency: a redelivery of the same checkout session must short-circuit
         # BEFORE the outbound Stripe calls (get_subscription / cancel_subscription),
@@ -1183,7 +1183,7 @@ def handle_checkout_completed(session: Any) -> None:
         subscription = stripe_client.get_subscription(session.subscription)
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
 
             # Re-check under the row lock: the unlocked guard above closes the common
             # sequential-redelivery case, but two concurrent deliveries could both pass

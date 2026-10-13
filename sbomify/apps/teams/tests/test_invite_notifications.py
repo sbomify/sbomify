@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.notifications import get_notifications
 from sbomify.apps.teams.signals.handlers import _accept_pending_invitations
 
@@ -33,11 +33,11 @@ def invited_user() -> User:
 
 
 @pytest.fixture
-def inviting_team() -> Team:
-    return Team.objects.create(name="Lithium Labs")
+def inviting_team() -> Workspace:
+    return Workspace.objects.create(name="Lithium Labs")
 
 
-def _invite(team: Team, email: str, role: str = "member") -> Invitation:
+def _invite(team: Workspace, email: str, role: str = "member") -> Invitation:
     return Invitation.objects.create(
         team=team,
         email=email,
@@ -48,7 +48,7 @@ def _invite(team: Team, email: str, role: str = "member") -> Invitation:
 
 
 @pytest.mark.django_db
-def test_a_pending_invitation_raises_a_notification(invited_user: User, inviting_team: Team) -> None:
+def test_a_pending_invitation_raises_a_notification(invited_user: User, inviting_team: Workspace) -> None:
     _invite(inviting_team, invited_user.email)
 
     request = RequestFactory().get("/")
@@ -62,9 +62,9 @@ def test_a_pending_invitation_raises_a_notification(invited_user: User, inviting
 
 
 @pytest.mark.django_db
-def test_the_notification_links_to_where_invitations_are_accepted(invited_user: User, inviting_team: Team) -> None:
+def test_the_notification_links_to_where_invitations_are_accepted(invited_user: User, inviting_team: Workspace) -> None:
     """Not the active workspace's member list, which holds no invitation of theirs."""
-    other_team = Team.objects.create(name="Somewhere Else")
+    other_team = Workspace.objects.create(name="Somewhere Else")
     Member.objects.create(team=other_team, user=invited_user, role="owner")
     _invite(inviting_team, invited_user.email)
 
@@ -79,7 +79,7 @@ def test_the_notification_links_to_where_invitations_are_accepted(invited_user: 
 
 
 @pytest.mark.django_db
-def test_an_auto_accepted_invitation_tells_the_user(invited_user: User, inviting_team: Team) -> None:
+def test_an_auto_accepted_invitation_tells_the_user(invited_user: User, inviting_team: Workspace) -> None:
     """A new user is put in the workspace and the invitation is deleted, so
     nothing downstream can announce it. The acceptance has to say so itself."""
     _invite(inviting_team, invited_user.email, role="admin")
@@ -109,9 +109,9 @@ class FallbackStorageStub:
 
 
 @pytest.mark.django_db
-def test_an_existing_member_is_not_auto_accepted(invited_user: User, inviting_team: Team) -> None:
+def test_an_existing_member_is_not_auto_accepted(invited_user: User, inviting_team: Workspace) -> None:
     """The auto-accept is a first-login convenience; anyone else chooses."""
-    other_team = Team.objects.create(name="Already In One")
+    other_team = Workspace.objects.create(name="Already In One")
     Member.objects.create(team=other_team, user=invited_user, role="owner")
     _invite(inviting_team, invited_user.email)
 
@@ -125,7 +125,7 @@ def test_an_existing_member_is_not_auto_accepted(invited_user: User, inviting_te
 
 @pytest.mark.django_db
 def test_a_login_without_message_storage_still_completes(
-    invited_user: User, inviting_team: Team, client: Client
+    invited_user: User, inviting_team: Workspace, client: Client
 ) -> None:
     """force_login builds a request with no message store, and announcing the
     acceptance must never be the thing that stops someone signing in."""
@@ -139,7 +139,7 @@ def test_a_login_without_message_storage_still_completes(
 
 
 @pytest.mark.django_db
-def test_a_login_with_no_message_storage_records_that_it_said_nothing(invited_user: User, inviting_team: Team) -> None:
+def test_a_login_with_no_message_storage_records_that_it_said_nothing(invited_user: User, inviting_team: Workspace) -> None:
     """The accept-invite view reads this flag to decide whether it still has to
     announce the join, so a silent acceptance must not claim otherwise."""
     _invite(inviting_team, invited_user.email)

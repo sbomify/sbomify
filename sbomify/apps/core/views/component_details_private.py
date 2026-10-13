@@ -63,16 +63,16 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         workspace_key = rights.team_key
         team_id = component.get("team_id")
         if team_id:
-            from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.models import Workspace
 
             try:
-                team = Team.objects.get(pk=team_id)
+                team = Workspace.objects.get(pk=team_id)
                 company_nda = team.get_company_nda_document()
                 if company_nda:
                     company_nda_id = company_nda.id
                 # Check if gated visibility is allowed (Business or Enterprise plans)
                 gated_visibility_allowed = team.can_be_private()
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 # If the referenced team no longer exists, keep the previously initialized
                 # default values (no NDA, no gated visibility) and continue rendering.
                 pass

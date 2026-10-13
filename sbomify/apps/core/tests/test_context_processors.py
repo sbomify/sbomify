@@ -17,7 +17,7 @@ from sbomify.apps.core.context_processors import (
     version_context,
 )
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 def _context_request(member: Member) -> HttpRequest:
@@ -59,7 +59,7 @@ def test_new_request_reads_role_changes(sample_team_with_owner_member: Member) -
 @pytest.mark.parametrize("scope", ["session", "url"])
 def test_request_context_follows_workspace_changes(sample_team_with_owner_member: Member, scope: str) -> None:
     member = sample_team_with_owner_member
-    workspace = Team.objects.create(name="Other workspace")
+    workspace = Workspace.objects.create(name="Other workspace")
     Member.objects.create(team=workspace, user=member.user, role="member")
     request = _context_request(member)
     assert app_context(request)["can_administer"]

@@ -26,7 +26,7 @@ from sbomify.apps.plugins.public_assessment_utils import (
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 PLUGINS = {
     "ntia-minimum-elements-2021": AssessmentCategory.COMPLIANCE.value,
@@ -93,7 +93,7 @@ def plugins(db):
 
 @pytest.fixture
 def component(db, plugins):
-    team = Team.objects.create(name="Batch Team", key="batch-team", is_public=True)
+    team = Workspace.objects.create(name="Batch Team", key="batch-team", is_public=True)
     return Component.objects.create(
         name="Batched", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
     )

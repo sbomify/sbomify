@@ -16,11 +16,11 @@ from django.urls import reverse
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
 )
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
-def two_workspaces(sample_team_with_owner_member: Member) -> tuple[Team, Team, Client]:  # noqa: F811
+def two_workspaces(sample_team_with_owner_member: Member) -> tuple[Workspace, Workspace, Client]:  # noqa: F811
     """A user owning two public workspaces, with the *other* one selected."""
     user = sample_team_with_owner_member.user
     viewed = sample_team_with_owner_member.team
@@ -31,7 +31,7 @@ def two_workspaces(sample_team_with_owner_member: Member) -> tuple[Team, Team, C
     viewed.has_completed_wizard = True
     viewed.save(update_fields=["is_public", "has_selected_billing_plan", "has_completed_wizard"])
 
-    selected = Team.objects.create(name="The Other Workspace")
+    selected = Workspace.objects.create(name="The Other Workspace")
     Member.objects.create(user=user, team=selected, role="owner")
 
     client = Client()
@@ -42,7 +42,7 @@ def two_workspaces(sample_team_with_owner_member: Member) -> tuple[Team, Team, C
 
 @pytest.mark.django_db
 def test_the_prompt_switches_workspace_before_landing_on_plugins(
-    two_workspaces: tuple[Team, Team, Client],
+    two_workspaces: tuple[Workspace, Workspace, Client],
 ) -> None:
     viewed, selected, client = two_workspaces
 
@@ -65,7 +65,7 @@ def test_the_prompt_switches_workspace_before_landing_on_plugins(
 
 @pytest.mark.django_db
 def test_following_it_selects_the_viewed_workspace(
-    two_workspaces: tuple[Team, Team, Client],
+    two_workspaces: tuple[Workspace, Workspace, Client],
 ) -> None:
     """Switching is what makes the destination correct, so exercise the hop.
 
@@ -86,7 +86,7 @@ def test_following_it_selects_the_viewed_workspace(
 
 @pytest.mark.django_db
 def test_switching_to_a_workspace_missing_from_a_stale_session(
-    two_workspaces: tuple[Team, Team, Client],
+    two_workspaces: tuple[Workspace, Workspace, Client],
 ) -> None:
     """The prompt is rendered from a live membership check, the switch read a
     session map written at login, and the two can disagree.
@@ -110,7 +110,7 @@ def test_switching_to_a_workspace_missing_from_a_stale_session(
 
 @pytest.mark.django_db
 def test_switching_to_a_workspace_the_user_does_not_belong_to(
-    two_workspaces: tuple[Team, Team, Client],
+    two_workspaces: tuple[Workspace, Workspace, Client],
 ) -> None:
     """Refreshing from the database must not become a way in.
 
@@ -118,7 +118,7 @@ def test_switching_to_a_workspace_the_user_does_not_belong_to(
     which is a redirect rather than a switch.
     """
     _viewed, _selected, client = two_workspaces
-    stranger = Team.objects.create(name="Someone Else's Workspace")
+    stranger = Workspace.objects.create(name="Someone Else's Workspace")
 
     response = client.get(reverse("workspaces:switch_team", kwargs={"workspace_key": stranger.key}))
 

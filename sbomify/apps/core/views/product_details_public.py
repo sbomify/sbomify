@@ -30,7 +30,7 @@ from sbomify.apps.plugins.public_assessment_utils import (
 from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
 from sbomify.apps.tea.mappers import build_product_tei_urn
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # GTIN types that support barcode rendering
 BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
@@ -206,7 +206,7 @@ class ProductDetailsPublicView(View):
         product_boms = SBOM.objects.filter(component__products__id=resolved_id)
         has_downloadable_content = product_boms.filter(bom_type=SBOM.BomType.SBOM).exists()
         has_cbom = product_boms.filter(bom_type=SBOM.BomType.CBOM).exists()
-        team = Team.objects.filter(pk=product.get("team_id")).first()
+        team = Workspace.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain

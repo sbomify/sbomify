@@ -40,7 +40,7 @@ from sbomify.apps.teams.services.contacts import (
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Allowed conformity assessment procedures per product category.
 # CRA Art 32(1): Default → Module A (self-assessment)
@@ -169,7 +169,7 @@ def _auto_fill_from_product(assessment: CRAAssessment) -> None:
 def get_or_create_assessment(
     product_id: str,
     user: User,
-    team: Team,
+    team: Workspace,
 ) -> ServiceResult[CRAAssessment]:
     """Get existing or create new CRA assessment for a product.
 

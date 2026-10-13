@@ -4,12 +4,12 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
 def team(db):
-    return Team.objects.create(name="Test Team", key="testteamkey")
+    return Workspace.objects.create(name="Test Team", key="testteamkey")
 
 
 @pytest.fixture
@@ -89,14 +89,14 @@ def test_settings_for_a_workspace_you_do_not_belong_to_is_refused(client, owner,
     # No explicit key: Team.save() derives a real token from the pk, and the
     # settings path decodes it. A hand-written key decodes to nothing and 404s
     # before any of the logic under test runs.
-    other = Team.objects.create(name="Someone Else's Workspace")
+    other = Workspace.objects.create(name="Someone Else's Workspace")
     stranger = django_user_model.objects.create_user(
         username="stranger", email="stranger@test.com", password="password"
     )
     Member.objects.create(user=stranger, team=other, role="owner", is_default_team=True)
 
     client.force_login(owner)
-    _setup_session(client, Team.objects.get(key="testteamkey"), "owner")
+    _setup_session(client, Workspace.objects.get(key="testteamkey"), "owner")
 
     response = client.get(reverse("workspaces:team_settings", kwargs={"workspace_key": other.key}))
 
@@ -111,7 +111,7 @@ def test_an_expired_invitation_does_not_unlock_admin_self_removal(client, admin_
     ago still bought a way past the rule.
     """
     Invitation.objects.create(
-        team=Team.objects.create(name="Somewhere Else"),
+        team=Workspace.objects.create(name="Somewhere Else"),
         email=admin_user.email,
         role="member",
         expires_at=timezone.now() - timedelta(days=30),
@@ -133,7 +133,7 @@ def test_a_live_invitation_still_unlocks_admin_self_removal(client, admin_user, 
     admin_user.email_verified = True
     admin_user.save(update_fields=["email_verified"])
     Invitation.objects.create(
-        team=Team.objects.create(name="Somewhere Else"),
+        team=Workspace.objects.create(name="Somewhere Else"),
         email=admin_user.email,
         role="member",
         expires_at=timezone.now() + timedelta(days=7),

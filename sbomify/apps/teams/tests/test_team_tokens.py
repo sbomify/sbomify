@@ -16,7 +16,7 @@ from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.mark.django_db
@@ -37,7 +37,7 @@ class TestTeamTokensView:
     def test_get_requires_team_membership(self, client: Client, sample_user: AbstractBaseUser):
         """Test that GET requires team membership."""
         client.force_login(sample_user)
-        team = Team.objects.create(name="Test Team")
+        team = Workspace.objects.create(name="Test Team")
         # Ensure team has a key
         if not team.key:
             team.key = number_to_random_token(team.pk)
@@ -199,7 +199,7 @@ class TestTeamTokensView:
         user = sample_team_with_owner_member.user
 
         # Create a second team
-        team_b = Team.objects.create(name="Team B")
+        team_b = Workspace.objects.create(name="Team B")
         team_b.key = number_to_random_token(team_b.pk)
         team_b.save()
         Member.objects.create(user=user, team=team_b, role="owner")
@@ -642,7 +642,7 @@ class TestBulkTokenRevocation:
         via this workspace's endpoint (it isn't shown on this page)."""
         team_a = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
-        team_b = Team.objects.create(name="Team B")
+        team_b = Workspace.objects.create(name="Team B")
         team_b.key = number_to_random_token(team_b.pk)
         team_b.save()
         token_b = AccessToken.objects.create(user=user, encoded_token="enc-b", description="b", team=team_b)
