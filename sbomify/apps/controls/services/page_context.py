@@ -91,7 +91,7 @@ def build_product_controls(request: HttpRequest, workspace_key: str, product_id:
     return ServiceResult.success(
         {
             "active_controls_tables": [controls_table_context(request, catalog, product) for catalog in catalogs],
-            "controls_settings_url": reverse("teams:team_settings_tab", args=[workspace_key, "controls"]),
+            "controls_settings_url": reverse("workspaces:team_settings_tab", args=[workspace_key, "controls"]),
             "can_manage_controls": can(request, "workspace:administer", product.team),
         }
     )

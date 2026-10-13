@@ -75,7 +75,7 @@ def test_form_rejects_profile_without_entities(
         data["entities-TOTAL_FORMS"] = "0"
 
     response = authenticated_web_client.post(
-        reverse("teams:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true"
+        reverse("workspaces:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true"
     )
 
     messages = json.loads(response["HX-Trigger"])["messages"]
@@ -98,8 +98,8 @@ def test_delete_incomplete_profile_from_every_list_render(
     if incomplete_entity:
         ContactEntity.objects.create(profile=empty_profile, is_author=True)
 
-    list_url = reverse("teams:contact_profiles_list", args=[workspace.key])
-    create_url = reverse("teams:contact_profiles_form", args=[workspace.key])
+    list_url = reverse("workspaces:contact_profiles_list", args=[workspace.key])
+    create_url = reverse("workspaces:contact_profiles_form", args=[workspace.key])
     client = authenticated_web_client
     if render_source == "list":
         response = client.get(list_url, HTTP_HX_REQUEST="true")
@@ -119,7 +119,7 @@ def test_delete_incomplete_profile_from_every_list_render(
                 }
             )
             response = client.post(
-                reverse("teams:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+                reverse("workspaces:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
                 data,
                 HTTP_HX_REQUEST="true",
             )

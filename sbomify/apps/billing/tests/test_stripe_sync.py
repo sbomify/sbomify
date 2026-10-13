@@ -460,7 +460,7 @@ class TestSyncIntegration:
 
         from django.urls import reverse
 
-        url = reverse("teams:team_settings_tab", kwargs={"team_key": team_with_subscription.key, "tab": "billing"})
+        url = reverse("workspaces:team_settings_tab", kwargs={"team_key": team_with_subscription.key, "tab": "billing"})
         response = client.get(url)
 
         assert response.status_code == 200

@@ -1017,7 +1017,7 @@ class TestNDADocumentVersioning:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key})
         
         from django.core.files.uploadedfile import SimpleUploadedFile
         new_nda = SimpleUploadedFile("new_nda.pdf", b"New NDA Content v2", content_type="application/pdf")

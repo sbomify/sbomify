@@ -175,7 +175,7 @@ class TestArtifactPage:
         html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
 
         assert "No assessments turned on" in html
-        switch = reverse("teams:switch_team", args=[sample_sbom.component.team.key])
+        switch = reverse("workspaces:switch_team", args=[sample_sbom.component.team.key])
         assert f'href="{switch}?next={reverse("plugins:plugins_page")}"' in html
         assert "processing completes" not in html
 

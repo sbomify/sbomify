@@ -33,7 +33,7 @@ def invitation(team_with_business_plan: Team, invitee: Any) -> Invitation:
 
 
 def _url(token: object) -> str:
-    return reverse("teams:accept_invite", kwargs={"invite_token": str(token)})
+    return reverse("workspaces:accept_invite", kwargs={"invite_token": str(token)})
 
 
 def _form_token(response: Any) -> str:

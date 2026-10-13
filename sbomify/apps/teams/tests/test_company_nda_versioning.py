@@ -23,7 +23,7 @@ PDF = b"%PDF-1.4 test nda"
 
 def _post_nda(client: Client, team_key: str, filename: str = "nda.pdf"):
     return client.post(
-        reverse("teams:team_settings", kwargs={"team_key": team_key}),
+        reverse("workspaces:team_settings", kwargs={"team_key": team_key}),
         {
             "company_nda_action": "upload",
             "company_nda_file": SimpleUploadedFile(filename, PDF, content_type="application/pdf"),
@@ -156,7 +156,7 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
 
         oversized = SimpleUploadedFile("nda.pdf", b"x" * (1024 * 1024 + 1), content_type="application/pdf")
         response = client.post(
-            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_settings", kwargs={"team_key": team.key}),
             {"company_nda_action": "upload", "company_nda_file": oversized},
             follow=True,
         )
@@ -179,7 +179,7 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
 
         big = SimpleUploadedFile("nda.pdf", b"x" * (512 * 1024), content_type="application/pdf")
         client.post(
-            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_settings", kwargs={"team_key": team.key}),
             {"company_nda_action": "upload", "company_nda_file": big},
         )
 
@@ -190,7 +190,7 @@ class TestTheNdaUploadFollowsTheConfiguredCeiling:
         client, team = owner_client
 
         body = client.get(
-            reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
         ).content.decode()
 
         assert "PDF only, up to 100 MB." in body

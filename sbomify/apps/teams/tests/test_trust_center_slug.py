@@ -12,7 +12,7 @@ from sbomify.apps.teams.models import Member, Team
 
 def _post_slug(client: Client, team: Team, new_slug: str):
     return client.post(
-        reverse("teams:team_settings", kwargs={"team_key": team.key}),
+        reverse("workspaces:team_settings", kwargs={"team_key": team.key}),
         {"slug_action": "update", "slug": new_slug, "active_tab": "trust-center"},
     )
 

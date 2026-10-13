@@ -1,6 +1,6 @@
 <form id="patch-sla-form"
       method="post"
-      hx-post="{% url 'teams:team_general' team.key %}"
+      hx-post="{% url 'workspaces:team_general' team.key %}"
       hx-disabled-elt="find button[type='submit']"
       hx-swap="none"
       x-data="{ mode: '{{ patch_sla_mode }}' }"

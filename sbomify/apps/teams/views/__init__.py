@@ -188,7 +188,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
 @validate_role_in_url_team(list(ADMINISTER))
 def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
     """Redirect to team settings for unified interface."""
-    return redirect("teams:team_settings", team_key=team_key)
+    return redirect("workspaces:team_settings", team_key=team_key)
 
 
 @login_required
@@ -291,7 +291,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             from django.urls import reverse
 
             login_url = reverse("core:keycloak_login")
-            redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+            redirect_url = reverse("workspaces:accept_invite", kwargs={"invite_token": invite_token})
             return redirect(f"{login_url}?next={quote(redirect_url)}")
 
         # If the invitation was auto-accepted during login, recover using session data
@@ -333,7 +333,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         from django.urls import reverse
 
         login_url = reverse("core:keycloak_login")
-        redirect_url = reverse("teams:accept_invite", kwargs={"invite_token": invite_token})
+        redirect_url = reverse("workspaces:accept_invite", kwargs={"invite_token": invite_token})
         return redirect(f"{login_url}?next={quote(redirect_url)}")
 
     # The URL names the invitation. A token saved in the session never replaces it
@@ -615,7 +615,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
     """
     current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
-        return redirect("teams:team_settings", team_key=current_team["key"])
+        return redirect("workspaces:team_settings", team_key=current_team["key"])
     else:
         # If no current team, redirect to teams dashboard to select one
         messages.add_message(
@@ -623,7 +623,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
             messages.INFO,
             "Please select a workspace to access its settings.",
         )
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
 
 @login_required
@@ -633,4 +633,4 @@ def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
     Redirect /workspace/{team_key}/settings/ to the unified settings interface.
     This provides backward compatibility for the old URL structure.
     """
-    return redirect("teams:team_settings", team_key=team_key)
+    return redirect("workspaces:team_settings", team_key=team_key)

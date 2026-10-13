@@ -49,14 +49,14 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return self._delete(request)
 
         messages.error(request, "Invalid request method")
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     def _post(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = AddTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         form.save(user=request.user)
         update_user_teams_session(request, user)
@@ -66,14 +66,14 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             f"Workspace {form.instance.name} created successfully",
         )
 
-        return redirect("teams:switch_team", team_key=form.instance.key)
+        return redirect("workspaces:switch_team", team_key=form.instance.key)
 
     def _patch(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = UpdateTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
@@ -96,14 +96,14 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
 
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     def _delete(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = DeleteTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         try:
             team = Team.objects.get(key=form.cleaned_data["key"])
@@ -134,4 +134,4 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         except Team.DoesNotExist:
             messages.error(request, "Workspace not found")
 
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")

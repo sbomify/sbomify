@@ -42,7 +42,7 @@ drawer no longer closes the drawer with it.
                     {% else %}
                         {% firstof 'false' as workspace_current %}
                     {% endif %}
-                    <c-dropdowns.item href="{% url 'teams:switch_team' workspace_key %}?next={% url 'core:dashboard' %}" icon="fas fa-briefcase" aria-current="{{ workspace_current }}">
+                    <c-dropdowns.item href="{% url 'workspaces:switch_team' workspace_key %}?next={% url 'core:dashboard' %}" icon="fas fa-briefcase" aria-current="{{ workspace_current }}">
                     {{ workspace_info.name }}
                     {% if workspace_key == current_workspace_key %}<c-badges.secondary size="sm">Current</c-badges.secondary>{% endif %}
                     </c-dropdowns.item>
@@ -50,7 +50,7 @@ drawer no longer closes the drawer with it.
             </div>
             <c-dropdowns.divider />
             <c-dropdowns.item icon="fas fa-plus" @click="open = false; $dispatch('open-add-workspace-modal')">Create workspace</c-dropdowns.item>
-            <c-dropdowns.item icon="fas fa-gear" href="{% url 'teams:teams_dashboard' %}">Manage workspaces</c-dropdowns.item>
+            <c-dropdowns.item icon="fas fa-gear" href="{% url 'workspaces:teams_dashboard' %}">Manage workspaces</c-dropdowns.item>
             </c-dropdowns.dropdown>
         </div>
     {% endif %}

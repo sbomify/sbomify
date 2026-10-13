@@ -251,7 +251,7 @@ def test_the_supplier_list_page_renders(client: Client, sample_team_with_owner_m
     create_supplier(team, {"name": "Acme Components"})
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    response = client.get(reverse("teams:suppliers", kwargs={"team_key": team.key}))
+    response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": team.key}))
 
     assert response.status_code == 200
     assert "Acme Components" in response.content.decode()
@@ -279,7 +279,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         other = self._setup(client, sample_team_with_owner_member)
         create_supplier(other, {"name": "Their Vendor"})
 
-        response = client.get(reverse("teams:suppliers", kwargs={"team_key": other.key}))
+        response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": other.key}))
 
         assert response.status_code == 403
         assert "Their Vendor" not in response.content.decode()
@@ -287,7 +287,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
     def test_a_guest_elsewhere_cannot_add_to_that_workspace(self, client: Client, sample_team_with_owner_member):
         other = self._setup(client, sample_team_with_owner_member)
 
-        client.post(reverse("teams:suppliers", kwargs={"team_key": other.key}), {"name": "Injected"})
+        client.post(reverse("workspaces:suppliers", kwargs={"team_key": other.key}), {"name": "Injected"})
 
         assert not Supplier.objects.filter(team=other, name="Injected").exists()
 
@@ -296,7 +296,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         supplier = create_supplier(other, {"name": "Their Vendor"}).value
 
         client.post(
-            reverse("teams:suppliers", kwargs={"team_key": other.key}),
+            reverse("workspaces:suppliers", kwargs={"team_key": other.key}),
             {"action": "delete", "supplier_id": supplier.id},
         )
 
@@ -307,7 +307,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         stranger = _other_team("Unrelated Workspace")
         setup_authenticated_client_session(client, session_team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("teams:suppliers", kwargs={"team_key": stranger.key}))
+        response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": stranger.key}))
 
         assert response.status_code in (403, 404)
 
