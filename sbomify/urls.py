@@ -81,7 +81,7 @@ urlpatterns = [
     path("workspace/", include(("sbomify.apps.teams.urls", "workspaces"), namespace="teams-legacy")),
     path("workspaces/", include("sbomify.apps.teams.urls")),
     # The old "teams:" names still reverse here until every open branch has re-run
-    # bin/rename_to_workspace.py (#1453). Listed after the canonical mount, so no
+    # bin/rename_to_workspace.py. Listed after the canonical mount, so no
     # request ever resolves to it.
     path("workspaces/", include(("sbomify.apps.teams.urls", "workspaces"), namespace="teams")),
     path("", include("sbomify.apps.sboms.urls")),

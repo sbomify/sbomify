@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite team names to workspace names across the tree (#1453).
+"""Rewrite team names to workspace names across the tree.
 
 Run it again after merging master and it renames whatever your branch added:
 
@@ -35,7 +35,7 @@ def _teams_url_names() -> str:
     return "|".join(sorted(set(re.findall(r'name="([a-z_0-9]+)"', source))))
 
 
-# Appended to by each phase of #1453, in the order they landed.
+# Appended to by each phase of the rename, in the order they landed.
 RULES: list[tuple[re.Pattern[str], str]] = [
     # P2a: the URL namespace, only before a name the workspaces urlconf defines.
     (re.compile(rf"\bteams:(?=(?:{_teams_url_names()})\b)"), "workspaces:"),
