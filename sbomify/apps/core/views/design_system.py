@@ -43,6 +43,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "pagination", "label": "Pagination", "group": "Data"},
     {"id": "stats", "label": "Stat cards", "group": "Data"},
     {"id": "severity", "label": "Severity badges", "group": "Data"},
+    {"id": "version-summaries", "label": "Version summaries", "group": "Data"},
     {"id": "role-badges", "label": "Role badges", "group": "Data"},
     {"id": "progress", "label": "Progress", "group": "Data"},
     {"id": "badges", "label": "Badges", "group": "Data"},
@@ -61,6 +62,89 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "tooltip", "label": "Tooltip", "group": "Misc"},
     {"id": "branded", "label": "Branded components", "group": "Branded"},
 ]
+
+
+def _fix_prompt_demo() -> dict[str, object]:
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt
+
+    fix: dict[str, object] = {
+        "advisory": "CVE-2026-10001",
+        "aliases": ["GHSA-demo-0001-0001"],
+        "severity": "high",
+        "cvss_score": 7.5,
+        "kev": True,
+        "malicious": False,
+        "title": "Request parser vulnerability",
+        "details": "",
+        "package": "example-parser",
+        "version": "1.0.0",
+        "ecosystem": "pypi",
+        "purl": "pkg:pypi/example-parser@1.0.0",
+        "fixed": "1.0.4",
+        "references": [],
+        "component": "api-gateway",
+        "sbom_version": "2.4.1",
+    }
+    fix["prompt"] = render_fix_prompt(fix)
+    return fix
+
+
+def _workspace_vulnerability_demo() -> dict[str, object]:
+    from django.core.paginator import Paginator
+
+    from sbomify.apps.vulnerability_scanning.services.workspace_vulnerabilities import (
+        COLUMNS,
+        PER_PAGE_CHOICES,
+        VulnerabilityQuery,
+    )
+
+    rows = [
+        {
+            "id": "CVE-2026-10001",
+            "aliases": ["GHSA-demo-0001-0001"],
+            "severity": "high",
+            "cvss_score": 7.5,
+            "kev": True,
+            "malicious": False,
+            "package": "example-parser",
+            "version": "1.0.0",
+            "ecosystem": "pypi",
+            "component_name": "api-gateway",
+            "component_url": "#vulnerability-browser",
+            "sbom_version": "2.4.1",
+            "product_names": "Acme Cloud",
+            "other_components": 2,
+            "sla": {"label": "3 days over", "overdue": True},
+            "decision": "Not reviewed",
+            "fix_prompt_url": "#vulnerability-browser",
+        }
+    ]
+    page = Paginator(rows, 25).get_page(1)
+    return {
+        "query": VulnerabilityQuery(),
+        "summary": {
+            "vulnerabilities": 1,
+            "critical_high": 1,
+            "exploited": 1,
+            "overdue": 1,
+            "occurrences": 3,
+            "components": 3,
+        },
+        "unassessed_components": 0,
+        "scoped_components": 3,
+        "rows": rows,
+        "page": page,
+        "total": 1,
+        "page_range": [1],
+        "headers": [
+            {"key": key, "label": label, "href": "#vulnerability-browser", "order": "none"} for key, label, _ in COLUMNS
+        ],
+        "products": [{"id": "demo", "name": "Acme Cloud"}],
+        "components": [{"id": "demo", "name": "api-gateway"}],
+        "base_url": "#vulnerability-browser",
+        "query_string": "",
+        "per_page_choices": PER_PAGE_CHOICES,
+    }
 
 
 class DesignSystemView(LoginRequiredMixin, View):
@@ -94,6 +178,8 @@ class DesignSystemView(LoginRequiredMixin, View):
         )
         context = {
             "vulnerability_demo": vulnerability_demo,
+            "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
+            "fix_prompt_demo": _fix_prompt_demo(),
             "plan_card_demos": [
                 {
                     "key": "community",
@@ -208,6 +294,18 @@ class DesignSystemView(LoginRequiredMixin, View):
                     {"tone": "medium", "count": 2},
                 ],
                 "passed": [{"tone": "success", "count": 3}],
+            },
+            "version_summary_demo": {
+                "open": {"state": "open", "critical": 3, "high": 13, "other": 11, "new": 2},
+                "high_only": {"state": "open", "critical": 0, "high": 1, "other": 0, "new": None},
+                "other_only": {"state": "open", "critical": 0, "high": 0, "other": 4, "new": 1},
+                "none": {"state": "none"},
+                "nothing_scanned": {"state": "nothing_scanned"},
+                "not_scanned": {"state": "not_scanned"},
+                "fails": {"state": "fails", "first": "BSI TR-03183-2", "more": 5},
+                "error": {"state": "error", "first": "GitHub Attestation", "more": 0},
+                "checking": {"state": "checking"},
+                "meets": {"state": "meets", "total": 3},
             },
             "team": request.session.get("current_workspace", {}),
             "sections": GALLERY_SECTIONS,

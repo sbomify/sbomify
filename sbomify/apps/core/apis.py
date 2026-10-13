@@ -1053,7 +1053,10 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:delete", product):
-        return 403, {"detail": "Only owners can delete products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete products",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = product.team.key
@@ -2161,7 +2164,10 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:delete", component):
-        return 403, {"detail": "Only owners can delete components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete components",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = component.team.key
@@ -3536,7 +3542,10 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:delete", release.product):
-        return 403, {"detail": "Only owners can delete releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent deleting latest releases
     if release.is_latest:
@@ -4985,6 +4994,7 @@ def list_component_sboms(
                             "status": plugin_status,
                             "findings_count": findings_count,
                             "fail_count": (run.result or {}).get("summary", {}).get("fail_count", 0),
+                            "category": run.category,
                         }
                     )
 
