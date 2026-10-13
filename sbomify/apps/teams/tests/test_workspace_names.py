@@ -35,7 +35,7 @@ def test_the_singular_mount_still_serves_old_links():
 def test_the_team_model_name_still_imports_as_the_workspace_model():
     from sbomify.apps.teams.models import Team, Workspace  # rename-to-workspace: keep
 
-    assert Team is Workspace
+    assert Team is Workspace  # rename-to-workspace: keep
     assert Workspace._meta.label == "teams.Workspace"
     assert Workspace._meta.db_table == "workspaces_workspaces"
 
