@@ -63,6 +63,22 @@ class TestBuiltinReconciliation:
         assert admin_plugin.is_enabled is True
         assert admin_plugin.is_builtin is False
 
+    def test_registration_keeps_what_an_admin_changed(self) -> None:
+        """A deploy resets what the code owns but not the enabled, beta and default config an admin sets."""
+        from sbomify.apps.plugins.apps import PluginsConfig
+        from sbomify.apps.plugins.builtins.osv import OSVPlugin
+
+        RegisteredPlugin.objects.filter(name="osv").update(
+            is_enabled=False, is_beta=False, default_config={"timeout": 1}, display_name="Renamed", version="0.0.1"
+        )
+
+        PluginsConfig("sbomify.apps.plugins", __import__("sbomify.apps.plugins"))._register_builtin_plugins()
+
+        plugin = RegisteredPlugin.objects.get(name="osv")
+        assert (plugin.is_enabled, plugin.is_beta, plugin.default_config) == (False, False, {"timeout": 1})
+        assert plugin.display_name == "OSV Vulnerability Scanner"
+        assert plugin.version == OSVPlugin.VERSION
+
     def test_builtins_registered_with_is_builtin_true(self) -> None:
         """All builtin plugins are registered with is_builtin=True and correct names."""
         builtins = RegisteredPlugin.objects.filter(is_builtin=True)

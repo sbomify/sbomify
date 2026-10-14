@@ -1,7 +1,5 @@
 from sbomify.apps.teams.templatetags.teams import (
     _get_attr,
-    avatar_color_index,
-    modulo,
     user_initials,
     workspace_display,
     workspace_initials,
@@ -26,54 +24,6 @@ class TestWorkspaceDisplay:
 
     def test_strips_whitespace(self):
         assert workspace_display("  John  ") == "John's Workspace"
-
-
-class TestModulo:
-    def test_basic_modulo(self):
-        assert modulo(10, 3) == 1
-        assert modulo(15, 5) == 0
-        assert modulo(7, 4) == 3
-
-    def test_string_inputs(self):
-        assert modulo("10", "3") == 1
-        assert modulo("15", "5") == 0
-
-    def test_invalid_value_returns_zero(self):
-        assert modulo("abc", 3) == 0
-        assert modulo(10, "xyz") == 0
-        assert modulo(None, 3) == 0
-
-    def test_float_truncates(self):
-        assert modulo(10.7, 3) == 1
-
-
-class TestAvatarColorIndex:
-    def test_none_returns_zero(self):
-        assert avatar_color_index(None) == 0
-
-    def test_empty_string_returns_zero(self):
-        assert avatar_color_index("") == 0
-
-    def test_alphabetic_mapping(self):
-        # A=0, B=1, C=2, D=3, E=4, F=0 (wraps)
-        assert avatar_color_index("Apple") == 0
-        assert avatar_color_index("Banana") == 1
-        assert avatar_color_index("Cherry") == 2
-        assert avatar_color_index("Date") == 3
-        assert avatar_color_index("Elderberry") == 4
-        assert avatar_color_index("Fig") == 0  # wraps
-
-    def test_case_insensitive(self):
-        assert avatar_color_index("apple") == avatar_color_index("Apple")
-        assert avatar_color_index("APPLE") == avatar_color_index("apple")
-
-    def test_numeric_first_char(self):
-        # Non-alpha uses ord % 5
-        result = avatar_color_index("123 Company")
-        assert 0 <= result <= 4
-
-    def test_strips_whitespace(self):
-        assert avatar_color_index("  Apple") == avatar_color_index("Apple")
 
 
 class TestWorkspaceInitials:

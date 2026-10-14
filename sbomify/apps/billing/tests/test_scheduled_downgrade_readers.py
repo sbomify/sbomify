@@ -4,9 +4,7 @@ from unittest.mock import patch
 
 import pytest
 import stripe
-from django.test import RequestFactory
 
-from sbomify.apps.billing.billing_processing import check_billing_limits
 from sbomify.apps.billing.notifications import check_downgrade_limit_exceeded
 from sbomify.apps.core.apis import _check_billing_limits
 
@@ -59,17 +57,7 @@ def _run_create_limit_check(team):
     _check_billing_limits(str(team.id), "component")
 
 
-def _run_decorator(team):
-    @check_billing_limits("component")
-    def view(request):
-        return None
-
-    request = RequestFactory().post("/")
-    request.session = {"current_workspace": {"key": team.key}}
-    view(request)
-
-
-READERS = [_run_bell, _run_create_limit_check, _run_decorator]
+READERS = [_run_bell, _run_create_limit_check]
 
 
 @pytest.mark.parametrize("reader", READERS)

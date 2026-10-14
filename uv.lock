@@ -790,39 +790,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-anymail"
-version = "15.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-    { name = "idna" },
-    { name = "requests" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/00/43/f0aadb31f2c58afcd9f001f4291998cbd6d289898167e79d908506fc6faf/django_anymail-15.0.tar.gz", hash = "sha256:23d8ab6589afe8cc1ae7665c26879814ad192f4c3ed837a2a1868b0a056869e0", size = 106985, upload-time = "2026-04-18T20:44:19.237Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/75/d1/daae99ec3b30886010a499975880ec20c32c622bee6b92c226b715e42f0c/django_anymail-15.0-py3-none-any.whl", hash = "sha256:64d33dd1084bfc8e4e12245f56629be40aa0b0498fc7fc7544d87b9b2048be1e", size = 147229, upload-time = "2026-04-18T20:44:17.323Z" },
-]
-
-[package.optional-dependencies]
-sendgrid = [
-    { name = "cryptography" },
-]
-
-[[package]]
-name = "django-cors-headers"
-version = "4.9.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "asgiref" },
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/21/39/55822b15b7ec87410f34cd16ce04065ff390e50f9e29f31d6d116fc80456/django_cors_headers-4.9.0.tar.gz", hash = "sha256:fe5d7cb59fdc2c8c646ce84b727ac2bca8912a247e6e68e1fb507372178e59e8", size = 21458, upload-time = "2025-09-18T10:40:52.326Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/d8/19ed1e47badf477d17fb177c1c19b5a21da0fd2d9f093f23be3fb86c5fab/django_cors_headers-4.9.0-py3-none-any.whl", hash = "sha256:15c7f20727f90044dcee2216a9fd7303741a864865f0c3657e28b7056f61b449", size = 12809, upload-time = "2025-09-18T10:40:50.843Z" },
-]
-
-[[package]]
 name = "django-cotton"
 version = "2.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -858,18 +825,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2b/b7/2a5ac56a5fd41fbe332221d3906168ace96df6a1f3c92d0839c4c7133cb2/django_dramatiq-0.15.0.tar.gz", hash = "sha256:e3cf1b2ac288fe4a7aa198c9450fe242ed312df8850f3f9e18ce01b8acc78b96", size = 15763, upload-time = "2025-11-13T15:53:40.115Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4a/3a/4d2e6f89ee0b9a79a271f0ead1a6c25f6cab291735493b083e316ab86130/django_dramatiq-0.15.0-py3-none-any.whl", hash = "sha256:23f0bc418a860952adbf822c4aa3b9c46c51d3d9f50be0a8ed3d19a53380df1d", size = 12620, upload-time = "2025-11-13T15:53:38.878Z" },
-]
-
-[[package]]
-name = "django-extensions"
-version = "4.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/b3/ed0f54ed706ec0b54fd251cc0364a249c6cd6c6ec97f04dc34be5e929eac/django_extensions-4.1.tar.gz", hash = "sha256:7b70a4d28e9b840f44694e3f7feb54f55d495f8b3fa6c5c0e5e12bcb2aa3cdeb", size = 283078, upload-time = "2025-04-11T01:15:39.617Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/64/96/d967ca440d6a8e3861120f51985d8e5aec79b9a8bdda16041206adfe7adc/django_extensions-4.1-py3-none-any.whl", hash = "sha256:0699a7af28f2523bf8db309a80278519362cd4b6e1fd0a8cd4bf063e1e023336", size = 232980, upload-time = "2025-04-11T01:15:37.701Z" },
 ]
 
 [[package]]
@@ -976,15 +931,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/23/fe/4be07f538bbf9bf8bf73b045552ec2a1b4fba67e3176abb30490b643368e/django_vite-3.1.0.tar.gz", hash = "sha256:8b4ffe4a9fa81ff568bfb195e74dde8694aaf13fd4b656ae60bf59cce08b85e8", size = 25434, upload-time = "2025-02-23T15:32:07.914Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/59/7df4b1077fa41b43b4e542696d75138dbb86a65f44248c607b3e0f1014ce/django_vite-3.1.0-py3-none-any.whl", hash = "sha256:4e46572bd6b1ce70784be129205dc2ffcbc7a3c19fea50bebfb72b327bbde5fc", size = 23579, upload-time = "2025-02-23T15:32:06.603Z" },
-]
-
-[[package]]
-name = "django-widget-tweaks"
-version = "1.5.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a5/fe/26eb92fba83844e71bbec0ced7fc2e843e5990020e3cc676925204031654/django-widget-tweaks-1.5.0.tar.gz", hash = "sha256:1c2180681ebb994e922c754804c7ffebbe1245014777ac47897a81f57cc629c7", size = 14767, upload-time = "2023-08-25T15:29:12.778Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/46/6a/6cb6deb5c38b785c77c3ba66f53051eada49205979c407323eb666930915/django_widget_tweaks-1.5.0-py3-none-any.whl", hash = "sha256:a41b7b2f05bd44d673d11ebd6c09a96f1d013ee98121cb98c384fe84e33b881e", size = 8960, upload-time = "2023-08-25T15:29:05.644Z" },
 ]
 
 [[package]]
@@ -2391,31 +2337,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pytest-json-report"
-version = "1.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pytest" },
-    { name = "pytest-metadata" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/d3/765dae9712fcd68d820338908c1337e077d5fdadccd5cacf95b9b0bea278/pytest-json-report-1.5.0.tar.gz", hash = "sha256:2dde3c647851a19b5f3700729e8310a6e66efb2077d674f27ddea3d34dc615de", size = 21241, upload-time = "2022-03-15T21:03:10.2Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/35/d07400c715bf8a88aa0c1ee9c9eb6050ca7fe5b39981f0eea773feeb0681/pytest_json_report-1.5.0-py3-none-any.whl", hash = "sha256:9897b68c910b12a2e48dd849f9a284b2c79a732a8a9cb398452ddd23d3c8c325", size = 13222, upload-time = "2022-03-15T21:03:08.65Z" },
-]
-
-[[package]]
-name = "pytest-metadata"
-version = "3.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pytest" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/85/8c969f8bec4e559f8f2b958a15229a35495f5b4ce499f6b865eac54b878d/pytest_metadata-3.1.1.tar.gz", hash = "sha256:d2a29b0355fbc03f168aa96d41ff88b1a3b44a3b02acbe491801c98a048017c8", size = 9952, upload-time = "2024-02-12T19:38:44.887Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/43/7e7b2ec865caa92f67b8f0e9231a798d102724ca4c0e1f414316be1c1ef2/pytest_metadata-3.1.1-py3-none-any.whl", hash = "sha256:c8e0844db684ee1c798cfa38908d20d67d0463ecb6137c72e91f418558dd5f4b", size = 11428, upload-time = "2024-02-12T19:38:42.531Z" },
-]
-
-[[package]]
 name = "pytest-mock"
 version = "3.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2910,17 +2831,14 @@ dependencies = [
     { name = "dj-database-url" },
     { name = "django" },
     { name = "django-allauth" },
-    { name = "django-anymail", extra = ["sendgrid"] },
     { name = "django-cotton" },
     { name = "django-dramatiq" },
-    { name = "django-extensions" },
     { name = "django-health-check" },
     { name = "django-htmx" },
     { name = "django-ninja" },
     { name = "django-ratelimit" },
     { name = "django-redis" },
     { name = "django-vite" },
-    { name = "django-widget-tweaks" },
     { name = "dramatiq", extra = ["redis", "watch"] },
     { name = "dramatiq-crontab" },
     { name = "email-validator" },
@@ -2954,19 +2872,16 @@ dependencies = [
 dev = [
     { name = "bandit" },
     { name = "datamodel-code-generator", extra = ["http"] },
-    { name = "django-cors-headers" },
     { name = "django-debug-toolbar" },
     { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "djlint" },
     { name = "ipython" },
     { name = "pre-commit" },
-    { name = "pytest-json-report" },
     { name = "pytest-playwright" },
     { name = "ruff" },
     { name = "types-boto3" },
     { name = "types-channels" },
     { name = "types-defusedxml" },
-    { name = "types-gunicorn" },
     { name = "types-jsonschema" },
     { name = "types-psycopg2" },
     { name = "types-pyyaml" },
@@ -2996,17 +2911,14 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=3.0.1,<4" },
     { name = "django", specifier = ">=5.2.16,<6" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },
-    { name = "django-anymail", extras = ["sendgrid"], specifier = "~=15.0" },
     { name = "django-cotton", specifier = ">=2.7.2" },
     { name = "django-dramatiq", specifier = ">=0.15.0" },
-    { name = "django-extensions", specifier = "~=4.1" },
     { name = "django-health-check", specifier = ">=3.20.0,<5" },
     { name = "django-htmx", specifier = ">=1.25.0,<2" },
     { name = "django-ninja", specifier = ">=1.4.3,<2" },
     { name = "django-ratelimit", specifier = ">=4.1,<5" },
     { name = "django-redis", specifier = ">=5.0.0" },
     { name = "django-vite", specifier = ">=3.1.0,<4" },
-    { name = "django-widget-tweaks", specifier = ">=1.5.0,<2" },
     { name = "dramatiq", extras = ["redis", "watch"], specifier = ">=2.0.0,<3" },
     { name = "dramatiq-crontab", specifier = ">=1.0.12,<2" },
     { name = "email-validator", specifier = ">=2.3.0,<3" },
@@ -3040,19 +2952,16 @@ requires-dist = [
 dev = [
     { name = "bandit", specifier = ">=1.9.3,<2" },
     { name = "datamodel-code-generator", extras = ["http"], specifier = "~=0.44" },
-    { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-debug-toolbar", specifier = ">=6.0.0,<8" },
     { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.0,<7" },
     { name = "djlint", specifier = ">=1.36.4,<2" },
     { name = "ipython", specifier = ">=9.10.0,<10" },
     { name = "pre-commit", specifier = ">=4.3.0,<5" },
-    { name = "pytest-json-report", specifier = ">=1.5.0,<2" },
     { name = "pytest-playwright", specifier = ">=0.7.1,<0.9" },
     { name = "ruff", specifier = ">=0.15.0,<0.16" },
     { name = "types-boto3", specifier = ">=1.42.0,<2" },
     { name = "types-channels", specifier = ">=4.3.0,<5" },
     { name = "types-defusedxml", specifier = ">=0.7.0.20260504" },
-    { name = "types-gunicorn", specifier = ">=25.1.0,<27" },
     { name = "types-jsonschema", specifier = ">=4.25.0,<5" },
     { name = "types-psycopg2", specifier = ">=2.9.21,<3" },
     { name = "types-pyyaml", specifier = ">=6.0.12,<7" },
@@ -3353,40 +3262,6 @@ wheels = [
 ]
 
 [[package]]
-name = "types-gevent"
-version = "25.9.0.20251228"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "types-greenlet" },
-    { name = "types-psutil" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/06/85/c5043c4472f82c8ee3d9e0673eb4093c7d16770a26541a137a53a1d096f6/types_gevent-25.9.0.20251228.tar.gz", hash = "sha256:423ef9891d25c5a3af236c3e9aace4c444c86ff773fe13ef22731bc61d59abef", size = 38063, upload-time = "2025-12-28T03:28:28.651Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c8/b7/a2d6b652ab5a26318b68cafd58c46fafb9b15c5313d2d76a70b838febb4b/types_gevent-25.9.0.20251228-py3-none-any.whl", hash = "sha256:e2e225af4fface9241c16044983eb2fc3993f2d13d801f55c2932848649b7f2f", size = 55486, upload-time = "2025-12-28T03:28:27.382Z" },
-]
-
-[[package]]
-name = "types-greenlet"
-version = "3.3.0.20251206"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fc/d3/23f4ab29a5ce239935bb3c157defcf50df8648c16c65965fae03980d67f3/types_greenlet-3.3.0.20251206.tar.gz", hash = "sha256:3e1ab312ab7154c08edc2e8110fbf00d9920323edc1144ad459b7b0052063055", size = 8901, upload-time = "2025-12-06T03:01:38.634Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7c/8f/aabde1b6e49b25a6804c12a707829e44ba0f5520563c09271f05d3196142/types_greenlet-3.3.0.20251206-py3-none-any.whl", hash = "sha256:8d11041c0b0db545619e8c8a1266aa4aaa4ebeae8ae6b4b7049917a6045a5590", size = 8809, upload-time = "2025-12-06T03:01:37.651Z" },
-]
-
-[[package]]
-name = "types-gunicorn"
-version = "25.1.0.20260215"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "types-gevent" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/92/0e5e58a871c59428481d964c740ad287851c8c8eb86b1a9b153c9a523276/types_gunicorn-25.1.0.20260215.tar.gz", hash = "sha256:a1cc9f59a3211d3048a22ba29ac5f54f8adb2230e87e90eb5860bdd9aaf822ea", size = 32097, upload-time = "2026-02-15T04:10:46.087Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/48/5a/30149601920587dfdb7b21a41716ae60545342f691d31941bf22d4cef1a9/types_gunicorn-25.1.0.20260215-py3-none-any.whl", hash = "sha256:fe548d19d0e3b1c98aa449f4f51074b3516c4405c17a73d4946fa3aa396f2628", size = 50887, upload-time = "2026-02-15T04:10:45.197Z" },
-]
-
-[[package]]
 name = "types-jsonschema"
 version = "4.26.0.20260518"
 source = { registry = "https://pypi.org/simple" }
@@ -3396,15 +3271,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/46/73b6a5d61a61015c4248030a8cb07e5bdddb4041430fae9e585a68692578/types_jsonschema-4.26.0.20260518.tar.gz", hash = "sha256:e1dd53dc97a64f5eccdd6fa9839666e09bb500a8ebba2db6fdaf1789faea81a6", size = 16638, upload-time = "2026-05-18T06:06:44.106Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/d5/134f8a147dcecda10db7f60cfc6af0578a25a5c53c87b3907a64385e0184/types_jsonschema-4.26.0.20260518-py3-none-any.whl", hash = "sha256:30b30a518c7fe335df85c919fcbcc631b69c03d4a4b5b632fa916bea03065307", size = 16072, upload-time = "2026-05-18T06:06:43.264Z" },
-]
-
-[[package]]
-name = "types-psutil"
-version = "7.2.2.20260130"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/69/14/fc5fb0a6ddfadf68c27e254a02ececd4d5c7fdb0efcb7e7e917a183497fb/types_psutil-7.2.2.20260130.tar.gz", hash = "sha256:15b0ab69c52841cf9ce3c383e8480c620a4d13d6a8e22b16978ebddac5590950", size = 26535, upload-time = "2026-01-30T03:58:14.116Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/d7/60974b7e31545d3768d1770c5fe6e093182c3bfd819429b33133ba6b3e89/types_psutil-7.2.2.20260130-py3-none-any.whl", hash = "sha256:15523a3caa7b3ff03ac7f9b78a6470a59f88f48df1d74a39e70e06d2a99107da", size = 32876, upload-time = "2026-01-30T03:58:13.172Z" },
 ]
 
 [[package]]

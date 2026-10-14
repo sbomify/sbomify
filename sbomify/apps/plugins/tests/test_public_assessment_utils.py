@@ -1,7 +1,5 @@
 """Tests for public assessment utilities."""
 
-from datetime import timedelta
-
 import pytest
 from django.contrib.auth import get_user_model
 
@@ -11,8 +9,6 @@ from sbomify.apps.plugins.public_assessment_utils import (
     PassingAssessment,
     get_component_assessment_status,
     get_component_latest_sbom_assessment_status,
-    get_latest_sbom_for_component,
-    get_product_assessment_status,
     get_product_latest_sbom_assessment_status,
     get_sbom_passing_assessments,
     passing_assessments_to_dict,
@@ -411,35 +407,6 @@ class TestGetComponentAssessmentStatus:
         assert len(result.passing_assessments) == 0
 
 
-class TestGetProductAssessmentStatus:
-    """Tests for get_product_assessment_status function."""
-
-    def test_product_with_all_passing_components(self, team, public_component, sbom, ntia_plugin):
-        """Product shows passing when all directly-attached components pass."""
-        product = Product.objects.create(
-            name="Test Product",
-            team=team,
-            is_public=True,
-        )
-        product.components.add(public_component)
-
-        AssessmentRun.objects.create(
-            sbom=sbom,
-            plugin_name="ntia-minimum-elements-2021",
-            plugin_version="1.0.0",
-            plugin_config_hash="abc123",
-            category=AssessmentCategory.COMPLIANCE.value,
-            run_reason=RunReason.ON_UPLOAD.value,
-            status=RunStatus.COMPLETED.value,
-            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
-        )
-
-        result = get_product_assessment_status(product)
-        assert result.has_assessments is True
-        assert result.all_pass is True
-        assert len(result.passing_assessments) == 1
-
-
 class TestPassingAssessmentsToDictHelper:
     """Tests for passing_assessments_to_dict helper."""
 
@@ -472,41 +439,6 @@ class TestPassingAssessmentsToDictHelper:
         """Returns empty list for empty input."""
         result = passing_assessments_to_dict([])
         assert result == []
-
-
-class TestGetLatestSbomForComponent:
-    """Tests for get_latest_sbom_for_component function."""
-
-    def test_returns_none_for_component_without_sboms(self, public_component):
-        """Returns None when component has no SBOMs."""
-        SBOM.objects.filter(component=public_component).delete()
-        result = get_latest_sbom_for_component(public_component)
-        assert result is None
-
-    def test_returns_latest_sbom(self, public_component, sbom):
-        """Returns the most recent SBOM by created_at."""
-        # Create an older SBOM
-        older_sbom = SBOM.objects.create(
-            name="Older SBOM",
-            version="0.8.0",
-            component=public_component,
-            format="cyclonedx",
-            format_version="1.5",
-        )
-        # Force older timestamp
-        SBOM.objects.filter(pk=older_sbom.pk).update(created_at=sbom.created_at - timedelta(days=1))
-
-        # Create a newer SBOM
-        newer_sbom = SBOM.objects.create(
-            name="Newer SBOM",
-            version="2.0.0",
-            component=public_component,
-            format="cyclonedx",
-            format_version="1.6",
-        )
-
-        result = get_latest_sbom_for_component(public_component)
-        assert result.id == newer_sbom.id
 
 
 class TestGetComponentLatestSbomAssessmentStatus:

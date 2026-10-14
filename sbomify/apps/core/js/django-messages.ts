@@ -2,10 +2,9 @@ import { showToast } from './alerts';
 
 let initialized = false;
 
+/** Django's default message tags; debug and anything unknown show as info. */
 function showMessage(level: string, message: string): void {
-  const value = level.replace(/^alert-/, '');
-  const type = value === 'error' || value === 'danger' ? 'error'
-    : value === 'success' || value === 'warning' ? value : 'info';
+  const type = level === 'success' || level === 'warning' || level === 'error' ? level : 'info';
   showToast({ title: type.charAt(0).toUpperCase() + type.slice(1), message, type });
 }
 

@@ -29,12 +29,12 @@ from sbomify.apps.plugins.sdk import (
     AssessmentCategory,
     AssessmentPlugin,
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
     ScanMode,
 )
 from sbomify.apps.plugins.sdk.base import SBOMContext
+from sbomify.apps.plugins.sdk.results import summarize
 from sbomify.apps.sboms.crypto_inventory import CryptoAsset, CryptoInventory, derive_crypto_inventory
 
 
@@ -125,17 +125,6 @@ def curve_bits(asset: CryptoAsset, hay: str) -> int | None:
     return None
 
 
-def summarize(findings: list[Finding]) -> AssessmentSummary:
-    return AssessmentSummary(
-        total_findings=len(findings),
-        pass_count=sum(1 for f in findings if f.status == "pass"),
-        fail_count=sum(1 for f in findings if f.status == "fail"),
-        warning_count=sum(1 for f in findings if f.status == "warning"),
-        error_count=sum(1 for f in findings if f.status == "error"),
-        info_count=sum(1 for f in findings if f.status == "info"),
-    )
-
-
 class CryptoInventoryPlugin(AssessmentPlugin):
     """Template for plugins that grade the derived crypto inventory."""
 
@@ -220,20 +209,13 @@ class CryptoInventoryPlugin(AssessmentPlugin):
         )
 
     def _error_result(self, message: str) -> AssessmentResult:
-        return AssessmentResult(
-            plugin_name=self.PLUGIN_NAME,
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=AssessmentSummary(total_findings=1, error_count=1),
-            findings=[
-                Finding(
-                    id=f"{self.PLUGIN_NAME}:error",
-                    title=self.ERROR_TITLE,
-                    description=message,
-                    status="error",
-                    severity="high",
-                )
-            ],
+        return self.build_single_finding_result(
+            finding_id=f"{self.PLUGIN_NAME}:error",
+            title=self.ERROR_TITLE,
+            description=message,
+            status="error",
+            severity="high",
             metadata={"error": True},
+            error_count=1,
+            total_findings=1,
         )

@@ -97,9 +97,3 @@ function handleAnchorLink(): void {
     }
   }
 }
-
-// For backwards compatibility, keep the Alpine registration but make it a no-op
-export function registerAssessmentResultsCard(): void {
-  // No longer needed - using server-side rendering
-  // Keep function for backwards compatibility with main.ts imports
-}

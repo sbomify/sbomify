@@ -1,5 +1,4 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load django_vite %}
 {% block title %}sbomify Artifacts: {{ component.name }}{% endblock %}
 {% block content %}
     <c-layout.page-header title="{{ page_title }}" :breadcrumbs="breadcrumb_items">
@@ -14,7 +13,4 @@
          hx-swap="innerHTML">
         <c-feedback.loading-table message="Loading artifacts…" />
     </div>
-{% endblock %}
-{% block scripts %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
 {% endblock %}

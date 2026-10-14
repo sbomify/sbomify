@@ -11,6 +11,8 @@ from sbomify.apps.controls.services.automation_service import (
     get_automation_mappings,
     sync_from_latest_assessments,
 )
+from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+from sbomify.apps.plugins.builtins.osv import OSVPlugin
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunStatus
 
@@ -236,6 +238,41 @@ class TestSyncFromLatestAssessments:
         # OSV maps to CC6.8, CC7.1, CC7.2, CC7.3
         assert result.value["total_updated"] == 4
         assert result.value["by_plugin"]["osv"] == 4
+
+
+@pytest.mark.django_db
+class TestSecurityScanThatCheckedNothing:
+    """An errored or skipped scan stores no severity counts, which is not the same as a clean scan."""
+
+    @pytest.mark.parametrize("plugin_class", [OSVPlugin, DependencyTrackPlugin], ids=["osv", "dependency-track"])
+    @pytest.mark.parametrize("outcome", ["error", "skipped"])
+    def test_sync_leaves_the_controls_alone(
+        self, sample_team_with_owner_member, automation_controls, _sbom_for_team, plugin_class, outcome
+    ) -> None:
+        plugin = plugin_class()
+        if outcome == "error":
+            result = plugin._create_error_result("The scanner could not run")
+        else:
+            result = plugin.create_skipped_result(
+                finding_id=f"{plugin.get_metadata().name}:skipped", title="Skipped", description="Nothing to scan"
+            )
+        AssessmentRun.objects.create(
+            id=uuid.uuid4(),
+            sbom=_sbom_for_team,
+            plugin_name=plugin.get_metadata().name,
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category="security",
+            run_reason="on_upload",
+            status=RunStatus.COMPLETED.value,
+            result=result.to_dict(),
+        )
+
+        sync = sync_from_latest_assessments(sample_team_with_owner_member.team)
+
+        assert sync.ok
+        assert sync.value == {"total_updated": 0, "by_plugin": {}}
+        assert not ControlStatus.objects.filter(control__in=automation_controls).exists()
 
 
 @pytest.mark.django_db

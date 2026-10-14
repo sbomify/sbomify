@@ -137,28 +137,3 @@ class TestComponentMetaInfoTemplates:
         # Assertions
         assert "licensesEditor" in rendered
         assert 'x-model="licenseExpression"' in rendered
-        
-    @pytest.mark.skip(reason="Legacy template - supplier_editor is replaced by FormSet-based contact form")
-    def test_supplier_editor_rendering(self):
-        # Test Rendering (wrapper and base)
-        rendered = render_to_string("sboms/components/supplier_editor.html.j2", {})
-        
-        # Assertions
-        assert "supplierEditor" in rendered
-        # Check content from base, not filename
-        assert "supplier.name" in rendered
-        assert "supplier.address" in rendered
-        assert "contactsEditor" in rendered
-
-    @pytest.mark.skip(reason="Legacy template - contacts_editor is replaced by FormSet-based contact form")
-    def test_contacts_editor_rendering(self):
-        # Test Rendering (wrapper and base)
-        rendered = render_to_string("sboms/components/contacts_editor.html.j2", {})
-        
-        # Assertions
-        assert "contactsEditor" in rendered
-        
-        # Check content from base
-        rendered_base = render_to_string("sboms/components/contacts_editor_base.html.j2", {})
-        assert "newContact.name" in rendered_base
-        assert "newContact.email" in rendered_base

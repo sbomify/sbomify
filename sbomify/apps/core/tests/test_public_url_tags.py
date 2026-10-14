@@ -106,46 +106,6 @@ class TestWorkspacePublicUrlTag:
 
 
 @pytest.mark.django_db
-class TestIsOnCustomDomainTag:
-    """Test is_on_custom_domain template tag."""
-
-    def test_is_on_custom_domain_true(self, sample_team_with_owner_member):
-        """Test is_on_custom_domain returns True when on custom domain."""
-        team = sample_team_with_owner_member.team
-
-        factory = RequestFactory()
-        request = factory.get("/")
-        request.is_custom_domain = True
-        request.custom_domain_team = team
-
-        template = Template("""
-            {% load public_url_tags %}
-            {% is_on_custom_domain as on_custom %}{{ on_custom }}
-        """)
-
-        context = Context({"request": request})
-        result = template.render(context).strip()
-
-        assert result == "True"
-
-    def test_is_on_custom_domain_false(self):
-        """Test is_on_custom_domain returns False when on main domain."""
-        factory = RequestFactory()
-        request = factory.get("/")
-        request.is_custom_domain = False
-
-        template = Template("""
-            {% load public_url_tags %}
-            {% is_on_custom_domain as on_custom %}{{ on_custom }}
-        """)
-
-        context = Context({"request": request})
-        result = template.render(context).strip()
-
-        assert result == "False"
-
-
-@pytest.mark.django_db
 class TestPublicUrlTag:
     """Test public_url template tag."""
 

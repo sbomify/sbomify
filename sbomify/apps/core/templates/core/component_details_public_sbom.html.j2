@@ -1,5 +1,4 @@
 {% extends "core/component_details_public_base.html.j2" %}
-{% load django_vite %}
 {% block meta_description_suffix %}View SBOMs associated with this component.{% endblock %}
 {% block before_table %}
     {# Post-Quantum posture — lazy-loaded; collapses when the latest artifact has no crypto assets #}
@@ -15,7 +14,4 @@
          hx-swap="innerHTML">
         <c-feedback.loading-table message="Loading SBOMs..." />
     </div>
-{% endblock %}
-{% block scripts_additional %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
 {% endblock %}

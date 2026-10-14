@@ -1,35 +1,3 @@
-import axios, { AxiosHeaders, AxiosInstance } from "axios";
-import { getCsrfToken } from './csrf';
-
-// No baseURL on purpose: the app is server-driven and same-origin (ADR-001),
-// so every call resolves against the page's own origin. A build-time absolute
-// base (the old VITE_API_BASE_URL) baked the builder's host into the bundle,
-// which sent every API call in the e2e environment to the chromium
-// container's own loopback and made pages "fail to load" locally only.
-const $axios = axios.create({
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add CSRF token to requests dynamically via interceptor
-$axios.interceptors.request.use((config) => {
-  try {
-    const token = getCsrfToken();
-    if (!config.headers) {
-      config.headers = new AxiosHeaders();
-    }
-    config.headers.set('X-CSRFToken', token);
-  } catch {
-    // CSRF token not available, let the request proceed without it
-    // Server will return 403 if CSRF is required
-  }
-  return config;
-});
-
-export default $axios as AxiosInstance;
-
 export function isEmpty(obj: unknown | string | number | object | null | undefined): boolean {
   if (typeof obj !== 'object' || obj === null) {
     return obj === undefined || obj === null || obj === '';
@@ -58,13 +26,6 @@ export function parseJsonScript<T = unknown>(elementId: string): T | null {
   } catch {
     return null;
   }
-}
-
-export function getErrorMessage(error: Error | unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
 }
 
 /**
@@ -165,70 +126,3 @@ export function formatCompactRelativeDate(
   if (diffDays < 7) return `${diffDays}d ago`;
   return d.toLocaleDateString(undefined, SHORT_DATE_OPTS);
 }
-
-/**
- * For "last checked" displays: returns "Never" for missing values.
- */
-export function formatLastChecked(
-  value?: string | Date | null,
-  opts?: { fallback?: string },
-): string {
-  const d = parseDate(value);
-  if (!d) return opts?.fallback ?? 'Never';
-  return d.toLocaleString(undefined, {
-    ...SHORT_DATE_OPTS,
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-/**
- * Simple event emitter for cross-component communication
- * Replaces global window function dependencies
- */
-type EventCallback = (...args: unknown[]) => void;
-
-class EventEmitter {
-  private events: Record<string, EventCallback[]> = {};
-
-  on(event: string, callback: EventCallback): void {
-    if (!this.events[event]) {
-      this.events[event] = [];
-    }
-    this.events[event].push(callback);
-  }
-
-  off(event: string, callback: EventCallback): void {
-    if (!this.events[event]) return;
-
-    const index = this.events[event].indexOf(callback);
-    if (index > -1) {
-      this.events[event].splice(index, 1);
-    }
-  }
-
-  emit(event: string, ...args: unknown[]): void {
-    if (!this.events[event]) return;
-
-    this.events[event].forEach(callback => {
-      try {
-        callback(...args);
-      } catch (error) {
-        console.error(`Error in event listener for ${event}:`, error);
-      }
-    });
-  }
-}
-
-// Global event emitter instance
-export const eventBus = new EventEmitter();
-
-// Event constants
-export const EVENTS = {
-  REFRESH_PRODUCTS: 'refresh_products',
-  REFRESH_COMPONENTS: 'refresh_components',
-  ITEM_CREATED: 'item_created',
-  ITEM_UPDATED: 'item_updated',
-  ITEM_DELETED: 'item_deleted',
-} as const;

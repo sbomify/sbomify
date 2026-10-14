@@ -514,7 +514,7 @@ class TestOnboardingIntegration:
         assert onboarding_status.should_receive_component_reminder(days_threshold=3)
 
         # Send the day-3 first-component reminder
-        result = OnboardingEmailService.send_first_component_email(test_user)
+        result = OnboardingEmailService.send_drip_email(test_user, OnboardingEmail.EmailType.FIRST_COMPONENT)
         assert result is True
 
         # Create component to simulate user action
@@ -662,7 +662,7 @@ class TestOnboardingSequenceService:
         status.save()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         assert result is True
         assert len(mail.outbox) == 1
@@ -683,7 +683,7 @@ class TestOnboardingSequenceService:
         email_record.mark_sent()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         assert result is True  # Returns True (already sent)
         assert len(mail.outbox) == 0
@@ -703,7 +703,7 @@ class TestOnboardingSequenceService:
         status.save()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_first_component_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.FIRST_COMPONENT)
 
         assert result is True
         assert len(mail.outbox) == 1
@@ -728,7 +728,7 @@ class TestOnboardingSequenceService:
         status.save()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_first_sbom_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.FIRST_SBOM)
 
         assert result is True
         assert len(mail.outbox) == 1
@@ -752,7 +752,7 @@ class TestOnboardingSequenceService:
         status.save()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_collaboration_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.COLLABORATION)
 
         assert result is True
         assert len(mail.outbox) == 1
@@ -776,7 +776,7 @@ class TestOnboardingSequenceService:
         status.created_at = timezone.now() - timedelta(days=2)
         status.save()
 
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         assert result is False
         email_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
@@ -796,14 +796,14 @@ class TestOnboardingSequenceService:
         # First attempt: simulate SMTP send failure
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             mock_email_cls.return_value.send.side_effect = Exception("SMTP Error")
-            result = OnboardingEmailService.send_quick_start_email(user)
+            result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
         assert result is False
         failed_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
         assert failed_record.status == OnboardingEmail.EmailStatus.FAILED
 
         # Second attempt: should delete FAILED record, create new one, and send successfully
         mail.outbox = []
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
         assert result is True
         assert len(mail.outbox) == 1
         sent_record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
@@ -827,7 +827,7 @@ class TestOnboardingSequenceService:
         concurrent_record.mark_sent()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         # Should return True because existing record is SENT (dedup check)
         assert result is True
@@ -848,7 +848,7 @@ class TestOnboardingSequenceService:
         status.save()
 
         mail.outbox = []
-        result = OnboardingEmailService.send_quick_start_email(user)
+        result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
         # Should return False because the concurrent record is not SENT
         assert result is False
@@ -1008,18 +1008,8 @@ class TestOnboardingSequenceTasks:
 
         assert len(mail.outbox) == 1
 
-    @patch("sbomify.apps.onboarding.tasks.send_quick_start_email_task")
-    @patch("sbomify.apps.onboarding.tasks.send_first_component_email_task")
-    @patch("sbomify.apps.onboarding.tasks.send_first_sbom_email_task")
-    @patch("sbomify.apps.onboarding.tasks.send_collaboration_email_task")
-    def test_process_onboarding_sequence_batch_task(
-        self,
-        mock_collab: MagicMock,
-        mock_sbom: MagicMock,
-        mock_component: MagicMock,
-        mock_quick: MagicMock,
-        ensure_billing_plans,
-    ) -> None:
+    @patch("sbomify.apps.onboarding.tasks.send_drip_email_task")
+    def test_process_onboarding_sequence_batch_task(self, mock_drip: MagicMock, ensure_billing_plans) -> None:
         """Test batch processing of onboarding sequence emails."""
         # Create user eligible for quick_start
         user = User.objects.create_user(username="batch1", email="batch1@example.com")
@@ -1030,15 +1020,10 @@ class TestOnboardingSequenceTasks:
         status.created_at = timezone.now() - timedelta(days=2)
         status.save()
 
-        mock_quick.send.return_value = MagicMock(message_id="test-id")
-        mock_component.send.return_value = MagicMock(message_id="test-id")
-        mock_sbom.send.return_value = MagicMock(message_id="test-id")
-        mock_collab.send.return_value = MagicMock(message_id="test-id")
-
         process_onboarding_sequence_batch_task()
 
         # Quick start should be queued for eligible user
-        assert mock_quick.send.call_count == 1
+        mock_drip.send.assert_called_once_with(user.id, OnboardingEmail.EmailType.QUICK_START)
 
 
 @pytest.mark.django_db
@@ -1227,7 +1212,7 @@ class TestEdgeCasesAndErrorHandling:
             patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"),
             patch.object(OnboardingEmail, "create_email", side_effect=create_and_raise),
         ):
-            result = OnboardingEmailService.send_first_component_email(user)
+            result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.FIRST_COMPONENT)
 
         # Concurrent worker already sent → returns True
         assert result is True
@@ -1252,7 +1237,7 @@ class TestEdgeCasesAndErrorHandling:
         )
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
-            result = OnboardingEmailService.send_first_component_email(user)
+            result = OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.FIRST_COMPONENT)
 
         assert result is True
         # FAILED record should be deleted, new SENT record should exist
@@ -1575,7 +1560,7 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
             mock_email_cls.return_value.send.side_effect = TimeoutError("timed out")
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
         assert record.status == OnboardingEmail.EmailStatus.PENDING
@@ -1641,13 +1626,13 @@ class TestTransientSendFailuresRetry:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {"gone@example.com": (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         record = OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START)
         assert record.status == OnboardingEmail.EmailStatus.UNDELIVERABLE
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
             mock_email_cls.assert_not_called()
 
     def test_a_corrected_address_is_tried_again(self) -> None:
@@ -1940,12 +1925,12 @@ class TestTransientSendFailuresRetry:
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
             with patch.object(OnboardingEmail, "mark_sent", side_effect=OperationalError("connection lost")):
-                assert OnboardingEmailService.send_quick_start_email(user) is True
+                assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
 
         self._age_handoff(OnboardingEmail.objects.get(user=user, email_type=OnboardingEmail.EmailType.QUICK_START))
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives") as mock_email_cls:
-            assert OnboardingEmailService.send_quick_start_email(user) is True
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
             mock_email_cls.assert_not_called()
 
     def test_an_abandoned_pending_row_is_reclaimed(self) -> None:
@@ -2004,7 +1989,7 @@ class TestTransientSendFailuresRetry:
         )
 
         mail.outbox = []
-        assert OnboardingEmailService.send_quick_start_email(user) is True
+        assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is True
         assert len(mail.outbox) == 1
 
     def test_a_broken_template_is_reported_as_permanent(self) -> None:
@@ -2056,7 +2041,7 @@ class TestTransientSendFailuresRetry:
 
         with self._mail_host_failing(OSError(113, "No route to host")):
             with pytest.raises(TransientEmailError):
-                OnboardingEmailService.send_quick_start_email(user)
+                OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
     def test_the_task_lets_a_transient_failure_out_so_dramatiq_sees_it(self) -> None:
         """The actor has to receive the exception, or the retry never happens."""
@@ -2259,7 +2244,7 @@ class TestTransientSendFailuresRetry:
             side_effect=InterfaceError("connection already closed"),
         ):
             with pytest.raises(InterfaceError):
-                OnboardingEmailService.send_quick_start_email(user)
+                OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START)
 
 
 @pytest.mark.django_db
@@ -2620,7 +2605,7 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         assert not self._eligible_quick_start(user)
 
@@ -2633,10 +2618,10 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         with patch("sbomify.apps.onboarding.services.render_email_templates") as render:
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
             render.assert_not_called()
 
     def test_a_corrected_address_comes_back(self) -> None:
@@ -2647,7 +2632,7 @@ class TestRefusedAddressesLeaveTheBatch:
             mock_email_cls.return_value.send.side_effect = smtplib.SMTPRecipientsRefused(
                 {user.email: (550, b"No such user here")}
             )
-            assert OnboardingEmailService.send_quick_start_email(user) is False
+            assert OnboardingEmailService.send_drip_email(user, OnboardingEmail.EmailType.QUICK_START) is False
 
         User.objects.filter(pk=user.pk).update(email="fixedquick2@example.com")
         assert self._eligible_quick_start(user)
@@ -2655,21 +2640,22 @@ class TestRefusedAddressesLeaveTheBatch:
 
 @pytest.mark.django_db
 class TestOnboardingFanOut:
-    """The daily cron has to reach both children.
+    """The daily schedule has to reach both the sequence batch and the welcome sweep.
 
     Every sweep test here calls ``requeue_missed_welcome_emails_task``
-    directly, so dropping it from the fan-out would leave all of them green
-    while the cron quietly stopped recovering missed welcomes.
+    directly, so unscheduling it would leave all of them green while the
+    daily run quietly stopped recovering missed welcomes.
     """
 
-    def test_the_daily_task_queues_both_children(self) -> None:
+    def test_the_daily_schedule_runs_both(self) -> None:
+        from dramatiq_crontab import scheduler
+
         from sbomify.apps.onboarding import tasks as onboarding_tasks
 
-        with (
-            patch.object(onboarding_tasks.process_onboarding_sequence_batch_task, "send_with_options") as sequence,
-            patch.object(onboarding_tasks.requeue_missed_welcome_emails_task, "send_with_options") as welcome,
+        triggers = {job.name: str(job.trigger) for job in scheduler.get_jobs()}
+        daily = "cron[month='*', day='*', day_of_week='*', hour='9', minute='0']"
+        for task in (
+            onboarding_tasks.process_onboarding_sequence_batch_task,
+            onboarding_tasks.requeue_missed_welcome_emails_task,
         ):
-            onboarding_tasks.process_all_onboarding_reminders_task()
-
-        sequence.assert_called_once()
-        welcome.assert_called_once()
+            assert triggers[task.actor_name] == daily

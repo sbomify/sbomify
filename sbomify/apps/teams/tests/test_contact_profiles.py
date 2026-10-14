@@ -210,6 +210,24 @@ def test_get_contact_profile_success(
 
 
 @pytest.mark.django_db
+def test_get_contact_profile_ignores_return_instance_over_http(
+    sample_team_with_owner_member,
+    sample_contact_profile_with_contacts,
+    authenticated_api_client,
+):
+    """A stray return_instance query parameter is ignored; the usual body comes back."""
+    team = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+    url = f"/api/v1/workspaces/{team.key}/contact-profiles/{sample_contact_profile_with_contacts.id}"
+
+    response = client.get(url, {"return_instance": "true"}, **headers)
+
+    assert response.status_code == 200
+    assert response.json() == client.get(url, **headers).json()
+
+
+@pytest.mark.django_db
 def test_get_contact_profile_admin_access(
     sample_team_with_admin_member,
     sample_contact_profile_with_contacts,

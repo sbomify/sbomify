@@ -37,6 +37,9 @@ class TestAssessmentSectionRefresh:
 
         page.locator(f"#run-trigger-{run.id}").click()
         expect(page.locator(f"#findings-{run.id}")).to_be_visible()
+        # The loading placeholder is visible before its fetch lands, so wait for
+        # the fetch and its settle before measuring what it brought.
+        expect(page.locator("#assessment-results .htmx-request, #assessment-results .htmx-settling")).to_have_count(0)
 
         # The findings arrived inside the section rather than in place of it.
         assert _section_size(page) > before

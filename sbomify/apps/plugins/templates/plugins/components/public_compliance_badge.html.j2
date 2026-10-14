@@ -1,9 +1,0 @@
-{# Public compliance badge - shows only PASSING assessments with category-aware icons #}
-{# Never displays failures on public pages #}
-{% if passing_assessments %}
-    <div class="public-compliance-badges">
-        {% for assessment in passing_assessments %}
-            {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-        {% endfor %}
-    </div>
-{% endif %}

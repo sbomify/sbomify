@@ -60,7 +60,6 @@ AWS_SBOMS_SECRET_ACCESS_KEY=sboms-secret
 AWS_MEDIA_STORAGE_BUCKET_NAME=sbomify-media
 AWS_MEDIA_STORAGE_BUCKET_URL=https://s3.example.com/sbomify-media
 AWS_SBOMS_STORAGE_BUCKET_NAME=sbomify-sboms
-AWS_SBOMS_STORAGE_BUCKET_URL=https://s3.example.com/sbomify-sboms
 EOF
 
 # 3. Deploy
@@ -145,7 +144,6 @@ AWS_SBOMS_SECRET_ACCESS_KEY=secret
 AWS_MEDIA_STORAGE_BUCKET_NAME=bucket
 AWS_MEDIA_STORAGE_BUCKET_URL=https://s3.example.com/bucket
 AWS_SBOMS_STORAGE_BUCKET_NAME=bucket
-AWS_SBOMS_STORAGE_BUCKET_URL=https://s3.example.com/bucket
 ```
 
 ### Optional

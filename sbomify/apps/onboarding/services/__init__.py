@@ -24,6 +24,30 @@ from ..utils import get_email_context, render_email_templates
 
 logger = getLogger(__name__)
 
+# Template, subject and eligibility check for each drip email.
+DRIP_EMAILS: dict[str, tuple[str, str, Callable[[OnboardingStatus], bool]]] = {
+    OnboardingEmail.EmailType.QUICK_START: (
+        "quick_start",
+        "Your quick start guide - sbomify",
+        lambda status: status.should_receive_quick_start(),
+    ),
+    OnboardingEmail.EmailType.FIRST_COMPONENT: (
+        "first_component",
+        "Ready to create your first component? - sbomify",
+        lambda status: status.should_receive_component_reminder(days_threshold=3),
+    ),
+    OnboardingEmail.EmailType.FIRST_SBOM: (
+        "first_sbom",
+        "Time to upload your first SBOM - sbomify",
+        lambda status: status.should_receive_sbom_reminder(days_threshold=7),
+    ),
+    OnboardingEmail.EmailType.COLLABORATION: (
+        "collaboration",
+        "Invite your team to sbomify",
+        lambda status: status.should_receive_collaboration(),
+    ),
+}
+
 
 class TransientEmailError(Exception):
     """A send that failed for a reason another attempt could survive.
@@ -762,51 +786,16 @@ class OnboardingEmailService:
         return True
 
     @staticmethod
-    def send_quick_start_email(user: Any) -> bool:
-        """Send quick start guide email (day 1)."""
+    def send_drip_email(user: Any, email_type: str) -> bool:
+        """Send one drip email: quick start, first component, first SBOM or collaboration."""
+        template_name, subject, is_due = DRIP_EMAILS[email_type]
         status = OnboardingStatus.objects.filter(user=user).first()
         return OnboardingEmailService._send_onboarding_email(
             user,
-            email_type=OnboardingEmail.EmailType.QUICK_START,
-            template_name="quick_start",
-            subject="Your quick start guide - sbomify",
-            eligible_check=lambda: status is not None and status.should_receive_quick_start(),
-        )
-
-    @staticmethod
-    def send_first_component_email(user: Any) -> bool:
-        """Send first component reminder email (day 3, no component created)."""
-        status = OnboardingStatus.objects.filter(user=user).first()
-        return OnboardingEmailService._send_onboarding_email(
-            user,
-            email_type=OnboardingEmail.EmailType.FIRST_COMPONENT,
-            template_name="first_component",
-            subject="Ready to create your first component? - sbomify",
-            eligible_check=lambda: status is not None and status.should_receive_component_reminder(days_threshold=3),
-        )
-
-    @staticmethod
-    def send_first_sbom_email(user: Any) -> bool:
-        """Send first SBOM upload reminder email (day 7, component exists but no SBOM)."""
-        status = OnboardingStatus.objects.filter(user=user).first()
-        return OnboardingEmailService._send_onboarding_email(
-            user,
-            email_type=OnboardingEmail.EmailType.FIRST_SBOM,
-            template_name="first_sbom",
-            subject="Time to upload your first SBOM - sbomify",
-            eligible_check=lambda: status is not None and status.should_receive_sbom_reminder(days_threshold=7),
-        )
-
-    @staticmethod
-    def send_collaboration_email(user: Any) -> bool:
-        """Send collaboration/invite email (day 10, solo workspace)."""
-        status = OnboardingStatus.objects.filter(user=user).first()
-        return OnboardingEmailService._send_onboarding_email(
-            user,
-            email_type=OnboardingEmail.EmailType.COLLABORATION,
-            template_name="collaboration",
-            subject="Invite your team to sbomify",
-            eligible_check=lambda: status is not None and status.should_receive_collaboration(),
+            email_type=email_type,
+            template_name=template_name,
+            subject=subject,
+            eligible_check=lambda: status is not None and is_due(status),
         )
 
     @staticmethod

@@ -146,13 +146,14 @@ class TestRegistryVersionMatchesTheClass:
     def test_every_builtin_registers_its_class_version(self):
         """A run records the class's VERSION. A registry row that disagrees would
         mark every result from that plugin as out of date, or none of them."""
+        from django.utils.module_loading import import_string
+
         from sbomify.apps.plugins.apps import PluginsConfig
-        from sbomify.apps.plugins.orchestrator import load_plugin_class
 
         PluginsConfig._register_builtin_plugins(None)  # type: ignore[arg-type]
 
         for plugin in RegisteredPlugin.objects.filter(is_builtin=True, is_enabled=True):
-            assert plugin.version == load_plugin_class(plugin.plugin_class_path).VERSION, plugin.name
+            assert plugin.version == import_string(plugin.plugin_class_path).VERSION, plugin.name
 
 
 def _page(client: Client, sbom: SBOM) -> str:

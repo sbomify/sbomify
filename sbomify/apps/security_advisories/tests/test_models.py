@@ -627,6 +627,16 @@ def test_version_string_survives_release_deletion(status, product) -> None:
     assert version_range.fixed == "1.4.3"
 
 
+def test_the_reverse_accessors_exist_now(status, product) -> None:
+    """The pins were related_name="+", so this walk was impossible."""
+    release = Release.objects.create(product=product, name="2.0.0", version="2.0.0")
+    version_range = AdvisoryVersionRange.objects.create(
+        product_status=status, introduced="1.0.0", fixed_release=release
+    )
+
+    assert list(release.advisory_ranges_fixed_here.all()) == [version_range]
+
+
 def test_pin_from_another_product_rejected(status, team) -> None:
     other_product = Product.objects.create(name="Other product", team=team)
     release = Release.objects.create(product=other_product, name="9.9.9", version="9.9.9")

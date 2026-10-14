@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
-from django.db.utils import NotSupportedError
+from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
 from .latest import latest_run_ids, status_runs
 from .models import AssessmentRun, RegisteredPlugin
@@ -67,7 +67,6 @@ class ProductAssessmentStatus:
     all_pass: bool  # True if all components pass all assessments
     has_assessments: bool
     passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
-    component_statuses: list[ComponentAssessmentStatus]
 
 
 def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
@@ -92,27 +91,12 @@ def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
     if not latest_ids:
         return []
     return sorted(
-        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
+        AssessmentRun.objects.filter(sbom_id=sbom_id)
+        .order_by("plugin_name", "-created_at")
+        .distinct("plugin_name")
+        .prefetch_related("releases"),
         key=lambda r: r.plugin_name,
     )
-
-
-def _is_run_skipped(run: AssessmentRun) -> bool:
-    """Check if an assessment run was skipped by the plugin (not actually scanned).
-
-    Release-per-pair plugins like Dependency Track return a skipped result
-    (``result.metadata.skipped = True``) when their preconditions aren't
-    met — for example, a cron-triggered DT scan on an SBOM with no release
-    association. Skipped runs complete without error and without findings,
-    but they shouldn't be counted as "passing" because the plugin never
-    actually scanned anything.
-    """
-    if not run.result or not isinstance(run.result, dict):
-        return False
-    metadata = run.result.get("metadata")
-    if not isinstance(metadata, dict):
-        return False
-    return bool(metadata.get("skipped"))
 
 
 def _is_run_passing(run: AssessmentRun) -> bool:
@@ -134,7 +118,7 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     """
     if run.status != RunStatus.COMPLETED.value:
         return False
-    if _is_run_skipped(run):
+    if result_scanned_nothing(run.result):
         return False
 
     result = run.result or {}
@@ -319,81 +303,15 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     )
 
 
-def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
-    """Get aggregated assessment status for a product.
-
-    A product passes an assessment if ALL its public components pass that assessment.
-    Visibility includes both PUBLIC and GATED so this matches the listing surface
-    used by ``workspace_public`` and ``product_details_public``.
-    """
-    from sbomify.apps.core.models import Component
-
-    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
-    components = Component.objects.filter(
-        products=product,
-        visibility__in=public_visibilities,
-    ).distinct()
-
-    if not components.exists():
-        return ProductAssessmentStatus(
-            product_id=str(product.id),
-            product_name=product.name,
-            all_pass=False,
-            has_assessments=False,
-            passing_assessments=[],
-            component_statuses=[],
-        )
-
-    component_statuses = []
-    component_passing: list[set[str]] = []
-    details_by_plugin: dict[str, PassingAssessment] = {}
-
-    for component in components:
-        status = get_component_assessment_status(component)
-        component_statuses.append(status)
-        if status.has_assessments:
-            component_passing.append({p.plugin_name for p in status.passing_assessments})
-            _collect_details(details_by_plugin, status.passing_assessments)
-
-    if not component_passing:
-        common_passing: set[str] = set()
-    else:
-        common_passing = set.intersection(*component_passing) if component_passing else set()
-
-    has_assessments = any(cs.has_assessments for cs in component_statuses)
-
-    plugin_info = _get_plugin_display_names()
-    passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
-
-    all_pass = len(common_passing) > 0 if has_assessments else False
-
-    return ProductAssessmentStatus(
-        product_id=str(product.id),
-        product_name=product.name,
-        all_pass=all_pass,
-        has_assessments=has_assessments,
-        passing_assessments=passing_assessments,
-        component_statuses=component_statuses,
-    )
-
-
-def get_latest_sbom_for_component(component: "Component") -> Any:
-    """Get the most recent SBOM for a component.
-
-    Returns None if the component has no SBOMs.
-    """
-    from sbomify.apps.sboms.models import SBOM
-
-    return SBOM.objects.filter(component=component).order_by("-created_at").first()
-
-
 def get_component_latest_sbom_assessment_status(component: "Component") -> ComponentAssessmentStatus:
     """Get assessment status based on ONLY the latest SBOM for a component.
 
     Unlike get_component_assessment_status which checks ALL SBOMs,
     this only looks at the most recent SBOM.
     """
-    latest_sbom = get_latest_sbom_for_component(component)
+    from sbomify.apps.sboms.models import SBOM
+
+    latest_sbom = SBOM.objects.filter(component=component).order_by("-created_at").first()
 
     if not latest_sbom:
         return ComponentAssessmentStatus(
@@ -427,8 +345,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     A product passes an assessment if the latest SBOM of every public component
     in the product passes that assessment. Visibility includes both PUBLIC and
     GATED so this matches the listing surface (workspace_public + product_details).
-
-    This differs from get_product_assessment_status which checks ALL SBOMs.
     """
     from sbomify.apps.core.models import Component
 
@@ -449,7 +365,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
-            component_statuses=[],
         )
 
     # Get latest SBOM assessment status for each component
@@ -484,7 +399,6 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
         all_pass=all_pass,
         has_assessments=has_any_assessments,
         passing_assessments=passing_assessments,
-        component_statuses=[],
     )
 
 
@@ -532,23 +446,11 @@ def get_products_latest_sbom_assessments_batch(
 
     # Step 2: Get latest SBOM for each component (single query with window function simulation)
     component_ids = list(component_to_products.keys())
-    latest_sboms = (
+    latest_sbom_list = list(
         SBOM.objects.filter(component_id__in=component_ids)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
-
-    # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
-    try:
-        latest_sbom_list = list(latest_sboms)
-    except NotSupportedError:
-        # Manual deduplication for SQLite which doesn't support DISTINCT ON
-        seen_components: set[str] = set()
-        latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
-            if str(sbom.component_id) not in seen_components:
-                seen_components.add(str(sbom.component_id))
-                latest_sbom_list.append(sbom)
 
     sbom_to_component = {str(sbom.id): str(sbom.component_id) for sbom in latest_sbom_list}
     sbom_ids = list(sbom_to_component.keys())
@@ -632,23 +534,11 @@ def get_components_latest_sbom_assessments_batch(
     component_ids = [str(c.id) for c in components]
 
     # Step 1: Get latest SBOM for each component (single query)
-    latest_sboms = (
+    latest_sbom_list = list(
         SBOM.objects.filter(component_id__in=component_ids)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
-
-    # Fallback for databases that don't support DISTINCT ON (e.g., SQLite in tests)
-    try:
-        latest_sbom_list = list(latest_sboms)
-    except NotSupportedError:
-        # Manual deduplication for SQLite which doesn't support DISTINCT ON
-        seen_components: set[str] = set()
-        latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
-            if str(sbom.component_id) not in seen_components:
-                seen_components.add(str(sbom.component_id))
-                latest_sbom_list.append(sbom)
 
     if not latest_sbom_list:
         return {cid: [] for cid in component_ids}

@@ -52,7 +52,3 @@ class SBOMAdmin(_SBOMAdminBase):
     def workspace(self, obj: Any) -> str:
         """Display the workspace (team) name for the SBOM."""
         return obj.component.team.name if obj.component and obj.component.team else "No Team"
-
-
-# Product, Component admin moved to core app
-admin.site.register(SBOM, SBOMAdmin)

@@ -12,6 +12,8 @@ from django.contrib import admin
 from django.db.models import QuerySet
 from django.http import HttpRequest
 
+from sbomify.apps.core.admin import admin_site
+
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 
 if TYPE_CHECKING:
@@ -24,7 +26,7 @@ else:
     _AssessmentRunAdminBase = admin.ModelAdmin
 
 
-@admin.register(RegisteredPlugin)
+@admin.register(RegisteredPlugin, site=admin_site)
 class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
     """Admin interface for managing registered plugins.
 
@@ -102,7 +104,7 @@ class RegisteredPluginAdmin(_RegisteredPluginAdminBase):
         self.message_user(request, f"{count} plugin(s) marked as stable.")
 
 
-@admin.register(TeamPluginSettings)
+@admin.register(TeamPluginSettings, site=admin_site)
 class TeamPluginSettingsAdmin(_TeamPluginSettingsAdminBase):
     """Admin interface for viewing team plugin settings."""
 
@@ -139,7 +141,7 @@ class TeamPluginSettingsAdmin(_TeamPluginSettingsAdminBase):
         return len(obj.enabled_plugins) if obj.enabled_plugins else 0
 
 
-@admin.register(AssessmentRun)
+@admin.register(AssessmentRun, site=admin_site)
 class AssessmentRunAdmin(_AssessmentRunAdminBase):
     """Admin interface for viewing assessment runs.
 
@@ -171,15 +173,13 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         "completed_at",
         "error_message",
         "triggered_by_user",
-        "triggered_by_token",
         "input_content_digest",
         "result",
         "result_schema_version",
-        "raw_output_key",
         "created_at",
         "duration_display",
     ]
-    raw_id_fields = ["sbom", "triggered_by_user", "triggered_by_token"]
+    raw_id_fields = ["sbom", "triggered_by_user"]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
 
@@ -208,7 +208,6 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
             {
                 "fields": [
                     "triggered_by_user",
-                    "triggered_by_token",
                     "input_content_digest",
                     "plugin_config_hash",
                 ],
@@ -217,7 +216,7 @@ class AssessmentRunAdmin(_AssessmentRunAdminBase):
         (
             "Results",
             {
-                "fields": ["result", "result_schema_version", "raw_output_key"],
+                "fields": ["result", "result_schema_version"],
                 "classes": ["collapse"],
             },
         ),

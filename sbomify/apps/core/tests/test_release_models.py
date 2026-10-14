@@ -179,195 +179,6 @@ def test_get_or_create_latest_release(sample_product: Product):  # noqa: F811
     assert release1.id == release2.id
 
 
-@pytest.mark.django_db
-def test_get_artifacts_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_sbom: SBOM,  # noqa: F811
-    sample_document: Document,  # noqa: F811
-):
-    """Test the get_artifacts method returns both SBOMs and Documents."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up artifacts
-    sample_sbom.component = sample_component
-    sample_sbom.save()
-    sample_document.component = sample_component
-    sample_document.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    # Add artifacts to release
-    ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
-    ReleaseArtifact.objects.create(release=release, document=sample_document)
-
-    artifacts = release.get_artifacts()
-
-    assert len(artifacts) == 2
-    assert sample_sbom in [a.sbom for a in artifacts if a.sbom]
-    assert sample_document in [a.document for a in artifacts if a.document]
-
-
-@pytest.mark.django_db
-def test_get_sboms_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_sbom: SBOM,  # noqa: F811
-    sample_document: Document,  # noqa: F811
-):
-    """Test the get_sboms method returns only SBOMs."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up artifacts
-    sample_sbom.component = sample_component
-    sample_sbom.save()
-    sample_document.component = sample_component
-    sample_document.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    # Add artifacts to release
-    ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
-    ReleaseArtifact.objects.create(release=release, document=sample_document)
-
-    sboms = release.get_sboms()
-
-    assert len(sboms) == 1
-    assert sample_sbom in sboms
-
-
-@pytest.mark.django_db
-def test_get_documents_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_sbom: SBOM,  # noqa: F811
-    sample_document: Document,  # noqa: F811
-):
-    """Test the get_documents method returns only Documents."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up artifacts
-    sample_sbom.component = sample_component
-    sample_sbom.save()
-    sample_document.component = sample_component
-    sample_document.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    # Add artifacts to release
-    ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
-    ReleaseArtifact.objects.create(release=release, document=sample_document)
-
-    documents = release.get_documents()
-
-    assert len(documents) == 1
-    assert sample_document in documents
-
-
-@pytest.mark.django_db
-def test_add_sbom_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_sbom: SBOM,  # noqa: F811
-):
-    """Test the add_sbom method."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up SBOM
-    sample_sbom.component = sample_component
-    sample_sbom.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    # Add SBOM to release
-    release.add_sbom(sample_sbom)
-
-    # Verify artifact was added
-    assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom).exists()
-
-
-@pytest.mark.django_db
-def test_add_document_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_document: Document,  # noqa: F811
-):
-    """Test the add_document method."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up document
-    sample_document.component = sample_component
-    sample_document.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-
-    # Add document to release
-    release.add_document(sample_document)
-
-    # Verify artifact was added
-    assert ReleaseArtifact.objects.filter(release=release, document=sample_document).exists()
-
-
-@pytest.mark.django_db
-def test_remove_sbom_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_sbom: SBOM,  # noqa: F811
-):
-    """Test the remove_sbom method."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up SBOM
-    sample_sbom.component = sample_component
-    sample_sbom.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-    ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
-
-    # Remove SBOM from release
-    release.remove_sbom(sample_sbom)
-
-    # Verify artifact was removed
-    assert not ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom).exists()
-
-
-@pytest.mark.django_db
-def test_remove_document_method(
-    sample_product: Product,  # noqa: F811
-    sample_component: Component,  # noqa: F811
-    sample_document: Document,  # noqa: F811
-):
-    """Test the remove_document method."""
-    # Set up component relationship — fixture already attaches component to product
-    sample_component.team = sample_product.team
-    sample_component.save()
-
-    # Set up document
-    sample_document.component = sample_component
-    sample_document.save()
-
-    release = Release.objects.create(product=sample_product, name="v1.0.0")
-    ReleaseArtifact.objects.create(release=release, document=sample_document)
-
-    # Remove document from release
-    release.remove_document(sample_document)
-
-    # Verify artifact was removed
-    assert not ReleaseArtifact.objects.filter(release=release, document=sample_document).exists()
-
-
 # =============================================================================
 # RELEASE ARTIFACT MODEL TESTS
 # =============================================================================
@@ -549,24 +360,22 @@ def test_latest_release_auto_management_integration(
 
     # Verify SBOM is in latest release
     latest_release.refresh_from_db()
-    assert sbom in latest_release.get_sboms()
+    assert latest_release.artifacts.filter(sbom=sbom).exists()
 
     # Create another SBOM - should be added to existing latest release
     sbom2 = SBOM.objects.create(component=sample_component, format="spdx", format_version="2.3", name="Test SBOM 2")
 
     # Verify both SBOMs are in latest release
     latest_release.refresh_from_db()
-    sboms = latest_release.get_sboms()
-    assert sbom in sboms
-    assert sbom2 in sboms
+    assert latest_release.artifacts.filter(sbom=sbom).exists()
+    assert latest_release.artifacts.filter(sbom=sbom2).exists()
 
     # Create Document - should be added to latest release
     document = Document.objects.create(component=sample_component, document_type="license", name="Test Document")
 
     # Verify document is in latest release
     latest_release.refresh_from_db()
-    documents = latest_release.get_documents()
-    assert document in documents
+    assert latest_release.artifacts.filter(document=document).exists()
 
 
 @pytest.mark.django_db
@@ -587,7 +396,7 @@ def test_non_sbom_upload_does_not_evict_sbom_from_latest_release(
         component=sample_component, format="cyclonedx", format_version="1.6", name="Real SBOM", version="1.0.0"
     )
     latest_release.refresh_from_db()
-    assert sbom in latest_release.get_sboms()
+    assert latest_release.artifacts.filter(sbom=sbom).exists()
 
     # Upload a same-format non-SBOM artifact (CBOM or VEX).
     other = SBOM.objects.create(
@@ -600,9 +409,8 @@ def test_non_sbom_upload_does_not_evict_sbom_from_latest_release(
     )
 
     latest_release.refresh_from_db()
-    artifacts = latest_release.get_sboms()
-    assert sbom in artifacts  # the real SBOM survived
-    assert other in artifacts  # the non-SBOM has its own slot
+    assert latest_release.artifacts.filter(sbom=sbom).exists()  # the real SBOM survived
+    assert latest_release.artifacts.filter(sbom=other).exists()  # the non-SBOM has its own slot
     # The release keeps exactly one artifact per (component, format, bom_type).
     assert latest_release.artifacts.filter(sbom__component=sample_component).count() == 2
 
@@ -706,27 +514,6 @@ def test_component_get_latest_documents_by_type(
     # Check that we got the latest documents for each type
     assert latest_docs["license"] == doc_license_new  # Latest by created_at
     assert latest_docs["readme"] == doc_readme
-
-
-@pytest.mark.django_db
-def test_component_get_latest_artifacts_by_type(
-    sample_component: Component,  # noqa: F811
-):
-    """Test Component.get_latest_artifacts_by_type method."""
-    # Create artifacts
-    sbom = SBOM.objects.create(component=sample_component, format="cyclonedx", format_version="1.6", name="Test SBOM")
-
-    document = Document.objects.create(component=sample_component, document_type="license", name="Test Document")
-
-    latest_artifacts = sample_component.get_latest_artifacts_by_type()
-
-    # Should return dict with sboms and documents keys
-    assert "sboms" in latest_artifacts
-    assert "documents" in latest_artifacts
-    assert len(latest_artifacts["sboms"]) == 1
-    assert len(latest_artifacts["documents"]) == 1
-    assert sbom in latest_artifacts["sboms"].values()
-    assert document in latest_artifacts["documents"].values()
 
 
 # =============================================================================

@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 
-from sbomify.apps.core.apis import _build_item_response, get_component
+from sbomify.apps.core.apis import _build_component_response, get_accessible_component
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
@@ -148,7 +148,7 @@ class ComponentItemPublicView(View):
         resolved_id = component_obj.id
         component_slug = get_component_public_slug(component_obj, request)
 
-        status_code, component = get_component(request, resolved_id, return_instance=True)
+        status_code, component = get_accessible_component(request, resolved_id)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
@@ -225,7 +225,7 @@ class ComponentItemPublicView(View):
             "brand": brand,
             "item": item,
             "item_type": item_type,
-            "component": _build_item_response(request, component, "component"),
+            "component": _build_component_response(request, component),
             "passing_assessments": passing_assessments,
             "workspace_public_url": workspace_public_url,
         }
@@ -242,11 +242,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
-        # Fetch the component for context (needed for title and other template elements)
-        # return_instance gives the access-checked model in one query; the
-        # template reads attributes/methods off it directly. Error responses
-        # are dicts regardless of the flag.
-        status_code, component = get_component(request, component_id, return_instance=True)
+        # Fetch the component for context (needed for title and other template elements).
+        # The access-checked model comes back in one query; the template reads
+        # attributes/methods off it directly. Error responses are dicts.
+        status_code, component = get_accessible_component(request, component_id)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))

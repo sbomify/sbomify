@@ -13,19 +13,13 @@ from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
 
-from sbomify.apps.core.models import Component, ComponentRelease, Product
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.security_advisories.models import (
     AdvisoryComponent,
     AdvisoryProduct,
     AdvisoryProductStatus,
-    AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
-)
-from sbomify.apps.security_advisories.services.release_impact import (
-    UNDETERMINED,
-    VERSION,
-    advisories_affecting_component_release,
 )
 
 
@@ -48,17 +42,6 @@ def advisory(team):
         tracking_id="QA-SA-2026-0002",
         published_at=timezone.now(),
     )
-
-
-def _component_range(advisory, component, **bounds):
-    vuln = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0002")
-    subject = AdvisoryComponent.objects.create(advisory=advisory, component=component)
-    status = AdvisoryProductStatus.objects.create(
-        vulnerability=vuln,
-        advisory_component=subject,
-        status=AdvisoryProductStatus.Status.EXPLOITABLE,
-    )
-    return AdvisoryVersionRange.objects.create(product_status=status, **bounds)
 
 
 @pytest.mark.django_db
@@ -158,60 +141,6 @@ class TestStatusSubjects:
                 recommended_release=release,
             )
         assert "component status" in str(exc.value.message_dict["recommended_release"])
-
-
-@pytest.mark.django_db
-class TestAdvisoriesAffectingComponentRelease:
-    def _release(self, component, version):
-        return ComponentRelease.objects.create(component=component, version=version)
-
-    def test_a_component_release_inside_the_range_is_reported(self, advisory, component):
-        _component_range(advisory, component, introduced="1.0.0", fixed="2.0.0")
-
-        impacts = advisories_affecting_component_release(self._release(component, "1.2.3"))
-
-        assert [i.advisory.pk for i in impacts] == [advisory.pk]
-        assert impacts[0].matched_by == VERSION
-
-    def test_a_component_release_outside_it_is_not(self, advisory, component):
-        _component_range(advisory, component, introduced="1.0.0", fixed="2.0.0")
-
-        assert advisories_affecting_component_release(self._release(component, "2.1.0")) == []
-
-    def test_another_components_advisory_does_not_leak_in(self, advisory, component, team):
-        other = Component.objects.create(name="unrelated", team=team)
-        _component_range(advisory, other, introduced="1.0.0", fixed="2.0.0")
-
-        assert advisories_affecting_component_release(self._release(component, "1.2.3")) == []
-
-    def test_an_uncomparable_version_is_surfaced(self, advisory, component):
-        _component_range(advisory, component, introduced="1.0.0", fixed="2.0.0")
-
-        impacts = advisories_affecting_component_release(self._release(component, "nightly-2026-08-25"))
-
-        assert [i.matched_by for i in impacts] == [UNDETERMINED]
-        assert not impacts[0].is_certain
-
-    def test_drafts_stay_out_of_outward_facing_answers(self, component, team):
-        draft = SecurityAdvisory.objects.create(team=team, title="Not announced", status=SecurityAdvisory.Status.DRAFT)
-        _component_range(draft, component, introduced="1.0.0", fixed="2.0.0")
-        release = self._release(component, "1.2.3")
-
-        assert advisories_affecting_component_release(release) == []
-        assert len(advisories_affecting_component_release(release, published_only=False)) == 1
-
-    def test_a_product_advisory_does_not_answer_for_a_component(self, advisory, component, team):
-        """The two subjects are separate; a product statement is not a component one."""
-        product = Product.objects.create(name="Lithium", team=team)
-        vuln = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0006")
-        status = AdvisoryProductStatus.objects.create(
-            vulnerability=vuln,
-            advisory_product=AdvisoryProduct.objects.create(advisory=advisory, product=product),
-            status=AdvisoryProductStatus.Status.EXPLOITABLE,
-        )
-        AdvisoryVersionRange.objects.create(product_status=status, introduced="1.0.0", fixed="2.0.0")
-
-        assert advisories_affecting_component_release(self._release(component, "1.2.3")) == []
 
 
 @pytest.mark.django_db

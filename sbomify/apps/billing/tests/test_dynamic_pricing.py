@@ -82,15 +82,6 @@ class TestBillingPlanPricingProperties(TestCase):
         self.business_plan.annual_price = None
         assert self.business_plan.annual_price_discounted is None
 
-    def test_monthly_savings_no_discount(self):
-        """Test monthly_savings returns None when no discount."""
-        assert self.business_plan.monthly_savings is None
-
-    def test_monthly_savings_with_discount(self):
-        """Test monthly_savings calculation with discount."""
-        self.business_plan.discount_percent_monthly = 20
-        assert self.business_plan.monthly_savings == Decimal("39.80")  # 199 * 0.2
-
     def test_annual_savings_no_discount(self):
         """Test annual_savings returns None when no discount."""
         assert self.business_plan.annual_savings is None
@@ -122,29 +113,6 @@ class TestBillingPlanPricingProperties(TestCase):
         """Test annual_vs_monthly_savings returns None when prices are missing."""
         self.business_plan.monthly_price = None
         assert self.business_plan.annual_vs_monthly_savings is None
-
-    def test_annual_discount_percent(self):
-        """Test annual_discount_percent calculation."""
-        # Monthly: $199 * 12 = $2388
-        # Annual: $1908
-        # Discount: (2388 - 1908) / 2388 * 100 = 20.1%
-        discount = self.business_plan.annual_discount_percent
-        assert discount == Decimal("20.1")
-
-    def test_annual_discount_percent_with_discounts(self):
-        """Test annual_discount_percent with promotional discounts."""
-        self.business_plan.discount_percent_monthly = 10
-        self.business_plan.discount_percent_annual = 5
-        # Monthly discounted: $199 * 0.9 * 12 = $2149.2
-        # Annual discounted: $1908 * 0.95 = $1812.6
-        # Discount: (2149.2 - 1812.6) / 2149.2 * 100 = 15.65%
-        discount = self.business_plan.annual_discount_percent
-        assert discount == Decimal("15.7")  # Rounded to 0.1
-
-    def test_annual_discount_percent_none(self):
-        """Test annual_discount_percent returns None when prices are missing."""
-        self.business_plan.monthly_price = None
-        assert self.business_plan.annual_discount_percent is None
 
     def test_discount_percent_100(self):
         """Test that 100% discount results in free price."""
@@ -196,7 +164,6 @@ class TestBillingPlanValidation(TestCase):
 
     @override_settings(
         STRIPE_SECRET_KEY="sk_live_test_key",
-        DJANGO_TEST=False,
         TESTING=False,
         DATABASES={"default": {"NAME": "production_db", "ENGINE": "django.db.backends.postgresql"}},
     )
@@ -242,7 +209,6 @@ class TestBillingPlanValidation(TestCase):
 
     @override_settings(
         STRIPE_SECRET_KEY="sk_live_test_key",
-        DJANGO_TEST=False,
         TESTING=False,
     )
     @patch("sbomify.apps.billing.stripe_client.StripeClient")
@@ -604,7 +570,6 @@ class TestBillingPlanEdgeCases(TestCase):
         assert plan.monthly_price_discounted is None
         assert plan.annual_price_discounted is None
         assert plan.annual_vs_monthly_savings is None
-        assert plan.annual_discount_percent is None
 
     def test_enterprise_plan_custom_pricing(self):
         """Test that plan properties handle None prices for custom pricing."""
@@ -717,7 +682,6 @@ class TestIntegrationScenarios(TestCase):
         assert plan.monthly_price_discounted == Decimal("199.00")
         assert plan.annual_price_discounted == Decimal("1908.00")
         assert plan.annual_vs_monthly_savings == Decimal("480.00")
-        assert plan.annual_discount_percent == Decimal("20.1")
 
         # Set up team with plan
         self.team.billing_plan = plan.key
@@ -767,7 +731,6 @@ class TestIntegrationScenarios(TestCase):
         assert plan.annual_price_discounted == Decimal("1621.80")  # 1908 * 0.85
 
         # Verify savings
-        assert plan.monthly_savings == Decimal("39.80")
         assert plan.annual_savings == Decimal("286.20")
 
         # Verify promo message

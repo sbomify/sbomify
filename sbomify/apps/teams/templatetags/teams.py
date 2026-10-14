@@ -65,34 +65,6 @@ def workspace_display(name: str | None) -> str:
 
 
 @register.filter
-def modulo(value: Any, arg: Any) -> int:
-    """Return value modulo arg."""
-    try:
-        return int(value) % int(arg)
-    except (ValueError, TypeError):
-        return 0
-
-
-@register.filter
-def avatar_color_index(name: str | None) -> int:
-    """
-    Return avatar color index (0-4) based on first letter of workspace name.
-
-    Maps A-Z to colors 0-4 for consistent coloring.
-    """
-    if not name:
-        return 0
-
-    name_str = str(name).strip()
-    first_char = name_str[0].upper() if name_str else "A"
-
-    if first_char.isalpha():
-        return (ord(first_char) - ord("A")) % 5
-
-    return ord(first_char) % 5
-
-
-@register.filter
 def workspace_initials(name: str | None) -> str:
     """
     Generate workspace initials for avatar display.
@@ -166,20 +138,7 @@ def user_initials(user: Any) -> str:
         else:
             name = identifier
 
-        name = name.strip()
-        words = name.split()
-
-        if len(words) == 0:
-            return "U"
-        elif len(words) == 1:
-            word = words[0]
-            return word[:2].upper() if len(word) >= 2 else word.upper()
-        else:
-            first_word = words[0]
-            second_word = words[1]
-            first_letter = first_word[0].upper() if first_word else ""
-            second_letter = second_word[0].upper() if second_word else ""
-            return first_letter + second_letter
+        return workspace_initials(name) if name.split() else "U"
 
     return "U"
 
