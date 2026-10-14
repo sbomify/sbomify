@@ -1,6 +1,7 @@
 {% comment %}
-Vulnerabilities drill-down for the latest SBOM. Rendered only when the latest
-scan has findings.
+The workspace Vulnerabilities list scoped to this component. Rendered once the
+component has an SBOM. The header names no version or count: the version select
+and the results below are swapped on their own, so anything here would go stale.
 
 The card and its collapse state live here; the toolbar, table and footer live in
 component_vulnerabilities_table.html.j2 and are swapped on their own when a
@@ -10,14 +11,7 @@ filter or a page changes, so searching never closes the panel.
     <c-cards.collapsible id="component-vulnerabilities" x-data="{ open: true }">
     <c-cards.collapsible-header>
     <c-cards.collapsible-trigger state="open" @click="open = !open">
-    <span class="text-lg">
-        Vulnerabilities
-        {% if vuln_data.selected_version %}
-            <span class="font-normal text-text-muted text-sm">· {{ vuln_data.summary.vulnerabilities }} open in {{ vuln_data.selected_version.version|truncatechars:24 }}
-                {% if vuln_data.selected_version.is_latest %}(latest){% endif %}
-            </span>
-        {% endif %}
-    </span>
+    <span class="text-lg">Vulnerabilities</span>
     </c-cards.collapsible-trigger>
     <c-slot name="actions">
     <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>

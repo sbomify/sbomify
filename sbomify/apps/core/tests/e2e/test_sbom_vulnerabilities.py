@@ -5,6 +5,8 @@ workspace Vulnerabilities page filtered to the component and that SBOM. Both
 lists read the projected ``Finding`` rows, so every scan here is synced.
 """
 
+import re
+
 import pytest
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
@@ -156,15 +158,20 @@ def _to_second_page_of_ten(page, panel):
 
 def _open_row_triage(page, panel, advisory_id: str):
     """Triage lives in each row's actions menu."""
-    panel.get_by_role("button", name=f"Actions for {advisory_id}", exact=True).click()
+    _row_menu(panel, advisory_id).click()
     page.get_by_role("menuitem", name="Triage", exact=True).click()
     return page.locator("#triage-modal")
+
+
+def _row_menu(panel, advisory_id: str):
+    """A row's actions menu. Its name also says which package it acts on, after the advisory."""
+    return panel.get_by_role("button", name=re.compile(rf"^Actions for {re.escape(advisory_id)} in "))
 
 
 def _first_advisory_on_page(panel) -> str:
     label = panel.locator("tbody").get_by_role("button", name="Actions for ").first.get_attribute("aria-label")
     assert label and label.startswith("Actions for ")
-    return label.removeprefix("Actions for ")
+    return label.removeprefix("Actions for ").split(" in ", 1)[0]
 
 
 @pytest.mark.django_db
@@ -197,7 +204,7 @@ def test_finding_controls_and_triage(authenticated_page, sbom_with_findings, mon
     search.fill("CVE-2024-0015")
     expect(panel.get_by_text("Showing 1 to 1 of 1", exact=True)).to_be_visible()
     _settled(page)
-    expect(panel.get_by_role("button", name="Actions for CVE-2024-0015", exact=True)).to_have_count(1)
+    expect(_row_menu(panel, "CVE-2024-0015")).to_have_count(1)
     modal = _open_row_triage(page, panel, "CVE-2024-0015")
     expect(modal).to_be_visible()
     expect(modal.get_by_role("heading")).to_contain_text("CVE-2024-0015")
@@ -217,7 +224,7 @@ def test_finding_controls_and_triage(authenticated_page, sbom_with_findings, mon
     panel.get_by_role("combobox", name="Filter by urgency").select_option("exploited")
     expect(panel.get_by_text("Showing 1 to 1 of 1", exact=True)).to_be_visible()
     _settled(page)
-    expect(panel.get_by_role("button", name="Actions for CVE-2024-0001", exact=True)).to_have_count(1)
+    expect(_row_menu(panel, "CVE-2024-0001")).to_have_count(1)
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
     assert errors == []
 
@@ -472,7 +479,7 @@ def test_a_saved_triage_shows_where_it_was_made(authenticated_page, sbom_with_fi
     assert response.value.status == 200
 
     # The decision, in the rows it was made from, with no reload in between.
-    expect(panel.get_by_role("button", name=f"Actions for {advisory}", exact=True)).to_have_count(0)
+    expect(_row_menu(panel, advisory)).to_have_count(0)
     expect(panel.get_by_text("Showing 11 to 14 of 14", exact=True)).to_be_visible()
     # And still ten to a page, still on page two.
     expect(panel.locator('[aria-current="page"]')).to_have_text("2")

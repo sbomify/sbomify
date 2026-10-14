@@ -10,11 +10,9 @@ inside the filter form and would inherit its hx-target and hx-push-url. The prom
 the scanner's full result, which the page itself never loads.
 {% endcomment %}
 <c-vars data results_target="vulnerabilities-results" />
+{% comment %}On a component page a triage refresh swaps only the results; the workspace page's browser refreshes itself, totals included.{% endcomment %}
 <div id="{{ results_target }}"
-     hx-get="{{ data.refresh_url }}"
-     hx-trigger="refresh-assessments from:body"
-     hx-target="this"
-     hx-swap="outerHTML">
+     {% if data.single_component %}hx-get="{{ data.refresh_url }}" hx-trigger="refresh-assessments from:body" hx-target="this" hx-swap="outerHTML"{% endif %}>
     <c-tables.shell>
     {% if data.rows %}
         {# djlint:off #}
@@ -100,7 +98,7 @@ the scanner's full result, which the page itself never loads.
                 </c-tables.cell>
                 <c-tables.cell compact end nowrap>
                 {% comment %}One menu per row. Both items dispatch to page-level listeners rather than carrying hx-get: the panel is teleported after HTMX processes a swapped page of rows, so an hx-get on it would never be bound. Triage asks the page's c-vulnerabilities.triage-host to load the dialog for this occurrence, purl and current decision included, from the SBOM the row was read from.{% endcomment %}
-                <c-actions-menu label="Actions for {{ row.id }}" icon="fas fa-ellipsis" width="w-52">
+                <c-actions-menu label="Actions for {{ row.id }} in {{ row.package|default:'unknown package' }}{% if row.version %} {{ row.version }}{% endif %}{% if not data.single_component %}, {{ row.component_name }}{% endif %}" icon="fas fa-ellipsis" width="w-52">
                 {% if data.can_triage %}
                     <c-dropdowns.item icon="fas fa-stethoscope" data-triage-url="{% url 'core:component_triage_modal' row.component_id %}?advisory={{ row.id|urlencode }}&amp;package={{ row.package|urlencode }}&amp;version={{ row.version|urlencode }}&amp;ecosystem={{ row.ecosystem|urlencode }}&amp;sbom={{ row.sbom_id|urlencode }}" @click="close(); $dispatch('open-vulnerability-triage', { url: $el.dataset.triageUrl })">
                     Triage
@@ -115,6 +113,8 @@ the scanner's full result, which the page itself never loads.
             {% endfor %}
         </tbody>
         </c-tables.table>
+    {% elif data.details_unavailable %}
+        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scan reports totals only, so there are no vulnerabilities to list. Its counts are in the summary." />
     {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
         <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>

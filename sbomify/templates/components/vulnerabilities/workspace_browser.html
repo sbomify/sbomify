@@ -14,7 +14,15 @@ the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
 <c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
-<div id="{{ browser_target }}" class="flex flex-col gap-4">
+{% comment %}A triage decision changes the totals as well as the rows, so the whole browser refreshes: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied, debounced because one re-apply can broadcast more than once.{% endcomment %}
+<div id="{{ browser_target }}"
+     class="flex flex-col gap-4"
+     x-data="{ refreshTimer: null }"
+     hx-get="{{ data.refresh_url }}"
+     hx-trigger="refresh-assessments from:body"
+     hx-target="this"
+     hx-swap="outerHTML"
+     @ws:message.window="if ($event.detail.type === 'vex_reapplied') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); }">
     <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
         {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
             <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
