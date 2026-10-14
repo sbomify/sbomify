@@ -35,13 +35,22 @@ two HTMX roots the view answers.
     </div>
     <c-typography.description size="sm">
     {% if data.summary.vulnerabilities %}
-        {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }},
+        {% if data.summary.occurrences %}
+            {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }},
+        {% else %}
+            Counted
+        {% endif %}
         {% if data.scope_label %}
             in {{ data.scope_label }}.
         {% else %}
             from each component's latest SBOM.
         {% endif %}
-        A vulnerability reported by several scanners or found in several components is counted once.
+        {% if data.summary.occurrences %}
+            A vulnerability reported by several scanners or found in several components is counted once.
+        {% endif %}
+        {% if data.summary_only_components %}
+            {{ data.summary_only_components|intcomma }} component{{ data.summary_only_components|pluralize }} reported totals only, so {{ data.summary_only_components|pluralize:"it is,they are" }} counted but not listed.
+        {% endif %}
     {% elif data.scope_label %}
         Nothing open in {{ data.scope_label }}.
     {% else %}
