@@ -84,17 +84,24 @@ class TestRoleVisibility:
         assert "API tokens" not in titles
 
     def test_every_internal_role_finds_what_its_views_admit(self):
-        """The API tokens tab and the vulnerability pages admit every internal
-        role, so search finds them for each one, the operator included."""
+        """The API tokens tab (and the MCP server entry that points at it) and
+        the vulnerability pages admit every internal role, so search finds them
+        for each one, the operator included."""
         from sbomify.apps.core.authz import READ_INTERNAL
 
         for role in READ_INTERNAL:
             titles = {
                 r["title"]
-                for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
+                for query in ("api key", "mcp", "vulnerability scans", "vulnerability trends", "cryptography")
                 for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")
             }
-            assert {"API tokens", "Vulnerabilities", "Vulnerability trends", "Cryptography"} <= titles, role
+            assert {
+                "API tokens",
+                "MCP server (AI agents)",
+                "Vulnerabilities",
+                "Vulnerability trends",
+                "Cryptography",
+            } <= titles, role
 
     def test_an_owner_sees_owner_only_destinations(self):
         titles = [r["title"] for r in search_destinations("billing", role="owner", workspace_key="AAAAAAAA")]

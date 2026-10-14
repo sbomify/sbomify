@@ -200,7 +200,7 @@
       "keywords": ["mcp", "model context protocol", "ai agent", "agent", "claude", "cursor", "llm"],
       "args": ["workspace_key"],
       "fragment": "tokens",
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Parties",
