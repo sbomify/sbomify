@@ -87,7 +87,7 @@ def test_bulk_response_stays_on_changed_catalog(
 
 @pytest.mark.parametrize("scope", ["workspace", "product"])
 def test_a_status_update_lands_back_on_the_page_it_came_from(
-    client: Client, sample_user: User, team_with_business_plan: Team, scope: str
+    client: Client, sample_user: User, team_with_business_plan: Workspace, scope: str
 ) -> None:
     from sbomify.apps.teams.utils import redirect_to_team_settings
 
@@ -117,7 +117,7 @@ def test_a_status_update_lands_back_on_the_page_it_came_from(
 
 
 def test_a_product_status_update_for_an_unknown_product_changes_nothing(
-    client: Client, sample_user: User, team_with_business_plan: Team
+    client: Client, sample_user: User, team_with_business_plan: Workspace
 ) -> None:
     workspace = team_with_business_plan
     setup_authenticated_client_session(client, workspace, sample_user)
