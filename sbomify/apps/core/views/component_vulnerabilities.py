@@ -26,7 +26,9 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.vary import vary_on_headers
 
 from sbomify.apps.core.apis import get_component
 from sbomify.apps.core.errors import error_response
@@ -84,6 +86,8 @@ class ComponentVulnerabilitiesPanelView(GuestAccessBlockedMixin, LoginRequiredMi
     public component page shows. See ``viewer_manages_component``.
     """
 
+    # The panel and its results-only fragment share a URL, told apart by HX-Target.
+    @method_decorator(vary_on_headers("HX-Target", "HX-Request"))
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
         status_code, component = get_component(request, component_id)
         if status_code != 200:

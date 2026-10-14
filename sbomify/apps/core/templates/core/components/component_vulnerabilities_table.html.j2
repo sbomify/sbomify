@@ -53,6 +53,7 @@ refresh when the re-apply broadcasts vex_reapplied for this component.{% endcomm
                     {% if vuln_data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
             </c-forms.select>
             <c-slot name="right">
+            <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
             <noscript>
                 <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
             </noscript>

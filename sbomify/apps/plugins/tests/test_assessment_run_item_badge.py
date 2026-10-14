@@ -8,6 +8,7 @@ scanner that ran and disagreed with the others.
 
 from __future__ import annotations
 
+import pytest
 from django.template.loader import render_to_string
 
 # The row's verdict takes its ink from its tone; this is the warning recipe, and
@@ -249,3 +250,36 @@ def test_a_vulnerability_scan_is_offered_no_rerun():
     assert "/sbom1/pqc/rerun" in html
     assert "/dependency-track/rerun" not in html
     assert 'id="plugin-dependency-track"' not in html
+
+
+@pytest.mark.parametrize(
+    ("status", "label"), [("failed", "Could not run"), ("pending", "Queued"), ("running", "Running")]
+)
+def test_an_unfinished_vulnerability_scan_still_shows_its_state(status, label):
+    """The Vulnerabilities list has nothing from a scan that has not finished, so the card keeps its row."""
+    from django.template.loader import render_to_string
+
+    run = {
+        "id": "r1",
+        "plugin_name": "osv",
+        "plugin_display_name": "OSV",
+        "category": "security",
+        "status": status,
+        "error_message": "Scanner timed out" if status == "failed" else None,
+        "result": None,
+    }
+    html = render_to_string(
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "latest_runs": [run],
+                "status_summary": {"total_assessments": 1, "overall_status": status},
+                "requirements": {"columns": [], "sources": []},
+                "unassessed_plugins": [],
+            },
+            "sbom_id": "s1",
+        },
+    )
+    assert label in html
+    if status == "failed":
+        assert "Scanner timed out" in html

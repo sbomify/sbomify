@@ -337,6 +337,25 @@ def vulnerability_total(summary: object) -> int:
 
 
 @register.filter
+def unfinished_scans(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Vulnerability scans that are queued, running or failed.
+
+    Finished scans are read on the Vulnerabilities list, so the assessments card
+    leaves them out. One that has not finished has no results there, and this
+    card is the only place its state, and a failure's error, shows.
+    """
+    from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
+
+    return [
+        tile
+        for tile in build_scorecards(assessment_runs)
+        if tile["run"]
+        and tile["run"].get("category") == "security"
+        and tile["run"].get("status") in ("pending", "running", "failed")
+    ]
+
+
+@register.filter
 def assessment_scorecards(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
     """One row per assessment, most urgent first. See services/assessment_scorecard.py."""
     from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
