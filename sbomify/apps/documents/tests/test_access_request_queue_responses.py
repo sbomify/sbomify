@@ -27,7 +27,7 @@ def queue(authenticated_web_client, team_with_business_plan, sample_user):
 def _assert_lands_back(response, team, active_tab):
     assert response.status_code == 302
     if active_tab:
-        assert response.url == reverse("teams:team_settings", kwargs={"team_key": team.key}) + "#trust-center"
+        assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": team.key}) + "#trust-center"
         assert response["HX-Trigger"] == "refreshAccessRequests"
     else:
         assert response.url == reverse("documents:access_request_queue", kwargs={"team_key": team.key})

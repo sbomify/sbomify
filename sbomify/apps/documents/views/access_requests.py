@@ -142,7 +142,7 @@ def _back(team_key: str, active_tab: str) -> HttpResponse:
     """Where a queue action lands without htmx: the trust-center tab, told to refresh, or the queue."""
     if active_tab == "trust-center":
         response: HttpResponse = redirect(
-            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
         )
         response["HX-Trigger"] = "refreshAccessRequests"
         return response
