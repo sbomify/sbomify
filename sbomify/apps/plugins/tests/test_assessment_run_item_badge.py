@@ -323,3 +323,16 @@ class TestStatusMarkersAreNotVulnerabilities:
         html = _findings_of(run)
         assert "CVE-2025-1111" in html
         assert 'aria-label="Vulnerabilities"' in html
+
+
+def test_a_vulnerability_row_offers_no_rerun():
+    """The plan and the backend schedule decide when a scan repeats, so even a
+    caller allowed to manage the component is not handed a Re-run."""
+    run = _run()
+    html = render_to_string(
+        "plugins/components/_assessment_run_item.html.j2",
+        {"run": run, "tile": scorecard_for_run(run), "sbom_id": "sbom1", "can_rerun": True},
+    )
+
+    assert "/rerun" not in html
+    assert "Re-run" not in html

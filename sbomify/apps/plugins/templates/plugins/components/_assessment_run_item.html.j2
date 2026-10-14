@@ -1,5 +1,5 @@
 {% load humanize plugins_extras %}
-{% comment %}One run as a row of the assessment list. tile is its entry from the assessment_scorecards filter, which carries the verdict, reason and bar; run is the same run. Queued and running rows have nothing to show yet, so they do not open.
+{% comment %}One run as a row of the assessment list. tile is its entry from the assessment_scorecards filter, which carries the verdict, reason and bar; run is the same run. Queued and running rows have nothing to show yet, so they do not open. There is no Re-run control here: how often a scan repeats is set by the plan and the backend schedule, not by the reader.
 
 The checks are fetched when the row is first opened, not when the page is built: see _assessment_run_findings.html.j2. The row's button carries the id the hx-trigger listens on, so one click both opens the row and asks for the checks.
 
@@ -42,7 +42,6 @@ The host around them is preserved through a page refresh. The server always send
     aria-hidden="true"></i></a>
             {% endif %}
         {% endwith %}
-        {% include 'plugins/components/_rerun_button.html.j2' %}
     </div>
     </c-slot>
     </c-assessments.row>
