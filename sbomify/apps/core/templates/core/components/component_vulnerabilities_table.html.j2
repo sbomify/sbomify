@@ -1,23 +1,64 @@
-{% comment %}The component panel and its filters swap together. Its modal remains
-outside this region.
+{% comment %}The component panel, in the workspace Vulnerabilities page's style: one row per
+vulnerability in this component, providers merged by alias, with triage and a fix
+prompt per row. Version picks which of the component's SBOMs is read; it starts at
+the newest. The toolbar swaps this whole region, the pager and a triage refresh
+swap only the results, as on the workspace page. The panel's URL is pushed, and
+a plain request to it redirects to the component page with the same filters, so
+a reload or Back keeps them.
 
-A triage decision re-annotates findings in a background task, so the panel
-refreshes twice: once straight away, on the refresh-assessments the triage modal
-dispatches when it saves, and again when the re-apply broadcasts vex_reapplied,
-which the bridge below turns into the same event for this component only. The
-debounce matches the artifact page's: one re-apply can broadcast more than once.
-Both refreshes carry vuln_refresh_query, which keeps the filters and the page the
-reader was on, and morph keeps their scroll position and focus.{% endcomment %}
+A triage decision re-annotates findings in a background task, so the results also
+refresh when the re-apply broadcasts vex_reapplied for this component.{% endcomment %}
 <div id="component-vulnerabilities-table"
+     class="flex flex-col"
      x-data="{ refreshTimer: null }"
-     hx-target="this"
-     hx-swap="morph"
-     hx-get="{{ vuln_panel_url }}?{{ vuln_refresh_query }}"
-     hx-trigger="refresh-assessments from:body"
      @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
-    <c-tables.shell nested>
-    <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />
-    <c-vulnerabilities.table :rows="vuln_panel.rows" :can_triage="can_triage" />
-    <c-vulnerabilities.footer :panel="vuln_panel" url="{{ vuln_panel_url }}" query="{{ vuln_query_string }}" prefix="vuln_" />
-    </c-tables.shell>
+    <form method="get"
+          action="{{ vuln_data.base_url }}"
+          class="flex flex-col"
+          hx-get="{{ vuln_data.base_url }}"
+          hx-target="#component-vulnerabilities-table"
+          hx-swap="outerHTML show:none"
+          hx-push-url="true"
+          hx-sync="this:replace"
+          hx-trigger="submit, change target:select, input changed delay:350ms target:input[type=search]">
+        <input type="hidden" name="sort" value="{{ vuln_data.query.sort }}">
+        <input type="hidden"
+               name="direction"
+               value="{{ vuln_data.query.direction }}">
+        <div class="px-4 pb-4">
+            <c-tables.toolbar flush>
+            <c-forms.search-input size="sm" name="search" id="component-vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID or package" value="{{ vuln_data.query.search }}" />
+            <c-forms.select size="md" name="version" id="component-vulnerabilities-version" label="Filter by version">
+            {% for version in vuln_data.versions %}
+                <option value="{% if not version.is_latest %}{{ version.id }}{% endif %}"
+                        {% if version.id == vuln_data.query.version or version.is_latest and not vuln_data.query.version %}selected{% endif %}>
+                    {{ version.version|default:version.id }}
+                    {% if version.is_latest %}(latest){% endif %}
+                    · {{ version.created_at|date:"j M Y" }}
+                </option>
+            {% endfor %}
+            </c-forms.select>
+            <c-forms.select size="md" name="severity" id="component-vulnerabilities-severity" label="Filter by severity">
+            <option value="">All severities</option>
+            {% for value, label in severity_choices %}
+                <option value="{{ value }}"
+                        {% if vuln_data.query.severity == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+            </c-forms.select>
+            <c-forms.select size="md" name="exposure" id="component-vulnerabilities-exposure" label="Filter by urgency">
+            <option value="">Any urgency</option>
+            <option value="exploited"
+                    {% if vuln_data.query.exposure == 'exploited' %}selected{% endif %}>Known exploited</option>
+            <option value="overdue"
+                    {% if vuln_data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
+            </c-forms.select>
+            <c-slot name="right">
+            <noscript>
+                <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+            </noscript>
+            </c-slot>
+            </c-tables.toolbar>
+        </div>
+        <c-vulnerabilities.workspace-results :data="vuln_data" results_target="component-vulnerabilities-results" />
+    </form>
 </div>

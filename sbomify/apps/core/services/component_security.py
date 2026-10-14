@@ -114,9 +114,13 @@ class ComponentVulnerabilitiesContext:
 
 
 def build_component_vulnerabilities(
-    component_id: str, query: FindingQuery, *, triage_identity: tuple[str, str, str, str] | None = None
+    component_id: str,
+    query: FindingQuery,
+    *,
+    triage_identity: tuple[str, str, str, str] | None = None,
+    sbom_id: str | None = None,
 ) -> ComponentVulnerabilitiesContext:
-    """The newest SBOM's findings, summarised whole and paged for display.
+    """The newest SBOM's findings, or ``sbom_id``'s when given, summarised whole and paged for display.
 
     Rows are derived on every request rather than cached. The derivation is the
     cheap half — 0.49 s against the 5.10 s of rendering them all, and most of
@@ -136,16 +140,14 @@ def build_component_vulnerabilities(
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
+    sboms = SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
     latest_sbom = (
-        SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
-        .order_by("-created_at")
-        .values("id", "version")
-        .first()
+        (sboms.filter(id=sbom_id) if sbom_id else sboms).order_by("-created_at").values("id", "version").first()
     )
     if not latest_sbom:
         return ComponentVulnerabilitiesContext()
 
-    sbom_id = latest_sbom["id"]
+    sbom_id = str(latest_sbom["id"])
     # The newest run of each provider, and the blob only for those. An empty
     # list also answers "did anything scan this at all", which is what the
     # summary fallback needs.

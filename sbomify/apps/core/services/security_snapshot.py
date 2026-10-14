@@ -14,9 +14,17 @@ from sbomify.apps.vulnerability_scanning.utils import state_label
 
 
 def build_component_security_picture(
-    component_ids: list[str], component_names: dict[str, str], sla_matrix: dict[str, Any]
+    component_ids: list[str],
+    component_names: dict[str, str],
+    sla_matrix: dict[str, Any],
+    sbom_overrides: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
-    """Worst non-suppressed findings across the given components."""
+    """Worst non-suppressed findings across the given components.
+
+    Each component is read at its newest SBOM unless ``sbom_overrides`` names
+    the SBOMs to read for it instead: the ones a release shipped, or one
+    version picked by hand.
+    """
     from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
@@ -29,18 +37,26 @@ def build_component_security_picture(
         severity_counts_from_rows,
     )
 
+    overrides = {key: value for key, value in (sbom_overrides or {}).items() if key in set(component_ids)}
     latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
+        SBOM.objects.filter(
+            component_id__in=[cid for cid in component_ids if cid not in overrides], bom_type=SBOM.BomType.SBOM
+        )
         .order_by("component_id", "-created_at")
         .distinct("component_id")
         .values("id", "component_id", "version", "created_at")
     )
-    sbom_meta = {str(row["id"]): row for row in latest_sboms}
+    chosen_sboms = SBOM.objects.filter(
+        id__in=[sbom_id for ids in overrides.values() for sbom_id in ids],
+        component_id__in=list(overrides),
+        bom_type=SBOM.BomType.SBOM,
+    ).values("id", "component_id", "version", "created_at")
+    sbom_meta = {str(row["id"]): row for row in [*latest_sboms, *chosen_sboms]}
     latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys())
     runs = (
         AssessmentRun.objects.filter(id__in=latest_ids)
         .order_by("sbom_id", "plugin_name")
-        .values("id", "sbom_id", "result_summary", "result_skipped", "created_at")
+        .values("id", "sbom_id", "plugin_name", "result_summary", "result_skipped", "created_at")
     )
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
     scanned_at_by_sbom: dict[str, Any] = {}
@@ -57,7 +73,12 @@ def build_component_security_picture(
     # scoped to the same latest runs as the summary and assessment state above.
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
+    # Which scanners reported an advisory in a package. Keyed by every id and alias, so it
+    # survives the alias merge below: OSV's GHSA row and Dependency-Track's CVE row meet here.
+    plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
+    sources: dict[tuple[str, str, str, str], set[str]] = {}
     for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
+        "run_id",
         "sbom_id",
         "advisory_id",
         "aliases",
@@ -71,6 +92,9 @@ def build_component_security_picture(
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
+        for identifier in (finding["advisory_id"], *finding["aliases"]):
+            key = (str(finding["sbom_id"]), identifier.lower(), finding["package_name"], finding["package_version"])
+            sources.setdefault(key, set()).add(plugin_by_run.get(finding["run_id"], ""))
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
                 "id": finding["advisory_id"],
@@ -111,11 +135,21 @@ def build_component_security_picture(
             if row.get("vex_suppressed"):
                 continue
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
+            row["sources"] = sorted(
+                set().union(
+                    *(
+                        sources.get((sbom_id, alias.lower(), row.get("package") or "", row.get("version") or ""), set())
+                        for alias in (row["id"], *row["aliases"])
+                    )
+                )
+                - {""}
+            )
             findings.append(
                 {
                     **row,
                     "component_id": component_id,
                     "component_name": component_names.get(component_id, ""),
+                    "sbom_id": sbom_id,
                     "sbom_version": meta["version"],
                     "scanned_at": scanned_at_by_sbom.get(sbom_id),
                 }

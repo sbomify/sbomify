@@ -43,29 +43,54 @@ def test_the_grace_period_agrees_with_its_count(days, expected):
     assert expected in " ".join(rendered.split())
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     ("total", "expected"),
     [(1, "1 vulnerability"), (2, "2 vulnerabilities")],
 )
-def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected):
+def test_the_scan_count_agrees_and_uses_the_whole_word(total, expected, sample_team_with_owner_member):
     """It read "1 vulns", which is two problems in four characters.
 
     The glossary makes "vulnerability" the user-facing word, so the
-    abbreviation was wrong before the agreement was.
+    abbreviation was wrong before the agreement was. The count is the artifact
+    page's vulnerability scan summary, beside the scanner that produced it.
     """
-    run = {
-        "id": "run1",
-        "plugin_name": "osv",
-        "category": "security",
-        "status": "completed",
-        "result": {"summary": {"by_severity": {"high": total}, "total_findings": total}},
-    }
+    from django.test import Client
+    from django.urls import reverse
+    from django.utils.html import strip_tags
 
-    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+    from sbomify.apps.core.models import Component
+    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.sboms.models import SBOM
 
-    rendered = render_to_string(
-        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+    member = sample_team_with_owner_member
+    component = Component.objects.create(team=member.team, name="counted", component_type=Component.ComponentType.BOM)
+    sbom = SBOM.objects.create(
+        component=component, name="counted", format="cyclonedx", format_version="1.6", sbom_filename="c.json"
     )
+    AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result={
+            "summary": {"by_severity": {"high": total}, "total_findings": total},
+            "findings": [
+                {"id": f"CVE-2026-{n:04d}", "severity": "high", "component": {"name": f"pkg-{n}", "version": "1"}}
+                for n in range(total)
+            ],
+        },
+    )
+    client = Client()
+    setup_authenticated_client_session(client, member.team, member.user)
 
-    assert expected in " ".join(rendered.split())
-    assert "vulns" not in rendered
+    response = client.get(
+        reverse("core:component_item", kwargs={"component_id": component.id, "item_type": "sboms", "item_id": sbom.id})
+    )
+    text = " ".join(strip_tags(response.content.decode()).split())
+
+    assert response.status_code == 200
+    assert f"Vulnerability scan {expected} · " in text
+    assert text.split("Vulnerability scan ", 1)[1].split(" Vulnerabilities", 1)[0].endswith(" · OSV")
+    assert "vulns" not in text

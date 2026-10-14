@@ -5,8 +5,11 @@ vulnerability_scanning/services/workspace_vulnerabilities.py. The totals count
 each vulnerability once, however many components or scanners report it; rows
 are one vulnerability in one component, because that is where a fix happens.
 
-Product and component change the scope, so they replace the whole browser and
-the totals follow. Every other control replaces only the results, which keeps
+Product, release, component and version change the scope, so they replace the
+whole browser and the totals follow. A release reads each component at the SBOM
+it shipped; a version reads one component at one SBOM. Inside a release the
+version is the release's, so that select is shown but locked. Every other
+control replaces only the results, which keeps
 the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
@@ -24,7 +27,15 @@ two HTMX roots the view answers.
     </div>
     <c-typography.description size="sm">
     {% if data.summary.vulnerabilities %}
-        {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }}, from each component's latest SBOM. A vulnerability reported by several scanners or found in several components is counted once.
+        {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }},
+        {% if data.scope_label %}
+            in {{ data.scope_label }}.
+        {% else %}
+            from each component's latest SBOM.
+        {% endif %}
+        A vulnerability reported by several scanners or found in several components is counted once.
+    {% elif data.scope_label %}
+        Nothing open in {{ data.scope_label }}.
     {% else %}
         Vulnerabilities from each component's latest SBOM appear here once it is scanned.
     {% endif %}
@@ -32,6 +43,13 @@ two HTMX roots the view answers.
         {{ data.unassessed_components|intcomma }} component{{ data.unassessed_components|pluralize }} not scanned yet.
     {% endif %}
     </c-typography.description>
+    {% if data.missing_from_release %}
+        <c-feedback.alert variant="info" icon="fas fa-circle-info" title="Not in this release">
+        <c-slot name="body">
+        {{ data.selected_release.name }} has no SBOM for {{ data.missing_from_release|join:", " }}, so {{ data.missing_from_release|length|pluralize:"it is,they are" }} not counted here.
+        </c-slot>
+        </c-feedback.alert>
+    {% endif %}
     <form method="get"
           action="{{ data.base_url }}"
           class="flex flex-col gap-4"
@@ -46,20 +64,50 @@ two HTMX roots the view answers.
         <input type="hidden" name="direction" value="{{ data.query.direction }}">
         <c-tables.toolbar flush>
         <c-forms.search-input size="sm" name="search" id="vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID, package or component" value="{{ data.query.search }}" />
-        <c-forms.select size="md" name="product" id="vulnerabilities-product" label="Filter by product" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not component,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+        <c-forms.select size="md" name="product" id="vulnerabilities-product" label="Filter by product" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not component,release,version,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
         <option value="">All products</option>
         {% for product in data.products %}
             <option value="{{ product.id }}"
                     {% if product.id == data.query.product %}selected{% endif %}>{{ product.name }}</option>
         {% endfor %}
         </c-forms.select>
-        <c-forms.select size="md" name="component" id="vulnerabilities-component" label="Filter by component" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+        {% if data.query.product %}
+            <c-forms.select size="md" name="release" id="vulnerabilities-release" label="Filter by release" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not version,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+            <option value="">Latest</option>
+            {% for release in data.releases %}
+                <option value="{{ release.id }}"
+                        {% if release.id == data.query.release %}selected{% endif %}>
+                    {{ release.name }}
+                    {% if release.is_prerelease %}(pre-release){% endif %}
+                </option>
+            {% endfor %}
+            </c-forms.select>
+        {% endif %}
+        <c-forms.select size="md" name="component" id="vulnerabilities-component" label="Filter by component" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not version,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
         <option value="">All components</option>
         {% for component in data.components %}
             <option value="{{ component.id }}"
                     {% if component.id == data.query.component %}selected{% endif %}>{{ component.name }}</option>
         {% endfor %}
         </c-forms.select>
+        {% if data.query.component %}
+            {% if data.version_locked %}
+                <c-forms.select size="md" id="vulnerabilities-version" label="Version, set by the release" disabled title="Set by the selected release">
+                <option>{{ data.selected_version.version|default:"Not in this release" }}</option>
+                </c-forms.select>
+            {% else %}
+                <c-forms.select size="md" name="version" id="vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
+                {% for version in data.versions %}
+                    <option value="{% if not version.is_latest %}{{ version.id }}{% endif %}"
+                            {% if version.id == data.query.version or version.is_latest and not data.query.version %}selected{% endif %}>
+                        {{ version.version|default:version.id }}
+                        {% if version.is_latest %}(latest){% endif %}
+                        · {{ version.created_at|date:"j M Y" }}
+                    </option>
+                {% endfor %}
+                </c-forms.select>
+            {% endif %}
+        {% endif %}
         <c-forms.select size="md" name="severity" id="vulnerabilities-severity" label="Filter by severity">
         <option value="">All severities</option>
         <option value="critical"

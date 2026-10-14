@@ -24,20 +24,8 @@ TEMPLATES = Path(__file__).resolve().parents[3]
 NO_RELOAD = [
     "apps/plugins/templates/plugins/components/triage_modal.html.j2",
     "apps/plugins/templates/plugins/components/assessment_results_card.html.j2",
-    "apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2",
-]
-
-#: Panels that host a triage control and so must refresh once the decision is
-#: recorded, and again when the background re-apply reports in.
-#:
-#: The assessment card's findings panel is not one of them. The artifact page
-#: refreshes as a whole region and marks that panel hx-preserve, because the
-#: server always renders it unopened: refetching it on triage would take back
-#: the filters the reader had set, which is the loss the region refresh exists
-#: to prevent.
-TRIAGE_PANELS = [
     "apps/core/templates/core/components/component_vulnerabilities_table.html.j2",
-    "apps/sboms/templates/sboms/components/scan_vulnerabilities.html.j2",
+    "templates/components/vulnerabilities/workspace_results.html",
 ]
 
 
@@ -71,7 +59,7 @@ def _root_attributes(html: str, element_id: str) -> dict[str, str]:
 
 @pytest.mark.django_db
 class TestATriagePanelRefreshesWhereTheReaderIs:
-    """Each triage panel refreshes on the events this flow emits, on the reader's page.
+    """The component panel refreshes on the events this flow emits, on the reader's page.
 
     The triage modal dispatches ``refresh-assessments`` when a decision is
     saved, and the background re-apply arrives as a ``ws:message`` of type
@@ -94,76 +82,22 @@ class TestATriagePanelRefreshesWhereTheReaderIs:
 
         response = client.get(
             reverse("core:component_vulnerabilities_panel", args=[component.id]),
-            {"vuln_submitted": "1", "vuln_page": "2"},
+            {"page": "2", "per_page": "10"},
             headers={"hx-request": "true"},
         )
+        html = response.content.decode()
 
-        root = _root_attributes(response.content.decode(), "component-vulnerabilities-table")
-        assert "vuln_page=2" in root["hx-get"]
-        assert root["hx-trigger"] == "refresh-assessments from:body"
+        # The re-apply bridge sits on the region, and names this component.
+        root = _root_attributes(html, "component-vulnerabilities-table")
         assert "'vex_reapplied'" in root["@ws:message.window"]
+        assert "refresh-assessments" in root["@ws:message.window"]
         assert f"'{component.id}'" in root["@ws:message.window"]
-
-    def test_the_artifact_report(self, sample_team_with_owner_member, sample_user) -> None:
-        from django.test import Client
-        from django.urls import reverse
-
-        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-        from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
-        from sbomify.apps.sboms.models import SBOM
-
-        team = sample_team_with_owner_member.team
-        component = _component_with_findings(team)
-        sbom = SBOM.objects.get(component=component)
-        client = Client()
-        setup_authenticated_client_session(client, team, sample_user)
-
-        response = client.get(
-            reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id}),
-            {"scan_submitted": "1", "scan_page": "2"},
-        )
-
-        root = _root_attributes(response.content.decode(), "scan-vulnerabilities")
-        assert "scan_page=2" in root["hx-get"]
-        assert root["hx-trigger"] == "refresh-assessments from:body"
-        assert "'vex_reapplied'" in root["@ws:message.window"]
-        assert f"'{component.id}'" in root["@ws:message.window"]
-
-
-@pytest.mark.django_db
-def test_a_report_with_no_scan_yet_waits_for_its_own_scan(sample_team_with_owner_member, sample_user) -> None:
-    """The report no longer reloads itself on a timer, so a finished scan has to reach it.
-
-    The bridge sits on a region the page always renders: the results panel only
-    exists once there are results, which is exactly when a report opened before
-    its scan has none.
-    """
-    from django.test import Client
-    from django.urls import reverse
-
-    from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-    from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
-    from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.sboms.models import SBOM
-
-    team = sample_team_with_owner_member.team
-    sbom = SBOM.objects.get(component=_component_with_findings(team))
-    AssessmentRun.objects.filter(sbom=sbom).delete()
-    client = Client()
-    setup_authenticated_client_session(client, team, sample_user)
-
-    html = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id})).content.decode()
-
-    assert "No Scan Data Available" in html
-    region = _root_attributes(html, "scan-report")
-    assert "'assessment_complete'" in region["@ws:message.window"]
-    assert f"'{sbom.id}'" in region["@ws:message.window"]
-
-
-@pytest.mark.parametrize("template", TRIAGE_PANELS)
-def test_a_refresh_keeps_the_reader_in_place(template: str) -> None:
-    """morph preserves scroll position and focus; outerHTML does not."""
-    assert 'hx-swap="morph"' in _source(template)
+        # The results refresh themselves on that event, at the page the reader is on.
+        results = _root_attributes(html, "component-vulnerabilities-results")
+        assert results["hx-trigger"] == "refresh-assessments from:body"
+        assert "page=2" in results["hx-get"]
+        assert "per_page=10" in results["hx-get"]
+        assert results["hx-get"].startswith(reverse("core:component_vulnerabilities_panel", args=[component.id]))
 
 
 # The triage modal and the assessment card are covered by the artifact page's
@@ -173,23 +107,16 @@ def test_a_refresh_keeps_the_reader_in_place(template: str) -> None:
 
 
 class TestScanProcessingState:
-    def test_it_no_longer_reloads_on_a_timer(self) -> None:
+    @pytest.mark.parametrize("template", NO_RELOAD)
+    def test_it_no_longer_refreshes_on_a_timer(self, template: str) -> None:
         """A 300 second reload fired whether or not anything had changed.
 
         A short debounce after a scan's completion message is not that: it waits
         for something that did change. What must not come back is a refresh
         nothing asked for, whether a reload, an interval or an htmx poll.
         """
-        source = _source("apps/sboms/templates/sboms/sbom_vulnerabilities.html.j2")
+        source = _source(template)
 
         assert "location.reload" not in source
         assert "setInterval" not in source
         assert not re.search(r'hx-trigger="[^"]*\bevery\b', source)
-
-    # There was a test here for the 60s fallback poll refreshing
-    # #scan-results-card. It is gone because the thing it asserted is gone:
-    # the processing branch it lived in was unreachable, and #1781 removed the
-    # branch and its poll together. Nothing on this page now renders a
-    # processing state, so there is no interval to fall back to -- a finished
-    # scan renders the results table instead. The sibling test above still
-    # pins the part that matters, that no timer reloads the page.

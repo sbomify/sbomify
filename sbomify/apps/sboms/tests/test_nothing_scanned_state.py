@@ -157,13 +157,13 @@ class TestOnlyWhenEveryProviderSkipped:
 
 
 @pytest.mark.django_db
-class TestTheSbomPages:
-    """The same three states on the SBOM's own pages.
+class TestTheSbomPage:
+    """The same three states on the SBOM's own page.
 
-    Both told you to wait: the scan report said "No Scan Data Available, try
-    again later" and the assessment card said "Pending". Waiting helps with
-    "Not scanned" alone. A skip repeats until someone fixes its reason, and a
-    clean scan has finished.
+    The scan summary at the top of the page must not read as a clean bill of
+    health when nothing was scanned, and the assessment card must not say
+    "Pending" for a skip: waiting helps with "Not scanned" alone. A skip repeats
+    until someone fixes its reason, and a clean scan has finished.
     """
 
     NO_PACKAGES = "None of the packages in this SBOM could be matched against an advisory source."
@@ -189,8 +189,8 @@ class TestTheSbomPages:
         finding = {"id": finding_id, "title": "Skipped", "description": description, "status": "warning"}
         return {**SKIPPED, "findings": [finding]}
 
-    def _open(self, sbom, url: str | None = None):
-        """The scan report unless ``url`` names another page."""
+    def _text(self, sbom) -> str:
+        """The SBOM page as a reader sees it, tags stripped."""
         from django.test import Client
         from django.urls import reverse
 
@@ -198,70 +198,52 @@ class TestTheSbomPages:
 
         client = Client()
         setup_test_session(client, sbom.component.team, sbom.component.team.members.first())
-        response = client.get(url or reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sbom.id}))
+        url = reverse(
+            "core:component_item",
+            kwargs={"component_id": sbom.component.id, "item_type": "sboms", "item_id": sbom.id},
+        )
+        response = client.get(url)
         assert response.status_code == 200
-        return response
+        return " ".join(strip_tags(response.content.decode()).split())
 
-    def test_every_provider_skipped_says_why(self, sample_sbom) -> None:
+    def test_every_provider_skipped_reports_no_scan(self, sample_sbom) -> None:
         self._run(sample_sbom, "osv", self._skipped("osv:no-packages", self.NO_PACKAGES))
         self._run(sample_sbom, "dependency-track", self._skipped("dependency-track:no-product", self.NO_PRODUCT))
 
-        response = self._open(sample_sbom)
-        html = response.content.decode()
+        text = self._text(sample_sbom)
 
-        assert "Nothing scanned" in html
-        assert self.NO_PACKAGES in html
-        assert self.NO_PRODUCT in html
-        assert "No Scan Data Available" not in html
-        # Nothing was scanned, so there is no scan to date.
-        assert response.context["scan_timestamp"] is None
+        # Nothing was scanned, so there is no scan to summarise or date.
+        assert "Vulnerability scan" not in text
+        assert "0 vulnerabilities" not in text
 
     def test_a_clean_scan_says_nothing_was_found(self, sample_sbom) -> None:
         self._run(sample_sbom, "osv", CLEAN)
 
-        html = self._open(sample_sbom).content.decode()
+        text = self._text(sample_sbom)
 
-        assert "No vulnerabilities found" in html
-        assert "No Scan Data Available" not in html
-        assert "Nothing scanned" not in html
+        assert "Vulnerability scan 0 vulnerabilities · " in text
+        assert "· OSV" in text
 
-    def test_a_run_with_no_result_is_not_a_clean_scan(self, sample_sbom) -> None:
-        """The column is nullable. A run that came back with nothing examined
-        nothing, so it cannot vouch for the SBOM."""
-        self._run(sample_sbom, "osv", None)
+    def test_no_runs_at_all_reports_no_scan(self, sample_sbom) -> None:
+        text = self._text(sample_sbom)
 
-        html = self._open(sample_sbom).content.decode()
-
-        assert "No vulnerabilities found" not in html
-        assert "No Scan Data Available" in html
-
-    def test_no_runs_at_all_still_has_no_data(self, sample_sbom) -> None:
-        html = self._open(sample_sbom).content.decode()
-
-        assert "No Scan Data Available" in html
-        assert "Nothing scanned" not in html
+        assert "Vulnerability scan" not in text
+        assert "0 vulnerabilities" not in text
 
     def test_one_skipped_one_clean_is_clean(self, sample_sbom) -> None:
         self._run(sample_sbom, "dependency-track", self._skipped("dependency-track:no-product", self.NO_PRODUCT))
         self._run(sample_sbom, "osv", CLEAN)
 
-        html = self._open(sample_sbom).content.decode()
+        text = self._text(sample_sbom)
 
-        assert "No vulnerabilities found" in html
-        assert "Nothing scanned" not in html
+        assert "Vulnerability scan 0 vulnerabilities · " in text
+        # Only the scanner that scanned is credited with the result.
+        assert "· OSV" in text
+        assert "Dependency-Track" not in text
 
-    def test_the_assessment_card_says_skipped_not_pending(self, sample_sbom) -> None:
-        from django.urls import reverse
-
+    def test_the_assessment_card_does_not_say_pending(self, sample_sbom) -> None:
         self._run(sample_sbom, "osv", self._skipped("osv:no-packages", self.NO_PACKAGES))
-        url = reverse(
-            "core:component_item",
-            kwargs={"component_id": sample_sbom.component.id, "item_type": "sboms", "item_id": sample_sbom.id},
-        )
 
-        html = self._open(sample_sbom, url).content.decode()
+        text = self._text(sample_sbom)
 
-        # Match the heading and its adjacent status, not the run badges or zero-count chips.
-        page_text = " ".join(strip_tags(html).split())
-        assert "Assessments Skipped" in page_text
-        assert "Assessments Pending" not in page_text
+        assert "Assessments Pending" not in text

@@ -197,17 +197,20 @@ def test_the_overview_offers_triage_to_every_role_that_can_triage(role, offered,
         assert modal not in page
 
 
-def test_the_report_offers_vex_upload_only_to_a_role_that_can_upload(items) -> None:
-    """Uploading a VEX file needs ``artifact:publish`` as well as the triage right."""
+def test_the_old_report_takes_an_operator_where_a_member_goes_and_lets_it_triage(items) -> None:
+    """The per-SBOM report now redirects to the workspace list; an operator follows it and can still triage."""
     url = reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": items["sbom_id"]})
 
-    operator = _client(items["team"], "operator").get(url)
-    member = _client(items["team"], "member").get(url)
+    operator = _client(items["team"], "operator")
+    member = _client(items["team"], "member")
+    operator_redirect = operator.get(url)
+    member_redirect = member.get(url)
 
-    assert operator.status_code == member.status_code == 200
-    assert 'id="triage-modal"' in operator.content.decode()
-    assert "Upload VEX" not in operator.content.decode()
-    assert "Upload VEX" in member.content.decode()
+    assert operator_redirect.status_code == member_redirect.status_code == 301
+    assert operator_redirect["Location"] == member_redirect["Location"]
+    landing = operator.get(operator_redirect["Location"])
+    assert landing.status_code == 200
+    assert 'id="vulnerability-triage-host"' in landing.content.decode()
 
 
 @pytest.mark.parametrize(("role", "offered"), [("operator", False), ("member", False), ("admin", True)])

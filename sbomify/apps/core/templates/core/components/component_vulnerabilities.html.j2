@@ -6,25 +6,21 @@ The card and its collapse state live here; the toolbar, table and footer live in
 component_vulnerabilities_table.html.j2 and are swapped on their own when a
 filter or a page changes, so searching never closes the panel.
 {% endcomment %}
-{% if vuln_panel and vuln_panel.unfiltered_total %}
+{% if vuln_data and vuln_data.versions %}
     <c-cards.collapsible id="component-vulnerabilities" x-data="{ open: true }">
-    {% comment %}
-        The panel is a full-bleed table, so it takes the clipped wrapper the
-        card's body would have given it and none of the padding.
-    {% endcomment %}
     <c-cards.collapsible-header>
     <c-cards.collapsible-trigger state="open" @click="open = !open">
     <span class="text-lg">
         Vulnerabilities
-        {% if latest_vuln_version %}
-            <span class="font-normal text-text-muted text-sm">· {{ latest_vuln_version|truncatechars:24 }} (latest)</span>
+        {% if vuln_data.selected_version %}
+            <span class="font-normal text-text-muted text-sm">· {{ vuln_data.summary.vulnerabilities }} open in {{ vuln_data.selected_version.version|truncatechars:24 }}
+                {% if vuln_data.selected_version.is_latest %}(latest){% endif %}
+            </span>
         {% endif %}
     </span>
     </c-cards.collapsible-trigger>
     <c-slot name="actions">
-    {% if latest_vuln_sbom_id %}
-        <c-buttons.ghost href="{% url 'sboms:sbom_vulnerabilities' latest_vuln_sbom_id %}" size="sm">View full scan report<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
-    {% endif %}
+    <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
     </c-slot>
     </c-cards.collapsible-header>
     <div class="overflow-hidden" x-show="open" x-collapse>

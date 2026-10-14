@@ -1,23 +1,25 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponsePermanentRedirect
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.sboms.services.vulnerability_report import build_sbom_vulnerabilities
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
 class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The old per-SBOM report. The workspace page now shows one SBOM through its version filter."""
+
     def get(self, request: HttpRequest, sbom_id: str) -> HttpResponse:
-        result = build_sbom_vulnerabilities(request, sbom_id)
-        if not result.ok:
-            return error_response(request, HttpResponse(result.error, status=result.status_code or 400))
-        template = (
-            "sboms/components/scan_vulnerabilities.html.j2"
-            if request.headers.get("HX-Target") == "scan-vulnerabilities"
-            else "sboms/sbom_vulnerabilities.html.j2"
+        sbom = SBOM.objects.filter(pk=sbom_id).values("id", "component_id", "component__team__key").first()
+        if sbom is None:
+            return error_response(request, HttpResponseNotFound("SBOM not found"))
+        url = reverse("vulnerability_scanning:vulnerability_scans", args=[sbom["component__team__key"]])
+        return HttpResponsePermanentRedirect(
+            f"{url}?{urlencode({'component': sbom['component_id'], 'version': sbom['id']})}"
         )
-        return render(request, template, result.value)
