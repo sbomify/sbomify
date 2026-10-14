@@ -10,7 +10,12 @@ from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
-from sbomify.apps.vulnerability_scanning.utils import state_label
+from sbomify.apps.vulnerability_scanning.utils import canonical_ecosystem, state_label
+
+
+def _ecosystem_scope(label: Any) -> str:
+    """The ecosystem under package_scopes' spelling, so "PyPI" and "pypi" are one package and npm another."""
+    return canonical_ecosystem({"ecosystem": label}) or "unknown"
 
 
 def build_component_security_picture(
@@ -76,7 +81,7 @@ def build_component_security_picture(
     # Which scanners reported an advisory in a package. Keyed by every id and alias, so it
     # survives the alias merge below: OSV's GHSA row and Dependency-Track's CVE row meet here.
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    sources: dict[tuple[str, str, str, str], set[str]] = {}
+    sources: dict[tuple[str, str, str, str, str], set[str]] = {}
     for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
         "run_id",
         "sbom_id",
@@ -92,8 +97,15 @@ def build_component_security_picture(
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
+        ecosystem = _ecosystem_scope(finding["ecosystem"])
         for identifier in (finding["advisory_id"], *finding["aliases"]):
-            key = (str(finding["sbom_id"]), identifier.lower(), finding["package_name"], finding["package_version"])
+            key = (
+                str(finding["sbom_id"]),
+                identifier.lower(),
+                finding["package_name"],
+                finding["package_version"],
+                ecosystem,
+            )
             sources.setdefault(key, set()).add(plugin_by_run.get(finding["run_id"], ""))
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
@@ -135,10 +147,14 @@ def build_component_security_picture(
             if row.get("vex_suppressed"):
                 continue
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
+            ecosystem = _ecosystem_scope(row.get("ecosystem"))
             row["sources"] = sorted(
                 set().union(
                     *(
-                        sources.get((sbom_id, alias.lower(), row.get("package") or "", row.get("version") or ""), set())
+                        sources.get(
+                            (sbom_id, alias.lower(), row.get("package") or "", row.get("version") or "", ecosystem),
+                            set(),
+                        )
                         for alias in (row["id"], *row["aliases"])
                     )
                 )
