@@ -396,3 +396,26 @@ def test_rail_rows_are_tappable_and_the_current_row_outranks_hover(authenticated
     assert current.evaluate(
         "el => getComputedStyle(el).boxShadow",
     ) != other.evaluate("el => getComputedStyle(el).boxShadow")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("motion", ["reduce", "no-preference"])
+def test_the_mobile_drawer_traps_focus_from_its_close_button(authenticated_page: Page, motion: str) -> None:
+    """Nothing in the rail can take focus for the first frames after it opens, so
+    focus() did nothing and the trap declined to arm. Opening the drawer has to land
+    focus on its close button and arm the trap: x-trap.inert hides the page behind
+    with aria-hidden, and Shift+Tab past the rail's first link wraps inside the rail
+    instead of walking out of it."""
+    page = authenticated_page
+    page.emulate_media(reduced_motion=motion)
+    page.route("**/api/v1/notifications/", lambda route: route.fulfill(json=[]))
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto("/products/")
+
+    page.get_by_role("banner").get_by_role("button", name="Toggle sidebar navigation").click()
+
+    expect(page.get_by_role("button", name="Close sidebar")).to_be_focused()
+    page.wait_for_function("() => document.querySelector('#main-content').closest('[aria-hidden=\"true\"]')")
+    page.keyboard.press("Shift+Tab")
+    page.keyboard.press("Shift+Tab")
+    assert page.evaluate("() => Boolean(document.activeElement.closest('#sidebar'))")

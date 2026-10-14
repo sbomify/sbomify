@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 from playwright.sync_api import Locator, Page, expect
 
+from sbomify.apps.core.tests.test_design_system_view import _debug_urlconf_fixture
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
@@ -16,6 +17,9 @@ def assert_fits_width(element: Locator) -> None:
         "el => { const r = el.getBoundingClientRect(); "
         "return r.left >= 0 && r.right <= document.documentElement.clientWidth; }"
     )
+
+
+debug_gallery = _debug_urlconf_fixture(True)
 
 
 @pytest.mark.django_db
@@ -110,3 +114,22 @@ def test_mobile_modal_actions_remain_reachable(
     expect(field).to_be_in_viewport()
     page.keyboard.press("Escape")
     expect(dialog).to_be_hidden()
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("debug_gallery")
+@pytest.mark.parametrize("width", [375, 1280])
+def test_a_tag_close_button_takes_a_phone_sized_tap(authenticated_page: Page, width: int) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto("/design-system/")
+    close = page.get_by_role("button", name="Remove Removable", exact=True)
+    close.scroll_into_view_if_needed()
+    box = close.bounding_box()
+    assert box and box["height"] < 20
+    # 15px below the centre is outside the 18px cross: only the phone's 44px box reaches there.
+    hit = page.evaluate(
+        "([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null",
+        [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2 + 15],
+    )
+    assert (hit == "Remove Removable") is (width < 640)

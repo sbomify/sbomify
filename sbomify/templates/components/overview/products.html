@@ -39,7 +39,7 @@ to the workspace total, and telling that reader otherwise is simply wrong.
             {% endif %}
             </c-tables.cell>
             <c-tables.cell>
-            <span class="text-xs tabular-nums {% if product.past_sla %}font-semibold text-danger{% else %}text-text-muted{% endif %}">{{ product.past_sla|default:0|intcomma }}</span>
+            <span class="text-xs tabular-nums {% if product.past_sla %}font-semibold text-danger-ink{% else %}text-text-muted{% endif %}">{{ product.past_sla|default:0|intcomma }}</span>
             </c-tables.cell>
             <c-tables.cell><c-overview.evidence :product="product" /></c-tables.cell>
             <c-tables.cell end><c-buttons.ghost size="sm" href="{% url 'core:product_details' product.id %}">View product</c-buttons.ghost></c-tables.cell>
