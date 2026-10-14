@@ -21,14 +21,14 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 # Anyone already in the workspace, internal or external — they do not need to
 # ask for access they already have.
 ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
 
-def invalidate_access_requests_cache(team: Team) -> None:
+def invalidate_access_requests_cache(team: Workspace) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
 
@@ -37,7 +37,7 @@ def invalidate_access_requests_cache(team: Team) -> None:
         cache.delete(cache_key)
 
 
-def pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def pending_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get pending access requests for a team, filtering by NDA signature if required.
 
     Args:
@@ -64,7 +64,7 @@ def pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
     return base_queryset
 
 
-def dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
+def dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Workspace) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     if pending_access_requests(team).count() == 0:
         notification_id = f"access_request_pending_{team.key}"
@@ -74,7 +74,7 @@ def dismiss_access_request_notification_if_no_pending(request: HttpRequest, team
         request.session.save()
 
 
-def request_access(team: Team, user: User) -> tuple[AccessRequest, bool]:
+def request_access(team: Workspace, user: User) -> tuple[AccessRequest, bool]:
     """The user's request for the workspace, created, or reopened as pending.
 
     Returns the request and whether this changed its state: a new request, or a

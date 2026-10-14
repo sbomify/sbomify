@@ -30,7 +30,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
@@ -383,7 +383,7 @@ class TestNDASigningRequestStatus:
             authenticated_web_client.force_login(guest_user)
             url = reverse(
                 "documents:sign_nda",
-                kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+                kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
             )
             with patch("sbomify.apps.documents.views.access_requests.StorageClient") as storage:
                 storage.return_value.get_document_data.return_value = b"Test NDA Content"
@@ -425,7 +425,7 @@ class TestNDASigningRequestStatus:
     ):
         storage.return_value.get_document_data.return_value = b"Test NDA Content"
         invitee = User.objects.create_user(username="invitee", email="invitee@example.com", email_verified=True)
-        Member.objects.create(user=invitee, team=Team.objects.create(name="Own Workspace"), role="owner")
+        Member.objects.create(user=invitee, team=Workspace.objects.create(name="Own Workspace"), role="owner")
         invitation = Invitation.objects.create(team=team_with_business_plan, email=invitee.email, role="guest")
         access_request = AccessRequest.objects.create(team=team_with_business_plan, user=invitee, status=status)
         client.force_login(invitee)
@@ -436,7 +436,7 @@ class TestNDASigningRequestStatus:
         client.post(
             reverse(
                 "documents:sign_nda",
-                kwargs={"team_key": team_with_business_plan.key, "request_id": access_request.id},
+                kwargs={"workspace_key": team_with_business_plan.key, "request_id": access_request.id},
             ),
             {"signed_name": "Invitee", "consent": "on"},
         )

@@ -20,17 +20,17 @@ pytestmark = pytest.mark.django_db
 def queue(authenticated_web_client, team_with_business_plan, sample_user):
     setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
     return authenticated_web_client, reverse(
-        "documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}
+        "documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}
     )
 
 
 def _assert_lands_back(response, team, active_tab):
     assert response.status_code == 302
     if active_tab:
-        assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": team.key}) + "#trust-center"
+        assert response.url == reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}) + "#trust-center"
         assert response["HX-Trigger"] == "refreshAccessRequests"
     else:
-        assert response.url == reverse("documents:access_request_queue", kwargs={"team_key": team.key})
+        assert response.url == reverse("documents:access_request_queue", kwargs={"workspace_key": team.key})
         assert "HX-Trigger" not in response
 
 

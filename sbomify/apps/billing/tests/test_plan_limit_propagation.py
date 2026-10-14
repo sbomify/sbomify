@@ -7,7 +7,7 @@ import pytest
 from django.db import connection, connections, transaction
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -15,8 +15,8 @@ OLD_LIMITS = {"max_products": 1, "max_components": 5, "max_users": 2}
 OTHER_KEYS = {"stripe_customer_id": "cus_123", "stripe_subscription_id": "sub_123", "subscription_status": "active"}
 
 
-def _workspace(plan_key: str) -> Team:
-    return Team.objects.create(
+def _workspace(plan_key: str) -> Workspace:
+    return Workspace.objects.create(
         name=f"On {plan_key}", billing_plan=plan_key, billing_plan_limits={**OLD_LIMITS, **OTHER_KEYS}
     )
 
@@ -81,7 +81,7 @@ def test_a_save_of_other_fields_only_leaves_workspaces_alone():
 
 def test_a_workspace_with_no_limits_yet_gets_them():
     plan = _plan("no_limits_yet")
-    workspace = Team.objects.create(name="No limits", billing_plan=plan.key, billing_plan_limits=None)
+    workspace = Workspace.objects.create(name="No limits", billing_plan=plan.key, billing_plan_limits=None)
 
     plan.max_products = 10
     plan.save()
@@ -90,10 +90,10 @@ def test_a_workspace_with_no_limits_yet_gets_them():
     assert workspace.billing_plan_limits == {"max_products": 10, "max_components": 5, "max_users": 2}
 
 
-def _row_location(workspace: Team) -> str:
+def _row_location(workspace: Workspace) -> str:
     """Where Postgres keeps the row: every UPDATE of it, even to the same values, moves it."""
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT ctid::text FROM {Team._meta.db_table} WHERE id = %s", [workspace.pk])
+        cursor.execute(f"SELECT ctid::text FROM {Workspace._meta.db_table} WHERE id = %s", [workspace.pk])
         return cursor.fetchone()[0]
 
 
@@ -149,7 +149,7 @@ def test_a_plan_save_keeps_what_a_concurrent_write_changed():
 
     saver = threading.Thread(target=save_plan)
     with transaction.atomic():
-        Team.objects.filter(pk=workspace.pk).update(
+        Workspace.objects.filter(pk=workspace.pk).update(
             billing_plan_limits={**OLD_LIMITS, **OTHER_KEYS, "subscription_status": "past_due"}
         )
         saver.start()

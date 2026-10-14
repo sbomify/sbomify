@@ -961,9 +961,9 @@ def list_contact_profiles(request: HttpRequest, team_key: str) -> tuple[int, Any
     return 200, [serialize_contact_profile(profile) for profile in profiles]
 
 
-def get_readable_contact_profile(request: HttpRequest, team_key: str, profile_id: str) -> tuple[int, Any]:
+def get_readable_contact_profile(request: HttpRequest, workspace_key: str, profile_id: str) -> tuple[int, Any]:
     """Return (200, profile) when the caller may read it, otherwise (status, error body)."""
-    team, role, error = _get_team_and_membership_role(request, team_key)
+    team, role, error = _get_team_and_membership_role(request, workspace_key)
     if error:
         return error
 
