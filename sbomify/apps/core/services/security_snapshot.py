@@ -92,6 +92,7 @@ def build_component_security_picture(
         "package_name",
         "package_version",
         "ecosystem",
+        "purl",
         "vex_state",
         "malicious",
     ):
@@ -118,6 +119,8 @@ def build_component_security_picture(
                     "name": finding["package_name"],
                     "version": finding["package_version"],
                     "ecosystem": finding["ecosystem"],
+                    # package_scopes keeps two groupIds with one artifact name apart by it.
+                    "purl": finding["purl"],
                 },
             }
         )
