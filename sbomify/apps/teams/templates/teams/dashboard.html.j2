@@ -17,7 +17,7 @@
                     <c-workspaces.card name="{{ team.name|workspace_display }}" role="{{ me.role }}" member_count="{{ team.members|length }}" invitation_count="{{ team.invitations|length }}" workspace_key="{{ team.key }}" current_key="{{ request.session.current_workspace.key }}" :default="me.is_default_workspace">
                     <c-slot name="actions">
                     <c-actions-menu label="Actions for {{ team.name|workspace_display }}">
-                    <form method="post" action="{% url 'teams:teams_dashboard' %}">
+                    <form method="post" action="{% url 'workspaces:teams_dashboard' %}">
                         {% csrf_token %}
                         <input type="hidden" name="_method" value="PATCH">
                         <input type="hidden" name="key" value="{{ team.key }}">
@@ -36,9 +36,9 @@
                     {% if request.session.current_workspace.key == team.key %}
                         <c-buttons.secondary size="sm" href="{% url 'core:dashboard' %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
                     {% else %}
-                        <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team.key %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
+                        <c-buttons.secondary size="sm" href="{% url 'workspaces:switch_team' team.key %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
                     {% endif %}
-                    <c-buttons.secondary size="sm" href="{% url 'teams:team_settings' team.key %}"><i class="fas fa-gear" aria-hidden="true"></i>Settings</c-buttons.secondary>
+                    <c-buttons.secondary size="sm" href="{% url 'workspaces:team_settings' team.key %}"><i class="fas fa-gear" aria-hidden="true"></i>Settings</c-buttons.secondary>
                     </c-workspaces.card>
                 {% endfor %}
             </div>

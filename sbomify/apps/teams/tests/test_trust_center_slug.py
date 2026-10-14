@@ -7,12 +7,12 @@ from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
-def _post_slug(client: Client, team: Team, new_slug: str):
+def _post_slug(client: Client, team: Workspace, new_slug: str):
     return client.post(
-        reverse("teams:team_settings", kwargs={"team_key": team.key}),
+        reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}),
         {"slug_action": "update", "slug": new_slug, "active_tab": "trust-center"},
     )
 
@@ -102,7 +102,7 @@ def test_rename_rejects_slug_taken_by_another_workspace(sample_team_with_owner_m
     team = sample_team_with_owner_member.team
     team.slug = "acme"
     team.save()
-    Team.objects.create(name="Other workspace", slug="taken")
+    Workspace.objects.create(name="Other workspace", slug="taken")
 
     client = Client()
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
@@ -114,7 +114,7 @@ def test_rename_rejects_slug_taken_by_another_workspace(sample_team_with_owner_m
     assert _messages(response), "expected an error message for a duplicate slug"
 
 
-def _member_with_role(team: Team, role: str, username: str) -> Member:
+def _member_with_role(team: Workspace, role: str, username: str) -> Member:
     from django.contrib.auth import get_user_model
 
     user = get_user_model().objects.create_user(username=username, password="x")  # noqa: S106

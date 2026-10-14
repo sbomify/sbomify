@@ -32,12 +32,12 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
         "hbom": events.HBOM_UPLOADED,
     }.get(instance.bom_type, events.SBOM_UPLOADED)
     team = getattr(instance.component, "team", None) if instance.component else None
-    team_key = team.key if team else ""
+    workspace_key = team.key if team else ""
     component_id = getattr(instance.component, "id", "")
     sbom_id = instance.id
     source = instance.source or ""
-    groups = {"workspace": team_key} if team_key else None
-    distinct_id = team_key or "system"
+    groups = {"workspace": workspace_key} if workspace_key else None
+    distinct_id = workspace_key or "system"
     transaction.on_commit(
         lambda: capture(
             distinct_id,
@@ -95,11 +95,11 @@ def update_latest_release_on_document_created(sender: Any, instance: Any, create
     from sbomify.apps.core.posthog_service import capture
 
     team = getattr(instance.component, "team", None) if instance.component else None
-    team_key = team.key if team else ""
+    workspace_key = team.key if team else ""
     component_id = getattr(instance.component, "id", "")
     document_id = instance.id
-    groups = {"workspace": team_key} if team_key else None
-    distinct_id = team_key or "system"
+    groups = {"workspace": workspace_key} if workspace_key else None
+    distinct_id = workspace_key or "system"
     transaction.on_commit(
         lambda: capture(
             distinct_id, "document:uploaded", {"component_id": component_id, "document_id": document_id}, groups=groups

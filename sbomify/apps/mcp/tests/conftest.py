@@ -7,7 +7,7 @@ import pytest
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture(autouse=True)
@@ -23,8 +23,8 @@ def _enforce_async_safety(monkeypatch):
     monkeypatch.delenv("DJANGO_ALLOW_ASYNC_UNSAFE", raising=False)
 
 
-def _make_team(name: str) -> Team:
-    team = Team.objects.create(name=name)
+def _make_team(name: str) -> Workspace:
+    team = Workspace.objects.create(name=name)
     team.key = number_to_random_token(team.pk)
     team.save()
     return team
@@ -48,7 +48,7 @@ def make_token(mcp_owner):
     """Build an AccessToken for the bound workspace with the given scopes."""
     user, bound, _ = mcp_owner
 
-    def _make(scopes: list[str] | None = None, team: Team | None = None) -> AccessToken:
+    def _make(scopes: list[str] | None = None, team: Workspace | None = None) -> AccessToken:
         return AccessToken.objects.create(
             user=user,
             encoded_token=create_personal_access_token(user),

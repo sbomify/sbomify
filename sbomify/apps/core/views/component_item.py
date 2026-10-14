@@ -120,7 +120,7 @@ class ComponentItemPublicView(View):
             if action_is_nda:
                 action_url = component_url
             elif team:
-                action_url = reverse("documents:request_access", kwargs={"team_key": team.key})
+                action_url = reverse("documents:request_access", kwargs={"workspace_key": team.key})
 
         return render(
             request,

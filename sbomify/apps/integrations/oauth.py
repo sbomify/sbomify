@@ -61,12 +61,12 @@ def callback_url(request: HttpRequest, provider: ProviderSpec) -> str:
     return request.build_absolute_uri(reverse("integrations:callback", kwargs={"provider": provider.key}))
 
 
-def start_authorization(request: HttpRequest, provider: ProviderSpec, team_key: str) -> str:
+def start_authorization(request: HttpRequest, provider: ProviderSpec, workspace_key: str) -> str:
     """Record the pending flow on the session and return where to send the user."""
     nonce = secrets.token_urlsafe(32)
     request.session[SESSION_KEY] = {
         "provider": provider.key,
-        "team_key": team_key,
+        "team_key": workspace_key,
         "nonce": nonce,
         "started_at": timezone.now().isoformat(),
     }
@@ -112,8 +112,8 @@ def consume_state(request: HttpRequest, provider: ProviderSpec, state: str) -> s
     if timezone.now() - started > STATE_MAX_AGE:
         return None
 
-    team_key = pending.get("team_key")
-    return team_key if isinstance(team_key, str) and team_key else None
+    workspace_key = pending.get("team_key")
+    return workspace_key if isinstance(workspace_key, str) and workspace_key else None
 
 
 def exchange_code(request: HttpRequest, provider: ProviderSpec, code: str) -> TokenSet:

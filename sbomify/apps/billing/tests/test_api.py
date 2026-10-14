@@ -25,7 +25,7 @@ from sbomify.apps.sboms.models import SBOM, Component
 
 # Import SBOM-related fixtures from sboms app
 from sbomify.apps.sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ def test_get_usage_no_team(client: Client, sample_user: AbstractBaseUser):  # no
 def test_get_usage(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """Test retrieving team's usage statistics."""
     from sbomify.apps.sboms.models import Component, ProductComponent
@@ -111,7 +111,7 @@ def test_get_usage(
 def test_get_usage_token_scope_gate(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """get_usage is a READ_MEMBER action gated by can("workspace:read", team).
 
@@ -151,7 +151,7 @@ def test_change_plan_token_scope_gate(
     client: Client,
     mocker: MockerFixture,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
 ):
     """change_plan is gated by can("billing:manage", team), the only check that applies a token's scopes.
@@ -212,7 +212,7 @@ def test_change_plan_token_scope_gate(
 def test_change_plan_unauthorized_user(
     client: Client,
     guest_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
 ):
     """Test that non-team-owners cannot change plans."""
@@ -243,7 +243,7 @@ def test_change_plan_unauthorized_user(
 def test_change_plan_to_community(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
     subscription_gone_at_stripe: None,
 ):
@@ -299,7 +299,7 @@ def test_change_plan_no_team_selected(
 def test_change_plan_invalid_plan(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """Test changing to a non-existent plan."""
     client.force_login(sample_user)
@@ -319,7 +319,7 @@ def test_change_plan_invalid_plan(
 def test_change_plan_to_business_monthly(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with monthly billing."""
@@ -339,7 +339,7 @@ def test_change_plan_to_business_monthly(
 def test_change_plan_to_business_annual(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with annual billing."""
@@ -359,7 +359,7 @@ def test_change_plan_to_business_annual(
 def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -403,7 +403,7 @@ def test_change_plan_business_upgrade_passes_allow_promotion_codes(
 def test_change_plan_to_community_with_active_subscription(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
     subscription_gone_at_stripe: None,
 ):
@@ -429,7 +429,7 @@ def test_change_plan_to_community_with_active_subscription(
 def test_changing_to_community_makes_sboms_public(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811

@@ -32,7 +32,7 @@ from ..limits import audit, enforce_response_size, untrusted
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 T = TypeVar("T")
 
@@ -255,7 +255,7 @@ async def run_db(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     return await database_sync_to_async(fn)(*args, **kwargs)
 
 
-def resolve_workspace(principal: Principal) -> Team:
+def resolve_workspace(principal: Principal) -> Workspace:
     """The workspace this call operates in.
 
     Mirrors the REST API's resolution (``core.apis._get_user_team_id``) minus
@@ -285,10 +285,10 @@ def resolve_workspace(principal: Principal) -> Team:
     from sbomify.apps.teams.utils import get_user_default_team
 
     if (cached := principal.resolved_workspace) is not None:
-        return cast("Team", cached)
+        return cast("Workspace", cached)
 
     user = cast("User", principal.user)
-    team: Team | None = principal.workspace
+    team: Workspace | None = principal.workspace
 
     if team is None:
         team_id = get_user_default_team(user)
@@ -324,7 +324,7 @@ def resolve_workspace(principal: Principal) -> Team:
     return team
 
 
-def workspace_key(team: Team) -> str:
+def workspace_key(team: Workspace) -> str:
     """The workspace's public key, for tools that call a ``{team_key}`` REST view.
 
     ``Team.key`` is nullable in the schema but populated on save, so an empty one

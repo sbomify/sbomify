@@ -15,13 +15,13 @@ from __future__ import annotations
 
 from django.db.models import QuerySet
 
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
-PAID_PLANS: tuple[str, ...] = (Team.Plan.BUSINESS, Team.Plan.ENTERPRISE)
+PAID_PLANS: tuple[str, ...] = (Workspace.Plan.BUSINESS, Workspace.Plan.ENTERPRISE)
 """Plans that carry a price. Mirrors the test in ``team_pricing_service``."""
 
 
-def paying_workspaces() -> QuerySet[Team]:
+def paying_workspaces() -> QuerySet[Workspace]:
     """Workspaces on a paid plan with a live subscription.
 
     Community is excluded because it carries ``subscription_status="active"``
@@ -30,26 +30,26 @@ def paying_workspaces() -> QuerySet[Team]:
     of those are real states worth reporting, just not as revenue: see
     ``trialing_workspaces`` and ``past_due_workspaces``.
     """
-    return Team.objects.filter(
+    return Workspace.objects.filter(
         billing_plan__in=PAID_PLANS,
         billing_plan_limits__subscription_status="active",
     )
 
 
-def trialing_workspaces() -> QuerySet[Team]:
+def trialing_workspaces() -> QuerySet[Workspace]:
     """Workspaces inside a free trial of a paid plan."""
-    return Team.objects.filter(billing_plan_limits__subscription_status="trialing")
+    return Workspace.objects.filter(billing_plan_limits__subscription_status="trialing")
 
 
-def past_due_workspaces() -> QuerySet[Team]:
+def past_due_workspaces() -> QuerySet[Workspace]:
     """Workspaces whose most recent payment failed and are in dunning."""
-    return Team.objects.filter(billing_plan_limits__subscription_status="past_due")
+    return Workspace.objects.filter(billing_plan_limits__subscription_status="past_due")
 
 
-def canceled_workspaces() -> QuerySet[Team]:
+def canceled_workspaces() -> QuerySet[Workspace]:
     """Workspaces whose subscription was canceled.
 
     Deliberately not filtered by plan: cancelling downgrades the workspace to
     community, so a canceled row usually sits on the community plan.
     """
-    return Team.objects.filter(billing_plan_limits__subscription_status="canceled")
+    return Workspace.objects.filter(billing_plan_limits__subscription_status="canceled")

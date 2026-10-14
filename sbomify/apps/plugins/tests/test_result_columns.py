@@ -10,7 +10,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import Component
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
@@ -20,7 +20,7 @@ class TestResultColumns:
     @pytest.fixture
     def sbom(self) -> SBOM:
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        team = Team.objects.create(name="Result Columns Team", key="result-columns-team", billing_plan="business")
+        team = Workspace.objects.create(name="Result Columns Team", key="result-columns-team", billing_plan="business")
         component = Component.objects.create(name="result-columns-component", team=team, component_type="bom")
         return SBOM.objects.create(
             name="result-columns-sbom",
@@ -105,7 +105,7 @@ class TestBackfillResultSummaries:
     @pytest.fixture
     def sbom(self) -> SBOM:
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        team = Team.objects.create(name="Backfill Team", key="backfill-team", billing_plan="business")
+        team = Workspace.objects.create(name="Backfill Team", key="backfill-team", billing_plan="business")
         component = Component.objects.create(name="backfill-component", team=team, component_type="bom")
         return SBOM.objects.create(
             name="backfill-sbom",

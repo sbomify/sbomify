@@ -19,7 +19,7 @@
     {% if team.is_public %}
         {% if trust_center_domain %}
             <form method="post"
-                  action="{% url 'teams:team_settings' team.key %}"
+                  action="{% url 'workspaces:team_settings' team.key %}"
                   x-data="{ slug: '{{ team_obj.slug|default:''|escapejs }}' }"
                   class="space-y-4">
                 {% csrf_token %}
@@ -58,7 +58,7 @@
         {% endif %}
         </c-cards.card>
         <form method="post"
-              action="{% url 'teams:team_settings' team.key %}"
+              action="{% url 'workspaces:team_settings' team.key %}"
               class="space-y-4">
             {% csrf_token %}
             <input type="hidden" name="trust_center_description_action" value="update">
@@ -84,7 +84,7 @@
         {% endif %}
         <c-cards.body>
         <form method="post"
-              action="{% url 'teams:team_settings' team.key %}"
+              action="{% url 'workspaces:team_settings' team.key %}"
               enctype="multipart/form-data"
               class="space-y-4"
               x-data="{ fileName: '' }">
@@ -116,7 +116,7 @@
             <c-feedback.loading-table message="Loading access requests..." />
         </div>
         <div id="team-custom-domain-wrapper"
-             hx-get="{% url 'teams:team_custom_domain' team.key %}"
+             hx-get="{% url 'workspaces:team_custom_domain' team.key %}"
              hx-trigger="load, refreshTeamCustomDomain from:body"
              hx-swap="innerHTML settle:0">
             <c-cards.card flush><c-feedback.loading message="Loading custom domain settings..." /></c-cards.card>

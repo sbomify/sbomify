@@ -15,7 +15,7 @@ from sbomify.apps.core.spotlight import SECTION_ORDER, initial_suggestions, load
 class TestRegistryIntegrity:
     def test_every_destination_resolves(self):
         """A typo'd url_name would 404 a user; fail here instead."""
-        unresolved = [d.url_name for d in load_destinations() if d.resolve(team_key="AAAAAAAA") is None]
+        unresolved = [d.url_name for d in load_destinations() if d.resolve(workspace_key="AAAAAAAA") is None]
 
         assert unresolved == []
 
@@ -44,7 +44,7 @@ class TestRegistryIntegrity:
 class TestRanking:
     def _titles(self, query, **kwargs):
         kwargs.setdefault("role", "owner")
-        kwargs.setdefault("team_key", "AAAAAAAA")
+        kwargs.setdefault("workspace_key", "AAAAAAAA")
         return [r["title"] for r in search_destinations(query, **kwargs)]
 
     def test_a_title_prefix_leads(self):
@@ -74,12 +74,12 @@ class TestRanking:
         assert self._titles("se") == self._titles("se")
 
     def test_the_limit_is_honoured(self):
-        assert len(search_destinations("e", role="owner", team_key="AAAAAAAA", limit=3)) == 3
+        assert len(search_destinations("e", role="owner", workspace_key="AAAAAAAA", limit=3)) == 3
 
 
 class TestRoleVisibility:
     def test_a_guest_does_not_see_admin_destinations(self):
-        titles = [r["title"] for r in search_destinations("token", role="guest", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("token", role="guest", workspace_key="AAAAAAAA")]
 
         assert "API tokens" not in titles
 
@@ -92,24 +92,24 @@ class TestRoleVisibility:
             titles = {
                 r["title"]
                 for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
-                for r in search_destinations(query, role=role, team_key="AAAAAAAA")
+                for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")
             }
-            assert {"API tokens", "Vulnerability scans", "Vulnerability trends", "Cryptography"} <= titles, role
+            assert {"API tokens", "Vulnerabilities", "Vulnerability trends", "Cryptography"} <= titles, role
 
     def test_an_owner_sees_owner_only_destinations(self):
-        titles = [r["title"] for r in search_destinations("billing", role="owner", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("billing", role="owner", workspace_key="AAAAAAAA")]
 
         assert "Billing" in titles
 
     def test_an_admin_does_not_see_owner_only_destinations(self):
-        titles = [r["title"] for r in search_destinations("billing", role="admin", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("billing", role="admin", workspace_key="AAAAAAAA")]
 
         assert "Billing" not in titles
 
     def test_a_blank_role_sees_only_unrestricted_entries(self):
         """No workspace in session is the safe default: a palette entry is a
         hint that a feature exists."""
-        titles = [r["title"] for r in search_destinations("workspace", role="", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("workspace", role="", workspace_key="AAAAAAAA")]
 
         assert "Workspace settings" not in titles
         assert "Switch workspace" in titles
@@ -118,7 +118,7 @@ class TestRoleVisibility:
 class TestUrlBuilding:
     def _find(self, title, **kwargs):
         kwargs.setdefault("role", "owner")
-        kwargs.setdefault("team_key", "AAAAAAAA")
+        kwargs.setdefault("workspace_key", "AAAAAAAA")
         for result in search_destinations(title.lower(), **kwargs):
             if result["title"] == title:
                 return result
@@ -140,7 +140,7 @@ class TestUrlBuilding:
 
     def test_a_team_scoped_destination_is_dropped_without_a_workspace(self):
         """Better a missing row than a link that 500s on reverse()."""
-        titles = [r["title"] for r in search_destinations("supplier", role="owner", team_key="")]
+        titles = [r["title"] for r in search_destinations("supplier", role="owner", workspace_key="")]
 
         assert "Suppliers" not in titles
 
@@ -234,7 +234,7 @@ class TestRootLevelCoverage:
     by typing — the palette is only a navigation tool if it covers the app."""
 
     def _titles(self, query):
-        return [r["title"] for r in search_destinations(query, role="owner", team_key="AAAAAAAA")]
+        return [r["title"] for r in search_destinations(query, role="owner", workspace_key="AAAAAAAA")]
 
     @pytest.mark.parametrize(
         "query,expected",
@@ -409,7 +409,7 @@ class TestInitialSuggestions:
         suggestions = initial_suggestions(role="owner", workspace_key="AAAAAAAA")
         assert {item["section"] for item in suggestions} == {"suggested", "examples"}
         for item in suggestions:
-            results = search_destinations(item.get("query", item["title"]), role="owner", team_key="AAAAAAAA")
+            results = search_destinations(item.get("query", item["title"]), role="owner", workspace_key="AAAAAAAA")
             assert any(result["url"] == item["url"] for result in results)
 
     @pytest.mark.parametrize("role", ["operator", "member", "admin", "owner", ""])

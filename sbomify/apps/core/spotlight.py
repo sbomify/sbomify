@@ -93,7 +93,7 @@ class Destination:
         """
         return not self.roles or role in self.roles
 
-    def resolve(self, *, team_key: str = "") -> str | None:
+    def resolve(self, *, workspace_key: str = "") -> str | None:
         """The concrete URL, or None when it cannot be built.
 
         Returns None rather than raising so one bad entry degrades to a
@@ -101,10 +101,10 @@ class Destination:
         """
         kwargs = {}
         for arg in self.args:
-            if arg == "team_key":
-                if not team_key:
+            if arg == "workspace_key":
+                if not workspace_key:
                     return None
-                kwargs["team_key"] = team_key
+                kwargs["workspace_key"] = workspace_key
             else:  # pragma: no cover - guarded by the registry test
                 return None
         try:
@@ -166,7 +166,7 @@ def _score(destination: Destination, query: str) -> int:
     return best
 
 
-def search_destinations(query: str, *, role: str = "", team_key: str = "", limit: int = 8) -> list[dict[str, Any]]:
+def search_destinations(query: str, *, role: str = "", workspace_key: str = "", limit: int = 8) -> list[dict[str, Any]]:
     """Ranked app destinations for a query.
 
     Ties break on the section order, so "Go to" beats "Settings" at equal
@@ -186,7 +186,7 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
         score = _score(destination, query)
         if not score:
             continue
-        url = destination.resolve(team_key=team_key)
+        url = destination.resolve(workspace_key=workspace_key)
         if url is None:
             continue
         section_rank = SECTION_ORDER.index(destination.section) if destination.section in SECTION_ORDER else 99
@@ -212,7 +212,7 @@ def initial_suggestions(*, role: str = "", workspace_key: str = "") -> list[dict
     for destination in load_destinations():
         if not (destination.suggested or destination.example) or not destination.visible_to(role):
             continue
-        url = destination.resolve(team_key=workspace_key)
+        url = destination.resolve(workspace_key=workspace_key)
         if url is None:
             continue
         if destination.suggested:

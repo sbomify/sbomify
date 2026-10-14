@@ -22,13 +22,13 @@ from sbomify.apps.oidc.permissions import (
 )
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 EXCHANGE_URL = "/api/v1/auth/oidc/github/exchange"
 
 
 @pytest.fixture
-def bound_component(db, team_with_business_plan: Team) -> Component:
+def bound_component(db, team_with_business_plan: Workspace) -> Component:
     """Component the binding will be pinned to."""
     return Component.objects.create(
         name="Bound", team=team_with_business_plan, component_type=Component.ComponentType.BOM
@@ -36,7 +36,7 @@ def bound_component(db, team_with_business_plan: Team) -> Component:
 
 
 @pytest.fixture
-def other_component(db, team_with_business_plan: Team) -> Component:
+def other_component(db, team_with_business_plan: Workspace) -> Component:
     """A second component in the SAME workspace — bot must NOT be able to hit this."""
     return Component.objects.create(
         name="Other", team=team_with_business_plan, component_type=Component.ComponentType.BOM
@@ -415,7 +415,7 @@ class TestSBOMUploadScope:
 
 class TestDocumentUploadScope:
     @pytest.mark.django_db
-    def test_cannot_upload_doc_to_another_component(self, oidc_sbomify_token, team_with_business_plan: Team) -> None:
+    def test_cannot_upload_doc_to_another_component(self, oidc_sbomify_token, team_with_business_plan: Workspace) -> None:
         """Document upload path enforces the same scope rule."""
         doc_component = Component.objects.create(
             name="Other Doc",
@@ -567,7 +567,7 @@ class TestOIDCTokenIsUploadOnly:
 class TestNonOidcRequestsUnaffected:
     @pytest.mark.django_db
     def test_pat_user_with_admin_role_still_works(
-        self, team_with_business_plan: Team, sample_user, bound_component
+        self, team_with_business_plan: Workspace, sample_user, bound_component
     ) -> None:
         """Regression: the new ``"bot"`` role in allowed_roles must not
         relax existing PAT/session permission — admins still work,

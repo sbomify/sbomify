@@ -17,7 +17,7 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class ProductReleasesPublicView(View):
@@ -43,7 +43,7 @@ class ProductReleasesPublicView(View):
                 request, HttpResponse(status=status_code, content=releases.get("detail", "Unknown error"))
             )
 
-        team = Team.objects.filter(pk=product.get("team_id")).first()
+        team = Workspace.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain

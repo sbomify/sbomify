@@ -74,7 +74,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # cannot open. ``or ""`` because a membership may carry no role and
             # search_destinations is typed str.
             role=get_member_role_by_key(request.user, current_team.get("key")) or "",
-            team_key=current_team.get("key", ""),
+            workspace_key=current_team.get("key", ""),
         )
 
         team_id = get_team_id_from_session(request)
@@ -86,7 +86,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         product_search_filter = Q(name__icontains=query) | Q(description__icontains=query)
         name_search_filter = Q(name__icontains=query)
 
-        products = Product.objects.filter(team_id=team_id).filter(product_search_filter).order_by("name")[:limit]
+        products = Product.objects.filter(team_id=int(team_id)).filter(product_search_filter).order_by("name")[:limit]
         products_data = [
             {
                 "id": p.id,
@@ -97,7 +97,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for p in products
         ]
 
-        components = Component.objects.filter(team_id=team_id).filter(name_search_filter).order_by("name")[:limit]
+        components = Component.objects.filter(team_id=int(team_id)).filter(name_search_filter).order_by("name")[:limit]
         components_data = [
             {
                 "id": c.id,
@@ -109,13 +109,13 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for c in components
         ]
 
-        # Empty team_key here means the session is missing the
+        # Empty workspace_key here means the session is missing the
         # ``current_team`` shape; ``capture_for_request`` will skip the
         # event entirely rather than mis-attribute it to a user PK (see
         # the empty-string branch in posthog_service.capture_for_request).
         # This is preferred over silently turning a workspace-scoped
         # event into a user-scoped one.
-        team_key = current_team.get("key", "")
+        workspace_key = current_team.get("key", "")
         result_count = len(products_data) + len(components_data)
         # NEVER include the raw ``query`` string in the event payload — it can
         # contain customer identifiers, internal component names, or secrets
@@ -130,7 +130,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "result_count": result_count,
                 "destination_count": len(destinations),
             },
-            team_key=team_key,
+            workspace_key=workspace_key,
         )
 
         return JsonResponse(

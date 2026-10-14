@@ -10,11 +10,11 @@ from django.utils.html import format_html
 
 from sbomify.apps.billing.models import BillingPlan
 
-from .models import Invitation, Member, Team
+from .models import Invitation, Member, Workspace
 
 if TYPE_CHECKING:
-    _TeamFormBase = forms.ModelForm[Team]
-    _TeamAdminBase = admin.ModelAdmin[Team]
+    _TeamFormBase = forms.ModelForm[Workspace]
+    _TeamAdminBase = admin.ModelAdmin[Workspace]
     _MemberAdminBase = admin.ModelAdmin[Member]
     _InvitationAdminBase = admin.ModelAdmin[Invitation]
 else:
@@ -28,7 +28,7 @@ class TeamAdminForm(_TeamFormBase):
     """Custom form for Team admin with billing plan dropdown."""
 
     class Meta:
-        model = Team
+        model = Workspace
         fields = "__all__"
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -95,7 +95,7 @@ class TeamAdminForm(_TeamFormBase):
         return cleaned_data
 
 
-@admin.register(Team)
+@admin.register(Workspace)
 class TeamAdmin(_TeamAdminBase):
     """Admin configuration for Team model."""
 
@@ -203,13 +203,13 @@ class TeamAdmin(_TeamAdminBase):
     )
 
     @admin.display(description="Members")
-    def member_count(self, obj: Team) -> str:
+    def member_count(self, obj: Workspace) -> str:
         """Display the number of members in the team."""
         count = obj.members.count()
         return format_html('<span style="color: #417690;">{} member{}</span>', count, "s" if count != 1 else "")
 
     @admin.display(description="Billing Plan")
-    def billing_plan_display(self, obj: Team) -> str:
+    def billing_plan_display(self, obj: Workspace) -> str:
         """Display billing plan with enhanced formatting."""
         if not obj.billing_plan:
             return format_html('<span style="color: #666;">No plan</span>')
@@ -225,7 +225,7 @@ class TeamAdmin(_TeamAdminBase):
             return format_html('<span style="color: #dc3545;">Invalid plan: {}</span>', obj.billing_plan)
 
     @admin.display(description="Billing Status")
-    def billing_status_display(self, obj: Team) -> str:
+    def billing_status_display(self, obj: Workspace) -> str:
         """Display billing status information."""
         if not obj.billing_plan_limits:
             return format_html('<span style="color: #666;">No billing data</span>')
@@ -246,7 +246,7 @@ class TeamAdmin(_TeamAdminBase):
             return format_html('<span style="color: #ffc107;">⚠ Setup incomplete</span>')
 
     @admin.display(description="Custom Domain")
-    def custom_domain_display(self, obj: Team) -> str:
+    def custom_domain_display(self, obj: Workspace) -> str:
         """Display custom domain with validation status."""
         if not obj.custom_domain:
             return format_html('<span style="color: #666;">—</span>')
@@ -263,7 +263,7 @@ class TeamAdmin(_TeamAdminBase):
             )
 
     @admin.display(description="Domain Status")
-    def custom_domain_status_display(self, obj: Team) -> str:
+    def custom_domain_status_display(self, obj: Workspace) -> str:
         """Display detailed custom domain status."""
         if not obj.custom_domain:
             return format_html('<span style="color: #666;">No custom domain configured</span>')
@@ -291,7 +291,7 @@ class TeamAdmin(_TeamAdminBase):
 
         return format_html("<br>".join(status_parts))
 
-    def get_queryset(self, request: HttpRequest) -> QuerySet[Team]:
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Workspace]:
         """Optimize queryset with prefetch_related for members."""
         return super().get_queryset(request).prefetch_related("members")
 

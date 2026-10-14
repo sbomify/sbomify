@@ -24,7 +24,7 @@ from django.urls import reverse
 from sbomify.apps.core.adapters import CustomSocialAccountAdapter
 from sbomify.apps.core.services.account_deletion import soft_delete_user_account
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Team
+from sbomify.apps.teams.models import Invitation, Workspace
 
 pytestmark = pytest.mark.django_db
 User = get_user_model()
@@ -143,7 +143,7 @@ def test_trust_center_invite_answers_when_two_accounts_hold_the_address(
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
     response = client.post(
-        reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
         {"action": "invite", "email": "holder@example.com"},
     )
 
@@ -152,7 +152,7 @@ def test_trust_center_invite_answers_when_two_accounts_hold_the_address(
 
 def test_account_deletion_removes_invitations_sent_in_other_case():
     user = User.objects.create_user(username="holder", email="holder@example.com", email_verified=True)
-    Invitation.objects.create(team=Team.objects.create(name="Other"), email="Holder@Example.com", role="admin")
+    Invitation.objects.create(team=Workspace.objects.create(name="Other"), email="Holder@Example.com", role="admin")
 
     with patch("sbomify.apps.core.services.account_deletion._disable_keycloak_user", return_value=True):
         soft_delete_user_account(user)

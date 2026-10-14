@@ -20,7 +20,7 @@
     </p>
     {% if team %}
         <p>
-            <a href="{{ base_url }}{% url 'teams:team_settings' team.key %}#tokens">Manage tokens</a>
+            <a href="{{ base_url }}{% url 'workspaces:team_settings' team.key %}#tokens">Manage tokens</a>
         </p>
     {% endif %}
     <p>

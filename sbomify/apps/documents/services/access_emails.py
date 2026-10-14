@@ -27,7 +27,7 @@ from django.urls import reverse
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -94,7 +94,7 @@ def _requester_context(access_request: AccessRequest) -> dict[str, object]:
     }
 
 
-def notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
+def notify_admins_of_access_request(access_request: AccessRequest, team: Workspace, requires_nda: bool = False) -> None:
     """Tell every owner and admin that someone has asked for access."""
     try:
         admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user")
@@ -109,7 +109,7 @@ def notify_admins_of_access_request(access_request: AccessRequest, team: Team, r
         # The settings tab, not the queue endpoint: the endpoint renders a
         # section with no page around it, so the button used to open unstyled
         # markup that nothing on it worked from.
-        review_url = reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
+        review_url = reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "trust-center"})
         nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
 
         context = {

@@ -12,7 +12,7 @@ from django.test import TestCase
 from sbomify.apps.core.models import Component, User
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.signals import trigger_plugin_assessments
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class SignalExceptionHandlingTests(TestCase):
@@ -21,7 +21,7 @@ class SignalExceptionHandlingTests(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         self.component = Component.objects.create(name="test-component", team=self.team)
 
     def test_signal_handlers_not_triggered_for_updates(self):
@@ -81,7 +81,7 @@ class SignalIntegrationTests(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         self.component = Component.objects.create(name="test-component", team=self.team)
 
     def test_signals_triggered_on_sbom_creation(self):

@@ -60,19 +60,19 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
         company_nda_id = None
         gated_visibility_allowed = False
-        team_key = rights.team_key
+        workspace_key = rights.team_key
         team_id = component.get("team_id")
         if team_id:
-            from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.models import Workspace
 
             try:
-                team = Team.objects.get(pk=team_id)
+                team = Workspace.objects.get(pk=team_id)
                 company_nda = team.get_company_nda_document()
                 if company_nda:
                     company_nda_id = company_nda.id
                 # Check if gated visibility is allowed (Business or Enterprise plans)
                 gated_visibility_allowed = team.can_be_private()
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 # If the referenced team no longer exists, keep the previously initialized
                 # default values (no NDA, no gated visibility) and continue rendering.
                 pass
@@ -117,9 +117,19 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
 
         cbom_issues = build_latest_cbom_issues(component_id) if is_bom_component else CbomIssuesContext()
 
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.core.models import Component
+
+        # The danger zone's two actions, delete and transfer, both need owner or
+        # admin, and of the component's own workspace, not the session's.
+        can_delete_component = bool(
+            can(request, "component:delete", Component.objects.select_related("team").get(pk=component_id))
+        )
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            "can_delete_component": can_delete_component,
             # The page header's copy chip is a list, like every other detail
             # page's, so the header component reads the same shape everywhere.
             "header_copy_values": [{"value": component_id, "title": f"Component ID: {component_id} (click to copy)"}],
@@ -127,7 +137,7 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "team_billing_plan": billing_plan,
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,
-            "team_key": team_key,
+            "team_key": workspace_key,
             "vuln_summary": vulns.summary,
             **vulnerabilities_panel_context(component_id, vulns, can_triage=rights.may_triage),
             "latest_cbom_issues": cbom_issues.issues,

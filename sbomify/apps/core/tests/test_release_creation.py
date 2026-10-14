@@ -5,16 +5,16 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
 def test_release_form_scopes_products_and_preselects(
-    authenticated_web_client: Client, team_with_business_plan: Team
+    authenticated_web_client: Client, team_with_business_plan: Workspace
 ) -> None:
     product = Product.objects.create(team=team_with_business_plan, name="Gateway")
-    other = Product.objects.create(team=Team.objects.create(name="Other"), name="Hidden product")
+    other = Product.objects.create(team=Workspace.objects.create(name="Other"), name="Hidden product")
     url = reverse("core:release_new")
     response = authenticated_web_client.get(url, {"product": product.id})
     assert response.status_code == 200
@@ -28,7 +28,7 @@ def test_release_form_scopes_products_and_preselects(
 
 @pytest.mark.parametrize("htmx", [False, True])
 def test_release_form_creates_and_redirects(
-    authenticated_web_client: Client, team_with_business_plan: Team, htmx: bool
+    authenticated_web_client: Client, team_with_business_plan: Workspace, htmx: bool
 ) -> None:
     product = Product.objects.create(team=team_with_business_plan, name="Gateway")
     response = authenticated_web_client.post(
@@ -58,7 +58,7 @@ def test_release_form_creates_and_redirects(
     "invalid", [{"name": " "}, {"name": "latest"}, {"created_at": "not a date"}, {"description": "a" * 1001}]
 )
 def test_release_form_preserves_invalid_submissions(
-    authenticated_web_client: Client, team_with_business_plan: Team, invalid: dict[str, str]
+    authenticated_web_client: Client, team_with_business_plan: Workspace, invalid: dict[str, str]
 ) -> None:
     product = Product.objects.create(team=team_with_business_plan, name="Gateway")
     data = {"product_id": product.id, "name": "January", "version": "v2", "description": "Keep these notes", **invalid}
@@ -71,7 +71,7 @@ def test_release_form_preserves_invalid_submissions(
 
 
 def test_release_form_reports_duplicate_without_overwriting(
-    authenticated_web_client: Client, team_with_business_plan: Team
+    authenticated_web_client: Client, team_with_business_plan: Workspace
 ) -> None:
     product = Product.objects.create(team=team_with_business_plan, name="Gateway")
     release = Release.objects.create(product=product, name="January", version="v1")
@@ -85,7 +85,7 @@ def test_release_form_reports_duplicate_without_overwriting(
 
 @pytest.mark.parametrize("role", ["owner", "admin", "member", "guest"])
 def test_release_form_uses_live_permissions(
-    authenticated_web_client: Client, team_with_business_plan: Team, sample_user: Any, role: str
+    authenticated_web_client: Client, team_with_business_plan: Workspace, sample_user: Any, role: str
 ) -> None:
     product = Product.objects.create(team=team_with_business_plan, name="Gateway")
     Member.objects.filter(team=team_with_business_plan, user=sample_user).update(role=role)

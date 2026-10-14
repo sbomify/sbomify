@@ -67,7 +67,7 @@ from sbomify.apps.tea.utils import (
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 log = getLogger(__name__)
 
@@ -197,7 +197,7 @@ def _prefetch_releases(release_ids: list[str]) -> QuerySet[Release]:
 
 def _apply_identifier_filter(
     queryset: QuerySet[Any],
-    team: Team,
+    team: Workspace,
     id_type: str,
     id_value: str,
     *,

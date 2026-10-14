@@ -5,12 +5,12 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
 def team(ensure_billing_plans):
-    return Team.objects.create(name="Owner Grant Workspace", billing_plan="business")
+    return Workspace.objects.create(name="Owner Grant Workspace", billing_plan="business")
 
 
 @pytest.fixture
@@ -32,11 +32,11 @@ def _client_for(team, user):
 
 
 def _invite(client, team, email, role):
-    return client.post(reverse("teams:invite_user", kwargs={"team_key": team.key}), {"email": email, "role": role})
+    return client.post(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key}), {"email": email, "role": role})
 
 
 def _accept(client, invitation):
-    return client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    return client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
 
 @pytest.mark.django_db
@@ -59,7 +59,7 @@ class TestIssuingOwnerInvitations:
     def test_admin_is_not_offered_the_owner_role(self, team, make_member):
         admin = make_member("admin1", "admin")
 
-        response = _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key}))
+        response = _client_for(team, admin).get(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key}))
 
         assert response.status_code == 200
         assert 'value="owner"' not in response.content.decode()
@@ -80,7 +80,7 @@ class TestIssuingOwnerInvitations:
         client = _client_for(team, owner)
 
         assert (
-            'value="owner"' in client.get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+            'value="owner"' in client.get(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key})).content.decode()
         )
         response = _invite(client, team, "new-owner@example.com", "owner")
 
@@ -189,7 +189,7 @@ class TestShowingOwnerInvitations:
         admin = make_member("admin1", "admin")
 
         body = (
-            _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+            _client_for(team, admin).get(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key})).content.decode()
         )
 
         assert "Full control of the workspace" not in body
@@ -198,7 +198,7 @@ class TestShowingOwnerInvitations:
         owner = make_member("owner1", "owner")
 
         body = (
-            _client_for(team, owner).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+            _client_for(team, owner).get(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key})).content.decode()
         )
 
         # The help comes from ROLE_DESCRIPTIONS, the same words the Members tab shows.
@@ -210,7 +210,7 @@ class TestShowingOwnerInvitations:
         Invitation.objects.create(team=team, email="real@example.com", role="owner", invited_by=owner)
 
         response = _client_for(team, owner).get(
-            reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"})
+            reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "members"})
         )
 
         invitations = {i["email"]: i["role"] for i in response.context["team"]["invitations"]}
@@ -237,7 +237,7 @@ class TestShowingOwnerInvitations:
         admin = make_member("admin1", "admin")
 
         body = (
-            _client_for(team, admin).get(reverse("teams:invite_user", kwargs={"team_key": team.key})).content.decode()
+            _client_for(team, admin).get(reverse("workspaces:invite_user", kwargs={"workspace_key": team.key})).content.decode()
         )
 
         assert descriptions["admin"] in body

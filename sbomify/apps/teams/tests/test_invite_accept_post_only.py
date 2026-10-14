@@ -13,7 +13,7 @@ from django.urls import reverse
 from pytest_mock import MockerFixture
 
 from sbomify.apps.documents.access_models import AccessRequest
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
@@ -22,18 +22,18 @@ def invitee() -> Any:
         username="invitee", email="invitee@example.com", password="pw", email_verified=True
     )
     # A workspace of their own, so signing in leaves the invitation pending.
-    home = Team.objects.create(name="Invitee Home")
+    home = Workspace.objects.create(name="Invitee Home")
     Member.objects.create(team=home, user=user, role="owner", is_default_team=True)
     return user
 
 
 @pytest.fixture
-def invitation(team_with_business_plan: Team, invitee: Any) -> Invitation:
+def invitation(team_with_business_plan: Workspace, invitee: Any) -> Invitation:
     return Invitation.objects.create(team=team_with_business_plan, email=invitee.email, role="member")
 
 
 def _url(token: object) -> str:
-    return reverse("teams:accept_invite", kwargs={"invite_token": str(token)})
+    return reverse("workspaces:accept_invite", kwargs={"invite_token": str(token)})
 
 
 def _form_token(response: Any) -> str:
@@ -96,7 +96,7 @@ def test_only_the_confirmation_logs_an_acceptance(mocker: MockerFixture, invitee
 @pytest.mark.django_db
 def test_link_keeps_its_own_invitation_over_a_saved_token(invitee: Any, invitation: Invitation) -> None:
     saved = Invitation.objects.create(
-        team=Team.objects.create(name="Saved Workspace"), email=invitee.email, role="member"
+        team=Workspace.objects.create(name="Saved Workspace"), email=invitee.email, role="member"
     )
     client = Client()
     client.force_login(invitee)
@@ -118,7 +118,7 @@ def test_link_keeps_its_own_invitation_over_a_saved_token(invitee: Any, invitati
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("role", "phrase"), [("admin", "invited as an admin."), ("member", "invited as a member.")])
-def test_confirmation_names_the_role(team_with_business_plan: Team, invitee: Any, role: str, phrase: str) -> None:
+def test_confirmation_names_the_role(team_with_business_plan: Workspace, invitee: Any, role: str, phrase: str) -> None:
     invitation = Invitation.objects.create(team=team_with_business_plan, email=invitee.email, role=role)
     client = Client()
     client.force_login(invitee)
@@ -151,7 +151,7 @@ def test_link_leaves_an_existing_role_alone(invitee: Any, invitation: Invitation
 def test_nda_workspace_opens_the_access_request_on_confirm(
     mocker: MockerFixture, invitee: Any, invitation: Invitation
 ) -> None:
-    mocker.patch.object(Team, "get_company_nda_document", return_value=object())
+    mocker.patch.object(Workspace, "get_company_nda_document", return_value=object())
     client = Client()
     client.force_login(invitee)
 
@@ -164,7 +164,7 @@ def test_nda_workspace_opens_the_access_request_on_confirm(
 
     access_request = AccessRequest.objects.get(team=invitation.team, user=invitee)
     assert response.url == reverse(
-        "documents:sign_nda", kwargs={"team_key": invitation.team.key, "request_id": access_request.id}
+        "documents:sign_nda", kwargs={"workspace_key": invitation.team.key, "request_id": access_request.id}
     )
 
 

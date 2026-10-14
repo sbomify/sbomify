@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = [
     pytest.mark.django_db,
@@ -22,11 +22,11 @@ pytestmark = [
 
 
 @pytest.fixture
-def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Team, None, None]:
+def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Workspace, None, None]:
     """Create a team with a stale trial (trial ended but status not updated)."""
     # Trial ended a week ago
     trial_end = int((timezone.now() - timedelta(days=7)).timestamp())
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Stale Trial Team",
         billing_plan="business",
         billing_plan_limits={

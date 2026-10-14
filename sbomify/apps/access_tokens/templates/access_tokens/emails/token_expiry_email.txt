@@ -4,7 +4,7 @@ The access token "{{ token.description }}"{% if team %} in workspace {{ team.nam
 
 Anything authenticating with it, CI pipelines included, will start failing with 401s at that point. Create a replacement token and rotate it in before then.
 
-{% if team %}Manage tokens: {{ base_url }}{% url 'teams:team_settings' team.key %}#tokens{% endif %}
+{% if team %}Manage tokens: {{ base_url }}{% url 'workspaces:team_settings' team.key %}#tokens{% endif %}
 
 Cheers,
 The sbomify Team

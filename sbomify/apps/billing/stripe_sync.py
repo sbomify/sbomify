@@ -13,7 +13,7 @@ from typing import Any
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from .billing_helpers import downgrade_ended_subscription, parse_cancel_at
@@ -39,7 +39,7 @@ def _is_missing_subscription(error: StripeError) -> bool:
     return "no such subscription" in error_str or "resource_missing" in error_str
 
 
-def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> bool:
+def reconcile_missing_subscription(team: Workspace, stripe_sub_id: str | None) -> bool:
     """Settle a workspace whose stored subscription no longer exists at Stripe.
 
     Re-reads the row under ``select_for_update`` rather than writing back a
@@ -73,7 +73,7 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
 
     reconciled = False
     with db_transaction.atomic():
-        locked = Team.objects.select_for_update().get(pk=team.pk)
+        locked = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits = locked.billing_plan_limits or {}
         current = billing_limits.get("stripe_subscription_id")
         if current != stripe_sub_id:
@@ -125,7 +125,7 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
     return reconciled
 
 
-def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
+def sync_subscription_from_stripe(team: Workspace, force_refresh: bool = False) -> bool:
     """
     Sync subscription data from Stripe to database.
 
@@ -167,21 +167,21 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             except (ValueError, AttributeError):
                 pass  # If we can't parse, just use normal flow
 
-        team_key: str = team.key or ""
+        workspace_key: str = team.key or ""
 
         # Fetch subscription from Stripe (uses cache unless force_refresh)
         if should_force_refresh:
-            invalidate_subscription_cache(stripe_sub_id, team_key)
+            invalidate_subscription_cache(stripe_sub_id, workspace_key)
             subscription = stripe_client.get_subscription(stripe_sub_id)
             if subscription:
-                set_cached_subscription(stripe_sub_id, team_key, subscription)
+                set_cached_subscription(stripe_sub_id, workspace_key, subscription)
             logger.debug("Force refreshed subscription")
         else:
-            subscription = get_cached_subscription(stripe_sub_id, team_key)
+            subscription = get_cached_subscription(stripe_sub_id, workspace_key)
             if not subscription:
                 subscription = stripe_client.get_subscription(stripe_sub_id)
                 if subscription:
-                    set_cached_subscription(stripe_sub_id, team_key, subscription)
+                    set_cached_subscription(stripe_sub_id, workspace_key, subscription)
 
         if not subscription:
             logger.warning("Could not fetch subscription")
@@ -251,7 +251,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     updated_fields.append("scheduled_downgrade_plan (set)")
                     logger.info("Detected cancellation, set scheduled_downgrade_plan to community")
                 # Invalidate cache to ensure fresh data on next fetch
-                invalidate_subscription_cache(stripe_sub_id, team_key)
+                invalidate_subscription_cache(stripe_sub_id, workspace_key)
 
             # Handle reactivation (cancellation reversal)
             elif current_cancel_at_period_end and not real_cancel_at_period_end:
@@ -315,7 +315,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
             with db_transaction.atomic():
                 # Use select_for_update to prevent race conditions
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
                 # The changes above describe the subscription fetched from Stripe. A
                 # checkout that completed meanwhile stored a new one, which must not be

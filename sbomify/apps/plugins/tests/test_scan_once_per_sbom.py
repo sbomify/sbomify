@@ -480,10 +480,10 @@ class TestDependencyTrackPluginScanOnce:
 
     def _make_env(self):
         """Build a team, product, component, SBOM linked to two named releases."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
-        team = Team.objects.create(name="DT Scan Once Team", key="dt-so", billing_plan="business")
+        team = Workspace.objects.create(name="DT Scan Once Team", key="dt-so", billing_plan="business")
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
         product.components.add(component)

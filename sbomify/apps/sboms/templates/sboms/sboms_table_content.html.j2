@@ -43,12 +43,7 @@
     <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell class="w-28">Type</c-tables.header-cell>
     <c-tables.header-cell sort="version" class="hidden md:table-cell w-28">Version</c-tables.header-cell>
-    {% if not is_public_view %}
-        <c-tables.header-cell class="w-56 lg:w-88">Vulnerabilities</c-tables.header-cell>
-    {% endif %}
-    {% if not is_public_view %}
-        <c-tables.header-cell class="hidden lg:table-cell w-40">Assessments</c-tables.header-cell>
-    {% endif %}
+    {% if not is_public_view %}<c-tables.header-cell class="w-44">Vulnerabilities</c-tables.header-cell>{% endif %}
     <c-tables.header-cell sort="created_at" date class="w-36 sm:w-40">Uploaded</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
     </c-tables.head>
@@ -87,77 +82,16 @@
                   :title="item.sbom.version"></span>
             </c-tables.cell>
             {% if not is_public_view %}
-                <c-tables.cell class="whitespace-nowrap">
-                <template x-if="!item.vuln && bomType === 'sbom'">
-                    <span class="text-text-muted text-sm">Not scanned</span>
+                {% comment %}
+                One file's own scan, worst first. Assessments are not repeated per
+                file: the version card and each artifact's page carry them.
+                {% endcomment %}
+                <c-tables.cell>
+                <template x-if="item.vuln || bomType === 'sbom'">
+                    <c-vulnerabilities.open bind="item.vuln" />
                 </template>
                 <template x-if="!item.vuln && bomType !== 'sbom'">
-                    <span class="text-text-muted text-sm">—</span>
-                </template>
-                {% comment %}
-                Nothing scanned is not nothing found. A skipped
-                run stores zero findings exactly as a clean scan
-                does, so without this branch an artifact no
-                scanner could read renders as "Clean".
-                {% endcomment %}
-                <template x-if="item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
-                    <c-badges.warning title="Every scanner skipped this artifact. Open it to see why.">
-                    Nothing scanned
-                    </c-badges.warning>
-                </template>
-                <template x-if="item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
-                    <c-badges.success>Clean</c-badges.success>
-                </template>
-                <template x-if="item.vuln && item.vuln.total > 0">
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <template x-if="item.vuln.critical > 0">
-                            <c-badges.severity level="critical" x-text="$number(item.vuln.critical) + ' Critical'" />
-                        </template>
-                        <template x-if="item.vuln.high > 0">
-                            <c-badges.severity level="high" x-text="$number(item.vuln.high) + ' High'" />
-                        </template>
-                        <template x-if="item.vuln.medium > 0">
-                            <c-badges.severity level="medium" x-text="$number(item.vuln.medium) + ' Medium'" />
-                        </template>
-                        <template x-if="item.vuln.low > 0">
-                            <c-badges.severity level="low" x-text="$number(item.vuln.low) + ' Low'" />
-                        </template>
-                    </div>
-                </template>
-                </c-tables.cell>
-                <c-tables.cell class="hidden lg:table-cell">
-                <template x-if="bomType === 'sbom' && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
-                    <div class="flex flex-wrap items-center gap-1">
-                        <!-- Individual plugin badges (show up to 3) -->
-                        <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
-                                  :key="plugin.name">
-                            <c-chips.assessment ::data-status="plugin.status" ::title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
-                            <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
-                            <span class="max-w-20 overflow-hidden text-ellipsis"
-                                  x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
-                            </c-chips.assessment>
-                        </template>
-                        <!-- More indicator with count -->
-                        <template x-if="item.assessments.plugins.length > 3">
-                            <c-chips.assessment ::title="$number(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')" x-text="'+' + $number(item.assessments.plugins.length - 3)" />
-                        </template>
-                        <!-- Failure summary (only if there are hidden failures) -->
-                        <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
-                            <c-chips.assessment status="summary-fail" ::title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
-                            <i class="fas fa-circle-exclamation"></i>
-                            <span x-text="$number(item.assessments.failing_count) + ' Failed'"></span>
-                            </c-chips.assessment>
-                        </template>
-                    </div>
-                </template>
-                <template x-if="bomType === 'sbom' && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
-                    <span class="inline-flex items-center gap-1.5 text-info text-sm">
-                        <i class="fas fa-clock fa-pulse"></i>
-                        <span>Checking...</span>
-                    </span>
-                </template>
-                <template x-if="bomType !== 'sbom' || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
-                    <span class="text-text-muted text-sm">—</span>
+                    <span class="text-sm text-text-muted">—</span>
                 </template>
                 </c-tables.cell>
             {% endif %}

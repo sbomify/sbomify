@@ -184,13 +184,13 @@ def test_signed_in_api_request_still_works(team_with_business_plan, guest_user):
 
 
 def test_anonymous_caller_is_sent_to_sign_in_from_the_request_page(team_with_business_plan):
-    url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+    url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
 
     _assert_sends_to_sign_in(_browser().get(url), then=url)
 
 
 def test_anonymous_page_post_creates_nothing(team_with_business_plan):
-    url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+    url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
 
     response = _browser().post(url, {"email": "visitor@example.com", "name": "Visitor"})
 
@@ -200,7 +200,7 @@ def test_anonymous_page_post_creates_nothing(team_with_business_plan):
 
 
 def _page_url(team, access_request) -> str:
-    return reverse("documents:sign_nda", kwargs={"team_key": team.key, "request_id": access_request.id})
+    return reverse("documents:sign_nda", kwargs={"workspace_key": team.key, "request_id": access_request.id})
 
 
 # Sign-in has to return the visitor to the whole link, escaped characters included.

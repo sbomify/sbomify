@@ -61,7 +61,7 @@
                     <c-forms.label for="support-contact">
                     <i class="fas fa-address-book text-primary mr-1.5"></i>Select from contact profiles
                     </c-forms.label>
-                    <a href="{% url 'teams:team_settings_tab' team_key=team.key tab='contact-profiles' %}"
+                    <a href="{% url 'workspaces:team_settings_tab' workspace_key=team.key tab='contact-profiles' %}"
                        class="text-xs text-primary hover:underline flex-shrink-0">
                         <i class="fas fa-plus mr-1"></i>Add Contact
                     </a>

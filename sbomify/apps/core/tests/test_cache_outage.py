@@ -34,7 +34,7 @@ from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
 )
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.settings import build_redis_caches
 
 # A port with nothing listening: connecting fails at once rather than after the
@@ -66,7 +66,7 @@ def test_settings_page_renders_while_redis_is_unreachable(
     fragments are the sidebar and header, and every other cache read on the path
     falls through to the database on a miss.
     """
-    team: Team = sample_team_with_owner_member.team
+    team: Workspace = sample_team_with_owner_member.team
     client = Client()
     client.force_login(sample_team_with_owner_member.user)
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)

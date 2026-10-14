@@ -16,7 +16,7 @@ from sbomify.apps.ops.services.populations import (
     workspaces_publishing_since,
 )
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
@@ -77,7 +77,7 @@ class TestPeople:
 
 @pytest.fixture
 def component(db) -> Component:
-    return Component.objects.create(team=Team.objects.create(name="Publisher"), name="backend")
+    return Component.objects.create(team=Workspace.objects.create(name="Publisher"), name="backend")
 
 
 @pytest.mark.django_db

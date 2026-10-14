@@ -43,7 +43,7 @@ from sbomify.apps.security_advisories.wellknown import (
     WhiteDocumentView,
     WhiteFeedView,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -303,7 +303,7 @@ class TestDistributionMarker:
         team = _public(team)
         team.refresh_from_db()
         ahead = team.csaf_feed_updated_at + timedelta(days=1)
-        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=ahead)
+        Workspace.objects.filter(pk=team.pk).update(csaf_feed_updated_at=ahead)
 
         rich_advisory.title = "Retitled"
         rich_advisory.save(update_fields=["title"])
@@ -314,7 +314,7 @@ class TestDistributionMarker:
     def test_a_draft_with_public_visibility_does_not_move_it(self, team) -> None:
         """is_externally_visible excludes a draft whatever its visibility says."""
         team = _public(team)
-        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
+        Workspace.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
 
         SecurityAdvisory.objects.create(
             team=team,
@@ -598,12 +598,16 @@ class TestDistributionMarker:
         initialize = import_module(
             "sbomify.apps.security_advisories.migrations.0007_initialize_csaf_markers"
         ).initialize_markers
-        Team.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
-        initialize(apps, SimpleNamespace(connection=connection))
+        # The migration's historical state still calls the model Team.
+        historical = SimpleNamespace(
+            get_model=lambda app, name: apps.get_model(app, "Workspace" if (app, name) == ("teams", "Team") else name)
+        )
+        Workspace.objects.filter(pk=team.pk).update(csaf_feed_updated_at=None)
+        initialize(historical, SimpleNamespace(connection=connection))
         team.refresh_from_db()
         assert team.csaf_feed_updated_at >= rich_advisory.updated_at
         marker = team.csaf_feed_updated_at
-        initialize(apps, SimpleNamespace(connection=connection))
+        initialize(historical, SimpleNamespace(connection=connection))
         team.refresh_from_db()
         assert team.csaf_feed_updated_at == marker
 

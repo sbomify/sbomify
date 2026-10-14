@@ -23,7 +23,7 @@ from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.management.commands.create_test_sbom_environment import Command
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.services.sboms import deleting_sbom_files, upload_sbom_file
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 BUCKET = settings.AWS_SBOMS_STORAGE_BUCKET_NAME
 
@@ -37,7 +37,7 @@ def delete_object(mocker: MockerFixture) -> MagicMock:
 @pytest.fixture
 def other_workspace_sbom(sample_sbom: SBOM) -> SBOM:
     """An SBOM in a second workspace holding the same stored file as ``sample_sbom``."""
-    team = Team.objects.create(name="Other workspace")
+    team = Workspace.objects.create(name="Other workspace")
     component = Component.objects.create(name="other component", team=team)
     return SBOM.objects.create(
         name="other", component=component, format="spdx", sbom_filename=sample_sbom.sbom_filename

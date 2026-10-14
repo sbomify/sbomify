@@ -13,6 +13,11 @@ keeps its place and the control stays quiet.
 The icon is here rather than in the slot because it is the chip's own furniture:
 the slot is the value.
 
+The chip reads as an identifier, not a control, so it keeps its height on a
+phone and stretches its touch target instead: an invisible ::after takes the
+pointer out to 44px without moving anything around it, the same trick
+c-forms.checkbox-input uses for the same reason.
+
 The chip states no line-height, which is the one place the usual rule is wrong:
 its font-size is an arbitrary value, so Tailwind attaches no line-height to
 cancel, and the public trust-center pages read 1.6 where the app reads 1.5. A
@@ -21,7 +26,7 @@ stated 1.5 would shorten every identifier chip on those pages by a pixel a line.
 <c-vars class />
 <button type="button"
         data-copied="false"
-        class="group inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md cursor-pointer transition-colors duration-150 hover:bg-surface-hover hover:border-border-light focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+        class="group relative inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md cursor-pointer transition-colors duration-150 hover:bg-surface-hover hover:border-border-light focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] max-sm:after:content-[''] max-sm:after:absolute max-sm:after:inset-x-0 max-sm:after:top-1/2 max-sm:after:h-11 max-sm:after:-translate-y-1/2{% if class %} {{ class }}{% endif %}"
         {{ attrs }}>
     {{ slot }}
     <i class="fas shrink-0 text-[0.6875rem] text-[color:var(--color-text-muted)] transition-colors duration-150 group-data-[copied=true]:text-success"

@@ -3,8 +3,10 @@ The live region every toast lands in. Pages never build a notification by hand:
 they dispatch a `toast` event with { type, title, message, duration } and this
 container renders it.
 
-The live rows compose c-feedback.toast. Only their text, icon and dismissal
-come from Alpine; the shared toast owns sizing and appearance.
+The live rows compose c-feedback.toast. Only their text, icon, role and
+dismissal come from Alpine; the shared toast owns sizing and appearance. The
+region is polite, so only an error row takes the alert role. The rows enter by
+x-transition alone, which stands still under reduced motion.
 
 The container is a singleton the base template renders once, so it takes no
 props: it owns its own corner of the viewport and needs no placement from a
@@ -18,7 +20,7 @@ caller.
      aria-label="Notifications"
      class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
     <template x-for="toast in toasts" :key="toast.id">
-        <c-feedback.toast class="pointer-events-auto" x_title="toast.title" x_icon="{success: 'fas fa-check-circle', warning: 'fas fa-exclamation-triangle', error: 'fas fa-times-circle', info: 'fas fa-info-circle'}[toast.type] || 'fas fa-info-circle'" close="show = false; $nextTick(() => removeToast(toast.id))" ::data-variant="toast.type" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, Math.max(0, (toast.duration || 3000) - 200))" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-8" x-transition:enter-end="opacity-100 translate-x-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-x-0" x-transition:leave-end="opacity-0 translate-x-8">
+        <c-feedback.toast live="true" class="pointer-events-auto" x_title="toast.title" x_role="toast.type === 'error' ? 'alert' : null" x_icon="{success: 'fas fa-check-circle', warning: 'fas fa-exclamation-triangle', error: 'fas fa-times-circle', info: 'fas fa-info-circle'}[toast.type] || 'fas fa-info-circle'" close="show = false; $nextTick(() => removeToast(toast.id))" ::data-variant="toast.type" x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, Math.max(0, (toast.duration || 3000) - 200))" x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none" x-transition:enter-start="opacity-0 translate-x-8" x-transition:enter-end="opacity-100 translate-x-0" x-transition:leave="transition ease-in duration-200 motion-reduce:transition-none" x-transition:leave-start="opacity-100 translate-x-0" x-transition:leave-end="opacity-0 translate-x-8">
         <span x-text="toast.message"></span>
         </c-feedback.toast>
     </template>

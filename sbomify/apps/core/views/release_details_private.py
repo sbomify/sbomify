@@ -36,6 +36,12 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         # breadcrumb trail are lists built here, and an empty editable type
         # renders the title read-only (the latest release cannot be renamed).
         can_edit_release = bool(release.get("has_crud_permissions")) and not release.get("is_latest")
+        # Deleting asks owner or admin of the product's workspace, as the API does.
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.core.models import Product
+
+        product = Product.objects.select_related("team").get(pk=release["product"]["id"])
+        can_delete_release = bool(can(request, "release:delete", product)) and not release.get("is_latest")
         header_copy_values = [
             {"value": release["id"], "title": f"Release ID: {release['id']} (click to copy)"},
         ]
@@ -54,6 +60,7 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "current_team": current_team,
                 "release": release,
+                "can_delete_release": can_delete_release,
                 "header_editable_type": "release" if can_edit_release else "",
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,

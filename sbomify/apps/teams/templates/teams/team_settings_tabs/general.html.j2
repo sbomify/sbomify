@@ -1,4 +1,4 @@
 <div id="team-general-wrapper"
-     hx-get="{% url 'teams:team_general' team.key %}"
+     hx-get="{% url 'workspaces:team_general' team.key %}"
      hx-trigger="refreshTeamGeneral from:body"
      hx-swap="innerHTML settle:0">{% include 'teams/team_general.html.j2' %}</div>

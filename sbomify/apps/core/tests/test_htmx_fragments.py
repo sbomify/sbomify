@@ -47,7 +47,7 @@ def test_writes_pass_through(method: str) -> None:
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
         ("sboms:sboms_table", "component"),
-        ("teams:team_tokens", "team"),
+        ("workspaces:team_tokens", "team"),
     ],
 )
 def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_product, sample_component) -> None:
@@ -58,8 +58,8 @@ def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_produc
         None: {},
         "product": {"product_id": sample_product.id},
         "component": {"component_id": sample_component.id},
-        "team": {"team_key": team.key},
-        "team_product": {"team_key": team.key, "product_id": sample_product.id},
+        "team": {"workspace_key": team.key},
+        "team_product": {"workspace_key": team.key, "product_id": sample_product.id},
     }[arg]
     url = reverse(url_name, kwargs=kwargs)
 
@@ -79,7 +79,7 @@ def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_produc
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
         ("sboms:sboms_table", "component"),
-        ("teams:team_tokens", "team"),
+        ("workspaces:team_tokens", "team"),
     ],
 )
 def test_an_htmx_read_without_a_session_still_meets_the_login_gate(url_name, arg, sample_product, sample_component):
@@ -89,8 +89,8 @@ def test_an_htmx_read_without_a_session_still_meets_the_login_gate(url_name, arg
         None: {},
         "product": {"product_id": sample_product.id},
         "component": {"component_id": sample_component.id},
-        "team": {"team_key": sample_component.team.key},
-        "team_product": {"team_key": sample_component.team.key, "product_id": sample_product.id},
+        "team": {"workspace_key": sample_component.team.key},
+        "team_product": {"workspace_key": sample_component.team.key, "product_id": sample_product.id},
     }[arg]
 
     response = Client().get(reverse(url_name, kwargs=kwargs), HTTP_HX_REQUEST="true")
