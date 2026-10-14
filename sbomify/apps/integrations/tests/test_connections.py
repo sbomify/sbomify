@@ -344,9 +344,9 @@ class TestPublishing:
         assert result.status_code == 400
 
     def test_refuses_a_framework_from_another_workspace(self, connected_vanta, guest_user) -> None:
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other workspace")
+        other_team = Workspace.objects.create(name="Other workspace")
         foreign = ControlCatalog.objects.create(
             team=other_team, name="SOC 2 Type II", version="", source=ControlCatalog.Source.VANTA
         )

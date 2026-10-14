@@ -515,9 +515,9 @@ class TestTriageModal:
         assert response.context["component_id"] == component.id
 
     def test_rejects_another_workspace(self, sample_team_with_owner_member, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_workspace = Team.objects.create(name="Other workspace")
+        other_workspace = Workspace.objects.create(name="Other workspace")
         component, _ = _component_with_findings(other_workspace, count=1)
         response = _client(sample_team_with_owner_member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
@@ -530,9 +530,9 @@ class TestTriageModal:
     def test_names_the_component_s_workspace_not_the_session_s(self, sample_team_with_owner_member, sample_user):
         """The modal posts this key when the scope is every component in the workspace."""
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
-        other_workspace = Team.objects.create(name="Other workspace")
+        other_workspace = Workspace.objects.create(name="Other workspace")
         other_workspace.key = number_to_random_token(other_workspace.pk)
         other_workspace.save(update_fields=["key"])
         Member.objects.create(team=other_workspace, user=sample_user, role="member")

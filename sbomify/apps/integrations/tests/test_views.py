@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db
 
 
 def _panel_url(team) -> str:
-    return reverse("integrations:panel", kwargs={"team_key": team.key})
+    return reverse("integrations:panel", kwargs={"workspace_key": team.key})
 
 
 def _token_set() -> oauth.TokenSet:
@@ -251,7 +251,7 @@ class TestConnect:
         team = sample_team_with_owner_member.team
 
         response = admin_client_for_team.post(
-            reverse("integrations:connect", kwargs={"team_key": team.key, "provider": "vanta"})
+            reverse("integrations:connect", kwargs={"workspace_key": team.key, "provider": "vanta"})
         )
 
         assert response.status_code == 302
@@ -264,7 +264,7 @@ class TestConnect:
         team = sample_team_with_owner_member.team
 
         response = admin_client_for_team.post(
-            reverse("integrations:connect", kwargs={"team_key": team.key, "provider": "nope"})
+            reverse("integrations:connect", kwargs={"workspace_key": team.key, "provider": "nope"})
         )
 
         assert response.status_code == 302
@@ -277,7 +277,7 @@ class TestConnect:
         team = sample_team_with_owner_member.team
 
         response = admin_client_for_team.post(
-            reverse("integrations:connect", kwargs={"team_key": team.key, "provider": "vanta"})
+            reverse("integrations:connect", kwargs={"workspace_key": team.key, "provider": "vanta"})
         )
 
         assert response.status_code == 302
@@ -288,7 +288,7 @@ class TestConnect:
 class TestCallback:
     @staticmethod
     def _start(client, team) -> str:
-        client.post(reverse("integrations:connect", kwargs={"team_key": team.key, "provider": "vanta"}))
+        client.post(reverse("integrations:connect", kwargs={"workspace_key": team.key, "provider": "vanta"}))
         return client.session[oauth.SESSION_KEY]["nonce"]
 
     def test_stores_the_connection_and_kicks_off_the_first_sync(

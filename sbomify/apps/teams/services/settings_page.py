@@ -16,7 +16,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team_branding
 from sbomify.apps.teams.forms import ContactProfileForm, PatchSLAForm
-from sbomify.apps.teams.models import Member, Team, default_patch_sla_days
+from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
 
 
 def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
@@ -97,7 +97,7 @@ def build_panel_context(request: HttpRequest, workspace_key: str, tab: str) -> S
 
 def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> ServiceResult[None]:
     with transaction.atomic():
-        workspace = Team.objects.select_for_update().filter(key=workspace_key).first()
+        workspace = Workspace.objects.select_for_update().filter(key=workspace_key).first()
         if workspace is None:
             return ServiceResult.failure("Workspace not found", status_code=404)
         workspace.patch_sla_days = targets
@@ -107,7 +107,7 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
 
 
 def update_support_period(workspace_key: str, years: int | None) -> ServiceResult[None]:
-    if not Team.objects.filter(key=workspace_key).update(default_support_period_years=years):
+    if not Workspace.objects.filter(key=workspace_key).update(default_support_period_years=years):
         return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success()
 

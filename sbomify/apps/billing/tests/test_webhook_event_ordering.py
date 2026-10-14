@@ -15,7 +15,7 @@ import stripe
 
 from sbomify.apps.billing import billing_processing, email_notifications
 from sbomify.apps.billing.stripe_client import BillingRetryableError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -34,7 +34,7 @@ def notify(mocker):
 
 
 @pytest.fixture
-def workspace(ensure_billing_plans, team_with_business_plan) -> Team:
+def workspace(ensure_billing_plans, team_with_business_plan) -> Workspace:
     return team_with_business_plan
 
 
@@ -74,7 +74,7 @@ def _event(event_id: str, created: int) -> stripe.Event:
 
 
 def test_an_update_older_than_the_cancellation_does_not_restore_the_paid_plan(workspace, notify):
-    Team.objects.filter(pk=workspace.pk).update(billing_plan="community")
+    Workspace.objects.filter(pk=workspace.pk).update(billing_plan="community")
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 200))
     notify.reset_mock()
 
@@ -243,7 +243,7 @@ def test_a_late_payment_delivered_twice_sends_one_receipt(workspace, notify):
 def test_a_payment_recorded_before_payments_had_their_own_key_is_not_recorded_twice(workspace, notify):
     limits = dict(workspace.billing_plan_limits or {})
     limits["last_processed_webhook_id"] = "evt_paid"
-    Team.objects.filter(pk=workspace.pk).update(billing_plan_limits=limits)
+    Workspace.objects.filter(pk=workspace.pk).update(billing_plan_limits=limits)
 
     billing_processing.handle_payment_succeeded(_invoice(), event=_event("evt_paid", 100))
 
@@ -381,10 +381,10 @@ def test_a_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, moc
 )
 def test_a_payment_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, mocker, handler):
     # What a concurrent delivery of the same event read before the first one committed.
-    before = Team.objects.get(pk=workspace.pk)
+    before = Workspace.objects.get(pk=workspace.pk)
     handler(_invoice(), event=_event("evt_invoice", 100))
     notify.reset_mock()
-    mocker.patch.object(Team.objects, "get", return_value=before)
+    mocker.patch.object(Workspace.objects, "get", return_value=before)
 
     handler(_invoice(), event=_event("evt_invoice", 100))
 
@@ -402,14 +402,14 @@ def test_a_payment_redelivery_caught_under_the_lock_sends_nothing(workspace, not
     ids=["canceled", "downgraded", "downgrade_blocked", "plan_missing"],
 )
 def test_a_deletion_redelivery_caught_under_the_lock_sends_nothing(workspace, notify, mocker, limits, products):
-    Team.objects.filter(pk=workspace.pk).update(billing_plan_limits={**workspace.billing_plan_limits, **limits})
+    Workspace.objects.filter(pk=workspace.pk).update(billing_plan_limits={**workspace.billing_plan_limits, **limits})
     exceeded = [f"{products} products (limit: 1)"] if products else []
     mocker.patch.object(billing_processing, "usage_over", return_value=exceeded)
     # What a concurrent delivery of the same event read before the first one committed.
-    before = Team.objects.get(pk=workspace.pk)
+    before = Workspace.objects.get(pk=workspace.pk)
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
     notify.reset_mock()
-    mocker.patch.object(Team.objects, "get", return_value=before)
+    mocker.patch.object(Workspace.objects, "get", return_value=before)
 
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted", 100))
 

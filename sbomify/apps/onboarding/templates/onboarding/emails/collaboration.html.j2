@@ -19,7 +19,7 @@
     {% endcomment %}
     <p style="text-align: center; margin: 32px 0;">
         {% if workspace_key %}
-            <a href="{{ base_url }}{% url 'workspaces:team_settings_tab' team_key=workspace_key tab='members' %}"
+            <a href="{{ base_url }}{% url 'workspaces:team_settings_tab' workspace_key=workspace_key tab='members' %}"
                class="button">Invite Members</a>
         {% else %}
             <a href="{{ base_url }}{% url 'workspaces:teams_dashboard' %}"

@@ -12,7 +12,7 @@ from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.sboms.utils import ProductSBOMBuilder
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from .fixtures import (
     sample_access_token,  # noqa: F401
@@ -49,7 +49,7 @@ def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: 
 def test_verify_item_access_unauthenticated(mock_request):
     """Test access verification for unauthenticated user"""
     mock_request.user = type("AnonymousUser", (), {"is_authenticated": False})()
-    team = Team(name="test")
+    team = Workspace(name="test")
 
     result = verify_item_access(mock_request, team, ["owner"])
 
@@ -293,10 +293,10 @@ def test_product_sbom_file_generation(tmp_path):
     # Import necessary models
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create a team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create a PUBLIC product with PUBLIC components attached directly
     product = Product.objects.create(name="test-product", team=team, is_public=True)
@@ -383,10 +383,10 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
 
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test entities
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
     product = Product.objects.create(name="test-product", team=team, is_public=True)
 
     # Create component
@@ -461,10 +461,10 @@ def test_private_product_sbom_generation(tmp_path):
 
     from sbomify.apps.sboms.models import Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create a team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create a PRIVATE product
     private_product = Product.objects.create(name="private-product", team=team, is_public=False)
@@ -527,10 +527,10 @@ def test_product_external_references_schema_compatibility():
     """Test that product external references use correct schema format."""
     from sbomify.apps.sboms.models import Product, ProductLink
     from sbomify.apps.sboms.utils import create_product_external_references
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test data
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
     product = Product.objects.create(name="test-product", team=team)
 
     # Create a product link that would trigger the schema error
@@ -573,10 +573,10 @@ def test_product_sbom_includes_documents_full_integration():
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.models import Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create product
     product = Product.objects.create(name="test-product", team=team, is_public=True)
@@ -655,10 +655,10 @@ def test_product_sbom_documents_relationship_debug():
     from sbomify.apps.core.models import Component
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create team
-    team = Team.objects.create(name="debug-team", key="debug-team")
+    team = Workspace.objects.create(name="debug-team", key="debug-team")
 
     # Create product
     product = Product.objects.create(name="debug-product", team=team, is_public=True)
@@ -712,10 +712,10 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     """
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test entities
-    team = Team.objects.create(name="schema-test-team", key="schema-test-team")
+    team = Workspace.objects.create(name="schema-test-team", key="schema-test-team")
     product = Product.objects.create(name="schema-test-product", team=team, is_public=True)
 
     component = Component.objects.create(

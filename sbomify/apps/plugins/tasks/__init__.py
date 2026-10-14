@@ -1145,7 +1145,7 @@ def enqueue_assessments_for_sbom(
 
     # Get team settings
     try:
-        settings = TeamPluginSettings.objects.get(team_id=team_id)
+        settings = TeamPluginSettings.objects.get(team_id=int(team_id))
         enabled_plugins = settings.enabled_plugins or []
     except TeamPluginSettings.DoesNotExist:
         # No settings configured, no plugins to run
@@ -1239,7 +1239,7 @@ def enqueue_assessments_for_existing_sboms_task(
     """
     # Imports inside function to avoid circular imports at module load time
     from sbomify.apps.sboms.models import SBOM, Component
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     from ..models import AssessmentRun, RegisteredPlugin
     from ..sdk.enums import AssessmentCategory
@@ -1255,8 +1255,8 @@ def enqueue_assessments_for_existing_sboms_task(
     try:
         # Look up the team
         try:
-            team = Team.objects.get(id=team_id)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(id=team_id)
+        except Workspace.DoesNotExist:
             logger.error(f"[TASK_bulk_enqueue] Team {team_id} not found")
             return {
                 "team_id": team_id,

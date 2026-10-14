@@ -20,18 +20,18 @@ from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 logger = getLogger(__name__)
 
 
-def get_integration(team: Team, provider_key: str) -> Integration | None:
+def get_integration(team: Workspace, provider_key: str) -> Integration | None:
     """This workspace's connection to ``provider_key``, if it has one."""
     return Integration.objects.filter(team=team, provider=provider_key).first()
 
 
 def save_connection(
-    team: Team,
+    team: Workspace,
     provider: ProviderSpec,
     token_set: oauth.TokenSet,
     user: User | None,
@@ -194,7 +194,7 @@ def _mark_revoked(integration: Integration, message: str) -> None:
         _copy_credential(current, integration)
 
 
-def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
+def disconnect(team: Workspace, provider_key: str) -> ServiceResult[None]:
     """Drop the connection and take everything it published off the trust center.
 
     The synced frameworks and their controls are kept but unpublished. Keeping
@@ -233,7 +233,7 @@ def disconnect(team: Team, provider_key: str) -> ServiceResult[None]:
     return ServiceResult.success(None)
 
 
-def provider_cards(team: Team) -> list[dict[str, Any]]:
+def provider_cards(team: Workspace) -> list[dict[str, Any]]:
     """One entry per registered provider, for the Integrations tab.
 
     Neither the connection nor the provider reaches the page as an object. Both
@@ -315,7 +315,7 @@ def _sync_state(integration: Integration | None) -> dict[str, Any] | None:
     }
 
 
-def set_catalog_published(team: Team, catalog_id: str, published: bool) -> ServiceResult[str]:
+def set_catalog_published(team: Workspace, catalog_id: str, published: bool) -> ServiceResult[str]:
     """Show or hide one synced framework on the trust center.
 
     Publishing is a separate, deliberate act from connecting, for the same

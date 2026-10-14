@@ -13,7 +13,7 @@ from django import forms
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.security_advisories.models import CVE_ID_RE, SecurityAdvisory, Severity
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class AdvisoryCreateForm(forms.Form):
@@ -51,7 +51,7 @@ class AdvisoryCreateForm(forms.Form):
     products = forms.ModelMultipleChoiceField(queryset=Product.objects.none(), required=False)
     affected_releases = forms.ModelMultipleChoiceField(queryset=Release.objects.none(), required=False)
 
-    def __init__(self, team: Team, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, team: Workspace, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["products"].queryset = Product.objects.filter(team=team)  # type: ignore[attr-defined]
         # ``latest`` is a floating pointer that re-targets as artifacts arrive,

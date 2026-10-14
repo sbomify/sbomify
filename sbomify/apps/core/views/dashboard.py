@@ -39,11 +39,11 @@ class ValidateWorkspaceMixin:
 
     def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         current_team = request.session.get("current_workspace", {})
-        team_key = current_team.get("key")
+        workspace_key = current_team.get("key")
 
-        if team_key:
+        if workspace_key:
             # Check if user is still a member of this workspace
-            is_member = get_member_role_by_key(request.user, team_key) is not None
+            is_member = get_member_role_by_key(request.user, workspace_key) is not None
 
             if not is_member:
                 # User was removed from this workspace, recover their session

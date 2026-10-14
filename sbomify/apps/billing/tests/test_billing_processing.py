@@ -14,7 +14,7 @@ from django.utils import timezone
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Product
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.logging import getLogger
 
 from ..stripe_client import BillingRetryableError, StripeError
@@ -452,20 +452,20 @@ class TestBillingProcessing:
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_payment_succeeded_precommit_db_failure_is_retryable(self, mock_email):
         """A transient failure writing the billing state (pre-commit) must retry."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_succeeded(self.invoice)
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_payment_failed_precommit_db_failure_is_retryable(self, mock_email):
         """A transient failure writing the past_due state (pre-commit) must retry."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_failed(self.invoice)
 
     def test_subscription_deleted_precommit_db_failure_is_retryable(self):
         """A transient failure writing the cancellation (pre-commit) must retry, not strand a stale plan."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_subscription_deleted(self.subscription)
 
@@ -588,7 +588,7 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
 def test_billing_disabled_bypass():
     """Test that billing checks are bypassed when billing is disabled."""
     # Create a test team with no billing plan
-    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
+    team = Workspace.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
 
     # Create a test user and member
     user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
@@ -613,7 +613,7 @@ def test_billing_disabled_bypass():
 def test_billing_disabled_unlimited_limits():
     """Test that billing disabled returns unlimited limits."""
     # Create a team
-    team = Team.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
+    team = Workspace.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
 
     # Get current limits (should be unlimited when billing is disabled)
     limits = billing_processing.get_current_limits(team)
@@ -637,7 +637,7 @@ def test_billing_enabled_checks():
     )
 
     # Create a team with the billing plan
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Team",
         key="test-team",
         billing_plan="business",
@@ -686,7 +686,7 @@ def test_payment_failure_grace_period():
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     
     # Create team with past_due status
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Team", 
         key="test-team-grace", 
         billing_plan="business",

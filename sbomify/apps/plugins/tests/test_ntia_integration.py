@@ -16,7 +16,7 @@ from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.signals import trigger_plugin_assessments
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
@@ -24,20 +24,20 @@ class TestNTIAPluginIntegration:
     """Integration tests for NTIA plugin workflow."""
 
     @pytest.fixture
-    def team(self) -> Team:
+    def team(self) -> Workspace:
         """Create a test team with business plan."""
         BillingPlan.objects.get_or_create(
             key="business",
             defaults={"name": "Business Plan"},
         )
-        return Team.objects.create(
+        return Workspace.objects.create(
             name="Test Team",
             key="test-team-ntia",
             billing_plan="business",
         )
 
     @pytest.fixture
-    def component(self, team: Team) -> Component:
+    def component(self, team: Workspace) -> Component:
         """Create a test component."""
         return Component.objects.create(
             name="test-component",
@@ -102,7 +102,7 @@ class TestNTIAPluginIntegration:
         }
 
     def test_signal_triggers_plugin_assessments(
-        self, team: Team, component: Component, ntia_plugin: RegisteredPlugin
+        self, team: Workspace, component: Component, ntia_plugin: RegisteredPlugin
     ) -> None:
         """Test that SBOM creation signal triggers plugin assessments."""
         from sbomify.apps.plugins.models import TeamPluginSettings
@@ -158,7 +158,7 @@ class TestNTIAPluginIntegration:
 
     def test_full_assessment_workflow_compliant(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         ntia_plugin: RegisteredPlugin,
         compliant_cyclonedx_sbom: dict,
@@ -197,7 +197,7 @@ class TestNTIAPluginIntegration:
 
     def test_full_assessment_workflow_non_compliant(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         ntia_plugin: RegisteredPlugin,
         non_compliant_cyclonedx_sbom: dict,
@@ -234,7 +234,7 @@ class TestNTIAPluginIntegration:
 
     def test_assessment_run_preserves_history(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         ntia_plugin: RegisteredPlugin,
         compliant_cyclonedx_sbom: dict,
@@ -283,7 +283,7 @@ class TestNTIAPluginAPIIntegration(TestCase):
 
     def setUp(self) -> None:
         """Set up test fixtures."""
-        self.team = Team.objects.create(
+        self.team = Workspace.objects.create(
             name="API Test Team",
             key="api-test-team",
             billing_plan="business",

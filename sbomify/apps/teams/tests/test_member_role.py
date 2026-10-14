@@ -132,7 +132,7 @@ class TestMemberCannotOverstep:
         tabs = {tab.key for tab in visible_tabs("member", billing_enabled=True)}
         assert tabs == {"tokens", "account"}, tabs
 
-        response = client.get(reverse("workspaces:team_settings", kwargs={"team_key": team.key}))
+        response = client.get(reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}))
         assert response.status_code == 200
         body = response.content.decode()
         assert 'data-settings-tab="tokens"' in body
@@ -156,7 +156,7 @@ class TestMemberCannotOverstep:
         assert team.is_public is False, "setup failed: workspace should start private"
 
         response = client.post(
-            reverse("workspaces:team_settings", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}),
             {"visibility_action": "update", "is_public": ["false", "true"]},
         )
         assert response.status_code in (302, 403)
@@ -166,7 +166,7 @@ class TestMemberCannotOverstep:
     def test_member_cannot_invite(self, member_client):
         client, team = member_client
         response = client.post(
-            reverse("workspaces:invite_user", kwargs={"team_key": team.key}),
+            reverse("workspaces:invite_user", kwargs={"workspace_key": team.key}),
             {"email": "someone@example.com", "role": "owner"},
         )
         assert response.status_code == 403

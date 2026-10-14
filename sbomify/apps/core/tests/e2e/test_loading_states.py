@@ -10,7 +10,7 @@ from playwright.sync_api import Locator, Page, Route, expect
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.test_design_system_view import _debug_urlconf_fixture
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 pytestmark = pytest.mark.django_db
@@ -29,7 +29,7 @@ def assert_content_placeholder(region: Locator) -> None:
 @pytest.mark.parametrize("width", [1280, 375])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_page_and_summary_skeletons_are_replaced_independently(
-    authenticated_page: Page, team_with_business_plan: Team, width: int, theme: str, tmp_path: Path
+    authenticated_page: Page, team_with_business_plan: Workspace, width: int, theme: str, tmp_path: Path
 ) -> None:
     page = authenticated_page
     page.set_viewport_size({"width": width, "height": 900})
@@ -81,7 +81,7 @@ def test_page_and_summary_skeletons_are_replaced_independently(
 def test_artifact_skeletons_work_in_app_and_public_stylesheets(
     authenticated_page: Page,
     component_factory: Callable[..., Component],
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     public: bool,
     kind: str,
     tmp_path: Path,

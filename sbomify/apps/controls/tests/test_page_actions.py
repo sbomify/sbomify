@@ -9,14 +9,14 @@ from django.urls import reverse
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.mark.parametrize("role", ["owner", "admin", "member", "guest"])
 def test_controls_permissions_use_live_membership(
-    client: Client, sample_user: User, team_with_business_plan: Team, role: str
+    client: Client, sample_user: User, team_with_business_plan: Workspace, role: str
 ) -> None:
     workspace = team_with_business_plan
     setup_authenticated_client_session(client, workspace, sample_user)
@@ -52,7 +52,7 @@ def test_controls_permissions_use_live_membership(
 
 
 def test_product_controls_reject_foreign_workspace(
-    client: Client, sample_user: User, team_with_business_plan: Team, sample_team: Team
+    client: Client, sample_user: User, team_with_business_plan: Workspace, sample_team: Workspace
 ) -> None:
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
     product = Product.objects.create(team=sample_team, name="Other workspace product")
@@ -65,7 +65,7 @@ def test_product_controls_reject_foreign_workspace(
 
 
 def test_bulk_response_stays_on_changed_catalog(
-    client: Client, sample_user: User, team_with_business_plan: Team
+    client: Client, sample_user: User, team_with_business_plan: Workspace
 ) -> None:
     workspace = team_with_business_plan
     setup_authenticated_client_session(client, workspace, sample_user)

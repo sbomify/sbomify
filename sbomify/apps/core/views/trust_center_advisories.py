@@ -32,7 +32,7 @@ from sbomify.apps.security_advisories.services.trust_center import (
     parse_advisory_query,
 )
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 def _querystrings(request: HttpRequest, query: Any) -> dict[str, str]:
@@ -52,9 +52,9 @@ def _querystrings(request: HttpRequest, query: Any) -> dict[str, str]:
 class _TrustCenterAdvisoryViewBase(View):
     """Shared workspace resolution and branding for the two advisory pages."""
 
-    def _resolve(self, request: HttpRequest, workspace_key: str | None) -> tuple[Team | None, HttpResponse | None]:
+    def _resolve(self, request: HttpRequest, workspace_key: str | None) -> tuple[Workspace | None, HttpResponse | None]:
         status_code, team_or_error = fetch_public_team(request, workspace_key)
-        if status_code != 200 or not isinstance(team_or_error, Team):
+        if status_code != 200 or not isinstance(team_or_error, Workspace):
             # A fixed string rather than the resolver's dict value: every failure
             # path it has returns this same message, so echoing the lookup back
             # gained nothing and put request-derived data on an error page for a
@@ -62,13 +62,13 @@ class _TrustCenterAdvisoryViewBase(View):
             return None, error_response(request, HttpResponseNotFound("Workspace not found"))
         return team_or_error, None
 
-    def _redirect_if_needed(self, request: HttpRequest, team: Team, path: str) -> HttpResponse | None:
+    def _redirect_if_needed(self, request: HttpRequest, team: Workspace, path: str) -> HttpResponse | None:
         """Send the reader to this workspace's verified public domain when needed."""
         if not (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             return None
         return custom_domain_redirect(team, path, request.is_secure())
 
-    def _base_context(self, request: HttpRequest, team: Team) -> dict[str, Any]:
+    def _base_context(self, request: HttpRequest, team: Workspace) -> dict[str, Any]:
         return {
             "brand": build_branding_context(team),
             "workspace": {"name": team.display_name, "key": team.key},

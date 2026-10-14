@@ -37,12 +37,12 @@ from sbomify.apps.billing.stripe_client import (
     StripeError,
     StripeResourceMissingError,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
-def _expired_trial_team(name: str = "Trial Team") -> Team:
+def _expired_trial_team(name: str = "Trial Team") -> Workspace:
     """A workspace whose trial ended yesterday — what the sweep looks for."""
-    return Team.objects.create(
+    return Workspace.objects.create(
         name=name,
         billing_plan="business",
         billing_plan_limits={
@@ -213,7 +213,7 @@ class TestTheSweepReconciles:
         team = _expired_trial_team()
 
         def _checkout_lands_mid_flight(_subscription_id: str):
-            fresh = Team.objects.get(pk=team.pk)
+            fresh = Workspace.objects.get(pk=team.pk)
             limits = fresh.billing_plan_limits
             limits["concurrent_write"] = "preserved"
             fresh.billing_plan_limits = limits
@@ -343,7 +343,7 @@ class TestTheSweepReportsWhatHappened:
         team = _expired_trial_team()
 
         def _checkout_lands_mid_flight(_subscription_id: str):
-            fresh = Team.objects.get(pk=team.pk)
+            fresh = Workspace.objects.get(pk=team.pk)
             limits = fresh.billing_plan_limits
             limits["stripe_subscription_id"] = "sub_new_from_checkout"
             fresh.billing_plan_limits = limits
@@ -418,7 +418,7 @@ class TestAnUnnamedSubscriptionSettlesNothing:
         subscription nobody named."""
         from sbomify.apps.billing import stripe_sync
 
-        team = Team.objects.create(name="No Subscription", billing_plan="community", billing_plan_limits={})
+        team = Workspace.objects.create(name="No Subscription", billing_plan="community", billing_plan_limits={})
 
         assert stripe_sync.reconcile_missing_subscription(team, None) is False
 
@@ -464,7 +464,7 @@ class TestTheSyncPathNamesTheWorkspace:
         team = _expired_trial_team()
 
         def _checkout_lands_mid_flight(_subscription_id: str):
-            fresh = Team.objects.get(pk=team.pk)
+            fresh = Workspace.objects.get(pk=team.pk)
             limits = fresh.billing_plan_limits
             limits["stripe_subscription_id"] = "sub_new_from_checkout"
             fresh.billing_plan_limits = limits

@@ -16,7 +16,7 @@ from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -78,7 +78,7 @@ def test_the_component_page_asks_the_component_s_workspace_not_the_session_s(ite
     """Owning the workspace the session points at grants nothing in another one."""
     user = get_user_model().objects.create_user(username="two-workspaces", email="two-workspaces@example.com")
     Member.objects.create(team=items["team"], user=user, role="member")
-    own = Team.objects.create(name="Owned elsewhere")
+    own = Workspace.objects.create(name="Owned elsewhere")
     Member.objects.create(team=own, user=user, role="owner")
     client = Client()
     setup_authenticated_client_session(client, own, user)

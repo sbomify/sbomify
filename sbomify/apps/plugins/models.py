@@ -144,7 +144,7 @@ class TeamPluginSettings(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     team = models.OneToOneField(
-        "teams.Team",
+        "teams.Workspace",
         on_delete=models.CASCADE,
         related_name="plugin_settings",
         db_column="workspace_id",

@@ -10,7 +10,7 @@ from playwright.sync_api import Page, Route, expect
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import Product, User
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 pytestmark = pytest.mark.django_db
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.mark.parametrize("width", [1280, 375])
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_plan_comparison(authenticated_page: Page, priced_plans: Team, width: int, theme: str, tmp_path: Path) -> None:
+def test_plan_comparison(authenticated_page: Page, priced_plans: Workspace, width: int, theme: str, tmp_path: Path) -> None:
     page = authenticated_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -58,7 +58,7 @@ def test_plan_comparison(authenticated_page: Page, priced_plans: Team, width: in
 
 
 @pytest.mark.parametrize("flow", ["checkout", "manage", "downgrade", "enterprise"])
-def test_plan_navigation_uses_existing_endpoints(authenticated_page: Page, priced_plans: Team, flow: str) -> None:
+def test_plan_navigation_uses_existing_endpoints(authenticated_page: Page, priced_plans: Workspace, flow: str) -> None:
     page = authenticated_page
     workspace = priced_plans
     if flow == "checkout":
@@ -106,7 +106,7 @@ def test_plan_navigation_uses_existing_endpoints(authenticated_page: Page, price
 
 
 @pytest.mark.parametrize("state", ["over-limit", "scheduled"])
-def test_plan_downgrade_guard(authenticated_page: Page, priced_plans: Team, state: str) -> None:
+def test_plan_downgrade_guard(authenticated_page: Page, priced_plans: Workspace, state: str) -> None:
     workspace = priced_plans
     if state == "over-limit":
         BillingPlan.objects.filter(key="community").update(max_products=0)
@@ -130,11 +130,11 @@ def test_plan_downgrade_guard(authenticated_page: Page, priced_plans: Team, stat
 @pytest.mark.parametrize("width", [1280, 375])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_workspace_cards(
-    authenticated_page: Page, sample_user: User, team_with_business_plan: Team, width: int, theme: str, tmp_path: Path
+    authenticated_page: Page, sample_user: User, team_with_business_plan: Workspace, width: int, theme: str, tmp_path: Path
 ) -> None:
-    other = Team.objects.create(name="Example engineering", billing_plan="community")
+    other = Workspace.objects.create(name="Example engineering", billing_plan="community")
     Member.objects.create(team=other, user=sample_user, role="owner")
-    readonly = Team.objects.create(
+    readonly = Workspace.objects.create(
         name="A workspace with a long name for the shared research group", billing_plan="community"
     )
     Member.objects.create(team=readonly, user=sample_user, role="member")
@@ -180,7 +180,7 @@ def test_workspace_cards(
 
 
 def test_workspace_create_and_delete(authenticated_page: Page, sample_user: User) -> None:
-    workspace = Team.objects.create(name="Example temporary workspace", billing_plan="community")
+    workspace = Workspace.objects.create(name="Example temporary workspace", billing_plan="community")
     Member.objects.create(team=workspace, user=sample_user, role="owner")
     page = authenticated_page
     errors: list[str] = []
@@ -195,7 +195,7 @@ def test_workspace_create_and_delete(authenticated_page: Page, sample_user: User
     with page.expect_navigation(wait_until="load"):
         dialog.get_by_role("button", name="Delete workspace", exact=True).click()
     expect(page.get_by_role("region", name=re.compile(r"^Example temporary workspace"))).to_have_count(0)
-    assert not Team.objects.filter(pk=workspace.pk).exists()
+    assert not Workspace.objects.filter(pk=workspace.pk).exists()
     expect(page.locator("#add-workspace-modal-dialog")).to_be_attached()
     page.locator("#toast-container").get_by_role("button", name="Dismiss", exact=True).click()
     page.get_by_role("button", name="Add workspace", exact=True).click()

@@ -134,7 +134,7 @@ def test_a_guest_still_reads_no_workspace_vulnerability_dashboard(path, items) -
 def test_an_operator_has_a_way_to_its_api_keys(items) -> None:
     """The tokens tab admits every internal role, so the rail offers it to all of them."""
     team = items["team"]
-    tokens = reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "tokens"})
+    tokens = reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "tokens"})
 
     page = _client(team, "operator").get(reverse("core:dashboard")).content.decode()
 
@@ -144,7 +144,7 @@ def test_an_operator_has_a_way_to_its_api_keys(items) -> None:
 def test_an_operator_has_a_way_to_the_cryptography_page(items) -> None:
     """The page admits every internal role, so the rail offers it to all of them."""
     team = items["team"]
-    crypto = reverse("sboms:workspace_crypto", kwargs={"team_key": team.key})
+    crypto = reverse("sboms:workspace_crypto", kwargs={"workspace_key": team.key})
 
     page = _client(team, "operator").get(reverse("core:dashboard")).content.decode()
 

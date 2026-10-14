@@ -17,7 +17,7 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
@@ -44,17 +44,17 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     template_name = "teams/suppliers.html.j2"
     rows_template_name = "teams/components/supplier_rows.html.j2"
 
-    def _team(self, request: HttpRequest, team_key: str) -> Team | None:
+    def _team(self, request: HttpRequest, workspace_key: str) -> Workspace | None:
         user = cast(User, request.user)
         membership = (
-            Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles)
+            Member.objects.filter(user=user, team__key=workspace_key, role__in=self.allowed_roles)
             .select_related("team")
             .only("team", "role")
             .first()
         )
         return membership.team if membership else None
 
-    def _rows(self, request: HttpRequest, team: Team, search: str = "") -> HttpResponse:
+    def _rows(self, request: HttpRequest, team: Workspace, search: str = "") -> HttpResponse:
         result = list_suppliers(team, search)
         return render(
             request,
@@ -62,8 +62,8 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             {"team": team, "suppliers": result.value or [], "search": search},
         )
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = self._team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = self._team(request, workspace_key)
         if team is None:
             return HttpResponseForbidden("You don't have access to this workspace's suppliers")
 
@@ -80,8 +80,8 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             {"team": team, "suppliers": result.value or [], "search": search},
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = self._team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = self._team(request, workspace_key)
         if team is None:
             return HttpResponseForbidden("You don't have access to this workspace's suppliers")
 

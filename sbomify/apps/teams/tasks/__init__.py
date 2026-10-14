@@ -12,7 +12,7 @@ from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
 
@@ -96,7 +96,7 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
 
     # Conditional on the domain the probe fetched: the workspace may have
     # changed it while the request was in flight.
-    validated = Team.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
+    validated = Workspace.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
         custom_domain_validated=True,
         # Validation is what makes the custom domain the preferred one,
         # so it rewrites every absolute URL in the CSAF distribution.
@@ -130,7 +130,7 @@ def _check(team_id: int, domain: str, last_checked_at: datetime | None) -> None:
     """
     now = timezone.now()
     # Use F() expression for atomic increment to prevent race conditions
-    counted = Team.objects.filter(
+    counted = Workspace.objects.filter(
         pk=team_id,
         custom_domain=domain,
         custom_domain_validated=False,
@@ -141,7 +141,9 @@ def _check(team_id: int, domain: str, last_checked_at: datetime | None) -> None:
     )
     if not counted:
         return
-    failures = Team.objects.filter(pk=team_id).values_list("custom_domain_verification_failures", flat=True).first()
+    failures = (
+        Workspace.objects.filter(pk=team_id).values_list("custom_domain_verification_failures", flat=True).first()
+    )
     check_custom_domain.send_with_options(
         args=(team_id, domain, now.isoformat()),
         delay=int(_backoff(failures or 0).total_seconds() * 1000),
@@ -170,7 +172,9 @@ def verify_custom_domains() -> None:
     record_task_breadcrumb("verify_custom_domains", "start")
 
     # Get unvalidated domains
-    teams = Team.objects.filter(custom_domain__isnull=False, custom_domain_validated=False).exclude(custom_domain="")
+    teams = Workspace.objects.filter(custom_domain__isnull=False, custom_domain_validated=False).exclude(
+        custom_domain=""
+    )
 
     for team in teams:
         # Check if it's time to retry based on failure count

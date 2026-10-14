@@ -50,7 +50,7 @@ from sbomify.apps.core.utils import generate_id
 from sbomify.apps.security_advisories.expressions import csaf_filename_expression
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # CVE ID syntax: the sequence part is four or more digits and has no upper bound.
 CVE_ID_RE = re.compile(r"^CVE-\d{4}-\d{4,}$")
@@ -205,7 +205,7 @@ class SecurityAdvisory(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="security_advisories", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="security_advisories", db_column="workspace_id"
     )
 
     advisory_type = models.CharField(max_length=20, choices=AdvisoryType.choices, default=AdvisoryType.PRODUCT_ADVISORY)
@@ -263,7 +263,7 @@ class SecurityAdvisory(models.Model):
         return self.status != self.Status.DRAFT and self.visibility != self.Visibility.PRIVATE
 
     @classmethod
-    def allocate_tracking_id(cls, team: Team, *, prefix: str | None = None, year: int | None = None) -> str:
+    def allocate_tracking_id(cls, team: Workspace, *, prefix: str | None = None, year: int | None = None) -> str:
         """Next per-team, per-year tracking id, e.g. ``ACME-SA-2026-0001``.
 
         The sequence restarts each year, matching CVE and CSAF practice. Callers

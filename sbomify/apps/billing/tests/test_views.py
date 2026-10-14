@@ -13,7 +13,7 @@ from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from .fixtures import (  # noqa: F401
     business_plan,
@@ -40,18 +40,20 @@ def factory():
 
 
 @pytest.mark.django_db
-def test_select_plan_requires_login(client: Client, team_with_business_plan: Team):  # noqa: F811
+def test_select_plan_requires_login(client: Client, team_with_business_plan: Workspace):  # noqa: F811
     """Test that plan selection page requires authentication."""
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
 
 @pytest.mark.django_db
-def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBaseUser, team_with_business_plan: Team):  # noqa: F811
+def test_select_plan_requires_team_owner(
+    client: Client, guest_user: AbstractBaseUser, team_with_business_plan: Workspace
+):  # noqa: F811
     """Test that only team owners can access plan selection."""
     client.force_login(guest_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
     messages = list(get_messages(response.wsgi_request))
@@ -62,13 +64,13 @@ def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBas
 def test_select_plan_page(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test plan selection page display."""
     client.force_login(sample_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
 
     assert response.status_code == 200
 
@@ -77,7 +79,7 @@ def test_select_plan_page(
 def test_what_a_downgrade_costs_renders_as_the_alert_body(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
@@ -86,7 +88,9 @@ def test_what_a_downgrade_costs_renders_as_the_alert_body(
     column. The block content goes in the named body slot instead."""
     client.force_login(sample_user)
 
-    html = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})).content.decode()
+    html = client.get(
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    ).content.decode()
 
     alert = html[html.index("Moving here costs you") :]
     alert = alert[: alert.index("</ul>")]
@@ -98,7 +102,7 @@ def test_what_a_downgrade_costs_renders_as_the_alert_body(
 def test_select_community_plan_immediate(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """Test switching to community plan when no active subscription exists (immediate)."""
@@ -108,7 +112,8 @@ def test_select_community_plan_immediate(
 
     client.force_login(sample_user)
     response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
     )
 
     assert response.status_code == 302
@@ -126,7 +131,7 @@ def test_select_community_plan_immediate(
 def test_a_downgrade_the_workspace_has_outgrown_is_refused(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """The plan cards disable a move down to a plan the workspace is over the
@@ -140,11 +145,12 @@ def test_a_downgrade_the_workspace_has_outgrown_is_refused(
     client.force_login(sample_user)
 
     response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
     )
 
     assert response.status_code == 302
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Reduce usage to choose Community: 2 products (limit: 1)."
     ]
@@ -156,7 +162,7 @@ def test_a_downgrade_the_workspace_has_outgrown_is_refused(
 def test_selecting_community_is_refused_when_the_sync_with_stripe_fails(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -194,11 +200,12 @@ def test_selecting_community_is_refused_when_the_sync_with_stripe_fails(
     client.force_login(sample_user)
 
     response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
     )
 
     assert response.status_code == 302
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Could not read the subscription before changing the plan. Please try again."
     ]
@@ -211,7 +218,7 @@ def test_selecting_community_is_refused_when_the_sync_with_stripe_fails(
 def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """The first check runs before the plan write's transaction. Product creation
@@ -237,12 +244,12 @@ def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
     client.force_login(sample_user)
     with patch.object(plan_selection, "check_downgrade", side_effect=check_then_race):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
     assert outcomes == [True, False]
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == "business"
 
@@ -251,7 +258,7 @@ def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
 def test_usage_committed_after_the_first_check_still_blocks_a_scheduled_downgrade(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """A subscription already cancelling at period end records Community as its
@@ -278,12 +285,12 @@ def test_usage_committed_after_the_first_check_still_blocks_a_scheduled_downgrad
         patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
     ):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
     assert outcomes == [True, False]
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Reduce usage to choose Community: 2 products (limit: 1)."
     ]
@@ -295,7 +302,7 @@ def test_usage_committed_after_the_first_check_still_blocks_a_scheduled_downgrad
 def test_select_community_plan_with_subscription_redirects_to_portal(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """Test selecting community plan with active subscription redirects to Portal (cancel flow)."""
@@ -318,7 +325,7 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
         mock_create_portal.return_value = mock_session
 
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
@@ -345,7 +352,7 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
 def test_the_portal_cancel_flow_refuses_a_workspace_over_community_limits(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
     already_cancelling: bool,
 ):
@@ -368,11 +375,11 @@ def test_the_portal_cancel_flow_refuses_a_workspace_over_community_limits(
         patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as create_portal,
     ):
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
             + "?flow_type=subscription_cancel"
         )
 
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Reduce usage to choose Community: 2 products (limit: 1)."
     ]
@@ -386,7 +393,7 @@ def test_the_portal_cancel_flow_refuses_a_workspace_over_community_limits(
 def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
     cancel_at_period_end: bool,
 ):
@@ -423,12 +430,12 @@ def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
         patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
     ):
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
             + "?flow_type=subscription_cancel"
         )
 
     assert outcomes == [True, False]
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Reduce usage to choose Community: 2 products (limit: 1)."
     ]
@@ -441,7 +448,7 @@ def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
 def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
     path: str,
 ):
@@ -455,7 +462,7 @@ def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
 
     from sbomify.apps.billing.stripe_client import StripeError
 
-    team_key = team_with_business_plan.key
+    workspace_key = team_with_business_plan.key
     team_with_business_plan.billing_plan_limits["cancel_at_period_end"] = path != "portal-stripe-already-scheduled"
     team_with_business_plan.save()
     replacement = {
@@ -468,7 +475,7 @@ def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
 
     def replace_then_lock(*args, **kwargs):
         # The checkout lands just before the view takes the workspace lock.
-        Team.objects.filter(pk=team_with_business_plan.pk).update(billing_plan_limits=replacement)
+        Workspace.objects.filter(pk=team_with_business_plan.pk).update(billing_plan_limits=replacement)
         return real_atomic(*args, **kwargs)
 
     client.force_login(sample_user)
@@ -482,15 +489,15 @@ def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
     ):
         if path == "plan-page":
             response = client.post(
-                reverse("billing:select_plan", kwargs={"team_key": team_key}), {"plan": community_plan.key}
+                reverse("billing:select_plan", kwargs={"workspace_key": workspace_key}), {"plan": community_plan.key}
             )
         else:
             response = client.get(
-                reverse("billing:create_portal_session", kwargs={"team_key": team_key})
+                reverse("billing:create_portal_session", kwargs={"workspace_key": workspace_key})
                 + "?flow_type=subscription_cancel"
             )
 
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": workspace_key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Your subscription changed while the downgrade was being scheduled. Please review it and try again."
     ]
@@ -502,7 +509,7 @@ def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
 def test_select_business_plan_new_checkout(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     business_plan: BillingPlan,
 ):
     """Test initiating business plan subscription (new)."""
@@ -521,7 +528,7 @@ def test_select_business_plan_new_checkout(
 
         # Request to select_plan endpoint
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": business_plan.key, "billing_period": "monthly"},
         )
 
@@ -537,7 +544,7 @@ def test_select_business_plan_new_checkout(
 def test_switch_business_plan_with_subscription_redirects_to_portal(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     business_plan: BillingPlan,
 ):
     """Test switching business plan period with active subscription redirects to Portal (update flow)."""
@@ -561,7 +568,7 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
 
         # Switch to annual
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": business_plan.key, "billing_period": "annual"},
         )
 
@@ -605,7 +612,7 @@ def _subscription_with_status(status: str) -> stripe.Subscription:
 def test_portal_sends_an_ended_subscription_to_plan_selection(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     ended_status: str,
 ):
     """Stripe never reopens an ended subscription, one whose first invoice expired unpaid included."""
@@ -622,11 +629,11 @@ def test_portal_sends_an_ended_subscription_to_plan_selection(
     ):
         mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_ended"
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
         )
 
     assert response.status_code == 302
-    assert response.url == reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key})
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
     assert [str(m) for m in get_messages(response.wsgi_request)] == [
         "Your subscription has ended. Please select a new plan to continue."
     ]
@@ -638,7 +645,7 @@ def test_portal_sends_an_ended_subscription_to_plan_selection(
 def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     unpaid_status: str,
 ):
     """Stripe can still move these back to active, and the owner pays the invoice in the portal."""
@@ -653,7 +660,7 @@ def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
     ):
         mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_unpaid"
         response = client.get(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_with_business_plan.key})
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
         )
 
     assert response.status_code == 302
@@ -665,7 +672,7 @@ def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
 def test_select_community_after_the_subscription_ended_switches_the_plan(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
     ended_status: str,
 ):
@@ -679,7 +686,7 @@ def test_select_community_after_the_subscription_ended_switches_the_plan(
         return_value=_subscription_with_status(ended_status),
     ):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 
@@ -695,7 +702,7 @@ def test_select_community_after_the_subscription_ended_switches_the_plan(
 def test_select_community_with_a_past_due_invoice_keeps_the_plan(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """Stripe still retries a past-due invoice, so the subscription has not ended."""
@@ -706,7 +713,7 @@ def test_select_community_with_a_past_due_invoice_keeps_the_plan(
         return_value=_subscription_with_status("past_due"),
     ):
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": community_plan.key},
         )
 

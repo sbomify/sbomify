@@ -164,9 +164,9 @@ class TestRendering:
         import json
         import re
 
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        Team.objects.create(name="Bob's Team", billing_plan="community")
+        Workspace.objects.create(name="Bob's Team", billing_plan="community")
         client.force_login(staff_user)
 
         body = client.get(reverse("ops:overview")).content.decode()
@@ -184,9 +184,9 @@ class TestRendering:
         from django.test.html import parse_html
         from django.utils.dateformat import format as date_format
 
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        Team.objects.create(name="Customer", billing_plan="business")
+        Workspace.objects.create(name="Customer", billing_plan="business")
         client.force_login(staff_user)
 
         response = client.get(reverse("ops:overview"))
@@ -207,9 +207,9 @@ class TestRendering:
         workspace, so counting by status alone reports the whole install as
         paying. One customer here, and one free workspace stored the way
         production stores it."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        Team.objects.create(
+        Workspace.objects.create(
             name="Customer",
             billing_plan="business",
             billing_plan_limits={
@@ -218,7 +218,7 @@ class TestRendering:
                 "stripe_customer_id": "cus_example",
             },
         )
-        Team.objects.create(
+        Workspace.objects.create(
             name="Community",
             billing_plan="community",
             billing_plan_limits={"subscription_status": "active", "max_products": 1, "max_components": 5},

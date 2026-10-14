@@ -10,7 +10,7 @@ from sbomify.apps.controls.services.status_service import get_controls_detail
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # The built-in control catalogues offered as tiles on the Controls tab.
 # ``catalog_service`` discovers the catalogues themselves by globbing
@@ -55,7 +55,7 @@ def controls_table_context(
 
 
 def build_controls_settings(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
-    workspace = Team.objects.filter(key=workspace_key).first()
+    workspace = Workspace.objects.filter(key=workspace_key).first()
     if workspace is None or not can(request, "workspace:administer", workspace):
         return ServiceResult.failure("You cannot manage this workspace's controls", status_code=403)
 

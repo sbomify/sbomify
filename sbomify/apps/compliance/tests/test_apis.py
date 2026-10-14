@@ -152,11 +152,11 @@ class TestGetAssessment:
         assessment IDs exist across tenants."""
         from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
         from sbomify.apps.core.models import Product
-        from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
+        from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Workspace
 
         # Build a parallel team+product+assessment owned by ``guest_user``
         # (which has no membership in the authenticated client's team).
-        other_team = Team.objects.create(name="OtherTeam", key="OT01")
+        other_team = Workspace.objects.create(name="OtherTeam", key="OT01")
         Member.objects.create(user=guest_user, team=other_team, role="owner")
         profile = ContactProfile.objects.create(name="Default", team=other_team, is_default=True)
         ContactEntity.objects.create(

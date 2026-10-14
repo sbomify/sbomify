@@ -16,7 +16,7 @@ from sbomify.apps.teams.branding import (
     resolve_brand_color,
     sanitize_hex_color,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class TestSanitizeHexColor:
@@ -93,7 +93,7 @@ class TestBuildBrandingContext:
 
     def test_sanitizes_malicious_brand_color(self):
         """Malicious brand color should be sanitized."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Evil Corp",
             branding_info={
                 "brand_color": "#000; } </style><script>alert('xss')</script><style>",
@@ -110,7 +110,7 @@ class TestBuildBrandingContext:
 
     def test_sanitizes_malicious_accent_color(self):
         """Malicious accent color should be sanitized."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Evil Corp",
             branding_info={
                 "accent_color": "'; DROP TABLE teams; --",
@@ -135,7 +135,7 @@ class TestBuildBrandingContext:
 
     def test_branding_disabled_returns_defaults(self):
         """Team with branding disabled should return defaults."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="No Branding Team",
             branding_info={
                 "branding_enabled": False,
@@ -150,7 +150,7 @@ class TestBuildBrandingContext:
 
     def test_valid_colors_pass_through(self):
         """Valid colors should pass through and RGB should be computed."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Valid Colors Team",
             branding_info={
                 "brand_color": "#123456",
@@ -169,7 +169,7 @@ class TestBuildBrandingContext:
 
     def test_empty_colors_use_defaults(self):
         """Empty color strings should use defaults."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Empty Colors Team",
             branding_info={
                 "brand_color": "",
@@ -185,7 +185,7 @@ class TestBuildBrandingContext:
 
     def test_rgb_values_precomputed(self):
         """RGB values should be pre-computed as strings."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="RGB Test Team",
             branding_info={
                 "brand_color": "#ff0000",
@@ -203,7 +203,7 @@ class TestBuildBrandingContext:
 
     def test_accent_color_dark_computed(self):
         """Darkened accent color should be computed."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Dark Color Team",
             branding_info={
                 "accent_color": "#6366f1",
@@ -300,7 +300,7 @@ class TestBrandingOffNotice:
     NOTICE = "customers still see the default sbomify look"
 
     def _render(self, client, team):
-        return client.get(reverse("workspaces:team_branding", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        return client.get(reverse("workspaces:team_branding", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
 
     def test_the_notice_renders_when_branding_is_off(self, client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team

@@ -25,7 +25,7 @@ from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     sample_user,
 )
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -49,8 +49,8 @@ def plans(db) -> None:
 
 
 @pytest.fixture
-def subscribed_workspace(db, plans) -> Team:
-    workspace = Team.objects.create(
+def subscribed_workspace(db, plans) -> Workspace:
+    workspace = Workspace.objects.create(
         name="Downgrade test",
         key="dg-test",
         billing_plan="business",
@@ -63,13 +63,13 @@ def subscribed_workspace(db, plans) -> Team:
     return workspace
 
 
-def _add_members(workspace: Team, count: int) -> None:
+def _add_members(workspace: Workspace, count: int) -> None:
     for index in range(count):
         user = User.objects.create(username=f"member-{index}-{workspace.key}", email=f"m{index}@example.com")
         Member.objects.create(user=user, team=workspace, role="member")
 
 
-def _add_bot(workspace: Team) -> None:
+def _add_bot(workspace: Workspace) -> None:
     """A synthetic OIDC identity, provisioned the way the binding flow does.
 
     A pre_save guard reserves ``role="bot"`` for that flow and takes this flag
@@ -137,7 +137,7 @@ def test_a_live_subscription_behind_on_payment_is_still_guarded(subscribed_works
 
 @pytest.mark.django_db
 def test_an_unsubscribed_workspace_is_never_blocked(plans) -> None:
-    workspace = Team.objects.create(name="Free", key="free-test", billing_plan="business", billing_plan_limits={})
+    workspace = Workspace.objects.create(name="Free", key="free-test", billing_plan="business", billing_plan_limits={})
     _add_members(workspace, 5)
 
     context = build_plan_selection_context(_request(), workspace, {}).value
@@ -200,15 +200,15 @@ def test_the_usage_card_counts_people_not_seats(subscribed_workspace) -> None:
 
 
 @pytest.fixture
-def workspace_on_business(business_plan: BillingPlan, sample_user: User) -> Team:  # noqa: F811
-    team = Team.objects.create(name="Downgrade Test", billing_plan="business")
+def workspace_on_business(business_plan: BillingPlan, sample_user: User) -> Workspace:  # noqa: F811
+    team = Workspace.objects.create(name="Downgrade Test", billing_plan="business")
     team.billing_plan_limits = {"subscription_status": "active", "max_products": 10, "max_components": 100}
     team.save()
     Member.objects.create(team=team, user=sample_user, role="owner")
     return team
 
 
-def _context(rf, user: User, team: Team) -> dict:
+def _context(rf, user: User, team: Workspace) -> dict:
     request = rf.get("/")
     request.user = user
     request.session = {}
@@ -224,7 +224,7 @@ def _downgrade(context: dict, key: str) -> dict:
 def test_an_unlimited_quota_never_blocks(
     rf,
     sample_user: User,  # noqa: F811
-    workspace_on_business: Team,
+    workspace_on_business: Workspace,
     enterprise_plan: BillingPlan,  # noqa: F811
 ) -> None:
     """Enterprise stores its quotas as None, which must not compare as zero."""
@@ -240,7 +240,7 @@ def test_an_unlimited_quota_never_blocks(
 def test_an_upgrade_is_never_guarded(
     rf,
     sample_user: User,  # noqa: F811
-    workspace_on_business: Team,
+    workspace_on_business: Workspace,
     enterprise_plan: BillingPlan,  # noqa: F811
 ) -> None:
     _add_members(workspace_on_business, 40)
@@ -251,7 +251,7 @@ def test_an_upgrade_is_never_guarded(
 def test_the_card_says_what_leaving_costs(
     rf,
     sample_user: User,  # noqa: F811
-    workspace_on_business: Team,
+    workspace_on_business: Workspace,
     community_plan: BillingPlan,  # noqa: F811
 ) -> None:
     context = _context(rf, sample_user, workspace_on_business)
@@ -299,7 +299,7 @@ def test_one_step_down_loses_only_that_step() -> None:
 def test_only_leaving_a_live_subscription_runs_to_the_period_end(
     rf,
     sample_user: User,  # noqa: F811
-    workspace_on_business: Team,
+    workspace_on_business: Workspace,
     community_plan: BillingPlan,  # noqa: F811
     enterprise_plan: BillingPlan,  # noqa: F811
 ) -> None:
@@ -318,7 +318,7 @@ def test_only_leaving_a_live_subscription_runs_to_the_period_end(
 def test_a_workspace_with_no_live_subscription_changes_over_at_once(
     rf,
     sample_user: User,  # noqa: F811
-    workspace_on_business: Team,
+    workspace_on_business: Workspace,
     community_plan: BillingPlan,  # noqa: F811
 ) -> None:
     workspace_on_business.billing_plan_limits = {"subscription_status": "canceled"}

@@ -33,7 +33,7 @@ from django.templatetags.static import static
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # What a badge says, and which seal it wears. The order here is the order on the
 # page: independent audits first, because that is what a reader scanning for
@@ -78,7 +78,7 @@ def badge_seal_url(subcategory: str) -> str:
     return static(BADGE_CATALOGUE[subcategory]["image"])
 
 
-def public_certification_badges(team: Team, request: HttpRequest) -> list[dict[str, Any]]:
+def public_certification_badges(team: Workspace, request: HttpRequest) -> list[dict[str, Any]]:
     """Badges this workspace has earned, in catalogue order.
 
     Args:

@@ -165,7 +165,7 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_sbom:downloaded"
         assert args[2]["format"] == "cyclonedx"
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key
 
     def test_release_vex_download_captures_vendor_scoped_event(
         self, component, sample_user, mocker, sample_team_with_owner_member
@@ -200,7 +200,7 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_vex:downloaded"
         assert args[2]["release_id"] == str(release.id)
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key
 
     def test_release_cbom_download_captures_vendor_scoped_event(
         self, component, sample_user, mocker, sample_team_with_owner_member
@@ -231,4 +231,4 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_cbom:downloaded"
         assert args[2]["release_id"] == str(release.id)
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key

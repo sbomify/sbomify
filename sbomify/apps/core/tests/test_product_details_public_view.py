@@ -6,13 +6,13 @@ from django.urls import reverse
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
 def public_team():
     """Create a public team for testing."""
-    return Team.objects.create(name="Public Test Team", is_public=True)
+    return Workspace.objects.create(name="Public Test Team", is_public=True)
 
 
 @pytest.fixture

@@ -20,7 +20,7 @@ from django.urls import reverse
 from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeError, StripeResourceMissingError
 from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.sboms.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -45,7 +45,7 @@ def _stripe(*, subscription: MagicMock | None = None, listed: list | None = None
     return stripe
 
 
-def _downgrade(team: Team, user, stripe: MagicMock):
+def _downgrade(team: Workspace, user, stripe: MagicMock):
     client = Client(enforce_csrf_checks=True)
     client.force_login(user)
     token = get_token(RequestFactory().get("/"))

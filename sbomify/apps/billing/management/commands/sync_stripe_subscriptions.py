@@ -32,7 +32,7 @@ from django.utils import timezone
 from sbomify.apps.billing.billing_helpers import downgrade_ended_subscription
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeClient, StripeError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         """Execute the command."""
         dry_run = options["dry_run"]
-        team_key = options["team_key"]
+        workspace_key = options["team_key"]
         stale_trials_only = options["stale_trials_only"]
         verbose = options["verbose"]
 
@@ -79,16 +79,16 @@ class Command(BaseCommand):
         stripe_client = StripeClient()
 
         # Build queryset
-        teams_list: Sequence[Team]
-        if team_key:
-            teams_qs = Team.objects.filter(key=team_key)
+        teams_list: Sequence[Workspace]
+        if workspace_key:
+            teams_qs = Workspace.objects.filter(key=workspace_key)
             if not teams_qs.exists():
-                self.stdout.write(self.style.ERROR(f"Team with key '{team_key}' not found"))
+                self.stdout.write(self.style.ERROR(f"Team with key '{workspace_key}' not found"))
                 return
             teams_list = list(teams_qs)
         else:
             # Get all teams with Stripe subscription IDs
-            teams_qs = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
+            teams_qs = Workspace.objects.exclude(billing_plan_limits__isnull=True).filter(
                 billing_plan_limits__has_key="stripe_subscription_id"
             )
             teams_list = list(teams_qs)
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         if stale_trials_only:
             # Filter to teams that appear to be trialing but trial_end is in the past
             now_timestamp = int(timezone.now().timestamp())
-            filtered_teams: list[Team] = []
+            filtered_teams: list[Workspace] = []
             for team in teams_list:
                 limits = team.billing_plan_limits or {}
                 if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
@@ -140,7 +140,7 @@ class Command(BaseCommand):
         if changes:
             self.stdout.write(f"\nTeams updated: {', '.join(changes)}")
 
-    def _sync_team(self, team: Team, stripe_client: StripeClient, dry_run: bool, verbose: bool) -> str:
+    def _sync_team(self, team: Workspace, stripe_client: StripeClient, dry_run: bool, verbose: bool) -> str:
         """
         Sync a single team's subscription status from Stripe.
 

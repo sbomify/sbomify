@@ -27,8 +27,8 @@ from sbomify.apps.teams.models import Member
 pytestmark = pytest.mark.django_db
 
 
-def _url(team_key: str) -> str:
-    return f"/api/v1/plugins/workspaces/{team_key}/settings"
+def _url(workspace_key: str) -> str:
+    return f"/api/v1/plugins/workspaces/{workspace_key}/settings"
 
 
 @pytest.fixture
@@ -89,8 +89,8 @@ class TestReadingTheSettings:
 
 
 class TestWritingTheSettings:
-    def _put(self, client, team_key, payload):
-        return client.put(_url(team_key), data=json.dumps(payload), content_type="application/json")
+    def _put(self, client, workspace_key, payload):
+        return client.put(_url(workspace_key), data=json.dumps(payload), content_type="application/json")
 
     def test_a_plugin_can_be_turned_on(self, owner, registered_plugin):
         client, team = owner

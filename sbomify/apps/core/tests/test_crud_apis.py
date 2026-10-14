@@ -2142,7 +2142,7 @@ def test_product_identifier_private_access_denied(
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that identifiers for private products are not accessible without permissions."""
-    from sbomify.apps.teams.models import Member, Team
+    from sbomify.apps.teams.models import Member, Workspace
 
     # Set product team to business plan to allow identifiers
     sample_product.team.billing_plan = "business"
@@ -2176,7 +2176,7 @@ def test_product_identifier_private_access_denied(
     )
 
     # Create a different team for this user
-    different_team = Team.objects.create(name="Different Team", billing_plan="business")
+    different_team = Workspace.objects.create(name="Different Team", billing_plan="business")
     Member.objects.create(user=different_user, team=different_team, role="owner")
 
     assert client.login(username="different_user", password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -3226,11 +3226,11 @@ def test_dashboard_summary_scoped_token_sees_only_its_workspace(
     workspace A would also count workspace B's products/components."""
     from sbomify.apps.access_tokens.models import AccessToken
     from sbomify.apps.access_tokens.utils import create_personal_access_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     user = sample_team_with_owner_member.user
     team_a = sample_team_with_owner_member.team
-    team_b = Team.objects.create(name="scope-gap-other-workspace")
+    team_b = Workspace.objects.create(name="scope-gap-other-workspace")
     Member.objects.create(user=user, team=team_b, role="owner")
 
     Product.objects.create(name="ws-a-product", team=team_a)

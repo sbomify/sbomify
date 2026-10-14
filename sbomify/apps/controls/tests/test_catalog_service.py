@@ -9,7 +9,7 @@ from sbomify.apps.controls.services.catalog_service import (
     get_active_catalogs,
     import_oscal_catalog,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import number_to_random_token
 
 
@@ -93,7 +93,7 @@ class TestDeleteCatalog:
         assert not ControlCatalog.objects.filter(id=catalog_id).exists()
 
     def test_wrong_team_returns_failure(self, sample_catalog) -> None:
-        other_team = Team.objects.create(name="other team")
+        other_team = Workspace.objects.create(name="other team")
         other_team.key = number_to_random_token(other_team.pk)
         other_team.save()
         result = delete_catalog(sample_catalog.id, other_team)

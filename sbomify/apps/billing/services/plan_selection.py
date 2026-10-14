@@ -11,13 +11,13 @@ from sbomify.apps.billing.plan_features import PLAN_FEATURES, features_lost_movi
 from sbomify.apps.billing.stripe_client import LIVE_SUBSCRIPTION_STATUSES
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.queries import get_team_user_counts
 
 _ORDER = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
 
 
-def _usage(workspace: Team) -> dict[str, int]:
+def _usage(workspace: Workspace) -> dict[str, int]:
     """Two member counts, on purpose, matching what the rest of the product does.
 
     ``users`` is people, counted the way the members tab counts them, for the
@@ -48,7 +48,7 @@ def _exceeded(usage: dict[str, int], plan: BillingPlan) -> list[str]:
     ]
 
 
-def _guarded(workspace: Team, plan_key: str) -> bool:
+def _guarded(workspace: Workspace, plan_key: str) -> bool:
     """Whether moving to ``plan_key`` is checked against its limits.
 
     Only a cheaper plan, and only from a live subscription. The plan cards and
@@ -59,7 +59,7 @@ def _guarded(workspace: Team, plan_key: str) -> bool:
     return subscribed and _ORDER.get(plan_key, 99) < _ORDER.get(current, 99)
 
 
-def usage_over(workspace: Team, plan: BillingPlan) -> list[str]:
+def usage_over(workspace: Workspace, plan: BillingPlan) -> list[str]:
     """Each of ``plan``'s limits that ``workspace`` is already past, ready to show.
 
     One count for every place that asks, so the plan cards, the request and the
@@ -68,7 +68,7 @@ def usage_over(workspace: Team, plan: BillingPlan) -> list[str]:
     return _exceeded(_usage(workspace), plan)
 
 
-def check_downgrade(workspace: Team, plan: BillingPlan) -> ServiceResult[None]:
+def check_downgrade(workspace: Workspace, plan: BillingPlan) -> ServiceResult[None]:
     """Refuse a move down to ``plan`` that ``workspace`` has outgrown.
 
     The plan cards disable that choice through ``downgradeLimits``. This is the
@@ -83,7 +83,7 @@ def check_downgrade(workspace: Team, plan: BillingPlan) -> ServiceResult[None]:
 
 
 def build_plan_selection_context(
-    request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
+    request: HttpRequest, workspace: Workspace, stripe_pricing_data: dict[str, dict[str, Any]]
 ) -> ServiceResult[dict[str, Any]]:
     order = _ORDER
     usage = _usage(workspace)

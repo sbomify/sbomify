@@ -6,14 +6,14 @@ from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 
 from sbomify.apps.plugins.apis import UpdateTeamPluginSettingsRequest, update_team_plugin_settings
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
 def test_plugin_settings_write_denies_cross_workspace(sample_team_with_owner_member):
     """A user who owns their own workspace must not update another workspace's plugin settings."""
     attacker = sample_team_with_owner_member.user  # owner of their own workspace only
-    victim = Team.objects.create(name="Victim WS")  # Team.save() populates .key
+    victim = Workspace.objects.create(name="Victim WS")  # Team.save() populates .key
 
     req = RequestFactory().post("/")
     req.user = attacker

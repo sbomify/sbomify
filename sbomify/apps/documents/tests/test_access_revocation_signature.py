@@ -74,7 +74,7 @@ class TestAccessRevocationSignature:
         signature_id = signed_access_request.nda_signature.id
         assert NDASignature.objects.filter(id=signature_id).exists()
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -116,7 +116,7 @@ class TestAccessRevocationSignature:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -153,7 +153,7 @@ class TestAccessRevocationSignature:
         
         # Guest logs in and requests access again
         authenticated_web_client.force_login(guest_user)
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(url, {})
         
         assert response.status_code in [200, 302]
@@ -183,7 +183,7 @@ class TestAccessRevocationSignature:
         )
         
         authenticated_web_client.force_login(guest_user)
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(url, {})
         
         request.refresh_from_db()

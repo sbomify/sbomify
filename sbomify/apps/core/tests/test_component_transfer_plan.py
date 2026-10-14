@@ -22,12 +22,12 @@ from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_l
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
-def _transfer(user, component: Component, target: Team):
+def _transfer(user, component: Component, target: Workspace):
     client = Client()
     setup_authenticated_client_session(client, component.team, user)
     return client.post(
@@ -35,8 +35,8 @@ def _transfer(user, component: Component, target: Team):
     )
 
 
-def _paid_workspace(owner, **billing_plan_limits) -> Team:
-    workspace = Team.objects.create(name="Other paid", billing_plan="business", billing_plan_limits=billing_plan_limits)
+def _paid_workspace(owner, **billing_plan_limits) -> Workspace:
+    workspace = Workspace.objects.create(name="Other paid", billing_plan="business", billing_plan_limits=billing_plan_limits)
     Member.objects.create(team=workspace, user=owner, role="owner")
     return workspace
 
@@ -73,7 +73,7 @@ def test_a_key_with_no_workspace_behind_it_is_refused(sample_user, team_with_bus
     # The same answer as for a workspace the caller does not administer.
     component = Component.objects.create(name="moving", team=team_with_business_plan)
 
-    response = _transfer(sample_user, component, Team(key=number_to_random_token(10**9)))
+    response = _transfer(sample_user, component, Workspace(key=number_to_random_token(10**9)))
 
     assert response.status_code == 403
     assert b"Only allowed for admins or owners of the target team" in response.content
@@ -117,7 +117,7 @@ def test_the_plan_that_decides_visibility_is_read_under_the_lock(
 
     def downgrade_then_take_lock(team_id: str, resource_type: str):
         # The plan changes after the view has read the workspace and before it locks it.
-        Team.objects.filter(pk=target.pk).update(billing_plan="community")
+        Workspace.objects.filter(pk=target.pk).update(billing_plan="community")
         return _enforce_limit_under_lock(team_id, resource_type)
 
     mocker.patch("sbomify.apps.core.views._enforce_limit_under_lock", side_effect=downgrade_then_take_lock)

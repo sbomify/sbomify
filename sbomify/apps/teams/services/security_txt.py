@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Max length for URL fields (RFC 9116 recommends fields < 2048 chars)
 MAX_FIELD_LENGTH = 2048
@@ -61,7 +61,7 @@ def validate_security_email(value: str) -> str | None:
     return None
 
 
-def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | None:
+def _get_security_contact_email(team: Workspace, config: dict[str, Any]) -> str | None:
     """Find the security contact email.
 
     If a specific contact_id is set in config, use that contact.
@@ -141,7 +141,7 @@ def _valid_url(config: dict[str, Any], key: str) -> str:
     return ""
 
 
-def _default_csaf_url(team: Team) -> str:
+def _default_csaf_url(team: Workspace) -> str:
     """The workspace's own CSAF provider metadata, when it serves any.
 
     A workspace that publishes advisories already answers on
@@ -162,7 +162,7 @@ def _default_csaf_url(team: Team) -> str:
     return build_custom_domain_url(team, PROVIDER_METADATA_PATH) or ""
 
 
-def generate_security_txt(team: Team) -> str:
+def generate_security_txt(team: Workspace) -> str:
     """Generate RFC 9116 / TR-03183-3 security.txt content for a team.
 
     Returns empty string if security.txt is disabled or no security contact
