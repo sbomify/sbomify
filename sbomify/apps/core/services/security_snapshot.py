@@ -124,6 +124,7 @@ def build_component_security_picture(
     findings: list[dict[str, Any]] = []
     counts_by_component: dict[str, dict[str, int]] = {}
     unassessed: set[str] = set(component_ids)
+    summary_only: set[str] = set()
     kev_ids = kev_ids_for_serialization() if results_by_sbom else frozenset()
     for sbom_id, provider_results in results_by_sbom.items():
         meta = sbom_meta[sbom_id]
@@ -135,7 +136,11 @@ def build_component_security_picture(
         )
         if not all(result_scanned_nothing(result) for result in provider_results):
             unassessed.discard(component_id)
-        # Keep summary-only providers visible, as on the product detail page.
+        # Keep summary-only providers visible, as on the product detail page. A component
+        # whose scans report totals but no finding rows at all is recorded as such: it has
+        # no details to list, unlike one whose findings are all suppressed.
+        if not rows and any(extract_severity_counts(result)["total"] for result in provider_results):
+            summary_only.add(component_id)
         counts_by_component[component_id] = (
             severity_counts_from_rows(rows)
             if rows
@@ -193,6 +198,7 @@ def build_component_security_picture(
     return {
         "findings": findings,
         "counts": counts_by_component,
+        "summary_only": summary_only,
         "unassessed": unassessed,
         "latest_sboms": {row["component_id"]: row for row in sbom_meta.values()},
         "last_scans": {

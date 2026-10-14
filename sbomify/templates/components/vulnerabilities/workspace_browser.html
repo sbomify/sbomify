@@ -106,7 +106,7 @@ two HTMX roots the view answers.
             {% else %}
                 <c-forms.select size="md" name="version" id="vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
                 {% for version in data.versions %}
-                    <option value="{% if not version.is_latest %}{{ version.id }}{% endif %}"
+                    <option value="{% if not version.is_latest or version.id == data.query.version %}{{ version.id }}{% endif %}"
                             {% if version.id == data.query.version or version.is_latest and not data.query.version %}selected{% endif %}>
                         {{ version.version|default:version.id }}
                         {% if version.is_latest %}(latest){% endif %}
