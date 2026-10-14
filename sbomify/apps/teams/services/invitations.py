@@ -25,7 +25,7 @@ from sbomify.apps.teams.models import Invitation, Team
 from sbomify.apps.teams.utils import user_seat
 
 # Guests join through trust center access requests, never by invitation.
-MEMBER_INVITE_ROLES = tuple(role for role, _label in settings.TEAMS_INVITABLE_ROLES if role != ROLE_GUEST)
+MEMBER_INVITE_ROLES = tuple(role for role, _label in settings.WORKSPACE_INVITABLE_ROLES if role != ROLE_GUEST)
 
 
 def list_invitations(team: Team) -> ServiceResult[list[Invitation]]:

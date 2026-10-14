@@ -137,7 +137,7 @@ def test_branding_form_removal_keeps_a_key_from_elsewhere(sample_team_with_owner
     _set_branding(team, icon="team_otherkey_icon_abc.png")
 
     response = owner_client.post(
-        reverse("teams:team_branding", kwargs={"team_key": team.key}),
+        reverse("workspaces:team_branding", kwargs={"team_key": team.key}),
         {"brand_color": "#123456", "accent_color": "#654321", "icon_pending_deletion": "true"},
         HTTP_HX_REQUEST="true",
     )

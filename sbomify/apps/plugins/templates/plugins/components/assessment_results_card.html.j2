@@ -113,7 +113,7 @@
     {% elif assessment_runs.plan_excludes_plugins %}
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="Not included in your plan" message="Your plan does not include the plugins this workspace has turned on.">
         {% if can_manage_plugins %}
-            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Manage plugins</c-buttons.secondary>
+            <c-buttons.secondary size="sm" href="{% url 'workspaces:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Manage plugins</c-buttons.secondary>
         {% endif %}
         </c-feedback.empty-state>
     {% else %}
@@ -121,7 +121,7 @@
         <c-feedback.empty-state compact icon="fas fa-circle-minus" icon_variant="neutral" title="No assessments turned on" message="This workspace has no plugins turned on, so artifacts are not checked.">
         {% if can_manage_plugins %}
             {% comment %}The plugins page configures the session's workspace, so switch to the artifact's first.{% endcomment %}
-            <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Turn on plugins</c-buttons.secondary>
+            <c-buttons.secondary size="sm" href="{% url 'workspaces:switch_team' team_key %}?next={% url 'plugins:plugins_page' %}">Turn on plugins</c-buttons.secondary>
         {% endif %}
         </c-feedback.empty-state>
     {% endif %}

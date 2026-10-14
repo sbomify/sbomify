@@ -65,11 +65,11 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     _setup_session(client, team, "owner")
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
-    url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
+    url = reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id})
     response = client.delete(url)
 
     assert response.status_code == 302
-    assert response.url == reverse("teams:team_settings", kwargs={"team_key": team.key})
+    assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": team.key})
 
     # 3. Verify: User removed
     assert not Member.objects.filter(pk=membership.pk).exists()
@@ -99,7 +99,7 @@ def test_self_removal_fallback_when_pending_invites_exist(client, user_with_one_
     _setup_session(client, team, "admin")
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
-    url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
+    url = reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id})
     response = client.delete(url)
 
     assert response.status_code == 302
@@ -155,7 +155,7 @@ def _delete_workspace(client, user, workspace, mocker, capture, settings, billin
     _setup_session(client, workspace, "owner")
     with capture(execute=True):
         response = client.post(
-            reverse("teams:teams_dashboard"),
+            reverse("workspaces:teams_dashboard"),
             {"_method": "DELETE", "key": workspace.key},
         )
     return response, queued
@@ -301,7 +301,7 @@ def _delete_workspace_from_settings(client, user, workspace, mocker, capture, se
     _setup_session(client, workspace, "owner")
     with capture(execute=True):
         response = client.post(
-            reverse("teams:team_general", kwargs={"team_key": workspace.key}),
+            reverse("workspaces:team_general", kwargs={"team_key": workspace.key}),
             {"action": "delete"},
         )
     return response, queued
@@ -312,7 +312,7 @@ def test_deleting_a_workspace_from_settings_cancels_its_subscription(
 ):
     """The Danger Zone is the delete a user actually reaches.
 
-    Its form posts to teams:team_general, not to the dashboard, so the
+    Its form posts to workspaces:team_general, not to the dashboard, so the
     cancellation the dashboard path performs has to happen here too or the
     subscription outlives the workspace and keeps charging.
     """

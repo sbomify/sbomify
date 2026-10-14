@@ -5,7 +5,7 @@
     {{ plan_selection_data|json_script:"plan-selection-data" }}
     <c-layout.frame x-data="planSelection(window.parseJsonScript('plan-selection-data'))">
     <c-layout.page-header title="Plans and billing" subtitle="Choose a plan for {{ team.name|workspace_display }}.">
-    <c-buttons.secondary size="sm" href="{% url 'teams:team_settings' team_key %}"><i class="fas fa-gear" aria-hidden="true"></i>Workspace settings</c-buttons.secondary>
+    <c-buttons.secondary size="sm" href="{% url 'workspaces:team_settings' team_key %}"><i class="fas fa-gear" aria-hidden="true"></i>Workspace settings</c-buttons.secondary>
     </c-layout.page-header>
     <c-feedback.alert variant="warning" icon="fas fa-calendar" x-show="cancelAtPeriodEnd" x-cloak>
     Your plan ends on <span x-text="formatDate(currentPeriodEnd)"></span>. Manage your subscription to change this.

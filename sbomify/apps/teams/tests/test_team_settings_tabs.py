@@ -27,7 +27,7 @@ def test_visibility_toggle_redirects_to_active_tab(sample_team_with_owner_member
 
     setup_authenticated_client_session(client, team, user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {
@@ -69,7 +69,7 @@ def test_delete_invitation_redirects_to_members_tab(sample_team_with_owner_membe
 
     setup_authenticated_client_session(client, team, user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {
@@ -92,7 +92,7 @@ def test_redirect_without_active_tab_has_no_hash(sample_team_with_owner_member: 
 
     setup_authenticated_client_session(client, team, user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {
@@ -134,7 +134,7 @@ def test_delete_member_redirects_to_active_tab(sample_team_with_owner_member: Me
 
     setup_authenticated_client_session(client, team, owner)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {
@@ -159,7 +159,7 @@ def test_invalid_active_tab_is_ignored(sample_team_with_owner_member: Member):  
 
     setup_authenticated_client_session(client, team, user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {
@@ -245,7 +245,7 @@ class TestMembersRoleLegend:
 
         # Each settings section is its own page, so target the members tab
         # directly rather than relying on which tab happens to be the default.
-        response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"}))
+        response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"}))
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -323,7 +323,7 @@ class TestTrustCenterDescription:
 
         setup_authenticated_client_session(client, team, user)
 
-        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
         response = client.post(
             uri,
             {
@@ -352,7 +352,7 @@ class TestTrustCenterDescription:
 
         setup_authenticated_client_session(client, team, user)
 
-        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
         response = client.post(
             uri,
             {
@@ -376,7 +376,7 @@ class TestTrustCenterDescription:
 
         setup_authenticated_client_session(client, team, user)
 
-        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
         response = client.post(
             uri,
             {
@@ -402,7 +402,7 @@ class TestTrustCenterDescription:
 
         setup_authenticated_client_session(client, team, admin_user)
 
-        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
         response = client.post(
             uri,
             {
@@ -424,7 +424,7 @@ class TestTrustCenterDescription:
 
         setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
-        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
         response = client.post(
             uri,
             {
@@ -454,7 +454,7 @@ class TestTrustCenterControlsFollowTheRole:
         client = Client()
         setup_authenticated_client_session(client, member.team, member.user)
         response = client.get(
-            reverse("teams:team_settings_tab", kwargs={"team_key": member.team.key, "tab": "trust-center"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": member.team.key, "tab": "trust-center"})
         )
         assert response.status_code == 200
         return response.content.decode()

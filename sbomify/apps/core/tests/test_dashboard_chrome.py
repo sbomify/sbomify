@@ -185,8 +185,8 @@ def test_sidebar_links_point_at_the_workspace_the_page_is_about(
     for url in (
         reverse("vulnerability_scanning:vulnerability_scans", kwargs={"team_key": other.key}),
         reverse("sboms:workspace_crypto", kwargs={"team_key": other.key}),
-        reverse("teams:team_settings_tab", kwargs={"team_key": other.key, "tab": "tokens"}),
-        reverse("teams:team_settings", kwargs={"team_key": other.key}),
+        reverse("workspaces:team_settings_tab", kwargs={"team_key": other.key, "tab": "tokens"}),
+        reverse("workspaces:team_settings", kwargs={"team_key": other.key}),
     ):
         assert f'href="{url}"' in sidebar[0], url
         # The switcher lists the session's workspace as current; only these links must not.

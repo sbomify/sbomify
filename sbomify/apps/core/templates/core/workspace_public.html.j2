@@ -143,7 +143,7 @@
                 current workspace. Linking straight to it could offer to enable
                 scanning on whichever workspace happened to be selected.
                 {% endcomment %}
-                <a href="{% url 'teams:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
+                <a href="{% url 'workspaces:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
                    class="font-medium">Plugins</a>
                 </c-feedback.alert>
             {% endif %}

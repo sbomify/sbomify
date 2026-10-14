@@ -1,4 +1,4 @@
 <div id="team-branding-wrapper"
-     hx-get="{% url 'teams:team_branding' team.key %}"
+     hx-get="{% url 'workspaces:team_branding' team.key %}"
      hx-trigger="refreshTeamBranding from:body"
      hx-swap="innerHTML settle:0">{% include 'teams/team_branding.html.j2' %}</div>
