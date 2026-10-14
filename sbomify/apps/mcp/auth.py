@@ -69,7 +69,7 @@ if TYPE_CHECKING:
     from django.contrib.auth.base_user import AbstractBaseUser
     from starlette.requests import Request
 
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 class MCPAuthError(ToolError):
@@ -118,7 +118,7 @@ class Principal:
 
     user: AbstractBaseUser
     request: HttpRequest
-    workspace: Team | None
+    workspace: Workspace | None
     scopes: list[str] | None
     #: Stable per credential, for the rate-limit window and the audit line. Two
     #: credentials belonging to one user throttle independently, which is what
