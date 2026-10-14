@@ -37,7 +37,7 @@ from typing import Any
 
 from django.http import HttpRequest
 
-# Roles — mirror the keys of ``settings.TEAMS_SUPPORTED_ROLES``.
+# Roles — mirror the keys of ``settings.WORKSPACE_SUPPORTED_ROLES``.
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_MEMBER = "member"

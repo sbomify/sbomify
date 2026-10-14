@@ -8,7 +8,7 @@ import pytest
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.ops.services.revenue import recurring_revenue
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
@@ -23,8 +23,8 @@ def plans(db):
     BillingPlan.objects.create(key="enterprise", name="Enterprise")
 
 
-def _workspace(name: str, plan: str, **limits: object) -> Team:
-    return Team.objects.create(
+def _workspace(name: str, plan: str, **limits: object) -> Workspace:
+    return Workspace.objects.create(
         name=name,
         billing_plan=plan,
         billing_plan_limits={"subscription_status": "active", **limits},

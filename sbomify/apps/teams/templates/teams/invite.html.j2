@@ -3,12 +3,12 @@
 {% block content %}
     <c-layout.frame class="max-w-xl">
     <c-layout.page-header title="Invite member" subtitle="Add someone to this workspace.">
-    <c-buttons.ghost size="sm" href="{% url 'teams:team_settings_tab' team_key=team_key tab='members' %}">
+    <c-buttons.ghost size="sm" href="{% url 'workspaces:team_settings_tab' workspace_key=team_key tab='members' %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to members
     </c-buttons.ghost>
     </c-layout.page-header>
     <c-cards.card>
-    <form action="{% url 'teams:invite_user' team_key %}" method="post">
+    <form action="{% url 'workspaces:invite_user' team_key %}" method="post">
         {% csrf_token %}
         {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
         {% if invite_user_form.non_field_errors %}

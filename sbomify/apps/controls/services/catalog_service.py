@@ -11,7 +11,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 logger = getLogger(__name__)
 
@@ -23,7 +23,7 @@ _BUILTIN_CATALOGS: dict[str, str] = {
 }
 
 
-def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[ControlCatalog]:
+def activate_builtin_catalog(team: Workspace, catalog_name: str) -> ServiceResult[ControlCatalog]:
     """Activate a built-in catalog for a team. Idempotent."""
     # Whitelist: only allow known catalog filenames from the data directory
     if catalog_name not in _BUILTIN_CATALOGS:
@@ -74,7 +74,7 @@ def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[Con
     return ServiceResult.success(catalog)
 
 
-def import_oscal_catalog(team: Team, oscal_json: dict[str, Any]) -> ServiceResult[ControlCatalog]:
+def import_oscal_catalog(team: Workspace, oscal_json: dict[str, Any]) -> ServiceResult[ControlCatalog]:
     """Import an OSCAL catalog JSON into the controls system.
 
     Accepts standard OSCAL catalog format (NIST SP 800-53, ISO 27001, etc.)
@@ -205,19 +205,19 @@ def import_oscal_catalog(team: Team, oscal_json: dict[str, Any]) -> ServiceResul
     return ServiceResult.success(catalog)
 
 
-def get_active_catalogs(team: Team) -> ServiceResult[list[ControlCatalog]]:
+def get_active_catalogs(team: Workspace) -> ServiceResult[list[ControlCatalog]]:
     """List active catalogs for a team."""
     catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True))
     return ServiceResult.success(catalogs)
 
 
-def get_all_catalogs(team: Team) -> ServiceResult[list[ControlCatalog]]:
+def get_all_catalogs(team: Workspace) -> ServiceResult[list[ControlCatalog]]:
     """List all catalogs for a team (active and inactive)."""
     catalogs = list(ControlCatalog.objects.filter(team=team))
     return ServiceResult.success(catalogs)
 
 
-def deactivate_catalog(catalog_id: str, team: Team) -> ServiceResult[None]:
+def deactivate_catalog(catalog_id: str, team: Workspace) -> ServiceResult[None]:
     """Deactivate a catalog (keeps data, just hides from trust center)."""
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -229,7 +229,7 @@ def deactivate_catalog(catalog_id: str, team: Team) -> ServiceResult[None]:
     return ServiceResult.success(None)
 
 
-def delete_catalog(catalog_id: str, team: Team) -> ServiceResult[None]:
+def delete_catalog(catalog_id: str, team: Workspace) -> ServiceResult[None]:
     """Delete a catalog and all its controls/statuses."""
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)

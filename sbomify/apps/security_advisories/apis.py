@@ -49,7 +49,7 @@ from sbomify.apps.security_advisories.schemas import (
 )
 from sbomify.apps.security_advisories.services import advisories as advisory_service
 from sbomify.apps.security_advisories.services import trust_center
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 router = Router(tags=["Security Advisories"])
 
@@ -61,7 +61,7 @@ AUTH = (PersonalAccessTokenAuth(), django_auth)
 _PLACEHOLDER_VERSIONS = frozenset({"—", "None", "All"})
 
 
-def _workspace(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
+def _workspace(request: HttpRequest) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
     """The caller's current workspace, from the session or the token."""
     from sbomify.apps.core.apis import _get_user_team_id
 
@@ -71,7 +71,7 @@ def _workspace(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorRespo
             403,
             ErrorResponse(detail="No current workspace selected", error_code=ErrorCode.NO_CURRENT_TEAM),
         )
-    team = Team.objects.filter(pk=team_id).first()
+    team = Workspace.objects.filter(pk=team_id).first()
     if team is None:
         return None, (404, ErrorResponse(detail="Workspace not found", error_code=ErrorCode.TEAM_NOT_FOUND))
     return team, None
@@ -146,7 +146,7 @@ def _failed(result: Any) -> tuple[int, ErrorResponse]:
     return status, ErrorResponse(detail=result.error or "Request failed", error_code=code)
 
 
-def _fetched(team: Team, advisory_id: str) -> tuple[int, Any]:
+def _fetched(team: Workspace, advisory_id: str) -> tuple[int, Any]:
     result = advisory_service.get_advisory(team, advisory_id)
     if not result.ok:
         return _failed(result)
@@ -402,14 +402,14 @@ def withdraw_advisory(request: HttpRequest, advisory_id: str, payload: WithdrawA
 # --- the trust center over JSON ---------------------------------------------
 
 
-def _public_workspace(request: HttpRequest, workspace_key: str) -> Team | None:
+def _public_workspace(request: HttpRequest, workspace_key: str) -> Workspace | None:
     """The workspace a trust-center reader named, or None when there is nothing to show.
 
     Reuses the page resolver, so a private workspace, a bad key and an
     unknown key are all the same 404 here as they are in the browser.
     """
     status, team = fetch_public_team(request, workspace_key)
-    return team if status == 200 and isinstance(team, Team) else None
+    return team if status == 200 and isinstance(team, Workspace) else None
 
 
 def _not_found(detail: str) -> tuple[int, ErrorResponse]:
@@ -532,7 +532,7 @@ def get_public_advisory(request: HttpRequest, workspace_key: str, advisory_id: s
     return 200, _public_shape(result.value)
 
 
-def _advisory_url(request: HttpRequest, team: Team, advisory_id: str) -> str:
+def _advisory_url(request: HttpRequest, team: Workspace, advisory_id: str) -> str:
     """Where a reader would find this advisory in a browser: the workspace's own domain when it has one."""
     path = f"/advisories/{quote(advisory_id, safe='')}/"
     custom = build_custom_domain_url(team, path, request.is_secure())

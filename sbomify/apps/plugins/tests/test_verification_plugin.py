@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -356,6 +357,15 @@ class TestCosignBundleVerification:
             mock_verify.return_value = mock_finding
             result = plugin.assess("sbom-1", sbom_file, context=context)
         return next(f for f in result.findings if f.id == "verification:signature-valid")
+
+    def test_the_sigstore_verifier_imports(self) -> None:
+        """The tests here mock the verification, so none imports sigstore.
+
+        A cryptography override once left pyOpenSSL on a release that cannot
+        import against it, and every real bundle then failed with "module 'lib'
+        has no attribute 'GEN_EMAIL'" while this suite stayed green.
+        """
+        importlib.import_module("sigstore.verify")
 
     def test_cosign_import_error(self, tmp_path: Path) -> None:
         finding = self._run_with_mock(tmp_path, "warning", "sigstore not available")

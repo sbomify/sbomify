@@ -14,7 +14,7 @@ from sbomify.apps.core import authz
 from sbomify.apps.core.authz import Decision, UnknownActionError, can
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.utils import verify_item_access
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 def _user(username: str):
@@ -36,7 +36,7 @@ def _member(team, user, role):
 
 @pytest.fixture
 def workspace(db):
-    team = Team.objects.create(name="authz-team")
+    team = Workspace.objects.create(name="authz-team")
     component = Component.objects.create(name="authz-comp", team=team)
     return team, component
 
@@ -334,7 +334,7 @@ def test_request_actor_preserves_token_workspace_scope(workspace):
     team, component = workspace
     owner = _user("scoped-owner")
     _member(team, owner, "owner")
-    other_team = Team.objects.create(name="other-ws")
+    other_team = Workspace.objects.create(name="other-ws")
 
     req = HttpRequest()
     req.user = owner

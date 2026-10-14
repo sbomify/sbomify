@@ -17,7 +17,7 @@ from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -99,7 +99,7 @@ def test_a_full_token_still_decides_a_request(
 def test_a_token_bound_to_another_workspace_cannot_approve(
     authenticated_api_client, team_with_business_plan, guest_user, sample_user
 ):
-    other = Team.objects.create(name="Other")
+    other = Workspace.objects.create(name="Other")
     Member.objects.create(team=other, user=sample_user, role="owner")
     access_request = AccessRequest.objects.create(team=team_with_business_plan, user=guest_user)
     client, headers = _scoped(authenticated_api_client, None, team=other)
@@ -144,7 +144,7 @@ def test_a_full_token_still_files_a_request(guest_api_client, team_with_business
 def test_a_token_bound_to_another_workspace_cannot_file_a_request(
     guest_api_client, team_with_business_plan, guest_user
 ):
-    own = Team.objects.create(name="Own")
+    own = Workspace.objects.create(name="Own")
     Member.objects.create(team=own, user=guest_user, role="owner")
     client, headers = _scoped(guest_api_client, None, team=own)
 
@@ -156,7 +156,8 @@ def test_a_token_bound_to_another_workspace_cannot_file_a_request(
 
 
 def _nda_urls(team, access_request):
-    kwargs = {"team_key": team.key, "request_id": access_request.id}
+    # A v1 API route, so its path still names team_key.
+    kwargs = {"team_key": team.key, "request_id": access_request.id}  # rename-to-workspace: keep
     return reverse("api-1:get_nda_for_signing", kwargs=kwargs), reverse("api-1:sign_nda", kwargs=kwargs)
 
 

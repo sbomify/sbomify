@@ -15,7 +15,7 @@ from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     sample_user,
 )
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -38,7 +38,7 @@ class TestBillingReturnIdempotency:
         mock_get_subscription,
         mock_get_customer,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test that billing_return is idempotent - doesn't process same subscription twice."""
@@ -115,7 +115,7 @@ class TestBillingReturnIdempotency:
         mock_sync,
         mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test that billing_return processes when subscription ID is different."""
@@ -193,7 +193,7 @@ class TestBillingReturnEdgeCases:
         mock_get_subscription,
         mock_get_customer,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test that plan_key from metadata is used correctly."""
@@ -248,7 +248,7 @@ class TestBillingReturnEdgeCases:
         mock_get_subscription,
         mock_get_customer,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
     ):
         """Test billing_return when plan key doesn't exist."""
         # Mock session data with invalid plan_key
@@ -309,7 +309,7 @@ class TestBillingReturnEdgeCases:
         mock_sync,
         mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test billing_return correctly detects annual billing period."""
@@ -430,7 +430,7 @@ class TestBillingReturnRaceConditions:
         mock_get_subscription,
         mock_get_customer,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test that billing_return uses select_for_update for locking."""

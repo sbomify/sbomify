@@ -6,8 +6,11 @@ depending on the metric, and the icon is the caller's own.
 
 accent names a token (info, success, warning, danger) and renders as one
 conditional segment carrying the fill, the border colour and the text colour
-together, so no two of them ever land on the same chip. The label stays muted
-under every accent; the value and the icon take it.
+together, so no two of them ever land on the same chip. The icon, a
+decorative mark, takes the accent itself. The text is read on a tint of the
+accent, where the accent and muted grey both fall below 4.5:1 on a light
+surface, so the segment also hands the parts --metric-ink, the accent's ink,
+for the value, and --metric-label, full text, for the label.
 
 The parts wrap inside the chip on narrow screens; the chip never widens the
 page to keep a scan summary on one line.
@@ -17,5 +20,5 @@ text-sm alone brings 1.25rem where the old rule inherited 1.5, which took a
 pixel off every chip and off the strip they sit in.
 {% endcomment %}
 <c-vars accent class />
-<span class="inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5] [overflow-wrap:anywhere] {% if accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] border-[color-mix(in_oklab,var(--color-info)_30%,transparent)] text-[color:var(--color-info)]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-[color:var(--color-success)]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-[color:var(--color-warning)]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-[color:var(--color-danger)]{% else %}bg-surface border-border text-text{% endif %}{% if class %} {{ class }}{% endif %}"
+<span class="inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5] [overflow-wrap:anywhere] {% if accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] border-[color-mix(in_oklab,var(--color-info)_30%,transparent)] text-[color:var(--color-info)] [--metric-ink:var(--color-info-ink)] [--metric-label:var(--color-text)]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-[color:var(--color-success)] [--metric-ink:var(--color-success-ink)] [--metric-label:var(--color-text)]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-[color:var(--color-warning)] [--metric-ink:var(--color-warning-ink)] [--metric-label:var(--color-text)]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-[color:var(--color-danger)] [--metric-ink:var(--color-danger-ink)] [--metric-label:var(--color-text)]{% else %}bg-surface border-border text-text{% endif %}{% if class %} {{ class }}{% endif %}"
       {{ attrs }}>{{ slot }}</span>

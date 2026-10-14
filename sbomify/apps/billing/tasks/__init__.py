@@ -60,9 +60,9 @@ def deliver_billing_email(
     5xx still runs inline, so that contract is unchanged.
     """
     from sbomify.apps.billing.email_notifications import render_and_send_billing_email
-    from sbomify.apps.teams.models import Member, Team
+    from sbomify.apps.teams.models import Member, Workspace
 
-    team = Team.objects.filter(pk=team_id).first()
+    team = Workspace.objects.filter(pk=team_id).first()
     # Scoped to the workspace, so mismatched ids cannot address the right person
     # with another workspace's name and billing links in the body.
     member = Member.objects.filter(pk=member_id, team_id=team_id).select_related("user").first()
@@ -245,7 +245,7 @@ def sync_active_subscriptions_task() -> None:
     the ``team_context`` context processor on every authenticated page load.
     """
     from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     record_task_breadcrumb("sync_active_subscriptions_task", "start")
     if not is_billing_enabled():
@@ -254,7 +254,7 @@ def sync_active_subscriptions_task() -> None:
 
     # JSON path lookup (portable across SQLite/Postgres, unlike has_key) — also
     # naturally excludes a null subscription id.
-    teams_with_subscriptions = Team.objects.filter(billing_plan_limits__stripe_subscription_id__isnull=False)
+    teams_with_subscriptions = Workspace.objects.filter(billing_plan_limits__stripe_subscription_id__isnull=False)
 
     synced = 0
     errors = 0
@@ -290,7 +290,7 @@ def check_stale_trials_task() -> None:
         StripeResourceMissingError,
     )
     from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     record_task_breadcrumb("check_stale_trials_task", "start")
     if not is_billing_enabled():
@@ -301,11 +301,11 @@ def check_stale_trials_task() -> None:
     now_timestamp = int(timezone.now().timestamp())
 
     # Find teams with stale trials
-    teams_with_subscriptions = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
+    teams_with_subscriptions = Workspace.objects.exclude(billing_plan_limits__isnull=True).filter(
         billing_plan_limits__has_key="stripe_subscription_id"
     )
 
-    stale_teams: list[Team] = []
+    stale_teams: list[Workspace] = []
     for team in teams_with_subscriptions:
         limits: dict[str, Any] = team.billing_plan_limits or {}
         # Check if it looks like a trial that should have ended

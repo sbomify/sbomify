@@ -7,7 +7,7 @@ def test_dynamic_host_validation_middleware(client):
     from django.core.cache import cache
 
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # 1. Test static hosts - should be allowed
     response = client.get("/", HTTP_HOST="localhost")
@@ -27,7 +27,7 @@ def test_dynamic_host_validation_middleware(client):
     assert response.status_code == 400, "Custom domain not in DB should be rejected"
 
     # 4. Add domain to DB
-    team = Team.objects.create(name="Host Test Team", billing_plan="business")
+    team = Workspace.objects.create(name="Host Test Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = custom_domain
     team.save()
@@ -62,13 +62,13 @@ def test_domain_check_serves_the_challenge_without_validating(client):
     from django.core.cache import cache
 
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
     from sbomify.apps.teams.utils import custom_domain_challenge
 
     custom_domain = "validated.example.com"
 
     # Create team with unvalidated domain
-    team = Team.objects.create(name="Check Endpoint Team", billing_plan="business")
+    team = Workspace.objects.create(name="Check Endpoint Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = custom_domain
     team.custom_domain_validated = False
@@ -110,11 +110,11 @@ def test_custom_domain_http_request_through_middleware(client):
     from django.core.cache import cache
 
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create team with unvalidated custom domain
     custom_domain = "test-production.example.com"
-    team = Team.objects.create(name="HTTP Request Test Team", billing_plan="business")
+    team = Workspace.objects.create(name="HTTP Request Test Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = custom_domain
     team.custom_domain_validated = False
@@ -124,7 +124,7 @@ def test_custom_domain_http_request_through_middleware(client):
     cache.delete(f"allowed_host:{custom_domain}")
 
     # Verify domain is in database
-    assert Team.objects.filter(custom_domain=custom_domain).exists()
+    assert Workspace.objects.filter(custom_domain=custom_domain).exists()
 
     # Make actual HTTP request through Django test client with custom Host header
     # This simulates what happens in production when a request comes in
@@ -171,12 +171,12 @@ def test_middleware_caching_behavior(client):
     from django.core.cache import cache
 
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     custom_domain = "caching-test.example.com"
 
     # Create team with domain
-    team = Team.objects.create(name="Cache Test Team", billing_plan="business")
+    team = Workspace.objects.create(name="Cache Test Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = custom_domain
     team.save()

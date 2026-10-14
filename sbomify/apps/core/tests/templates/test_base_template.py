@@ -5,7 +5,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.utils import get_user_teams
 
 
@@ -16,7 +16,7 @@ class TestBaseTemplate:
         client.login(username=sample_user.username, password="test")  # nosec B106
 
         # Create team with wizard completed to avoid redirect
-        team = Team.objects.create(name="Test Team", has_completed_wizard=True)
+        team = Workspace.objects.create(name="Test Team", has_completed_wizard=True)
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=sample_user, team=team, role="owner", is_default_team=True)
@@ -59,7 +59,7 @@ class TestBaseTemplate:
         client.login(username=sample_user.username, password="test")  # nosec B106
 
         # Ensure the user has a team with completed wizard
-        team = Team.objects.create(name="Test Team", has_completed_wizard=True)
+        team = Workspace.objects.create(name="Test Team", has_completed_wizard=True)
         team.key = number_to_random_token(team.pk)
         team.save()
 
@@ -89,4 +89,4 @@ class TestBaseTemplate:
 
         # Test other navigation items present
         assert ">Products</span>" in content
-        assert ">Vulnerability scans</span>" in content
+        assert ">Vulnerabilities</span>" in content

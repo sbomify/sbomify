@@ -18,6 +18,15 @@ def rendered() -> str:
     return render_to_string("core/cotton_probes/feedback.html.j2")
 
 
+@pytest.fixture(scope="module")
+def rendered_with_catalogue() -> str:
+    """The same probes, for the callers that know the shape of what is coming."""
+    return render_to_string(
+        "core/cotton_probes/feedback.html.j2",
+        {"empty_sections": [], "catalogue_sections": [3, 1]},
+    )
+
+
 def _tag_around(rendered: str, needle: str) -> str:
     """The opening tag that carries (or immediately precedes) `needle`."""
     index = rendered.index(needle)
@@ -300,6 +309,49 @@ def test_loading_density_and_table_surface_modifiers(rendered: str) -> None:
     assert _section(rendered, "loading-stats").count("height: 1lh;") == 6
 
 
+def test_a_list_draws_every_row_its_caller_counted(rendered_with_catalogue: str) -> None:
+    # Sized from a catalogue, so the placeholder must not stop at the length of
+    # whatever literal the loop happens to be written over.
+    assert _section(rendered_with_catalogue, "loading-list-long").count("rounded-full") == 24
+
+
+def test_a_row_draws_every_subline_its_caller_asked_for(rendered: str) -> None:
+    # Each subline is one 45% skeleton, so the count is the caller's, not a
+    # literal's length.
+    assert _section(rendered, "loading-list-deep").count("width: 45%;") == 6
+
+
+def test_an_empty_shape_draws_no_cards_and_an_absent_one_falls_back(rendered_with_catalogue: str) -> None:
+    # An empty catalogue answers "no cards"; two generic ones would never arrive.
+    assert _section(rendered_with_catalogue, "loading-page-empty").count("rounded-full") == 0
+    # A shape that was given is drawn card for card, row for row.
+    assert _section(rendered_with_catalogue, "loading-page-sections").count("rounded-full") == 4
+    # Left off entirely, the generic body still stands in: two cards of two rows.
+    assert _section(rendered_with_catalogue, "loading-page").count("rounded-full") == 4
+
+
+def test_a_card_the_rows_cannot_describe_follows_the_counted_ones(rendered_with_catalogue: str) -> None:
+    # No counted cards, then the caller's own, under the page's one status.
+    slot = _section(rendered_with_catalogue, "loading-page-slot")
+    assert slot.count("rounded-full") == 1
+
+
+def test_the_heading_action_is_as_tall_as_the_small_button_it_stands_in_for(rendered_with_catalogue: str) -> None:
+    # A small button is 2.25rem, and at least 44px below sm: the placeholder
+    # takes the same floor, so a phone's header does not grow when it arrives.
+    action = _tag_around(_section(rendered_with_catalogue, "loading-page-heading"), "width: 7rem;")
+    assert "max-sm:min-h-11" in action
+    assert "height: 2.25rem;" in action
+
+
+def test_a_list_can_sit_two_to_a_line_from_md(rendered: str) -> None:
+    # One display segment each way: the grid stacks on a phone, the default never grids.
+    columns = _section(rendered, "loading-list-columns")
+    assert columns.count("rounded-full") == 4
+    assert 'class="grid min-w-0 gap-5 px-4 py-4 md:grid-cols-2"' in columns
+    assert "md:grid-cols-2" not in _section(rendered, "loading-list")
+
+
 def test_loading_forwards_state_to_the_root(rendered: str) -> None:
     tag = _probe(rendered, "loading-list")
     assert 'hx-swap-oob="true"' in tag
@@ -325,20 +377,35 @@ def test_toast_shell_and_accent(rendered: str) -> None:
     assert "w-[min(28rem,calc(100vw-2rem))]" in success
     assert "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]" in success
     assert "[--toast-accent:var(--color-success)]" in success
-    assert 'role="alert"' in success
-    assert "[--toast-accent:var(--color-danger)]" in _probe(rendered, "toast-danger")
+    # Only a danger toast interrupts; every other kind is a status.
+    assert 'role="status"' in success
+    danger = _probe(rendered, "toast-danger")
+    assert "[--toast-accent:var(--color-danger)]" in danger
+    assert 'role="alert"' in danger
 
 
 def test_toast_icon_tint_reads_the_accent(rendered: str) -> None:
     icon = _section(rendered, "toast-success")
-    assert "fas fa-check-circle" in icon
+    assert '<i class="fas fa-check-circle"' in icon
     assert "bg-[color-mix(in_oklab,var(--toast-accent,var(--color-primary))_12%,transparent)]" in icon
+
+
+def test_toast_icon_tile_wraps_the_glyph(rendered: str) -> None:
+    """Font Awesome styles its own <i>, so the tile is a span the glyph sits in."""
+    body = _section(rendered, "toast-success")
+    tile = body[body.index("<span") : body.index("</span>")]
+    assert "w-8 h-8" in tile
+    assert '<i class="fas fa-check-circle"' in tile
 
 
 def test_toast_title_and_message(rendered: str) -> None:
     body = _section(rendered, "toast-success")
-    assert '<p class="text-[0.9375rem] font-semibold text-text mb-0.5">Saved</p>' in body
-    assert '<p class="text-sm leading-[1.4] text-text-muted">Component updated.</p>' in body
+    assert '<p class="text-[0.9375rem] font-semibold text-text mb-0.5 empty:hidden" data-toast-title>Saved</p>' in body
+    # Muted under a title, full ink when the message is the only line.
+    assert (
+        '<p class="text-sm leading-[1.4] text-text [[data-toast-title]:not(:empty)+&]:text-text-muted">'
+        "Component updated.</p>"
+    ) in body
 
 
 def test_toast_close_is_on_by_default_and_can_be_turned_off(rendered: str) -> None:
@@ -358,6 +425,7 @@ def test_toast_container_keeps_its_event_driven_alpine_markup(rendered: str) -> 
     assert 'aria-live="polite"' in body
     assert '<template x-for="toast in toasts" :key="toast.id">' in body
     assert 'x-transition:enter-start="opacity-0 translate-x-8"' in body
+    assert 'x-transition:enter="transition ease-out duration-300 motion-reduce:transition-none"' in body
     assert 'x-text="toast.title"' in body
     assert '@click="show = false; $nextTick(() => removeToast(toast.id))"' in body
 
@@ -367,6 +435,8 @@ def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> N
     assert ':data-variant="toast.type"' in body
     assert "data-[variant=success]:[--toast-accent:var(--color-success)]" in body
     assert ":class=\"{success: 'fas fa-check-circle'" in body
+    # The region is polite; only an error row takes the alert role.
+    assert ":role=\"toast.type === 'error' ? 'alert' : null\"" in body
     # The surface itself is static, exactly as c-feedback.toast renders it.
     assert "flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl" in body
     assert "pointer-events-auto" in body
@@ -375,7 +445,14 @@ def test_toast_container_binds_only_the_accent_and_the_glyph(rendered: str) -> N
 def test_toast_container_surface_matches_the_toast_component(rendered: str) -> None:
     shared = (
         "bg-surface rounded-xl border border-solid border-border "
-        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))] "
-        "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+        "shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] w-[min(28rem,calc(100vw-2rem))]"
     )
     assert rendered.count(shared) == 3  # two toasts and the container's template
+
+
+def test_live_toasts_enter_once(rendered: str) -> None:
+    """The container animates its rows, so the surface's own entrance stays off there."""
+    entrance = "motion-safe:animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+    container = rendered[rendered.index('id="toast-container"') :]
+    assert entrance not in container
+    assert rendered.count(entrance) == 2  # the two static toasts

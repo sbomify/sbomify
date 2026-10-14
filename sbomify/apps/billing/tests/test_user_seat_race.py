@@ -22,7 +22,7 @@ from django.db import connection, connections, transaction
 from django.test.utils import CaptureQueriesContext
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.utils import can_add_user_to_team, user_seat
 
 
@@ -32,13 +32,13 @@ def _user(email: str):
     return get_user_model().objects.create_user(username=email, email=email, password="x")
 
 
-def _two_seat_team(name: str = "capped") -> Team:
+def _two_seat_team(name: str = "capped") -> Workspace:
     plan, _ = BillingPlan.objects.get_or_create(
         key="two-seats",
         defaults={"name": "Two Seats", "max_users": 2, "max_products": 10, "max_components": 10},
     )
     BillingPlan.objects.filter(pk=plan.pk).update(max_users=2)
-    return Team.objects.create(name=name, billing_plan="two-seats")
+    return Workspace.objects.create(name=name, billing_plan="two-seats")
 
 
 @pytest.mark.django_db
@@ -55,7 +55,7 @@ class TestTheRowIsActuallyLocked:
         assert locking, "user_seat did not lock the workspace row"
         # Asked of the model rather than spelled out, so this keeps testing the
         # lock rather than the table's legacy name.
-        assert any(Team._meta.db_table in sql for sql in locking)
+        assert any(Workspace._meta.db_table in sql for sql in locking)
 
     def test_the_verdict_is_the_one_the_unlocked_check_gives(self) -> None:
         """The lock changes when the count is safe to act on, not what it says."""

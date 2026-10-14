@@ -105,13 +105,13 @@ class TestSearchView:
         self, client: Client, sample_team_with_owner_member
     ):
         """Test that search only returns results from current team."""
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         Member.objects.create(team=other_team, user=user, role="owner")
 
         Product.objects.create(name="Team Product", team=team)

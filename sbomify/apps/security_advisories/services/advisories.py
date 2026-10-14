@@ -777,9 +777,9 @@ def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str)
     if visibility not in PUBLISHABLE_VISIBILITIES:
         return ServiceResult.failure("Choose whether to publish publicly or to NDA readers.", status_code=400)
 
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    Team.objects.select_for_update().filter(pk=team.pk).first()
+    Workspace.objects.select_for_update().filter(pk=team.pk).first()
 
     advisory = (
         SecurityAdvisory.objects.select_for_update()

@@ -52,10 +52,10 @@ def _records(tmp_path, document: str, fmt: str, key: str, filename: str):
     """Real rows, so assess() gets past the lookup and reaches the upload."""
     from sbomify.apps.core.models import Component, Product
     from sbomify.apps.sboms.models import SBOM
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
     from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
-    team = Team.objects.create(name=f"Team {key}", key=key, billing_plan="business")
+    team = Workspace.objects.create(name=f"Team {key}", key=key, billing_plan="business")
     server = DependencyTrackServer.objects.create(
         name=f"Server {key}",
         url=f"https://{key}.example.com",
@@ -125,10 +125,10 @@ class TestTheUploadCarriesTheConversion:
     def scannable(self, tmp_path):
         from sbomify.apps.core.models import Component, Product
         from sbomify.apps.sboms.models import SBOM
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
-        team = Team.objects.create(name="DT Conv Team", key="dtconvteam", billing_plan="business")
+        team = Workspace.objects.create(name="DT Conv Team", key="dtconvteam", billing_plan="business")
         server = DependencyTrackServer.objects.create(
             name="DT Conv Server",
             url="https://dt-conv.example.com",

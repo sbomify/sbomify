@@ -1,5 +1,5 @@
 <form method="post"
-      action="{% url 'teams:team_settings' team.key %}"
+      action="{% url 'workspaces:team_settings' team.key %}"
       class="space-y-4"
       x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
     {% csrf_token %}

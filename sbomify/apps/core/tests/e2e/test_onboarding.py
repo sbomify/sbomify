@@ -6,7 +6,7 @@ from pytest_django.fixtures import SettingsWrapper
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
-from sbomify.apps.teams.models import ContactProfileContact, Team
+from sbomify.apps.teams.models import ContactProfileContact, Workspace
 
 
 @pytest.mark.django_db
@@ -48,7 +48,7 @@ class TestOnboardingWizardSnapshot:
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
 def test_onboarding_saves_security_choices(
-    authenticated_page: Page, team_with_business_plan: Team, settings: SettingsWrapper, width: int
+    authenticated_page: Page, team_with_business_plan: Workspace, settings: SettingsWrapper, width: int
 ) -> None:
     settings.BILLING = False
     page = authenticated_page
@@ -110,7 +110,7 @@ def test_onboarding_security_snapshot(authenticated_page: Page, snapshot: Any, w
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
-def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Team, snapshot: Any, width: int) -> None:
+def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Workspace, snapshot: Any, width: int) -> None:
     priced_plans.has_selected_billing_plan = False
     priced_plans.save(update_fields=["has_selected_billing_plan"])
     authenticated_page.goto("/workspaces/onboarding/?step=plan")
@@ -122,7 +122,7 @@ def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Team, 
 
 @pytest.mark.django_db
 def test_onboarding_community_plan_finishes_without_checkout(
-    authenticated_page: Page, priced_plans: Team, settings: SettingsWrapper, mocker: MockerFixture
+    authenticated_page: Page, priced_plans: Workspace, settings: SettingsWrapper, mocker: MockerFixture
 ) -> None:
     settings.BILLING = True
     priced_plans.has_selected_billing_plan = False

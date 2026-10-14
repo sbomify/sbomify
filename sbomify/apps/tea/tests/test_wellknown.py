@@ -134,12 +134,12 @@ class TestTEAWellKnownEndpoint:
 
     def test_wellknown_workspace_not_public(self, sample_team):
         """C1: Non-public workspace returns 404 via .well-known/tea."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         sample_team.custom_domain = "trust.example.com"
         sample_team.custom_domain_validated = True
         sample_team.tea_enabled = True
-        sample_team.billing_plan = Team.Plan.BUSINESS
+        sample_team.billing_plan = Workspace.Plan.BUSINESS
         sample_team.is_public = False
         sample_team.save()
 

@@ -1,5 +1,5 @@
 <c-forms.field horizontal label="{{ label }}" for="{{ control_id }}" hint="{{ hint }}">
-<form method="post" action="{% url 'teams:team_settings' team.key %}">
+<form method="post" action="{% url 'workspaces:team_settings' team.key %}">
     {% csrf_token %}
     <input type="hidden" name="{{ action_name }}" value="update">
     <input type="hidden" name="{{ field_name }}" value="false">

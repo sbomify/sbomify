@@ -7,10 +7,10 @@ from django.conf import settings
 from django.forms import inlineformset_factory
 
 from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Workspace
 
 if TYPE_CHECKING:
-    _TeamFormBase = forms.ModelForm[Team]
+    _TeamFormBase = forms.ModelForm[Workspace]
     _ContactProfileFormBase = forms.ModelForm[ContactProfile]
     _ContactEntityFormBase = forms.ModelForm[ContactEntity]
     _ContactProfileContactFormBase = forms.ModelForm[ContactProfileContact]
@@ -23,10 +23,10 @@ else:
 
 class AddTeamForm(_TeamFormBase):
     class Meta:
-        model = Team
+        model = Workspace
         fields = ["name"]
 
-    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
+    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Workspace:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)
         if is_new and user:
@@ -62,8 +62,8 @@ class InviteUserForm(forms.Form):
         required=True,
         # ``guest`` is a self-service trust-center role (not invited).
         # ``bot`` is reserved for synthetic OIDC binding identities and
-        # must NEVER be human-assignable — see settings.TEAMS_SUPPORTED_ROLES.
-        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")],
+        # must NEVER be human-assignable — see settings.WORKSPACE_SUPPORTED_ROLES.
+        choices=[(role, label) for role, label in settings.WORKSPACE_SUPPORTED_ROLES if role not in ("guest", "bot")],
         # Least privilege by default: most people being invited need to do the
         # work, not configure the workspace.
         initial="member",
@@ -76,7 +76,7 @@ class InviteUserForm(forms.Form):
             role_field = cast(forms.ChoiceField, self.fields["role"])
             role_field.choices = [
                 (role, label)
-                for role, label in settings.TEAMS_SUPPORTED_ROLES
+                for role, label in settings.WORKSPACE_SUPPORTED_ROLES
                 if role not in (ROLE_GUEST, ROLE_BOT, ROLE_OWNER)
             ]
 

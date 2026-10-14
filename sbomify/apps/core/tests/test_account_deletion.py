@@ -44,7 +44,7 @@ def user_no_team(django_user_model):
 def deletable_user_with_team(django_user_model):
     """Create a user who is the sole owner and sole member of a team."""
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Member, Team
+    from sbomify.apps.teams.models import Member, Workspace
 
     _ensure_community_plan()
     user = django_user_model.objects.create_user(
@@ -52,7 +52,7 @@ def deletable_user_with_team(django_user_model):
         email="deletable@example.com",
         password="testpass123",
     )
-    team = Team.objects.create(name="Deletable Team", billing_plan="community")
+    team = Workspace.objects.create(name="Deletable Team", billing_plan="community")
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -61,7 +61,7 @@ def deletable_user_with_team(django_user_model):
 
     if User.objects.filter(id=user.id).exists():
         user.delete()
-    if Team.objects.filter(pk=team.pk).exists():
+    if Workspace.objects.filter(pk=team.pk).exists():
         team.delete()
 
 
@@ -99,7 +99,7 @@ class TestValidateAccountDeletion:
         """Sole owner of workspace with other members cannot delete."""
         from sbomify.apps.core.services.account_deletion import validate_account_deletion
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         _ensure_community_plan()
         owner = django_user_model.objects.create_user(
@@ -108,7 +108,7 @@ class TestValidateAccountDeletion:
         other_user = django_user_model.objects.create_user(
             username="other", email="other@example.com", password="testpass123"
         )
-        team = Team.objects.create(name="Shared Team", billing_plan="community")
+        team = Workspace.objects.create(name="Shared Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=owner, team=team, role="owner", is_default_team=True)
@@ -132,7 +132,7 @@ class TestValidateAccountDeletion:
         """Owner can delete when another owner exists (not sole owner)."""
         from sbomify.apps.core.services.account_deletion import validate_account_deletion
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         _ensure_community_plan()
         owner1 = django_user_model.objects.create_user(
@@ -141,7 +141,7 @@ class TestValidateAccountDeletion:
         owner2 = django_user_model.objects.create_user(
             username="owner2", email="owner2@example.com", password="testpass123"
         )
-        team = Team.objects.create(name="Co-Owned Team", billing_plan="community")
+        team = Workspace.objects.create(name="Co-Owned Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=owner1, team=team, role="owner", is_default_team=True)
@@ -226,10 +226,10 @@ class TestSoftDeleteUserAccount:
         """Soft delete removes incoming invitations for user's email."""
         from sbomify.apps.core.services.account_deletion import soft_delete_user_account
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Invitation, Team
+        from sbomify.apps.teams.models import Invitation, Workspace
 
         _ensure_community_plan()
-        team = Team.objects.create(name="Other Team", billing_plan="community")
+        team = Workspace.objects.create(name="Other Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
         Invitation.objects.create(team=team, email=user_no_team.email, role="admin")
@@ -258,7 +258,7 @@ class TestSoftDeleteUserAccount:
     def test_soft_delete_deletes_orphaned_workspace(self, deletable_user_with_team):
         """Soft delete removes workspaces where user is sole owner and sole member."""
         from sbomify.apps.core.services.account_deletion import soft_delete_user_account
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team, user = deletable_user_with_team
         team_id = team.pk
@@ -267,7 +267,7 @@ class TestSoftDeleteUserAccount:
             with patch("sbomify.apps.billing.config.is_billing_enabled", return_value=False):
                 soft_delete_user_account(user)
 
-        assert not Team.objects.filter(pk=team_id).exists()
+        assert not Workspace.objects.filter(pk=team_id).exists()
 
     @pytest.mark.django_db
     def test_soft_delete_cancels_stripe_for_orphaned_workspace(self, deletable_user_with_team):
@@ -385,14 +385,14 @@ class TestDeleteAccountAPI:
     def api_user_and_team(self, db):
         _ensure_community_plan()
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         user = User.objects.create_user(
             username="api_delete_user",
             email="api_delete@example.com",
             password="testpass123",
         )
-        team = Team.objects.create(name="API Delete Team", billing_plan="community")
+        team = Workspace.objects.create(name="API Delete Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)

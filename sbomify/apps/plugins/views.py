@@ -15,6 +15,7 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequ
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+from .services.catalogue import CATEGORY_ORDER, get_catalogue_shape
 from .services.new_plugins import plugins_added_since_last_save
 
 logger = getLogger(__name__)
@@ -25,13 +26,13 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Render the plugin settings page."""
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+        status_code, plugin_settings = get_team_plugin_settings(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(plugin_settings.get("detail", "Failed to load settings"))
 
@@ -39,7 +40,7 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
         enabled_plugins = plugin_settings.get("enabled_plugins", [])
         plugin_configs = plugin_settings.get("plugin_configs", {})
         plugins = plugin_settings.get("available_plugins", [])
-        new_plugins = plugins_added_since_last_save(team_key).value or set()
+        new_plugins = plugins_added_since_last_save(workspace_key).value or set()
         for plugin in plugins:
             plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
             # Enabled while the plan still included it, and kept across the downgrade.
@@ -64,16 +65,17 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
         # badge conveys plan gating, so the previous global "Requires Plan Upgrade"
         # divider is dropped. Sort so regroup produces contiguous category blocks in
         # a stable, sensible order.
-        # Every AssessmentCategory (sdk.enums) is listed so none falls into the unknown
-        # bucket; anything unlisted still degrades gracefully via the category tiebreaker.
-        category_order = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
+        # CATEGORY_ORDER lists every AssessmentCategory (sdk.enums) so none falls into
+        # the unknown bucket; anything unlisted still degrades gracefully via the
+        # category tiebreaker. The catalogue skeleton sorts by the same constant, so
+        # its placeholder cards line up with the sections that replace them.
         # Group by category for {% regroup %} (which only groups adjacent rows, so the
         # category string keeps same-category plugins contiguous even when two unknown
         # categories both fall back to 99). Within a category, preserve the API's ordering:
         # accessible plugins before upgrade-gated ones, then by display name.
         plugins.sort(
             key=lambda p: (
-                category_order.get(p.get("category", ""), 99),
+                CATEGORY_ORDER.get(p.get("category", ""), 99),
                 p.get("category", ""),
                 p.get("requires_upgrade", False),
                 p.get("display_name", ""),
@@ -89,7 +91,7 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Update plugin settings."""
         # Get enabled plugins from form data (checkboxes)
         enabled_plugins = request.POST.getlist("enabled_plugins")
@@ -112,7 +114,7 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
             plugin_configs=plugin_configs if plugin_configs else None,
         )
 
-        status_code, result = update_team_plugin_settings(request, team_key, payload)
+        status_code, result = update_team_plugin_settings(request, workspace_key, payload)
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update settings"))
 
@@ -122,13 +124,13 @@ class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
         )
 
 
-def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] | None:
+def _build_plugin_stats(request: HttpRequest, workspace_key: str) -> dict[str, Any] | None:
     """Build plugin summary stats from the API."""
-    status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+    status_code, plugin_settings = get_team_plugin_settings(request, workspace_key)
     if status_code != 200:
-        # Intentionally do NOT include team_key in the log message: CodeQL
+        # Intentionally do NOT include workspace_key in the log message: CodeQL
         # flags it as "clear-text logging of sensitive information" because
-        # team_key is a URL path parameter (user-controlled input). Structured
+        # workspace_key is a URL path parameter (user-controlled input). Structured
         # log correlation for this warning is available via the request's
         # standard Django request-id middleware, which already scopes every
         # log entry to the team implicitly through the URL.
@@ -164,7 +166,8 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the standalone plugins page."""
-        return render(request, "plugins/plugins_page.html.j2")
+        shape = get_catalogue_shape()
+        return render(request, "plugins/plugins_page.html.j2", {"catalogue_shape": shape.value})
 
 
 class PluginsSummaryView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -175,11 +178,11 @@ class PluginsSummaryView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequired
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
         team_data = request.session.get("current_workspace", {})
-        team_key = team_data.get("key", "")
+        workspace_key = team_data.get("key", "")
 
         context: dict[str, Any] = {}
-        if team_key:
-            stats = _build_plugin_stats(request, team_key)
+        if workspace_key:
+            stats = _build_plugin_stats(request, workspace_key)
             if stats:
                 context["plugin_stats"] = stats
 

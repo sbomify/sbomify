@@ -17,13 +17,13 @@ from sbomify.apps.core.tests.posthog_helpers import (
     patch_capture,
 )
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.mark.django_db(transaction=True)
 def test_invite_member_captures_team_member_invited(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     mock_capture = patch_capture(mocker)
@@ -32,7 +32,7 @@ def test_invite_member_captures_team_member_invited(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:invite_user", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:invite_user", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"email": "new-colleague@example.com", "role": "admin"},
     )
 
@@ -47,7 +47,7 @@ def test_invite_member_captures_team_member_invited(
 @pytest.mark.django_db(transaction=True)
 def test_accept_invite_captures_team_member_invitation_accepted(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """The explicit accept_invite view fires the event for existing users.
@@ -63,7 +63,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     )
 
     # Pre-existing membership skips the auto-accept signal path.
-    other_team = Team.objects.create(name="Other Workspace", billing_plan="business")
+    other_team = Workspace.objects.create(name="Other Workspace", billing_plan="business")
     Member.objects.create(team=other_team, user=invitee, role="owner", is_default_team=True)
 
     invitation = Invitation.objects.create(
@@ -76,7 +76,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     client = Client()
     client.force_login(invitee)
 
-    response = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 302, f"Unexpected status {response.status_code}: {response.content!r}"
     assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()
@@ -86,7 +86,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
 @pytest.mark.django_db(transaction=True)
 def test_auto_accept_invitation_captures_team_member_invitation_accepted(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
 ) -> None:
     """The user_logged_in auto-accept path fires the event for new-user invitations.
 
@@ -122,7 +122,7 @@ def test_auto_accept_invitation_captures_team_member_invitation_accepted(
 @pytest.mark.django_db(transaction=True)
 def test_remove_member_captures_team_member_removed(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     from django.contrib.auth import get_user_model
@@ -135,7 +135,7 @@ def test_remove_member_captures_team_member_removed(
     client = Client()
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
-    response = client.post(reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id}))
+    response = client.post(reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id}))
 
     assert response.status_code in (200, 302)
     assert "team:member_removed" in called_events(mock_capture)
@@ -147,7 +147,7 @@ def test_remove_member_captures_team_member_removed(
 @pytest.mark.django_db(transaction=True)
 def test_settings_view_member_remove_also_fires_event(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """remove_member_safely is reused by TeamSettingsView; verify that path also captures."""
@@ -163,7 +163,7 @@ def test_settings_view_member_remove_also_fires_event(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"_method": "DELETE", "member_id": membership.id, "active_tab": "members"},
     )
 
@@ -174,7 +174,7 @@ def test_settings_view_member_remove_also_fires_event(
 @pytest.mark.django_db(transaction=True)
 def test_role_change_captures_team_role_changed(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Saving an existing Member with a new role fires ``team:role_changed``."""
@@ -201,7 +201,7 @@ def test_role_change_captures_team_role_changed(
 @pytest.mark.django_db(transaction=True)
 def test_role_change_no_op_save_does_not_capture(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Re-saving a Member without changing role must not fire ``team:role_changed``."""
@@ -221,7 +221,7 @@ def test_role_change_no_op_save_does_not_capture(
 @pytest.mark.django_db(transaction=True)
 def test_role_change_followed_by_other_field_save_does_not_refire(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """A second save touching a non-role field must NOT re-fire team:role_changed.
@@ -260,7 +260,7 @@ def test_role_change_followed_by_other_field_save_does_not_refire(
 @pytest.mark.django_db(transaction=True)
 def test_role_change_update_fields_without_role_skips_snapshot(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """``save(update_fields=[other])`` must not even snapshot the role.
@@ -288,7 +288,7 @@ def test_role_change_update_fields_without_role_skips_snapshot(
 @pytest.mark.django_db(transaction=True)
 def test_create_access_token_captures_api_token_created(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     mock_capture = patch_capture(mocker)
@@ -297,7 +297,7 @@ def test_create_access_token_captures_api_token_created(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:team_tokens", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_tokens", kwargs={"workspace_key": team_with_business_plan.key}),
         data={"description": "test-token"},
     )
 
@@ -311,7 +311,7 @@ def test_create_access_token_captures_api_token_created(
 @pytest.mark.django_db(transaction=True)
 def test_delete_access_token_captures_api_token_deleted(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     token = AccessToken.objects.create(
@@ -334,7 +334,7 @@ def test_delete_access_token_captures_api_token_deleted(
 @pytest.mark.django_db(transaction=True)
 def test_custom_domain_first_time_set_captures_event(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """team:custom_domain_added fires when a workspace gets its first custom domain."""
@@ -359,7 +359,7 @@ def test_custom_domain_first_time_set_captures_event(
 @pytest.mark.django_db
 def test_custom_domain_resave_same_value_does_not_capture(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Re-saving an existing domain (no change) must not fire team:custom_domain_added."""
@@ -384,7 +384,7 @@ def test_custom_domain_resave_same_value_does_not_capture(
 @pytest.mark.django_db
 def test_custom_domain_change_to_different_value_does_not_capture(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Switching from one custom domain to another is not a first-time set; event must not fire."""

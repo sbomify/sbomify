@@ -11,7 +11,7 @@ from django.http import HttpRequest
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 log = getLogger(__name__)
 
@@ -38,7 +38,7 @@ def get_team_or_400(request: HttpRequest, workspace_key: str | None, endpoint_na
 
 def get_workspace_from_request(
     request: HttpRequest, workspace_key: str | None = None, check_tea_enabled: bool = True
-) -> "Team | str":
+) -> "Workspace | str":
     """
     Resolve workspace from request for TEA API access.
 
@@ -54,9 +54,9 @@ def get_workspace_from_request(
     Returns:
         Team instance on success, or error message string on failure
     """
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    team: Team | None = None
+    team: Workspace | None = None
 
     # Check custom domain / trust center subdomain first
     if getattr(request, "is_custom_domain", False):
@@ -75,8 +75,8 @@ def get_workspace_from_request(
 
     if not team and workspace_key:
         try:
-            team = Team.objects.get(key=workspace_key, is_public=True)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key, is_public=True)
+        except Workspace.DoesNotExist:
             log.warning("Workspace not found or not public (key=%s)", workspace_key)
             return "Workspace not found or not accessible"
 

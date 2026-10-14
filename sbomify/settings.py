@@ -1233,7 +1233,7 @@ sentry_sdk.init(
 # The ``bot`` role is reserved for synthetic identities provisioned by
 # OIDC Trusted Publishing bindings (see ``sbomify.apps.oidc``); it should
 # NEVER appear in invite or role-change UIs presented to humans.
-TEAMS_SUPPORTED_ROLES = [
+WORKSPACE_SUPPORTED_ROLES = [
     ("owner", "Owner"),
     ("admin", "Admin"),
     ("member", "Member"),
@@ -1250,7 +1250,10 @@ TEAMS_SUPPORTED_ROLES = [
 # The InviteUserForm UI further excludes guest from its choices since
 # admins shouldn't invite guests directly (they self-serve), but the
 # model-level constraint stays permissive.
-TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k != "bot"]
+WORKSPACE_INVITABLE_ROLES = [(k, v) for k, v in WORKSPACE_SUPPORTED_ROLES if k != "bot"]
+# The team names answer until every open branch has re-run bin/rename_to_workspace.py.
+TEAMS_SUPPORTED_ROLES = WORKSPACE_SUPPORTED_ROLES  # rename-to-workspace: keep
+TEAMS_INVITABLE_ROLES = WORKSPACE_INVITABLE_ROLES  # rename-to-workspace: keep
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 

@@ -10,7 +10,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 logger = getLogger(__name__)
 
@@ -67,7 +67,7 @@ def get_mappings_for_control(control: Control) -> ServiceResult[list[ControlMapp
     return ServiceResult.success(mappings)
 
 
-def import_mappings_bulk(mappings: list[dict[str, str]], team: Team) -> ServiceResult[int]:
+def import_mappings_bulk(mappings: list[dict[str, str]], team: Workspace) -> ServiceResult[int]:
     """Bulk import control mappings.
 
     Each item in *mappings* must have keys:

@@ -6,7 +6,7 @@ from django.apps import apps
 from django.utils import timezone
 
 from sbomify.apps.plugins.models import TeamPluginSettings
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 migration = import_module("sbomify.apps.plugins.migrations.0019_drop_cra_compliance_from_team_settings")
 
@@ -19,7 +19,7 @@ def test_removed_plugin_is_dropped_from_settings(sample_team) -> None:
         plugin_configs={"cra-compliance-2024": {"strict": True}, "osv": {"a": 1}},
     )
     clean = TeamPluginSettings.objects.create(
-        team=Team.objects.create(name="Other"),
+        team=Workspace.objects.create(name="Other"),
         enabled_plugins=["osv"],
         plugin_configs={"osv": {"a": 1}},
     )

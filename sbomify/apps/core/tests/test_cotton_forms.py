@@ -191,9 +191,18 @@ def test_select_default_segments_and_chevron(rendered: str) -> None:
 def test_select_small_segment_never_conflicts_with_the_default(rendered: str) -> None:
     select = _open_tag(rendered, "select", 'id="probe-select-sm"')
     classes = _classes(rendered, "select", 'id="probe-select-sm"')
-    assert "w-auto py-1 pr-7 pl-2 text-xs" in select
+    assert "w-auto py-1 pr-7 pl-2 max-sm:min-h-11 text-xs" in select
     for bit in ("w-full", "py-3", "pr-10", "pl-[1rem]", "text-sm"):
         assert bit not in classes
+
+
+def test_select_compact_size_is_capped_and_the_default_fills(rendered: str) -> None:
+    small = _classes(rendered, "select", 'id="probe-select-sm"')
+    default = _classes(rendered, "select", 'id="probe-select"')
+    assert "max-w-[min(100%,12rem)]" in small
+    assert "truncate" in small
+    assert not any(bit.startswith("max-w-") for bit in default)
+    assert "truncate" not in default
 
 
 @pytest.mark.parametrize("accent", ["success", "warning", "danger"])
@@ -202,7 +211,7 @@ def test_select_accent_tints_border_fill_and_ink_together(rendered: str, accent:
     classes = _classes(rendered, "select", f'id="probe-select-{accent}"')
     assert f"bg-[color-mix(in_oklab,var(--color-{accent})_10%,transparent)]" in classes
     assert f"border-[color-mix(in_oklab,var(--color-{accent})_30%,transparent)]" in classes
-    assert f"text-{accent}" in classes
+    assert f"text-{accent}-ink" in classes
     assert "bg-surface" not in classes
     assert "border-border" not in classes
     assert "text-text" not in classes

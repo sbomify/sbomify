@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.services.plan_selection import build_plan_selection_context
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 User = get_user_model()
 
@@ -41,8 +41,8 @@ def plans(db) -> None:
 
 
 @pytest.fixture
-def subscribed_workspace(db, plans) -> Team:
-    workspace = Team.objects.create(
+def subscribed_workspace(db, plans) -> Workspace:
+    workspace = Workspace.objects.create(
         name="Downgrade test",
         key="dg-test",
         billing_plan="business",
@@ -55,13 +55,13 @@ def subscribed_workspace(db, plans) -> Team:
     return workspace
 
 
-def _add_members(workspace: Team, count: int) -> None:
+def _add_members(workspace: Workspace, count: int) -> None:
     for index in range(count):
         user = User.objects.create(username=f"member-{index}-{workspace.key}", email=f"m{index}@example.com")
         Member.objects.create(user=user, team=workspace, role="member")
 
 
-def _add_bot(workspace: Team) -> None:
+def _add_bot(workspace: Workspace) -> None:
     """A synthetic OIDC identity, provisioned the way the binding flow does.
 
     A pre_save guard reserves ``role="bot"`` for that flow and takes this flag
@@ -111,7 +111,7 @@ def test_the_cheaper_plan_is_marked_as_a_downgrade(subscribed_workspace) -> None
 
 @pytest.mark.django_db
 def test_an_unsubscribed_workspace_is_never_blocked(plans) -> None:
-    workspace = Team.objects.create(name="Free", key="free-test", billing_plan="business", billing_plan_limits={})
+    workspace = Workspace.objects.create(name="Free", key="free-test", billing_plan="business", billing_plan_limits={})
     _add_members(workspace, 5)
 
     context = build_plan_selection_context(_request(), workspace, {}).value

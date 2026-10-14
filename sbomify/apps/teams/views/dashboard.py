@@ -13,7 +13,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import list_teams
 from sbomify.apps.teams.forms import AddTeamForm, DeleteTeamForm, UpdateTeamForm
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.utils import update_user_teams_session
 
@@ -49,14 +49,14 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return self._delete(request)
 
         messages.error(request, "Invalid request method")
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     def _post(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = AddTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         form.save(user=request.user)
         update_user_teams_session(request, user)
@@ -66,17 +66,17 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             f"Workspace {form.instance.name} created successfully",
         )
 
-        return redirect("teams:switch_team", team_key=form.instance.key)
+        return redirect("workspaces:switch_team", workspace_key=form.instance.key)
 
     def _patch(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = UpdateTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         try:
-            team = Team.objects.get(key=form.cleaned_data["key"])
+            team = Workspace.objects.get(key=form.cleaned_data["key"])
             membership = Member.objects.get(user=user, team=team)
 
             with transaction.atomic():
@@ -93,20 +93,20 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
 
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     def _delete(self, request: HttpRequest) -> HttpResponse:
         user = cast(User, request.user)
         form = DeleteTeamForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return redirect("teams:teams_dashboard")
+            return redirect("workspaces:teams_dashboard")
 
         try:
-            team = Team.objects.get(key=form.cleaned_data["key"])
+            team = Workspace.objects.get(key=form.cleaned_data["key"])
             # TODO move it to permissions
             membership = Member.objects.get(user=user, team=team, role="owner")
 
@@ -131,7 +131,7 @@ class WorkspacesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 update_user_teams_session(request, user)
         except Member.DoesNotExist:
             messages.error(request, "Membership not found")
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
 
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")

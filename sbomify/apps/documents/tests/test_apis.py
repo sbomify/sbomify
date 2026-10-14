@@ -588,7 +588,7 @@ def test_delete_document_forbidden(
 
     assert response.status_code == 403
     data = json.loads(response.content)
-    assert "Only owners can delete documents" in data["detail"]
+    assert "Only workspace owners and admins can delete documents" in data["detail"]
 
 
 @pytest.mark.django_db

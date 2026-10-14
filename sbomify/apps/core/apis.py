@@ -39,7 +39,7 @@ from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch
 from sbomify.apps.sboms.services.sboms import deleting_sbom_files
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
-from sbomify.apps.teams.models import ContactProfile, Team
+from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
 from .models import Component, Product, Release, ReleaseArtifact, User
@@ -176,7 +176,7 @@ def _is_guest_member(request: HttpRequest, team_id: str | None = None) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    return Member.objects.filter(user=request.user, team_id=resolved_team_id, role="guest").exists()
+    return Member.objects.filter(user=request.user, team_id=int(resolved_team_id), role="guest").exists()
 
 
 def _is_internal_member(request: HttpRequest) -> bool:
@@ -200,7 +200,7 @@ def _enforce_limit_under_lock(team_id: str, resource_type: str) -> tuple[bool, s
     if not is_billing_enabled():
         return True, "", None
 
-    team = Team.objects.select_for_update().filter(id=team_id).first()
+    team = Workspace.objects.select_for_update().filter(id=team_id).first()
     if team is None:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
@@ -271,7 +271,7 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    member = Member.objects.filter(user=request.user, team_id=team_id).only("role").first()
+    member = Member.objects.filter(user=request.user, team_id=int(team_id)).only("role").first()
     if not member:
         return False
 
@@ -281,11 +281,11 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     return member.role in MANAGE
 
 
-def _private_items_allowed(team: Team) -> bool:
+def _private_items_allowed(team: Workspace) -> bool:
     return team.can_be_private()
 
 
-def _gated_visibility_allowed(team: Team) -> bool:
+def _gated_visibility_allowed(team: Workspace) -> bool:
     """Check if gated visibility is allowed for the team (Business or Enterprise plans)."""
     return team.can_be_private()  # Same restriction as private items
 
@@ -543,8 +543,8 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         return True, "", None
 
     try:
-        team = Team.objects.get(id=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(id=team_id)
+    except Workspace.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
     # Check for payment failure / suspended account
@@ -708,7 +708,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
                 return 403, {"detail": error_msg, "error_code": error_code}
 
             # Check if user has permission to create products in this team
-            team = Team.objects.get(id=team_id)
+            team = Workspace.objects.get(id=team_id)
             if not can(request, "product:create", team):
                 return 403, {
                     "detail": "You don't have permission to create products in this workspace",
@@ -741,7 +741,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
                 request,
                 "product:created",
                 {"product_id": captured_product_id, "is_public": captured_is_public},
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -752,7 +752,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception:
         log.exception("Error creating product")
@@ -783,11 +783,11 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         # product:read is the READ_INTERNAL tier, which every internal member
         # already satisfies; it only adds the token action-scope gate.
         # Guests hold no read tier and are denied here, by design.
-        team = Team.objects.filter(id=team_id).first()
+        team = Workspace.objects.filter(id=team_id).first()
         if team is not None and not can(request, "product:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
+        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=int(team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         # Apply pagination
@@ -1056,7 +1056,10 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:delete", product):
-        return 403, {"detail": "Only owners can delete products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete products",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = product.team.key
@@ -1709,7 +1712,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                 return 403, {"detail": error_msg, "error_code": error_code}
 
             # Check if user has permission to create components in this team
-            team = Team.objects.get(id=team_id)
+            team = Workspace.objects.get(id=team_id)
             if not can(request, "component:create", team):
                 return 403, {
                     "detail": "You don't have permission to create components in this workspace",
@@ -1743,7 +1746,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                 return validation_error_response(ve, "component")
 
             # Assign default contact profile after validation passes
-            default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
+            default_profile = ContactProfile.objects.filter(team_id=int(team_id), is_default=True).first()
             if default_profile:
                 component.contact_profile = default_profile
 
@@ -1771,7 +1774,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                     "component_type": captured_component_type,
                     "visibility": captured_visibility,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -1782,7 +1785,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
     except Exception:
         log.exception("Error creating component")
@@ -1819,11 +1822,13 @@ def list_components(
         # component:read_internal is the READ_INTERNAL tier, which every internal
         # member already satisfies; it only adds the token action-scope gate.
         # Guests hold no read tier and are denied here, by design.
-        team = Team.objects.filter(id=team_id).first()
+        team = Workspace.objects.filter(id=team_id).first()
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
+        components_queryset = with_latest_sbom(
+            optimize_component_queryset(Component.objects.filter(team_id=int(team_id)))
+        )
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -2164,7 +2169,10 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:delete", component):
-        return 403, {"detail": "Only owners can delete components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete components",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = component.team.key
@@ -2668,7 +2676,7 @@ def get_dashboard_summary(
         # a vendor's still had that vendor's private product/component counts and
         # latest-upload names summed into their dashboard. The can() gate below
         # only authorizes the *session* workspace, so it cannot catch this.
-        user_teams_qs = Team.objects.filter(member__user=current_user, member__role__in=READ_INTERNAL)
+        user_teams_qs = Workspace.objects.filter(member__user=current_user, member__role__in=READ_INTERNAL)
         # A workspace-scoped API token must only see its own workspace's data:
         # without this, a token bound to workspace A would still aggregate the
         # user's other workspaces (B, C, …) into the dashboard. Sessions (no
@@ -2684,7 +2692,7 @@ def get_dashboard_summary(
         # every internal member already satisfies; it only adds the token
         # scope gate. Guests hold no read tier and are denied, by design.
         team_id = _get_user_team_id(request)
-        team = Team.objects.filter(id=team_id).first() if team_id else None
+        team = Workspace.objects.filter(id=team_id).first() if team_id else None
         if team is not None and not can(request, "workspace:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
         # Base querysets for the user's teams
@@ -2692,7 +2700,7 @@ def get_dashboard_summary(
         components_qs = Component.objects.filter(team__in=user_teams_qs)
     else:
         # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
-        user_teams_qs = Team.objects.none()
+        user_teams_qs = Workspace.objects.none()
         products_qs = Product.objects.none()
         components_qs = Component.objects.none()
 
@@ -2844,7 +2852,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(product.id)},
-        team_key=product.team.key or "",
+        workspace_key=product.team.key or "",
     )
     return response
 
@@ -2899,7 +2907,7 @@ def list_all_releases(
                     # tokens — release:read is the READ_INTERNAL tier every
                     # internal member already satisfies; it only adds the
                     # token scope gate.
-                    team = Team.objects.filter(id=team_id).first()
+                    team = Workspace.objects.filter(id=team_id).first()
                     if team is not None and not can(request, "release:read", team):
                         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
@@ -2929,12 +2937,12 @@ def list_all_releases(
             # full/unscoped tokens — release:read is the READ_INTERNAL tier
             # every internal member already satisfies; it only adds the
             # token scope gate.
-            team = Team.objects.filter(id=team_id).first()
+            team = Workspace.objects.filter(id=team_id).first()
             if team is not None and not can(request, "release:read", team):
                 return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
             # Build the base query for releases belonging to the user's team
-            query = Release.objects.filter(product__team_id=team_id).select_related("product")
+            query = Release.objects.filter(product__team_id=int(team_id)).select_related("product")
 
             # Ensure latest releases exist for all team products when listing all releases
             team_products = Product.objects.filter(team__id=team_id)
@@ -3286,7 +3294,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                     "product_id": captured_product_id,
                     "is_prerelease": captured_is_prerelease,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -3539,7 +3547,10 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:delete", release.product):
-        return 403, {"detail": "Only owners can delete releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent deleting latest releases
     if release.is_latest:
@@ -3717,7 +3728,7 @@ def download_release(
                     "product_id": str(release.product_id),
                     "format": format_lower,
                 },
-                team_key=release.product.team.key or "",
+                workspace_key=release.product.team.key or "",
             )
             return response
 
@@ -3800,7 +3811,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
         request,
         events.RELEASE_VEX_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 
@@ -3876,7 +3887,7 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 
@@ -4988,6 +4999,7 @@ def list_component_sboms(
                             "status": plugin_status,
                             "findings_count": findings_count,
                             "fail_count": (run.result or {}).get("summary", {}).get("fail_count", 0),
+                            "category": run.category,
                         }
                     )
 
@@ -5253,12 +5265,12 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
 
 def _export_team(request: HttpRequest) -> tuple[Any, tuple[int, ErrorResponse] | None]:
     """The caller's workspace for an export, or an error pair."""
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     team_id = _get_user_team_id(request)
     if not team_id:
         return None, (403, ErrorResponse(detail="No workspace context"))
-    team = Team.objects.filter(id=team_id).first()
+    team = Workspace.objects.filter(id=team_id).first()
     if team is None:
         return None, (403, ErrorResponse(detail="No workspace context"))
     if not can(request, "workspace:read", team):

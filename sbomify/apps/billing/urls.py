@@ -5,8 +5,8 @@ from . import views
 
 app_name = "billing"
 urlpatterns: list[URLPattern] = [
-    path("portal/<str:team_key>/", views.CreatePortalSessionView.as_view(), name="create_portal_session"),
-    path("select-plan/<str:team_key>/", views.SelectPlanView.as_view(), name="select_plan"),
+    path("portal/<str:workspace_key>/", views.CreatePortalSessionView.as_view(), name="create_portal_session"),
+    path("select-plan/<str:workspace_key>/", views.SelectPlanView.as_view(), name="select_plan"),
     path("enterprise-contact/", views.EnterpriseContactView.as_view(), name="enterprise_contact"),
     path("return/", views.BillingReturnView.as_view(), name="billing_return"),
     path("checkout/success/", views.CheckoutSuccessView.as_view(), name="checkout_success"),

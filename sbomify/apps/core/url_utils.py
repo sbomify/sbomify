@@ -23,7 +23,7 @@ from sbomify.apps.teams.validators import validate_custom_domain
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Release
     from sbomify.apps.sboms.models import Component as BaseComponent
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 def normalize_base_url(url: str) -> str:
@@ -41,7 +41,7 @@ def get_base_url() -> str:
     return normalize_base_url(getattr(settings, "APP_BASE_URL", ""))
 
 
-def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
+def get_public_url_base(request: HttpRequest, team: Workspace | None = None) -> str:
     """
     Get the base URL for public pages.
 
@@ -75,7 +75,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
     return get_base_url()
 
 
-def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
+def _build_trust_center_base_url(team: Workspace | None, secure: bool = True) -> str:
     """Build the trust center subdomain base URL for a team, or empty string."""
     if not team:
         return ""
@@ -89,7 +89,7 @@ def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
     return f"{protocol}://{slug}.{trust_center_domain}"
 
 
-def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> str:
+def build_trust_center_url(team: Workspace, path: str = "/", secure: bool = True) -> str:
     """Build a full URL using the team's trust center subdomain.
 
     Returns empty string if TRUST_CENTER_DOMAIN is not configured or team has no slug.
@@ -102,7 +102,7 @@ def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> 
     return f"{base}{path}"
 
 
-def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
+def should_redirect_to_custom_domain(request: HttpRequest, team: Workspace) -> bool:
     """
     Check if the request should be redirected to the team's preferred public domain.
 
@@ -185,7 +185,7 @@ def should_redirect_to_clean_url(request: HttpRequest) -> bool:
     return path.startswith("/public/")
 
 
-def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
+def build_custom_domain_url(team: Workspace, path: str, secure: bool = True) -> str:
     """
     Build a full URL using the team's preferred public domain.
 
@@ -228,7 +228,7 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
     return ""
 
 
-def custom_domain_redirect(team: Team, path: str, secure: bool = True) -> HttpResponseRedirect | None:
+def custom_domain_redirect(team: Workspace, path: str, secure: bool = True) -> HttpResponseRedirect | None:
     """Redirect only to a valid, verified public host belonging to this workspace."""
     allowed_hosts = set()
     if team.custom_domain and team.custom_domain_validated:
@@ -381,7 +381,7 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
 
 
 def get_back_url_from_referrer(
-    request: HttpRequest, team: "Team | None", fallback_url: str | None = None
+    request: HttpRequest, team: "Workspace | None", fallback_url: str | None = None
 ) -> str | None:
     """
     Get the back URL from HTTP_REFERER header if it's a valid page from the same workspace.
@@ -463,7 +463,7 @@ def get_back_url_from_referrer(
         return fallback_url
 
 
-def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
+def get_workspace_public_url(request: HttpRequest, team: "Workspace | None") -> str:
     """
     Generate the workspace public URL based on the request context.
 
@@ -510,7 +510,7 @@ def is_public_url_path(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in public_prefixes)
 
 
-def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"]:
+def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Workspace | None"]:
     """
     Extract custom domain context from a request.
 
@@ -522,7 +522,7 @@ def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"
     return is_custom_domain, team
 
 
-def get_public_custom_domain_workspace(request: HttpRequest) -> "Team | None":
+def get_public_custom_domain_workspace(request: HttpRequest) -> "Workspace | None":
     """
     The workspace a public custom-domain request may read from, if any.
 
@@ -538,7 +538,7 @@ def get_public_custom_domain_workspace(request: HttpRequest) -> "Team | None":
     if not getattr(request, "is_custom_domain", False):
         return None
 
-    team: "Team | None" = getattr(request, "custom_domain_team", None)
+    team: "Workspace | None" = getattr(request, "custom_domain_team", None)
     if team is None or not team.is_public:
         return None
 
@@ -594,7 +594,7 @@ def verify_custom_domain_ownership(
 def add_custom_domain_to_context(
     request: HttpRequest,
     context: dict[str, Any],
-    team: "Team | None" = None,
+    team: "Workspace | None" = None,
 ) -> dict[str, Any]:
     """
     Add custom domain context variables to a template context dict.

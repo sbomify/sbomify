@@ -1201,12 +1201,12 @@ def test_add_sbom_from_different_team_fails(
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that adding SBOM from different team fails."""
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     client = Client()
 
     # Create a different team explicitly
-    different_team = Team.objects.create(name="different team")
+    different_team = Workspace.objects.create(name="different team")
 
     # Ensure SBOM belongs to component from different team
     sample_component.team = different_team

@@ -16,7 +16,7 @@ import urllib3
 from django.test import Client
 from django.utils import timezone
 
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.tasks import PROBE_MAX_BYTES, check_custom_domain, probe_custom_domain, verify_custom_domains
 from sbomify.apps.teams.utils import custom_domain_challenge
 
@@ -26,7 +26,7 @@ PUBLIC_ADDRESS = "93.184.215.14"
 
 @pytest.fixture
 def claimed(db):
-    return Team.objects.create(name="Claimant", billing_plan="business", custom_domain=DOMAIN)
+    return Workspace.objects.create(name="Claimant", billing_plan="business", custom_domain=DOMAIN)
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +83,7 @@ def test_a_request_carrying_the_domain_does_not_verify_it(client, claimed):
 
 
 def test_a_request_on_the_domain_brings_the_next_probe_forward(client, claimed):
-    Team.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=6)
+    Workspace.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=6)
 
     client.get("/", HTTP_HOST=DOMAIN)
 
@@ -110,7 +110,7 @@ def test_the_task_leaves_a_domain_that_changed_after_it_was_read(claimed, mocker
 
     def change_it_meanwhile(task_name: str, message: str, **kwargs) -> None:
         if message == "probe":
-            Team.objects.filter(pk=claimed.pk).update(**change)
+            Workspace.objects.filter(pk=claimed.pk).update(**change)
 
     # The breadcrumb is recorded between the task's read and its write.
     mocker.patch("sbomify.apps.teams.tasks.record_task_breadcrumb", side_effect=change_it_meanwhile)
@@ -163,7 +163,7 @@ def test_checks_continue_without_the_sweep_until_the_domain_verifies(claimed, fe
 def test_a_check_overtaken_by_a_newer_one_does_nothing(claimed, mocker):
     probe = mocker.patch.object(probe_custom_domain, "send")
     later = mocker.patch.object(check_custom_domain, "send_with_options")
-    Team.objects.filter(pk=claimed.pk).update(
+    Workspace.objects.filter(pk=claimed.pk).update(
         custom_domain_verification_failures=3, custom_domain_last_checked_at=timezone.now()
     )
 
@@ -181,7 +181,7 @@ def test_the_sweep_takes_over_the_line_of_checks(claimed, mocker):
     probe = mocker.patch.object(probe_custom_domain, "send")
     mocker.patch.object(check_custom_domain, "send_with_options")
     last_checked_at = timezone.now() - timedelta(days=1)
-    Team.objects.filter(pk=claimed.pk).update(
+    Workspace.objects.filter(pk=claimed.pk).update(
         custom_domain_verification_failures=1, custom_domain_last_checked_at=last_checked_at
     )
 
@@ -195,7 +195,7 @@ def test_the_sweep_takes_over_the_line_of_checks(claimed, mocker):
 
 @pytest.mark.parametrize("routed", [_routed_here, _routed_here_compressed])
 def test_the_probe_verifies_a_domain_that_serves_the_challenge(claimed, fetch, routed):
-    Team.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=1)
+    Workspace.objects.filter(pk=claimed.pk).update(custom_domain_verification_failures=1)
     fetch.side_effect = routed
 
     probe_custom_domain(claimed.pk, DOMAIN)
@@ -308,7 +308,7 @@ def test_the_probe_rejects_a_domain_that_serves_anything_else(claimed, fetch, st
 def test_the_probe_does_not_verify_a_domain_changed_while_it_ran(claimed, fetch):
     def fetch_then_change(*args, **kwargs) -> urllib3.HTTPResponse:
         response = _routed_here(*args, **kwargs)
-        Team.objects.filter(pk=claimed.pk).update(custom_domain="other.example.com")
+        Workspace.objects.filter(pk=claimed.pk).update(custom_domain="other.example.com")
         return response
 
     fetch.side_effect = fetch_then_change
@@ -322,7 +322,7 @@ def test_the_probe_does_not_verify_a_domain_changed_while_it_ran(claimed, fetch)
 
 def test_the_challenge_is_served_only_on_the_custom_domain(client, claimed, settings):
     settings.TRUST_CENTER_DOMAIN = "trustcenters.test"
-    Team.objects.filter(pk=claimed.pk).update(is_public=True, slug="claimant")
+    Workspace.objects.filter(pk=claimed.pk).update(is_public=True, slug="claimant")
 
     response = client.get("/.well-known/com.sbomify.domain-check", HTTP_HOST="claimant.trustcenters.test")
 

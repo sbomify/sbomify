@@ -55,7 +55,7 @@ def build_component_security_picture(
     # Workspace metrics need every occurrence, but never the full scanner blobs.
     # Use the projection maintained by scan completion and VEX re-annotation,
     # scoped to the same latest runs as the summary and assessment state above.
-    indexed_by_sbom: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
     for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
         "sbom_id",
@@ -71,7 +71,7 @@ def build_component_security_picture(
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
-        indexed_by_sbom.setdefault(str(finding["sbom_id"]), {}).setdefault(finding["ecosystem"], []).append(
+        indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
                 "id": finding["advisory_id"],
                 "aliases": finding["aliases"],
@@ -92,13 +92,11 @@ def build_component_security_picture(
     for sbom_id, provider_results in results_by_sbom.items():
         meta = sbom_meta[sbom_id]
         component_id = meta["component_id"]
-        rows = [
-            row
-            for ecosystem_findings in indexed_by_sbom.get(sbom_id, {}).values()
-            for row in extract_finding_rows(
-                merge_findings_by_alias([{"findings": ecosystem_findings}]), kev_ids=kev_ids
-            )
-        ]
+        # One pass over the SBOM, as its card merges: package_scopes keys on the
+        # canonical ecosystem, so OSV's "PyPI" and a purl's "pypi" meet here.
+        rows = extract_finding_rows(
+            merge_findings_by_alias([{"findings": indexed_by_sbom.get(sbom_id, [])}]), kev_ids=kev_ids
+        )
         if not all(result_scanned_nothing(result) for result in provider_results):
             unassessed.discard(component_id)
         # Keep summary-only providers visible, as on the product detail page.
@@ -123,7 +121,9 @@ def build_component_security_picture(
                 }
             )
     _attach_patch_sla(findings, component_ids, sla_matrix)
-    # Active exploitation leads, followed by a breached SLA and severity.
+    # Active exploitation leads, followed by a breached SLA and severity. The
+    # trailing identity makes the order total: without it, ties kept the query's
+    # order, which follows random SBOM ids, and a paged list could repeat a row.
     findings.sort(
         key=lambda r: (
             not r["malicious"],
@@ -133,6 +133,11 @@ def build_component_security_picture(
             r["sla"]["remaining_seconds"] if r["sla"]["remaining_seconds"] is not None else float("inf"),
             -(r["scanned_at"].timestamp() if r["scanned_at"] else 0.0),
             -(r.get("cvss_score") or 0),
+            r["id"].casefold(),
+            r["component_name"].casefold(),
+            r["component_id"],
+            (r.get("package") or "").casefold(),
+            r.get("version") or "",
         )
     )
     return {

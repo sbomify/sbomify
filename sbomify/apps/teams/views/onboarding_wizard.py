@@ -17,7 +17,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     Member,
-    Team,
+    Workspace,
     default_patch_sla_days,
 )
 from sbomify.apps.teams.utils import (
@@ -119,11 +119,11 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         # only be reached by having an entity the user never asked for.
         company_name = request.session.get("wizard_company_name")
         if not company_name:
-            return redirect(reverse("teams:onboarding_wizard"))
+            return redirect(reverse("workspaces:onboarding_wizard"))
 
         billing_enabled = is_billing_enabled()
         if billing_enabled:
-            next_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+            next_url = f"{reverse('workspaces:onboarding_wizard')}?step=plan"
         else:
             # The dashboard, where the onboarding checklist asks for a product
             # and a component. Those steps used to be pre-ticked by the wizard
@@ -177,7 +177,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if not is_billing_enabled():
             return redirect("core:dashboard")
 
-        plan_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+        plan_url = f"{reverse('workspaces:onboarding_wizard')}?step=plan"
 
         if check_rate_limit(f"onboarding_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
             messages.error(request, "Too many requests. Please try again later.")
@@ -221,13 +221,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
 
-            team_key: str | None = team.key
-            if not team_key:
+            workspace_key: str | None = team.key
+            if not workspace_key:
                 log.error("Team %s has no key set — cannot start billing checkout", getattr(team, "pk", "unknown"))
                 messages.error(request, "We couldn't start the checkout for your workspace. Please contact support.")
                 return redirect(plan_url)
 
-            if not acquire_checkout_lock(team_key):
+            if not acquire_checkout_lock(workspace_key):
                 messages.info(request, "A checkout is already in progress. Please wait.")
                 return redirect(plan_url)
 
@@ -255,15 +255,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 self._pop_wizard_session(request)
                 return redirect(session.url)
             except StripeError:
-                release_checkout_lock(team_key)
-                log.exception("Stripe error creating checkout session for team %s", team_key)
+                release_checkout_lock(workspace_key)
+                log.exception("Stripe error creating checkout session for team %s", workspace_key)
                 messages.warning(
                     request,
                     "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",
                 )
                 return redirect(plan_url)
             except Exception:
-                release_checkout_lock(team_key)
+                release_checkout_lock(workspace_key)
                 raise
 
         team.has_selected_billing_plan = True
@@ -272,10 +272,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return redirect("core:dashboard")
 
     @staticmethod
-    def _get_current_team(request: HttpRequest) -> Team | None:
-        team_key = request.session.get("current_workspace", {}).get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+    def _get_current_team(request: HttpRequest) -> Workspace | None:
+        workspace_key = request.session.get("current_workspace", {}).get("key")
+        if workspace_key:
+            team = Workspace.objects.filter(key=workspace_key).first()
             if team:
                 return team
         user = cast(User, request.user)
@@ -283,7 +283,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _can_administer_team(user: Any, team: Team) -> bool:
+    def _can_administer_team(user: Any, team: Workspace) -> bool:
         """The wizard configures the workspace, so it's the ADMINISTER tier."""
         return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 
@@ -300,7 +300,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect("core:dashboard")
         if team.is_payment_restricted:
             messages.error(request, "Your account is suspended. Please update your payment method.")
-            return redirect("teams:onboarding_wizard")
+            return redirect("workspaces:onboarding_wizard")
 
         form = OnboardingCompanyForm(request.POST)
         if form.is_valid():
@@ -312,7 +312,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 refresh_current_team_session(request, result.value.workspace)
                 request.session["wizard_company_name"] = form.cleaned_data["company_name"]
                 messages.success(request, "Your workspace settings are saved.")
-                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
+                return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=complete")
             form.add_error(None, result.error or "Unable to complete setup. Please try again.")
 
         return self._render_setup(request, form=form)

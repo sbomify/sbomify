@@ -10,12 +10,12 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.queries import get_team_user_counts
 
 
 def build_plan_selection_context(
-    request: HttpRequest, workspace: Team, stripe_pricing_data: dict[str, dict[str, Any]]
+    request: HttpRequest, workspace: Workspace, stripe_pricing_data: dict[str, dict[str, Any]]
 ) -> ServiceResult[dict[str, Any]]:
     order = {BillingPlan.KEY_COMMUNITY: 0, BillingPlan.KEY_BUSINESS: 1, BillingPlan.KEY_ENTERPRISE: 2}
     # Two different numbers on purpose, matching what the rest of the product

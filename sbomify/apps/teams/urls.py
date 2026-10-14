@@ -48,63 +48,63 @@ def domain_check(request: HttpRequest) -> JsonResponse:
     return JsonResponse(payload)
 
 
-app_name = "teams"
+app_name = "workspaces"
 urlpatterns: list[URLPattern] = [
     path("", views.WorkspacesDashboardView.as_view(), name="teams_dashboard"),
-    path("switch/<team_key>/", views.switch_team, name="switch_team"),
-    path("invite/<team_key>/", views.invite, name="invite_user"),
+    path("switch/<workspace_key>/", views.switch_team, name="switch_team"),
+    path("invite/<workspace_key>/", views.invite, name="invite_user"),
     path("accept_invite/<invite_token>/", views.accept_invite, name="accept_invite"),
     path("<membership_id>/leave", views.delete_member, name="team_membership_delete"),
     path("<invitation_id>/uninvite", views.delete_invite, name="team_invitation_delete"),
     path("onboarding/", views.OnboardingWizardView.as_view(), name="onboarding_wizard"),
     # Backward compatibility redirects - must come before general patterns
     path("settings/", views.settings_redirect, name="settings_redirect"),
-    path("<team_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),
+    path("<workspace_key>/settings/", views.team_settings_redirect, name="team_settings_redirect"),
     # Keep team_details as an alias that redirects to team_settings for backward compatibility
-    path("<team_key>/details", views.team_details, name="team_details"),
-    path("<team_key>/vulnerability-scans", VulnerabilityScansView.as_view(), name="vulnerability_scans"),
+    path("<workspace_key>/details", views.team_details, name="team_details"),
+    path("<workspace_key>/vulnerability-scans", VulnerabilityScansView.as_view(), name="vulnerability_scans"),
     # Contact profiles HTMX endpoints
-    path("<team_key>/contact-profiles", views.ContactProfileView.as_view(), name="contact_profiles_list"),
-    path("<team_key>/suppliers", views.SupplierListView.as_view(), name="suppliers"),
+    path("<workspace_key>/contact-profiles", views.ContactProfileView.as_view(), name="contact_profiles_list"),
+    path("<workspace_key>/suppliers", views.SupplierListView.as_view(), name="suppliers"),
     path(
-        "<team_key>/contact-profiles/form",
+        "<workspace_key>/contact-profiles/form",
         views.ContactProfileFormView.as_view(),
         name="contact_profiles_form",
     ),
     path(
-        "<team_key>/contact-profiles/<profile_id>/form",
+        "<workspace_key>/contact-profiles/<profile_id>/form",
         views.ContactProfileFormView.as_view(),
         name="contact_profiles_detail_form",
     ),
     path(
-        "<team_key>/branding",
+        "<workspace_key>/branding",
         views.TeamBrandingView.as_view(),
         name="team_branding",
     ),
     path(
-        "<team_key>/general",
+        "<workspace_key>/general",
         views.TeamGeneralView.as_view(),
         name="team_general",
     ),
     path(
-        "<team_key>/custom-domain",
+        "<workspace_key>/custom-domain",
         views.TeamCustomDomainView.as_view(),
         name="team_custom_domain",
     ),
     path(
-        "<team_key>/tokens",
+        "<workspace_key>/tokens",
         views.TeamTokensView.as_view(),
         name="team_tokens",
     ),
     # POST-only: mints the short-lived token the CI/CD dialog puts in its command.
     path(
-        "<team_key>/ci-token",
+        "<workspace_key>/ci-token",
         views.CITokenView.as_view(),
         name="ci_token",
     ),
-    # One page per settings section. Declared before the bare <team_key> so the
+    # One page per settings section. Declared before the bare <workspace_key> so the
     # slug is not swallowed by it.
-    path("<team_key>/settings/<slug:tab>", views.TeamSettingsView.as_view(), name="team_settings_tab"),
+    path("<workspace_key>/settings/<slug:tab>", views.TeamSettingsView.as_view(), name="team_settings_tab"),
     # Settings index — renders the first section the member may open.
-    path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
+    path("<workspace_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

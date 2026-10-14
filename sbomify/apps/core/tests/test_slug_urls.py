@@ -11,7 +11,7 @@ import pytest
 from django.core.cache import cache
 
 from sbomify.apps.core.models import Component, Product, Release
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -33,7 +33,7 @@ def clear_cache():
 @pytest.fixture
 def custom_domain_team(db):
     """Create a team with a custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Company",
         billing_plan="business",
         custom_domain="trust.example.com",
@@ -157,7 +157,7 @@ class TestSlugRoutingOnCustomDomain:
     def test_wrong_workspace_slug_returns_404(self, client, db, custom_domain_team):
         """Test that accessing another workspace's product by slug returns 404."""
         # Create another team and product with same name
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Company",
             billing_plan="community",
             is_public=True,

@@ -16,7 +16,7 @@ from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @dataclass
@@ -88,7 +88,7 @@ def gated_denial_copy(
     return message.format(subject=subject), offer_action, action_is_nda
 
 
-def pending_request_needs_nda(user: User | AnonymousUser, team: Team | None) -> bool:
+def pending_request_needs_nda(user: User | AnonymousUser, team: Workspace | None) -> bool:
     """Is a pending access request waiting on this reader's NDA signature?
 
     Mirrors the same check on the component's public page, so a deep link to one
@@ -117,7 +117,7 @@ def pending_request_needs_nda(user: User | AnonymousUser, team: Team | None) -> 
     return not NDASignature.objects.live().filter(access_request=pending, nda_document=company_nda).exists()
 
 
-def _user_has_signed_current_nda(user: User, team: Team) -> bool:
+def _user_has_signed_current_nda(user: User, team: Workspace) -> bool:
     """Check if user has signed the current company-wide NDA version.
 
     Optimized to use a single query with exists() to avoid fetching unnecessary data.
@@ -149,7 +149,7 @@ def _user_has_signed_current_nda(user: User, team: Team) -> bool:
     )
 
 
-def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
+def _check_gated_access(user: User, team: Workspace) -> tuple[bool, bool]:
     """Check if user has gated access to components in a team.
 
     This is the core logic for gated access checking, used by both
@@ -229,7 +229,7 @@ def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
 
 
 def check_component_access(
-    request: HttpRequest, component: Component, team: Team | None = None
+    request: HttpRequest, component: Component, team: Workspace | None = None
 ) -> ComponentAccessResult:
     """Check if user has access to a component.
 
@@ -360,7 +360,7 @@ def check_component_access(
 
 
 def check_component_access_for_user(
-    user: User, component: Component, team: Team | None = None
+    user: User, component: Component, team: Workspace | None = None
 ) -> ComponentAccessResult:
     """Access check for a user with no HTTP-request context.
 

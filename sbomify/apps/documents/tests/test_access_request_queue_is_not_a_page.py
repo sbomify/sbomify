@@ -19,11 +19,11 @@ pytestmark = pytest.mark.django_db
 
 
 def _queue_url(team) -> str:
-    return reverse("documents:access_request_queue", kwargs={"team_key": team.key})
+    return reverse("documents:access_request_queue", kwargs={"workspace_key": team.key})
 
 
 def _settings_url(team) -> str:
-    return reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "trust-center"})
+    return reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "trust-center"})
 
 
 def test_a_browser_is_sent_to_the_page_that_renders_it(sample_team_with_owner_member: Member) -> None:

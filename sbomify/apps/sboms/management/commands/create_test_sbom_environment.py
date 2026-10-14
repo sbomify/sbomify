@@ -15,7 +15,7 @@ from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
 from sbomify.apps.sboms.services.sboms import deleting_sbom_files
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class Command(BaseCommand):
@@ -39,15 +39,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        team_key = options.get("team_key")
+        workspace_key = options.get("team_key")
         clean = options.get("clean")
 
         # Get or create team
-        team: Team
-        if team_key:
-            team = Team.objects.get(key=team_key)
+        team: Workspace
+        if workspace_key:
+            team = Workspace.objects.get(key=workspace_key)
         else:
-            first_team = Team.objects.first()
+            first_team = Workspace.objects.first()
             if not first_team:
                 self.stdout.write(self.style.ERROR("No workspace found. Please create a workspace first."))
                 return
@@ -62,7 +62,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             self.create_test_environment(team)
 
-    def cleanup_test_data(self, team: Team) -> None:
+    def cleanup_test_data(self, team: Workspace) -> None:
         """Clean up existing test data for the workspace"""
         self.stdout.write(f"Cleaning up existing test data for workspace {team.key}...")
 
@@ -93,7 +93,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Cleanup completed successfully"))
 
-    def create_test_environment(self, team: Team) -> None:
+    def create_test_environment(self, team: Workspace) -> None:
         """Create the test environment with all necessary data"""
         self.stdout.write("Creating test environment...")
 

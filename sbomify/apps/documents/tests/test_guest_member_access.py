@@ -384,7 +384,7 @@ class TestGuestCannotLeakAcrossWorkspaces:
     @pytest.fixture
     def guest_of_vendor(self, team_with_business_plan, guest_user, company_nda_document):
         """A user who owns their own workspace and is an approved guest of another."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         access_request = AccessRequest.objects.create(
@@ -398,7 +398,7 @@ class TestGuestCannotLeakAcrossWorkspaces:
             nda_content_hash=company_nda_document.content_hash,
             signed_name="Test User",
         )
-        own = Team.objects.create(name="Guest's Own Workspace")
+        own = Workspace.objects.create(name="Guest's Own Workspace")
         Member.objects.create(team=own, user=guest_user, role="owner", is_default_team=True)
         return guest_user, own
 

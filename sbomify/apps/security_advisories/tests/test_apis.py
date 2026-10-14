@@ -724,11 +724,11 @@ class TestThePublicSide:
         assert body["pagination"]["total"] == 1
 
     def test_a_private_workspace_is_not_found(self, client_and_headers, team, public_product) -> None:
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         client, _ = client_and_headers
         _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
-        Team.objects.filter(pk=team.pk).update(is_public=False)
+        Workspace.objects.filter(pk=team.pk).update(is_public=False)
 
         assert client.get(_public(team.key)).status_code == 404
 

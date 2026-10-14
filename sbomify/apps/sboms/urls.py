@@ -52,7 +52,7 @@ urlpatterns: list[URLPattern] = [
         name="sbom_crypto_inventory",
     ),
     path(
-        "workspaces/<str:team_key>/crypto/",
+        "workspaces/<str:workspace_key>/crypto/",
         WorkspaceCryptoView.as_view(),
         name="workspace_crypto",
     ),

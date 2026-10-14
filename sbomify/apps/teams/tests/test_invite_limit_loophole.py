@@ -2,7 +2,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.utils import can_add_user_to_team
 
 
@@ -19,7 +19,7 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     )
     
     user1 = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
-    team = Team.objects.create(name="Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Test Team", billing_plan="community")
     Member.objects.create(user=user1, team=team, role="owner")
     
     # 2. Verify team has 1 member

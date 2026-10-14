@@ -15,7 +15,7 @@ from sbomify.apps.core.services import inventory_page
 from sbomify.apps.core.services.product_page import build_product_page_context, build_product_releases_context
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.tests.test_inventory_page import scan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -73,7 +73,7 @@ def test_product_scope_cannot_be_changed_by_filters_or_foreign_relationships(
     other = Product.objects.create(name="Other", team=member.team)
     own = Component.objects.create(name="Own", team=member.team)
     unrelated = Component.objects.create(name="Unrelated", team=member.team)
-    foreign = Component.objects.create(name="Secret", team=Team.objects.create(name="Foreign"))
+    foreign = Component.objects.create(name="Secret", team=Workspace.objects.create(name="Foreign"))
     product.components.add(own)
     from sbomify.apps.sboms.models import ProductComponent
 
@@ -113,7 +113,7 @@ def test_product_membership_forms_preserve_other_assignments_and_reject_foreign_
         Component.objects.create(
             name="Workspace document", team=member.team, component_type="document", is_global=True
         ),
-        Component.objects.create(name="Foreign", team=Team.objects.create(name="Other workspace")),
+        Component.objects.create(name="Foreign", team=Workspace.objects.create(name="Other workspace")),
     ]
     for component in invalid:
         response = client.post(

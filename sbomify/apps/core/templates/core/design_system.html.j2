@@ -1190,6 +1190,17 @@ first-of-type rule that drops the leading hairline reads the section's position
     </tbody>
     </c-tables.screen-reader-table>
     </c-cards.card>
+    <h3 id="vulnerability-browser" class="text-lg font-semibold text-text">Workspace vulnerabilities</h3>
+    <p class="text-sm text-text-muted m-0">
+        One row per vulnerability in a component; totals count each vulnerability once. Product and component replace the
+        whole browser, every other control only the results. Fix prompt opens the page's fix prompt dialog.
+    </p>
+    <c-vulnerabilities.workspace-browser :data="workspace_vulnerability_demo" browser_target="demo-vulnerabilities-browser" results_target="demo-vulnerabilities-results" />
+    <c-vulnerabilities.fix-prompt-dialog />
+    <c-cards.card flush>
+    <c-cards.header title="Fix prompt" />
+    <c-vulnerabilities.fix-prompt :fix="fix_prompt_demo" />
+    </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
@@ -1299,6 +1310,28 @@ first-of-type rule that drops the leading hairline reads the section's position
         the component. Where the server knows the band, pass it as
         <c-code-inline>level</c-code-inline>.
     </p>
+    </c-cards.card>
+    <h2 id="version-summaries" class="text-xl font-semibold text-text">Version summaries</h2>
+    <c-cards.card>
+    {% comment %}A version row's two answers as table cells: what is still open, worst first, and the first check it fails. Every state each one can take.{% endcomment %}
+    {% with demo=version_summary_demo %}
+        <div class="flex flex-col gap-6">
+            <div class="flex flex-wrap items-start gap-10">
+                <c-vulnerabilities.open :summary="demo.open" />
+                <c-vulnerabilities.open :summary="demo.high_only" />
+                <c-vulnerabilities.open :summary="demo.other_only" />
+                <c-vulnerabilities.open :summary="demo.none" />
+                <c-vulnerabilities.open :summary="demo.nothing_scanned" />
+                <c-vulnerabilities.open :summary="demo.not_scanned" />
+            </div>
+            <div class="flex flex-wrap items-start gap-10">
+                <c-assessments.compliance :summary="demo.fails" href="#version-summaries" />
+                <c-assessments.compliance :summary="demo.error" href="#version-summaries" />
+                <c-assessments.compliance :summary="demo.checking" />
+                <c-assessments.compliance :summary="demo.meets" />
+            </div>
+        </div>
+    {% endwith %}
     </c-cards.card>
     <h2 id="role-badges" class="text-xl font-semibold text-text">Role badges</h2>
     <c-cards.card>
@@ -1536,6 +1569,8 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-cards.card title="Lists and dropdowns">
         <c-feedback.loading-list message="Loading notifications..." />
         <c-code-inline>&lt;c-feedback.loading-list&gt;</c-code-inline>
+        <c-feedback.loading-list rows="4" columns="2" message="Loading notes..." />
+        <c-code-inline>&lt;c-feedback.loading-list rows="4" columns="2"&gt;</c-code-inline>
         </c-cards.card>
         <div class="flex min-w-0 flex-col gap-3">
             <c-feedback.loading-table message="Loading artifacts..." />
@@ -1559,6 +1594,10 @@ first-of-type rule that drops the leading hairline reads the section's position
         <div class="flex min-w-0 flex-col gap-3">
             <c-feedback.loading-page message="Loading page content..." />
             <c-code-inline>&lt;c-feedback.loading-page&gt;</c-code-inline>
+        </div>
+        <div class="flex min-w-0 flex-col gap-3">
+            <c-feedback.loading-page heading sublines="3" :sections="loading_page_sections" message="Loading a catalogue..." />
+            <c-code-inline>&lt;c-feedback.loading-page heading sublines="3" :sections="[3, 1]"&gt;</c-code-inline>
         </div>
         <c-cards.card title="Skeleton primitives">
         <div class="flex flex-col gap-4">

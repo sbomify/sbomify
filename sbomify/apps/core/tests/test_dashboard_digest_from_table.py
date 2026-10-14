@@ -232,10 +232,10 @@ class TestScopeIsKept:
     def test_another_workspace_s_findings_stay_out(self, sample_team_with_owner_member) -> None:
         """Not ``sample_team``: that fixture is the same workspace this one owns,
         so a component added to it lands in the digest under test."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team = sample_team_with_owner_member.team
-        somebody_else = Team.objects.create(name="somebody else")
+        somebody_else = Workspace.objects.create(name="somebody else")
         _component_with(team, {"osv": [_finding("CVE-MINE", "high")]}, name="mine")
         _component_with(somebody_else, {"osv": [_finding("CVE-THEIRS", "critical")]}, name="theirs")
 

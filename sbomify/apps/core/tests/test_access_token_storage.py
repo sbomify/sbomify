@@ -56,12 +56,12 @@ def _token_claiming(user: AbstractBaseUser, token_type: str | None) -> str:
 
 
 def _from_tokens_page(client: Client, member: Member) -> str:
-    url = reverse("teams:team_tokens", kwargs={"team_key": member.team.key})
+    url = reverse("workspaces:team_tokens", kwargs={"workspace_key": member.team.key})
     return str(client.post(url, {"description": "CI"}).context["new_encoded_access_token"])
 
 
 def _from_ci_dialog(client: Client, member: Member) -> str:
-    url = reverse("teams:ci_token", kwargs={"team_key": member.team.key})
+    url = reverse("workspaces:ci_token", kwargs={"workspace_key": member.team.key})
     return str(client.post(url).json()["token"])
 
 

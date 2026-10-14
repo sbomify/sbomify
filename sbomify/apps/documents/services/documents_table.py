@@ -6,6 +6,8 @@ from typing import Any
 from django.http import HttpRequest
 
 from sbomify.apps.core.apis import get_component, list_component_documents
+from sbomify.apps.core.authz import can
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.documents.forms import DocumentDeleteForm, DocumentEditForm
 from sbomify.apps.documents.models import Document
@@ -52,6 +54,9 @@ def build_documents_table_context(
         "documents": document_items,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions") if not is_public_view else False,
+        # Editing is the manage tier; deleting asks owner or admin, as the API does.
+        "can_delete_document": not is_public_view
+        and bool(can(request, "document:delete", Component.objects.select_related("team").get(pk=component_id))),
         "delete_form": DocumentDeleteForm(),
         "document_type_choices": Document.DocumentType.choices,
         "document_type_subcategories": document_type_subcategories,

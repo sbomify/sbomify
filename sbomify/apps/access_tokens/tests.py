@@ -13,7 +13,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token, verify_item_access
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from .auth import PersonalAccessTokenAuth, optional_token_auth
 from .models import AccessToken
@@ -285,7 +285,7 @@ def test_auth_returns_none_without_db_record(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_scoped_token_same_team_access(sample_user):  # noqa: F811
     """Token scoped to team A, access team A resource -> allowed."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -306,10 +306,10 @@ def test_scoped_token_same_team_access(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
     """Token scoped to team A, access team B resource -> denied."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
-    team_b = Team.objects.create(name="Team B")
+    team_b = Workspace.objects.create(name="Team B")
     team_b.key = number_to_random_token(team_b.pk)
     team_b.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -333,7 +333,7 @@ def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     """Token with team=None, access any team user belongs to -> allowed."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -445,10 +445,10 @@ def test_token_scoped_to_one_workspace_blocks_other_workspaces(
     from sbomify.apps.sboms.models import Component
 
     # Two distinct workspaces — same user is owner of both.
-    workspace_a = Team.objects.create(name="Workspace A")
+    workspace_a = Workspace.objects.create(name="Workspace A")
     workspace_a.key = number_to_random_token(workspace_a.pk)
     workspace_a.save()
-    workspace_b = Team.objects.create(name="Workspace B")
+    workspace_b = Workspace.objects.create(name="Workspace B")
     workspace_b.key = number_to_random_token(workspace_b.pk)
     workspace_b.save()
     Member.objects.create(user=sample_user, team=workspace_a, role="owner", is_default_team=True)
@@ -509,10 +509,10 @@ def test_token_scoped_to_workspace_a_cannot_create_in_workspace_b(
     coerced into operating on the user's default workspace if it's
     scoped elsewhere.
     """
-    workspace_a = Team.objects.create(name="Workspace A (scoped target)")
+    workspace_a = Workspace.objects.create(name="Workspace A (scoped target)")
     workspace_a.key = number_to_random_token(workspace_a.pk)
     workspace_a.save()
-    workspace_b = Team.objects.create(name="Workspace B (default)")
+    workspace_b = Workspace.objects.create(name="Workspace B (default)")
     workspace_b.key = number_to_random_token(workspace_b.pk)
     workspace_b.save()
     # B is the DEFAULT — a buggy ``_get_user_team_id`` that forgot

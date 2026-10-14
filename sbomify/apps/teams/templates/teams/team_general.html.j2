@@ -7,7 +7,7 @@
     <c-layout.section-header level="2" title="General" subtitle="Your workspace's name, defaults and security targets." />
     <form id="team-general-form"
           method="post"
-          hx-post="{% url 'teams:team_general' team.key %}"
+          hx-post="{% url 'workspaces:team_general' team.key %}"
           hx-disabled-elt="#team-general-save-btn"
           hx-swap="none"
           class="flex flex-col gap-5">
@@ -43,19 +43,19 @@
         <form id="default-workspace-form"
               hidden
               method="post"
-              hx-post="{% url 'teams:team_general' team.key %}"
+              hx-post="{% url 'workspaces:team_general' team.key %}"
               hx-swap="none">
             {% csrf_token %}
             <input type="hidden" name="action" value="set_default">
         </form>
     {% endif %}
     <div id="patch-sla-wrapper"
-         hx-get="{% url 'teams:team_general' team.key %}"
+         hx-get="{% url 'workspaces:team_general' team.key %}"
          hx-select="#patch-sla-form"
          hx-trigger="refreshPatchSLA from:body"
          hx-swap="innerHTML">{% include 'teams/components/patch_sla_form.html.j2' %}</div>
     <form method="post"
-          hx-post="{% url 'teams:team_general' team.key %}"
+          hx-post="{% url 'workspaces:team_general' team.key %}"
           hx-swap="none"
           hx-disabled-elt="find button[type='submit']"
           class="flex flex-col gap-4">
