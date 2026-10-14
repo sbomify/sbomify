@@ -41,7 +41,7 @@
                     <c-billing.plan-card :plan="plan">
                     <c-slot name="action">
                     {% if plan.key == plan_hint %}<c-badges.secondary>Your selected plan</c-badges.secondary>{% endif %}
-                    <form method="post" action="{% url 'teams:onboarding_wizard' %}">
+                    <form method="post" action="{% url 'workspaces:onboarding_wizard' %}">
                         {% csrf_token %}
                         <input type="hidden" name="plan" value="{{ plan.key }}">
                         <input type="hidden" name="billing_period" :value="billingPeriod">
@@ -76,12 +76,12 @@
                     <c-onboarding.reason number="02" icon="fas fa-shield-halved" title="Where to report a vulnerability" description="Give security researchers a contact email. You can publish it through your Trust Center's security.txt." />
                     <c-onboarding.reason number="03" icon="fas fa-clock" title="How you support your software" description="Choose a default support period and patch targets so you can track progress against your commitments." />
                     <div class="flex flex-wrap items-center justify-between gap-3">
-                        <c-buttons.primary href="{% url 'teams:onboarding_wizard' %}?step=setup">Start <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
+                        <c-buttons.primary href="{% url 'workspaces:onboarding_wizard' %}?step=setup">Start <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
                         <c-forms.hint>Takes about two minutes.</c-forms.hint>
                     </div>
                 {% elif current_step == 'setup' %}
                     <form method="post"
-                          action="{% url 'teams:onboarding_wizard' %}"
+                          action="{% url 'workspaces:onboarding_wizard' %}"
                           novalidate
                           @submit="submit($event)"
                           class="flex flex-col gap-6">
@@ -117,7 +117,7 @@
                             <c-forms.textarea id="id_goal" name="goal" maxlength="1000" rows="2" value="{{ form.goal.value|default:'' }}" />
                             </c-forms.field>
                             <div class="flex flex-wrap justify-between gap-3">
-                                <c-buttons.secondary href="{% url 'teams:onboarding_wizard' %}">Back</c-buttons.secondary>
+                                <c-buttons.secondary href="{% url 'workspaces:onboarding_wizard' %}">Back</c-buttons.secondary>
                                 <c-buttons.primary @click="next()">Continue <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.primary>
                             </div>
                         </div>

@@ -4,7 +4,7 @@
      @update-counts.window="updateCounts()">
     {# Header with back navigation #}
     <div class="flex items-center gap-4 px-6 py-5 border-b border-border">
-        <c-buttons.icon label="Back to parties" hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML" title="Back to parties">
+        <c-buttons.icon label="Back to parties" hx-get="{% url 'workspaces:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML" title="Back to parties">
         <i class="fas fa-arrow-left"></i>
         </c-buttons.icon>
         <div>
@@ -25,7 +25,7 @@
             </p>
         </div>
     </div>
-    <form hx-post="{% if is_create %}{% url 'teams:contact_profiles_form' team.key %}{% else %}{% url 'teams:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
+    <form hx-post="{% if is_create %}{% url 'workspaces:contact_profiles_form' team.key %}{% else %}{% url 'workspaces:contact_profiles_detail_form' team.key profile.id %}{% endif %}"
           hx-target="#contact-profiles-content"
           hx-swap="innerHTML"
           hx-disabled-elt="find button[type='submit']"
@@ -81,7 +81,7 @@
         </div>
         {# Action Buttons - Sticky Footer #}
         <div class="flex items-center justify-between px-6 py-4 border-t border-border bg-surface/80 backdrop-blur-sm sticky bottom-0">
-            <c-buttons.secondary hx-get="{% url 'teams:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
+            <c-buttons.secondary hx-get="{% url 'workspaces:contact_profiles_list' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
             Cancel
             </c-buttons.secondary>
             <c-buttons.primary type="submit" ::disabled="hasErrors || visibleEntitiesCount === 0">

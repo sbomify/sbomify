@@ -17,7 +17,7 @@
     <c-cards.card flush>
     <c-cards.header compact title="Your tokens" />
     {% if access_tokens or unscoped_tokens %}
-        <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
+        <div x-data="window.getBulkRevokeData({ url: '{% url 'workspaces:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
             <c-tables.toolbar>
             <c-forms.checkbox @change="toggleAll($event.target.checked, [
             {% for t in access_tokens %}{{ t.id }},{% endfor %}
@@ -58,7 +58,7 @@
     <form method="post"
           id="tokenGenerationForm"
           x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}' }"
-          hx-post="{% url 'teams:team_tokens' team.key %}"
+          hx-post="{% url 'workspaces:team_tokens' team.key %}"
           hx-target="#team-tokens-content"
           hx-disabled-elt="#generate-token-button"
           hx-swap="innerHTML settle:0"

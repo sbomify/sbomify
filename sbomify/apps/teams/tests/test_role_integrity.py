@@ -48,7 +48,7 @@ class TestRoleIntegrity:
         membership = Member.objects.create(team=team, user=user, role=ROLE_MEMBER)
 
         assert membership.role == ROLE_MEMBER
-        assert ROLE_MEMBER in [role for role, _label in settings.TEAMS_SUPPORTED_ROLES]
+        assert ROLE_MEMBER in [role for role, _label in settings.WORKSPACE_SUPPORTED_ROLES]
 
     def test_database_rejects_an_unrecognised_invitation_role(self):
         """Invitation was the remaining way in for a role the code doesn't know.
@@ -76,14 +76,14 @@ class TestRoleIntegrity:
 
         Scope, precisely: the suite runs with ``--nomigrations`` (see the module
         docstring), so the schema — constraint included — is built from the
-        models, which read ``TEAMS_SUPPORTED_ROLES``. That makes this a check of
+        models, which read ``WORKSPACE_SUPPORTED_ROLES``. That makes this a check of
         model/settings coherence, NOT of migration coherence: a role added to
         settings without a migration would still pass here, because the
         constraint under test was generated from the same setting.
         ``test_models_and_migrations_agree`` is what covers that gap.
         """
         team = Team.objects.create(name="All Roles Workspace")
-        for index, (role, _label) in enumerate(settings.TEAMS_SUPPORTED_ROLES):
+        for index, (role, _label) in enumerate(settings.WORKSPACE_SUPPORTED_ROLES):
             user = django_user_model.objects.create_user(username=f"role-{index}-user", password="x")  # noqa: S106
             member = Member(team=team, user=user, role=role)
             if role == "bot":

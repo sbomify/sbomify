@@ -1070,7 +1070,7 @@
                                         <div class="workspace-dropdown-header">Switch Workspace</div>
                                         {% for t_key, t_info in available_workspaces.items %}
                                             <a class="workspace-dropdown-item {% if request.session.current_workspace.key == t_key %}active{% endif %}"
-                                               href="{% url 'teams:switch_team' t_key %}">
+                                               href="{% url 'workspaces:switch_team' t_key %}">
                                                 <span class="item-content">
                                                     <i class="fas fa-folder"></i>
                                                     {{ t_info.name|workspace_display }}

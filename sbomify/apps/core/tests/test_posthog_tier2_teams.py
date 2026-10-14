@@ -32,7 +32,7 @@ def test_invite_member_captures_team_member_invited(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:invite_user", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:invite_user", kwargs={"team_key": team_with_business_plan.key}),
         data={"email": "new-colleague@example.com", "role": "admin"},
     )
 
@@ -76,7 +76,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     client = Client()
     client.force_login(invitee)
 
-    response = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 302, f"Unexpected status {response.status_code}: {response.content!r}"
     assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()
@@ -135,7 +135,7 @@ def test_remove_member_captures_team_member_removed(
     client = Client()
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
-    response = client.post(reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id}))
+    response = client.post(reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id}))
 
     assert response.status_code in (200, 302)
     assert "team:member_removed" in called_events(mock_capture)
@@ -163,7 +163,7 @@ def test_settings_view_member_remove_also_fires_event(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}),
         data={"_method": "DELETE", "member_id": membership.id, "active_tab": "members"},
     )
 
@@ -297,7 +297,7 @@ def test_create_access_token_captures_api_token_created(
 
     assert team_with_business_plan.key is not None
     response = client.post(
-        reverse("teams:team_tokens", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("workspaces:team_tokens", kwargs={"team_key": team_with_business_plan.key}),
         data={"description": "test-token"},
     )
 

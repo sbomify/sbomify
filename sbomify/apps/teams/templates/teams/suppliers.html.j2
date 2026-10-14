@@ -12,10 +12,10 @@
     {# List. The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
     <c-tables.toolbar>
-    <c-forms.search-input size="sm" id="supplier-search" label="Search suppliers" placeholder="Search by name or email" name="search" value="{{ search }}" hx-get="{% url 'teams:suppliers' team.key %}?partial=true" hx-trigger="input changed delay:300ms, search" hx-target="#supplier-rows" hx-swap="innerHTML" />
+    <c-forms.search-input size="sm" id="supplier-search" label="Search suppliers" placeholder="Search by name or email" name="search" value="{{ search }}" hx-get="{% url 'workspaces:suppliers' team.key %}?partial=true" hx-trigger="input changed delay:300ms, search" hx-target="#supplier-rows" hx-swap="innerHTML" />
     </c-tables.toolbar>
     <div id="supplier-rows"
-         hx-get="{% url 'teams:suppliers' team.key %}?partial=true"
+         hx-get="{% url 'workspaces:suppliers' team.key %}?partial=true"
          hx-trigger="refresh-suppliers from:body"
          hx-swap="innerHTML">{% include "teams/components/supplier_rows.html.j2" %}</div>
     </c-tables.shell>
@@ -26,7 +26,7 @@
         <span x-text="form.supplierId ? 'Edit supplier' : 'Add supplier'"></span>
     </h2>
     <form method="post"
-          hx-post="{% url 'teams:suppliers' team.key %}"
+          hx-post="{% url 'workspaces:suppliers' team.key %}"
           hx-swap="none"
           class="space-y-4">
         {% csrf_token %}

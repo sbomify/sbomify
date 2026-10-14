@@ -134,7 +134,7 @@ def test_a_guest_still_reads_no_workspace_vulnerability_dashboard(path, items) -
 def test_an_operator_has_a_way_to_its_api_keys(items) -> None:
     """The tokens tab admits every internal role, so the rail offers it to all of them."""
     team = items["team"]
-    tokens = reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "tokens"})
+    tokens = reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "tokens"})
 
     page = _client(team, "operator").get(reverse("core:dashboard")).content.decode()
 

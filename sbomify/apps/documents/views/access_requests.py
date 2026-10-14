@@ -702,7 +702,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         if request.headers.get("HX-Request") != "true":
-            return redirect("teams:team_settings_tab", team_key=team.key, tab="trust-center")
+            return redirect("workspaces:team_settings_tab", team_key=team.key, tab="trust-center")
 
         # Verify user is owner or admin
         try:
@@ -806,7 +806,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Invalid invitation ID")
                 if active_tab == "trust-center":
                     response: HttpResponse = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -889,7 +889,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -899,7 +899,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Invitation not found")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -912,7 +912,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Email is required")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -926,7 +926,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -944,7 +944,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, f"Invitation already sent to {email}")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -1075,7 +1075,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return response
 
             if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+                response = redirect(
+                    reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                )
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
             return redirect("documents:access_request_queue", team_key=team_key)
@@ -1083,7 +1085,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if not action or not request_id:
             messages.error(request, "Invalid request")
             if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+                response = redirect(
+                    reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                )
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
             return redirect("documents:access_request_queue", team_key=team_key)
@@ -1100,7 +1104,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Access request not found")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -1112,7 +1116,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -1136,7 +1140,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -1157,7 +1161,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not approved")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -1185,7 +1189,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not rejected")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
@@ -1206,7 +1210,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Invalid action")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
@@ -1319,7 +1323,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if active_tab == "trust-center":
             # Redirect to trust center tab and trigger refresh of access requests
-            response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+            response = redirect(reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
             response["HX-Trigger"] = "refreshAccessRequests"
             return response
         return redirect("documents:access_request_queue", team_key=team_key)

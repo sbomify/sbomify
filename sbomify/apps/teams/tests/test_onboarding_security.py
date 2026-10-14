@@ -43,7 +43,7 @@ def setup_data(**changes: Any) -> dict[str, Any]:
 def test_security_setup_is_saved_together(setup_client: tuple[Client, Team], settings: SettingsWrapper) -> None:
     settings.BILLING = False
     client, workspace = setup_client
-    response = client.post(reverse("teams:onboarding_wizard"), setup_data())
+    response = client.post(reverse("workspaces:onboarding_wizard"), setup_data())
     assert response.status_code == 302
     workspace.refresh_from_db()
     assert workspace.has_completed_wizard
@@ -71,7 +71,7 @@ def test_invalid_security_settings_keep_answers_without_partial_save(
 ) -> None:
     client, workspace = setup_client
     original_name = workspace.name
-    response = client.post(reverse("teams:onboarding_wizard"), setup_data(**invalid))
+    response = client.post(reverse("workspaces:onboarding_wizard"), setup_data(**invalid))
     assert response.status_code == 200
     assert response.context["wizard_config"]["step"] == "security"
     assert response.context["form"]["company_name"].value() == "Example Software"
@@ -84,7 +84,7 @@ def test_invalid_security_settings_keep_answers_without_partial_save(
 
 def test_security_contact_does_not_publish_without_opt_in(setup_client: tuple[Client, Team]) -> None:
     client, workspace = setup_client
-    response = client.post(reverse("teams:onboarding_wizard"), setup_data(publish_security_txt=""))
+    response = client.post(reverse("workspaces:onboarding_wizard"), setup_data(publish_security_txt=""))
     assert response.status_code == 302
     workspace.refresh_from_db()
     assert not workspace.security_txt_config.get("enabled")
@@ -92,7 +92,7 @@ def test_security_contact_does_not_publish_without_opt_in(setup_client: tuple[Cl
 
 def test_support_default_can_be_changed_and_cleared_in_settings(setup_client: tuple[Client, Team]) -> None:
     client, workspace = setup_client
-    url = reverse("teams:team_general", args=[workspace.key])
+    url = reverse("workspaces:team_general", args=[workspace.key])
     for value, expected in [("10", 10), ("", None)]:
         response = client.post(url, {"action": "update_support_period", "default_support_period_years": value})
         assert response.status_code == 200

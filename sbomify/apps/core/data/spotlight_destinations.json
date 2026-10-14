@@ -73,7 +73,7 @@
     },
     {
       "title": "Suppliers",
-      "url_name": "teams:suppliers",
+      "url_name": "workspaces:suppliers",
       "section": "navigate",
       "icon": "fa-truck-field",
       "keywords": ["vendors", "third party", "supply chain", "supplier list"],
@@ -164,7 +164,7 @@
     },
     {
       "title": "Workspace settings",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-sliders",
       "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years"],
@@ -173,7 +173,7 @@
     },
     {
       "title": "Members",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-users",
       "keywords": ["team", "invite", "users", "people", "permissions", "roles", "access"],
@@ -184,7 +184,7 @@
     {
       "title": "API tokens",
       "example": "api key",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-key",
       "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
@@ -194,7 +194,7 @@
     },
     {
       "title": "Parties",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-address-book",
       "keywords": ["contact profiles", "contacts", "parties", "supplier contact", "author", "manufacturer"],
@@ -204,7 +204,7 @@
     },
     {
       "title": "Trust Center",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-globe",
       "keywords": ["public page", "custom domain", "nda", "tea", "security.txt", "publish"],
@@ -214,7 +214,7 @@
     },
     {
       "title": "Integrations",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-plug",
       "keywords": ["vanta", "connect", "oauth", "sync", "compliance tool", "drata", "data source", "frameworks"],
@@ -224,7 +224,7 @@
     },
     {
       "title": "Branding",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-palette",
       "keywords": ["logo", "colors", "theme", "look and feel", "white label"],
@@ -234,7 +234,7 @@
     },
     {
       "title": "Billing",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-credit-card",
       "keywords": ["plan", "subscription", "invoice", "payment", "upgrade", "pricing"],
@@ -244,7 +244,7 @@
     },
     {
       "title": "Account",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-user-gear",
       "keywords": ["profile", "my account", "delete workspace", "danger zone"],
@@ -254,7 +254,7 @@
     },
     {
       "title": "Switch workspace",
-      "url_name": "teams:teams_dashboard",
+      "url_name": "workspaces:teams_dashboard",
       "section": "settings",
       "icon": "fa-right-left",
       "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
@@ -310,7 +310,7 @@
     },
     {
       "title": "Get started wizard",
-      "url_name": "teams:onboarding_wizard",
+      "url_name": "workspaces:onboarding_wizard",
       "section": "actions",
       "icon": "fa-rocket",
       "keywords": ["onboarding", "setup", "tutorial", "first steps", "getting started"]
@@ -324,7 +324,7 @@
     },
     {
       "title": "Compliance controls",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "args": ["team_key"],
       "section": "settings",
       "icon": "fa-list-check",

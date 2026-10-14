@@ -47,7 +47,7 @@ class TestDeletingAProfileYouJustCreated:
     def _create(client: Client, team_key: str, name: str):
         """Create a profile the way the form does, and get the list back."""
         return client.post(
-            reverse("teams:contact_profiles_form", args=[team_key]),
+            reverse("workspaces:contact_profiles_form", args=[team_key]),
             {
                 "name": name,
                 "entities-TOTAL_FORMS": "1",
@@ -67,7 +67,7 @@ class TestDeletingAProfileYouJustCreated:
 
     def test_the_delete_form_points_at_the_list_whichever_view_rendered_it(self, signed_in) -> None:
         client, member = signed_in
-        list_url = reverse("teams:contact_profiles_list", args=[member.team.key])
+        list_url = reverse("workspaces:contact_profiles_list", args=[member.team.key])
 
         from_list = client.get(list_url, headers={"hx-request": "true"}).content.decode()
         from_create = self._create(client, member.team.key, "test").content.decode()
@@ -96,7 +96,7 @@ class TestDeletingAProfileYouJustCreated:
         client, member = signed_in
         self._create(client, member.team.key, "test")
         profile = ContactProfile.objects.get(team=member.team, name="test")
-        list_url = reverse("teams:contact_profiles_list", args=[member.team.key])
+        list_url = reverse("workspaces:contact_profiles_list", args=[member.team.key])
         reloaded = client.get(list_url, headers={"hx-request": "true"}).content.decode()
 
         response = client.post(

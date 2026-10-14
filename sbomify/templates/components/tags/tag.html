@@ -7,6 +7,8 @@ the slot; the shell's gap spaces it.
 removable renders the close button. label names what is being removed, for the
 accessible name, and remove_click carries the Alpine handler the editors wire up
 (@click.stop, so clicking the cross never fires the tag's own click).
+The cross stays 18px to sit inside the tag; below sm an invisible 44px box
+centred on it takes the tap, as the checkbox and radio do.
 
 A tag an editor builds from Alpine names itself in the browser, so remove_label
 takes the expression instead of the words and binds the accessible name; the two
@@ -29,7 +31,7 @@ are different gestures.
         {{ slot }}
         {% if removable %}
             <button type="button"
-                    class="flex items-center justify-center w-[1.125rem] h-[1.125rem] rounded-full ml-0.5 -mr-1 opacity-60 transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-danger)_20%,transparent)] hover:text-danger hover:opacity-100 focus-visible:outline-none focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                    class="relative flex items-center justify-center w-[1.125rem] h-[1.125rem] rounded-full ml-0.5 -mr-1 opacity-60 max-sm:after:content-[''] max-sm:after:absolute max-sm:after:top-1/2 max-sm:after:left-1/2 max-sm:after:-translate-x-1/2 max-sm:after:-translate-y-1/2 max-sm:after:w-11 max-sm:after:h-11 transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-danger)_20%,transparent)] hover:text-danger-ink hover:opacity-100 focus-visible:outline-none focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
                     {% if remove_label %}:aria-label="{{ remove_label }}"{% else %}aria-label="Remove {{ label }}"{% endif %}
                     {% if remove_title %}title="{{ remove_title }}"{% endif %}
                     {% if remove_click %}@click.stop="{{ remove_click }}"{% endif %}>

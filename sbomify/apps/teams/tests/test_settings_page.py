@@ -44,7 +44,7 @@ def test_initial_and_partial_settings_render_the_active_content(
 ) -> None:
     membership = sample_team_with_owner_member
     setup_authenticated_client_session(client, membership.team, membership.user)
-    url = reverse("teams:team_settings_tab", args=[membership.team.key, tab])
+    url = reverse("workspaces:team_settings_tab", args=[membership.team.key, tab])
     full = client.get(url)
     partial = client.get(url, HTTP_HX_REQUEST="true", HTTP_HX_TARGET="settings-content")
     assert full.status_code == partial.status_code == 200
@@ -71,8 +71,8 @@ def test_tokens_remain_personal_on_full_and_partial_pages(
         Member.objects.get_or_create(user=user, team=workspace, defaults={"role": "member"})
         AccessToken.objects.create(user=user, team=workspace, description=name, encoded_token=f"secret-{user.pk}")
     for url_name, args in (
-        ("teams:team_settings_tab", [workspace.key, "tokens"]),
-        ("teams:team_tokens", [workspace.key]),
+        ("workspaces:team_settings_tab", [workspace.key, "tokens"]),
+        ("workspaces:team_tokens", [workspace.key]),
     ):
         response = client.get(reverse(url_name, args=args), HTTP_HX_REQUEST="true", HTTP_HX_TARGET="settings-content")
         text = response.content.decode()
@@ -93,7 +93,7 @@ def test_patch_targets_require_workspace_administration(
     setup_authenticated_client_session(client, workspace, membership.user)
     before = workspace.patch_sla_days.copy()
     response = client.post(
-        reverse("teams:team_general", args=[workspace.key]),
+        reverse("workspaces:team_general", args=[workspace.key]),
         {"action": "update_patch_sla", "mode": "custom", "critical": "0", "high": "14", "medium": "", "low": "3650"},
     )
     workspace.refresh_from_db()
@@ -158,7 +158,7 @@ def test_invalid_patch_targets_do_not_change_saved_policy(
     workspace = membership.team
     setup_authenticated_client_session(client, workspace, membership.user)
     client.post(
-        reverse("teams:team_general", args=[workspace.key]),
+        reverse("workspaces:team_general", args=[workspace.key]),
         {"action": "update_patch_sla", "mode": "custom", "critical": value},
     )
     workspace.refresh_from_db()
@@ -179,7 +179,7 @@ def test_recommended_targets_restore_defaults_and_invalidate_dashboard(
     cache.set(cache_key, {"stale": True})
     with django_capture_on_commit_callbacks(execute=True):
         response = client.post(
-            reverse("teams:team_general", args=[workspace.key]), {"action": "update_patch_sla", "mode": "recommended"}
+            reverse("workspaces:team_general", args=[workspace.key]), {"action": "update_patch_sla", "mode": "recommended"}
         )
     assert response.status_code == 200
     workspace.refresh_from_db()
@@ -195,7 +195,7 @@ def test_admin_can_open_access_request_dialogs(client: Client, sample_team_with_
     workspace.is_public = True
     workspace.save(update_fields=["is_public"])
     setup_authenticated_client_session(client, workspace, membership.user)
-    response = client.get(reverse("teams:team_settings_tab", args=[workspace.key, "trust-center"]))
+    response = client.get(reverse("workspaces:team_settings_tab", args=[workspace.key, "trust-center"]))
     elements = Elements(response.content)
     assert elements.by_id("inviteUserForm")
     assert "required" in elements.by_id("company_nda_file")

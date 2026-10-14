@@ -45,7 +45,7 @@
             Edit
             </c-dropdowns.item>
             {% comment %}hx-vals replaces the old hidden-input form: a form must not ride along when the menu teleports to the body, and the CSRF header is set globally on every HTMX request.{% endcomment %}
-            <c-dropdowns.item-danger icon="fas fa-trash" hx-post="{% url 'teams:suppliers' team.key %}" hx-vals='{"action": "delete", "supplier_id": "{{ supplier.id }}"}' hx-swap="none">
+            <c-dropdowns.item-danger icon="fas fa-trash" hx-post="{% url 'workspaces:suppliers' team.key %}" hx-vals='{"action": "delete", "supplier_id": "{{ supplier.id }}"}' hx-swap="none">
             Remove
             </c-dropdowns.item-danger>
             </c-actions-menu>

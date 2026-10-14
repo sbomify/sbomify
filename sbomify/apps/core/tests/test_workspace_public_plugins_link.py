@@ -54,7 +54,7 @@ def test_the_prompt_switches_workspace_before_landing_on_plugins(
     # scanner enabled, which is this fixture.
     assert "Enable vulnerability scanning" in html
 
-    switch = reverse("teams:switch_team", kwargs={"team_key": viewed.key})
+    switch = reverse("workspaces:switch_team", kwargs={"team_key": viewed.key})
     plugins = reverse("plugins:plugins_page")
     assert f'href="{switch}?next={plugins}"' in html
 
@@ -77,7 +77,7 @@ def test_following_it_selects_the_viewed_workspace(
     assert client.session["current_workspace"]["key"] == selected.key
 
     plugins = reverse("plugins:plugins_page")
-    response = client.get(f"{reverse('teams:switch_team', kwargs={'team_key': viewed.key})}?next={plugins}")
+    response = client.get(f"{reverse('workspaces:switch_team', kwargs={'team_key': viewed.key})}?next={plugins}")
 
     assert response.status_code == 302
     assert response.headers["Location"] == plugins
@@ -102,7 +102,7 @@ def test_switching_to_a_workspace_missing_from_a_stale_session(
     session.save()
     assert viewed.key not in client.session["user_workspaces"]
 
-    response = client.get(reverse("teams:switch_team", kwargs={"team_key": viewed.key}))
+    response = client.get(reverse("workspaces:switch_team", kwargs={"team_key": viewed.key}))
 
     assert response.status_code == 302
     assert client.session["current_workspace"]["key"] == viewed.key
@@ -120,7 +120,7 @@ def test_switching_to_a_workspace_the_user_does_not_belong_to(
     _viewed, _selected, client = two_workspaces
     stranger = Team.objects.create(name="Someone Else's Workspace")
 
-    response = client.get(reverse("teams:switch_team", kwargs={"team_key": stranger.key}))
+    response = client.get(reverse("workspaces:switch_team", kwargs={"team_key": stranger.key}))
 
     assert response.status_code == 302
     assert client.session["current_workspace"]["key"] != stranger.key

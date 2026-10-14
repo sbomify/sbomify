@@ -211,7 +211,7 @@ def test_controls_navigation_and_product_overrides(
 ) -> None:
     page = authenticated_page
     workspace = team_with_business_plan
-    page.goto(reverse("teams:team_settings", args=[workspace.key]) + "#controls")
+    page.goto(reverse("workspaces:team_settings", args=[workspace.key]) + "#controls")
     expect(page).to_have_url(re.compile(r"/settings/controls$"))
     page.get_by_role("button", name="Activate SOC 2 Type II", exact=True).click()
     expect(page.get_by_role("button", name="Deactivate SOC 2 Type II", exact=True)).to_be_visible()
@@ -309,7 +309,7 @@ def test_unchanged_lifecycle_keeps_the_editor(
 
 def test_catalog_import_and_deletion(authenticated_page: Page, team_with_business_plan: Team) -> None:
     page = authenticated_page
-    page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
+    page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
     page.get_by_role("button", name="Import catalog", exact=True).click()
     dialog = page.get_by_role("dialog", name="Import OSCAL catalog", exact=True)
     upload = page.locator("#catalog-import-file")
@@ -354,7 +354,7 @@ def test_controls_settings_snapshot(
     page = authenticated_page
     page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}')")
     page.set_viewport_size({"width": width, "height": 1080})
-    page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
+    page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
     page.get_by_role("button", name="Access (1)", exact=True).click()
     page.wait_for_load_state("networkidle")
     assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")

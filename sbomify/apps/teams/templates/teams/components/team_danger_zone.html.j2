@@ -28,7 +28,7 @@
     <c-buttons.ghost @click="showDeleteModal = false; confirmText = ''">Cancel</c-buttons.ghost>
     <form x-ref="deleteForm"
           method="post"
-          action="{% url 'teams:team_general' team_key %}">
+          action="{% url 'workspaces:team_general' team_key %}">
         {% csrf_token %}
         <input type="hidden" name="action" value="delete">
         <c-buttons.danger type="submit" ::disabled="!canConfirm">

@@ -272,7 +272,7 @@ class TestBrandingUploadEndpoint:
 @pytest.mark.django_db
 class TestBrandingSettingsForm:
     def post(self, client, team, files):
-        return client.post(reverse("teams:team_branding", kwargs={"team_key": team.key}), files)
+        return client.post(reverse("workspaces:team_branding", kwargs={"team_key": team.key}), files)
 
     def test_a_new_icon_is_stored_under_the_type_its_bytes_show(self, owner, s3):
         client, team = owner

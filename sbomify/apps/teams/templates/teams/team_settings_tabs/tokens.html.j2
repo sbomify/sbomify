@@ -1,5 +1,5 @@
 <div id="team-tokens-wrapper"
-     hx-get="{% url 'teams:team_tokens' team.key %}"
+     hx-get="{% url 'workspaces:team_tokens' team.key %}"
      hx-trigger="refreshTeamTokens from:body"
      hx-target="#team-tokens-content"
      hx-swap="innerHTML settle:0">

@@ -195,7 +195,7 @@ def test_dangerzone_repaints_its_header_and_body(rendered: str) -> None:
 def test_dangerzone_header_ink_is_danger(rendered: str) -> None:
     header = _card_holding(rendered, "Danger body")
     assert 'class="fas fa-exclamation-triangle text-danger"' in header
-    assert 'class="text-lg font-semibold m-0 text-danger"' in header
+    assert 'class="text-lg font-semibold m-0 text-danger-ink"' in header
     assert "text-text-muted mr-2" not in header
 
 

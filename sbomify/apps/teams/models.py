@@ -541,14 +541,14 @@ class Member(models.Model):
             # three files. This constraint is what stops another one appearing:
             # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_SUPPORTED_ROLES]),
                 name="member_role_is_supported",
             ),
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
-    role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_SUPPORTED_ROLES)
     is_default_team = models.BooleanField(default=False, db_column="is_default_workspace")
     joined_at = models.DateTimeField(auto_now_add=True)
 
@@ -578,7 +578,7 @@ class Invitation(models.Model):
             # fixtures, admin — that bypasses full_clean(). The clean() below
             # gives the normal form flow a friendlier ValidationError first.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_INVITABLE_ROLES]),
                 name="invitation_role_is_invitable",
             ),
         ]
@@ -593,7 +593,7 @@ class Invitation(models.Model):
     # InviteUserForm UI further restricts choices but the model layer
     # allows the broader set so non-UI flows work. ``operator`` is invited
     # like any other internal role and needs no special handling.
-    role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
     # Who issued it, read again at accept time: an owner invitation only makes
@@ -620,7 +620,7 @@ class Invitation(models.Model):
 
     def get_granted_role_display(self) -> str:
         role = self.granted_role
-        return str(dict(settings.TEAMS_INVITABLE_ROLES).get(role, role))
+        return str(dict(settings.WORKSPACE_INVITABLE_ROLES).get(role, role))
 
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any

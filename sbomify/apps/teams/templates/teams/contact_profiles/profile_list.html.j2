@@ -8,7 +8,7 @@
 {% endif %}
 {% if not profiles %}
     <c-feedback.empty-state icon="fas fa-address-book" title="No parties yet" message="Add a party to reuse supplier details across components.">
-    <c-buttons.primary hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
+    <c-buttons.primary hx-get="{% url 'workspaces:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
     <i class="fas fa-plus mr-2"></i>Add your first party
     </c-buttons.primary>
     </c-feedback.empty-state>
@@ -57,5 +57,5 @@
     </template>
 {% endif %}
 </c-tables.shell>
-{% url 'teams:contact_profiles_list' team.key as delete_url %}
+{% url 'workspaces:contact_profiles_list' team.key as delete_url %}
 {% include "components/modals/delete_modal.html.j2" with modal_id="delete-contact-profile-modal" modal_title="Delete party" message_text="Are you sure you want to delete" warning_text="This cannot be undone." form_action=delete_url form=form submit_text="Delete party" use_htmx=True hx_target="#contact-profiles-content" hx_swap="innerHTML" %}

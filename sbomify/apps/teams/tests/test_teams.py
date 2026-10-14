@@ -126,7 +126,7 @@ def test_teams_dashboard_only_accessible_when_logged_in(
 ):
     client = Client()
 
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302  # nosec
@@ -146,7 +146,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "POST", "name": "New Test Team"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
@@ -156,7 +156,7 @@ def test_team_creation(sample_user: AbstractBaseUser):  # noqa: F811
     assert len(team.key) > 0  # nosec
 
     assert response.status_code == 302
-    assert response.url == reverse("teams:switch_team", kwargs={"team_key": team.key})
+    assert response.url == reverse("workspaces:switch_team", kwargs={"team_key": team.key})
 
     messages = list(get_messages(response.wsgi_request))
 
@@ -169,7 +169,7 @@ def test_only_logged_in_users_are_allowed_to_switch_teams(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("teams:switch_team", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:switch_team", kwargs={"team_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -192,7 +192,7 @@ def test_only_owners_are_allowed_to_access_team_details(
     client = Client()
 
     # User not logged in
-    uri = reverse("teams:team_details", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:team_details", kwargs={"team_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -205,7 +205,7 @@ def test_only_owners_are_allowed_to_access_team_details(
 
     # team_details now redirects to team_settings for unified interface
     assert response.status_code == 302
-    assert response.url == reverse("teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    assert response.url == reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
 
 
 @pytest.mark.django_db
@@ -213,7 +213,7 @@ def test_non_owners_cannot_access_team_details(sample_team_with_guest_member: Me
     client = Client()
 
     # User not logged in
-    uri = reverse("teams:team_details", kwargs={"team_key": sample_team_with_guest_member.team.key})
+    uri = reverse("workspaces:team_details", kwargs={"team_key": sample_team_with_guest_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -240,12 +240,12 @@ def test_set_default_team(sample_team_with_owner_member: Member):  # noqa: F811
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "PATCH", "key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     assert response.status_code == 302
-    assert response.url == reverse("teams:teams_dashboard")
+    assert response.url == reverse("workspaces:teams_dashboard")
 
     membership = Member.objects.filter(
         user_id=sample_team_with_owner_member.user_id, team_id=sample_team_with_owner_member.team_id
@@ -283,13 +283,13 @@ def test_delete_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the non-default team
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     # Check redirect to teams dashboard
     assert response.status_code == 302
-    assert response.url == reverse("teams:teams_dashboard")
+    assert response.url == reverse("workspaces:teams_dashboard")
 
     # Verify team is deleted
     assert not Team.objects.filter(pk=team.pk).exists()
@@ -325,7 +325,7 @@ def test_delete_team_not_owner(sample_user: AbstractBaseUser):  # noqa: F811
     session.save()
 
     # Try to delete the team
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
     response = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
@@ -344,7 +344,7 @@ def test_only_owners_are_allowed_to_open_team_invitation_form_view(sample_team: 
     client = Client()
 
     # User not logged in - should redirect to login
-    uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 302
@@ -357,7 +357,7 @@ def test_team_invitation_form_view(sample_team_with_owner_member: Member):  # no
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 200
@@ -369,7 +369,7 @@ def test_only_owners_are_allowed_to_send_invitation(sample_team: Team):  # noqa:
     client = Client()
 
     # User not logged in - should redirect to login
-    uri = reverse("teams:invite_user", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
@@ -408,7 +408,7 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     }
     session.save()
 
-    uri = reverse("teams:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:invite_user", kwargs={"team_key": sample_team_with_owner_member.team.key})
     # Guest role is no longer available in invite form - use admin instead
     form_data = urlencode({"email": "admin@example.com", "role": "admin"})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
@@ -448,7 +448,7 @@ def test_accept_invitation(
 
     # accept_invite
     client = Client()
-    uri = reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)})
+    uri = reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)})
     assert client.login(username="admin_user", password="adminpass")  # nosec B106
 
     response: HttpResponse = client.get(uri)
@@ -476,7 +476,7 @@ def test_accept_invitation_sets_default_team_and_session(django_user_model, comm
     client = Client()
     assert client.login(username="invited-user", password="secret")
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.get(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership = Member.objects.get(user=invited_user, team=team)
@@ -561,7 +561,7 @@ def test_accept_invitation_updates_existing_member_role(django_user_model, commu
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
 
@@ -637,7 +637,7 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role was updated
@@ -675,7 +675,7 @@ def test_accept_invitation_never_demotes_an_owner(django_user_model, community_p
     assert client.login(username="demote-target-owner", password="secret")
     setup_authenticated_client_session(client, team, owner_user)
 
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -703,7 +703,7 @@ def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_
     assert client.login(username="promote-to-owner", password="secret")
     setup_authenticated_client_session(client, team, user)
 
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     membership.refresh_from_db()
@@ -737,7 +737,7 @@ def test_accept_invitation_no_role_change_when_same_role(django_user_model, comm
     setup_authenticated_client_session(client, team, user)
 
     # Accept the invitation
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
     assert response.status_code == 302
 
     # Verify membership role unchanged
@@ -771,7 +771,7 @@ def test_accept_invitation_workspace_full_status_page(django_user_model):
     client = Client()
     assert client.login(username="capacity-guest", password="secret")
 
-    response: HttpResponse = client.post(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    response: HttpResponse = client.post(reverse("workspaces:accept_invite", kwargs={"invite_token": str(invitation.token)}))
 
     assert response.status_code == 403
     assert any(t.name == "teams/workspace_availability.html.j2" for t in response.templates)
@@ -794,7 +794,7 @@ def test_delete_membership(
     membership = Member.objects.filter(user_id=invited_user.id, team_id=sample_team_with_owner_member.team_id).first()
     assert membership is not None
 
-    uri = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
+    uri = reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id})
 
     client = Client()
 
@@ -841,7 +841,7 @@ def test_deleting_last_owner_of_team_is_not_allowed(
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
 
-    uri = reverse("teams:team_membership_delete", kwargs={"membership_id": sample_team_with_owner_member.id})
+    uri = reverse("workspaces:team_membership_delete", kwargs={"membership_id": sample_team_with_owner_member.id})
 
     response: HttpResponse = client.delete(uri)
 
@@ -862,7 +862,7 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
 
     invitation = Invitation.objects.filter(email="admin@example.com").first()
     assert invitation is not None
-    uri = reverse("teams:team_invitation_delete", kwargs={"invitation_id": invitation.id})
+    uri = reverse("workspaces:team_invitation_delete", kwargs={"invitation_id": invitation.id})
 
     response: HttpResponse = client.delete(uri)
 
@@ -881,7 +881,7 @@ def test_access_team_settings__when_user_is_owner__should_succeed(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_owner_member.team.key})
 
     setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
 
@@ -902,7 +902,7 @@ def test_team_settings_handles_invalid_billing_plan_gracefully(
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response: HttpResponse = client.get(uri)
 
     assert response.status_code == 200
@@ -921,7 +921,7 @@ def test_update_visibility_blocks_invalid_billing_plan(
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response: HttpResponse = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -941,7 +941,7 @@ def test_access_team_settings__when_user_is_admin__should_succeed(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_admin_member.team.key})
 
     setup_authenticated_client_session(client, sample_team_with_admin_member.team, sample_team_with_admin_member.user)
 
@@ -956,7 +956,7 @@ def test_access_team_settings__when_user_is_guest__should_fail(
     sample_team_with_guest_member: Member,  # noqa: F811
 ):
     client = Client()
-    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team_with_guest_member.team.key})
     setup_authenticated_client_session(client, sample_team_with_guest_member.team, sample_team_with_guest_member.user)
     response: HttpResponse = client.get(uri)
     assert response.status_code == 403
@@ -968,7 +968,7 @@ def test_access_team_settings__when_user_is_not_member__should_fail(
     sample_team: Team,
 ):
     client = Client()
-    uri = reverse("teams:team_settings", kwargs={"team_key": sample_team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": sample_team.key})
 
     # Unauthenticated users get redirected to login
     response: HttpResponse = client.get(uri)
@@ -1012,7 +1012,7 @@ def test_visibility_toggle__owner_can_make_public(
 
     setup_authenticated_client_session(client, team_with_business_plan, sample_user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1035,7 +1035,7 @@ def test_visibility_toggle__community_cannot_be_private(
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_community_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -1062,7 +1062,7 @@ def test_visibility_toggle__admin_allowed(
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1086,7 +1086,7 @@ def test_visibility_toggle__guest_blocked(
 
     setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false", "true"]},
@@ -1108,7 +1108,7 @@ def test_visibility_toggle_allowed_when_billing_disabled(
     client = Client()
     setup_authenticated_client_session(client, team_with_community_plan, sample_user)
 
-    uri = reverse("teams:team_settings", kwargs={"team_key": team_with_community_plan.key})
+    uri = reverse("workspaces:team_settings", kwargs={"team_key": team_with_community_plan.key})
     response = client.post(
         uri,
         {"visibility_action": "update", "is_public": ["false"]},
@@ -1630,7 +1630,7 @@ def test_cannot_delete_default_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the default team - should fail
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team1.key})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
@@ -1665,7 +1665,7 @@ def test_cannot_delete_last_team(sample_user: AbstractBaseUser):
     session.save()
 
     # Try to delete the only team - should fail
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team.key})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
@@ -1708,13 +1708,13 @@ def test_can_delete_non_default_team_when_multiple_exist(sample_user: AbstractBa
     session.save()
 
     # Try to delete the non-default team - should succeed
-    uri = reverse("teams:teams_dashboard")
+    uri = reverse("workspaces:teams_dashboard")
     form_data = urlencode({"_method": "DELETE", "key": team2.key})
     response: HttpResponse = client.post(uri, form_data, content_type="application/x-www-form-urlencoded")
 
     # Check redirect to teams dashboard
     assert response.status_code == 302
-    assert response.url == reverse("teams:teams_dashboard")
+    assert response.url == reverse("workspaces:teams_dashboard")
 
     # Verify non-default team is deleted
     assert not Team.objects.filter(pk=team2.pk).exists()
@@ -2122,7 +2122,7 @@ def test_team_general_get__when_user_is_owner__should_succeed(
     """Test that owners can access the general settings view."""
     client = Client()
     team = sample_team_with_owner_member.team
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2143,7 +2143,7 @@ def test_team_general_get__when_user_is_admin__should_succeed(
     """
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2159,7 +2159,7 @@ def test_team_general_get__when_user_is_guest__should_fail(
     """Test that guests cannot access the general settings view."""
     client = Client()
     team = sample_team_with_guest_member.team
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
@@ -2177,7 +2177,7 @@ def test_team_general_post__update_name_successfully(
     team = sample_team_with_owner_member.team
     original_name = team.name
     new_name = "Updated Workspace Name"
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2201,7 +2201,7 @@ def test_team_general_post__empty_name_should_fail(
     client = Client()
     team = sample_team_with_owner_member.team
     original_name = team.name
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2226,7 +2226,7 @@ def test_team_general_post__admin_can_update_name(
     """Admins can rename the workspace — workspace settings are ADMINISTER."""
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2249,7 +2249,7 @@ def test_team_general_post__admin_cannot_delete_workspace(
     """
     client = Client()
     team = sample_team_with_admin_member.team
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
@@ -2273,7 +2273,7 @@ def test_team_general_post__updates_session(
     client = Client()
     team = sample_team_with_owner_member.team
     new_name = "Session Updated Name"
-    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+    uri = reverse("workspaces:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
@@ -2348,7 +2348,7 @@ def test_accept_invite_with_an_unparseable_token_is_not_found(django_user_model,
     assert client.login(username="mangled-invite-recipient", password="secret")
     setup_authenticated_client_session(client, team, user)
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": invite_token}))
+    response: HttpResponse = client.get(reverse("workspaces:accept_invite", kwargs={"invite_token": invite_token}))
 
     assert response.status_code == 404
 
@@ -2358,6 +2358,6 @@ def test_accept_invite_with_an_unparseable_token_sends_a_signed_out_visitor_to_l
     """The anonymous branch reaches the same query first, so it 500'd too."""
     client = Client()
 
-    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": "not-a-token"}))
+    response: HttpResponse = client.get(reverse("workspaces:accept_invite", kwargs={"invite_token": "not-a-token"}))
 
     assert response.status_code == 302

@@ -13,7 +13,7 @@
               class="min-w-0 flex flex-col gap-5"
               method="post"
               enctype="multipart/form-data"
-              hx-post="{% url 'teams:team_branding' team.key %}"
+              hx-post="{% url 'workspaces:team_branding' team.key %}"
               hx-disabled-elt="#team-branding-save-btn"
               hx-swap="none">
             {% csrf_token %}

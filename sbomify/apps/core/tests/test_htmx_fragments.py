@@ -47,7 +47,7 @@ def test_writes_pass_through(method: str) -> None:
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
         ("sboms:sboms_table", "component"),
-        ("teams:team_tokens", "team"),
+        ("workspaces:team_tokens", "team"),
     ],
 )
 def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_product, sample_component) -> None:
@@ -79,7 +79,7 @@ def test_each_app_guards_its_fragments(url_name, arg, sample_user, sample_produc
         ("oidc:trusted_publishers", "component"),
         ("plugins:plugins_summary", None),
         ("sboms:sboms_table", "component"),
-        ("teams:team_tokens", "team"),
+        ("workspaces:team_tokens", "team"),
     ],
 )
 def test_an_htmx_read_without_a_session_still_meets_the_login_gate(url_name, arg, sample_product, sample_component):

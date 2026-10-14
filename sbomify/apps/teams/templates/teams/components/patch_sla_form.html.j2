@@ -5,7 +5,7 @@ first save, leaving the next render with nothing to compare against.
 {% endcomment %}
 <form id="patch-sla-form"
       method="post"
-      hx-post="{% url 'teams:team_general' team.key %}"
+      hx-post="{% url 'workspaces:team_general' team.key %}"
       hx-disabled-elt="find button[type='submit']"
       hx-swap="none"
       x-data="dirtySettingsForm(window.parseJsonScript('patch-sla-fields'))"

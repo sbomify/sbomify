@@ -4,7 +4,7 @@
     <c-layout.section-header level="2" title="Members" subtitle="Who has access to this workspace.">
     <c-slot name="actions">
     {% if can_administer %}
-        <c-buttons.primary size="sm" href="{% url 'teams:invite_user' team.key %}">Invite member</c-buttons.primary>
+        <c-buttons.primary size="sm" href="{% url 'workspaces:invite_user' team.key %}">Invite member</c-buttons.primary>
     {% endif %}
     </c-slot>
     </c-layout.section-header>
