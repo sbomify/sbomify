@@ -28,7 +28,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
                               ┌───────────────┼───────────────┐
                               ▼               ▼               ▼
                         ┌──────────┐   ┌──────────┐   ┌──────────┐
-                        │  Team    │   │  Email   │   │  Logs    │
+                        │ Workspace│   │  Email   │   │  Logs    │
                         │  Model   │   │  Notifs  │   │          │
                         └──────────┘   └──────────┘   └──────────┘
 ```
@@ -81,7 +81,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 3. `billing_redirect()` creates Stripe checkout session
 4. User completes payment on Stripe
 5. Stripe sends `checkout.session.completed` webhook (see [Webhook Events](#required-webhook-events))
-6. `handle_checkout_completed()` updates Team billing state
+6. `handle_checkout_completed()` updates the workspace's billing state
 7. User redirected to `/billing/return/` → `billing_return()` shows success
 
 ### Billing Portal Access
@@ -109,10 +109,10 @@ class MyCreateView(View):
         # Create logic here
 ```
 
-Limits are stored in `Team.billing_plan_limits` JSONField:
+Limits are stored in `Workspace.billing_plan_limits` JSONField:
 
 - `max_products`, `max_components`
-- When billing is disabled (`BILLING=FALSE`), all teams get unlimited access
+- When billing is disabled (`BILLING=FALSE`), all workspaces get unlimited access
 
 ## Async Tasks & Cron Jobs
 
@@ -163,7 +163,7 @@ The `notifications.py` module provides billing alerts:
 
 ### Trial Status Fields
 
-The `Team.billing_plan_limits` JSON field contains:
+The `Workspace.billing_plan_limits` JSON field contains:
 
 ```json
 {
@@ -309,10 +309,10 @@ stripe listen --forward-to localhost:8000/billing/webhook/
 # Dry run - see what would change
 python manage.py sync_stripe_subscriptions --dry-run
 
-# Sync all teams with subscriptions
+# Sync all workspaces with subscriptions
 python manage.py sync_stripe_subscriptions
 
-# Sync only teams with stale trials
+# Sync only workspaces with stale trials
 python manage.py sync_stripe_subscriptions --stale-trials-only
 
 # Sync a specific team
