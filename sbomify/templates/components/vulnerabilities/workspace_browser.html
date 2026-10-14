@@ -111,7 +111,7 @@ two HTMX roots the view answers.
         {% if data.query.component %}
             {% if data.version_locked %}
                 <c-forms.select size="md" id="vulnerabilities-version" label="Version, set by the release" disabled title="Set by the selected release">
-                <option>{{ data.selected_version.version|default:"Not in this release" }}</option>
+                <option>{% if data.selected_version %}{{ data.selected_version.version|default:data.selected_version.id }}{% else %}Not in this release{% endif %}</option>
                 </c-forms.select>
             {% else %}
                 <c-forms.select size="md" name="version" id="vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">

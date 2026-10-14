@@ -137,7 +137,7 @@ def build_component_vulnerabilities(
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
-        purl_matches,
+        package_scopes,
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -192,12 +192,29 @@ def build_component_vulnerabilities(
         advisory, package, version, ecosystem, *rest = triage_identity
         # The purl tells two packages apart that share a name, such as two Maven groupIds.
         purl = rest[0] if rest else ""
+        # Matched by package scope, not by label: the list merges findings in another
+        # order than this view, so it can name OSV's "com.foo:shared" / "Maven" for the
+        # occurrence this view names by Dependency-Track's "shared" / "maven".
+        wanted, *row_scopes = package_scopes(
+            [
+                {"component": {"name": package, "version": version, "ecosystem": ecosystem, "purl": purl}},
+                *(
+                    {
+                        "component": {
+                            "name": row["package"],
+                            "version": row["version"],
+                            "ecosystem": row["ecosystem"],
+                            "purl": row.get("purl"),
+                        }
+                    }
+                    for row in rows
+                ),
+            ]
+        )
         rows = [
             row
-            for row in rows
-            if advisory in (row["id"], *row["aliases"])
-            and (row["package"], row["version"], row["ecosystem"]) == (package, version, ecosystem)
-            and purl_matches(row.get("purl"), purl)
+            for row, scope in zip(rows, row_scopes, strict=True)
+            if scope == wanted and advisory in (row["id"], *row["aliases"])
         ]
 
     return ComponentVulnerabilitiesContext(

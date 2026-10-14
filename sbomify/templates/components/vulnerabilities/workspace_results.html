@@ -115,6 +115,12 @@ the scanner's full result, which the page itself never loads.
         </c-tables.table>
     {% elif data.details_unavailable %}
         <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scan reports totals only, so there are no vulnerabilities to list. Its counts are in the summary." />
+    {% elif data.scoped_components and data.unassessed_components == data.scoped_components %}
+        {% if data.single_component %}
+            <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities in this version appear here once it is scanned." />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities appear here once a component is scanned." />
+        {% endif %}
     {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
         <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>

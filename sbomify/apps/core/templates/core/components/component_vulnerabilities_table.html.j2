@@ -7,11 +7,12 @@ a plain request to it redirects to the component page with the same filters, so
 a reload or Back keeps them.
 
 A triage decision re-annotates findings in a background task, so the results also
-refresh when the re-apply broadcasts vex_reapplied for this component.{% endcomment %}
+refresh when the re-apply broadcasts vex_reapplied for this component, and when a
+scan of the displayed version finishes (assessment_complete).{% endcomment %}
 <div id="component-vulnerabilities-table"
      class="flex flex-col"
      x-data="{ refreshTimer: null }"
-     @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+     @ws:message.window=" if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ vuln_data.selected_version.id }}')) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <form method="get"
           action="{{ vuln_data.base_url }}"
           class="flex flex-col"
