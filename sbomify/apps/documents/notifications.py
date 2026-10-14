@@ -81,7 +81,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         request_timestamp = oldest_request.requested_at.isoformat()
 
         # Create notification with link to trust center tab
-        trust_center_url = reverse("teams:team_settings", kwargs={"team_key": team_key}) + "#trust-center"
+        trust_center_url = reverse("workspaces:team_settings", kwargs={"team_key": team_key}) + "#trust-center"
 
         message = f"You have {pending_count} pending access request{'s' if pending_count > 1 else ''} to review."
 

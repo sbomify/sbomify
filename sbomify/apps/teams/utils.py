@@ -65,7 +65,7 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
 
     # Validate team_key exists to prevent open redirect vulnerabilities
     if not Team.objects.filter(key=team_key).exists():
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     # Each section is its own page, so a known tab is a URL rather than a
     # fragment — the browser lands on the section directly instead of loading the
@@ -73,9 +73,9 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
     if active_tab and active_tab in TABS_BY_KEY:
-        return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab)
+        return redirect("workspaces:team_settings_tab", team_key=team_key, tab=active_tab)
 
-    base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
+    base_url = reverse("workspaces:team_settings", kwargs={"team_key": team_key})
     # The names with no page of their own keep the old fragment, so links to
     # them are not broken by the move.
     #
@@ -794,7 +794,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
             request.session.pop("current_workspace", None)
 
         request.session.modified = True
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
     else:
         messages.info(request, f"Member {removed_user.username} removed from workspace.")
         return redirect_to_team_settings(removed_team_key, active_tab)

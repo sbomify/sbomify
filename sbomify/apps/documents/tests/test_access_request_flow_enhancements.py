@@ -43,7 +43,7 @@ class TestAccessRequestFlowEnhancements:
         
         # Check redirection
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         
         # Check HX-Trigger header
@@ -92,7 +92,7 @@ class TestAccessRequestFlowEnhancements:
         )
         
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
@@ -122,7 +122,7 @@ class TestAccessRequestFlowEnhancements:
         )
         
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
@@ -152,6 +152,6 @@ class TestAccessRequestFlowEnhancements:
         
         # Logic says: message.error(...) and return redirect(...)
         assert response.status_code == 302
-        expected_url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"

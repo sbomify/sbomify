@@ -62,7 +62,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         current_team = request.session.get("current_workspace", {})
 
         if not current_team.get("has_completed_wizard", True):
-            return redirect("teams:onboarding_wizard")
+            return redirect("workspaces:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
         from sbomify.apps.core.services.dashboard_page import get_dashboard_workspace
@@ -73,7 +73,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         team = workspace_result.value
 
         if needs_plan_selection(team, request.user):
-            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+            return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
 
         if self.show_trends:
             return render(request, "core/dashboard_trends.html.j2", {"trends_query": trends_query(request)})

@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db
 
 def _wizard_plan_url(**params):
     """Build the wizard plan step URL."""
-    url = reverse("teams:onboarding_wizard") + "?step=plan"
+    url = reverse("workspaces:onboarding_wizard") + "?step=plan"
     for key, value in params.items():
         url += f"&{key}={value}"
     return url
@@ -182,7 +182,7 @@ class TestOnboardingPlanSelectionGet:
 class TestOnboardingPlanSelectionPost:
     def test_select_community(self, billing_enabled, authed_client, community_plan):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "community"})
         assert resp.status_code == 302
 
         team.refresh_from_db()
@@ -196,7 +196,7 @@ class TestOnboardingPlanSelectionPost:
         mock_checkout.return_value = mock_session
         client, user, team = authed_client
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert resp.url == mock_session.url
 
@@ -214,7 +214,7 @@ class TestOnboardingPlanSelectionPost:
         mock_checkout.side_effect = StripeError("Stripe error")
         client, user, team = authed_client
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert "step=plan" in resp.url
 
@@ -223,7 +223,7 @@ class TestOnboardingPlanSelectionPost:
 
     def test_select_enterprise_redirects_to_contact(self, billing_enabled, authed_client, enterprise_plan):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "enterprise"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "enterprise"})
         assert resp.status_code == 302
         assert "enterprise-contact" in resp.url
 
@@ -232,7 +232,7 @@ class TestOnboardingPlanSelectionPost:
 
     def test_invalid_plan_rejected(self, billing_enabled, authed_client):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "invalid"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "invalid"})
         assert resp.status_code == 302
 
         team.refresh_from_db()
@@ -249,7 +249,7 @@ class TestOnboardingPlanSelectionPost:
         }
         session.save()
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert "/dashboard" in resp.url or resp.url == "/"
 
@@ -262,7 +262,7 @@ class TestBillingDisabled:
 
     def test_post_redirects_to_dashboard(self, billing_disabled, authed_client):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "community"})
         assert resp.status_code == 302
 
 

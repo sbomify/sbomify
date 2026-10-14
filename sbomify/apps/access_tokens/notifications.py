@@ -106,7 +106,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days} days")
         action_url = None
         if token.team is not None:
-            action_url = reverse("teams:team_settings", kwargs={"team_key": token.team.key}) + "#tokens"
+            action_url = reverse("workspaces:team_settings", kwargs={"team_key": token.team.key}) + "#tokens"
         notifications.append(
             NotificationSchema(
                 # Day-resolution id: dismissing today's warning keeps it away

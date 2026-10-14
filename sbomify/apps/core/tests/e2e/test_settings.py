@@ -90,7 +90,7 @@ class TestSettingsSnapshot:
 
         expect(no_workspace_page.get_by_role("button", name="Generate token", exact=False)).to_have_count(0)
         expect(no_workspace_page.get_by_role("link", name="Select workspace", exact=True)).to_have_attribute(
-            "href", reverse("teams:teams_dashboard")
+            "href", reverse("workspaces:teams_dashboard")
         )
 
         baseline = snapshot.get_or_create_baseline_screenshot(no_workspace_page, width=width)

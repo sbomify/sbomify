@@ -143,7 +143,7 @@ def test_workspace_cards(
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
     page.set_viewport_size({"width": width, "height": 900})
-    page.goto(reverse("teams:teams_dashboard"))
+    page.goto(reverse("workspaces:teams_dashboard"))
     current = page.get_by_role("region", name=re.compile(r"^Test Business Team"))
     card = page.get_by_role("region", name=re.compile(r"^Example engineering"))
     member_card = page.get_by_role("region", name=re.compile(r"^A workspace with a long name"))
@@ -153,7 +153,7 @@ def test_workspace_cards(
     expect(current.get_by_text("Default", exact=True)).to_be_visible()
     expect(page.get_by_text("0 pending invitations", exact=True)).to_have_count(0)
     expect(card.get_by_role("link", name="Settings", exact=True)).to_have_attribute(
-        "href", reverse("teams:team_settings", args=[other.key])
+        "href", reverse("workspaces:team_settings", args=[other.key])
     )
     member_card.get_by_role("button", name=re.compile(r"^Actions for")).click()
     expect(page.get_by_role("menuitem", name="Delete workspace", exact=True)).to_be_hidden()
@@ -174,7 +174,7 @@ def test_workspace_cards(
     page.evaluate("window.scrollTo(0, 0)")
     page.screenshot(path=str(tmp_path / f"workspaces-{theme}-{width}.png"), full_page=True, animations="disabled")
     card.get_by_role("link", name="Open workspace", exact=True).click()
-    page.goto(reverse("teams:teams_dashboard"))
+    page.goto(reverse("workspaces:teams_dashboard"))
     expect(card.get_by_text("Current", exact=True)).to_be_visible()
     assert not errors
 
@@ -185,7 +185,7 @@ def test_workspace_create_and_delete(authenticated_page: Page, sample_user: User
     page = authenticated_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto(reverse("teams:teams_dashboard"))
+    page.goto(reverse("workspaces:teams_dashboard"))
     page.get_by_role("region", name=re.compile(r"^Example temporary workspace")).get_by_role(
         "button", name=re.compile(r"^Actions for")
     ).click()
@@ -204,7 +204,7 @@ def test_workspace_create_and_delete(authenticated_page: Page, sample_user: User
     create.get_by_role("textbox", name="Name *", exact=True).fill("Example new workspace")
     with page.expect_navigation(wait_until="load"):
         create.get_by_role("button", name="Add Workspace", exact=True).click()
-    page.goto(reverse("teams:teams_dashboard"))
+    page.goto(reverse("workspaces:teams_dashboard"))
     expect(page.get_by_role("region", name=re.compile(r"^Example new workspace"))).to_be_visible()
     assert Member.objects.filter(team__name="Example new workspace", user=sample_user, role="owner").exists()
     assert not errors

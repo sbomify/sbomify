@@ -105,6 +105,9 @@ default-groups = [
     "test",
 ]
 
+# An override also lifts every other package's cap on it. pyOpenSSL caps
+# cryptography to the releases it can import against, so raise pyopenssl
+# whenever this floor moves.
 override-dependencies = [
     "cryptography>=50.0.0",
     "pillow>=12.3.0",

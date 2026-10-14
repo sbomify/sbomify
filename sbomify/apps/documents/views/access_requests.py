@@ -678,7 +678,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         if request.headers.get("HX-Request") != "true":
-            return redirect("teams:team_settings_tab", team_key=team.key, tab="trust-center")
+            return redirect("workspaces:team_settings_tab", team_key=team.key, tab="trust-center")
 
         # Verify user is owner or admin
         try:

@@ -48,7 +48,7 @@ def domain_check(request: HttpRequest) -> JsonResponse:
     return JsonResponse(payload)
 
 
-app_name = "teams"
+app_name = "workspaces"
 urlpatterns: list[URLPattern] = [
     path("", views.WorkspacesDashboardView.as_view(), name="teams_dashboard"),
     path("switch/<team_key>/", views.switch_team, name="switch_team"),

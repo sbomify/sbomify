@@ -380,7 +380,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
         response = client.get(
             # The billing tab, not the settings index: the index resolves to
             # General, which renders no billing and so builds none.
-            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
         )
         assert response.status_code == 200
 
@@ -411,7 +411,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
         response = client.get(
             # The billing tab, not the settings index: the index resolves to
             # General, which renders no billing and so builds none.
-            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
         )
         assert response.status_code == 200
 
@@ -437,7 +437,7 @@ class TestTeamSettingsBillingPeriod(TestCase):
         response = client.get(
             # The billing tab, not the settings index: the index resolves to
             # General, which renders no billing and so builds none.
-            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
         )
         assert response.status_code == 200
 
@@ -708,7 +708,7 @@ class TestIntegrationScenarios(TestCase):
         response = client.get(
             # The billing tab, not the settings index: the index resolves to
             # General, which renders no billing and so builds none.
-            reverse("teams:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
+            reverse("workspaces:team_settings_tab", kwargs={"team_key": self.team.key, "tab": "billing"})
         )
         assert response.status_code == 200
         assert response.context["plan_pricing"]["billing_period"] == "annual"

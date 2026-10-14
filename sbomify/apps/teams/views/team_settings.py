@@ -111,7 +111,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # the highlighted tab and the content all agree. Returning here also
         # means a redirect costs no billing work.
         if tab is not None and tab != active_tab.key:
-            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+            return redirect("workspaces:team_settings_tab", team_key=team_key, tab=active_tab.key)
 
         # Stripe is reached only where its answer is on screen. Eight sections
         # render from this view and one of them shows billing, so syncing on

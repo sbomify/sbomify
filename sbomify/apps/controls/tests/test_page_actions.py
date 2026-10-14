@@ -24,7 +24,7 @@ def test_controls_permissions_use_live_membership(
     catalog = ControlCatalog.objects.create(team=workspace, name="Audit", version="1")
     control = Control.objects.create(catalog=catalog, control_id="A-1", title="Access review", group="Access")
     product = Product.objects.create(team=workspace, name="Controls product")
-    settings_url = reverse("teams:team_settings_tab", args=[workspace.key, "controls"])
+    settings_url = reverse("workspaces:team_settings_tab", args=[workspace.key, "controls"])
     response = client.get(settings_url)
     if role in ("owner", "admin"):
         assert response.status_code == 200

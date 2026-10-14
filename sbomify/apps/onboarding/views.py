@@ -22,12 +22,12 @@ class OnboardingPlanSelectionView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         if not is_billing_enabled():
             return redirect("core:dashboard")
-        return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+        return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
 
     def post(self, request: HttpRequest) -> HttpResponse:
         if not is_billing_enabled():
             return redirect("core:dashboard")
-        return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+        return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
 
 
 @method_decorator(csrf_exempt, name="dispatch")

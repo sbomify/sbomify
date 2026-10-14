@@ -23,7 +23,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.4.2",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "alpinejs": "3.17.4",
     "chart.js": "^4.5.1",
     "dompurify": "^3.4.16",

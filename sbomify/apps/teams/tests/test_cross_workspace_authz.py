@@ -46,7 +46,7 @@ def test_owner_elsewhere_cannot_rename_a_workspace_they_are_only_a_member_of(cli
     _session_for(client, home, "owner")
 
     response = client.post(
-        reverse("teams:team_general", kwargs={"team_key": other.key}),
+        reverse("workspaces:team_general", kwargs={"team_key": other.key}),
         {"action": "update_name", "name": "Renamed By An Outsider"},
     )
 
@@ -61,7 +61,7 @@ def test_owner_elsewhere_cannot_change_another_workspaces_freshness_policy(clien
     _session_for(client, home, "owner")
 
     client.post(
-        reverse("teams:team_general", kwargs={"team_key": other.key}),
+        reverse("workspaces:team_general", kwargs={"team_key": other.key}),
         {"action": "update_name", "name": other.name, "sbom_freshness_days": 1},
     )
 
@@ -83,7 +83,7 @@ def test_capability_flags_describe_the_workspace_the_page_is_about(client, two_h
     client.force_login(two_hatted_user)
     _session_for(client, home, "owner")
 
-    response = client.get(reverse("teams:team_settings", kwargs={"team_key": other.key}))
+    response = client.get(reverse("workspaces:team_settings", kwargs={"team_key": other.key}))
     request = response.wsgi_request
 
     context = team_context(request)
@@ -141,7 +141,7 @@ def test_a_member_cannot_delete_a_workspace_invitation(client, django_user_model
     _session_for(client, home, "member")
 
     client.post(
-        reverse("teams:team_settings", kwargs={"team_key": home.key}),
+        reverse("workspaces:team_settings", kwargs={"team_key": home.key}),
         {"_method": "DELETE", "invitation_id": invitation.id},
     )
 

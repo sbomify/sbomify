@@ -96,7 +96,7 @@ def home(request: HttpRequest) -> HttpResponse:
 
         # Wizard not finished yet → send to Welcome step (not plan)
         if not current_team.get("has_completed_wizard", True):
-            return redirect("teams:onboarding_wizard")
+            return redirect("workspaces:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
         from sbomify.apps.teams.models import Team
@@ -107,7 +107,7 @@ def home(request: HttpRequest) -> HttpResponse:
             team = Team.objects.filter(key=team_key).first()
 
         if needs_plan_selection(team, request.user):
-            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+            return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
 
@@ -175,7 +175,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         current_team = request.session.get("current_workspace")
         if current_team and current_team.get("key"):
-            return redirect("teams:team_settings_tab", team_key=current_team["key"], tab="tokens")
+            return redirect("workspaces:team_settings_tab", team_key=current_team["key"], tab="tokens")
 
         messages.add_message(
             request,
@@ -188,7 +188,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     # Check if user has a current workspace - if so, redirect to tokens tab
     current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
-        return redirect("teams:team_settings", team_key=current_team["key"])
+        return redirect("workspaces:team_settings", team_key=current_team["key"])
 
     # If no current workspace, show pending invitations only (backward compatibility)
     context = _build_settings_context(request.user)
@@ -200,7 +200,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
             messages.INFO,
             "Please select a workspace to access token settings.",
         )
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     return render(request, "core/settings.html.j2", context)
 

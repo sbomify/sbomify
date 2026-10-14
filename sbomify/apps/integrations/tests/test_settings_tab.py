@@ -45,7 +45,7 @@ class TestTabPage:
         client = Client()
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "integrations"}))
+        response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "integrations"}))
 
         assert response.status_code == 200
         assert reverse("integrations:panel", kwargs={"team_key": team.key}).encode() in response.content
@@ -68,7 +68,7 @@ class TestTabPage:
         client = Client()
         setup_authenticated_client_session(client, team, guest_user)
 
-        response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "integrations"}))
+        response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "integrations"}))
 
         assert response.status_code == 302
         assert not response.url.endswith("/settings/integrations")
