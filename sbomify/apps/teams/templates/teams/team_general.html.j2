@@ -1,14 +1,14 @@
 <div id="team-general-content" class="flex flex-col gap-5">
     <c-layout.section-header level="2" title="General" subtitle="Your workspace's name, defaults and security targets." />
     <div id="workspace-card-wrapper"
-         hx-get="{% url 'teams:team_general' team.key %}"
+         hx-get="{% url 'workspaces:team_general' team.key %}"
          hx-select="#workspace-card"
          hx-trigger="refreshWorkspaceCard from:body"
          hx-swap="innerHTML">
         <div id="workspace-card">
             <form id="team-general-form"
                   method="post"
-                  hx-post="{% url 'teams:team_general' team.key %}"
+                  hx-post="{% url 'workspaces:team_general' team.key %}"
                   hx-disabled-elt="#team-general-save-btn"
                   hx-swap="none"
                   x-data="dirtySettingsForm(window.parseJsonScript('team-general-fields'))"
@@ -43,7 +43,7 @@
                 <form id="default-workspace-form"
                       hidden
                       method="post"
-                      hx-post="{% url 'teams:team_general' team.key %}"
+                      hx-post="{% url 'workspaces:team_general' team.key %}"
                       hx-swap="none">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="set_default">
@@ -52,18 +52,18 @@
         </div>
     </div>
     <div id="patch-sla-wrapper"
-         hx-get="{% url 'teams:team_general' team.key %}"
+         hx-get="{% url 'workspaces:team_general' team.key %}"
          hx-select="#patch-sla-form"
          hx-trigger="refreshPatchSLA from:body"
          hx-swap="innerHTML">{% include 'teams/components/patch_sla_form.html.j2' %}</div>
     <div id="support-period-wrapper"
-         hx-get="{% url 'teams:team_general' team.key %}"
+         hx-get="{% url 'workspaces:team_general' team.key %}"
          hx-select="#support-period-form"
          hx-trigger="refreshSupportPeriod from:body"
          hx-swap="innerHTML">
         <form id="support-period-form"
               method="post"
-              hx-post="{% url 'teams:team_general' team.key %}"
+              hx-post="{% url 'workspaces:team_general' team.key %}"
               hx-swap="none"
               hx-disabled-elt="find button[type='submit']"
               x-data="dirtySettingsForm(window.parseJsonScript('support-period-fields'))"

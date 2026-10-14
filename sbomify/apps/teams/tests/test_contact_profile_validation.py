@@ -240,7 +240,7 @@ def test_the_list_a_save_returns_shows_when_each_party_changed(
     workspace = team_with_business_plan
     client = authenticated_web_client
     data = profile_form_data()
-    response = client.post(reverse("teams:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true")
+    response = client.post(reverse("workspaces:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true")
     if render_source == "update":
         profile = ContactProfile.objects.get(team=workspace, name=data["name"])
         entity = profile.entities.get()
@@ -254,7 +254,7 @@ def test_the_list_a_save_returns_shows_when_each_party_changed(
             }
         )
         response = client.post(
-            reverse("teams:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+            reverse("workspaces:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
             data,
             HTTP_HX_REQUEST="true",
         )
@@ -271,7 +271,7 @@ def test_an_api_error_reaches_the_settings_in_their_word(
     """The API names this resource a contact profile; the settings call it a party,
     so an API message shown as a toast there is put in the settings' word."""
     response = authenticated_web_client.get(
-        reverse("teams:contact_profiles_detail_form", args=[team_with_business_plan.key, "missingprof1"]),
+        reverse("workspaces:contact_profiles_detail_form", args=[team_with_business_plan.key, "missingprof1"]),
         HTTP_HX_REQUEST="true",
     )
 

@@ -117,7 +117,7 @@ def test_saving_the_support_period_refreshes_that_form_alone(
     freshness edit in the card above."""
     workspace = sample_team_with_owner_member.team
     setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
-    url = reverse("teams:team_general", args=[workspace.key])
+    url = reverse("workspaces:team_general", args=[workspace.key])
 
     response = client.post(url, {"action": "update_support_period", "default_support_period_years": "7"})
 
@@ -137,7 +137,7 @@ def test_saving_the_workspace_card_refreshes_that_card_alone(
     unsaved patch-target or support-period edit further down."""
     workspace = sample_team_with_owner_member.team
     setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
-    url = reverse("teams:team_general", args=[workspace.key])
+    url = reverse("workspaces:team_general", args=[workspace.key])
 
     response = client.post(url, {"name": "Renamed workspace", "sbom_freshness_days": "30"})
 
@@ -214,7 +214,7 @@ def test_a_party_renders_its_last_updated_date(client: Client, sample_team_with_
     ContactProfile.objects.create(team=workspace, name="Product contacts", is_default=True)
     setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
 
-    response = client.get(reverse("teams:team_settings_tab", args=[workspace.key, "contact-profiles"]))
+    response = client.get(reverse("workspaces:team_settings_tab", args=[workspace.key, "contact-profiles"]))
     payload = response.content.decode()
     profiles = json.loads(payload[payload.index('id="profiles-data"') :].split(">", 1)[1].split("</script>")[0])
 
@@ -255,7 +255,7 @@ def test_the_nda_card_footer_sits_on_the_card_surface(client: Client, sample_tea
     workspace = sample_team_with_owner_member.team
     setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
 
-    response = client.get(reverse("teams:team_settings_tab", args=[workspace.key, "trust-center"]))
+    response = client.get(reverse("workspaces:team_settings_tab", args=[workspace.key, "trust-center"]))
 
     parser = _AncestorsOf("Upload NDA")
     parser.feed(response.content.decode())
