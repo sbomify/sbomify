@@ -89,7 +89,7 @@ class TestAccessRequestCreation:
 
     def test_create_access_request_view_unauthenticated(self, client, team_with_business_plan):
         """Test that unauthenticated users cannot create access requests."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         response = client.post(url, {})
         assert response.status_code in [302, 401, 403]  # Redirect to login or forbidden
 
@@ -97,7 +97,7 @@ class TestAccessRequestCreation:
         self, authenticated_web_client, team_with_business_plan, guest_user
     ):
         """Test creating an access request via view."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         
         # Switch to guest user
         authenticated_web_client.force_login(guest_user)
@@ -152,7 +152,7 @@ class TestAccessRequestCreation:
         self, authenticated_web_client, team_with_business_plan, guest_user, pending_access_request
     ):
         """Test that creating a request when one already exists updates it."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.force_login(guest_user)
         
         response = authenticated_web_client.post(url, {})
@@ -178,7 +178,7 @@ class TestAccessRequestCreation:
         
         # Try to create a new request
         authenticated_web_client.force_login(guest_user)
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(url, {})
         
         assert response.status_code in [200, 302]
@@ -201,7 +201,7 @@ class TestTrustCenterInvitation:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
         authenticated_web_client.post(
-            reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
             {"action": "invite", "email": guest_user.email},
         )
 
@@ -218,7 +218,7 @@ class TestNDASigning:
         """Test that unauthenticated users cannot sign NDAs."""
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
@@ -239,7 +239,7 @@ class TestNDASigning:
         
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
         # Submit NDA signing form with name and consent
@@ -274,7 +274,7 @@ class TestNDASigning:
         
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
         # Submit NDA signing form - should fail due to hash mismatch
@@ -307,7 +307,7 @@ class TestNDASigning:
 
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
 
         # Submit NDA signing form with X-Real-IP header (set by reverse proxy)
@@ -342,7 +342,7 @@ class TestNDASigning:
 
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
 
         # Submit NDA signing form without X-Real-IP header
@@ -456,7 +456,7 @@ class TestAccessRequestApproval:
         """Test approving an access request via view."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -488,7 +488,7 @@ class TestAccessRequestApproval:
         """Test that approval sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -537,7 +537,7 @@ class TestAccessRequestApproval:
             team=team_with_business_plan, user=pending_access_request.user
         ).exists()
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -563,7 +563,7 @@ class TestAccessRequestApproval:
         cache_key = f"user_teams_invalidate:{pending_access_request.user.id}"
         cache.set(cache_key, True, timeout=600)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -587,7 +587,7 @@ class TestAccessRequestRejection:
         """Test rejecting an access request via view."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -612,7 +612,7 @@ class TestAccessRequestRejection:
         """Test that rejection sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -671,7 +671,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -699,7 +699,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -730,7 +730,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -766,7 +766,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -788,7 +788,7 @@ class TestAccessRequestClearRejection:
         """Test that clearing a non-existent request returns error."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -824,7 +824,7 @@ class TestAccessRequestRevocation:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -865,7 +865,7 @@ class TestAccessRequestRevocation:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -907,7 +907,7 @@ class TestAccessRequestRevocation:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -956,7 +956,7 @@ class TestAccessRequestRevocation:
         
         # Revoke access
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -1010,7 +1010,7 @@ class TestNotificationSystem:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         # Approve the only pending request
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -1103,7 +1103,7 @@ class TestNDADocumentVersioning:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key})
         
         from django.core.files.uploadedfile import SimpleUploadedFile
         new_nda = SimpleUploadedFile("new_nda.pdf", b"New NDA Content v2", content_type="application/pdf")
@@ -1189,7 +1189,7 @@ class TestAccessRequestQueueView:
 
     def test_access_request_queue_requires_auth(self, client, team_with_business_plan):
         """Test that queue view requires authentication."""
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
 
@@ -1206,7 +1206,7 @@ class TestAccessRequestQueueView:
         }
         session.save()
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url)
         # TeamRoleRequiredMixin may redirect to recover workspace session if user is not a member
         assert response.status_code in [302, 403, 404]
@@ -1222,7 +1222,7 @@ class TestAccessRequestQueueView:
         """
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
@@ -1234,7 +1234,7 @@ class TestAccessRequestQueueView:
         """Test that queue view supports partial rendering for HTMX."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
@@ -1255,7 +1255,7 @@ class TestAccessRequestQueueView:
             signed_name="Test User"
         )
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
@@ -1418,7 +1418,7 @@ class TestAccessRequestEdgeCases:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -1446,7 +1446,7 @@ class TestAccessRequestEdgeCases:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -1465,7 +1465,7 @@ class TestAccessRequestEdgeCases:
         """Test that revoking a non-approved request fails."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {

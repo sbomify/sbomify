@@ -28,7 +28,7 @@ from django.views.generic import TemplateView
 from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 
 from sbomify.apps.core.utils import get_client_ip
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from . import billing_processing
@@ -199,8 +199,8 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
 class CreatePortalSessionView(LoginRequiredMixin, View):
     """Create a Stripe Billing Portal session and redirect to it."""
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = get_object_or_404(Team, key=team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = get_object_or_404(Workspace, key=workspace_key)
 
         can_bill, error_msg = require_billing_manager(team, request.user)
         if not can_bill:
@@ -210,7 +210,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
         stripe_customer_id = (team.billing_plan_limits or {}).get("stripe_customer_id")
         if not stripe_customer_id:
             messages.error(request, "No billing account found. Please subscribe to a plan first.")
-            return redirect("billing:select_plan", team_key=team.key)
+            return redirect("billing:select_plan", workspace_key=team.key)
 
         sync_subscription_from_stripe(team, force_refresh=True)
         team.refresh_from_db()
@@ -222,7 +222,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
 
         if sub_status in TERMINAL_SUBSCRIPTION_STATUSES or not sub_id:
             messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
-            return redirect("billing:select_plan", team_key=team.key)
+            return redirect("billing:select_plan", workspace_key=team.key)
 
         try:
             return_url = request.build_absolute_uri(reverse("core:dashboard"))
@@ -250,7 +250,7 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                 elif flow_type == "subscription_cancel" and cancel_at_period_end:
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
-                            team = Team.objects.select_for_update().get(pk=team.pk)
+                            team = Workspace.objects.select_for_update().get(pk=team.pk)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             team.billing_plan_limits = billing_limits
@@ -259,12 +259,12 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                         request,
                         "Your subscription is already scheduled for cancellation at the end of the billing period.",
                     )
-                    return redirect("billing:select_plan", team_key=team.key)
+                    return redirect("billing:select_plan", workspace_key=team.key)
             elif flow_type == "subscription_cancel":
                 messages.info(request, "Your subscription has ended. Please select a new plan to continue.")
-                return redirect("billing:select_plan", team_key=team.key)
+                return redirect("billing:select_plan", workspace_key=team.key)
 
-            logger.debug("Creating portal session for team %s", team_key)
+            logger.debug("Creating portal session for team %s", workspace_key)
             try:
                 session = stripe_client.create_billing_portal_session(
                     stripe_customer_id, return_url, flow_data=flow_data
@@ -273,14 +273,14 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
             except StripeError as e:
                 error_str = str(e).lower()
                 if "already set to be canceled" in error_str or "already scheduled for cancellation" in error_str:
-                    logger.info("Subscription already canceled in Stripe for team %s, syncing...", team_key)
+                    logger.info("Subscription already canceled in Stripe for team %s, syncing...", workspace_key)
                     sync_subscription_from_stripe(team, force_refresh=True)
                     team.refresh_from_db()
                     billing_limits = team.billing_plan_limits or {}
 
                     if not billing_limits.get("scheduled_downgrade_plan"):
                         with transaction.atomic():
-                            team = Team.objects.select_for_update().get(pk=team.pk)
+                            team = Workspace.objects.select_for_update().get(pk=team.pk)
                             billing_limits = team.billing_plan_limits or {}
                             billing_limits["scheduled_downgrade_plan"] = "community"
                             billing_limits["cancel_at_period_end"] = True
@@ -292,19 +292,19 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
                         "Your subscription is already scheduled for cancellation at the end of the billing period. "
                         "Your current plan will remain active until then.",
                     )
-                    return redirect("billing:select_plan", team_key=team.key)
+                    return redirect("billing:select_plan", workspace_key=team.key)
                 raise
         except StripeError as e:
-            logger.error("Failed to create portal session for team %s: %s", team_key, e)
+            logger.error("Failed to create portal session for team %s: %s", workspace_key, e)
             messages.error(request, "Unable to access billing portal. Please contact support.")
-            return redirect("billing:select_plan", team_key=team.key)
+            return redirect("billing:select_plan", workspace_key=team.key)
 
 
 class SelectPlanView(LoginRequiredMixin, View):
     """Display plan selection page and handle plan selection."""
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = get_object_or_404(Team, key=team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        team = get_object_or_404(Workspace, key=workspace_key)
 
         can_bill, error_msg = require_billing_manager(team, request.user)
         if not can_bill:
@@ -318,12 +318,12 @@ class SelectPlanView(LoginRequiredMixin, View):
 
         return self._render_plan_page(request, team, stripe_pricing_data)
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         if is_ratelimited(request, group="select_plan", key="user", rate=RATE_LIMIT, increment=True):
             messages.error(request, "Too many requests. Please try again later.")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
-        team = get_object_or_404(Team, key=team_key)
+        team = get_object_or_404(Workspace, key=workspace_key)
 
         can_bill, error_msg = require_billing_manager(team, request.user)
         if not can_bill:
@@ -337,17 +337,17 @@ class SelectPlanView(LoginRequiredMixin, View):
 
         if not plan_key:
             messages.error(request, "Please select a plan")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
         if billing_period and billing_period not in ["monthly", "annual"]:
             messages.error(request, "Invalid billing period selected")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
         try:
             plan = BillingPlan.objects.get(key=plan_key)
         except BillingPlan.DoesNotExist:
             messages.error(request, "Invalid plan selected")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
         if plan.key == BillingPlan.KEY_ENTERPRISE:
             return redirect("billing:enterprise_contact")
@@ -362,15 +362,15 @@ class SelectPlanView(LoginRequiredMixin, View):
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
 
         if plan.key == BillingPlan.KEY_COMMUNITY and cancel_at_period_end:
-            return self._handle_scheduled_downgrade(team, team_key, scheduled_downgrade_plan, request)
+            return self._handle_scheduled_downgrade(team, workspace_key, scheduled_downgrade_plan, request)
 
         if not stripe_sub_id or current_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
-            result = self._handle_subscription_cancel(team, team_key, plan, request)
+            result = self._handle_subscription_cancel(team, workspace_key, plan, request)
             if result is not None:
                 return result
 
         if stripe_sub_id and current_sub_status in ["active", "trialing"] and not cancel_at_period_end:
-            return self._handle_active_subscription_portal(team_key, plan, request)
+            return self._handle_active_subscription_portal(workspace_key, plan, request)
 
         if plan.key == BillingPlan.KEY_COMMUNITY:
             messages.warning(
@@ -378,16 +378,18 @@ class SelectPlanView(LoginRequiredMixin, View):
                 "Unable to process downgrade. Your subscription status may have changed. "
                 "Please refresh the page and try again, or contact support if the issue persists.",
             )
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
         if plan.key == BillingPlan.KEY_BUSINESS:
-            return self._handle_checkout_creation(team, team_key, plan, billing_period, stripe_pricing_data, request)
+            return self._handle_checkout_creation(
+                team, workspace_key, plan, billing_period, stripe_pricing_data, request
+            )
 
         messages.error(request, "Unsupported plan selected")
-        return redirect("billing:select_plan", team_key=team_key)
+        return redirect("billing:select_plan", workspace_key=workspace_key)
 
     def _handle_scheduled_downgrade(
-        self, team: Team, team_key: str, scheduled_downgrade_plan: Any, request: HttpRequest
+        self, team: Workspace, workspace_key: str, scheduled_downgrade_plan: Any, request: HttpRequest
     ) -> HttpResponse:
         """Handle case where subscription already has cancel_at_period_end set."""
         if scheduled_downgrade_plan:
@@ -398,7 +400,7 @@ class SelectPlanView(LoginRequiredMixin, View):
             )
         else:
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
                 billing_limits["scheduled_downgrade_plan"] = "community"
                 team.billing_plan_limits = billing_limits
@@ -408,15 +410,15 @@ class SelectPlanView(LoginRequiredMixin, View):
                 "Your subscription is already scheduled for cancellation at the end of the billing period. "
                 "Your current plan will remain active until then.",
             )
-        return redirect("billing:select_plan", team_key=team_key)
+        return redirect("billing:select_plan", workspace_key=workspace_key)
 
     def _handle_subscription_cancel(
-        self, team: Team, team_key: str, plan: BillingPlan, request: HttpRequest
+        self, team: Workspace, workspace_key: str, plan: BillingPlan, request: HttpRequest
     ) -> HttpResponse | None:
         """Handle plan selection when no active subscription exists."""
         if plan.key == BillingPlan.KEY_COMMUNITY:
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 team.billing_plan = plan.key
                 existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                 existing_limits.update(
@@ -433,7 +435,7 @@ class SelectPlanView(LoginRequiredMixin, View):
         return None
 
     def _handle_active_subscription_portal(
-        self, team_key: str, plan: BillingPlan, request: HttpRequest
+        self, workspace_key: str, plan: BillingPlan, request: HttpRequest
     ) -> HttpResponse:
         """Redirect to Stripe portal for active subscription changes."""
         flow_type = "subscription_update"
@@ -441,13 +443,14 @@ class SelectPlanView(LoginRequiredMixin, View):
             flow_type = "subscription_cancel"
 
         return redirect(
-            reverse("billing:create_portal_session", kwargs={"team_key": team_key}) + f"?flow_type={flow_type}"
+            reverse("billing:create_portal_session", kwargs={"workspace_key": workspace_key})
+            + f"?flow_type={flow_type}"
         )
 
     def _handle_checkout_creation(
         self,
-        team: Team,
-        team_key: str,
+        team: Workspace,
+        workspace_key: str,
         plan: BillingPlan,
         billing_period: str | None,
         stripe_pricing_data: dict[str, dict[str, Any]],
@@ -456,11 +459,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         """Create a Stripe checkout session for a new subscription."""
         if not billing_period:
             messages.error(request, "Please select a billing period")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
-        if not acquire_checkout_lock(team_key):
+        if not acquire_checkout_lock(workspace_key):
             messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
         plan_pricing = stripe_pricing_data.get(plan.key or "", {})
 
@@ -487,15 +490,15 @@ class SelectPlanView(LoginRequiredMixin, View):
             )
             return redirect(session.url)
         except StripeError as e:
-            release_checkout_lock(team_key)
-            logger.error("Failed to create checkout session for team %s: %s", team_key, e)
+            release_checkout_lock(workspace_key)
+            logger.error("Failed to create checkout session for team %s: %s", workspace_key, e)
             messages.error(request, "Failed to initiate payment. Please try again.")
-            return redirect("billing:select_plan", team_key=team_key)
+            return redirect("billing:select_plan", workspace_key=workspace_key)
 
     def _render_plan_page(
         self,
         request: HttpRequest,
-        team: Team,
+        team: Workspace,
         stripe_pricing_data: dict[str, dict[str, Any]],
     ) -> HttpResponse:
         from .services.plan_selection import build_plan_selection_context
@@ -515,30 +518,30 @@ class BillingReturnView(LoginRequiredMixin, View):
 
         logger.info("Processing billing return with session_id: %s...%s", session_id[:8], session_id[-4:])
 
-        team_key: str | None = None
+        workspace_key: str | None = None
         try:
             session = stripe_client.get_checkout_session(session_id)
 
             # Verify ownership BEFORE processing payment status
-            team_key = session.metadata.get("team_key")
-            if not team_key:
+            workspace_key = session.metadata.get("team_key")
+            if not workspace_key:
                 logger.error("No team key found in session metadata")
                 messages.error(request, "Invalid checkout session. Please contact support.")
                 return redirect("core:dashboard")
 
             try:
-                team_check = Team.objects.get(key=team_key)
+                team_check = Workspace.objects.get(key=workspace_key)
                 can_bill, _ = require_billing_manager(team_check, request.user)
                 if not can_bill:
                     logger.warning(
                         "User %s attempted billing_return for team %s without billing access",
                         request.user.pk,
-                        team_key,
+                        workspace_key,
                     )
                     messages.error(request, "You do not have permission to manage billing for this workspace.")
                     return redirect("core:dashboard")
-            except Team.DoesNotExist:
-                logger.error("Team %s not found for checkout session %s", team_key, session_id)
+            except Workspace.DoesNotExist:
+                logger.error("Team %s not found for checkout session %s", workspace_key, session_id)
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
@@ -546,7 +549,7 @@ class BillingReturnView(LoginRequiredMixin, View):
             if session.payment_status not in {"paid", "no_payment_required"}:
                 logger.error("Payment status was not valid: %s", session.payment_status)
                 messages.error(request, "Payment was not completed. Please try again.")
-                return redirect("billing:select_plan", team_key=team_key)
+                return redirect("billing:select_plan", workspace_key=workspace_key)
 
             subscription = stripe_client.get_subscription(session.subscription)
             customer = stripe_client.get_customer(session.customer)
@@ -555,7 +558,7 @@ class BillingReturnView(LoginRequiredMixin, View):
 
             try:
                 with transaction.atomic():
-                    team = Team.objects.select_for_update().get(key=team_key)
+                    team = Workspace.objects.select_for_update().get(key=workspace_key)
 
                     # Re-verify ownership under lock to prevent TOCTOU race
                     can_bill, _ = require_billing_manager(team, request.user)
@@ -565,7 +568,7 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
                     if existing_subscription_id == subscription.id:
-                        logger.info("Subscription %s already processed for team %s", subscription.id, team_key)
+                        logger.info("Subscription %s already processed for team %s", subscription.id, workspace_key)
                         if not team.has_selected_billing_plan:
                             team.has_selected_billing_plan = True
                             team.save(update_fields=["has_selected_billing_plan"])
@@ -576,7 +579,7 @@ class BillingReturnView(LoginRequiredMixin, View):
                     try:
                         plan = BillingPlan.objects.get(key=plan_key)
                     except BillingPlan.DoesNotExist:
-                        logger.error("Plan %s not found for team %s", plan_key, team_key)
+                        logger.error("Plan %s not found for team %s", plan_key, workspace_key)
                         messages.error(
                             request,
                             "Billing plan configuration error. Please contact support.",
@@ -638,13 +641,13 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     logger.info(
                         "Successfully updated billing information for team %s",
-                        team_key,
+                        workspace_key,
                     )
                     messages.success(request, f"Successfully activated {plan.name} plan")
                     return redirect("core:dashboard")
 
-            except Team.DoesNotExist:
-                logger.error("Team %s not found for checkout session %s", team_key, session_id)
+            except Workspace.DoesNotExist:
+                logger.error("Team %s not found for checkout session %s", workspace_key, session_id)
                 messages.error(request, "Workspace not found. Please contact support.")
                 return redirect("core:dashboard")
 
@@ -660,8 +663,8 @@ class BillingReturnView(LoginRequiredMixin, View):
             messages.error(request, "An unexpected error occurred. Please contact support.")
             return redirect("core:dashboard")
         finally:
-            if team_key:
-                release_checkout_lock(team_key)
+            if workspace_key:
+                release_checkout_lock(workspace_key)
 
 
 class CheckoutSuccessView(TemplateView):

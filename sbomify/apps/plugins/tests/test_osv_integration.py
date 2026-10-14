@@ -14,7 +14,7 @@ from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tasks import run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # Mock osv-scanner output with vulnerabilities
 MOCK_OSV_OUTPUT_WITH_VULNS = json.dumps(
@@ -57,17 +57,17 @@ class TestOSVPluginIntegration:
     """Integration tests for OSV plugin workflow."""
 
     @pytest.fixture
-    def team(self) -> Team:
+    def team(self) -> Workspace:
         """Create a test team with business plan."""
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        return Team.objects.create(
+        return Workspace.objects.create(
             name="OSV Test Team",
             key="osv-test-team",
             billing_plan="business",
         )
 
     @pytest.fixture
-    def component(self, team: Team) -> Component:
+    def component(self, team: Workspace) -> Component:
         """Create a test component."""
         return Component.objects.create(
             name="osv-test-component",
@@ -114,7 +114,7 @@ class TestOSVPluginIntegration:
 
     def test_full_assessment_workflow_with_vulns(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         osv_plugin: RegisteredPlugin,
         cyclonedx_sbom_bytes: bytes,
@@ -163,7 +163,7 @@ class TestOSVPluginIntegration:
 
     def test_full_assessment_workflow_no_vulns(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         osv_plugin: RegisteredPlugin,
         cyclonedx_sbom_bytes: bytes,
@@ -202,7 +202,7 @@ class TestOSVPluginIntegration:
 
     def test_assessment_run_stored_correctly(
         self,
-        team: Team,
+        team: Workspace,
         component: Component,
         osv_plugin: RegisteredPlugin,
         cyclonedx_sbom_bytes: bytes,
@@ -261,13 +261,13 @@ class TestIsRunFailing:
     """Tests for _is_run_failing() helper with security and compliance runs."""
 
     @pytest.fixture
-    def team(self) -> Team:
+    def team(self) -> Workspace:
         """Create a test team."""
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        return Team.objects.create(name="Failing Test Team", key="failing-test-team", billing_plan="business")
+        return Workspace.objects.create(name="Failing Test Team", key="failing-test-team", billing_plan="business")
 
     @pytest.fixture
-    def component(self, team: Team) -> Component:
+    def component(self, team: Workspace) -> Component:
         """Create a test component."""
         return Component.objects.create(name="failing-test-component", team=team, component_type="bom")
 
@@ -377,13 +377,13 @@ class TestComputeStatusSummary:
     """Tests for _compute_status_summary() with mixed security and compliance runs."""
 
     @pytest.fixture
-    def team(self) -> Team:
+    def team(self) -> Workspace:
         """Create a test team."""
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        return Team.objects.create(name="Summary Test Team", key="summary-test-team", billing_plan="business")
+        return Workspace.objects.create(name="Summary Test Team", key="summary-test-team", billing_plan="business")
 
     @pytest.fixture
-    def component(self, team: Team) -> Component:
+    def component(self, team: Workspace) -> Component:
         """Create a test component."""
         return Component.objects.create(name="summary-test-component", team=team, component_type="bom")
 
@@ -467,32 +467,32 @@ class TestScheduledOSVScanTasks:
     """Tests for scheduled OSV scan tasks."""
 
     @pytest.fixture
-    def community_team(self) -> Team:
+    def community_team(self) -> Workspace:
         """Create a community team."""
-        return Team.objects.create(
+        return Workspace.objects.create(
             name="Community Team",
             key="community-osv-test",
             billing_plan=None,
         )
 
     @pytest.fixture
-    def business_team(self) -> Team:
+    def business_team(self) -> Workspace:
         """Create a business team."""
         BillingPlan.objects.get_or_create(key="business", defaults={"name": "Business Plan"})
-        return Team.objects.create(
+        return Workspace.objects.create(
             name="Business Team",
             key="business-osv-test",
             billing_plan="business",
         )
 
-    def test_is_community_team(self, community_team: Team) -> None:
+    def test_is_community_team(self, community_team: Workspace) -> None:
         """Test community team filter."""
         from sbomify.apps.plugins.tasks import _is_community_team, _is_paid_team
 
         assert _is_community_team(community_team) is True
         assert _is_paid_team(community_team) is False
 
-    def test_is_paid_team(self, business_team: Team) -> None:
+    def test_is_paid_team(self, business_team: Workspace) -> None:
         """Test paid team filter."""
         from sbomify.apps.plugins.tasks import _is_community_team, _is_paid_team
 

@@ -136,10 +136,10 @@ class TestTheWiringInAssess:
         """An SBOM that gets all the way to the upload."""
         from sbomify.apps.core.models import Component, Product
         from sbomify.apps.sboms.models import SBOM
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
         from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
 
-        team = Team.objects.create(name="DT Spec Team", key="dtspecteam", billing_plan="business")
+        team = Workspace.objects.create(name="DT Spec Team", key="dtspecteam", billing_plan="business")
         # A real row, not a mock: the plugin queries
         # SbomDependencyTrackProjectVersion by this FK before it uploads, and a
         # MagicMock has no primary key to resolve.

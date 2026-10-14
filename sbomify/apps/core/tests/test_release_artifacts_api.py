@@ -13,7 +13,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 )
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -26,7 +26,7 @@ class TestReleaseArtifactsAPI(TestCase):
         self.factory = RequestFactory()
 
         # Create test team
-        self.team = Team.objects.create(key="test-team", name="Test Team")
+        self.team = Workspace.objects.create(key="test-team", name="Test Team")
 
         # Create test product
         self.product = Product.objects.create(team=self.team, name="Test Product", is_public=True)
@@ -225,7 +225,7 @@ class TestAddArtifactsToReleaseAPI:
     """
 
     @pytest.fixture(autouse=True)
-    def setup_test_data(self, team_with_business_plan: Team, sample_user: User) -> None:
+    def setup_test_data(self, team_with_business_plan: Workspace, sample_user: User) -> None:
         """Set up test data using shared fixtures."""
         self.team = team_with_business_plan
         self.user = sample_user
@@ -386,7 +386,7 @@ class TestAddArtifactsToReleaseAPI:
         headers = get_api_headers(access_token)
 
         # Create a different team with a component and SBOM
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         other_component = Component.objects.create(name="Other Component", team=other_team)
         other_sbom = SBOM.objects.create(
             name="Other SBOM", component=other_component, format="cyclonedx", version="1.0.0"

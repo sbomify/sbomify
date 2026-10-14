@@ -16,7 +16,7 @@ from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
@@ -53,10 +53,10 @@ def get_first_component(team_id: int) -> ServiceResult[Component]:
     )
 
 
-def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Team]:
+def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Workspace]:
     if not workspace_key:
         return ServiceResult.success()
-    workspace = Team.objects.filter(key=workspace_key).first()
+    workspace = Workspace.objects.filter(key=workspace_key).first()
     if workspace is None:
         return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success(workspace)
@@ -72,7 +72,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
 
-    workspace = Team.objects.filter(id=team_id).first()
+    workspace = Workspace.objects.filter(id=team_id).first()
     if workspace is None:
         return ServiceResult.failure("Workspace not found", status_code=404)
 

@@ -31,7 +31,7 @@ def _ask_via_api(team, user):
 def _ask_via_page(team, user):
     client = Client()
     client.force_login(user)
-    return client.post(reverse("documents:request_access", kwargs={"team_key": team.key}), {})
+    return client.post(reverse("documents:request_access", kwargs={"workspace_key": team.key}), {})
 
 
 @pytest.mark.parametrize(("ask", "expected_status"), [(_ask_via_api, 201), (_ask_via_page, 302)])

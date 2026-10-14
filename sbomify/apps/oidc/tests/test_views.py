@@ -24,11 +24,11 @@ from sbomify.apps.oidc.github_api import GitHubResolveError, ResolvedRepository
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def component(db, team_with_business_plan: Team) -> Component:
+def component(db, team_with_business_plan: Workspace) -> Component:
     return Component.objects.create(
         name="Trusted Pubs UI",
         team=team_with_business_plan,
@@ -277,7 +277,7 @@ class TestDelete:
 class TestPermissions:
     @pytest.mark.django_db
     def test_admin_role_can_create_and_delete(
-        self, component: Component, team_with_business_plan: Team, mocker
+        self, component: Component, team_with_business_plan: Workspace, mocker
     ) -> None:
         """Test-automator P1: admin-role members (not just owners) can
         manage trusted publishers. ``_TrustedPublishersBase`` accepts
@@ -323,7 +323,7 @@ class TestPermissions:
         assert not OIDCBinding.objects.filter(pk=binding.id).exists()
 
     @pytest.mark.django_db
-    def test_guest_member_blocked(self, component: Component, team_with_business_plan: Team) -> None:
+    def test_guest_member_blocked(self, component: Component, team_with_business_plan: Workspace) -> None:
         from django.contrib.auth import get_user_model
 
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session

@@ -31,7 +31,7 @@ class TestAccessRequestFlowEnhancements:
         # Ensure user is owner
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -43,7 +43,7 @@ class TestAccessRequestFlowEnhancements:
         
         # Check redirection
         assert response.status_code == 302
-        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         
         # Check HX-Trigger header
@@ -57,7 +57,7 @@ class TestAccessRequestFlowEnhancements:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -69,7 +69,7 @@ class TestAccessRequestFlowEnhancements:
         
         # Check redirection
         assert response.status_code == 302
-        expected_url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        expected_url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         assert response.url == expected_url
         
         # HX-Trigger usually not checking here, but key is logic difference
@@ -81,7 +81,7 @@ class TestAccessRequestFlowEnhancements:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -92,7 +92,7 @@ class TestAccessRequestFlowEnhancements:
         )
         
         assert response.status_code == 302
-        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
@@ -111,7 +111,7 @@ class TestAccessRequestFlowEnhancements:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -122,7 +122,7 @@ class TestAccessRequestFlowEnhancements:
         )
         
         assert response.status_code == 302
-        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"
 
@@ -140,7 +140,7 @@ class TestAccessRequestFlowEnhancements:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -152,6 +152,6 @@ class TestAccessRequestFlowEnhancements:
         
         # Logic says: message.error(...) and return redirect(...)
         assert response.status_code == 302
-        expected_url = reverse("workspaces:team_settings", kwargs={"team_key": team_with_business_plan.key}) + "#trust-center"
+        expected_url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key}) + "#trust-center"
         assert response.url == expected_url
         assert response.headers.get("HX-Trigger") == "refreshAccessRequests"

@@ -34,7 +34,7 @@ from sbomify.apps.security_advisories.services.trust_center import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 CSAF_SCHEMA_URL = "https://docs.oasis-open.org/csaf/csaf/v2.0/csaf_json_schema.json"
 ROLIE_CATEGORY_SCHEME = "urn:ietf:params:rolie:category:information-type"
@@ -73,7 +73,7 @@ def _stamp(value: Any) -> str:
     return value.isoformat() if value else timezone.now().isoformat()
 
 
-def distribution_marker(team: Team) -> str:
+def distribution_marker(team: Workspace) -> str:
     """When this workspace's TLP:WHITE distribution last changed.
 
     Read from the workspace rather than aggregated over the advisories still
@@ -89,7 +89,7 @@ def distribution_marker(team: Team) -> str:
     return _stamp(team.csaf_feed_updated_at or team.created_at)
 
 
-def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
+def provider_metadata(team: Workspace, *, base_url: str) -> dict[str, Any]:
     """CSAF 2.0 section 7.1.8 provider metadata for one workspace.
 
     ``last_updated`` is the workspace's distribution marker, so a polling
@@ -129,7 +129,7 @@ def provider_metadata(team: Team, *, base_url: str) -> dict[str, Any]:
     }
 
 
-def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
+def rolie_feed(team: Workspace, *, base_url: str) -> dict[str, Any]:
     """The RFC 8322 feed listing every TLP:WHITE advisory this workspace has published."""
     entries = []
     for advisory in public_advisory_index(team):
@@ -166,7 +166,9 @@ def rolie_feed(team: Team, *, base_url: str) -> dict[str, Any]:
     }
 
 
-def white_document(team: Team, year: str, filename: str, *, base_url: str, generator: str) -> dict[str, Any] | None:
+def white_document(
+    team: Workspace, year: str, filename: str, *, base_url: str, generator: str
+) -> dict[str, Any] | None:
     """Resolve one public document using the indexed CSAF filename expression."""
     if not re.fullmatch(r"[0-9]{4}", year):
         return None

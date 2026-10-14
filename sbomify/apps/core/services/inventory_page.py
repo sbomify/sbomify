@@ -17,7 +17,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.freshness import freshness_state
 from sbomify.apps.sboms.models import ProductComponent
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postures
 
 KINDS = ("products", "releases", "components")
@@ -86,7 +86,7 @@ def _url(params: dict[str, Any], *, base_url: str = "", **changes: Any) -> str:
     return (base_url or reverse("core:products_dashboard")) + (f"?{query}" if query else "")
 
 
-def _scope_counts(workspace: Team, product_id: str = "", *, products_known: int | None = None) -> dict[str, int]:
+def _scope_counts(workspace: Workspace, product_id: str = "", *, products_known: int | None = None) -> dict[str, int]:
     """How many of each kind the scope holds. ``products_known`` is a count the
     caller already has, so the products table is not counted a second time."""
     products = Product.objects.filter(team=workspace)
@@ -132,7 +132,7 @@ def _tab_href(params: dict[str, Any], kind: str, target: str, *, chose_order: bo
     )
 
 
-def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
+def _inventory_catalog(workspace: Workspace, product_id: str = "") -> dict[str, Any]:
     products = Product.objects.filter(team=workspace)
     if product_id:
         products = products.filter(id=product_id)
@@ -141,7 +141,7 @@ def _inventory_catalog(workspace: Team, product_id: str = "") -> dict[str, Any]:
 
 
 def build_inventory_snapshot(
-    workspace: Team,
+    workspace: Workspace,
     kind: str,
     *,
     product_id: str = "",
@@ -338,7 +338,7 @@ def build_inventory_snapshot(
 def build_inventory_context(request: HttpRequest, *, kind: str | None = None) -> ServiceResult[dict[str, Any]]:
     """Authorise the live membership before reading or filtering any inventory."""
     workspace_key = (request.session.get("current_workspace") or {}).get("key")
-    workspace = Team.objects.filter(key=workspace_key).first() if workspace_key else None
+    workspace = Workspace.objects.filter(key=workspace_key).first() if workspace_key else None
     if workspace is None or not can(request, "workspace:read", workspace):
         return ServiceResult.failure("Workspace not found", status_code=404)
     kind = kind or request.GET.get("view", "products")
@@ -349,7 +349,7 @@ def build_inventory_context(request: HttpRequest, *, kind: str | None = None) ->
 
 def build_inventory_page(
     request: HttpRequest,
-    workspace: Team,
+    workspace: Workspace,
     *,
     kind: str,
     product_id: str = "",

@@ -140,9 +140,9 @@ class TestGetOrCreateAssessment:
         assert result.status_code == 404
 
     def test_fails_for_wrong_team(self, sample_team_with_owner_member, sample_user, product):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         result = get_or_create_assessment(product.id, sample_user, other_team)
 
         assert not result.ok
@@ -848,9 +848,9 @@ class TestGetAssessmentListForTeam:
         assert "updated_at" in item
 
     def test_empty_for_other_team(self, assessment):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         result = get_assessment_list_for_team(other_team.id)
         assert result.ok
         assert len(result.value) == 0

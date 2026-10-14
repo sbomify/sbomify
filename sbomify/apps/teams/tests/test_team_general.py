@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.mark.django_db
@@ -29,12 +29,12 @@ class TestTeamGeneralView:
         stale_version = client.session.get("user_teams_version")
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "update_name", "name": "Renamed Workspace"},
         )
 
         assert response.status_code == 200
-        assert Team.objects.get(pk=team.pk).name == "Renamed Workspace"
+        assert Workspace.objects.get(pk=team.pk).name == "Renamed Workspace"
 
         session = client.session
         assert session["current_workspace"]["name"] == "Renamed Workspace"
@@ -49,11 +49,11 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         Member.objects.create(team=other_team, user=user, role="owner", is_default_team=True)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "set_default"},
         )
 
@@ -82,7 +82,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, member_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "set_default"},
         )
 
@@ -96,7 +96,7 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         
         # Create other team as default first
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         from sbomify.apps.core.utils import number_to_random_token
         if not other_team.key:
             other_team.key = number_to_random_token(other_team.pk)
@@ -110,11 +110,11 @@ class TestTeamGeneralView:
         
         setup_authenticated_client_session(client, team, user)
 
-        team_key = team.key
+        workspace_key = team.key
         team_id = team.id  # Store ID to check deletion
         
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team_key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": workspace_key}),
             {"action": "delete_workspace"},
             follow=False,  # Don't follow redirect to check status code
         )
@@ -125,8 +125,8 @@ class TestTeamGeneralView:
             assert response.url == reverse("core:dashboard")
         
         # Verify team is deleted by checking ID (key might be cached)
-        assert not Team.objects.filter(id=team_id).exists(), "Team should have been deleted"
-        assert not Team.objects.filter(key=team_key).exists(), "Team should have been deleted"
+        assert not Workspace.objects.filter(id=team_id).exists(), "Team should have been deleted"
+        assert not Workspace.objects.filter(key=workspace_key).exists(), "Team should have been deleted"
 
     def test_delete_default_workspace_fails(
         self, client: Client, sample_team_with_owner_member
@@ -141,12 +141,12 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "delete_workspace"},
         )
 
         assert response.status_code == 200
-        assert Team.objects.filter(key=team.key).exists()
+        assert Workspace.objects.filter(key=team.key).exists()
 
     def test_delete_workspace_requires_owner(
         self, client: Client, sample_team_with_owner_member
@@ -165,12 +165,12 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, admin_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"action": "delete_workspace"},
         )
 
         assert response.status_code == 403
-        assert Team.objects.filter(key=team.key).exists()
+        assert Workspace.objects.filter(key=team.key).exists()
 
     def test_delete_workspace_switches_to_default(
         self, client: Client, sample_team_with_owner_member
@@ -180,7 +180,7 @@ class TestTeamGeneralView:
         user = sample_team_with_owner_member.user
         
         # Create default team first
-        default_team = Team.objects.create(name="Default Team")
+        default_team = Workspace.objects.create(name="Default Team")
         from sbomify.apps.core.utils import number_to_random_token
         if not default_team.key:
             default_team.key = number_to_random_token(default_team.pk)
@@ -200,7 +200,7 @@ class TestTeamGeneralView:
         team_key_to_delete = team.key
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team_key_to_delete}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team_key_to_delete}),
             {"action": "delete_workspace"},
             follow=True,  # Follow redirect to verify session update
         )
@@ -221,7 +221,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": "Updated Team Name"},
         )
 
@@ -250,7 +250,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, admin_user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": "Admin Renamed This"},
         )
 
@@ -267,7 +267,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "90"},
         )
 
@@ -286,7 +286,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": ""},
         )
 
@@ -303,7 +303,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         response = client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "0"},
         )
 
@@ -318,7 +318,7 @@ class TestTeamGeneralView:
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
         client.post(
-            reverse("workspaces:team_general", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": team.key}),
             {"name": team.name, "sbom_freshness_days": "-5"},
         )
 
@@ -333,7 +333,7 @@ class TestTeamGeneralView:
         team.save(update_fields=["sbom_freshness_days"])
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("workspaces:team_general", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_general", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
 
         assert response.status_code == 200
         assert 'data-freshness-days="45"' in response.content.decode()

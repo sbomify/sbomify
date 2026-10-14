@@ -24,7 +24,7 @@ from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
-from .models import Invitation, Member, Team, get_team_name_for_user
+from .models import Invitation, Member, Workspace, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts, invitation_email
 
 # Names still linked to by fragment that have no settings page of their own.
@@ -49,12 +49,12 @@ def find_invitation_by_token(token: Any, **filters: Any) -> Invitation | None:
     return Invitation.objects.filter(token=token, **filters).first()
 
 
-def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
+def redirect_to_team_settings(workspace_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
     """
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
     Args:
-        team_key: The workspace key to redirect
+        workspace_key: The workspace key to redirect
         active_tab: Optional settings tab, or a name in FRAGMENT_ONLY_TABS to append as URL fragment
 
     Returns:
@@ -63,8 +63,8 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from django.shortcuts import redirect
     from django.urls import reverse
 
-    # Validate team_key exists to prevent open redirect vulnerabilities
-    if not Team.objects.filter(key=team_key).exists():
+    # Validate workspace_key exists to prevent open redirect vulnerabilities
+    if not Workspace.objects.filter(key=workspace_key).exists():
         return redirect("workspaces:teams_dashboard")
 
     # Each section is its own page, so a known tab is a URL rather than a
@@ -73,9 +73,9 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
     if active_tab and active_tab in TABS_BY_KEY:
-        return redirect("workspaces:team_settings_tab", team_key=team_key, tab=active_tab)
+        return redirect("workspaces:team_settings_tab", workspace_key=workspace_key, tab=active_tab)
 
-    base_url = reverse("workspaces:team_settings", kwargs={"team_key": team_key})
+    base_url = reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
     # The names with no page of their own keep the old fragment, so links to
     # them are not broken by the move.
     #
@@ -198,10 +198,10 @@ def get_user_teams(user: User) -> dict[str, Any]:
     )
 
     for membership in memberships:
-        team_key = membership.team.key
-        if team_key is None:
+        workspace_key = membership.team.key
+        if workspace_key is None:
             continue
-        teams[team_key] = {
+        teams[workspace_key] = {
             "id": membership.team.id,
             "name": membership.team.name,
             "role": membership.role,
@@ -236,7 +236,7 @@ def update_user_teams_session(
     return teams
 
 
-def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
+def refresh_current_team_session(request: HttpRequest, team: Workspace) -> None:
     """
     Update the current_team session entry to reflect the latest team state.
 
@@ -261,7 +261,7 @@ def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
     request.session.modified = True
 
 
-def switch_active_workspace(request: HttpRequest, team: Team, role: str | None = None) -> None:
+def switch_active_workspace(request: HttpRequest, team: Workspace, role: str | None = None) -> None:
     """
     Canonical helper to switch the user's active session context.
 
@@ -319,7 +319,7 @@ def get_user_default_team(user: User) -> int | None:
 
 
 @contextmanager
-def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
+def user_seat(team: Workspace, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
     """Hold the workspace row while a seat is counted and then taken.
 
     ``can_add_user_to_team`` counts and returns a verdict, and a verdict cannot
@@ -347,11 +347,11 @@ def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tu
     commits, which is the behaviour wanted either way.
     """
     with transaction.atomic():
-        locked = Team.objects.select_for_update().get(pk=team.pk)
+        locked = Workspace.objects.select_for_update().get(pk=team.pk)
         yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
 
 
-def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
+def can_add_user_to_team(team: Workspace, is_joining_via_invite: bool = False) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
 
@@ -420,7 +420,7 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         return True, ""
 
 
-def create_user_team_and_subscription(user: User) -> Team | None:
+def create_user_team_and_subscription(user: User) -> Workspace | None:
     """
     Create a team and set up billing subscription for a new user.
 
@@ -441,9 +441,9 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     """
     # Check if user already has a team (idempotency check)
     # Only do this if user has been saved to DB (has a PK)
-    if user.pk and Team.objects.filter(members=user).exists():
+    if user.pk and Workspace.objects.filter(members=user).exists():
         logger.debug(f"User {user.username} already has a team, skipping creation")
-        return Team.objects.filter(members=user).first()
+        return Workspace.objects.filter(members=user).first()
 
     # Skip auto-creation if the user has an active invitation to another workspace
     if email := invitation_email(user):
@@ -481,7 +481,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         # Still create team, but set up community plan as fallback
         team_name = get_team_name_for_user(user)
         with transaction.atomic():
-            team = Team.objects.create(name=team_name)
+            team = Workspace.objects.create(name=team_name)
             team.key = number_to_random_token(team.pk)
             team.save()
             Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -493,7 +493,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     # Create team
     team_name = get_team_name_for_user(user)
     with transaction.atomic():
-        team = Team.objects.create(name=team_name)
+        team = Workspace.objects.create(name=team_name)
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -507,7 +507,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     return team
 
 
-def _setup_community_plan(team: Team) -> None:
+def _setup_community_plan(team: Workspace) -> None:
     """
     Set up community plan for a team (fallback when billing is disabled or trial fails).
 
@@ -717,7 +717,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
             request,
             "team:member_removed",
             {"role": removed_role, "self_removal": is_self_removal},
-            team_key=removed_team_key,
+            workspace_key=removed_team_key,
         )
     )
 
@@ -800,7 +800,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
         return redirect_to_team_settings(removed_team_key, active_tab)
 
 
-def delete_workspace_with_billing_cleanup(team: Team) -> None:
+def delete_workspace_with_billing_cleanup(team: Workspace) -> None:
     """Delete a workspace and cancel whatever it was paying for.
 
     Both delete paths route through here because the billing half is easy to

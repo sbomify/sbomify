@@ -10,7 +10,7 @@ from django.utils import timezone
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.apis import _handle_community_downgrade
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -19,7 +19,7 @@ def test_community_downgrade_uses_stored_subscription_id():
     """Downgrade must cancel the stored subscription, whatever the customer id looks like
     (web checkout creates a random cus_), instead of downgrading locally while billing continues."""
     BillingPlan.objects.create(key="business", name="Business")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="wsdowngrade",
         billing_plan="business",
@@ -44,7 +44,7 @@ def test_payment_failed_does_not_reset_failure_time():
     can actually expire."""
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     original = (timezone.now() - datetime.timedelta(days=2)).isoformat()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="test-team-reset",
         billing_plan="business",
@@ -72,7 +72,7 @@ def test_payment_recovery_clears_failure_marker_so_grace_resets():
     window instead of reusing the old (already-expired) timestamp."""
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     old_failure = (timezone.now() - datetime.timedelta(days=10)).isoformat()  # long past grace
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="test-team-recover",
         billing_plan="business",

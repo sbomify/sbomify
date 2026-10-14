@@ -16,7 +16,7 @@ from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.mark.django_db
@@ -25,19 +25,19 @@ class TestTeamTokensView:
 
     def test_an_htmx_read_requires_authentication(self, client: Client):
         """Signed out, the panel's own htmx read is sent to sign in."""
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": "test"}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": "test"}), HTTP_HX_REQUEST="true")
         assert response.status_code == 302
         assert response["Location"].startswith("/login")
 
     def test_a_direct_visit_is_a_404_even_signed_out(self, client: Client):
         """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": "test"}))
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": "test"}))
         assert response.status_code == 404
 
     def test_get_requires_team_membership(self, client: Client, sample_user: AbstractBaseUser):
         """Test that GET requires team membership."""
         client.force_login(sample_user)
-        team = Team.objects.create(name="Test Team")
+        team = Workspace.objects.create(name="Test Team")
         # Ensure team has a key
         if not team.key:
             team.key = number_to_random_token(team.pk)
@@ -49,7 +49,7 @@ class TestTeamTokensView:
             del session["current_workspace"]
         session.save()
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code in (403, 404)
 
     def test_get_renders_template(self, client: Client, sample_team_with_owner_member):
@@ -58,7 +58,7 @@ class TestTeamTokensView:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert b"Generate token" in response.content
         assert b"Your tokens" in response.content
@@ -76,7 +76,7 @@ class TestTeamTokensView:
             team=team,
         )
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert b"Scoped Token" in response.content
 
@@ -101,7 +101,7 @@ class TestTeamTokensView:
             last_used_at=None,
         )
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         body = response.content.decode()
         assert response.status_code == 200
         assert "Last used" in body
@@ -119,7 +119,7 @@ class TestTeamTokensView:
         initial_count = AccessToken.objects.filter(user=user).count()
 
         response = client.post(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": "New Test Token"},
         )
 
@@ -140,7 +140,7 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, user)
 
         client.post(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": "Full Token"},
         )
         tok = AccessToken.objects.get(user=user, description="Full Token")
@@ -153,7 +153,7 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, user)
 
         client.post(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": "CI Token", "scope": "publish"},
         )
         tok = AccessToken.objects.get(user=user, description="CI Token")
@@ -168,7 +168,7 @@ class TestTeamTokensView:
         initial_count = AccessToken.objects.filter(user=user).count()
 
         response = client.post(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": ""},
         )
 
@@ -182,7 +182,7 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, user)
 
         response = client.post(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": "New Token"},
         )
 
@@ -199,7 +199,7 @@ class TestTeamTokensView:
         user = sample_team_with_owner_member.user
 
         # Create a second team
-        team_b = Team.objects.create(name="Team B")
+        team_b = Workspace.objects.create(name="Team B")
         team_b.key = number_to_random_token(team_b.pk)
         team_b.save()
         Member.objects.create(user=user, team=team_b, role="owner")
@@ -209,7 +209,7 @@ class TestTeamTokensView:
         AccessToken.objects.create(user=user, description="Token B", encoded_token="token_b", team=team_b)
 
         setup_authenticated_client_session(client, team_a, user)
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team_a.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team_a.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert "Token A" in content
@@ -226,7 +226,7 @@ class TestTeamTokensView:
         # Create an unscoped token
         AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert response.status_code == 200
@@ -243,7 +243,7 @@ class TestTeamTokensView:
 
         AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         content = response.content.decode()
 
         assert "deprecated" not in content.lower()
@@ -271,7 +271,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, member_user)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_guest_cannot_manage_tokens(self, client: Client, sample_team_with_owner_member):
@@ -286,7 +286,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, guest)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 403
 
     def test_admin_role_can_access(self, client: Client, sample_team_with_owner_member):
@@ -301,7 +301,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, admin_user)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
 
     def test_guest_role_cannot_access(self, client: Client, sample_team_with_owner_member):
@@ -316,7 +316,7 @@ class TestTeamTokensView:
 
         setup_authenticated_client_session(client, team, guest_user)
 
-        response = client.get(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true")
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 403
 
 
@@ -426,7 +426,7 @@ class TestTeamTokenExpiry:
     """Token creation persists the chosen expiry and the UI surfaces it (#215)."""
 
     def _post(self, client, team, data):
-        return client.post(reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), data)
+        return client.post(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), data)
 
     def test_post_sets_default_90_day_expiry(self, client: Client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
@@ -507,7 +507,7 @@ class TestTeamTokenExpiry:
         )
 
         content = client.get(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
         ).content.decode()
         assert "Expires" in content
 
@@ -520,7 +520,7 @@ class TestTeamTokenExpiry:
         )
 
         content = client.get(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
         ).content.decode()
         assert "Never expires" in content
 
@@ -537,7 +537,7 @@ class TestTeamTokenExpiry:
         )
 
         content = client.get(
-            reverse("workspaces:team_tokens", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
         ).content.decode()
         assert "Expired" in content
 
@@ -547,7 +547,7 @@ class TestBulkTokenRevocation:
     """Bulk revoke + revoke-all on TeamTokensView.delete (#1061)."""
 
     def _url(self, team):
-        return reverse("workspaces:team_tokens", kwargs={"team_key": team.key})
+        return reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key})
 
     def _tok(self, user, team, desc):
         return AccessToken.objects.create(user=user, encoded_token=f"enc-{desc}", description=desc, team=team)
@@ -642,7 +642,7 @@ class TestBulkTokenRevocation:
         via this workspace's endpoint (it isn't shown on this page)."""
         team_a = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
-        team_b = Team.objects.create(name="Team B")
+        team_b = Workspace.objects.create(name="Team B")
         team_b.key = number_to_random_token(team_b.pk)
         team_b.save()
         token_b = AccessToken.objects.create(user=user, encoded_token="enc-b", description="b", team=team_b)

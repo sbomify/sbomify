@@ -26,20 +26,20 @@ from sbomify.apps.core.views.component_item import ComponentItemPublicView
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
 def team():
-    workspace = Team.objects.create(name="Gating Co", billing_plan="business")
+    workspace = Workspace.objects.create(name="Gating Co", billing_plan="business")
     workspace.is_public = True
     workspace.save(update_fields=["is_public"])
     return workspace
 
 
-def _document(team: Team, visibility: str, component_name: str = "Policy Docs") -> Document:
+def _document(team: Workspace, visibility: str, component_name: str = "Policy Docs") -> Document:
     component = Component.objects.create(
         name=component_name,
         team=team,
@@ -55,7 +55,7 @@ def _document(team: Team, visibility: str, component_name: str = "Policy Docs") 
     )
 
 
-def _require_nda(team: Team) -> Document:
+def _require_nda(team: Workspace) -> Document:
     """Give the workspace a company-wide NDA, so gated access needs a signature."""
     nda = _document(team, Component.Visibility.PRIVATE, component_name="Company NDA")
     team.branding_info = {**(team.branding_info or {}), "company_nda_document_id": nda.id}
@@ -79,7 +79,7 @@ def _visit(document: Document, user: User | None = None):
     )
 
 
-def _sbom(team: Team, visibility: str, component_name: str = "Platform") -> SBOM:
+def _sbom(team: Workspace, visibility: str, component_name: str = "Platform") -> SBOM:
     component = Component.objects.create(
         name=component_name,
         team=team,
@@ -108,8 +108,8 @@ def _visit_sbom(sbom: SBOM, user: User | None = None, item_type: str = "sboms"):
     )
 
 
-def _request_access_url(team: Team) -> str:
-    return reverse("documents:request_access", kwargs={"team_key": team.key})
+def _request_access_url(team: Workspace) -> str:
+    return reverse("documents:request_access", kwargs={"workspace_key": team.key})
 
 
 def test_anonymous_reader_is_asked_to_request_access(team):
@@ -485,7 +485,7 @@ class TestOnACustomDomain:
 
     @pytest.fixture
     def team(self):
-        workspace = Team.objects.create(
+        workspace = Workspace.objects.create(
             name="Gating Co",
             billing_plan="business",
             custom_domain="trust.example.com",
@@ -605,7 +605,7 @@ class TestOnACustomDomain:
 
 
 @pytest.mark.parametrize("gated_name", ["Policy Docs", "Policy-Docs"])
-def test_generated_gated_link_survives_public_slug_collision(team: Team, gated_name: str) -> None:
+def test_generated_gated_link_survives_public_slug_collision(team: Workspace, gated_name: str) -> None:
     public_name = "Policy-Docs" if gated_name == "Policy Docs" else "Policy Docs"
     _document(team, Component.Visibility.PUBLIC, public_name)
     document = _document(team, Component.Visibility.GATED, gated_name)
@@ -624,7 +624,7 @@ def test_generated_gated_link_survives_public_slug_collision(team: Team, gated_n
     assert "Request Access" in response.content.decode()
 
 
-def test_app_domain_redirect_preserves_shadowed_gated_artifact(team: Team) -> None:
+def test_app_domain_redirect_preserves_shadowed_gated_artifact(team: Workspace) -> None:
     _document(team, Component.Visibility.PUBLIC, "Policy Docs")
     document = _document(team, Component.Visibility.GATED, "Policy-Docs")
     team.custom_domain = "trust.example.com"
@@ -640,7 +640,7 @@ def test_app_domain_redirect_preserves_shadowed_gated_artifact(team: Team) -> No
 
 
 @pytest.mark.parametrize("item_type", ["documents", "sboms", "vex", "cbom"])
-def test_public_artifact_cannot_be_shown_under_another_component(team: Team, item_type: str) -> None:
+def test_public_artifact_cannot_be_shown_under_another_component(team: Workspace, item_type: str) -> None:
     factory = _document if item_type == "documents" else _sbom
     target = factory(team, Component.Visibility.PUBLIC, "Target")
     other = factory(team, Component.Visibility.PUBLIC, "Other")
@@ -658,7 +658,7 @@ def test_public_artifact_cannot_be_shown_under_another_component(team: Team, ite
     assert other.name not in response.content.decode()
 
 
-def test_gated_slug_serialization_scans_workspace_once(team: Team, django_assert_num_queries) -> None:
+def test_gated_slug_serialization_scans_workspace_once(team: Workspace, django_assert_num_queries) -> None:
     from django.http import HttpRequest
 
     from sbomify.apps.core.url_utils import get_component_public_slug
@@ -678,7 +678,7 @@ def test_gated_slug_serialization_scans_workspace_once(team: Team, django_assert
         assert [get_component_public_slug(component, request) for component in gated] == identifiers
 
 
-def test_generated_component_id_cannot_be_shadowed_by_a_slug(team: Team) -> None:
+def test_generated_component_id_cannot_be_shadowed_by_a_slug(team: Workspace) -> None:
     from django.http import HttpRequest
 
     from sbomify.apps.core.url_utils import get_component_public_slug
@@ -700,7 +700,7 @@ def test_generated_component_id_cannot_be_shadowed_by_a_slug(team: Team) -> None
     assert "Please request access to view this document." in response.content.decode()
 
 
-def test_empty_gated_slug_generates_a_working_id_link(team: Team) -> None:
+def test_empty_gated_slug_generates_a_working_id_link(team: Workspace) -> None:
     document = _document(team, Component.Visibility.GATED, "!!!")
     document.component.is_global = True
     document.component.save()

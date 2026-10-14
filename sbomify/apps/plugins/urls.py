@@ -19,7 +19,7 @@ urlpatterns = [
         name="plugins_summary",
     ),
     path(
-        "settings/<team_key>",
+        "settings/<workspace_key>",
         TeamPluginSettingsView.as_view(),
         name="team_plugin_settings",
     ),

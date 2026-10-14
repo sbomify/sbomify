@@ -135,9 +135,9 @@ class TestCRAAssessment:
         assert not CRAAssessment.objects.filter(pk=pk).exists()
 
     def test_team_cascade_delete(self, catalog):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.create(name="cascade-test-team")
+        team = Workspace.objects.create(name="cascade-test-team")
         product = Product.objects.create(name="Cascade Product", team=team)
         oscal = OSCALAssessmentResult.objects.create(catalog=catalog, team=team, title="Cascade OSCAL")
         assessment = CRAAssessment.objects.create(team=team, product=product, oscal_assessment_result=oscal)

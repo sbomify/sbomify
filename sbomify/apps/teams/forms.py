@@ -7,10 +7,10 @@ from django.conf import settings
 from django.forms import inlineformset_factory
 
 from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Workspace
 
 if TYPE_CHECKING:
-    _TeamFormBase = forms.ModelForm[Team]
+    _TeamFormBase = forms.ModelForm[Workspace]
     _ContactProfileFormBase = forms.ModelForm[ContactProfile]
     _ContactEntityFormBase = forms.ModelForm[ContactEntity]
     _ContactProfileContactFormBase = forms.ModelForm[ContactProfileContact]
@@ -23,7 +23,7 @@ else:
 
 class AddTeamForm(_TeamFormBase):
     class Meta:
-        model = Team
+        model = Workspace
         fields = ["name"]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -31,7 +31,7 @@ class AddTeamForm(_TeamFormBase):
         # form_modal renders Django's own widget, so the legacy input class goes on it here.
         self.fields["name"].widget.attrs["class"] = "tw-form-input"
 
-    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
+    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Workspace:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)
         if is_new and user:

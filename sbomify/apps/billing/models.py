@@ -211,7 +211,7 @@ class BillingPlan(models.Model):
         overwritten: Postgres redoes the merge on whatever that transaction committed.
         Workspaces that already hold these limits are left alone.
         """
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         limits = {
             "max_products": self.max_products,
@@ -225,7 +225,7 @@ class BillingPlan(models.Model):
             template="%(expressions)s",
             output_field=JSONField(),
         )
-        Team.objects.filter(billing_plan=self.key).exclude(billing_plan_limits__contains=limits).update(
+        Workspace.objects.filter(billing_plan=self.key).exclude(billing_plan_limits__contains=limits).update(
             billing_plan_limits=merged
         )
 

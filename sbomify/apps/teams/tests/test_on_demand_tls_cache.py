@@ -21,13 +21,13 @@ from unittest.mock import patch
 import pytest
 
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 ASK = "/api/v1/internal/domains?domain={}"
 
 
-def _business_team_with_domain(domain: str) -> Team:
-    team = Team.objects.create(name="Business Team", billing_plan="business")
+def _business_team_with_domain(domain: str) -> Workspace:
+    team = Workspace.objects.create(name="Business Team", billing_plan="business")
     team.key = number_to_random_token(team.pk)
     team.custom_domain = domain
     team.save()
@@ -82,7 +82,7 @@ class TestTheAnswersAreStillCorrect:
         assert client.get(ASK.format("App.Example.Com")).status_code == 200
 
     def test_a_community_plan_domain_is_still_denied(self, client) -> None:
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Community Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.custom_domain = "app.community.com"
         team.save()

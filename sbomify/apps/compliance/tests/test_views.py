@@ -12,7 +12,7 @@ from sbomify.apps.compliance.models import CRAAssessment, CRAScopeScreening
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -461,7 +461,7 @@ class TestBillingGateViews:
 class TestCRAStartPicker:
     def test_lists_only_unassessed_workspace_products(self, web_client: Client, assessment: CRAAssessment) -> None:
         available = Product.objects.create(name="Available product", team=assessment.team)
-        other = Product.objects.create(name="Other workspace product", team=Team.objects.create(name="Other workspace"))
+        other = Product.objects.create(name="Other workspace product", team=Workspace.objects.create(name="Other workspace"))
         response = web_client.get(reverse("compliance:cra_product_list"))
         assert response.context["available_products"] == [{"id": available.id, "name": available.name}]
         html = response.content.decode()

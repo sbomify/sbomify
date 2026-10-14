@@ -16,7 +16,7 @@ from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
@@ -71,8 +71,8 @@ def create_access_request(
     try:
         # Get team
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         if not can(request, "access_request:submit", team):
@@ -139,7 +139,7 @@ def create_access_request(
                         request,
                         "document:access_requested",
                         {"requires_nda": requires_nda},
-                        team_key=team_key,
+                        workspace_key=team_key,
                     )
                 )
 
@@ -187,8 +187,8 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
     """Get NDA document for signing."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -250,8 +250,8 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
     """Sign NDA for access request."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -363,10 +363,10 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     teams_requiring_nda = []
     for team_id in member_teams:
         try:
-            team = Team.objects.get(pk=team_id)
+            team = Workspace.objects.get(pk=team_id)
             if team.get_company_nda_document():
                 teams_requiring_nda.append(team_id)
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             # Team no longer exists, skip it
             pass
 

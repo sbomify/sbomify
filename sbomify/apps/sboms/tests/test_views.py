@@ -12,7 +12,7 @@ from pytest_mock.plugin import MockerFixture
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from ..models import SBOM, Component, Product
 from .fixtures import (
@@ -22,7 +22,7 @@ from .fixtures import (
 )
 
 
-def setup_test_session(client: Client, team: Team, user) -> None:
+def setup_test_session(client: Client, team: Workspace, user) -> None:
     """Set up session data for tests.
 
     Args:

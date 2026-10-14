@@ -106,10 +106,10 @@ def _in_batches(ids: Iterable[Any]) -> Iterator[list[Any]]:
 
 
 def _bump(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     for batch in _in_batches(team_ids):
-        Team.objects.filter(pk__in=batch).update(csaf_feed_updated_at=_forward_only("csaf_feed_updated_at"))
+        Workspace.objects.filter(pk__in=batch).update(csaf_feed_updated_at=_forward_only("csaf_feed_updated_at"))
     for batch in _in_batches(advisory_ids):
         # The workspace marker tells a poller the distribution moved; this tells
         # it which document moved, because a consumer that deduplicates by
@@ -228,7 +228,7 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
         anonymous_viewer_scope,
         product_link_is_readable,
     )
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     links = list(
         AdvisoryProduct.objects.filter(
@@ -237,7 +237,7 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
             advisory__visibility=SecurityAdvisory.Visibility.PUBLIC,
         ).select_related("product", "advisory__team")
     )
-    teams: dict[Any, Team] = {link.advisory.team_id: link.advisory.team for link in links}
+    teams: dict[Any, Workspace] = {link.advisory.team_id: link.advisory.team for link in links}
     for pk, team in teams.items():
         if pk not in scopes:
             scopes[pk] = anonymous_viewer_scope(team)
@@ -400,11 +400,11 @@ def connect() -> None:
     from sbomify.apps.core.models import Component as CoreComponent
     from sbomify.apps.core.models import Product as CoreProduct
     from sbomify.apps.sboms.models import Component, Product, ProductComponent
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     pre_save.connect(_before_advisory_save, sender=SecurityAdvisory, dispatch_uid="csaf_marker_advisory_before")
-    pre_save.connect(_before_team_save, sender=Team, dispatch_uid="csaf_marker_team_before")
-    post_save.connect(_on_team_save, sender=Team, dispatch_uid="csaf_marker_team_save")
+    pre_save.connect(_before_team_save, sender=Workspace, dispatch_uid="csaf_marker_team_before")
+    post_save.connect(_on_team_save, sender=Workspace, dispatch_uid="csaf_marker_team_save")
 
     for child_model in _TO_ADVISORY:
         if child_model is SecurityAdvisory:  # Has its own, reading the row's own team.

@@ -537,11 +537,11 @@ class TestNotificationsLeaveTheRequest:
     def test_a_member_of_another_workspace_is_not_emailed(self, mocker, sample_team_with_owner_member):
         """Mismatched ids would name the wrong workspace at the right person."""
         from sbomify.apps.billing.tasks import deliver_billing_email
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         send = mocker.patch("sbomify.apps.billing.email_notifications.render_and_send_billing_email")
         member = sample_team_with_owner_member
-        other = Team.objects.create(name="Another workspace", key="another-ws-key")
+        other = Workspace.objects.create(name="Another workspace", key="another-ws-key")
 
         deliver_billing_email(other.pk, member.pk, "Subject", "trial_ending", {})
 
@@ -592,20 +592,20 @@ class TestATrialRunsItsFullLength:
 
     def test_a_plan_restored_after_the_claim_keeps_its_settings(self, mocker, sample_team_with_owner_member):
         from sbomify.apps.billing import billing_processing
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         downgrade = mocker.patch("sbomify.apps.billing.billing_processing.apply_community_downgrade")
         mocker.patch("sbomify.apps.billing.billing_processing.notify_billing_managers")
         team = sample_team_with_owner_member.team
-        real_save = Team.save
+        real_save = Workspace.save
 
         def save_then_restore(self, *args, **kwargs):
             real_save(self, *args, **kwargs)
             if self.billing_plan == "community":
                 # A payment recovers and restores the paid plan right after the claim commits.
-                Team.objects.filter(pk=self.pk).update(billing_plan="business")
+                Workspace.objects.filter(pk=self.pk).update(billing_plan="business")
 
-        mocker.patch.object(Team, "save", save_then_restore)
+        mocker.patch.object(Workspace, "save", save_then_restore)
 
         billing_processing.handle_trial_period(self._subscription(-1), team)
 

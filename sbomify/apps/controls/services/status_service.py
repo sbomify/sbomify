@@ -11,7 +11,7 @@ from sbomify.apps.core.services.results import ServiceResult
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product, User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 _VALID_STATUSES = {choice[0] for choice in ControlStatus.Status.choices}
 
@@ -104,7 +104,9 @@ def upsert_status(
     return ServiceResult.success(control_status)
 
 
-def bulk_update_statuses(updates: list[dict[str, Any]], user: User, team: Team | None = None) -> ServiceResult[int]:
+def bulk_update_statuses(
+    updates: list[dict[str, Any]], user: User, team: Workspace | None = None
+) -> ServiceResult[int]:
     """Atomically update multiple control statuses.
 
     Each dict must have: control_id (str), status (str).
@@ -183,7 +185,7 @@ def bulk_update_statuses(updates: list[dict[str, Any]], user: User, team: Team |
 
 
 def get_controls_summary(
-    team: Team, product: Product | None = None, catalog: ControlCatalog | None = None
+    team: Workspace, product: Product | None = None, catalog: ControlCatalog | None = None
 ) -> ServiceResult[dict[str, Any]]:
     """Calculate compliance summary for a team's active catalog.
 

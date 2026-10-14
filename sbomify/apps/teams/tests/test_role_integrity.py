@@ -19,14 +19,14 @@ from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.authz import ROLE_MEMBER
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.mark.django_db
 class TestRoleIntegrity:
     def test_database_rejects_an_unrecognised_role(self, django_user_model):
         """The whole point: this write used to succeed."""
-        team = Team.objects.create(name="Constraint Workspace")
+        team = Workspace.objects.create(name="Constraint Workspace")
         user = django_user_model.objects.create_user(username="ghost-role-user", password="x")  # noqa: S106
 
         with pytest.raises(IntegrityError), transaction.atomic():
@@ -34,7 +34,7 @@ class TestRoleIntegrity:
 
     def test_database_rejects_an_unrecognised_role_via_bulk_create(self, django_user_model):
         """bulk_create() bypasses save() and full_clean() — the constraint does not."""
-        team = Team.objects.create(name="Bulk Constraint Workspace")
+        team = Workspace.objects.create(name="Bulk Constraint Workspace")
         user = django_user_model.objects.create_user(username="bulk-ghost-user", password="x")  # noqa: S106
 
         with pytest.raises(IntegrityError), transaction.atomic():
@@ -42,7 +42,7 @@ class TestRoleIntegrity:
 
     def test_member_is_now_a_real_role(self, django_user_model):
         """The value that started all this is accepted, because it means something."""
-        team = Team.objects.create(name="Member Workspace")
+        team = Workspace.objects.create(name="Member Workspace")
         user = django_user_model.objects.create_user(username="real-member-user", password="x")  # noqa: S106
 
         membership = Member.objects.create(team=team, user=user, role=ROLE_MEMBER)
@@ -59,14 +59,14 @@ class TestRoleIntegrity:
         member_role_is_supported, turning a write nobody validated into an
         IntegrityError for whoever clicked the link.
         """
-        team = Team.objects.create(name="Invitation Constraint Workspace")
+        team = Workspace.objects.create(name="Invitation Constraint Workspace")
 
         with pytest.raises(IntegrityError), transaction.atomic():
             Invitation.objects.create(team=team, email="someone@example.com", role="viewer")
 
     def test_invitations_still_cannot_carry_the_bot_role(self):
         """The invitable set subsumes the old not-bot rule; prove it still holds."""
-        team = Team.objects.create(name="Bot Invitation Workspace")
+        team = Workspace.objects.create(name="Bot Invitation Workspace")
 
         with pytest.raises(IntegrityError), transaction.atomic():
             Invitation.objects.create(team=team, email="ci@example.com", role="bot")
@@ -82,7 +82,7 @@ class TestRoleIntegrity:
         constraint under test was generated from the same setting.
         ``test_models_and_migrations_agree`` is what covers that gap.
         """
-        team = Team.objects.create(name="All Roles Workspace")
+        team = Workspace.objects.create(name="All Roles Workspace")
         for index, (role, _label) in enumerate(settings.WORKSPACE_SUPPORTED_ROLES):
             user = django_user_model.objects.create_user(username=f"role-{index}-user", password="x")  # noqa: S106
             member = Member(team=team, user=user, role=role)

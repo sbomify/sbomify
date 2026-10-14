@@ -17,7 +17,7 @@ from django.test import Client
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactProfile, Member, Workspace
 
 WORKSPACES_URL = "/api/v1/workspaces/"
 
@@ -26,10 +26,10 @@ WORKSPACES_URL = "/api/v1/workspaces/"
 def owner_of_two_workspaces(db, django_user_model):
     """A user who is owner of two workspaces: the token-bound one and another."""
     user = django_user_model.objects.create_user(username="multiws", email="multiws@example.com", password="pw")
-    bound = Team.objects.create(name="Bound WS")
+    bound = Workspace.objects.create(name="Bound WS")
     bound.key = number_to_random_token(bound.pk)
     bound.save()
-    other = Team.objects.create(name="Other WS")
+    other = Workspace.objects.create(name="Other WS")
     other.key = number_to_random_token(other.pk)
     other.save()
     Member.objects.create(user=user, team=bound, role="owner", is_default_team=False)

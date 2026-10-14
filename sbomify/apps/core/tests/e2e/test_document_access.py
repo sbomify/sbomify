@@ -15,14 +15,14 @@ from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def gated_workspace() -> Team:
+def gated_workspace() -> Workspace:
     """A workspace the signed-in user is not a member of. The key is derived
     from the pk by hand, as the team helpers do: nothing sets it on create."""
-    team = Team.objects.create(name="Gated Workspace")
+    team = Workspace.objects.create(name="Gated Workspace")
     team.key = number_to_random_token(team.pk)
     team.save(update_fields=["key"])
     return team

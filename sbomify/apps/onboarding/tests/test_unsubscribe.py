@@ -144,9 +144,9 @@ class TestHeaders:
         """Account mail has nothing to opt out of, so it must not offer."""
         from sbomify.apps.documents.access_models import AccessRequest
         from sbomify.apps.documents.services.access_emails import notify_access_rejected
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
-        team = Team.objects.create(name="Txn Workspace")
+        team = Workspace.objects.create(name="Txn Workspace")
         requester = django_user_model.objects.create_user(
             username="txnuser", email="txnuser@test.com", password="password"
         )

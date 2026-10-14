@@ -15,7 +15,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from .billing_helpers import (
     RATE_LIMIT,
@@ -68,7 +68,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
         return 404, {"detail": "No team selected"}
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=team_key)
 
         if not team.members.filter(member__user=request.user).exists():
             return 403, {"detail": "You do not have access to this workspace"}
@@ -83,7 +83,7 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
             components=counts["components"],
             current_plan=team.billing_plan if team.billing_plan else None,
         )
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
 
@@ -110,7 +110,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         return 404, {"detail": "No team selected"}
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=team_key)
 
         # Route through can() rather than require_billing_manager: this endpoint
         # accepts personal access tokens, and can() is the only place token
@@ -134,7 +134,7 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
 
         return 400, {"detail": "Invalid plan"}
 
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
     except BillingPlan.DoesNotExist:
         return 400, {"detail": "Invalid plan"}
@@ -144,10 +144,10 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         return 400, {"detail": "Invalid request"}
 
 
-def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
+def _handle_community_downgrade(team: Workspace, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
     with transaction.atomic():
-        team = Team.objects.select_for_update().get(pk=team.pk)
+        team = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits = team.billing_plan_limits or {}
 
         # Only a subscription Stripe reports gone or ended moves the workspace
@@ -204,13 +204,13 @@ def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, An
 
 
 def _handle_business_upgrade(
-    team: Team, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
+    team: Workspace, request: HttpRequest, plan: BillingPlan, data: ChangePlanRequest, stripe_client: Any
 ) -> tuple[int, Any]:
     """Handle upgrade to business plan."""
     user = cast(User, request.user)
 
-    team_key = team.key
-    if not team_key:
+    workspace_key = team.key
+    if not workspace_key:
         return 400, {"detail": "Workspace is not properly configured. Please contact support."}
 
     # A second checkout would start a second subscription next to the live one.
@@ -224,14 +224,14 @@ def _handle_business_upgrade(
     # The customer the workspace already has, so its subscriptions stay together.
     customer_id = billing_limits.get("stripe_customer_id")
     if not customer_id:
-        customer_id = f"c_{team_key}"
+        customer_id = f"c_{workspace_key}"
         try:
             customer = stripe_client.get_customer(customer_id)
         except StripeError:
             customer = stripe_client.create_customer(
                 email=user.email,
                 name=team.name,
-                metadata={"team_key": team_key},
+                metadata={"team_key": workspace_key},
                 id=customer_id,
             )
         customer_id = customer.id
@@ -240,7 +240,7 @@ def _handle_business_upgrade(
     if not price_id:
         return 400, {"detail": "Selected billing option is not available. Please try a different plan or period."}
 
-    if not acquire_checkout_lock(team_key):
+    if not acquire_checkout_lock(workspace_key):
         return 429, {"detail": "A checkout is already in progress. Please wait a moment and try again."}
 
     try:
@@ -253,10 +253,10 @@ def _handle_business_upgrade(
             price_id=price_id,
             success_url=success_url,
             cancel_url=request.build_absolute_uri("/"),
-            metadata={"team_key": team_key, "plan_key": plan.key},
+            metadata={"team_key": workspace_key, "plan_key": plan.key},
         )
 
         return 200, ChangePlanResponse(redirect_url=session.url)
     except Exception:
-        release_checkout_lock(team_key)
+        release_checkout_lock(workspace_key)
         raise

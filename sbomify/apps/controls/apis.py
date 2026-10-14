@@ -58,7 +58,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -71,7 +71,7 @@ router = Router(tags=["Controls"])
 # ---------------------------------------------------------------------------
 
 
-def _get_user_team(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
+def _get_user_team(request: HttpRequest) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
     """Resolve team from session or token, return (team, error_tuple)."""
     from sbomify.apps.core.apis import _get_user_team_id
 
@@ -80,14 +80,14 @@ def _get_user_team(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorR
         return None, (403, ErrorResponse(detail="No current workspace"))
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return None, (404, ErrorResponse(detail="Workspace not found"))
 
     return team, None
 
 
-def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorResponse] | None:
+def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, ErrorResponse] | None:
     """Return an error tuple unless the caller is an owner or admin and, for a token, its scope allows it."""
     if not can(request, "workspace:administer", team):
         return 403, ErrorResponse(detail="Only workspace owners and admins can perform this action")
@@ -96,7 +96,7 @@ def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorRespo
 
 def _team_or_error(
     request: HttpRequest, *, admin: bool = False
-) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
+) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
     """Resolve the current workspace, then check the caller may read it, or with ``admin`` manage it."""
     team, err = _get_user_team(request)
     if team is None:
@@ -108,7 +108,7 @@ def _team_or_error(
     return (None, err) if err else (team, None)
 
 
-def _public_summary_response(team: Team, product: Product | None = None) -> HttpResponse | tuple[int, Any]:
+def _public_summary_response(team: Workspace, product: Product | None = None) -> HttpResponse | tuple[int, Any]:
     """The first published catalog's public summary, cacheable for a minute."""
     result = get_public_controls_list(team, product)
     if not result.ok or not result.value:
@@ -668,7 +668,7 @@ _VALID_EVIDENCE_TYPES = {choice[0] for choice in ControlEvidence.EvidenceType.ch
 
 
 def _resolve_control_status(
-    control_id: str, team: Team
+    control_id: str, team: Workspace
 ) -> tuple[ControlStatus | None, tuple[int, ErrorResponse] | None]:
     """Find the ControlStatus for a control scoped to a team.
 
@@ -857,8 +857,8 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
         return 404, ErrorResponse(detail="Workspace not found")
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, ErrorResponse(detail="Workspace not found")
 
     if not team.is_public:
@@ -882,8 +882,8 @@ def public_product_controls_summary(
         return 404, ErrorResponse(detail="Workspace not found")
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, ErrorResponse(detail="Workspace not found")
 
     if not team.is_public:

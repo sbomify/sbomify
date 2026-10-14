@@ -17,7 +17,7 @@ from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.settings_tabs import SETTINGS_TABS
 
 
@@ -43,7 +43,7 @@ def paid_workspace(db, django_user_model):
     user = django_user_model.objects.create_user(
         username="settings-owner", email="settings@test.com", password="password"
     )
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Settings Workspace",
         billing_plan="business",
         billing_plan_limits={
@@ -95,7 +95,7 @@ def _visit(client, team, user, tab, mocker, settings, *, stub_pricing=True):
             side_effect=lambda db_plans: {},
         )
     setup_authenticated_client_session(client, team, user)
-    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": tab}))
+    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": tab}))
     return response, synced, service_synced
 
 
@@ -136,7 +136,7 @@ def test_billing_disabled_reaches_stripe_from_no_tab(client, paid_workspace, moc
     synced = mocker.patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     setup_authenticated_client_session(client, team, user)
 
-    client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "general"}))
+    client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "general"}))
 
     synced.assert_not_called()
 
@@ -157,7 +157,7 @@ def test_a_tab_that_shows_no_billing_builds_no_pricing(client, paid_workspace, m
     priced = mocker.patch("sbomify.apps.billing.team_pricing_service.TeamPricingService.get_plan_pricing")
     setup_authenticated_client_session(client, team, user)
 
-    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": tab}))
+    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": tab}))
 
     assert response.status_code == 200
     priced.assert_not_called()
@@ -173,7 +173,7 @@ def test_the_billing_tab_still_builds_its_pricing(client, paid_workspace, mocker
     )
     setup_authenticated_client_session(client, team, user)
 
-    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "billing"}))
 
     assert response.status_code == 200
     priced.assert_called_once()
@@ -209,7 +209,7 @@ def test_the_billing_tab_prices_what_the_sync_just_fetched(client, paid_workspac
     )
     setup_authenticated_client_session(client, team, user)
 
-    client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+    client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "billing"}))
 
     priced_team = priced.call_args.args[0]
     assert priced_team.billing_plan_limits["subscription_status"] == "past_due", "pricing was handed the pre-sync copy"
@@ -243,7 +243,7 @@ def test_the_billing_page_shows_the_status_the_sync_just_wrote(client, paid_work
     )
     setup_authenticated_client_session(client, team, user)
 
-    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"team_key": team.key, "tab": "billing"}))
+    response = client.get(reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "billing"}))
 
     shown = response.context["team"]
     limits = shown["billing_plan_limits"] if isinstance(shown, dict) else shown.billing_plan_limits

@@ -6,7 +6,7 @@ from django.urls import reverse
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -14,7 +14,7 @@ pytestmark = pytest.mark.django_db
 @pytest.mark.parametrize("name", [" ", "x" * 256])
 @pytest.mark.parametrize("kind", ["product", "component"])
 def test_invalid_name_keeps_form_values(
-    authenticated_web_client: Client, team_with_business_plan: Team, name: str, kind: str
+    authenticated_web_client: Client, team_with_business_plan: Workspace, name: str, kind: str
 ) -> None:
     data = {"name": name, "description": "Keep these notes", "component_type": "document", "is_global": "on"}
     response = authenticated_web_client.post(reverse(f"core:{kind}_new"), data)

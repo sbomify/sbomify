@@ -19,21 +19,21 @@ from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 
-def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool:
-    """Return True if the session's current_team key matches the URL team_key."""
+def _check_team_key_matches_session(request: HttpRequest, workspace_key: str) -> bool:
+    """Return True if the session's current_team key matches the URL workspace_key."""
     current_team_key: str = request.session.get("current_workspace", {}).get("key", "")
-    return current_team_key == team_key
+    return current_team_key == workspace_key
 
 
 class ProductControlsView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """Load the same controls tables with product-specific overrides."""
 
-    def get(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
-        result = build_product_controls(request, team_key, product_id)
+    def get(self, request: HttpRequest, workspace_key: str, product_id: str) -> HttpResponse:
+        result = build_product_controls(request, workspace_key, product_id)
         if not result.ok:
             return htmx_error_response(result.error or "Unable to load controls")
         return render(request, "controls/components/product_controls_section.html.j2", result.value)
@@ -44,20 +44,20 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
-        if not _check_team_key_matches_session(request, team_key):
+        if not _check_team_key_matches_session(request, workspace_key):
             messages.error(request, "Unauthorized: workspace mismatch")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         action = request.POST.get("controls_catalog_action", "")
 
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         if action == "activate":
             catalog_name = request.POST.get("catalog_name", "soc2-type2")
@@ -86,7 +86,7 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             catalog_id = request.POST.get("catalog_id", "")
             if not catalog_id:
                 messages.error(request, "No catalog specified")
-                return redirect_to_team_settings(team_key, "controls")
+                return redirect_to_team_settings(workspace_key, "controls")
 
             deactivate_result = deactivate_catalog(catalog_id, team)
             if deactivate_result.ok:
@@ -98,7 +98,7 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             catalog_id = request.POST.get("catalog_id", "")
             if not catalog_id:
                 messages.error(request, "No catalog specified")
-                return redirect_to_team_settings(team_key, "controls")
+                return redirect_to_team_settings(workspace_key, "controls")
 
             delete_result = delete_catalog(catalog_id, team)
             if delete_result.ok:
@@ -108,7 +108,7 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         else:
             messages.error(request, "Invalid action")
 
-        return redirect_to_team_settings(team_key, "controls")
+        return redirect_to_team_settings(workspace_key, "controls")
 
 
 class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -116,16 +116,16 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str, product_id: str | None = None) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str, product_id: str | None = None) -> HttpResponse:
         from sbomify.apps.core.models import Product
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
         def back() -> HttpResponse:
             if product_id is None:
-                return redirect_to_team_settings(team_key, "controls")
+                return redirect_to_team_settings(workspace_key, "controls")
             return redirect("core:product_details", product_id=product_id)
 
-        if not _check_team_key_matches_session(request, team_key):
+        if not _check_team_key_matches_session(request, workspace_key):
             messages.error(request, "Unauthorized: workspace mismatch")
             return back()
 
@@ -138,7 +138,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return back()
 
         try:
-            control = Control.objects.get(id=control_id, catalog__team__key=team_key)
+            control = Control.objects.get(id=control_id, catalog__team__key=workspace_key)
         except Control.DoesNotExist:
             messages.error(request, "Control not found")
             return back()
@@ -146,7 +146,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         product = None
         if product_id is not None:
             try:
-                product = Product.objects.get(id=product_id, team__key=team_key)
+                product = Product.objects.get(id=product_id, team__key=workspace_key)
             except Product.DoesNotExist:
                 messages.error(request, "Product not found")
                 return back()
@@ -172,13 +172,13 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         from sbomify.apps.controls.services.status_service import bulk_update_statuses
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
-        if not _check_team_key_matches_session(request, team_key):
+        if not _check_team_key_matches_session(request, workspace_key):
             messages.error(request, "Unauthorized: workspace mismatch")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         user = cast(User, request.user)
         category = request.POST.get("category", "")
@@ -187,29 +187,29 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if not category or not status:
             messages.error(request, "Missing category or status")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         # Get all controls in this category for this team, scoped to a specific catalog
-        controls_qs = Control.objects.filter(catalog__team__key=team_key, group=category)
+        controls_qs = Control.objects.filter(catalog__team__key=workspace_key, group=category)
         if catalog_id:
             controls_qs = controls_qs.filter(catalog_id=catalog_id)
         controls = controls_qs.values_list("id", flat=True)
 
         if not controls.exists():
             messages.error(request, "No controls found in this category")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         updates = [{"control_id": cid, "status": status} for cid in controls]
 
         if len(updates) > 500:
             messages.error(request, f"Category has {len(updates)} controls, exceeding the 500 limit")
-            return redirect_to_team_settings(team_key, "controls")
+            return redirect_to_team_settings(workspace_key, "controls")
 
         result = bulk_update_statuses(updates, user, team=team)
 
@@ -230,4 +230,4 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     {"controls": controls_table_context(request, control.catalog)},
                 )
 
-        return redirect_to_team_settings(team_key, "controls")
+        return redirect_to_team_settings(workspace_key, "controls")

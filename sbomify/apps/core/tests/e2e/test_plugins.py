@@ -7,7 +7,7 @@ from django.urls import reverse
 from playwright.sync_api import Page, expect
 
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 
@@ -34,7 +34,7 @@ class TestPluginsPageSnapshot:
 
 
 @pytest.fixture
-def configurable_plugin(team_with_business_plan: Team) -> RegisteredPlugin:
+def configurable_plugin(team_with_business_plan: Workspace) -> RegisteredPlugin:
     plugin = RegisteredPlugin.objects.create(
         name="ui-config-example",
         display_name="Configurable assessment",
@@ -104,7 +104,7 @@ def test_plugin_configuration_saves_and_refreshes_summary(
 
 
 @pytest.mark.django_db
-def test_plugin_upgrade_link_and_disabled_control(authenticated_page: Page, team_with_business_plan: Team) -> None:
+def test_plugin_upgrade_link_and_disabled_control(authenticated_page: Page, team_with_business_plan: Workspace) -> None:
     team_with_business_plan.billing_plan = "community"
     team_with_business_plan.save(update_fields=["billing_plan"])
     page = authenticated_page
@@ -159,7 +159,7 @@ def _ancestor_compositing(locator) -> list[dict]:
 @pytest.mark.django_db
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_a_plan_restricted_row_never_fades_the_reason_it_is_restricted(
-    authenticated_page: Page, team_with_business_plan: Team, theme: str
+    authenticated_page: Page, team_with_business_plan: Workspace, theme: str
 ) -> None:
     """Nothing on the live page may fade the restriction notice or its CTA.
 

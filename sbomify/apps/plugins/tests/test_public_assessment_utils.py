@@ -15,7 +15,7 @@ from sbomify.apps.plugins.public_assessment_utils import (
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -33,7 +33,7 @@ def user(db):
 @pytest.fixture
 def team(db, user):
     """Create a test team."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Team",
         key="test-team",
         is_public=True,

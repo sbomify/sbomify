@@ -51,8 +51,8 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str) -> JsonResponse:
-        status_code, team = get_team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> JsonResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
@@ -68,7 +68,7 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # ADMINISTER — unlike a personal token, it is not tied to one person's
         # own capabilities and does not expire with their membership.
         user = cast(User, request.user)
-        if not Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles).exists():
+        if not Member.objects.filter(user=user, team__key=workspace_key, role__in=self.allowed_roles).exists():
             return JsonResponse({"detail": "Forbidden"}, status=403)
 
         from sbomify.apps.core.authz import SCOPE_PRESETS
@@ -83,12 +83,12 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # is the one action someone may want and would otherwise be
             # guessing which row this was.
             description=f"CI/CD setup ({timezone.now():%d %b %Y})",
-            team_id=token_to_number(team_key),
+            team_id=token_to_number(workspace_key),
             expires_at=expires_at,
             scopes=SCOPE_PRESETS[CI_SCOPE_PRESET],
         )
 
-        capture_for_request(request, "api_token:created", team_key=team_key)
+        capture_for_request(request, "api_token:created", workspace_key=workspace_key)
 
         # Returned once and never stored anywhere we can read back: the row
         # holds only its hash, same as every other token.

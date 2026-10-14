@@ -23,7 +23,7 @@ from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.teams.utils import normalize_host
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 logger = logging.getLogger(__name__)
@@ -223,9 +223,9 @@ class DynamicHostValidationMiddleware:
             return cached  # type: ignore[no-any-return]
 
         # Cache miss - query database
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        exists = Team.objects.filter(custom_domain=host).exists()
+        exists = Workspace.objects.filter(custom_domain=host).exists()
 
         # Cache result for 24 hours (valid domains) or 5 min (invalid)
         # Valid domains cached aggressively since they rarely change
@@ -346,14 +346,14 @@ class CustomDomainContextMiddleware:
             return cached  # type: ignore[no-any-return]
 
         # Query database
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        exists = Team.objects.filter(custom_domain=host).exists()
+        exists = Workspace.objects.filter(custom_domain=host).exists()
         cache.set(cache_key, exists, 86400)  # Cache for 24 hours
 
         return exists
 
-    def _get_team_for_domain(self, host: str) -> "Team | None":
+    def _get_team_for_domain(self, host: str) -> "Workspace | None":
         """
         Get the Team instance associated with a custom domain.
 
@@ -369,32 +369,32 @@ class CustomDomainContextMiddleware:
         # Try cache first
         cached_team_id = cache.get(cache_key)
         if cached_team_id is not None:
-            from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.models import Workspace
 
             try:
-                team = Team.objects.get(pk=cached_team_id)
+                team = Workspace.objects.get(pk=cached_team_id)
                 if team.custom_domain == host:
                     return team
                 # Domain was reassigned — cache is stale
                 cache.delete(cache_key)
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 # Cache is stale, clear it
                 cache.delete(cache_key)
 
         # Cache miss or stale - query database
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         try:
-            team = Team.objects.get(custom_domain=host)
+            team = Workspace.objects.get(custom_domain=host)
             # Cache the team ID for 24 hours
             cache.set(cache_key, team.pk, 86400)
             return team
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             return None
 
     _SLUG_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
-    def _get_team_for_slug(self, slug: str) -> "Team | None":
+    def _get_team_for_slug(self, slug: str) -> "Workspace | None":
         """Get a public Team instance for a trust center subdomain slug.
 
         Uses Redis caching to minimise database queries.  Invalid slugs and
@@ -418,38 +418,38 @@ class CustomDomainContextMiddleware:
             return None
 
         if cached_value is not None:
-            from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.models import Workspace
 
             try:
-                team = Team.objects.get(pk=cached_value, is_public=True)
+                team = Workspace.objects.get(pk=cached_value, is_public=True)
                 if team.slug == slug:
                     return team
                 cache.delete(cache_key)
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 cache.delete(cache_key)
 
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         try:
-            team = Team.objects.get(slug=slug, is_public=True)
+            team = Workspace.objects.get(slug=slug, is_public=True)
             cache.set(cache_key, team.pk, 86400)
             return team
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             # Negative-cache for 5 minutes to avoid repeated DB lookups
             cache.set(cache_key, "__none__", 300)
             return None
 
-    def _probe_soon(self, team: "Team", host: str) -> None:
+    def _probe_soon(self, team: "Workspace", host: str) -> None:
         """Clear the verification backoff of a domain that received a request.
 
         The client picks the Host header, so the request proves nothing and only
         the probe in teams.tasks can validate the domain. It does suggest DNS now
         points here, which is what the backoff was waiting for.
         """
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         try:
-            Team.objects.filter(pk=team.pk, custom_domain=host, custom_domain_validated=False).update(
+            Workspace.objects.filter(pk=team.pk, custom_domain=host, custom_domain_validated=False).update(
                 custom_domain_verification_failures=0
             )
         except Exception as e:

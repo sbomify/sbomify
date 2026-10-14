@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.logging import getLogger
 
 from ..stripe_client import BillingRetryableError, StripeError
@@ -450,20 +450,20 @@ class TestBillingProcessing:
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_payment_succeeded_precommit_db_failure_is_retryable(self, mock_email):
         """A transient failure writing the billing state (pre-commit) must retry."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_succeeded(self.invoice)
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_payment_failed_precommit_db_failure_is_retryable(self, mock_email):
         """A transient failure writing the past_due state (pre-commit) must retry."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_failed(self.invoice)
 
     def test_subscription_deleted_precommit_db_failure_is_retryable(self):
         """A transient failure writing the cancellation (pre-commit) must retry, not strand a stale plan."""
-        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+        with patch("sbomify.apps.teams.models.Workspace.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_subscription_deleted(self.subscription)
 
@@ -589,7 +589,7 @@ def test_handle_payment_failed_stamps_the_failure_time():
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     
     # Create team with past_due status
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Team", 
         key="test-team-grace", 
         billing_plan="business",

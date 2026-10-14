@@ -56,6 +56,16 @@ class SBOMDataError(Exception):
     pass
 
 
+class SBOMContentMissingError(SBOMDataError):
+    """The SBOM row exists but its stored document is missing or empty.
+
+    Separated from its siblings because it does not heal on retry: a database
+    blip or a transient fetch error may succeed on the next attempt, but an
+    object that is not in the bucket stays not there. Callers that retry on a
+    schedule need the type to tell the two apart.
+    """
+
+
 def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
     """
     Fetch SBOM instance and parsed JSON data with proper error handling.
@@ -376,7 +386,7 @@ def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
-        raise SBOMDataError(f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)")
+        raise SBOMContentMissingError(f"Failed to download SBOM {sbom_instance.sbom_filename} from S3 (empty data)")
 
     # 3) Validate that it's valid data (basic check without parsing)
     try:

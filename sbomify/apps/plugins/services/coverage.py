@@ -16,7 +16,7 @@ from django.utils.module_loading import import_string
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from ..models import RegisteredPlugin, TeamPluginSettings
@@ -48,7 +48,7 @@ class AssessmentCoverage:
 
 
 def get_assessment_coverage(
-    sbom_id: str, team: Team, latest_runs: list[dict[str, Any]]
+    sbom_id: str, team: Workspace, latest_runs: list[dict[str, Any]]
 ) -> ServiceResult[AssessmentCoverage]:
     """Compare an artifact's latest runs with the plugins its workspace runs.
 

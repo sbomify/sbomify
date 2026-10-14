@@ -12,11 +12,14 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from django.db import connection, transaction
+from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.module_loading import import_string
 
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
+from sbomify.apps.sboms.utils import SBOMContentMissingError, SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
@@ -311,15 +314,22 @@ class PluginOrchestrator:
             assessment_run.result = result.to_dict()
             assessment_run.result_schema_version = result.schema_version
             assessment_run.status = RunStatus.COMPLETED.value
-            assessment_run.completed_at = timezone.now()
-            assessment_run.save(
-                update_fields=[
-                    "result",
-                    "result_schema_version",
-                    "status",
-                    "completed_at",
-                ]
-            )
+            # Settled under the missing-content report lock, so a check that
+            # is reading the preceding run either sees this success or settles
+            # before it. Without it, this could land between that read and the
+            # failure's own completed_at, and the failure would be ordered
+            # after a success it never saw.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                assessment_run.completed_at = timezone.now()
+                assessment_run.save(
+                    update_fields=[
+                        "result",
+                        "result_schema_version",
+                        "status",
+                        "completed_at",
+                    ]
+                )
 
             # Fold the run into the component's vulnerability lifecycle. The
             # stored run stays immutable (ADR-004); this is a separate index
@@ -373,6 +383,25 @@ class PluginOrchestrator:
                 f"with {result.summary.total_findings} findings"
             )
 
+        except SBOMContentMissingError as e:
+            # The stored document is gone, and it will still be gone on the next
+            # sweep, which retries a failed run once a day indefinitely. One
+            # report is worth having -- it is data loss -- so the first failure
+            # is an error and each identical repeat after it is a warning.
+            #
+            # Nothing upstream serialises runs for one SBOM and plugin (an
+            # upload, the sweep and a manual rerun can overlap), so the check
+            # and the write that the next check reads are made under one lock.
+            # A second worker waits here until the first has committed its
+            # failure, and then sees it.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                if self._previous_run_failed_with(assessment_run, str(e)):
+                    logger.warning(f"[PLUGIN] SBOM content still missing for run {assessment_run.id}: {e}")
+                else:
+                    logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
+                self._mark_failed(assessment_run, str(e))
+
         except SBOMDataError as e:
             # SBOM fetch error
             logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
@@ -396,6 +425,38 @@ class PluginOrchestrator:
 
         return assessment_run
 
+    @staticmethod
+    def _lock_missing_content_report(assessment_run: AssessmentRun) -> None:
+        """Hold the SBOM and plugin's report lock until the current transaction ends.
+
+        Every terminal transition takes it before stamping ``completed_at``,
+        so the missing-content check's read of the preceding run and the
+        order runs settle in are serialised together.
+        """
+        key = f"plugin-missing-content:{assessment_run.sbom_id}:{assessment_run.plugin_name}"
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [key])
+
+    def _previous_run_failed_with(self, assessment_run: AssessmentRun, error_message: str) -> bool:
+        """Whether the run before this one, for the same SBOM and plugin,
+        failed with exactly this error.
+
+        Only the immediately preceding terminal run counts, so a success in
+        between -- the object restored -- makes the next loss report again.
+        "Preceding" is by when a run settled, not when it was enqueued: runs
+        can overlap and finish out of order. This is the same ordering, and
+        the same index, as the failure-backoff probe in ``tasks``.
+        """
+        previous = (
+            AssessmentRun.objects.filter(sbom_id=assessment_run.sbom_id, plugin_name=assessment_run.plugin_name)
+            .exclude(id=assessment_run.id)
+            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+            .order_by(Coalesce("completed_at", "created_at").desc(), F("id").desc())
+            .values_list("status", "error_message")
+            .first()
+        )
+        return previous == (RunStatus.FAILED.value, error_message)
+
     def _mark_failed(self, assessment_run: AssessmentRun, error_message: str) -> None:
         """Mark an assessment run as failed.
 
@@ -405,8 +466,13 @@ class PluginOrchestrator:
         """
         assessment_run.status = RunStatus.FAILED.value
         assessment_run.error_message = error_message
-        assessment_run.completed_at = timezone.now()
-        assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+        # Any failure resets the missing-content report just as a success
+        # does, so it settles under the same lock. Advisory locks stack, so
+        # the missing-content handler, which already holds it, is unaffected.
+        with transaction.atomic():
+            self._lock_missing_content_report(assessment_run)
+            assessment_run.completed_at = timezone.now()
+            assessment_run.save(update_fields=["status", "error_message", "completed_at"])
 
     def finalize_retry_exhausted(self, run_id: str, error_message: str) -> AssessmentRun | None:
         """Settle a run that has burnt through every ``RetryLaterError`` slot.
@@ -530,6 +596,28 @@ class PluginOrchestrator:
         }
 
         with transaction.atomic():
+            # Settled under the missing-content report lock like every other
+            # terminal transition, with ``completed_at`` stamped only once the
+            # lock is held. Otherwise this could land between a missing-content
+            # check's read of the preceding run and that failure's own
+            # completed_at, ordering the failure after a run it never saw.
+            #
+            # The row is locked first, and the report lock only once it is
+            # held. A worker still on this run holds the row from its RUNNING
+            # save until its task transaction ends, and takes the report lock
+            # inside that; taking them here in the other order would deadlock
+            # against it. Waiting on the row instead lets the worker settle,
+            # and the filter below then finds nothing left to finalise.
+            locked = (
+                AssessmentRun.objects.select_for_update()
+                .filter(id=run_id, status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value))
+                .values_list("id", flat=True)
+                .first()
+            )
+            if locked is not None:
+                self._lock_missing_content_report(run)
+            now = timezone.now()
+            synthesized_result["assessed_at"] = now.isoformat()
             updated = AssessmentRun.objects.filter(
                 id=run_id,
                 status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),

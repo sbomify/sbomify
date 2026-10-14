@@ -11,7 +11,7 @@ from django.utils import timezone
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -90,7 +90,7 @@ def billing_disabled(settings):
 def new_user(community_plan):
     """Simulate a freshly signed-up user whose workspace has NOT selected a plan."""
     user = User.objects.create_user(username="newuser", email="new@example.com", password="testpass123")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="New Team",
         billing_plan="community",
         has_completed_wizard=True,
@@ -111,7 +111,7 @@ def new_user(community_plan):
 def existing_user(community_plan):
     """Simulate an existing user whose workspace already selected a plan."""
     user = User.objects.create_user(username="existinguser", email="existing@example.com", password="testpass123")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Existing Team",
         billing_plan="community",
         has_completed_wizard=True,
@@ -316,7 +316,7 @@ class TestTrialExpirationDowngrade:
         from sbomify.apps.billing.billing_processing import handle_trial_period
 
         expired_ts = int((timezone.now() - timezone.timedelta(days=1)).timestamp())
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Trial Team",
             billing_plan="business",
             billing_plan_limits={
@@ -354,7 +354,7 @@ class TestTrialExpirationDowngrade:
         from sbomify.apps.billing.billing_processing import handle_trial_period
 
         future_ts = int((timezone.now() + timezone.timedelta(days=7)).timestamp())
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Active Trial Team",
             billing_plan="business",
             billing_plan_limits={

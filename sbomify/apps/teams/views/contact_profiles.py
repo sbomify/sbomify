@@ -76,12 +76,12 @@ def _format_formset_errors(formset: Any) -> str:
 class ContactProfileView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Failed to load team"))
 
-        status_code, profiles = list_contact_profiles(request, team_key)
+        status_code, profiles = list_contact_profiles(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(profiles.get("detail", "Failed to load contact profiles"))
 
@@ -94,38 +94,38 @@ class ContactProfileView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequired
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         if request.POST.get("_method") == "DELETE":
-            return self._delete(request, team_key)
+            return self._delete(request, workspace_key)
         elif request.POST.get("_method") == "PATCH":
-            return self._patch(request, team_key)
+            return self._patch(request, workspace_key)
 
         return htmx_error_response("Invalid request")
 
-    def _delete(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _delete(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         form = ContactProfileForm(request.POST)
         if not form.is_valid():
             return htmx_error_response(form.errors.as_text())
 
-        status_code, result = delete_contact_profile(request, team_key, form.cleaned_data["profile_id"])
+        status_code, result = delete_contact_profile(request, workspace_key, form.cleaned_data["profile_id"])
         if status_code != 204:
             return htmx_error_response(result.get("detail", "Failed to delete profile"))
 
         return htmx_success_response("Contact profile deleted successfully", triggers={"refreshProfileList": True})
 
-    def _patch(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _patch(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         form = ContactProfileForm(request.POST)
         if not form.is_valid():
             return htmx_error_response(form.errors.as_text())
 
-        status_code, profile = get_contact_profile(request, team_key, form.cleaned_data["profile_id"])
+        status_code, profile = get_contact_profile(request, workspace_key, form.cleaned_data["profile_id"])
         if status_code != 200:
             return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         if not profile.is_default:
             payload = ContactProfileUpdateSchema(is_default=True)
 
-            status_code, result = update_contact_profile(request, team_key, profile.id, payload)
+            status_code, result = update_contact_profile(request, workspace_key, profile.id, payload)
             if status_code != 200:
                 return htmx_error_response(result.get("detail", "Failed to set default profile"))
 
@@ -135,14 +135,14 @@ class ContactProfileView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequired
 class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str, profile_id: str | None = None) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str, profile_id: str | None = None) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Failed to load team"))
 
         profile = None
         if profile_id:
-            status_code, profile = get_readable_contact_profile(request, team_key, profile_id)
+            status_code, profile = get_readable_contact_profile(request, workspace_key, profile_id)
             if status_code != 200:
                 return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
@@ -168,19 +168,19 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str, profile_id: str | None = None) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str, profile_id: str | None = None) -> HttpResponse:
         if profile_id is None:
-            return self._create_profile(request, team_key)
-        return self._update_profile(request, team_key, profile_id)
+            return self._create_profile(request, workspace_key)
+        return self._update_profile(request, workspace_key, profile_id)
 
     def _validate_form_and_formsets(
-        self, request: HttpRequest, team_key: str, profile: ContactProfile | None = None
+        self, request: HttpRequest, workspace_key: str, profile: ContactProfile | None = None
     ) -> tuple[dict[str, Any], list[ContactEntityCreateSchema | ContactEntityUpdateSchema]]:
         form = ContactProfileModelForm(request.POST, instance=profile)
         if not form.is_valid():
             raise ValidationError(form.errors.as_text())
 
-        team, _, error = _get_team_and_membership_role(request, team_key)
+        team, _, error = _get_team_and_membership_role(request, workspace_key)
         if error or not team:
             raise ValidationError("Failed to get team information")
         fallback_email = _get_team_owner_email(team)
@@ -363,9 +363,9 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
 
         return entities_data
 
-    def _create_profile(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _create_profile(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         try:
-            form_data, entities = self._validate_form_and_formsets(request, team_key)
+            form_data, entities = self._validate_form_and_formsets(request, workspace_key)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
@@ -375,19 +375,19 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
             entities=entities,  # type: ignore[arg-type]
         )
 
-        status_code, result = create_contact_profile(request, team_key, payload)
+        status_code, result = create_contact_profile(request, workspace_key, payload)
         if status_code != 201:
             return htmx_error_response(result.get("detail", "Failed to create profile"))
 
-        return self._render_profile_list_response(request, team_key, "Contact profile created successfully")
+        return self._render_profile_list_response(request, workspace_key, "Contact profile created successfully")
 
-    def _update_profile(self, request: HttpRequest, team_key: str, profile_id: str) -> HttpResponse:
-        status_code, profile = get_readable_contact_profile(request, team_key, profile_id)
+    def _update_profile(self, request: HttpRequest, workspace_key: str, profile_id: str) -> HttpResponse:
+        status_code, profile = get_readable_contact_profile(request, workspace_key, profile_id)
         if status_code != 200:
             return htmx_error_response(profile.get("detail", "Failed to load contact profile"))
 
         try:
-            form_data, entities = self._validate_form_and_formsets(request, team_key, profile=profile)
+            form_data, entities = self._validate_form_and_formsets(request, workspace_key, profile=profile)
         except ValidationError as e:
             return htmx_error_response(e.message)
 
@@ -397,18 +397,18 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
             entities=entities,
         )
 
-        status_code, result = update_contact_profile(request, team_key, profile_id, payload)
+        status_code, result = update_contact_profile(request, workspace_key, profile_id, payload)
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update profile"))
 
-        return self._render_profile_list_response(request, team_key, "Contact profile updated successfully")
+        return self._render_profile_list_response(request, workspace_key, "Contact profile updated successfully")
 
-    def _render_profile_list_response(self, request: HttpRequest, team_key: str, message: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def _render_profile_list_response(self, request: HttpRequest, workspace_key: str, message: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response("Failed to load team")
 
-        status_code, profiles = list_contact_profiles(request, team_key)
+        status_code, profiles = list_contact_profiles(request, workspace_key)
         if status_code != 200:
             return htmx_error_response("Failed to load contact profiles")
 

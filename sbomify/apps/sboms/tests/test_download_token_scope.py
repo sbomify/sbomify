@@ -19,12 +19,12 @@ from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
 
-def _sbom(team: Team, visibility: str) -> SBOM:
+def _sbom(team: Workspace, visibility: str) -> SBOM:
     component = Component.objects.create(name="app", team=team, visibility=visibility)
     return SBOM.objects.create(
         name="app", component=component, format="cyclonedx", format_version="1.6", sbom_filename="app.json"

@@ -9,12 +9,12 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.schemas import ReleaseCreateSchema
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 def release_product_choices(request: HttpRequest) -> ServiceResult[list[tuple[str, str]]]:
     workspace_key = (request.session.get("current_workspace") or {}).get("key")
-    workspace = Team.objects.filter(key=workspace_key).first() if workspace_key else None
+    workspace = Workspace.objects.filter(key=workspace_key).first() if workspace_key else None
     if workspace is None or not can(request, "release:create", workspace):
         return ServiceResult.failure("You cannot create releases in this workspace.", status_code=403)
     return ServiceResult.success(

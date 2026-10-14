@@ -14,7 +14,7 @@ from sbomify.apps.oidc.services import (
     provision_bot_user_for_binding,
 )
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 def _make_binding(component: Component, *, repo: str = "acme/widget", repo_id: int = 12345, owner_id: int = 67890):
@@ -34,7 +34,7 @@ def _make_binding(component: Component, *, repo: str = "acme/widget", repo_id: i
 
 
 @pytest.fixture
-def component(db, team_with_business_plan: Team) -> Component:
+def component(db, team_with_business_plan: Workspace) -> Component:
     return Component.objects.create(name="OIDC Test", team=team_with_business_plan)
 
 

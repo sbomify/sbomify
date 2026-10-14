@@ -23,7 +23,7 @@ from sbomify.apps.plugins.sdk.results import (
 )
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.utils import SBOMDataError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class MockPlugin(AssessmentPlugin):
@@ -81,7 +81,7 @@ class FailingPlugin(AssessmentPlugin):
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     """Create a test team."""
     BillingPlan.objects.get_or_create(
         key="community",
@@ -92,13 +92,13 @@ def test_team(db) -> Team:
             "max_users": 2,
         },
     )
-    team = Team.objects.create(name="Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Test Team", billing_plan="community")
     yield team
     team.delete()
 
 
 @pytest.fixture
-def test_component(test_team: Team):
+def test_component(test_team: Workspace):
     """Create a test component."""
     component = Component.objects.create(team=test_team, name="Test Component")
     yield component

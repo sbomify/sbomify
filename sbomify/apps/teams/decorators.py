@@ -10,11 +10,11 @@ from sbomify.apps.core.errors import error_response
 
 
 def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
-    """Require one of ``allowed_roles`` in the workspace named by the URL ``team_key``,
+    """Require one of ``allowed_roles`` in the workspace named by the URL ``workspace_key``,
     checked against the database.
 
     This authorizes the workspace the request actually acts on, not the caller's *active*
-    (session) workspace. Views that take a URL ``team_key`` must use this — trusting the
+    (session) workspace. Views that take a URL ``workspace_key`` must use this — trusting the
     session workspace lets an owner of workspace A act on workspace B. The DB lookup also
     avoids honouring a stale cached role in the session.
     """
@@ -28,12 +28,12 @@ def validate_role_in_url_team(allowed_roles: list[str]) -> Callable[..., Any]:
             if not request.user.is_authenticated:
                 return error_response(request, HttpResponseForbidden("Not logged in"))
 
-            team_key = kwargs.get("team_key")
-            if not team_key:
+            workspace_key = kwargs.get("workspace_key")
+            if not workspace_key:
                 return error_response(request, HttpResponseForbidden("No workspace specified"))
 
             try:
-                team_id = token_to_number(team_key)
+                team_id = token_to_number(workspace_key)
             except (ValueError, TypeError):
                 return error_response(request, HttpResponseForbidden("Unknown workspace"))
 

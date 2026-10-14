@@ -110,14 +110,14 @@ class TeamPricingService:
         # so syncing here as well meant every tab paid for the call twice.
         if sync_from_stripe and is_billing_enabled() and stripe_subscription_id:
             try:
-                from sbomify.apps.teams.models import Team
+                from sbomify.apps.teams.models import Workspace
 
                 from .stripe_sync import sync_subscription_from_stripe
 
                 # Get actual Team model instance if team is a schema
                 if hasattr(team, "key") and not hasattr(team, "pk"):
                     # It's a Pydantic schema, fetch the model instance
-                    team_obj = Team.objects.get(key=team.key)
+                    team_obj = Workspace.objects.get(key=team.key)
                 else:
                     # It's already a model instance
                     team_obj = team
@@ -231,19 +231,19 @@ class TeamPricingService:
                 logger.warning(f"Failed to fetch invoice details: {e}")
 
             # Cache what we found
-            from sbomify.apps.teams.models import Team
+            from sbomify.apps.teams.models import Workspace
 
             # Get actual Team model instance if team is a schema
             if hasattr(team, "key") and not hasattr(team, "pk"):
                 # It's a Pydantic schema, fetch the model instance
-                team_obj = Team.objects.get(key=team.key)
+                team_obj = Workspace.objects.get(key=team.key)
             else:
                 # It's already a model instance
                 team_obj = team
 
             try:
                 with transaction.atomic():
-                    locked_team = Team.objects.select_for_update().get(pk=team_obj.pk)
+                    locked_team = Workspace.objects.select_for_update().get(pk=team_obj.pk)
                     billing_plan_limits = locked_team.billing_plan_limits or {}
 
                     if amount is not None:

@@ -63,7 +63,7 @@ class Integration(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="integrations", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="integrations", db_column="workspace_id"
     )
     provider = models.CharField(max_length=32, choices=Provider.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONNECTED)

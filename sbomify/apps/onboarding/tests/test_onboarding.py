@@ -26,7 +26,7 @@ from sbomify.apps.onboarding.tasks import (
 )
 from sbomify.apps.onboarding.utils import get_email_context, html_to_plain_text, render_email_templates
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -105,7 +105,7 @@ class TestOnboardingStatusModel:
         test_user = User.objects.create_user(
             username="componenttest", email="componenttest@example.com", password="testpass123"
         )
-        test_team = Team.objects.create(name="Component Test Team", key="comp-test-team")
+        test_team = Workspace.objects.create(name="Component Test Team", key="comp-test-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=test_user)
@@ -136,7 +136,7 @@ class TestOnboardingStatusModel:
         """Test SBOM reminder logic for workspace owners."""
         # Create a fresh user and team to avoid fixture conflicts
         test_user = User.objects.create_user(username="sbomtest", email="sbomtest@example.com", password="testpass123")
-        test_team = Team.objects.create(name="SBOM Test Team", key="sbom-test-team")
+        test_team = Workspace.objects.create(name="SBOM Test Team", key="sbom-test-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=test_user)
@@ -170,7 +170,7 @@ class TestOnboardingStatusModel:
         test_user = User.objects.create_user(
             username="dripclock", email="dripclock@example.com", password="testpass123"
         )
-        test_team = Team.objects.create(name="Drip Clock Team", key="drip-clock-team")
+        test_team = Workspace.objects.create(name="Drip Clock Team", key="drip-clock-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=test_user)
@@ -441,7 +441,7 @@ class TestOnboardingSignals:
         """Test component creation is tracked in onboarding status."""
         # Create fresh user/team to ensure this is the first component
         test_user = User.objects.create_user(username="comptrack", email="comptrack@example.com", password="test123")
-        test_team = Team.objects.create(name="Track Team", key="track-team")
+        test_team = Workspace.objects.create(name="Track Team", key="track-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
 
         # Get onboarding status (created by signal)
@@ -463,7 +463,7 @@ class TestOnboardingSignals:
         """Test SBOM upload is tracked in onboarding status."""
         # Create fresh user/team/component to ensure this is the first SBOM
         test_user = User.objects.create_user(username="sbomtrack", email="sbomtrack@example.com", password="test123")
-        test_team = Team.objects.create(name="SBOM Track Team", key="sbom-track-team")
+        test_team = Workspace.objects.create(name="SBOM Track Team", key="sbom-track-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
         test_component = Component.objects.create(name="track-component", team=test_team)
 
@@ -491,7 +491,7 @@ class TestOnboardingIntegration:
         """Test the complete onboarding email flow."""
         # Create fresh user/team to avoid fixture conflicts
         test_user = User.objects.create_user(username="flowtest", email="flowtest@example.com", password="test123")
-        test_team = Team.objects.create(name="Flow Team", key="flow-team")
+        test_team = Workspace.objects.create(name="Flow Team", key="flow-team")
         Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
 
         # OnboardingStatus should be created automatically
@@ -567,7 +567,7 @@ class TestOnboardingStatusSequenceMethods:
     def test_should_receive_quick_start_eligible(self) -> None:
         """Quick start sent after 1+ days with welcome sent and owner role."""
         user = User.objects.create_user(username="qs3", email="qs3@example.com", password="test123")
-        team = Team.objects.create(name="QS3 Team", key="qs3-team")
+        team = Workspace.objects.create(name="QS3 Team", key="qs3-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get(user=user)
         status.mark_welcome_email_sent()
@@ -579,7 +579,7 @@ class TestOnboardingStatusSequenceMethods:
     def test_should_receive_collaboration_not_welcome_sent(self) -> None:
         """Collaboration not sent if welcome email not sent."""
         user = User.objects.create_user(username="col1", email="col1@example.com", password="test123")
-        team = Team.objects.create(name="Col Team 1", key="col-team-1")
+        team = Workspace.objects.create(name="Col Team 1", key="col-team-1")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -591,7 +591,7 @@ class TestOnboardingStatusSequenceMethods:
     def test_should_receive_collaboration_too_early(self) -> None:
         """Collaboration not sent if less than 10 days since signup."""
         user = User.objects.create_user(username="col2", email="col2@example.com", password="test123")
-        team = Team.objects.create(name="Col Team 2", key="col-team-2")
+        team = Workspace.objects.create(name="Col Team 2", key="col-team-2")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -604,7 +604,7 @@ class TestOnboardingStatusSequenceMethods:
     def test_should_receive_collaboration_not_owner(self) -> None:
         """Collaboration not sent to non-owners."""
         user = User.objects.create_user(username="col3", email="col3@example.com", password="test123")
-        team = Team.objects.create(name="Col Team 3", key="col-team-3")
+        team = Workspace.objects.create(name="Col Team 3", key="col-team-3")
         Member.objects.create(user=user, team=team, role="member", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -618,7 +618,7 @@ class TestOnboardingStatusSequenceMethods:
         """Collaboration not sent if workspace already has multiple members."""
         user = User.objects.create_user(username="col4", email="col4@example.com", password="test123")
         user2 = User.objects.create_user(username="col4b", email="col4b@example.com", password="test123")
-        team = Team.objects.create(name="Col Team 4", key="col-team-4")
+        team = Workspace.objects.create(name="Col Team 4", key="col-team-4")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         Member.objects.create(user=user2, team=team, role="member")
 
@@ -632,7 +632,7 @@ class TestOnboardingStatusSequenceMethods:
     def test_should_receive_collaboration_eligible(self) -> None:
         """Collaboration sent to solo workspace owner after 10+ days."""
         user = User.objects.create_user(username="col5", email="col5@example.com", password="test123")
-        team = Team.objects.create(name="Col Team 5", key="col-team-5")
+        team = Workspace.objects.create(name="Col Team 5", key="col-team-5")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -652,7 +652,7 @@ class TestOnboardingSequenceService:
         user = User.objects.create_user(
             username="qsvc1", email="qsvc1@example.com", password="test123", first_name="Quick"
         )
-        team = Team.objects.create(name="QS Team", key="qs-team")
+        team = Workspace.objects.create(name="QS Team", key="qs-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Set up eligibility: welcome sent + 2 days ago
@@ -674,7 +674,7 @@ class TestOnboardingSequenceService:
     def test_send_quick_start_email_already_sent(self) -> None:
         """Test quick start email not sent if already sent."""
         user = User.objects.create_user(username="qsvc2", email="qsvc2@example.com", password="test123")
-        team = Team.objects.create(name="QS Team 2", key="qs-team-2")
+        team = Workspace.objects.create(name="QS Team 2", key="qs-team-2")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         email_record = OnboardingEmail.create_email(
@@ -693,7 +693,7 @@ class TestOnboardingSequenceService:
         user = User.objects.create_user(
             username="fcsvc1", email="fcsvc1@example.com", password="test123", first_name="First"
         )
-        team = Team.objects.create(name="FC Team", key="fc-team")
+        team = Workspace.objects.create(name="FC Team", key="fc-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Set up eligibility: welcome sent + 4 days ago + no components
@@ -717,7 +717,7 @@ class TestOnboardingSequenceService:
         user = User.objects.create_user(
             username="fssvc1", email="fssvc1@example.com", password="test123", first_name="Sbom"
         )
-        team = Team.objects.create(name="FS Team", key="fs-team")
+        team = Workspace.objects.create(name="FS Team", key="fs-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Set up eligibility: component created 8 days ago + no SBOMs
@@ -742,7 +742,7 @@ class TestOnboardingSequenceService:
         user = User.objects.create_user(
             username="clsvc1", email="clsvc1@example.com", password="test123", first_name="Collab"
         )
-        team = Team.objects.create(name="CL Team", key="cl-team")
+        team = Workspace.objects.create(name="CL Team", key="cl-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Set up eligibility: welcome sent + 12 days ago + solo workspace
@@ -767,7 +767,7 @@ class TestOnboardingSequenceService:
         mock_send_mail.side_effect = Exception("SMTP Error")
 
         user = User.objects.create_user(username="failsvc", email="failsvc@example.com", password="test123")
-        team = Team.objects.create(name="Fail Team", key="fail-team")
+        team = Workspace.objects.create(name="Fail Team", key="fail-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Set up eligibility for quick_start
@@ -785,7 +785,7 @@ class TestOnboardingSequenceService:
     def test_retry_after_failure_succeeds(self) -> None:
         """Test that a failed email can be retried successfully on the next attempt."""
         user = User.objects.create_user(username="retrysvc", email="retrysvc@example.com", password="test123")
-        team = Team.objects.create(name="Retry Team", key="retry-team")
+        team = Workspace.objects.create(name="Retry Team", key="retry-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -812,7 +812,7 @@ class TestOnboardingSequenceService:
     def test_integrity_error_concurrent_sent_returns_true(self) -> None:
         """Test that IntegrityError returns True when the concurrent record is SENT."""
         user = User.objects.create_user(username="racesvc", email="racesvc@example.com", password="test123")
-        team = Team.objects.create(name="Race Team", key="race-team")
+        team = Workspace.objects.create(name="Race Team", key="race-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -839,7 +839,7 @@ class TestOnboardingSequenceService:
         mock_create.side_effect = IntegrityError("duplicate key")
 
         user = User.objects.create_user(username="racesvc2", email="racesvc2@example.com", password="test123")
-        team = Team.objects.create(name="Race Team 2", key="race-team-2")
+        team = Workspace.objects.create(name="Race Team 2", key="race-team-2")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -858,7 +858,7 @@ class TestOnboardingSequenceService:
         """Test getting eligible users for each onboarding sequence email."""
         # User 1: eligible for quick_start (day 2, welcome sent)
         user1 = User.objects.create_user(username="seq1", email="seq1@example.com")
-        team1 = Team.objects.create(name="Seq Team 1", key="seq-team-1")
+        team1 = Workspace.objects.create(name="Seq Team 1", key="seq-team-1")
         Member.objects.create(user=user1, team=team1, role="owner", is_default_team=True)
         status1 = OnboardingStatus.objects.get(user=user1)
         status1.mark_welcome_email_sent()
@@ -867,7 +867,7 @@ class TestOnboardingSequenceService:
 
         # User 2: eligible for first_component (day 4, no component)
         user2 = User.objects.create_user(username="seq2", email="seq2@example.com")
-        team2 = Team.objects.create(name="Seq Team 2", key="seq-team-2")
+        team2 = Workspace.objects.create(name="Seq Team 2", key="seq-team-2")
         Member.objects.create(user=user2, team=team2, role="owner", is_default_team=True)
         status2 = OnboardingStatus.objects.get(user=user2)
         status2.mark_welcome_email_sent()
@@ -876,7 +876,7 @@ class TestOnboardingSequenceService:
 
         # User 3: eligible for first_sbom (day 8, component but no SBOM)
         user3 = User.objects.create_user(username="seq3", email="seq3@example.com")
-        team3 = Team.objects.create(name="Seq Team 3", key="seq-team-3")
+        team3 = Workspace.objects.create(name="Seq Team 3", key="seq-team-3")
         Member.objects.create(user=user3, team=team3, role="owner", is_default_team=True)
         Component.objects.create(name="seq-comp-3", team=team3)
         status3 = OnboardingStatus.objects.get(user=user3)
@@ -888,7 +888,7 @@ class TestOnboardingSequenceService:
 
         # User 4: eligible for collaboration (day 12, solo workspace)
         user4 = User.objects.create_user(username="seq4", email="seq4@example.com")
-        team4 = Team.objects.create(name="Seq Team 4", key="seq-team-4")
+        team4 = Workspace.objects.create(name="Seq Team 4", key="seq-team-4")
         Member.objects.create(user=user4, team=team4, role="owner", is_default_team=True)
         status4 = OnboardingStatus.objects.get(user=user4)
         status4.mark_welcome_email_sent()
@@ -916,7 +916,7 @@ class TestOnboardingSequenceService:
     def test_get_users_for_onboarding_sequence_skip_already_sent(self, ensure_billing_plans) -> None:
         """Test that already-sent emails are skipped."""
         user = User.objects.create_user(username="seqskip", email="seqskip@example.com")
-        team = Team.objects.create(name="Skip Team", key="skip-team")
+        team = Workspace.objects.create(name="Skip Team", key="skip-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get(user=user)
         status.mark_welcome_email_sent()
@@ -941,7 +941,7 @@ class TestOnboardingSequenceTasks:
     def test_send_quick_start_email_task_success(self) -> None:
         """Test quick start email task execution."""
         user = User.objects.create_user(username="qstask", email="qstask@example.com", password="test123")
-        team = Team.objects.create(name="QS Task Team", key="qs-task-team")
+        team = Workspace.objects.create(name="QS Task Team", key="qs-task-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -962,7 +962,7 @@ class TestOnboardingSequenceTasks:
     def test_send_first_component_email_task_success(self) -> None:
         """Test first component email task execution."""
         user = User.objects.create_user(username="fctask", email="fctask@example.com", password="test123")
-        team = Team.objects.create(name="FC Task Team", key="fc-task-team")
+        team = Workspace.objects.create(name="FC Task Team", key="fc-task-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -978,7 +978,7 @@ class TestOnboardingSequenceTasks:
     def test_send_first_sbom_email_task_success(self) -> None:
         """Test first SBOM email task execution."""
         user = User.objects.create_user(username="fstask", email="fstask@example.com", password="test123")
-        team = Team.objects.create(name="FS Task Team", key="fs-task-team")
+        team = Workspace.objects.create(name="FS Task Team", key="fs-task-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -995,7 +995,7 @@ class TestOnboardingSequenceTasks:
     def test_send_collaboration_email_task_success(self) -> None:
         """Test collaboration email task execution."""
         user = User.objects.create_user(username="cltask", email="cltask@example.com", password="test123")
-        team = Team.objects.create(name="CL Task Team", key="cl-task-team")
+        team = Workspace.objects.create(name="CL Task Team", key="cl-task-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -1013,7 +1013,7 @@ class TestOnboardingSequenceTasks:
         """Test batch processing of onboarding sequence emails."""
         # Create user eligible for quick_start
         user = User.objects.create_user(username="batch1", email="batch1@example.com")
-        team = Team.objects.create(name="Batch Team", key="batch-team")
+        team = Workspace.objects.create(name="Batch Team", key="batch-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get(user=user)
         status.mark_welcome_email_sent()
@@ -1033,7 +1033,7 @@ class TestOnboardingSequenceProgression:
     def test_sequence_progression_over_time(self) -> None:
         """Test correct emails are eligible at correct days."""
         user = User.objects.create_user(username="prog1", email="prog1@example.com", password="test123")
-        team = Team.objects.create(name="Prog Team", key="prog-team")
+        team = Workspace.objects.create(name="Prog Team", key="prog-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -1063,7 +1063,7 @@ class TestOnboardingSequenceProgression:
     def test_skip_component_email_if_component_exists(self) -> None:
         """Test first component email skipped if component already created."""
         user = User.objects.create_user(username="skip1", email="skip1@example.com", password="test123")
-        team = Team.objects.create(name="Skip Team 1", key="skip-team-1")
+        team = Workspace.objects.create(name="Skip Team 1", key="skip-team-1")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         Component.objects.create(name="skip-comp", team=team)
 
@@ -1078,7 +1078,7 @@ class TestOnboardingSequenceProgression:
     def test_skip_sbom_email_if_sbom_exists(self) -> None:
         """Test first SBOM email skipped if SBOM already uploaded."""
         user = User.objects.create_user(username="skip2", email="skip2@example.com", password="test123")
-        team = Team.objects.create(name="Skip Team 2", key="skip-team-2")
+        team = Workspace.objects.create(name="Skip Team 2", key="skip-team-2")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         component = Component.objects.create(name="skip-comp-2", team=team)
         SBOM.objects.create(name="skip-sbom", component=component)
@@ -1095,7 +1095,7 @@ class TestOnboardingSequenceProgression:
         """Test collaboration email skipped if workspace has multiple members."""
         user = User.objects.create_user(username="skip3", email="skip3@example.com", password="test123")
         user2 = User.objects.create_user(username="skip3b", email="skip3b@example.com", password="test123")
-        team = Team.objects.create(name="Skip Team 3", key="skip-team-3")
+        team = Workspace.objects.create(name="Skip Team 3", key="skip-team-3")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         Member.objects.create(user=user2, team=team, role="member")
 
@@ -1190,7 +1190,7 @@ class TestEdgeCasesAndErrorHandling:
     def test_first_component_integrity_error_concurrent_sent(self) -> None:
         """T3: First component email returns True when race and concurrent record is SENT."""
         user = User.objects.create_user(username="ec3", email="ec3@example.com", password="test123")
-        team = Team.objects.create(name="EC3 Team", key="ec3-team")
+        team = Workspace.objects.create(name="EC3 Team", key="ec3-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -1220,7 +1220,7 @@ class TestEdgeCasesAndErrorHandling:
     def test_first_component_retry_after_failure(self) -> None:
         """T4: FAILED record is deleted and retry succeeds (render-before-delete ordering)."""
         user = User.objects.create_user(username="ec4", email="ec4@example.com", password="test123")
-        team = Team.objects.create(name="EC4 Team", key="ec4-team")
+        team = Workspace.objects.create(name="EC4 Team", key="ec4-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -1273,7 +1273,7 @@ class TestEdgeCasesAndErrorHandling:
     def test_non_sbom_component_does_not_trigger_tracking(self) -> None:
         """T6: A non-SBOM component type does not trigger first component tracking."""
         user = User.objects.create_user(username="ec6", email="ec6@example.com", password="test123")
-        team = Team.objects.create(name="EC6 Team", key="ec6-team")
+        team = Workspace.objects.create(name="EC6 Team", key="ec6-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         status = OnboardingStatus.objects.get(user=user)
@@ -1292,7 +1292,7 @@ class TestEdgeCasesAndErrorHandling:
     def test_batch_skips_user_with_no_onboarding_status(self) -> None:
         """T8: Batch methods skip users without OnboardingStatus records."""
         user = User.objects.create_user(username="ec8", email="ec8@example.com", password="test123")
-        team = Team.objects.create(name="EC8 Team", key="ec8-team")
+        team = Workspace.objects.create(name="EC8 Team", key="ec8-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
 
         # Delete the auto-created OnboardingStatus
@@ -1307,7 +1307,7 @@ class TestEdgeCasesAndErrorHandling:
         """Batch processing continues even if one user causes an error."""
         user1 = User.objects.create_user(username="ec9a", email="ec9a@example.com", password="test123")
         user2 = User.objects.create_user(username="ec9b", email="ec9b@example.com", password="test123")
-        team = Team.objects.create(name="EC9 Team", key="ec9-team")
+        team = Workspace.objects.create(name="EC9 Team", key="ec9-team")
         Member.objects.create(user=user1, team=team, role="owner", is_default_team=True)
         Member.objects.create(user=user2, team=team, role="owner", is_default_team=True)
 
@@ -1359,7 +1359,7 @@ class TestTransientSendFailuresRetry:
     @staticmethod
     def _user(name: str) -> Any:
         user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
-        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        team = Workspace.objects.create(name=f"{name} Team", key=f"{name}-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         return user
 
@@ -2260,7 +2260,7 @@ class TestWelcomeRecoverySweep:
     def _owner(name: str, *, welcome_sent: bool, age_days: int = 0, owner: bool = True) -> Any:
         user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
         if owner:
-            team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+            team = Workspace.objects.create(name=f"{name} Team", key=f"{name}-team")
             Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get_or_create(user=user)[0]
         if welcome_sent:
@@ -2584,7 +2584,7 @@ class TestRefusedAddressesLeaveTheBatch:
 
     def _user_due_for_quick_start(self, name: str) -> Any:
         user = User.objects.create_user(username=name, email=f"{name}@example.com", password="test123")
-        team = Team.objects.create(name=f"{name} Team", key=f"{name}-team")
+        team = Workspace.objects.create(name=f"{name} Team", key=f"{name}-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get(user=user)
         status.mark_welcome_email_sent()

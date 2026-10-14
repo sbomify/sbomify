@@ -17,16 +17,16 @@ from pytest_mock import MockerFixture
 from sbomify.apps.core.models import Component
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import public_certification_badges
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def public_team() -> Team:
-    return Team.objects.create(name="Badge Workspace", is_public=True)
+def public_team() -> Workspace:
+    return Workspace.objects.create(name="Badge Workspace", is_public=True)
 
 
 def _component(
-    team: Team,
+    team: Workspace,
     name: str = "ISO 27001",
     *,
     is_global: bool = True,
@@ -61,7 +61,7 @@ def _document(
 
 
 @pytest.mark.django_db
-def test_a_published_company_wide_report_earns_its_badge(public_team: Team) -> None:
+def test_a_published_company_wide_report_earns_its_badge(public_team: Workspace) -> None:
     component = _component(public_team)
     _document(component)
 
@@ -74,7 +74,7 @@ def test_a_published_company_wide_report_earns_its_badge(public_team: Team) -> N
 
 
 @pytest.mark.django_db
-def test_a_component_with_no_file_on_it_claims_nothing(public_team: Team) -> None:
+def test_a_component_with_no_file_on_it_claims_nothing(public_team: Workspace) -> None:
     """The easy way to claim a certification you do not hold."""
     _document(_component(public_team), filename="")
 
@@ -82,21 +82,21 @@ def test_a_component_with_no_file_on_it_claims_nothing(public_team: Team) -> Non
 
 
 @pytest.mark.django_db
-def test_a_product_level_report_is_not_a_company_certification(public_team: Team) -> None:
+def test_a_product_level_report_is_not_a_company_certification(public_team: Workspace) -> None:
     _document(_component(public_team, is_global=False))
 
     assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
-def test_a_private_component_stays_off_the_trust_center(public_team: Team) -> None:
+def test_a_private_component_stays_off_the_trust_center(public_team: Workspace) -> None:
     _document(_component(public_team, visibility=Component.Visibility.PRIVATE))
 
     assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
-def test_a_gated_report_still_earns_the_badge(public_team: Team) -> None:
+def test_a_gated_report_still_earns_the_badge(public_team: Workspace) -> None:
     """The gate is on the download, not on the fact that the workspace holds it."""
     _document(_component(public_team, visibility=Component.Visibility.GATED))
 
@@ -107,7 +107,7 @@ def test_a_gated_report_still_earns_the_badge(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_an_nda_is_not_a_certification(public_team: Team) -> None:
+def test_an_nda_is_not_a_certification(public_team: Workspace) -> None:
     """An NDA is published the same way and still earns nothing.
 
     It is `DocumentType.NDA` rather than a compliance document now, so the
@@ -127,14 +127,14 @@ def test_an_nda_is_not_a_certification(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_a_compliance_document_with_no_subcategory_earns_nothing(public_team: Team) -> None:
+def test_a_compliance_document_with_no_subcategory_earns_nothing(public_team: Workspace) -> None:
     _document(_component(public_team), subcategory=None)
 
     assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
-def test_a_non_compliance_document_earns_nothing(public_team: Team) -> None:
+def test_a_non_compliance_document_earns_nothing(public_team: Workspace) -> None:
     """document_type and subcategory are stored separately, so both are checked."""
     _document(_component(public_team), document_type=Document.DocumentType.REPORT)
 
@@ -142,7 +142,7 @@ def test_a_non_compliance_document_earns_nothing(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_soc2_type_i_and_type_ii_are_separate_badges(public_team: Team) -> None:
+def test_soc2_type_i_and_type_ii_are_separate_badges(public_team: Workspace) -> None:
     _document(
         _component(public_team, name="SOC 2 Type I"),
         subcategory=Document.ComplianceSubcategory.SOC2_TYPE1,
@@ -161,7 +161,7 @@ def test_soc2_type_i_and_type_ii_are_separate_badges(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_cra_conformity_earns_its_badge(public_team: Team) -> None:
+def test_cra_conformity_earns_its_badge(public_team: Workspace) -> None:
     """A declared conformity is a different claim from an audit, published the same way."""
     _document(
         _component(public_team, name="CRA conformity"),
@@ -176,7 +176,7 @@ def test_cra_conformity_earns_its_badge(public_team: Team) -> None:
 
 
 @pytest.mark.django_db
-def test_every_year_of_a_report_shows_one_badge_pointing_at_the_newest(public_team: Team) -> None:
+def test_every_year_of_a_report_shows_one_badge_pointing_at_the_newest(public_team: Workspace) -> None:
     older = _component(public_team, name="ISO 27001 2025")
     _document(older, version="2025")
     newer = _component(public_team, name="ISO 27001 2026")
@@ -190,15 +190,15 @@ def test_every_year_of_a_report_shows_one_badge_pointing_at_the_newest(public_te
 
 
 @pytest.mark.django_db
-def test_another_workspace_report_does_not_leak(public_team: Team) -> None:
-    other = Team.objects.create(name="Other Workspace", is_public=True)
+def test_another_workspace_report_does_not_leak(public_team: Workspace) -> None:
+    other = Workspace.objects.create(name="Other Workspace", is_public=True)
     _document(_component(other))
 
     assert public_certification_badges(public_team, HttpRequest()) == []
 
 
 @pytest.mark.django_db
-def test_the_migration_moves_plain_soc2_to_type_ii(public_team: Team) -> None:
+def test_the_migration_moves_plain_soc2_to_type_ii(public_team: Workspace) -> None:
     """The data move runs under --nomigrations, where the migration never does.
 
     Tests build a bare schema, so nothing else in the suite executes 0015. The
@@ -281,7 +281,7 @@ def test_the_demo_seed_publishes_a_certification_that_earns_a_badge() -> None:
 
 
 @pytest.mark.django_db
-def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: Team, mocker: MockerFixture) -> None:
+def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: Workspace, mocker: MockerFixture) -> None:
     """A demo database seeded earlier keeps its rows, so the tag has to catch up.
 
     ``_ensure_document`` returns early on an existing name/version, which would
@@ -323,7 +323,7 @@ def test_re_seeding_tags_a_certificate_seeded_before_subcategories(public_team: 
 
 
 @pytest.mark.django_db
-def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Team) -> None:
+def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Workspace) -> None:
     """The data move runs under ``--nomigrations``, where the migration never does.
 
     Tests build a bare schema, so nothing else in the suite executes 0016. The
@@ -366,7 +366,7 @@ def test_the_migration_moves_the_nda_out_of_compliance_and_back(public_team: Tea
 
 
 @pytest.mark.django_db
-def test_a_gated_certification_does_not_borrow_a_public_component_slug(public_team: Team) -> None:
+def test_a_gated_certification_does_not_borrow_a_public_component_slug(public_team: Workspace) -> None:
     """Slugs are derived from names and are not unique within a workspace.
 
     "Foo Bar" and "Foo-Bar" slugify to the same thing, and

@@ -7,7 +7,7 @@ from django.test import TestCase
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.utils import can_add_user_to_team
 
 User = get_user_model()
@@ -46,7 +46,7 @@ class UserLimitsTestCase(TestCase):
 
     def test_community_plan_user_limit(self):
         """Test that community plan allows only 1 user."""
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Community Team", billing_plan="community")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should not be able to add another user
@@ -56,7 +56,7 @@ class UserLimitsTestCase(TestCase):
 
     def test_business_plan_user_limit(self):
         """Test that business plan allows up to 5 users."""
-        team = Team.objects.create(name="Business Team", billing_plan="business")
+        team = Workspace.objects.create(name="Business Team", billing_plan="business")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should be able to add up to 4 more users
@@ -78,7 +78,7 @@ class UserLimitsTestCase(TestCase):
 
     def test_enterprise_plan_unlimited_users(self):
         """Test that enterprise plan allows unlimited users."""
-        team = Team.objects.create(name="Enterprise Team", billing_plan="enterprise")
+        team = Workspace.objects.create(name="Enterprise Team", billing_plan="enterprise")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should be able to add users without limit
@@ -99,7 +99,7 @@ class UserLimitsTestCase(TestCase):
 
     def test_no_billing_plan_defaults_to_community(self):
         """Test that teams without billing plan default to community limits."""
-        team = Team.objects.create(name="No Plan Team")  # No billing_plan set
+        team = Workspace.objects.create(name="No Plan Team")  # No billing_plan set
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should not be able to add another user (defaults to community)
@@ -109,7 +109,7 @@ class UserLimitsTestCase(TestCase):
 
     def test_invalid_billing_plan_defaults_to_community(self):
         """Test that teams with invalid billing plan default to community limits."""
-        team = Team.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
+        team = Workspace.objects.create(name="Invalid Plan Team", billing_plan="invalid_plan")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should not be able to add another user (defaults to community)
@@ -120,7 +120,7 @@ class UserLimitsTestCase(TestCase):
     def test_community_team_with_multiple_users_grandfathered(self):
         """Test that existing community teams with multiple users can't add more but aren't broken."""
         # Create a community team with multiple users (simulating legacy data)
-        team = Team.objects.create(name="Legacy Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Legacy Community Team", billing_plan="community")
 
         # Add multiple users (simulating pre-limit situation)
         owner = User.objects.create_user(username="legacy_owner", email="legacy_owner@test.com")
@@ -151,7 +151,7 @@ class UserLimitsTestCase(TestCase):
     def test_business_team_with_excess_users_grandfathered(self):
         """Test that existing business teams with >5 users are grandfathered on business plan."""
         # Create a business team with more than 5 users (simulating legacy data)
-        team = Team.objects.create(name="Legacy Business Team", billing_plan="business")
+        team = Workspace.objects.create(name="Legacy Business Team", billing_plan="business")
 
         # Add 7 users (exceeding business plan limit of 5)
         for i in range(7):
@@ -218,7 +218,7 @@ class NTIAFeatureGatingTestCase(TestCase):
     @patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom")
     def test_plugin_assessments_triggered_on_sbom_create(self, mock_enqueue):
         """Test that plugin assessments are triggered when SBOM is created."""
-        team = Team.objects.create(name="Test Team", billing_plan="business")
+        team = Workspace.objects.create(name="Test Team", billing_plan="business")
         Member.objects.create(user=self.user, team=team, role="owner")
         component = Component.objects.create(name="Test Component", team=team)
 
@@ -240,7 +240,7 @@ class NTIAFeatureGatingTestCase(TestCase):
         """
         for plan in ["community", "business", "enterprise", None]:
             mock_enqueue.reset_mock()
-            team = Team.objects.create(name=f"Team {plan}", billing_plan=plan)
+            team = Workspace.objects.create(name=f"Team {plan}", billing_plan=plan)
             Member.objects.create(user=self.user, team=team, role="owner")
             component = Component.objects.create(name="Test Component", team=team)
 
@@ -271,7 +271,7 @@ class InvitationUserLimitsTestCase(TestCase):
 
     def test_invitation_creation_respects_user_limits(self):
         """Test that invitations cannot be created when user limit is reached."""
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Community Team", billing_plan="community")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Should not be able to create invitation
@@ -281,7 +281,7 @@ class InvitationUserLimitsTestCase(TestCase):
 
     def test_invitation_acceptance_respects_user_limits(self):
         """Test that invitations cannot be accepted when user limit is reached."""
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Community Team", billing_plan="community")
         Member.objects.create(user=self.user1, team=team, role="owner")
 
         # Create invitation (bypassing the normal flow for testing)

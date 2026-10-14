@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.teams.models import Supplier, Team
+from sbomify.apps.teams.models import Supplier, Workspace
 
 
 def _first_error(exc: DjangoValidationError) -> str:
@@ -28,7 +28,7 @@ def _first_error(exc: DjangoValidationError) -> str:
     return str(exc.messages[0]) if exc.messages else "Invalid input"
 
 
-def list_suppliers(team: Team, search: str = "") -> ServiceResult[list[Supplier]]:
+def list_suppliers(team: Workspace, search: str = "") -> ServiceResult[list[Supplier]]:
     """The workspace's suppliers, optionally filtered by name or contact."""
     queryset = Supplier.objects.filter(team=team)
     if search := (search or "").strip():
@@ -36,7 +36,7 @@ def list_suppliers(team: Team, search: str = "") -> ServiceResult[list[Supplier]
     return ServiceResult.success(list(queryset.order_by("name")))
 
 
-def get_supplier(team: Team, supplier_id: str) -> ServiceResult[Supplier]:
+def get_supplier(team: Workspace, supplier_id: str) -> ServiceResult[Supplier]:
     """One supplier, scoped to the workspace.
 
     Scoped rather than fetched by id alone: an id from another workspace has to
@@ -48,7 +48,7 @@ def get_supplier(team: Team, supplier_id: str) -> ServiceResult[Supplier]:
     return ServiceResult.success(supplier)
 
 
-def create_supplier(team: Team, data: dict[str, Any]) -> ServiceResult[Supplier]:
+def create_supplier(team: Workspace, data: dict[str, Any]) -> ServiceResult[Supplier]:
     """Add a supplier to the workspace."""
     supplier = Supplier(
         team=team,
@@ -74,7 +74,7 @@ def create_supplier(team: Team, data: dict[str, Any]) -> ServiceResult[Supplier]
     return ServiceResult.success(supplier)
 
 
-def update_supplier(team: Team, supplier_id: str, data: dict[str, Any]) -> ServiceResult[Supplier]:
+def update_supplier(team: Workspace, supplier_id: str, data: dict[str, Any]) -> ServiceResult[Supplier]:
     """Change a supplier's details. Absent keys are left alone."""
     result = get_supplier(team, supplier_id)
     if not result.ok or result.value is None:
@@ -96,7 +96,7 @@ def update_supplier(team: Team, supplier_id: str, data: dict[str, Any]) -> Servi
     return ServiceResult.success(supplier)
 
 
-def delete_supplier(team: Team, supplier_id: str) -> ServiceResult[None]:
+def delete_supplier(team: Workspace, supplier_id: str) -> ServiceResult[None]:
     """Remove a supplier from the workspace."""
     result = get_supplier(team, supplier_id)
     if not result.ok or result.value is None:
