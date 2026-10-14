@@ -50,13 +50,13 @@ def test_a_user_reaches_their_workspaces_by_the_old_reverse_names(sample_team_wi
     assert get_user_model().objects.filter(team=member.team).get() == member.user
 
 
-def _rename_permissions():
+def _rename_permissions(direction="rename_to_workspace"):
     import importlib
 
     from django.apps import apps
 
     module = importlib.import_module("sbomify.apps.teams.migrations.0049_rename_team_permissions")
-    module.rename_to_workspace(apps, None)
+    getattr(module, direction)(apps, None)
 
 
 @pytest.mark.django_db
@@ -85,18 +85,29 @@ def test_a_grant_on_the_old_permission_survives_the_rename(sample_user):
 
 
 @pytest.mark.django_db
-def test_the_rename_leaves_a_workspace_permission_that_already_exists():
-    from django.contrib.auth.models import Permission
+@pytest.mark.parametrize(
+    ("direction", "old", "new"),
+    [
+        ("rename_to_workspace", "team", "workspace"),  # rename-to-workspace: keep
+        ("rename_to_team", "workspace", "team"),  # rename-to-workspace: keep
+    ],
+)
+def test_grants_move_onto_a_permission_that_already_exists(sample_user, direction, old, new):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group, Permission
     from django.contrib.contenttypes.models import ContentType
 
     content_type = ContentType.objects.get(app_label="teams", model="workspace")
-    old = Permission.objects.create(
-        content_type=content_type,
-        codename="change_team",  # rename-to-workspace: keep
-        name="Can change team",  # rename-to-workspace: keep
-    )
+    Permission.objects.filter(content_type=content_type, codename__startswith="change_").delete()
+    stale = Permission.objects.create(content_type=content_type, codename=f"change_{old}", name=f"Can change {old}")
+    target = Permission.objects.create(content_type=content_type, codename=f"change_{new}", name=f"Can change {new}")
+    group = Group.objects.create(name="workspace editors")
+    sample_user.user_permissions.add(stale)
+    group.permissions.add(stale)
 
-    _rename_permissions()
+    _rename_permissions(direction)
 
-    assert Permission.objects.filter(content_type=content_type, codename="change_workspace").count() == 1
-    assert Permission.objects.filter(pk=old.pk, codename="change_team").exists()  # rename-to-workspace: keep
+    assert not Permission.objects.filter(pk=stale.pk).exists()
+    assert Permission.objects.filter(content_type=content_type, codename=f"change_{new}").count() == 1
+    assert get_user_model().objects.get(pk=sample_user.pk).has_perm(f"teams.change_{new}")
+    assert list(group.permissions.all()) == [target]

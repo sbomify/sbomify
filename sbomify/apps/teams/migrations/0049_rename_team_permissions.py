@@ -7,17 +7,24 @@ def _rename(apps, old, new):
     """Rename the model's default permissions, which the content type rename leaves behind.
 
     Renaming in place keeps every grant attached. A fresh database has no
-    content type yet, so there is nothing to do; a codename that already exists
-    under the new name is left alone rather than duplicated.
+    content type yet, so there is nothing to do. When the new codename already
+    exists (post_migrate ran between the two migrations), the old permission's
+    user and group grants move onto it and the old row goes, so no grant is
+    left on a codename nothing checks.
     """
     content_type = apps.get_model("contenttypes", "ContentType").objects.filter(app_label="teams", model="workspace")
     permission = apps.get_model("auth", "Permission")
     for action in ACTIONS:
-        if permission.objects.filter(content_type__in=content_type, codename=f"{action}_{new}").exists():
+        stale = permission.objects.filter(content_type__in=content_type, codename=f"{action}_{old}").first()
+        if stale is None:
             continue
-        permission.objects.filter(content_type__in=content_type, codename=f"{action}_{old}").update(
-            codename=f"{action}_{new}", name=f"Can {action} {new}"
-        )
+        target = permission.objects.filter(content_type__in=content_type, codename=f"{action}_{new}").first()
+        if target is None:
+            permission.objects.filter(pk=stale.pk).update(codename=f"{action}_{new}", name=f"Can {action} {new}")
+            continue
+        target.user_set.add(*stale.user_set.all())
+        target.group_set.add(*stale.group_set.all())
+        stale.delete()
 
 
 def rename_to_workspace(apps, schema_editor):
