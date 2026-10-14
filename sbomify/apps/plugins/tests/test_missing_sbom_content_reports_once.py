@@ -334,3 +334,48 @@ def test_a_finalized_run_settles_under_the_report_lock(sbom, finalize) -> None:
     assert run.status == RunStatus.COMPLETED.value
     assert run.completed_at >= released_at[0]
     assert run.result["assessed_at"] == run.completed_at.isoformat()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("finalize", ["finalize_retry_exhausted", "finalize_stranded"])
+def test_finalizing_a_run_a_worker_still_holds_does_not_deadlock(sbom, finalize) -> None:
+    """A worker on the run holds its row and then takes the report lock to settle.
+
+    The task keeps one transaction open around the whole run, so the row lock
+    from the RUNNING save is held until the worker commits. A finalizer that
+    took the report lock first and then waited on that row would deadlock
+    against it, and PostgreSQL would abort one side.
+    """
+    run = _settled_run(sbom, RunStatus.RUNNING.value, created_at=timezone.now(), completed_at=None)
+    holding = threading.Event()
+    failures: list[BaseException] = []
+
+    def running_worker() -> None:
+        try:
+            with transaction.atomic():
+                row = AssessmentRun.objects.select_for_update().get(id=run.id)
+                holding.set()
+                # Give the finalizer time to reach its lock waits.
+                threading.Event().wait(0.5)
+                PluginOrchestrator._lock_missing_content_report(row)
+                AssessmentRun.objects.filter(id=row.id).update(
+                    status=RunStatus.COMPLETED.value, result={"honest": True}, completed_at=timezone.now()
+                )
+        except BaseException as e:  # surfaced to the test thread below
+            failures.append(e)
+            holding.set()
+        finally:
+            connection.close()
+
+    worker = threading.Thread(target=running_worker)
+    worker.start()
+    try:
+        assert holding.wait(timeout=10)
+        settled = getattr(PluginOrchestrator(), finalize)(str(run.id), "gone")
+    finally:
+        worker.join(timeout=10)
+
+    assert failures == []
+    assert settled is not None
+    assert settled.status == RunStatus.COMPLETED.value
+    assert settled.result == {"honest": True}

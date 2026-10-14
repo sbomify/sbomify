@@ -648,9 +648,22 @@ class PluginOrchestrator:
             # terminal transition, with ``completed_at`` stamped only once the
             # lock is held. Otherwise this could land between a missing-content
             # check's read of the preceding run and that failure's own
-            # completed_at, ordering the failure after a run it never saw. The
-            # lock is taken before the row update, as on the other paths.
-            self._lock_missing_content_report(run)
+            # completed_at, ordering the failure after a run it never saw.
+            #
+            # The row is locked first, and the report lock only once it is
+            # held. A worker still on this run holds the row from its RUNNING
+            # save until its task transaction ends, and takes the report lock
+            # inside that; taking them here in the other order would deadlock
+            # against it. Waiting on the row instead lets the worker settle,
+            # and the filter below then finds nothing left to finalise.
+            locked = (
+                AssessmentRun.objects.select_for_update()
+                .filter(id=run_id, status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value))
+                .values_list("id", flat=True)
+                .first()
+            )
+            if locked is not None:
+                self._lock_missing_content_report(run)
             now = timezone.now()
             synthesized_result["assessed_at"] = now.isoformat()
             updated = AssessmentRun.objects.filter(
