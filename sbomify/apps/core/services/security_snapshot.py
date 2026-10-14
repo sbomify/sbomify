@@ -10,19 +10,7 @@ from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
-from sbomify.apps.vulnerability_scanning.utils import canonical_ecosystem, state_label
-
-
-def _ecosystem_scope(label: Any) -> str:
-    """The ecosystem under package_scopes' spelling, so "PyPI" and "pypi" are one package and npm another."""
-    return canonical_ecosystem({"ecosystem": label}) or "unknown"
-
-
-def _package_key(purl: Any, name: Any, version: Any, ecosystem: Any) -> tuple[str, ...]:
-    """A package's identity for the scanner-source index: its purl when known, else name, version and ecosystem."""
-    if isinstance(purl, str) and purl:
-        return ("purl", purl.split("#", 1)[0].split("?", 1)[0].lower())
-    return ("name", str(name or ""), str(version or ""), _ecosystem_scope(ecosystem))
+from sbomify.apps.vulnerability_scanning.utils import state_label
 
 
 def build_component_security_picture(
@@ -45,8 +33,10 @@ def build_component_security_picture(
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
+        package_scopes,
         result_scanned_nothing,
         severity_counts_from_rows,
+        vulnerability_findings,
     )
 
     overrides = {key: value for key, value in (sbom_overrides or {}).items() if key in set(component_ids)}
@@ -85,13 +75,7 @@ def build_component_security_picture(
     # scoped to the same latest runs as the summary and assessment state above.
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
-    # Which scanners reported an advisory in a package. Keyed by every id and alias, so it
-    # survives the alias merge below: OSV's GHSA row and Dependency-Track's CVE row meet here.
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    # A finding with a purl is indexed by it, so two Maven groupIds sharing an artifact name
-    # keep their own scanners; one without is indexed by name, version and ecosystem, and a
-    # row with a purl also reads that, so a scanner that named only the artifact still counts.
-    sources: dict[tuple[str, ...], set[str]] = {}
     for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
         "run_id",
         "sbom_id",
@@ -108,16 +92,11 @@ def build_component_security_picture(
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
-        package = _package_key(
-            finding["purl"], finding["package_name"], finding["package_version"], finding["ecosystem"]
-        )
-        for identifier in (finding["advisory_id"], *finding["aliases"]):
-            key = (str(finding["sbom_id"]), identifier.lower(), *package)
-            sources.setdefault(key, set()).add(plugin_by_run.get(finding["run_id"], ""))
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
                 "id": finding["advisory_id"],
                 "aliases": finding["aliases"],
+                "plugin": plugin_by_run.get(finding["run_id"], ""),
                 "severity": finding["severity"],
                 "cvss_score": finding["cvss_score"],
                 "analysis_state": finding["vex_state"],
@@ -142,9 +121,28 @@ def build_component_security_picture(
         component_id = meta["component_id"]
         # One pass over the SBOM, as its card merges: package_scopes keys on the
         # canonical ecosystem, so OSV's "PyPI" and a purl's "pypi" meet here.
-        rows = extract_finding_rows(
-            merge_findings_by_alias([{"findings": indexed_by_sbom.get(sbom_id, [])}]), kev_ids=kev_ids
-        )
+        indexed = vulnerability_findings([{"findings": indexed_by_sbom.get(sbom_id, [])}])
+        rows = extract_finding_rows(merge_findings_by_alias([{"findings": indexed}]), kev_ids=kev_ids)
+        # Which scanners reported each row, keyed by every id and alias in the package scope
+        # the merge used, so OSV's "com.foo:shared" without a purl and Dependency-Track's
+        # "shared" with one meet here as they did there. Each row is scoped alongside the
+        # findings it came from: it carries one of their purls, so it joins their scope.
+        row_components = [
+            {
+                "component": {
+                    "name": row["package"],
+                    "version": row["version"],
+                    "ecosystem": row["ecosystem"],
+                    "purl": row["purl"],
+                }
+            }
+            for row in rows
+        ]
+        scopes = package_scopes([*indexed, *row_components])
+        sources: dict[tuple[str, tuple[str, ...]], set[str]] = {}
+        for occurrence, scope in zip(indexed, scopes[: len(indexed)], strict=True):
+            for identifier in (occurrence["id"], *occurrence["aliases"]):
+                sources.setdefault((identifier.lower(), scope), set()).add(occurrence["plugin"])
         if not all(result_scanned_nothing(result) for result in provider_results):
             unassessed.discard(component_id)
         # Keep summary-only providers visible, as on the product detail page. A component
@@ -167,18 +165,13 @@ def build_component_security_picture(
         previous = counts_by_component.get(component_id)
         if previous is None or counts["total"] > previous["total"]:
             counts_by_component[component_id] = counts
-        for row in rows:
+        for row, scope in zip(rows, scopes[len(indexed) :], strict=True):
             if row.get("vex_suppressed"):
                 continue
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
-            keys = {
-                _package_key(row.get("purl"), row.get("package"), row.get("version"), row.get("ecosystem")),
-                _package_key("", row.get("package"), row.get("version"), row.get("ecosystem")),
-            }
             reported_by: set[str] = set()
             for alias in (row["id"], *row["aliases"]):
-                for package in keys:
-                    reported_by |= sources.get((sbom_id, alias.lower(), *package), set())
+                reported_by |= sources.get((alias.lower(), scope), set())
             row["sources"] = sorted(reported_by - {""})
             findings.append(
                 {
