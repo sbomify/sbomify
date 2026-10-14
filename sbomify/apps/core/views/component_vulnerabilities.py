@@ -129,6 +129,7 @@ class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, Login
             request.GET.get("package", ""),
             request.GET.get("version", ""),
             request.GET.get("ecosystem", ""),
+            request.GET.get("purl", ""),
         )
         # The SBOM the row was read from: the list can show a release's or an older version's findings.
         vulns = build_component_vulnerabilities(

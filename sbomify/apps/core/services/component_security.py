@@ -117,7 +117,7 @@ def build_component_vulnerabilities(
     component_id: str,
     query: FindingQuery,
     *,
-    triage_identity: tuple[str, str, str, str] | None = None,
+    triage_identity: tuple[str, ...] | None = None,
     sbom_id: str | None = None,
 ) -> ComponentVulnerabilitiesContext:
     """The newest SBOM's findings, or ``sbom_id``'s when given, summarised whole and paged for display.
@@ -137,6 +137,7 @@ def build_component_vulnerabilities(
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
+        purl_matches,
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -188,12 +189,15 @@ def build_component_vulnerabilities(
         )
 
     if triage_identity is not None:
-        advisory, package, version, ecosystem = triage_identity
+        advisory, package, version, ecosystem, *rest = triage_identity
+        # The purl tells two packages apart that share a name, such as two Maven groupIds.
+        purl = rest[0] if rest else ""
         rows = [
             row
             for row in rows
             if advisory in (row["id"], *row["aliases"])
             and (row["package"], row["version"], row["ecosystem"]) == (package, version, ecosystem)
+            and purl_matches(row.get("purl"), purl)
         ]
 
     return ComponentVulnerabilitiesContext(

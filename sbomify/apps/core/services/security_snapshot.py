@@ -18,6 +18,13 @@ def _ecosystem_scope(label: Any) -> str:
     return canonical_ecosystem({"ecosystem": label}) or "unknown"
 
 
+def _package_key(purl: Any, name: Any, version: Any, ecosystem: Any) -> tuple[str, ...]:
+    """A package's identity for the scanner-source index: its purl when known, else name, version and ecosystem."""
+    if isinstance(purl, str) and purl:
+        return ("purl", purl.split("#", 1)[0].split("?", 1)[0].lower())
+    return ("name", str(name or ""), str(version or ""), _ecosystem_scope(ecosystem))
+
+
 def build_component_security_picture(
     component_ids: list[str],
     component_names: dict[str, str],
@@ -81,7 +88,10 @@ def build_component_security_picture(
     # Which scanners reported an advisory in a package. Keyed by every id and alias, so it
     # survives the alias merge below: OSV's GHSA row and Dependency-Track's CVE row meet here.
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    sources: dict[tuple[str, str, str, str, str], set[str]] = {}
+    # A finding with a purl is indexed by it, so two Maven groupIds sharing an artifact name
+    # keep their own scanners; one without is indexed by name, version and ecosystem, and a
+    # row with a purl also reads that, so a scanner that named only the artifact still counts.
+    sources: dict[tuple[str, ...], set[str]] = {}
     for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
         "run_id",
         "sbom_id",
@@ -98,15 +108,11 @@ def build_component_security_picture(
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
-        ecosystem = _ecosystem_scope(finding["ecosystem"])
+        package = _package_key(
+            finding["purl"], finding["package_name"], finding["package_version"], finding["ecosystem"]
+        )
         for identifier in (finding["advisory_id"], *finding["aliases"]):
-            key = (
-                str(finding["sbom_id"]),
-                identifier.lower(),
-                finding["package_name"],
-                finding["package_version"],
-                ecosystem,
-            )
+            key = (str(finding["sbom_id"]), identifier.lower(), *package)
             sources.setdefault(key, set()).add(plugin_by_run.get(finding["run_id"], ""))
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
@@ -148,30 +154,32 @@ def build_component_security_picture(
             itemised.add(component_id)
         elif any(extract_severity_counts(result)["total"] for result in provider_results):
             summary_only.add(component_id)
-        counts_by_component[component_id] = (
+        counts = (
             severity_counts_from_rows(rows)
             if rows
             else max(
                 (extract_severity_counts(result) for result in provider_results), key=lambda counts: counts["total"]
             )
         )
+        # A release can read several SBOMs of one component, usually one build in two
+        # formats. Keep the largest report rather than whichever SBOM came last: adding
+        # them would count one build twice, and order must not decide the number.
+        previous = counts_by_component.get(component_id)
+        if previous is None or counts["total"] > previous["total"]:
+            counts_by_component[component_id] = counts
         for row in rows:
             if row.get("vex_suppressed"):
                 continue
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
-            ecosystem = _ecosystem_scope(row.get("ecosystem"))
-            row["sources"] = sorted(
-                set().union(
-                    *(
-                        sources.get(
-                            (sbom_id, alias.lower(), row.get("package") or "", row.get("version") or "", ecosystem),
-                            set(),
-                        )
-                        for alias in (row["id"], *row["aliases"])
-                    )
-                )
-                - {""}
-            )
+            keys = {
+                _package_key(row.get("purl"), row.get("package"), row.get("version"), row.get("ecosystem")),
+                _package_key("", row.get("package"), row.get("version"), row.get("ecosystem")),
+            }
+            reported_by: set[str] = set()
+            for alias in (row["id"], *row["aliases"]):
+                for package in keys:
+                    reported_by |= sources.get((sbom_id, alias.lower(), *package), set())
+            row["sources"] = sorted(reported_by - {""})
             findings.append(
                 {
                     **row,
