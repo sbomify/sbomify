@@ -9,7 +9,7 @@
             {# Manufacturer — Annex V item 2 guard #}
             <c-layout.form-section stacked title="Manufacturer" description="Legal details from your workspace’s Parties settings.">
             <c-slot name="actions">
-            <c-buttons.secondary size="sm" id="manufacturer-settings" href="{% url 'workspaces:team_settings_tab' team_key=team.key tab='contact-profiles' %}" target="_blank" rel="noopener" data-testid="mfr-settings-link" aria-label="Edit manufacturer in Parties (opens in a new tab)">Edit details<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.secondary>
+            <c-buttons.secondary size="sm" id="manufacturer-settings" href="{% url 'workspaces:team_settings_tab' workspace_key=team.key tab='contact-profiles' %}" target="_blank" rel="noopener" data-testid="mfr-settings-link" aria-label="Edit manufacturer in Parties (opens in a new tab)">Edit details<i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i></c-buttons.secondary>
             </c-slot>
             <div class="flex flex-col gap-4">
                 <dl x-show="manufacturer" class="flex flex-col gap-3 m-0">

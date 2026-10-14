@@ -5,7 +5,7 @@ import stripe
 
 from sbomify.apps.billing.billing_processing import handle_subscription_updated
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 def _real_subscription(**overrides):
@@ -39,7 +39,7 @@ def enterprise_plan_with_price():
 
 @pytest.fixture
 def team_with_subscription(db):
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         key="test_team", 
         name="Test Team",
         billing_plan="business",

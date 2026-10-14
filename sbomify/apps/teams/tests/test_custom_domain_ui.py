@@ -9,7 +9,7 @@ from django.utils.html import strip_tags
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
@@ -110,7 +110,7 @@ class TestTeamBrandingViewCustomDomain:
     @pytest.fixture
     def business_team(self, sample_user):
         """Create a team with business plan."""
-        team = Team.objects.create(name="Business Team", billing_plan="business")
+        team = Workspace.objects.create(name="Business Team", billing_plan="business")
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
@@ -119,7 +119,7 @@ class TestTeamBrandingViewCustomDomain:
     @pytest.fixture
     def community_team(self, sample_user):
         """Create a team with community plan."""
-        team = Team.objects.create(name="Community Team", billing_plan="community")
+        team = Workspace.objects.create(name="Community Team", billing_plan="community")
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(team=team, user=sample_user, role="owner", is_default_team=True)
@@ -128,7 +128,7 @@ class TestTeamBrandingViewCustomDomain:
     @pytest.fixture
     def team_with_domain(self, sample_user):
         """Create a team with a configured custom domain."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Domain Team",
             billing_plan="business",
             custom_domain="trust.example.com",
@@ -191,7 +191,7 @@ class TestTeamBrandingViewCustomDomain:
     def test_pending_verification_status(self, sample_user):
         """Team with unverified domain should show pending status."""
         test_domain = "unverified.example.com"
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Pending Team",
             billing_plan="business",
             custom_domain=test_domain,

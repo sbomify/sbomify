@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Workspace
 
 
 class DeleteFormParser(HTMLParser):
@@ -65,7 +65,7 @@ def test_api_rejects_empty_profile_without_changing_default(
 @pytest.mark.django_db
 @pytest.mark.parametrize("deleted_entity", [False, True])
 def test_form_rejects_profile_without_entities(
-    authenticated_web_client: Client, team_with_business_plan: Team, deleted_entity: bool
+    authenticated_web_client: Client, team_with_business_plan: Workspace, deleted_entity: bool
 ) -> None:
     workspace = team_with_business_plan
     data = profile_form_data()
@@ -89,7 +89,7 @@ def test_form_rejects_profile_without_entities(
 @pytest.mark.parametrize("incomplete_entity", [False, True])
 def test_delete_incomplete_profile_from_every_list_render(
     authenticated_web_client: Client,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     render_source: str,
     incomplete_entity: bool,
 ) -> None:
@@ -135,7 +135,7 @@ def test_delete_incomplete_profile_from_every_list_render(
     assert parser.action == list_url
 
 
-def create_profile_via_api(client: Client, token: AccessToken, workspace: Team, name: str, entity_name: str) -> str:
+def create_profile_via_api(client: Client, token: AccessToken, workspace: Workspace, name: str, entity_name: str) -> str:
     """Create a profile with a single complete entity and return its id."""
     response = client.post(
         f"/api/v1/workspaces/{workspace.key}/contact-profiles",

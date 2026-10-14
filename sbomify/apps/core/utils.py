@@ -236,11 +236,11 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_workspace", {}).get("key")
-    if team_key is None:
+    workspace_key = request.session.get("current_workspace", {}).get("key")
+    if workspace_key is None:
         return None
 
-    return token_to_number(team_key)
+    return token_to_number(workspace_key)
 
 
 @lru_cache(maxsize=1)
@@ -482,7 +482,7 @@ def get_team_id_from_session(request: Any) -> str | None:
 
 def _extract_team_id(item: Any) -> int | None:
     """Extract the team_id from any model that has a team relationship."""
-    if hasattr(item, "_meta") and item._meta.label == "teams.Team":
+    if hasattr(item, "_meta") and item._meta.label == "teams.Workspace":
         return item.id  # type: ignore[no-any-return]
     if hasattr(item, "team_id"):
         return item.team_id  # type: ignore[no-any-return]

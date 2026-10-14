@@ -26,7 +26,7 @@ from sbomify.apps.plugins.sdk import (
 from sbomify.apps.plugins.sdk.base import SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class SecurityMockPlugin(AssessmentPlugin):
@@ -92,16 +92,16 @@ def _vex_doc(cve: str, purl: str) -> bytes:
 
 
 @pytest.fixture
-def team(db) -> Team:
+def team(db) -> Workspace:
     BillingPlan.objects.get_or_create(
         key="community",
         defaults={"name": "Community", "max_products": 1, "max_components": 5, "max_users": 2},
     )
-    return Team.objects.create(name="VEX Hook Team", billing_plan="community")
+    return Workspace.objects.create(name="VEX Hook Team", billing_plan="community")
 
 
 @pytest.fixture
-def component(team: Team) -> Component:
+def component(team: Workspace) -> Component:
     return Component.objects.create(team=team, name="vex-hook-component")
 
 

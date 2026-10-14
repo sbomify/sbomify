@@ -29,15 +29,15 @@ from django.urls import reverse
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeError, StripeResourceMissingError
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
 
-def _set_limits(team: Team, **limits) -> None:
+def _set_limits(team: Workspace, **limits) -> None:
     current = team.billing_plan_limits or {}
     current.update(limits)
-    Team.objects.filter(pk=team.pk).update(billing_plan_limits=current)
+    Workspace.objects.filter(pk=team.pk).update(billing_plan_limits=current)
     team.refresh_from_db()
 
 
@@ -64,7 +64,7 @@ def _event(event_id: str) -> stripe.Event:
     return stripe.Event.construct_from({"id": event_id, "object": "event"}, "sk_test_x")
 
 
-def _checkout_session(team: Team) -> stripe.checkout.Session:
+def _checkout_session(team: Workspace) -> stripe.checkout.Session:
     return stripe.checkout.Session.construct_from(
         {
             "id": "cs_new",
@@ -106,7 +106,7 @@ def _stripe_has(stripe_client: MagicMock, **subscriptions: stripe.Subscription |
     stripe_client.get_subscription.side_effect = get_subscription
 
 
-def _complete_checkout(checkout: str, team: Team, user) -> None:
+def _complete_checkout(checkout: str, team: Workspace, user) -> None:
     """Finish the checkout through the browser's return, or through Stripe's webhook."""
     if checkout == "return":
         client = Client()
@@ -272,7 +272,7 @@ def test_the_downgrade_rolls_back_when_the_visibility_change_fails(team_with_bus
     }
 
 
-def _change_plan(client: Client, team: Team):
+def _change_plan(client: Client, team: Workspace):
     return client.post(
         reverse("api-1:change_plan"),
         json.dumps({"plan": "business", "billing_period": "monthly", "team_key": team.key}),

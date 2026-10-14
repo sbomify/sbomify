@@ -18,7 +18,7 @@ from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, 
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.logging import getLogger
 
 from .latest import latest_run_ids, status_runs
@@ -648,7 +648,7 @@ def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
     return result
 
 
-def _resolve_dt_servers(team: Team | None = None) -> list[dict[str, Any]]:
+def _resolve_dt_servers(team: Workspace | None = None) -> list[dict[str, Any]]:
     """Resolve available Dependency Track servers for select field.
 
     Only Enterprise teams can select a specific server.
@@ -674,7 +674,7 @@ CHOICE_RESOLVERS: dict[str, Callable[..., list[dict[str, Any]]]] = {
 }
 
 
-def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = None) -> list[dict[str, Any]]:
+def _resolve_config_schema(schema: list[dict[str, Any]], team: Workspace | None = None) -> list[dict[str, Any]]:
     """Resolve dynamic choices in a config schema.
 
     Replaces `choices_source` keys with resolved `choices` lists.
@@ -698,7 +698,7 @@ def _resolve_config_schema(schema: list[dict[str, Any]], team: Team | None = Non
     return resolved
 
 
-def _token_may_manage_plugins(request: HttpRequest, team: Team) -> bool:
+def _token_may_manage_plugins(request: HttpRequest, team: Workspace) -> bool:
     """Whether a token caller's scope reaches this workspace's plugin settings.
 
     The Member check in both handlers is the authority on *who* may change
@@ -725,8 +725,8 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     Returns a tuple of (status_code, data).
     """
     try:
-        team = Team.objects.get(key=team_key)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(key=team_key)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Team not found"}
 
     # Authorize against the URL team (see update_team_plugin_settings) rather than trusting the
@@ -795,8 +795,8 @@ def update_team_plugin_settings(
     Returns a tuple of (status_code, data).
     """
     try:
-        team = Team.objects.get(key=team_key)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(key=team_key)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Team not found"}
 
     # Authorize against the URL team. The calling view's TeamRoleRequiredMixin only checks the

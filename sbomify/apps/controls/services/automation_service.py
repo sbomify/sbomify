@@ -24,7 +24,7 @@ from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunStatus
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Plugin name → list of SOC 2 control IDs that can be auto-verified.
 PLUGIN_CONTROL_MAP: dict[str, list[str]] = {
@@ -81,7 +81,7 @@ def _is_passing(run: AssessmentRun) -> bool:
     return fail_count == 0 and error_count == 0 and pass_count > 0
 
 
-def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> ServiceResult[int]:
+def auto_update_from_assessment(team: Workspace, plugin_name: str, passed: bool) -> ServiceResult[int]:
     """Update control statuses based on a plugin assessment result.
 
     * If *passed* is ``True``, controls mapped to the plugin that currently
@@ -149,7 +149,7 @@ def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> S
     return ServiceResult.success(updated_count)
 
 
-def sync_from_latest_assessments(team: Team) -> ServiceResult[dict[str, Any]]:
+def sync_from_latest_assessments(team: Workspace) -> ServiceResult[dict[str, Any]]:
     """Sync control statuses from the latest completed assessment runs for a team.
 
     Looks at the most recent ``AssessmentRun`` for each plugin, checks

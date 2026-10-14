@@ -25,7 +25,7 @@ from django.utils import timezone
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -81,7 +81,7 @@ class Command(BaseCommand):
                 raise CommandError(f"User with ID {user_id} not found")
         else:
             # Find teams without billing subscriptions using efficient query
-            teams_without_billing = Team.objects.filter(
+            teams_without_billing = Workspace.objects.filter(
                 Q(billing_plan_limits__isnull=True) | ~Q(billing_plan_limits__has_key="stripe_subscription_id")
             )
 
@@ -107,7 +107,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  Current email: {user.email or '(empty)'}")
 
             # Show user's teams
-            user_teams = Team.objects.filter(members=user)
+            user_teams = Workspace.objects.filter(members=user)
             for team in user_teams:
                 has_billing = team.billing_plan_limits and team.billing_plan_limits.get("stripe_subscription_id")
                 status = "✓ Has billing" if has_billing else "✗ Missing billing"

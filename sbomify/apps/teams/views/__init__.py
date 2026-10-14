@@ -33,7 +33,7 @@ from sbomify.apps.teams.forms import InviteUserForm
 from sbomify.apps.teams.models import (
     Invitation,
     Member,
-    Team,
+    Workspace,
 )
 from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members, invitation_email
@@ -50,21 +50,23 @@ log = getLogger(__name__)
 
 def _render_workspace_availability_page(
     request: HttpRequest,
-    team: Team,
+    team: Workspace,
     invitation: Invitation | None,
     error_message: str,
 ) -> HttpResponse:
     """Render a friendly status page when the workspace is at capacity."""
 
-    plan_key = team.billing_plan or Team.Plan.COMMUNITY
-    plan_label = team.get_billing_plan_display() or getattr(Team.Plan.COMMUNITY, "label", str(Team.Plan.COMMUNITY))
+    plan_key = team.billing_plan or Workspace.Plan.COMMUNITY
+    plan_label = team.get_billing_plan_display() or getattr(
+        Workspace.Plan.COMMUNITY, "label", str(Workspace.Plan.COMMUNITY)
+    )
 
     plan_record = BillingPlan.objects.filter(key=plan_key).first()
     member_limit: int | None = None
     if plan_record:
         plan_label = plan_record.name or plan_label
         member_limit = plan_record.max_users
-    elif plan_key == Team.Plan.COMMUNITY:
+    elif plan_key == Workspace.Plan.COMMUNITY:
         member_limit = 1
 
     owners = (
@@ -136,7 +138,7 @@ __all__ = [
 
 # view to redirect to /home url
 @login_required
-def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
+def switch_team(request: HttpRequest, workspace_key: str) -> HttpResponse:
     from django.utils.http import url_has_allowed_host_and_scheme
 
     user = cast(User, request.user)
@@ -149,7 +151,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     # Re-reading before giving up turns a KeyError 500 into the switch the user
     # asked for.
     user_teams: dict[str, Any] = request.session.get("user_workspaces") or {}
-    if team_key not in user_teams:
+    if workspace_key not in user_teams:
         from sbomify.apps.teams.utils import get_user_teams
 
         # Read the memberships rather than call update_user_teams_session, which
@@ -159,20 +161,20 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
         user_teams = get_user_teams(user)
         request.session["user_workspaces"] = user_teams
         request.session.modified = True
-    if team_key not in user_teams:
+    if workspace_key not in user_teams:
         messages.add_message(request, messages.ERROR, "You are not a member of that workspace")
         return redirect("core:dashboard")
 
-    team = dict(key=team_key, **user_teams[team_key])
+    team = dict(key=workspace_key, **user_teams[workspace_key])
     request.session["current_workspace"] = team
 
     # Check if user is a guest member of the newly switched workspace
     from sbomify.apps.teams.models import Member
 
     try:
-        Member.objects.get(user=user, team__key=team_key, role="guest")
+        Member.objects.get(user=user, team__key=workspace_key, role="guest")
         # Guest members should be redirected to the public workspace page
-        redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": team_key})
+        redirect_to = reverse("core:workspace_public", kwargs={"workspace_key": workspace_key})
     except Member.DoesNotExist:
         # Not a guest, check next parameter or default to dashboard
         next_url = request.GET.get("next", "")
@@ -186,9 +188,9 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
 
 @login_required
 @validate_role_in_url_team(list(ADMINISTER))
-def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
+def team_details(request: HttpRequest, workspace_key: str) -> HttpResponse:
     """Redirect to team settings for unified interface."""
-    return redirect("workspaces:team_settings", team_key=team_key)
+    return redirect("workspaces:team_settings", workspace_key=workspace_key)
 
 
 @login_required
@@ -220,15 +222,15 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
 
 @login_required
 @validate_role_in_url_team(list(ADMINISTER))
-def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
-    team_id = token_to_number(team_key)
-    context: dict[str, Any] = {"team_key": team_key}
+def invite(request: HttpRequest, workspace_key: str) -> HttpResponseForbidden | HttpResponse:
+    team_id = token_to_number(workspace_key)
+    context: dict[str, Any] = {"team_key": workspace_key}
 
     # Get team for context
     try:
-        team = Team.objects.get(id=team_id)
+        team = Workspace.objects.get(id=team_id)
         context["team"] = team
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Team not found"))
 
     can_grant_owner = bool(can(request, "member:grant_owner", team))
@@ -257,7 +259,7 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             result = invite_member(request, team, email, invite_user_form.cleaned_data["role"])
             if result.ok:
                 messages.add_message(request, messages.SUCCESS, f"Invite sent to {email}")
-                return redirect_to_team_settings(team_key, "members")
+                return redirect_to_team_settings(workspace_key, "members")
             invite_user_form.add_error(
                 "email" if result.status_code == 409 else None, result.error or "The invitation was not sent"
             )
@@ -458,7 +460,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         # Redirect to NDA signing page
         from django.urls import reverse
 
-        return redirect("documents:sign_nda", team_key=invitation.team.key, request_id=access_request.id)
+        return redirect("documents:sign_nda", workspace_key=invitation.team.key, request_id=access_request.id)
 
     # Counted and taken under one lock. is_joining_via_invite allows total ==
     # max because this user's own pending invitation already occupies a slot,
@@ -565,7 +567,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             request,
             "team:member_invitation_accepted",
             {"role": captured_role},
-            team_key=captured_team_key,
+            workspace_key=captured_team_key,
         )
     )
 
@@ -578,7 +580,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             lambda: capture_for_request(
                 request,
                 "document:access_approved",
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -615,7 +617,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
     """
     current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
-        return redirect("workspaces:team_settings", team_key=current_team["key"])
+        return redirect("workspaces:team_settings", workspace_key=current_team["key"])
     else:
         # If no current team, redirect to teams dashboard to select one
         messages.add_message(
@@ -628,9 +630,9 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @validate_role_in_url_team(list(ADMINISTER))
-def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
+def team_settings_redirect(request: HttpRequest, workspace_key: str) -> HttpResponse:
     """
-    Redirect /workspace/{team_key}/settings/ to the unified settings interface.
+    Redirect /workspace/{workspace_key}/settings/ to the unified settings interface.
     This provides backward compatibility for the old URL structure.
     """
-    return redirect("workspaces:team_settings", team_key=team_key)
+    return redirect("workspaces:team_settings", workspace_key=workspace_key)

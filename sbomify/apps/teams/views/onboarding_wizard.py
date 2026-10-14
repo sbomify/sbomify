@@ -17,7 +17,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     Member,
-    Team,
+    Workspace,
     default_patch_sla_days,
 )
 from sbomify.apps.teams.utils import (
@@ -221,13 +221,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
 
-            team_key: str | None = team.key
-            if not team_key:
+            workspace_key: str | None = team.key
+            if not workspace_key:
                 log.error("Team %s has no key set — cannot start billing checkout", getattr(team, "pk", "unknown"))
                 messages.error(request, "We couldn't start the checkout for your workspace. Please contact support.")
                 return redirect(plan_url)
 
-            if not acquire_checkout_lock(team_key):
+            if not acquire_checkout_lock(workspace_key):
                 messages.info(request, "A checkout is already in progress. Please wait.")
                 return redirect(plan_url)
 
@@ -255,15 +255,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 self._pop_wizard_session(request)
                 return redirect(session.url)
             except StripeError:
-                release_checkout_lock(team_key)
-                log.exception("Stripe error creating checkout session for team %s", team_key)
+                release_checkout_lock(workspace_key)
+                log.exception("Stripe error creating checkout session for team %s", workspace_key)
                 messages.warning(
                     request,
                     "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",
                 )
                 return redirect(plan_url)
             except Exception:
-                release_checkout_lock(team_key)
+                release_checkout_lock(workspace_key)
                 raise
 
         team.has_selected_billing_plan = True
@@ -272,10 +272,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return redirect("core:dashboard")
 
     @staticmethod
-    def _get_current_team(request: HttpRequest) -> Team | None:
-        team_key = request.session.get("current_workspace", {}).get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+    def _get_current_team(request: HttpRequest) -> Workspace | None:
+        workspace_key = request.session.get("current_workspace", {}).get("key")
+        if workspace_key:
+            team = Workspace.objects.filter(key=workspace_key).first()
             if team:
                 return team
         user = cast(User, request.user)
@@ -283,7 +283,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _can_administer_team(user: Any, team: Team) -> bool:
+    def _can_administer_team(user: Any, team: Workspace) -> bool:
         """The wizard configures the workspace, so it's the ADMINISTER tier."""
         return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 

@@ -23,10 +23,10 @@ from sbomify.apps.plugins.services.access import plugins_within_plan
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.security_advisories.services.trust_center import public_advisory_summary
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
-def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
+def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Workspace | dict[str, Any]]:
     """
     Resolve a public workspace by explicit key, custom domain, or session fallback.
 
@@ -55,8 +55,8 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
             return 404, {"detail": "Workspace not found"}
 
         try:
-            team = Team.objects.get(pk=team_id)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(pk=team_id)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Workspace not found"}
 
         if team.key != workspace_key or not team.is_public:
@@ -76,8 +76,8 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not team.is_public:
@@ -86,7 +86,7 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
     return 200, team
 
 
-def _list_public_products(team: Team) -> list[dict[str, Any]]:
+def _list_public_products(team: Workspace) -> list[dict[str, Any]]:
     """List public products that have at least one publicly-visible component.
 
     Includes passing assessments based on the latest SBOM of each component.
@@ -133,7 +133,7 @@ def _list_public_products(team: Team) -> list[dict[str, Any]]:
     return result
 
 
-def _list_public_global_components(team: Team, request: HttpRequest) -> list[dict[str, Any]]:
+def _list_public_global_components(team: Workspace, request: HttpRequest) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
     components = Component.objects.filter(
         team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
@@ -156,7 +156,7 @@ class WorkspacePublicView(View):
 
     def get(self, request: HttpRequest, workspace_key: str | None = None) -> HttpResponse:
         status_code, team_or_error = fetch_public_team(request, workspace_key)
-        if status_code != 200 or not isinstance(team_or_error, Team):
+        if status_code != 200 or not isinstance(team_or_error, Workspace):
             return error_response(request, HttpResponseNotFound(team_or_error.get("detail", "Workspace not found")))  # type: ignore[union-attr]
 
         team = team_or_error

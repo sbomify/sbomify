@@ -195,9 +195,9 @@ class TestProducts:
 class TestScoping:
     def test_the_list_shows_only_this_workspaces_advisories(self, sample_team, guest_user):
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Other Workspace")
+        other = Workspace.objects.create(name="Other Workspace")
         other.key = number_to_random_token(other.pk)
         other.save(update_fields=["key"])
         _advisory(sample_team, title="Ours")
@@ -207,9 +207,9 @@ class TestScoping:
 
     def test_another_workspaces_advisory_reads_as_absent(self, sample_team):
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Other Workspace")
+        other = Workspace.objects.create(name="Other Workspace")
         other.key = number_to_random_token(other.pk)
         other.save(update_fields=["key"])
         theirs = _advisory(other, title="Theirs")
@@ -366,9 +366,9 @@ class TestUpdateAdvisory:
         assert advisory.severity == "low"
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team, guest_user, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other, title="Not yours")
 
         result = update_advisory(sample_team, sample_user, advisory.id, title="Mine now")
@@ -652,9 +652,9 @@ class TestPublishAdvisory:
         assert advisory.tracking_id == first_id
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other)
 
         result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
@@ -687,9 +687,9 @@ class TestDelete:
         assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other)
 
         result = delete_advisory(sample_team, advisory.id)

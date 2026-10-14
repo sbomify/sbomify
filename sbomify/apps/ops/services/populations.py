@@ -21,7 +21,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.documents.models import Document
 from sbomify.apps.oidc.services import BOT_USERNAME_PREFIX
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 BOT_EMAIL_DOMAIN = "sbomify.local"
 """Non-routable domain used for synthetic OIDC identities (RFC 6761 6.3)."""
@@ -60,7 +60,7 @@ def bot_identities() -> QuerySet[User]:
     return User.objects.filter(_IS_BOT)
 
 
-def workspaces() -> QuerySet[Team]:
+def workspaces() -> QuerySet[Workspace]:
     """Every workspace.
 
     Deliberately unfiltered. sbomify's own internal workspaces are in here and
@@ -68,7 +68,7 @@ def workspaces() -> QuerySet[Team]:
     is slightly generous. Tagging them is worth doing, and is not something
     this module can invent.
     """
-    return Team.objects.all()
+    return Workspace.objects.all()
 
 
 def boms() -> QuerySet[SBOM]:
@@ -115,7 +115,7 @@ def artifact_count(*, since: datetime | None = None) -> int:
     return bom_rows.count() + document_rows.count()
 
 
-def workspaces_publishing_since(moment: datetime) -> QuerySet[Team]:
+def workspaces_publishing_since(moment: datetime) -> QuerySet[Workspace]:
     """Workspaces that published an artifact after ``moment``.
 
     This is the honest reading of "active": something arrived. Measuring

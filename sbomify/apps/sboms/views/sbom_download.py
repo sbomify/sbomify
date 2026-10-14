@@ -44,7 +44,7 @@ class SbomDownloadView(View):
                         else "Your access request is pending approval or has been rejected."
                     )
                     request_access_url = (
-                        reverse("documents:request_access", kwargs={"team_key": team.key}) if team else None
+                        reverse("documents:request_access", kwargs={"workspace_key": team.key}) if team else None
                     )
 
                     # Get component detail page URL instead of referrer to avoid loops
@@ -104,7 +104,7 @@ class SbomDownloadView(View):
                 distinct_id = get_distinct_id(request)
                 if distinct_id != "anonymous":
                     team_obj = getattr(component, "team", None)
-                    team_key = team_obj.key if team_obj else ""
+                    workspace_key = team_obj.key if team_obj else ""
                     # VEX/CBOM/HBOM rows share this download path; each ships
                     # under its own event.
                     event = {
@@ -116,7 +116,7 @@ class SbomDownloadView(View):
                         distinct_id,
                         event,
                         {"sbom_id": sbom_id, "component_id": str(component.id)},
-                        groups={"workspace": team_key} if team_key else None,
+                        groups={"workspace": workspace_key} if workspace_key else None,
                         request=request,
                     )
 

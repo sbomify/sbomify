@@ -85,7 +85,7 @@ class DocumentDownloadView(View):
                         else "Your access request is pending approval or has been rejected."
                     )
                     request_access_url = (
-                        reverse("documents:request_access", kwargs={"team_key": team.key}) if team else None
+                        reverse("documents:request_access", kwargs={"workspace_key": team.key}) if team else None
                     )
 
                     # Get component detail page URL instead of referrer to avoid loops

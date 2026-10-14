@@ -6,7 +6,7 @@ from django.http import HttpRequest, HttpResponse
 from sbomify.apps.billing.billing_processing import check_billing_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.sboms.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from .fixtures import (  # noqa: F401
     business_plan,
@@ -27,7 +27,7 @@ def test_billing_plan_str_representation(business_plan: BillingPlan):
 
 
 @pytest.mark.django_db
-def test_product_creation_within_limit(team_with_business_plan: Team, business_plan: BillingPlan):
+def test_product_creation_within_limit(team_with_business_plan: Workspace, business_plan: BillingPlan):
     """Test product creation within plan limits."""
     team_with_business_plan.billing_plan = business_plan.key
     team_with_business_plan.save()
@@ -46,7 +46,7 @@ def test_product_creation_within_limit(team_with_business_plan: Team, business_p
 
 
 @pytest.mark.django_db
-def test_product_creation_over_limit(team_with_business_plan: Team, community_plan: BillingPlan):
+def test_product_creation_over_limit(team_with_business_plan: Workspace, community_plan: BillingPlan):
     """Test product creation exceeding community plan limits."""
     team_with_business_plan.billing_plan = community_plan.key
     team_with_business_plan.save()
@@ -68,7 +68,7 @@ def test_product_creation_over_limit(team_with_business_plan: Team, community_pl
 
 
 @pytest.mark.django_db
-def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, enterprise_plan: BillingPlan):
+def test_component_creation_enterprise_unlimited(team_with_business_plan: Workspace, enterprise_plan: BillingPlan):
     """Test unlimited component creation with enterprise plan."""
     team_with_business_plan.billing_plan = enterprise_plan.key
     billing_limits = team_with_business_plan.billing_plan_limits or {}
@@ -101,7 +101,7 @@ def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, 
 
 
 @pytest.mark.django_db
-def test_component_creation_no_plan(team_with_business_plan: Team):
+def test_component_creation_no_plan(team_with_business_plan: Workspace):
     """Test component creation with no billing plan."""
     team_with_business_plan.billing_plan = None
     team_with_business_plan.save()

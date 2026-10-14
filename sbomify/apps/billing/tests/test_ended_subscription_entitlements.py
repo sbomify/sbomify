@@ -26,7 +26,7 @@ from sbomify.apps.billing.billing_processing import BillingRetryableError
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
 from sbomify.apps.sboms.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 ENDED_STATUSES = ["canceled", "incomplete_expired"]
 RECOVERABLE_STATUSES = ["unpaid", "paused"]
@@ -43,7 +43,7 @@ def _no_side_channels(mocker):
 
 
 @pytest.fixture
-def paid_workspace(ensure_billing_plans, team_with_business_plan) -> Team:
+def paid_workspace(ensure_billing_plans, team_with_business_plan) -> Workspace:
     team = team_with_business_plan
     Component.objects.create(name="private-component", team=team, visibility=Component.Visibility.PRIVATE)
     return team
@@ -70,7 +70,7 @@ def _event(event_id: str) -> MagicMock:
     return event
 
 
-def _assert_on_community(team: Team) -> None:
+def _assert_on_community(team: Workspace) -> None:
     team.refresh_from_db()
     community = BillingPlan.objects.get(key="community")
     assert team.billing_plan == "community"
@@ -80,7 +80,7 @@ def _assert_on_community(team: Team) -> None:
     assert not Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC).exists()
 
 
-def _assert_still_on_the_paid_plan(team: Team, product: Product) -> None:
+def _assert_still_on_the_paid_plan(team: Workspace, product: Product) -> None:
     team.refresh_from_db()
     product.refresh_from_db()
     assert team.billing_plan == "business"
@@ -101,7 +101,7 @@ def test_deleted_subscription_over_the_community_limits_still_moves_to_community
         Product.objects.create(name=f"product-{index}", team=paid_workspace)
     limits = paid_workspace.billing_plan_limits
     limits.update({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"})
-    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+    Workspace.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
 
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted"))
 
@@ -213,7 +213,7 @@ def test_stripe_sync_leaves_a_workspace_whose_subscription_was_replaced(paid_wor
         "stripe_subscription_id": "sub_new",
         "subscription_status": "active",
     }
-    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+    Workspace.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
     canceled = stripe.Subscription.construct_from(
         {
             "id": "sub_test123",
@@ -247,7 +247,7 @@ def test_stale_trial_sweep_moves_an_ended_trial_to_community(paid_workspace):
     limits.update(
         {"is_trial": True, "subscription_status": "trialing", "trial_end": int(timezone.now().timestamp()) - 86400}
     )
-    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+    Workspace.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
     client: Any = MagicMock()
     client.get_subscription.return_value = _subscription("canceled")
 
@@ -263,7 +263,7 @@ def test_stale_trial_sweep_moves_an_ended_trial_to_community(paid_workspace):
 def test_moving_to_community_clears_a_scheduled_cancel(paid_workspace):
     limits = paid_workspace.billing_plan_limits
     limits.update({"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"})
-    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
+    Workspace.objects.filter(pk=paid_workspace.pk).update(billing_plan_limits=limits)
 
     assert downgrade_ended_subscription(paid_workspace.pk)
 
@@ -273,7 +273,7 @@ def test_moving_to_community_clears_a_scheduled_cancel(paid_workspace):
 
 
 def test_enterprise_workspace_keeps_its_plan_when_a_subscription_ends(paid_workspace):
-    Team.objects.filter(pk=paid_workspace.pk).update(billing_plan="enterprise")
+    Workspace.objects.filter(pk=paid_workspace.pk).update(billing_plan="enterprise")
 
     billing_processing.handle_subscription_deleted(_subscription("canceled"), event=_event("evt_deleted"))
 

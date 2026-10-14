@@ -23,7 +23,7 @@ from sbomify.apps.core.services.access_control import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
@@ -206,7 +206,7 @@ class TestCheckComponentAccess:
         Member.objects.get_or_create(
             user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
         )
-        other_team = Team.objects.create(name="Other WS", key="otherwsscopekey")
+        other_team = Workspace.objects.create(name="Other WS", key="otherwsscopekey")
 
         factory = RequestFactory()
         request = factory.get("/")

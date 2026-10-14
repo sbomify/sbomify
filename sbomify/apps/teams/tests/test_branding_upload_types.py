@@ -17,7 +17,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 24
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 24
@@ -272,7 +272,7 @@ class TestBrandingUploadEndpoint:
 @pytest.mark.django_db
 class TestBrandingSettingsForm:
     def post(self, client, team, files):
-        return client.post(reverse("workspaces:team_branding", kwargs={"team_key": team.key}), files)
+        return client.post(reverse("workspaces:team_branding", kwargs={"workspace_key": team.key}), files)
 
     def test_a_new_icon_is_stored_under_the_type_its_bytes_show(self, owner, s3):
         client, team = owner
@@ -353,7 +353,7 @@ class TestBrandingSettingsForm:
 
     def test_a_failed_save_removes_the_new_file_and_keeps_the_old_one(self, owner, s3, mocker):
         client, team = owner
-        mocker.patch.object(Team, "save", side_effect=DatabaseError("save failed"))
+        mocker.patch.object(Workspace, "save", side_effect=DatabaseError("save failed"))
 
         with pytest.raises(DatabaseError):
             self.post(client, team, {"icon": SimpleUploadedFile("icon.png", PNG, content_type="image/png")})

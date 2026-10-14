@@ -8,10 +8,10 @@ from sbomify.apps.core.services.results import ServiceResult
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
-def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
+def get_public_controls(team: Workspace) -> ServiceResult[dict[str, Any]]:
     """Get public compliance controls summary for a team's first active catalog.
 
     Returns failure if no active catalog exists.
@@ -23,7 +23,7 @@ def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
     return ServiceResult.success(result.value[0])
 
 
-def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
+def get_public_controls_list(team: Workspace) -> ServiceResult[list[dict[str, Any]]]:
     """Get public compliance controls for all active catalogs.
 
     Returns a list of catalog data dicts, each with catalog info, summary, and categories.

@@ -18,12 +18,12 @@ import pytest
 from django.conf import settings
 from django.core import mail
 
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
 def workspace(db):
-    return Team.objects.create(name="Sender Workspace")
+    return Workspace.objects.create(name="Sender Workspace")
 
 
 def _member(django_user_model, team, username, role="owner"):

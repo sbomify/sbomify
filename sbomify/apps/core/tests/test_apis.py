@@ -12,7 +12,7 @@ from sbomify.apps.sboms.models import Product
 from sbomify.apps.sboms.tests.fixtures import sample_access_token, sample_product  # noqa: F401
 from sbomify.apps.sboms.tests.test_views import setup_test_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -141,9 +141,9 @@ def test_api_endpoints_require_team_membership(sample_access_token):  # noqa: F8
     client = Client()
 
     # Create a team that the user is not a member of
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    other_team = Team.objects.create(name="Other Team")
+    other_team = Workspace.objects.create(name="Other Team")
 
     response = client.get(
         reverse("api-1:get_team", kwargs={"team_key": other_team.key}),
@@ -428,7 +428,7 @@ def test_download_private_product_sbom_wrong_team(
     sample_product.save()
 
     # Create different team
-    other_team = Team.objects.create(name="other-team", key="other-team")
+    other_team = Workspace.objects.create(name="other-team", key="other-team")
     other_user = User.objects.create_user(username="other-user", password="password")
     Member.objects.create(user=other_user, team=other_team, role="owner")
 

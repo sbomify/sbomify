@@ -26,9 +26,9 @@ TEA_CACHE_PREFIX = "tea"
 TEA_TEAM_ATTR = "tea_team"
 
 
-def tea_cache_key(team_key: str, *parts: str) -> str:
+def tea_cache_key(workspace_key: str, *parts: str) -> str:
     """Build a namespaced TEA cache key."""
-    return f"{TEA_CACHE_PREFIX}:{team_key}:{':'.join(parts)}"
+    return f"{TEA_CACHE_PREFIX}:{workspace_key}:{':'.join(parts)}"
 
 
 def hash_key_part(value: str) -> str:
@@ -62,22 +62,22 @@ def set_tea_cache(key: str, value: Any) -> None:
             log.exception("Failed to write TEA cache key %s", key)
 
 
-def invalidate_tea_cache(team_key: str) -> None:
+def invalidate_tea_cache(workspace_key: str) -> None:
     """Delete all TEA cache entries for a workspace."""
     if not settings.TEA_CACHE_TTL:
         return
-    pattern = f"{TEA_CACHE_PREFIX}:{team_key}:*"
+    pattern = f"{TEA_CACHE_PREFIX}:{workspace_key}:*"
     if hasattr(cache, "delete_pattern"):
         try:
             cache.delete_pattern(pattern)
         except Exception:
-            log.exception("Failed to invalidate TEA cache for workspace %s", team_key)
+            log.exception("Failed to invalidate TEA cache for workspace %s", workspace_key)
             return
-        log.debug("Invalidated TEA cache for workspace %s", team_key)
+        log.debug("Invalidated TEA cache for workspace %s", workspace_key)
     else:
         log.debug(
             "Skipped TEA cache invalidation for workspace %s (backend %s has no delete_pattern)",
-            team_key,
+            workspace_key,
             type(cache).__name__,
         )
 

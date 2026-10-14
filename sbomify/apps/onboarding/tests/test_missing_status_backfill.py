@@ -29,7 +29,7 @@ from django.contrib.auth import get_user_model
 
 from sbomify.apps.onboarding.models import OnboardingStatus
 from sbomify.apps.onboarding.services import OnboardingEmailService
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -42,7 +42,7 @@ def owner_without_status(db):
     the fact to reproduce the state staging is actually in.
     """
     user = User.objects.create_user(username="legacy-owner", email="legacy@example.com")
-    team = Team.objects.create(name="Legacy Workspace")
+    team = Workspace.objects.create(name="Legacy Workspace")
     Member.objects.create(team=team, user=user, role="owner", is_default_team=True)
     OnboardingStatus.objects.filter(user=user).delete()
     return user
@@ -137,7 +137,7 @@ class TestOwnersWithAStatusAreUnaffected:
     def test_an_existing_row_is_not_replaced(self) -> None:
         """get_or_create must not reset a real user's onboarding progress."""
         user = User.objects.create_user(username="normal-owner", email="normal@example.com")
-        team = Team.objects.create(name="Normal Workspace")
+        team = Workspace.objects.create(name="Normal Workspace")
         Member.objects.create(team=team, user=user, role="owner", is_default_team=True)
         status = OnboardingStatus.objects.get(user=user)
         status.welcome_email_sent = True
@@ -162,7 +162,7 @@ class TestBotsAreLeftAlone:
     @pytest.fixture
     def bot_owner(self, db):
         bot = User.objects.create_user(username="oidc-bot-legacy", email="oidc-bot-legacy@sbomify.local")
-        team = Team.objects.create(name="Bot Workspace")
+        team = Workspace.objects.create(name="Bot Workspace")
         Member.objects.create(team=team, user=bot, role="owner", is_default_team=True)
         OnboardingStatus.objects.filter(user=bot).delete()
         return bot

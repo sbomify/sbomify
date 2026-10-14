@@ -12,7 +12,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.schemas import ErrorCode
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -53,7 +53,7 @@ class TestErrorResponseConsistency:
     def test_forbidden_error_consistency(self, sample_team, sample_user):  # noqa: F811
         """Test that forbidden errors are consistent across endpoints."""
         # Create a different team
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         other_user = User.objects.create_user(username="otheruser", email="other@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 
@@ -141,13 +141,13 @@ class TestErrorResponseConsistency:
 
     def test_no_current_team_error_consistency(self, sample_user, ensure_billing_plans):  # noqa: F811
         """Test that no current team errors are consistent across endpoints."""
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         client = Client()
         client.force_login(sample_user)
 
         # Delete any teams that were created for the user during login
-        teams_to_delete = Team.objects.filter(members=sample_user)
+        teams_to_delete = Workspace.objects.filter(members=sample_user)
         Member.objects.filter(user=sample_user).delete()
         teams_to_delete.delete()
 
@@ -206,7 +206,7 @@ class TestErrorMessageStandardization:
     def test_forbidden_message_standardization(self, sample_team, sample_user):  # noqa: F811
         """Test that forbidden error messages are standardized."""
         # Create a different team
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         other_user = User.objects.create_user(username="otheruser2", email="other2@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 

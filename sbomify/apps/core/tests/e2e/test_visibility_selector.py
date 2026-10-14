@@ -9,7 +9,7 @@ from django.urls import reverse
 from playwright.sync_api import Page, Route, expect
 
 from sbomify.apps.core.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
 pytestmark = pytest.mark.django_db
@@ -155,7 +155,7 @@ def test_visibility_failure_keeps_saved_choice(
 
 
 def test_unavailable_gated_option_explains_plan(
-    authenticated_page: Page, component_factory: Callable[..., Component], team_with_business_plan: Team
+    authenticated_page: Page, component_factory: Callable[..., Component], team_with_business_plan: Workspace
 ) -> None:
     component = component_factory("Visibility plan", "document", visibility="public")
     team_with_business_plan.billing_plan = "community"

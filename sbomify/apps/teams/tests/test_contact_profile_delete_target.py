@@ -44,10 +44,10 @@ class TestDeletingAProfileYouJustCreated:
         return client, sample_team_with_owner_member
 
     @staticmethod
-    def _create(client: Client, team_key: str, name: str):
+    def _create(client: Client, workspace_key: str, name: str):
         """Create a profile the way the form does, and get the list back."""
         return client.post(
-            reverse("workspaces:contact_profiles_form", args=[team_key]),
+            reverse("workspaces:contact_profiles_form", args=[workspace_key]),
             {
                 "name": name,
                 "entities-TOTAL_FORMS": "1",

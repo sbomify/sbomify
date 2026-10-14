@@ -21,21 +21,21 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.teams.models import Invitation, Team
+from sbomify.apps.teams.models import Invitation, Workspace
 from sbomify.apps.teams.utils import user_seat
 
 # Guests join through trust center access requests, never by invitation.
 MEMBER_INVITE_ROLES = tuple(role for role, _label in settings.WORKSPACE_INVITABLE_ROLES if role != ROLE_GUEST)
 
 
-def list_invitations(team: Team) -> ServiceResult[list[Invitation]]:
+def list_invitations(team: Workspace) -> ServiceResult[list[Invitation]]:
     """The workspace's invitations nobody has accepted yet, oldest first."""
     return ServiceResult.success(
         list(Invitation.objects.filter(team=team).select_related("team", "invited_by").order_by("created_at", "id"))
     )
 
 
-def invite_member(request: HttpRequest, team: Team, email: str, role: str) -> ServiceResult[Invitation]:
+def invite_member(request: HttpRequest, team: Workspace, email: str, role: str) -> ServiceResult[Invitation]:
     """Invite ``email`` to ``team`` as ``role`` and send the invitation.
 
     Fails with 400 for an address or role the members page would not take, 409
@@ -97,19 +97,19 @@ def invite_member(request: HttpRequest, team: Team, email: str, role: str) -> Se
     # some B2B (e.g. an internal subsidiary) — acceptable trade-off
     # for the funnel metric.
     email_domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
-    team_key = team.key
+    workspace_key = team.key
     transaction.on_commit(
         lambda: capture_for_request(
             request,
             "team:member_invited",
             {"role": role, "invited_email_domain": email_domain},
-            team_key=team_key,
+            workspace_key=workspace_key,
         )
     )
     return ServiceResult.success(invitation)
 
 
-def revoke_invitation(team: Team, invitation_id: int) -> ServiceResult[Invitation]:
+def revoke_invitation(team: Workspace, invitation_id: int) -> ServiceResult[Invitation]:
     """Delete one of the workspace's invitations, so its link stops working."""
     invitation = Invitation.objects.filter(team=team, pk=invitation_id).first()
     if invitation is None:

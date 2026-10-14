@@ -8,7 +8,7 @@ from django.conf import settings
 from django.test import Client, override_settings
 
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db
@@ -64,7 +64,7 @@ def test_check_domain_allowed_business_plan_custom_domain():
     client = Client()
 
     # Create a team with business plan and custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="business.example.com",
@@ -83,7 +83,7 @@ def test_check_domain_allowed_enterprise_plan_custom_domain():
     client = Client()
 
     # Create a team with enterprise plan and custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Enterprise Team",
         billing_plan="enterprise",
         custom_domain="enterprise.example.com",
@@ -102,7 +102,7 @@ def test_check_domain_allowed_community_plan_denied():
     client = Client()
 
     # Create a team with community plan and custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Community Team",
         billing_plan="community",
         custom_domain="community.example.com",
@@ -130,7 +130,7 @@ def test_check_domain_allowed_case_insensitive():
     client = Client()
 
     # Create a team with custom domain in lowercase
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="example.com",
@@ -153,7 +153,7 @@ def test_check_domain_allowed_strips_whitespace():
     client = Client()
 
     # Create a team with custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="example.com",
@@ -172,7 +172,7 @@ def test_check_domain_allowed_handles_domain_with_port():
     client = Client()
 
     # Create a team with custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="example.com",
@@ -191,7 +191,7 @@ def test_check_domain_allowed_handles_domain_with_protocol():
     client = Client()
 
     # Create a team with custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="example.com",
@@ -253,7 +253,7 @@ def test_check_domain_allowed_real_world_scenario():
     assert response.status_code == 200
 
     # Test a custom domain for a business team
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Acme Corp",
         billing_plan="business",
         custom_domain="trust.acme.com",
@@ -275,7 +275,7 @@ def test_check_domain_allowed_multiple_teams_same_billing_plan():
     client = Client()
 
     # Create multiple business teams
-    team1 = Team.objects.create(
+    team1 = Workspace.objects.create(
         name="Business Team 1",
         billing_plan="business",
         custom_domain="business1.example.com",
@@ -283,7 +283,7 @@ def test_check_domain_allowed_multiple_teams_same_billing_plan():
     team1.key = number_to_random_token(team1.pk)
     team1.save()
 
-    team2 = Team.objects.create(
+    team2 = Workspace.objects.create(
         name="Business Team 2",
         billing_plan="business",
         custom_domain="business2.example.com",
@@ -306,7 +306,7 @@ def test_check_domain_allowed_no_app_base_url():
     client = Client()
 
     # Create a business team with custom domain
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Business Team",
         billing_plan="business",
         custom_domain="business.example.com",

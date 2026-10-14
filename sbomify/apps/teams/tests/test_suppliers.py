@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Supplier, Team
+from sbomify.apps.teams.models import Member, Supplier, Workspace
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
     delete_supplier,
@@ -25,8 +25,8 @@ from sbomify.apps.teams.services.suppliers import (
 pytestmark = pytest.mark.django_db
 
 
-def _other_team(name: str = "Other Workspace") -> Team:
-    team = Team.objects.create(name=name)
+def _other_team(name: str = "Other Workspace") -> Workspace:
+    team = Workspace.objects.create(name=name)
     team.key = number_to_random_token(team.pk)
     team.save(update_fields=["key"])
     return team
@@ -176,7 +176,7 @@ class TestSearch:
 
 
 class TestApi:
-    def _url(self, team: Team, suffix: str = "") -> str:
+    def _url(self, team: Workspace, suffix: str = "") -> str:
         return f"/api/v1/workspaces/{team.key}/suppliers{suffix}"
 
     def test_a_member_can_list(self, client: Client, sample_team_with_owner_member):
@@ -251,7 +251,7 @@ def test_the_supplier_list_page_renders(client: Client, sample_team_with_owner_m
     create_supplier(team, {"name": "Acme Components"})
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-    response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": team.key}))
+    response = client.get(reverse("workspaces:suppliers", kwargs={"workspace_key": team.key}))
 
     assert response.status_code == 200
     assert "Acme Components" in response.content.decode()
@@ -264,7 +264,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
     one workspace act on another where they are only a guest.
     """
 
-    def _setup(self, client: Client, sample_team_with_owner_member) -> Team:
+    def _setup(self, client: Client, sample_team_with_owner_member) -> Workspace:
         session_team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         other = _other_team("Someone Else's Workspace")
@@ -279,7 +279,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         other = self._setup(client, sample_team_with_owner_member)
         create_supplier(other, {"name": "Their Vendor"})
 
-        response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": other.key}))
+        response = client.get(reverse("workspaces:suppliers", kwargs={"workspace_key": other.key}))
 
         assert response.status_code == 403
         assert "Their Vendor" not in response.content.decode()
@@ -287,7 +287,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
     def test_a_guest_elsewhere_cannot_add_to_that_workspace(self, client: Client, sample_team_with_owner_member):
         other = self._setup(client, sample_team_with_owner_member)
 
-        client.post(reverse("workspaces:suppliers", kwargs={"team_key": other.key}), {"name": "Injected"})
+        client.post(reverse("workspaces:suppliers", kwargs={"workspace_key": other.key}), {"name": "Injected"})
 
         assert not Supplier.objects.filter(team=other, name="Injected").exists()
 
@@ -296,7 +296,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         supplier = create_supplier(other, {"name": "Their Vendor"}).value
 
         client.post(
-            reverse("workspaces:suppliers", kwargs={"team_key": other.key}),
+            reverse("workspaces:suppliers", kwargs={"workspace_key": other.key}),
             {"action": "delete", "supplier_id": supplier.id},
         )
 
@@ -307,7 +307,7 @@ class TestTheUrlWorkspaceIsWhatGetsAuthorized:
         stranger = _other_team("Unrelated Workspace")
         setup_authenticated_client_session(client, session_team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("workspaces:suppliers", kwargs={"team_key": stranger.key}))
+        response = client.get(reverse("workspaces:suppliers", kwargs={"workspace_key": stranger.key}))
 
         assert response.status_code in (403, 404)
 

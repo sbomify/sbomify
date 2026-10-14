@@ -24,7 +24,7 @@ from sbomify.apps.core.url_utils import (
 )
 from sbomify.apps.plugins.public_assessment_utils import get_component_assessment_status, passing_assessments_to_dict
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class ComponentDetailsPublicView(View):
@@ -52,7 +52,7 @@ class ComponentDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
 
-        team = Team.objects.filter(pk=component.get("team_id")).first()
+        team = Workspace.objects.filter(pk=component.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain

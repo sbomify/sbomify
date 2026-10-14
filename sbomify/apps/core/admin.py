@@ -16,7 +16,7 @@ from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.admin import SBOMAdmin
 from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.vulnerability_scanning.admin import (
     ComponentDependencyTrackMappingAdmin,
     DependencyTrackServerAdmin,
@@ -233,7 +233,7 @@ admin_site = SbomifyAdminSite(name="admin")
 
 # Register all models with our custom admin site
 admin_site.register(User, CustomUserAdmin)
-admin_site.register(Team, TeamAdmin)
+admin_site.register(Workspace, TeamAdmin)
 admin_site.register(Member, MemberAdmin)
 admin_site.register(Invitation, InvitationAdmin)
 admin_site.register(Product, ProductAdmin)

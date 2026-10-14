@@ -10,7 +10,7 @@ from playwright.sync_api import BrowserContext, Page, expect
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Team
+from sbomify.apps.teams.models import Invitation, Workspace
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def invitation(sample_user) -> Generator[Invitation, None, None]:  # noqa: F811
     sees its invitations."""
     sample_user.email_verified = True
     sample_user.save(update_fields=["email_verified"])
-    team = Team.objects.create(name="Contoso Industries")
+    team = Workspace.objects.create(name="Contoso Industries")
     yield Invitation.objects.create(team=team, email=sample_user.email, role="admin")
 
 

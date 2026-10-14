@@ -22,13 +22,13 @@ from sbomify.apps.core.tests.posthog_helpers import (
     patch_capture,
 )
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.mark.django_db(transaction=True)
 def test_create_product_captures_product_created(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     mock_capture = patch_capture(mocker)
@@ -53,7 +53,7 @@ def test_create_product_captures_product_created(
 @pytest.mark.django_db(transaction=True)
 def test_create_component_captures_component_created(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     mock_capture = patch_capture(mocker)
@@ -82,7 +82,7 @@ def test_create_component_captures_component_created(
 @pytest.mark.django_db(transaction=True)
 def test_create_release_captures_release_created(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """First create a product to attach the release to, then create the release."""
@@ -113,7 +113,7 @@ def test_create_release_captures_release_created(
 @pytest.mark.django_db(transaction=True)
 def test_toggle_component_visibility_captures_event(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     """Components support 'public' / 'private' / 'gated' — exercise 'gated' too."""
@@ -141,7 +141,7 @@ def test_toggle_component_visibility_captures_event(
 @pytest.mark.django_db(transaction=True)
 def test_toggle_product_visibility_captures_event(
     mocker: MockerFixture,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: Any,
 ) -> None:
     from sbomify.apps.core.models import Product
