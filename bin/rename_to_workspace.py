@@ -6,8 +6,8 @@ Run it again after merging master and it renames whatever your branch added:
     uv run python bin/rename_to_workspace.py
 
 Every rule is idempotent. Migrations and ADRs are never touched, and neither is
-a line carrying the KEEP marker: the aliases that keep the old names working,
-and the tests that pin them.
+a line carrying the KEEP marker: the old names a test or migration has to
+spell out.
 """
 
 import ast
