@@ -58,7 +58,7 @@ two HTMX roots the view answers.
             {% if data.summary_only_components %}
                 {{ data.summary_only_components|intcomma }} component{{ data.summary_only_components|pluralize }} reported totals only, so {{ data.summary_only_components|pluralize:"it is,they are" }} counted but not listed.
             {% endif %}
-        {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
+        {% elif data.scoped_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
         {% elif data.scope_label %}
             Nothing open in {{ data.scope_label }}.
         {% else %}

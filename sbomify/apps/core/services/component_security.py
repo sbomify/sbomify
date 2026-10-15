@@ -146,7 +146,7 @@ def build_component_vulnerabilities(
         merge_findings_by_alias,
         package_scopes,
     )
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+    from sbomify.apps.vulnerability_scanning.vex import resolve_vex_statements_for_runs, triage_statements
 
     sboms = SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
     latest_sbom = (
@@ -169,15 +169,20 @@ def build_component_vulnerabilities(
     latest_ids, _ = release_run_ids(
         AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id], release_id
     )
-    provider_results = list(
-        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("result", flat=True)
+    provider_runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("id", "result")
     )
-    if not provider_results:
+    if not provider_runs:
         return ComponentVulnerabilitiesContext(sbom_id=sbom_id, version=latest_sbom["version"])
 
+    # Each run reads VEX in its own release context, as the finding rows behind
+    # the release list do, so a release that pins a VEX never falls back to the
+    # component's latest one. Triage stays a live overlay on top.
+    run_statements = resolve_vex_statements_for_runs(component_id, sbom_id, [run_id for run_id, _ in provider_runs])
+    provider_results = [_with_vex_fallback(result, run_statements[run_id]) for run_id, result in provider_runs]
     rows = extract_finding_rows(
         merge_findings_by_alias(provider_results),
-        vex_statements=load_vex_suppressions(component_id),
+        vex_statements=triage_statements(component_id),
         kev_ids=kev_ids_for_serialization(),
     )
 
@@ -239,6 +244,38 @@ def build_component_vulnerabilities(
         sbom_id=sbom_id,
         version=latest_sbom["version"],
     )
+
+
+def _with_vex_fallback(result: Any, statements: list[dict[str, Any]]) -> Any:
+    """``result`` with each finding that carries no stored VEX analysis read from ``statements``.
+
+    The fallback :func:`extract_finding_rows` applies, done per run so each run
+    answers from its own release context before the providers are merged. A
+    stored analysis is left as it is, and so is everything outside the findings.
+    """
+    from sbomify.apps.vulnerability_scanning.vex import find_in_index, statement_index
+
+    findings = result.get("findings") if isinstance(result, dict) else None
+    if not statements or not isinstance(findings, list):
+        return result
+    index = statement_index(statements)
+    annotated: list[Any] = []
+    for finding in findings:
+        statement = None
+        if isinstance(finding, dict) and not finding.get("analysis_state"):
+            statement = find_in_index(finding, index)
+        if statement is None:
+            annotated.append(finding)
+            continue
+        annotated.append(
+            {
+                **finding,
+                "analysis_state": statement.get("state") or "",
+                "analysis_justification": finding.get("analysis_justification") or statement.get("justification") or "",
+                "analysis_detail": finding.get("analysis_detail") or statement.get("detail") or "",
+            }
+        )
+    return {**result, "findings": annotated}
 
 
 def viewer_manages_component(request: Any, component_id: str) -> bool:
