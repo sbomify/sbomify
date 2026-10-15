@@ -39,7 +39,11 @@ def scan(component: Component, advisory: str | None = None) -> SBOM:
     )
     findings = [{"id": advisory, "severity": "high", "component": {"name": "pkg", "version": "1"}}] if advisory else []
     run = AssessmentRun.objects.create(
-        sbom=sbom, plugin_name="osv", category="security", status="completed", result={"findings": findings}
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result={"findings": findings, "summary": {"total_findings": len(findings)}},
     )
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 

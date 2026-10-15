@@ -57,7 +57,7 @@ def test_mobile_detail_layout(authenticated_page: Page, sbom_component_details: 
     for select in page.locator("#component-vulnerabilities-table select").all():
         assert_fits_width(select)
     search.fill("no-such-vulnerability")
-    expect(page.locator("#component-vulnerabilities-table")).to_contain_text("No vulnerabilities")
+    expect(page.locator("#component-vulnerabilities-table")).to_contain_text("No matching vulnerabilities")
     assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
     page.goto(f"/components/{component.id}/sboms/{run.sbom_id}/")
     report_link = page.get_by_role("link", name="Vulnerabilities", exact=True)

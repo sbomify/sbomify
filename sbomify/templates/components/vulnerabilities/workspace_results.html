@@ -10,21 +10,28 @@ inside the filter form and would inherit its hx-target and hx-push-url. The prom
 the scanner's full result, which the page itself never loads.
 {% endcomment %}
 <c-vars data results_target="vulnerabilities-results" />
-<div id="{{ results_target }}">
+{% comment %}The refresh lives outside the results on both pages, so it never runs a stale query or inherits the form's request queue. On a component page it reads data-refresh-url when it runs; the workspace page's browser refreshes itself, totals included.{% endcomment %}
+<div id="{{ results_target }}" data-refresh-url="{{ data.refresh_url }}">
+    {% comment %}The sort lives here, not in the toolbar: a column header swaps only this region, so the form's next search or filter submits the order now shown.{% endcomment %}
+    <input type="hidden" name="sort" value="{{ data.query.sort }}">
+    <input type="hidden" name="direction" value="{{ data.query.direction }}">
     <c-tables.shell>
     {% if data.rows %}
         {# djlint:off #}
-        <c-tables.table sized variant_class="min-w-240" aria-label="Open vulnerabilities">
+        <c-tables.table sized variant_class="min-w-240" aria-label="{% if data.query.status == 'decided' %}Vulnerabilities closed by a decision{% else %}Open vulnerabilities{% endif %}">
         {# djlint:on #}
         <thead>
             <tr>
                 {% for header in data.headers %}
-                    {# djlint:off #}
+                    {% if header.key == 'component' and data.single_component %}
+                    {% else %}
+                        {# djlint:off #}
                     <c-tables.header-cell compact nowrap href="{{ header.href }}" order="{{ header.order }}" sort="{{ header.key }}"
                         class="{% if header.key == 'vulnerability' %}{% elif header.key == 'severity' %}w-28{% elif header.key == 'sla' %}w-32{% else %}w-44{% endif %}">{{ header.label }}</c-tables.header-cell>
-                    {# djlint:on #}
+                        {# djlint:on #}
+                    {% endif %}
                 {% endfor %}
-                <c-tables.header-cell compact end class="w-36"><span class="sr-only">Fix prompt</span></c-tables.header-cell>
+                <c-tables.header-cell compact end class="w-16"><span class="sr-only">Actions</span></c-tables.header-cell>
             </tr>
         </thead>
         <tbody>
@@ -56,6 +63,16 @@ the scanner's full result, which the page itself never loads.
                     {% if row.kev %}
                         <c-badges.solid-danger size="sm" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
                     {% endif %}
+                    {% comment %}Which scanners reported it. Neutral on purpose: a source is provenance, not risk.{% endcomment %}
+                    {% for source in row.sources %}
+                        {% if source == 'osv' %}
+                            <c-badges.secondary size="sm" title="Reported by OSV">OSV</c-badges.secondary>
+                        {% elif source == 'dependency-track' %}
+                            <c-badges.secondary size="sm" title="Reported by Dependency-Track">DT</c-badges.secondary>
+                        {% else %}
+                            <c-badges.secondary size="sm" title="Reported by {{ source }}">{{ source }}</c-badges.secondary>
+                        {% endif %}
+                    {% endfor %}
                 </div>
                 {% if row.aliases %}<div class="text-xs text-text-muted mt-1">Also {{ row.aliases|join:", " }}</div>{% endif %}
                 {% if row.other_components %}
@@ -64,12 +81,14 @@ the scanner's full result, which the page itself never loads.
                     </div>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell compact>
-                <a href="{{ row.component_url }}"
-                   class="font-medium text-text hover:text-primary hover:underline">{{ row.component_name }}</a>
-                {% if row.sbom_version %}<div class="text-xs text-text-muted mt-1">SBOM {{ row.sbom_version }}</div>{% endif %}
-                {% if row.product_names %}<div class="text-xs text-text-muted mt-1">{{ row.product_names }}</div>{% endif %}
-                </c-tables.cell>
+                {% if not data.single_component %}
+                    <c-tables.cell compact>
+                    <a href="{{ row.component_url }}"
+                       class="font-medium text-text hover:text-primary hover:underline">{{ row.component_name }}</a>
+                    {% if row.sbom_version %}<div class="text-xs text-text-muted mt-1">SBOM {{ row.sbom_version }}</div>{% endif %}
+                    {% if row.product_names %}<div class="text-xs text-text-muted mt-1">{{ row.product_names }}</div>{% endif %}
+                    </c-tables.cell>
+                {% endif %}
                 <c-tables.cell compact>
                 <span class="font-medium text-text break-all">{{ row.package }}</span>
                 {% if row.version %}<span class="text-text-muted">{{ row.version }}</span>{% endif %}
@@ -80,20 +99,46 @@ the scanner's full result, which the page itself never loads.
                 <div class="text-xs text-text-muted mt-1">{{ row.decision }}</div>
                 </c-tables.cell>
                 <c-tables.cell compact end nowrap>
-                <c-buttons.secondary size="sm" @click="$dispatch('open-fix-prompt', { url: '{{ row.fix_prompt_url|escapejs }}', title: '{{ row.id|escapejs }} in {{ row.component_name|escapejs }}' })">
-                <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>Fix prompt
-                </c-buttons.secondary>
+                {% comment %}One menu per row. Both items dispatch to page-level listeners rather than carrying hx-get: the panel is teleported after HTMX processes a swapped page of rows, so an hx-get on it would never be bound. Triage asks the page's c-vulnerabilities.triage-host to load the dialog for this occurrence, purl and current decision included, from the SBOM and release the row was read from.{% endcomment %}
+                <c-actions-menu label="Actions for {{ row.id }} in {{ row.package|default:'unknown package' }}{% if row.version %} {{ row.version }}{% endif %}{% if not data.single_component %}, {{ row.component_name }}{% endif %}" icon="fas fa-ellipsis" width="w-52">
+                {% if data.can_triage %}
+                    <c-dropdowns.item icon="fas fa-stethoscope" data-triage-url="{% url 'core:component_triage_modal' row.component_id %}?advisory={{ row.id|urlencode }}&amp;package={{ row.package|urlencode }}&amp;version={{ row.version|urlencode }}&amp;ecosystem={{ row.ecosystem|urlencode }}&amp;purl={{ row.purl|default:''|urlencode }}&amp;sbom={{ row.sbom_id|urlencode }}&amp;release={{ row.release_id|default:''|urlencode }}" @click="close(); $dispatch('open-vulnerability-triage', { url: $el.dataset.triageUrl })">
+                    Triage
+                    </c-dropdowns.item>
+                {% endif %}
+                <c-dropdowns.item icon="fas fa-wand-magic-sparkles" @click="close(); $dispatch('open-fix-prompt', { url: '{{ row.fix_prompt_url|escapejs }}', title: '{{ row.id|escapejs }} in {{ row.component_name|escapejs }}' })">
+                Fix prompt
+                </c-dropdowns.item>
+                </c-actions-menu>
                 </c-tables.cell>
                 </c-tables.row>
             {% endfor %}
         </tbody>
         </c-tables.table>
-    {% elif data.query.is_filtered %}
+    {% elif data.details_unavailable %}
+        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scan reports totals only, so there are no vulnerabilities to list. Its counts are in the summary." />
+    {% elif data.scoped_components and data.unassessed_components == data.scoped_components %}
+        {% if data.single_component %}
+            <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities in this version appear here once it is scanned." />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities appear here once a component is scanned." />
+        {% endif %}
+    {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
+        {% if data.single_component %}
+            <c-feedback.empty-state icon="fas fa-circle-exclamation" title="Scan failed" message="The scan of this version failed, so its vulnerabilities are unknown. It is scanned again on the next run." />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-circle-exclamation" title="Scan failed" message="The scans failed, so these vulnerabilities are unknown. They are scanned again on the next run." />
+        {% endif %}
+    {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
         <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>
         </c-feedback.empty-state>
     {% else %}
-        <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="Nothing open in the latest scan of any component." />
+        {% if data.single_component %}
+            <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="Nothing open in this version." />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="Nothing open in the latest scan of any component." />
+        {% endif %}
     {% endif %}
     {% if data.total %}
         <c-tables.footer>
@@ -113,6 +158,9 @@ the scanner's full result, which the page itself never loads.
             <c-navigation.pagination :current="data.page.number" :total="data.page.paginator.num_pages" :page_range="data.page_range" base_url="{{ data.base_url }}" query="{{ data.query_string }}" label="Vulnerabilities pagination" hx-boost="true" hx-target="#{{ results_target }}" hx-swap="outerHTML show:none" />
         </div>
         </c-tables.footer>
+    {% elif data.query.params.per_page %}
+        {% comment %}No footer means no Rows select, so carry the chosen page size into the next search.{% endcomment %}
+        <input type="hidden" name="per_page" value="{{ data.query.per_page }}">
     {% endif %}
     </c-tables.shell>
 </div>

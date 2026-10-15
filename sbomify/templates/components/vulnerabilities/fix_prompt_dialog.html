@@ -4,7 +4,8 @@ dispatches open-fix-prompt with the prompt url and a title; this shows a
 loading state and fetches the prompt into #fix-prompt-body.
 It lives outside any region HTMX replaces, so paging the table keeps it.
 {% endcomment %}
-<div x-data="{ fixPromptOpen: false, fixPromptTitle: '' }"
+<div class="contents"
+     x-data="{ fixPromptOpen: false, fixPromptTitle: '' }"
      @open-fix-prompt.window="fixPromptTitle = $event.detail.title; fixPromptOpen = true; document.getElementById('fix-prompt-body').replaceChildren(document.getElementById('fix-prompt-loading').content.cloneNode(true)); htmx.ajax('GET', $event.detail.url, { target: '#fix-prompt-body', swap: 'innerHTML' })">
     <template id="fix-prompt-loading">
         <c-cards.body>

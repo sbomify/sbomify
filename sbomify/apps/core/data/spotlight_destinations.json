@@ -280,7 +280,7 @@
       "url_name": "vulnerability_scanning:vulnerability_scans",
       "section": "navigate",
       "icon": "fa-bug",
-      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history"],
+      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history", "release vulnerabilities", "vulnerabilities by version", "triage", "vex"],
       "args": ["workspace_key"],
       "roles": ["owner", "admin", "member", "operator"]
     },

@@ -522,7 +522,9 @@ class PluginOrchestrator:
             assessment_run.completed_at = timezone.now()
             assessment_run.save(update_fields=["status", "error_message", "completed_at"])
 
-    def finalize_retry_exhausted(self, run_id: str, error_message: str) -> AssessmentRun | None:
+    def finalize_retry_exhausted(
+        self, run_id: str, error_message: str, title: str | None = None
+    ) -> AssessmentRun | None:
         """Settle a run that has burnt through every ``RetryLaterError`` slot.
 
         The orchestrator's ``RetryLaterError`` handler resets the run to
@@ -555,15 +557,20 @@ class PluginOrchestrator:
         Idempotent: if the run is already in a terminal state, no-op.
         Returns the run on success, ``None`` if the run isn't found.
         """
+        # The finding renders on the compliance page, so it says what the user
+        # is left with rather than how the retries were scheduled. The plugin's
+        # message carries the substance; ``title`` lets it name the outcome.
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS
+
+        minutes = sum(RETRY_LATER_DELAYS_MS) // 60_000
+        message = error_message.strip()
+        if message and not message.endswith((".", "!", "?")):
+            message += "."
         return self._finalize_unfinished(
             run_id,
             kind="retry-exhausted",
-            title="Assessment Retry Budget Exhausted",
-            description=(
-                "The plugin reported a transient condition for every retry attempt "
-                "in the configured budget. The condition may have become permanent "
-                f"(e.g., the upstream resource never became available). Last error: {error_message}"
-            ),
+            title=title or "Check did not finish",
+            description=f"{message} sbomify checked again for {minutes} minutes before stopping.".lstrip(),
             error_message=f"Retry budget exhausted: {error_message}",
             last_error=error_message,
         )

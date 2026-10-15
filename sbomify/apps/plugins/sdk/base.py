@@ -34,18 +34,24 @@ class RetryLaterError(Exception):
     Attributes:
         message: Human-readable description of why retry is needed.
         assessment_run_id: Optional ID of the AssessmentRun (set by orchestrator).
+        title: Optional finding title shown to the user if the retries run out.
     """
 
-    def __init__(self, message: str = "", assessment_run_id: str | None = None) -> None:
+    def __init__(self, message: str = "", assessment_run_id: str | None = None, *, title: str | None = None) -> None:
         """Initialize RetryLaterError.
 
         Args:
-            message: Human-readable description of why retry is needed.
+            message: Human-readable description of why retry is needed. If the
+                retries run out it becomes the finding's description, so write
+                it for the user.
             assessment_run_id: Optional ID of the AssessmentRun. This is typically
                 set by the orchestrator when re-raising the exception.
+            title: Finding title shown to the user if the retries run out. The
+                orchestrator falls back to a generic one when this is omitted.
         """
         super().__init__(message)
         self.assessment_run_id = assessment_run_id
+        self.title = title
 
 
 @dataclass
