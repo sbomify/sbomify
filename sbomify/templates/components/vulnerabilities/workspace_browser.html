@@ -14,7 +14,7 @@ the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
 <c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
-{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals and the results, never the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
+{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals, the version options and the results, never the rest of the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
 <div id="{{ browser_target }}"
      class="flex flex-col gap-4"
      x-data="{ refreshTimer: null }"
@@ -25,12 +25,14 @@ two HTMX roots the view answers.
          hx-sync="#{{ browser_target }}-form:queue last"
          hx-target="#{{ browser_target }}"
          hx-swap="none"
-         hx-select-oob="#{{ browser_target }}-summary,#{{ results_target }}"
+         hx-select-oob="#{{ browser_target }}-summary,#{{ browser_target }}-version,#{{ results_target }}"
          hx-on::config-request="event.detail.path = window.location.pathname + window.location.search"></div>
     <div id="{{ browser_target }}-summary" class="flex flex-col gap-4">
         <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
             {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
                 <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
+            {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
+                <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="Scan failed" />
             {% else %}
                 <c-layout.stat-card icon="fas fa-bug" :value="data.summary.vulnerabilities" label="Open vulnerabilities" />
             {% endif %}
@@ -56,6 +58,7 @@ two HTMX roots the view answers.
             {% if data.summary_only_components %}
                 {{ data.summary_only_components|intcomma }} component{{ data.summary_only_components|pluralize }} reported totals only, so {{ data.summary_only_components|pluralize:"it is,they are" }} counted but not listed.
             {% endif %}
+        {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
         {% elif data.scope_label %}
             Nothing open in {{ data.scope_label }}.
         {% else %}
@@ -63,6 +66,9 @@ two HTMX roots the view answers.
         {% endif %}
         {% if data.unassessed_components %}
             {{ data.unassessed_components|intcomma }} component{{ data.unassessed_components|pluralize }} not scanned yet.
+        {% endif %}
+        {% if data.failed_components %}
+            The scan failed for {{ data.failed_components|intcomma }} component{{ data.failed_components|pluralize }}, so {{ data.failed_components|pluralize:"its,their" }} vulnerabilities are unknown.
         {% endif %}
         </c-typography.description>
         {% if data.missing_from_release %}
@@ -112,6 +118,8 @@ two HTMX roots the view answers.
                     {% if component.id == data.query.component %}selected{% endif %}>{{ component.name }}</option>
         {% endfor %}
         </c-forms.select>
+        {% comment %}Its own refresh target: a scan of a newly uploaded SBOM makes that SBOM the latest version, so the options and the selection follow the results.{% endcomment %}
+        <div id="{{ browser_target }}-version" class="contents">
         {% if data.query.component %}
             {% if data.version_locked %}
                 <c-forms.select size="md" id="vulnerabilities-version" label="Version, set by the release" disabled title="Set by the selected release">
@@ -136,6 +144,7 @@ two HTMX roots the view answers.
                 </c-forms.select>
             {% endif %}
         {% endif %}
+        </div>
         <c-forms.select size="md" name="severity" id="vulnerabilities-severity" label="Filter by severity">
         <option value="">All severities</option>
         <option value="critical"

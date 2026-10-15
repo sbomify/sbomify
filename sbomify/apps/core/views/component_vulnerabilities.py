@@ -131,9 +131,13 @@ class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, Login
             request.GET.get("ecosystem", ""),
             request.GET.get("purl", ""),
         )
-        # The SBOM the row was read from: the list can show a release's or an older version's findings.
+        # The SBOM and release the row was read from: the list can show a release's or an older version's findings.
         vulns = build_component_vulnerabilities(
-            component_id, FindingQuery(), triage_identity=identity, sbom_id=request.GET.get("sbom") or None
+            component_id,
+            FindingQuery(),
+            triage_identity=identity,
+            sbom_id=request.GET.get("sbom") or None,
+            release_id=request.GET.get("release") or None,
         )
         rows = vulns.panel["rows"] if vulns.panel else []
         if len(rows) != 1:

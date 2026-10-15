@@ -29,7 +29,7 @@ def build_component_security_picture(
     """
     from django.db.models import Q
 
-    from sbomify.apps.plugins.latest import latest_run_ids
+    from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.models import Finding
@@ -38,6 +38,7 @@ def build_component_security_picture(
         extract_severity_counts,
         merge_findings_by_alias,
         package_scopes,
+        result_scan_failed,
         result_scanned_nothing,
         severity_counts_from_rows,
         vulnerability_findings,
@@ -58,30 +59,16 @@ def build_component_security_picture(
         bom_type=SBOM.BomType.SBOM,
     ).values("id", "component_id", "version", "created_at")
     sbom_meta = {str(row["id"]): row for row in [*latest_sboms, *chosen_sboms]}
-    security_runs = AssessmentRun.objects.filter(category="security", status="completed")
-    latest_ids = latest_run_ids(security_runs, sbom_meta.keys())
-    # Two releases can share an SBOM yet each hold a live run of one scanner, because a
-    # run is annotated with its own releases' VEX. The newest run overall may then carry
-    # another release's suppressions, so a release reads the newest run that covers it,
-    # and falls back to the newest run for a scanner none of whose runs name it.
-    release_ids = set(
-        latest_run_ids(
-            security_runs.filter(releases=release_id), [sbom_id for ids in overrides.values() for sbom_id in ids]
-        )
-        if release_id
-        else []
+    # A release reads the runs that cover it; see release_run_ids. The release reads only
+    # SBOMs it shipped, so every SBOM read here is one of them.
+    run_ids, release_ids = release_run_ids(
+        AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys(), release_id
     )
-    candidates = list(
-        AssessmentRun.objects.filter(id__in=[*latest_ids, *release_ids])
+    runs = list(
+        AssessmentRun.objects.filter(id__in=run_ids)
         .order_by("sbom_id", "plugin_name")
         .values("id", "sbom_id", "plugin_name", "result_summary", "result_skipped", "created_at")
     )
-    release_pairs = {(run["sbom_id"], run["plugin_name"]) for run in candidates if run["id"] in release_ids}
-    runs = [
-        run
-        for run in candidates
-        if run["id"] in release_ids or (run["sbom_id"], run["plugin_name"]) not in release_pairs
-    ]
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
     scanned_at_by_sbom: dict[str, Any] = {}
     for run in runs:
@@ -99,7 +86,6 @@ def build_component_security_picture(
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    run_ids = [run["id"] for run in runs]
     for finding in Finding.objects.filter(
         Q(run_id__in=[rid for rid in run_ids if rid not in release_ids], is_current=True)
         | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
@@ -142,6 +128,9 @@ def build_component_security_picture(
     summary_only: set[str] = set()
     # A component counts as totals-only when none of its SBOMs read here lists findings.
     itemised: set[str] = set()
+    # A component counts as failed when its scans errored and none of them succeeded.
+    errored: set[str] = set()
+    scanned: set[str] = set()
     kev_ids = kev_ids_for_serialization() if results_by_sbom else frozenset()
     for sbom_id, provider_results in results_by_sbom.items():
         meta = sbom_meta[sbom_id]
@@ -172,6 +161,11 @@ def build_component_security_picture(
                 sources.setdefault((identifier.lower(), scope), set()).add(occurrence["plugin"])
         if not all(result_scanned_nothing(result) for result in provider_results):
             unassessed.discard(component_id)
+        # A scan that errored lists nothing, which must not read as nothing open.
+        if any(result_scan_failed(result) for result in provider_results):
+            errored.add(component_id)
+        if any(not result_scanned_nothing(result) and not result_scan_failed(result) for result in provider_results):
+            scanned.add(component_id)
         # Keep summary-only providers visible, as on the product detail page. A component
         # whose scans report totals but no finding rows at all is recorded as such: it has
         # no details to list, unlike one whose findings are all suppressed.
@@ -207,6 +201,8 @@ def build_component_security_picture(
                     "component_name": component_names.get(component_id, ""),
                     "sbom_id": sbom_id,
                     "sbom_version": meta["version"],
+                    # The release it was read in, so its actions read the same runs.
+                    "release_id": release_id or "",
                     "scanned_at": scanned_at_by_sbom.get(sbom_id),
                 }
             )
@@ -235,6 +231,7 @@ def build_component_security_picture(
         "counts": counts_by_component,
         "summary_only": summary_only - itemised,
         "unassessed": unassessed,
+        "failed": errored - scanned,
         "latest_sboms": {row["component_id"]: row for row in sbom_meta.values()},
         "last_scans": {
             sbom_meta[sbom_id]["component_id"]: scanned_at for sbom_id, scanned_at in scanned_at_by_sbom.items()

@@ -100,10 +100,10 @@ the scanner's full result, which the page itself never loads.
                 <div class="text-xs text-text-muted mt-1">{{ row.decision }}</div>
                 </c-tables.cell>
                 <c-tables.cell compact end nowrap>
-                {% comment %}One menu per row. Both items dispatch to page-level listeners rather than carrying hx-get: the panel is teleported after HTMX processes a swapped page of rows, so an hx-get on it would never be bound. Triage asks the page's c-vulnerabilities.triage-host to load the dialog for this occurrence, purl and current decision included, from the SBOM the row was read from.{% endcomment %}
+                {% comment %}One menu per row. Both items dispatch to page-level listeners rather than carrying hx-get: the panel is teleported after HTMX processes a swapped page of rows, so an hx-get on it would never be bound. Triage asks the page's c-vulnerabilities.triage-host to load the dialog for this occurrence, purl and current decision included, from the SBOM and release the row was read from.{% endcomment %}
                 <c-actions-menu label="Actions for {{ row.id }} in {{ row.package|default:'unknown package' }}{% if row.version %} {{ row.version }}{% endif %}{% if not data.single_component %}, {{ row.component_name }}{% endif %}" icon="fas fa-ellipsis" width="w-52">
                 {% if data.can_triage %}
-                    <c-dropdowns.item icon="fas fa-stethoscope" data-triage-url="{% url 'core:component_triage_modal' row.component_id %}?advisory={{ row.id|urlencode }}&amp;package={{ row.package|urlencode }}&amp;version={{ row.version|urlencode }}&amp;ecosystem={{ row.ecosystem|urlencode }}&amp;purl={{ row.purl|default:''|urlencode }}&amp;sbom={{ row.sbom_id|urlencode }}" @click="close(); $dispatch('open-vulnerability-triage', { url: $el.dataset.triageUrl })">
+                    <c-dropdowns.item icon="fas fa-stethoscope" data-triage-url="{% url 'core:component_triage_modal' row.component_id %}?advisory={{ row.id|urlencode }}&amp;package={{ row.package|urlencode }}&amp;version={{ row.version|urlencode }}&amp;ecosystem={{ row.ecosystem|urlencode }}&amp;purl={{ row.purl|default:''|urlencode }}&amp;sbom={{ row.sbom_id|urlencode }}&amp;release={{ row.release_id|default:''|urlencode }}" @click="close(); $dispatch('open-vulnerability-triage', { url: $el.dataset.triageUrl })">
                     Triage
                     </c-dropdowns.item>
                 {% endif %}
@@ -123,6 +123,12 @@ the scanner's full result, which the page itself never loads.
             <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities in this version appear here once it is scanned." />
         {% else %}
             <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities appear here once a component is scanned." />
+        {% endif %}
+    {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
+        {% if data.single_component %}
+            <c-feedback.empty-state icon="fas fa-circle-exclamation" title="Scan failed" message="The scan of this version failed, so its vulnerabilities are unknown. It is scanned again on the next run." />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-circle-exclamation" title="Scan failed" message="The scans failed, so these vulnerabilities are unknown. They are scanned again on the next run." />
         {% endif %}
     {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">

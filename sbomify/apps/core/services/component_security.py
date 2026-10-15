@@ -119,8 +119,12 @@ def build_component_vulnerabilities(
     *,
     triage_identity: tuple[str, ...] | None = None,
     sbom_id: str | None = None,
+    release_id: str | None = None,
 ) -> ComponentVulnerabilitiesContext:
     """The newest SBOM's findings, or ``sbom_id``'s when given, summarised whole and paged for display.
+
+    ``release_id`` reads the SBOM at the runs that release reads, as the release-scoped
+    list does. It is ignored unless the release shipped the SBOM in the component's workspace.
 
     Rows are derived on every request rather than cached. The derivation is the
     cheap half — 0.49 s against the 5.10 s of rendering them all, and most of
@@ -128,7 +132,10 @@ def build_component_vulnerabilities(
     across requests. What made the page time out was handing the template 2,390
     rows to show five of, and that is what paging removes.
     """
-    from sbomify.apps.plugins.latest import latest_run_ids
+    from django.db.models import F
+
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
@@ -149,10 +156,19 @@ def build_component_vulnerabilities(
         return ComponentVulnerabilitiesContext()
 
     sbom_id = str(latest_sbom["id"])
-    # The newest run of each provider, and the blob only for those. An empty
+    # The newest run of each provider (a release reads its own), and the blob only for those. An empty
     # list also answers "did anything scan this at all", which is what the
     # summary fallback needs.
-    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id])
+    if (
+        release_id
+        and not ReleaseArtifact.objects.filter(
+            release_id=release_id, sbom_id=sbom_id, release__product__team_id=F("sbom__component__team_id")
+        ).exists()
+    ):
+        release_id = None
+    latest_ids, _ = release_run_ids(
+        AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id], release_id
+    )
     provider_results = list(
         AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("result", flat=True)
     )
