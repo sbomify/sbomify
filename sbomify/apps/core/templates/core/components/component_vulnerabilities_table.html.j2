@@ -13,12 +13,27 @@ refresh when the re-apply broadcasts vex_reapplied for this component, and when 
 scan of the displayed version finishes (assessment_complete). On the rolling latest
 an upload to this component (sbom_uploaded) refreshes too, so the new SBOM becomes
 the latest version. The SBOM watched is read from the version slot, which each
-results refresh swaps out of band, so it never stays pinned to an older version.{% endcomment %}
+results refresh swaps out of band, so it never stays pinned to an older version.
+
+The refresh sits outside the swapped results and queues behind the form's
+requests: a search or version change in flight runs first, and a new one cancels
+a refresh still in flight. When it runs it reads the refresh URL from the results
+then on screen, so it asks for the query the controls show, not the one the panel
+was rendered with.{% endcomment %}
 <div id="component-vulnerabilities-table"
      class="flex flex-col"
      x-data="{ refreshTimer: null }"
      @ws:message.window=" const watch = document.getElementById('component-vulnerabilities-version-slot').dataset; if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'sbom_uploaded' && $event.detail.component_id === '{{ component_id }}' && 'rolling' in watch) || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === watch.sbom)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
-    <form method="get"
+    <div hidden
+         hx-get="{{ vuln_data.refresh_url }}"
+         hx-trigger="refresh-assessments from:body"
+         hx-sync="#component-vulnerabilities-form:queue last"
+         hx-target="#component-vulnerabilities-results"
+         hx-swap="outerHTML"
+         hx-on::config-request="event.detail.path = document.getElementById('component-vulnerabilities-results').dataset.refreshUrl">
+    </div>
+    <form id="component-vulnerabilities-form"
+          method="get"
           action="{{ vuln_data.base_url }}"
           class="flex flex-col"
           hx-get="{{ vuln_data.base_url }}"

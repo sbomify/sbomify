@@ -92,12 +92,75 @@ class TestATriagePanelRefreshesWhereTheReaderIs:
         assert "'vex_reapplied'" in root["@ws:message.window"]
         assert "refresh-assessments" in root["@ws:message.window"]
         assert f"'{component.id}'" in root["@ws:message.window"]
-        # The results refresh themselves on that event, at the page the reader is on.
+        # The results carry the query they show, at the page the reader is on.
         results = _root_attributes(html, "component-vulnerabilities-results")
-        assert results["hx-trigger"] == "refresh-assessments from:body"
-        assert "page=2" in results["hx-get"]
-        assert "per_page=10" in results["hx-get"]
-        assert results["hx-get"].startswith(reverse("core:component_vulnerabilities_panel", args=[component.id]))
+        assert "hx-get" not in results
+        assert "page=2" in results["data-refresh-url"]
+        assert "per_page=10" in results["data-refresh-url"]
+        assert results["data-refresh-url"].startswith(
+            reverse("core:component_vulnerabilities_panel", args=[component.id])
+        )
+        # The refresh sits outside them, waits behind the form's requests, and asks for that query when it runs.
+        refresh = _refresh_attributes(html)
+        assert refresh["hx-target"] == "#component-vulnerabilities-results"
+        assert refresh["hx-sync"] == "#component-vulnerabilities-form:queue last"
+        assert "dataset.refreshUrl" in refresh["hx-on::config-request"]
+        assert _root_attributes(html, "component-vulnerabilities-form")
+
+    def test_a_search_with_no_matches_keeps_the_page_size(self, sample_team_with_owner_member, sample_user) -> None:
+        """No matches means no footer and no Rows select, so the next search would drop back to 25."""
+        from django.test import Client
+        from django.urls import reverse
+
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
+
+        team = sample_team_with_owner_member.team
+        component = _component_with_findings(team)
+        client = Client()
+        setup_authenticated_client_session(client, team, sample_user)
+        url = reverse("core:component_vulnerabilities_panel", args=[component.id])
+
+        def per_page_inputs(params: dict[str, str]) -> list[dict[str, str]]:
+            from html.parser import HTMLParser
+
+            found: list[dict[str, str]] = []
+
+            class Inputs(HTMLParser):
+                def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+                    named = {name: value or "" for name, value in attrs}
+                    if named.get("name") == "per_page":
+                        found.append({"tag": tag, **named})
+
+            html = client.get(
+                url, params, headers={"hx-request": "true", "hx-target": "component-vulnerabilities-results"}
+            ).content.decode()
+            Inputs().feed(html)
+            return found
+
+        assert per_page_inputs({"search": "no-such-vulnerability", "per_page": "10"}) == [
+            {"tag": "input", "type": "hidden", "name": "per_page", "value": "10"}
+        ]
+        # The default needs nothing carried, and a list with rows has its own select.
+        assert per_page_inputs({"search": "no-such-vulnerability"}) == []
+        assert [found["tag"] for found in per_page_inputs({"per_page": "10"})] == ["select"]
+
+
+def _refresh_attributes(html: str) -> dict[str, str]:
+    """The attributes of the one element that refreshes on ``refresh-assessments``."""
+    from html.parser import HTMLParser
+
+    found: list[dict[str, str]] = []
+
+    class Refresh(HTMLParser):
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            named = {name: value or "" for name, value in attrs}
+            if named.get("hx-trigger") == "refresh-assessments from:body":
+                found.append(named)
+
+    Refresh().feed(html)
+    assert len(found) == 1
+    return found[0]
 
 
 # The triage modal and the assessment card are covered by the artifact page's

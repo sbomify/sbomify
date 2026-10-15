@@ -10,9 +10,8 @@ inside the filter form and would inherit its hx-target and hx-push-url. The prom
 the scanner's full result, which the page itself never loads.
 {% endcomment %}
 <c-vars data results_target="vulnerabilities-results" />
-{% comment %}On a component page a triage refresh swaps only the results; the workspace page's browser refreshes itself, totals included.{% endcomment %}
-<div id="{{ results_target }}"
-     {% if data.single_component %}hx-get="{{ data.refresh_url }}" hx-trigger="refresh-assessments from:body" hx-target="this" hx-swap="outerHTML"{% endif %}>
+{% comment %}The refresh lives outside the results on both pages, so it never runs a stale query or inherits the form's request queue. On a component page it reads data-refresh-url when it runs; the workspace page's browser refreshes itself, totals included.{% endcomment %}
+<div id="{{ results_target }}" data-refresh-url="{{ data.refresh_url }}">
     {% comment %}The sort lives here, not in the toolbar: a column header swaps only this region, so the form's next search or filter submits the order now shown.{% endcomment %}
     <input type="hidden" name="sort" value="{{ data.query.sort }}">
     <input type="hidden" name="direction" value="{{ data.query.direction }}">
@@ -159,6 +158,9 @@ the scanner's full result, which the page itself never loads.
             <c-navigation.pagination :current="data.page.number" :total="data.page.paginator.num_pages" :page_range="data.page_range" base_url="{{ data.base_url }}" query="{{ data.query_string }}" label="Vulnerabilities pagination" hx-boost="true" hx-target="#{{ results_target }}" hx-swap="outerHTML show:none" />
         </div>
         </c-tables.footer>
+    {% elif data.query.params.per_page %}
+        {% comment %}No footer means no Rows select, so carry the chosen page size into the next search.{% endcomment %}
+        <input type="hidden" name="per_page" value="{{ data.query.per_page }}">
     {% endif %}
     </c-tables.shell>
 </div>
