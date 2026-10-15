@@ -177,9 +177,14 @@ def build_component_vulnerabilities(
 
     # Each run reads VEX in its own release context, as the finding rows behind
     # the release list do, so a release that pins a VEX never falls back to the
-    # component's latest one. Triage stays a live overlay on top.
-    run_statements = resolve_vex_statements_for_runs(component_id, sbom_id, [run_id for run_id, _ in provider_runs])
-    provider_results = [_with_vex_fallback(result, run_statements[run_id]) for run_id, result in provider_runs]
+    # component's latest one. Triage stays a live overlay on top. Only runs
+    # with a finding still missing its analysis are resolved: the fallback
+    # leaves annotated findings alone, and resolving reads an SPDX 3 artifact's
+    # embedded VEX from object storage on every page load.
+    run_statements = resolve_vex_statements_for_runs(
+        component_id, sbom_id, [run_id for run_id, result in provider_runs if _needs_vex_fallback(result)]
+    )
+    provider_results = [_with_vex_fallback(result, run_statements.get(run_id, [])) for run_id, result in provider_runs]
     rows = extract_finding_rows(
         merge_findings_by_alias(provider_results),
         vex_statements=triage_statements(component_id),
@@ -243,6 +248,14 @@ def build_component_vulnerabilities(
         panel=browse_finding_rows(rows, query),
         sbom_id=sbom_id,
         version=latest_sbom["version"],
+    )
+
+
+def _needs_vex_fallback(result: Any) -> bool:
+    """Whether ``result`` has a finding :func:`_with_vex_fallback` would read VEX for."""
+    findings = result.get("findings") if isinstance(result, dict) else None
+    return isinstance(findings, list) and any(
+        isinstance(finding, dict) and not finding.get("analysis_state") for finding in findings
     )
 
 
