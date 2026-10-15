@@ -28,7 +28,7 @@ from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.plugins.tests.test_orchestrator import MockPlugin
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.utils import SBOMContentMissingError, SBOMDataError, get_sbom_data, get_sbom_data_bytes
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # ``sbomify`` is ``propagate: False`` in LOGGING, so ``caplog`` sees nothing;
 # the handler goes on the orchestrator's logger directly.
@@ -61,7 +61,7 @@ def sbom(db):
         key="community",
         defaults={"name": "Community", "max_products": 1, "max_components": 5, "max_users": 2},
     )
-    team = Team.objects.create(name="Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Test Team", billing_plan="community")
     component = Component.objects.create(team=team, name="Test Component")
     return SBOM.objects.create(
         name="test-sbom",
