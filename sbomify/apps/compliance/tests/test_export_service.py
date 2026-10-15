@@ -282,11 +282,12 @@ class TestBuildExportPackage:
         """Manifest format bumped to 1.2 when the per-document PDF
         rendering shipped — downstream consumers that pin on the version
         can decide whether to expect a sibling ``.pdf`` next to each
-        ``.md`` in the manifest's files array."""
+        ``.md`` in the manifest's files array. 1.3 added the optional
+        ``integrity.signature`` block."""
         mock_get_content.return_value = b"mock content"
 
         result = build_export_package(assessment_with_docs, sample_user)
-        assert result.value.manifest["format_version"] == "1.2"
+        assert result.value.manifest["format_version"] == "1.3"
 
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_sha256_round_trips_through_shasum(

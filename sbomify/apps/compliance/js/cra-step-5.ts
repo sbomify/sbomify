@@ -29,10 +29,19 @@ interface ExportFileEntry {
   cra_reference: string;
 }
 
+interface ExportSignature {
+  algorithm: string;
+  encoding: string;
+  key_id: string;
+  public_key_url: string;
+}
+
 interface ExportIntegrity {
   hash_algorithm: string;
   manifest_hash_file: string;
   verification_doc: string;
+  /** Present only when sbomify signed the bundle. */
+  signature?: ExportSignature | null;
 }
 
 interface ExportInfo {
@@ -85,6 +94,8 @@ function craStep5() {
     docKinds: DOC_KINDS,
     isRefreshing: false,
     isExporting: false,
+    // Presigned for 15 minutes, so it is offered only right after an export.
+    signatureUrl: '',
     isFinishing: false,
     generatingDoc: null as string | null,
     previewContent: '',
@@ -293,6 +304,7 @@ function craStep5() {
           if (dlResp.ok) {
             const dl = await dlResp.json();
             window.open(dl.download_url, '_blank', 'noopener,noreferrer');
+            this.signatureUrl = dl.signature_url || '';
             showSuccess('Export package ready');
           } else {
             showError('Failed to get download URL');
@@ -305,6 +317,12 @@ function craStep5() {
         showError('Network error');
       } finally {
         this.isExporting = false;
+      }
+    },
+
+    downloadSignature(): void {
+      if (this.signatureUrl) {
+        window.open(this.signatureUrl, '_blank', 'noopener,noreferrer');
       }
     },
 

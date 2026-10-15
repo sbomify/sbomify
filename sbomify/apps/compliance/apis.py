@@ -703,6 +703,7 @@ def create_export(request: HttpRequest, assessment_id: str) -> _Response:
         content_hash=pkg.content_hash,
         manifest=pkg.manifest,
         created_at=pkg.created_at,
+        signed=bool(pkg.signing_key_id),
     )
 
 
@@ -716,6 +717,8 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     Response shape (200):
 
     - ``download_url``: presigned URL for the ZIP.
+    - ``signature_url``: presigned URL for its detached signature, or
+      ``null`` when sbomify did not sign the bundle.
 
     The response carries ``Cache-Control: no-store`` and
     ``Pragma: no-cache`` so intermediate caches (Caddy, corporate
@@ -739,13 +742,16 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     except CRAExportPackage.DoesNotExist:
         return 404, ErrorResponse(error="Export package not found", error_code="not_found")
 
-    from .services.export_service import get_download_url
+    from .services.export_service import get_download_url, get_signature_url
 
     url = get_download_url(package)
     if not url.ok:
         return url.status_code or 500, ErrorResponse(error=url.error or "Unknown error")
+    signature_url = get_signature_url(package)
+    if not signature_url.ok:
+        return signature_url.status_code or 500, ErrorResponse(error=signature_url.error or "Unknown error")
 
-    return 200, {"download_url": url.value}
+    return 200, {"download_url": url.value, "signature_url": signature_url.value}
 
 
 @router.get(
