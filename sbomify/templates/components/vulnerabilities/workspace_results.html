@@ -19,7 +19,7 @@ the scanner's full result, which the page itself never loads.
     <c-tables.shell>
     {% if data.rows %}
         {# djlint:off #}
-        <c-tables.table sized variant_class="min-w-240" aria-label="Open vulnerabilities">
+        <c-tables.table sized variant_class="min-w-240" aria-label="{% if data.query.status == 'decided' %}Vulnerabilities closed by a decision{% else %}Open vulnerabilities{% endif %}">
         {# djlint:on #}
         <thead>
             <tr>

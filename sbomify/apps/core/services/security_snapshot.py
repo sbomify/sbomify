@@ -19,6 +19,7 @@ def build_component_security_picture(
     sla_matrix: dict[str, Any],
     sbom_overrides: dict[str, list[str]] | None = None,
     release_id: str | None = None,
+    include_suppressed: bool = False,
 ) -> dict[str, Any]:
     """Worst non-suppressed findings across the given components.
 
@@ -26,6 +27,9 @@ def build_component_security_picture(
     the SBOMs to read for it instead: the ones a release shipped, or one
     version picked by hand. ``release_id`` names the release those SBOMs came
     from, so each is read at the newest run that covers that release.
+
+    ``include_suppressed`` also lists the findings a VEX decision closed, marked
+    ``suppressed``, so a decision can be found again and revised.
     """
     from django.db.models import Q
 
@@ -187,8 +191,9 @@ def build_component_security_picture(
         if previous is None or counts["total"] > previous["total"]:
             counts_by_component[component_id] = counts
         for row, scope in zip(rows, scopes[len(indexed) :], strict=True):
-            if row.get("vex_suppressed"):
+            if row.get("vex_suppressed") and not include_suppressed:
                 continue
+            row["suppressed"] = bool(row.get("vex_suppressed"))
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
             reported_by: set[str] = set()
             for alias in (row["id"], *row["aliases"]):

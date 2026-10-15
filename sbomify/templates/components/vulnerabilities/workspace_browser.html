@@ -164,6 +164,11 @@ two HTMX roots the view answers.
         <option value="overdue"
                 {% if data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
         </c-forms.select>
+        <c-forms.select size="md" name="status" id="vulnerabilities-status" label="Filter by status">
+        <option value="">Open</option>
+        <option value="decided"
+                {% if data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
+        </c-forms.select>
         <c-slot name="right">
         <noscript>
             <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>

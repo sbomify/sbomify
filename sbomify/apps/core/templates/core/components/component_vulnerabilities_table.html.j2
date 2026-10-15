@@ -10,11 +10,14 @@ a reload or Back keeps them.
 
 A triage decision re-annotates findings in a background task, so the results also
 refresh when the re-apply broadcasts vex_reapplied for this component, and when a
-scan of the displayed version finishes (assessment_complete).{% endcomment %}
+scan of the displayed version finishes (assessment_complete). On the rolling latest
+an upload to this component (sbom_uploaded) refreshes too, so the new SBOM becomes
+the latest version. The SBOM watched is read from the version slot, which each
+results refresh swaps out of band, so it never stays pinned to an older version.{% endcomment %}
 <div id="component-vulnerabilities-table"
      class="flex flex-col"
      x-data="{ refreshTimer: null }"
-     @ws:message.window=" if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ vuln_data.selected_version.id }}')) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+     @ws:message.window=" const watch = document.getElementById('component-vulnerabilities-version-slot').dataset; if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'sbom_uploaded' && $event.detail.component_id === '{{ component_id }}' && 'rolling' in watch) || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === watch.sbom)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <form method="get"
           action="{{ vuln_data.base_url }}"
           class="flex flex-col"
@@ -27,16 +30,7 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
         <div class="px-4 pb-4">
             <c-tables.toolbar flush>
             <c-forms.search-input size="sm" name="search" id="component-vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID or package" value="{{ vuln_data.query.search }}" />
-            <c-forms.select size="md" name="version" id="component-vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ vuln_data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#component-vulnerabilities-table" hx-swap="outerHTML show:none" hx-push-url="true">
-            {% for version in vuln_data.versions %}
-                <option value="{% if not version.is_latest or version.id == vuln_data.query.version %}{{ version.id }}{% endif %}"
-                        {% if version.id == vuln_data.query.version or version.is_latest and not vuln_data.query.version %}selected{% endif %}>
-                    {{ version.version|default:version.id }}
-                    {% if version.is_latest %}(latest){% endif %}
-                    · {{ version.created_at|date:"j M Y" }}
-                </option>
-            {% endfor %}
-            </c-forms.select>
+            {% include "core/components/component_vulnerabilities_version.html.j2" %}
             <c-forms.select size="md" name="severity" id="component-vulnerabilities-severity" label="Filter by severity">
             <option value="">All severities</option>
             {% for value, label in severity_choices %}
@@ -50,6 +44,11 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
                     {% if vuln_data.query.exposure == 'exploited' %}selected{% endif %}>Known exploited</option>
             <option value="overdue"
                     {% if vuln_data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
+            </c-forms.select>
+            <c-forms.select size="md" name="status" id="component-vulnerabilities-status" label="Filter by status">
+            <option value="">Open</option>
+            <option value="decided"
+                    {% if vuln_data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
             </c-forms.select>
             <c-slot name="right">
             {% comment %}Search and the filters swap only the results, so the href rendered here goes stale. It is rebuilt from the form's current controls whenever the link is followed, opened in a new tab or copied.{% endcomment %}
