@@ -310,3 +310,15 @@ def test_a_completed_scan_that_errored_still_shows_its_state():
         },
     )
     assert "Could not scan" in html
+
+
+def test_a_completed_scan_error_shows_what_the_scanner_said():
+    """The scanner's diagnostic is the only place the reason survives, so the row shows it."""
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+    marker = {"id": "osv:scan-error", "status": "error", "title": "Scan Error", "description": "OSV timed out"}
+    run = {"category": "security", "status": "completed", "result": {"summary": {"error_count": 1}, "findings": [marker]}}
+    assert scorecard_for_run(run)["caption"] == "OSV timed out"
+
+    run["result"]["findings"] = []
+    assert scorecard_for_run(run)["caption"] == "The scanner reported an error."

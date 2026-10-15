@@ -82,8 +82,6 @@ two HTMX roots the view answers.
           hx-push-url="true"
           hx-sync="this:replace"
           hx-trigger="submit, change target:select:not([data-scope]), input changed delay:350ms target:input[type=search]">
-        <input type="hidden" name="sort" value="{{ data.query.sort }}">
-        <input type="hidden" name="direction" value="{{ data.query.direction }}">
         <c-tables.toolbar flush>
         <c-forms.search-input size="sm" name="search" id="vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID, package or component" value="{{ data.query.search }}" />
         <c-forms.select size="md" name="product" id="vulnerabilities-product" label="Filter by product" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not component,release,version,page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">

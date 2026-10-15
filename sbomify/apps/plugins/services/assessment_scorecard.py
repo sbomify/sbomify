@@ -25,7 +25,7 @@ def _plural(count: int, singular: str, plural: str) -> str:
     return f"{intcomma(count)} {singular if count == 1 else plural}"
 
 
-def _security_tile(summary: dict[str, Any]) -> dict[str, Any]:
+def _security_tile(summary: dict[str, Any], findings: list[Any]) -> dict[str, Any]:
     by_severity = summary.get("by_severity") or {}
     if not isinstance(by_severity, dict):
         by_severity = {}
@@ -33,7 +33,16 @@ def _security_tile(summary: dict[str, Any]) -> dict[str, Any]:
     other = sum(_count(by_severity, key) for key in by_severity if key not in severities)
     total = sum(severities.values()) + other
     if not by_severity and _count(summary, "error_count"):
-        return {"tone": "danger", "label": "Could not scan", "caption": "The scanner reported an error."}
+        # The scanner writes what went wrong, a timeout or a bad config, on its error marker.
+        detail = next(
+            (
+                finding["description"]
+                for finding in findings
+                if isinstance(finding, dict) and finding.get("status") == "error" and finding.get("description")
+            ),
+            "",
+        )
+        return {"tone": "danger", "label": "Could not scan", "caption": detail or "The scanner reported an error."}
     if not total:
         return {
             "tone": "success",
@@ -105,7 +114,10 @@ def scorecard_for_run(run: dict[str, Any]) -> dict[str, Any]:
         tile = {"tone": "neutral", "label": "Skipped", "caption": findings[0].get("title") or "Did not apply."}
     else:
         summary = result.get("summary") or {}
-        tile = _security_tile(summary) if run.get("category") == "security" else _checks_tile(summary)
+        if run.get("category") == "security":
+            tile = _security_tile(summary, result.get("findings") or [])
+        else:
+            tile = _checks_tile(summary)
     segments = [segment for segment in tile.get("segments", []) if segment["count"]]
     return {
         **tile,

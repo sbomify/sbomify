@@ -13,6 +13,9 @@ the scanner's full result, which the page itself never loads.
 {% comment %}On a component page a triage refresh swaps only the results; the workspace page's browser refreshes itself, totals included.{% endcomment %}
 <div id="{{ results_target }}"
      {% if data.single_component %}hx-get="{{ data.refresh_url }}" hx-trigger="refresh-assessments from:body" hx-target="this" hx-swap="outerHTML"{% endif %}>
+    {% comment %}The sort lives here, not in the toolbar: a column header swaps only this region, so the form's next search or filter submits the order now shown.{% endcomment %}
+    <input type="hidden" name="sort" value="{{ data.query.sort }}">
+    <input type="hidden" name="direction" value="{{ data.query.direction }}">
     <c-tables.shell>
     {% if data.rows %}
         {# djlint:off #}

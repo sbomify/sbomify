@@ -24,10 +24,6 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
           hx-push-url="true"
           hx-sync="this:replace"
           hx-trigger="submit, change target:select:not([data-scope]), input changed delay:350ms target:input[type=search]">
-        <input type="hidden" name="sort" value="{{ vuln_data.query.sort }}">
-        <input type="hidden"
-               name="direction"
-               value="{{ vuln_data.query.direction }}">
         <div class="px-4 pb-4">
             <c-tables.toolbar flush>
             <c-forms.search-input size="sm" name="search" id="component-vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID or package" value="{{ vuln_data.query.search }}" />
@@ -56,7 +52,8 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
                     {% if vuln_data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
             </c-forms.select>
             <c-slot name="right">
-            <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+            {% comment %}Search and the filters swap only the results, so the href rendered here goes stale. It is rebuilt from the form's current controls whenever the link is followed, opened in a new tab or copied.{% endcomment %}
+            <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm" x-data="{ sync() { const params = new URLSearchParams(); for (const [key, value] of new FormData(this.$el.closest('form'))) { if (value) params.set(key, value); } params.set('component', '{{ component_id }}'); this.$el.search = params.toString(); } }" @click="sync()" @auxclick="sync()" @contextmenu="sync()" @focus="sync()">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
             <noscript>
                 <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
             </noscript>
