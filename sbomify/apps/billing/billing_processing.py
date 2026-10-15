@@ -92,7 +92,7 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     * ``BillingRetryableError`` (incl. transient Stripe failures surfaced by the
       ``handle_stripe_errors`` decorator) -> propagate so the view returns 5xx and
       Stripe retries.
-    * ``Team.DoesNotExist`` -> ``WorkspaceGoneError``, terminal: the view
+    * ``Workspace.DoesNotExist`` -> ``WorkspaceGoneError``, terminal: the view
       acknowledges with 200 and reports it as an event with nowhere to land
       rather than as a fault.
     * An explicit terminal ``StripeError`` (e.g. an invalid subscription status,
@@ -1282,7 +1282,7 @@ def handle_checkout_completed(session: Any) -> None:
             )
 
     except Exception as e:
-        # Team.DoesNotExist -> terminal; a missing BillingPlan / unexpected failure -> retryable
+        # Workspace.DoesNotExist -> terminal; a missing BillingPlan / unexpected failure -> retryable
         # (don't drop a paid checkout). See _raise_classified_webhook_error.
         _raise_classified_webhook_error(e)
 
