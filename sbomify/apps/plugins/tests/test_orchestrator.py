@@ -694,7 +694,7 @@ class TestFinalizeRetryExhausted:
 
         finding = run.result["findings"][0]
         assert finding["id"] == "sbom-verification:retry-exhausted"
-        assert finding["title"] == "Assessment Retry Budget Exhausted"
+        assert finding["title"] == "Check did not finish"
         assert finding["status"] == "error"
         assert "GitHub returned 404" in finding["description"]
         assert finding["metadata"] == {"retry_exhausted": True, "last_error": "GitHub returned 404 for sha256:abc..."}
@@ -761,6 +761,60 @@ class TestFinalizeRetryExhausted:
         orchestrator = PluginOrchestrator()
         result = orchestrator.finalize_retry_exhausted("00000000-0000-0000-0000-000000000000", "nope")
         assert result is None
+
+    def _settle(self, test_sbom, message: str, **kwargs) -> dict:
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="sbom-verification",
+            plugin_version="2.0.0",
+            category="attestation",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+        PluginOrchestrator().finalize_retry_exhausted(str(run.id), message, **kwargs)
+        run.refresh_from_db()
+        return run.result["findings"][0]
+
+    def test_a_plugin_can_name_what_the_user_reads(self, test_sbom, db) -> None:
+        """The plugin knows what a check that never settled means; the orchestrator does not."""
+        finding = self._settle(test_sbom, "GitHub returned no attestation.", title="No attestation found")
+
+        assert finding["title"] == "No attestation found"
+
+    def test_the_finding_reads_as_copy_not_as_internals(self, test_sbom, db) -> None:
+        """This finding renders on the compliance page, so it follows the copy rules."""
+        finding = self._settle(test_sbom, "Dependency Track still processing SBOM")
+        text = f"{finding['title']} {finding['description']}"
+
+        for word in ("budget", "transient", "plugin", "e.g."):
+            assert word not in text.lower()
+        assert "\u2014" not in text and "\u2013" not in text
+        assert finding["description"].startswith("Dependency Track still processing SBOM. ")
+        assert "32 minutes" in finding["description"]
+
+
+@pytest.mark.django_db
+def test_the_task_hands_the_plugins_title_to_the_settled_finding(test_sbom, mocker) -> None:
+    """Once the last retry is spent, the task layer finalises the run with the title the plugin raised."""
+    from sbomify.apps.plugins.builtins.verification import AttestationNotYetAvailableError
+    from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
+
+    orchestrator = mocker.patch("sbomify.apps.plugins.tasks.PluginOrchestrator").return_value
+    orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+        "GitHub returned no attestation.", assessment_run_id="run-1", title="No attestation found"
+    )
+
+    response = run_assessment_task.fn(
+        sbom_id=str(test_sbom.id),
+        plugin_name="sbom-verification",
+        run_reason=RunReason.ON_UPLOAD.value,
+        _retry_later_count=len(RETRY_LATER_DELAYS_MS),
+    )
+
+    assert response["status"] == "retry_exhausted"
+    orchestrator.finalize_retry_exhausted.assert_called_once_with(
+        "run-1", "GitHub returned no attestation.", title="No attestation found"
+    )
 
 
 @pytest.mark.django_db

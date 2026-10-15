@@ -518,7 +518,9 @@ def run_assessment_task(
                     # carry on; the row stays in PENDING but at least the
                     # exhaustion event is recorded.
                     try:
-                        PluginOrchestrator().finalize_retry_exhausted(run_id, str(retry_error))
+                        PluginOrchestrator().finalize_retry_exhausted(
+                            run_id, str(retry_error), title=getattr(retry_error, "title", None)
+                        )
                     except Exception as finalize_err:  # noqa: BLE001
                         logger.error(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
