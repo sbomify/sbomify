@@ -175,6 +175,7 @@ class BillingResourceType(str, Enum):
 
     PRODUCT = "product"
     COMPONENT = "component"
+    USER = "user"
 
 
 # Set of valid billing resource type values for quick validation
@@ -184,6 +185,7 @@ BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
 RESOURCE_TYPE_TO_LIMIT_FIELD = {
     BillingResourceType.PRODUCT.value: "max_products",
     BillingResourceType.COMPONENT.value: "max_components",
+    BillingResourceType.USER.value: "max_users",
 }
 
 

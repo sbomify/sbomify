@@ -17,16 +17,18 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
 from django.utils import timezone
 
+from sbomify.apps.billing.billing_processing import get_resource_limit
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.core.queries import get_team_asset_count
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
 from .models import Invitation, Member, Workspace, get_team_name_for_user
-from .queries import count_team_members, get_team_user_counts, invitation_email
+from .queries import invitation_email
 
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
@@ -400,57 +402,51 @@ def can_add_user_to_team(team: Workspace, is_joining_via_invite: bool = False) -
     if not team.billing_plan:
         try:
             plan = BillingPlan.objects.get(key="community")
-            if plan.max_users is not None:
-                current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
-                # If joining with existing invite, allowing total == max is fine (slot consumed)
-                limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
-
-                if limit_reached:
-                    return (
-                        False,
-                        f"Community plan allows only {plan.max_users} users. "
-                        "Please upgrade your plan to add more members.",
-                    )
+            max_users = get_resource_limit(plan, "user")
+            if max_users is not None and _seats_full(team, max_users, is_joining_via_invite):
+                return (
+                    False,
+                    f"Community plan allows only {max_users} users. Please upgrade your plan to add more members.",
+                )
             return True, ""
         except BillingPlan.DoesNotExist:
             pass
 
-        current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
         # Fallback limit is 1
-        limit_reached = total_users > 1 if is_joining_via_invite else total_users >= 1
-
-        if limit_reached:
+        if _seats_full(team, 1, is_joining_via_invite):
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
+        max_users = get_resource_limit(plan, "user")
 
-        if plan.key == "enterprise" or plan.max_users is None:
+        if plan.key == "enterprise" or max_users is None:
             return True, ""
 
-        current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
-        if plan.max_users is not None:
-            limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
-
-            if limit_reached:
-                return (
-                    False,
-                    f"Your {plan.name} plan allows only {plan.max_users} users. "
-                    f"Please upgrade your plan to add more members.",
-                )
+        if _seats_full(team, max_users, is_joining_via_invite):
+            return (
+                False,
+                f"Your {plan.name} plan allows only {max_users} users. Please upgrade your plan to add more members.",
+            )
 
         return True, ""
 
     except BillingPlan.DoesNotExist:
         # If plan doesn't exist, treat as community
-        current_members = count_team_members(team.id)
-        if current_members >= 1:
+        if _seats_full(team, 1, is_joining_via_invite):
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""
+
+
+def _seats_full(team: Workspace, max_users: int, is_joining_via_invite: bool) -> bool:
+    """Whether ``team`` has no seat left for one more person.
+
+    An invitee who is accepting already holds one of the counted seats, so they
+    may join when every seat is taken. Only a count past the limit refuses them.
+    """
+    taken = get_team_asset_count(str(team.id), "user")
+    return taken > max_users if is_joining_via_invite else taken >= max_users
 
 
 def create_user_team_and_subscription(user: User) -> Workspace | None:
