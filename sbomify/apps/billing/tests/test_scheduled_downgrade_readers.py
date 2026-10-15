@@ -7,8 +7,10 @@ import stripe
 from django.test import RequestFactory
 
 from sbomify.apps.billing.billing_processing import check_billing_limits
+from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.notifications import check_downgrade_limit_exceeded
 from sbomify.apps.core.apis import _check_billing_limits
+from sbomify.apps.teams.models import Invitation
 
 pytestmark = pytest.mark.django_db
 
@@ -94,3 +96,12 @@ def test_reactivation_still_clears_the_schedule(mock_cache, reader, scheduled_te
 
     scheduled_team.refresh_from_db()
     assert "scheduled_downgrade_plan" not in scheduled_team.billing_plan_limits
+
+
+@patch("sbomify.apps.billing.stripe_cache.get_cached_subscription")
+def test_the_bell_counts_seats_against_the_plan_being_dropped_to(mock_cache, scheduled_team, ensure_billing_plans):
+    mock_cache.return_value = _subscription(cancel_at_period_end=True)
+    BillingPlan.objects.filter(key="community").update(max_users=1)
+    Invitation.objects.create(team=scheduled_team, email="ada@example.com", role="member")
+
+    assert check_downgrade_limit_exceeded(scheduled_team) is not None

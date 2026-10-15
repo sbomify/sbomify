@@ -22,6 +22,7 @@ STAT_ICON = "absolute flex items-center justify-center rounded-lg"
 STAT_LABEL = "row-start-2 m-0 font-medium"
 STAT_VALUE = "row-start-1 m-0 min-w-0"
 STAT_CHANGE = "inline-flex items-baseline gap-1 text-[0.8125rem]"
+STAT_LIMIT = "text-sm font-medium tracking-normal text-text-muted"
 CHOICE = "inline-flex items-center gap-2 px-3 py-2 rounded-[0.625rem]"
 CHOICE_GROUP = "flex flex-wrap gap-2"
 SELECT_ROW = "flex items-start gap-4 p-4 cursor-pointer"
@@ -317,6 +318,14 @@ def test_the_card_aligns_changes_with_its_value_and_a_bare_change_keeps_its_marg
     bare = _classes(rendered, STAT_CHANGE, "unchanged")
     assert "mt-[var(--stat-change-mt,0.5rem)]" in bare
     assert "color-mix" not in bare
+
+
+def test_a_limit_sits_beside_the_value_in_the_cards_own_recipe(rendered: str) -> None:
+    """The card sets both halves of "250 of 1,000". A page that styled its own
+    suffix would drift from the next page that wanted one."""
+    assert "flex items-baseline" in _classes(rendered, STAT_VALUE, "of 1,000")
+    assert _classes(rendered, STAT_LIMIT, "of 1,000")
+    assert _classes(rendered, STAT_LIMIT, "of unlimited")
 
 
 def test_stat_card_forwards_attrs_and_caller_class(rendered: str) -> None:

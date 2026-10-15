@@ -147,8 +147,26 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
 
 def _handle_community_downgrade(team: Workspace, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
+    from .services.plan_selection import check_downgrade
+    from .stripe_sync import sync_subscription_from_stripe
+
+    # Stripe's state first, as the plan page does, and before the lock: a stored
+    # status that missed a reactivation would skip the check below, and one that
+    # outlived its subscription would refuse a move with nothing left to cancel.
+    # A sync that fails leaves the stored status standing, so it refuses the move
+    # rather than let a stale "canceled" skip the check while the read below finds
+    # the subscription live and schedules the downgrade at Stripe.
+    has_subscription = bool((team.billing_plan_limits or {}).get("stripe_subscription_id"))
+    if has_subscription and not sync_subscription_from_stripe(team, force_refresh=True):
+        raise BillingRetryableError("Could not read the subscription before checking the downgrade.")
+
     with transaction.atomic():
         team = Workspace.objects.select_for_update().get(pk=team.pk)
+        # The plan page's check, asked under the workspace lock that product,
+        # component and seat creation also take, before Stripe or the plan moves.
+        community = BillingPlan.objects.filter(key=BillingPlan.KEY_COMMUNITY).first()
+        if community and not (downgrade := check_downgrade(team, community)).ok:
+            return downgrade.status_code or 409, {"detail": downgrade.error}
         billing_limits = team.billing_plan_limits or {}
 
         # Only a subscription Stripe reports gone or ended moves the workspace

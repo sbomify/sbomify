@@ -15,10 +15,12 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -378,13 +380,53 @@ def user_seat(team: Workspace, *, is_joining_via_invite: bool = False) -> Iterat
 
     Nested inside an outer transaction the lock is simply held until that one
     commits, which is the behaviour wanted either way.
+
+    Whether Stripe still holds a scheduled cancel is read before the lock, as
+    ``core.apis._enforce_limit_under_lock`` does for products and components: it
+    can be an HTTPS round trip, and every write that takes this lock would wait
+    on it. That gives nothing back to the race the lock closes. The lock
+    serialises the seat count against concurrent inserts, and the count stays
+    inside it; the cancel is Stripe's state, which no row lock protects.
     """
+    cancel_due = None if is_joining_via_invite else _cancel_still_due(team)
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=team.pk)
-        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite, cancel_due=cancel_due)
 
 
-def can_add_user_to_team(team: Workspace, is_joining_via_invite: bool = False) -> tuple[bool, str]:
+def _cancel_still_due(team: Workspace) -> bool:
+    """Whether Stripe still holds the cancel ``team``'s stored limits record.
+
+    With no cancel recorded there is nothing to ask, and True leaves the answer
+    to the stored row, so a cancel written after this read counts as due: the
+    same answer an unreachable Stripe gets.
+    """
+    limits = team.billing_plan_limits or {}
+    if not (limits.get("cancel_at_period_end") and limits.get("scheduled_downgrade_plan")):
+        return True
+    subscription_id = str(limits.get("stripe_subscription_id") or "")
+    return get_subscription_cancel_at_period_end(subscription_id, team.key or "", fallback_value=True)
+
+
+def _scheduled_downgrade_plan(team: Workspace, cancel_due: bool | None = None) -> BillingPlan | None:
+    """The plan a cancelled subscription drops to, while that cancel is still due.
+
+    Products and components stop at this plan's limits for the rest of the
+    billing period, so the downgrade cannot land over them. Seats follow the
+    same rule. ``cancel_due`` is Stripe's answer read earlier; None asks now.
+    """
+    limits = team.billing_plan_limits or {}
+    key = limits.get("scheduled_downgrade_plan")
+    if not (limits.get("cancel_at_period_end") and key):
+        return None
+    if not (_cancel_still_due(team) if cancel_due is None else cancel_due):
+        return None
+    return BillingPlan.objects.filter(key=key).first()
+
+
+def can_add_user_to_team(
+    team: Workspace, is_joining_via_invite: bool = False, cancel_due: bool | None = None
+) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
 
@@ -393,6 +435,8 @@ def can_add_user_to_team(team: Workspace, is_joining_via_invite: bool = False) -
         is_joining_via_invite: If True, we are checking if an existing pending user can join.
                                In this case, we allow joining if total_users <= max_users
                                (because the pending user is already counted in total_users).
+        cancel_due: Whether Stripe still holds the scheduled cancel, read before a
+                    row lock was taken. None reads it here, which can reach Stripe.
 
     Returns:
         Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
@@ -427,6 +471,18 @@ def can_add_user_to_team(team: Workspace, is_joining_via_invite: bool = False) -
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
+
+        # A pending invitee already holds the seat it joins with, so only a new
+        # seat is weighed against the plan the workspace is moving to.
+        scheduled = None if is_joining_via_invite else _scheduled_downgrade_plan(team, cancel_due)
+        if scheduled is not None and scheduled.max_users is not None:
+            if get_team_user_counts(team.id)[2] >= scheduled.max_users:
+                return (
+                    False,
+                    f"You cannot add this member because your scheduled downgrade to {scheduled.name} would "
+                    f"exceed the plan limit of {scheduled.max_users} member{pluralize(scheduled.max_users)}. "
+                    "Please reduce your usage or continue with your current plan.",
+                )
 
         if plan.key == "enterprise" or plan.max_users is None:
             return True, ""

@@ -52,16 +52,14 @@ def _strip_workspace_suffix(name: str) -> str:
 
 @register.filter
 def workspace_display(name: str | None) -> str:
-    """Display workspace names with a single `'s Workspace` suffix."""
-    if not name:
-        return "Workspace"
+    """A workspace's name as the user set it, with a fallback for an unnamed one.
 
-    trimmed = str(name).strip()
-    normalized = trimmed.casefold()
-    if any(normalized.endswith(suffix) for suffix in LEGACY_SUFFIXES):
-        return trimmed
-
-    return f"{trimmed}{WORKSPACE_SUFFIX}"
+    It used to append `'s Workspace`, which left every workspace carrying two
+    names at once: the switcher and the settings field showed what the user
+    typed, and page headers showed that plus a suffix. The name is the name.
+    """
+    trimmed = str(name).strip() if name else ""
+    return trimmed or "Workspace"
 
 
 @register.filter

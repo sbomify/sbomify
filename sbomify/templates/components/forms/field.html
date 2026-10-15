@@ -14,12 +14,17 @@ horizontal puts the label and hint beside the control in a divided settings
 row. Rows stack on small screens. The control remains the same shared input,
 select, toggle or action, and errors stay beside the control they describe.
 
+wide widens that control column, for the rows whose value is the point: a URL
+you hand a customer, a long message. Without it every control takes the same
+narrow column whatever it holds, and a public address rendered as
+"https://app.example." with 800px of empty label beside it.
+
 The parts below are wrapped in a with block that blanks class: the field's own
 class is layout for the field, and the label and the help line would otherwise
 inherit it and repeat that layout on every row.
 {% endcomment %}
-<c-vars label for required hint error horizontal class />
-<div class="{% if horizontal %}grid grid-cols-1 gap-3 px-5 py-3.5 border-b border-solid border-border last:border-b-0 md:grid-cols-[minmax(0,1fr)_minmax(0,44%)] md:items-center md:gap-8{% else %}space-y-1.5{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars label for required hint error horizontal wide class />
+<div class="{% if horizontal %}grid grid-cols-1 gap-3 px-5 py-3.5 border-b border-solid border-border last:border-b-0 md:items-center md:gap-8 {% if wide %}md:grid-cols-[minmax(0,1fr)_minmax(0,60%)]{% else %}md:grid-cols-[minmax(0,1fr)_minmax(0,44%)]{% endif %}{% else %}space-y-1.5{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>
     {% with class="" %}
         {% if horizontal %}
@@ -27,7 +32,7 @@ inherit it and repeat that layout on every row.
                 {% if label %}<c-forms.label compact for="{{ for }}" :required="required">{{ label }}</c-forms.label>{% endif %}
                 {% if hint %}<c-forms.hint compact>{{ hint }}</c-forms.hint>{% endif %}
             </div>
-            <div class="flex min-w-0 w-full flex-col items-start gap-1.5 md:max-w-[340px] md:items-end md:justify-self-end">
+            <div class="flex min-w-0 w-full flex-col items-start gap-1.5 md:items-end md:justify-self-end {% if wide %}md:max-w-none{% else %}md:max-w-[340px]{% endif %}">
                 {{ slot }}
                 {% if error %}<c-forms.error>{{ error }}</c-forms.error>{% endif %}
             </div>
