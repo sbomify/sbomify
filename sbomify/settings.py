@@ -86,6 +86,12 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "")
 # Signing salt for signed URLs (should be unique per installation)
 SIGNED_URL_SALT = os.environ.get("SIGNED_URL_SALT", "django-insecure-signed-url-salt-CHANGE-ME!")
 
+# Key that signs CRA export bundles: an unencrypted PKCS#8 EC P-256 PEM. Unset,
+# bundles go out unsigned. Earlier keys' public PEMs, concatenated, stay
+# published so bundles they signed can still be verified.
+CRA_EXPORT_SIGNING_KEY = os.environ.get("CRA_EXPORT_SIGNING_KEY", "")
+CRA_EXPORT_SIGNING_RETIRED_PUBLIC_KEYS = os.environ.get("CRA_EXPORT_SIGNING_RETIRED_PUBLIC_KEYS", "")
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 

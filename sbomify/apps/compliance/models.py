@@ -533,6 +533,15 @@ class CRAExportPackage(models.Model):
             "treated as retained forever."
         ),
     )
+    signing_key_id = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text=(
+            "Id of the export key that signed the bundle, empty when unsigned. "
+            "The signature is stored beside the bundle at storage_key + '.sig'."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
