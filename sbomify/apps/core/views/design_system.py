@@ -89,6 +89,43 @@ def _fix_prompt_demo() -> dict[str, object]:
     return fix
 
 
+def _bulk_fix_prompt_demo() -> dict[str, object]:
+    from sbomify.apps.vulnerability_scanning.services.bulk_fix_prompt import render_bulk_fix_prompt
+
+    advisory = {
+        "aliases": [],
+        "cvss_score": 7.5,
+        "kev": False,
+        "malicious": False,
+        "title": "Request parser vulnerability",
+        "references": [],
+    }
+    components = [
+        {
+            "name": "api-gateway",
+            "sbom_version": "2.4.1",
+            "repositories": [{"url": "https://github.com/example/api-gateway", "source": "named in this SBOM"}],
+            "packages": [
+                {
+                    "name": "example-parser",
+                    "version": "1.0.0",
+                    "ecosystem": "pypi",
+                    "purl": "pkg:pypi/example-parser@1.0.0",
+                    "malicious": False,
+                    "fixed": ["1.0.4", "1.0.2"],
+                    "advisories": [
+                        {**advisory, "id": "CVE-2026-10001", "severity": "high", "kev": True, "fixed": "1.0.4"},
+                        {**advisory, "id": "CVE-2026-10002", "severity": "medium", "fixed": "1.0.2"},
+                    ],
+                }
+            ],
+        }
+    ]
+    fix: dict[str, object] = {"components": components, "total": 2, "scope": "", "vulnerabilities": 2, "packages": 1}
+    fix["prompt"] = render_bulk_fix_prompt(fix)
+    return fix
+
+
 def _workspace_vulnerability_demo() -> dict[str, object]:
     from django.core.paginator import Paginator
 
@@ -143,6 +180,7 @@ def _workspace_vulnerability_demo() -> dict[str, object]:
         "components": [{"id": "demo", "name": "api-gateway"}],
         "base_url": "#vulnerability-browser",
         "query_string": "",
+        "bulk_fix_prompt_url": "#vulnerability-browser",
         "per_page_choices": PER_PAGE_CHOICES,
     }
 
@@ -180,6 +218,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "vulnerability_demo": vulnerability_demo,
             "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
             "fix_prompt_demo": _fix_prompt_demo(),
+            "bulk_fix_prompt_demo": _bulk_fix_prompt_demo(),
             "plan_card_demos": [
                 {
                     "key": "community",
