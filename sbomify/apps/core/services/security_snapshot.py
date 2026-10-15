@@ -163,12 +163,19 @@ def build_component_security_picture(
         for occurrence, scope in zip(indexed, scopes[: len(indexed)], strict=True):
             for identifier in (occurrence["id"], *occurrence["aliases"]):
                 sources.setdefault((identifier.lower(), scope), set()).add(occurrence["plugin"])
-        if not all(result_scanned_nothing(result) for result in provider_results):
+        # A completed run that stored no result examined nothing it can vouch for,
+        # so only a readable summary or listed findings count as an assessment.
+        examined = [
+            result
+            for result in provider_results
+            if result and not result_scanned_nothing(result) and isinstance(result.get("summary"), dict)
+        ]
+        if rows or examined:
             unassessed.discard(component_id)
         # A scan that errored lists nothing, which must not read as nothing open.
-        if any(result_scan_failed(result) for result in provider_results):
+        if any(result_scan_failed(result) for result in examined):
             errored.add(component_id)
-        if any(not result_scanned_nothing(result) and not result_scan_failed(result) for result in provider_results):
+        if any(not result_scan_failed(result) for result in examined):
             scanned.add(component_id)
         # Keep summary-only providers visible, as on the product detail page. A component
         # whose scans report totals but no finding rows at all is recorded as such: it has
