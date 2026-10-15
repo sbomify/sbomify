@@ -170,7 +170,9 @@ two HTMX roots the view answers.
                 {% if data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
         </c-forms.select>
         <c-slot name="right">
-        <c-vulnerabilities.bulk-fix-prompt-button url="{{ data.bulk_fix_prompt_url }}" />
+        {% if data.summary.occurrences %}
+            <c-vulnerabilities.bulk-fix-prompt-button url="{{ data.bulk_fix_prompt_url }}" />
+        {% endif %}
         <noscript>
             <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
         </noscript>
