@@ -113,6 +113,7 @@ def _bulk_fix_prompt_demo() -> dict[str, object]:
                     "purl": "pkg:pypi/example-parser@1.0.0",
                     "malicious": False,
                     "fixed": ["1.0.4", "1.0.2"],
+                    "unfixed": [],
                     "advisories": [
                         {**advisory, "id": "CVE-2026-10001", "severity": "high", "kev": True, "fixed": "1.0.4"},
                         {**advisory, "id": "CVE-2026-10002", "severity": "medium", "fixed": "1.0.2"},
