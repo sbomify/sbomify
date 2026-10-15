@@ -3,13 +3,7 @@ import pytest
 
 from sbomify.apps.billing.models import BillingPlan
 
-from .fixtures import (  # noqa: F401
-    business_plan,
-    multiple_components,
-    multiple_products,
-    sample_user,
-    test_product,
-)
+from .fixtures import business_plan  # noqa: F401
 
 
 @pytest.mark.django_db
