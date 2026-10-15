@@ -4,6 +4,9 @@ The team names answered for a while after the rename. A branch that still uses
 one fails here, and ``bin/rename_to_workspace.py`` rewrites it.
 """
 
+import ast
+from pathlib import Path
+
 import pytest
 from django.conf import settings
 from django.urls import NoReverseMatch, resolve, reverse
@@ -13,6 +16,18 @@ def test_the_role_settings_have_only_the_workspace_names():
     assert settings.WORKSPACE_SUPPORTED_ROLES
     assert not hasattr(settings, "TEAMS_SUPPORTED_ROLES")  # rename-to-workspace: keep
     assert not hasattr(settings, "TEAMS_INVITABLE_ROLES")  # rename-to-workspace: keep
+
+
+def test_the_screencasts_import_no_team_name():
+    """pytest never collects ``screencasts/``, so an old name there breaks only a recording."""
+    imported: set[str] = set()
+    for path in (Path(settings.BASE_DIR) / "screencasts").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module == "sbomify.apps.teams.models":
+                imported |= {alias.name for alias in node.names}
+
+    assert imported, "no screencast imports the teams models, so this test checks nothing"
+    assert "Team" not in imported  # rename-to-workspace: keep
 
 
 def test_a_workspace_page_resolves_under_the_workspaces_namespace():

@@ -25,6 +25,7 @@ GLOBS = (
     "sbomify/**/*.txt",
     "sbomify/**/*.json",
     "sbomify/**/*.ts",
+    "screencasts/**/*.py",
     "AGENTS.md",
     "docs/**/*.md",
     "docs/**/*.csv",
