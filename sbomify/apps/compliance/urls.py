@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views.cra_product_list import CRAProductListView
+from .views.cra_reports import CRAReportCreateView, CRAReportDetailView, CRAReportListView
 from .views.cra_wizard import CRAScopeScreeningView, CRAStartAssessmentView, CRAStepView, CRAWizardShellView
 from .views.doc_public import ProductDoCPublicView
 from .views.vdp_public import ProductVDPPublicView
@@ -11,6 +12,10 @@ app_name = "compliance"
 
 urlpatterns = [
     path("cra/", CRAProductListView.as_view(), name="cra_product_list"),
+    # Before cra/<assessment_id>/, which would otherwise capture "reports".
+    path("cra/reports/", CRAReportListView.as_view(), name="cra_reports"),
+    path("cra/reports/new/", CRAReportCreateView.as_view(), name="cra_report_create"),
+    path("cra/reports/<str:report_id>/", CRAReportDetailView.as_view(), name="cra_report_detail"),
     path("cra/scope/<str:product_id>/", CRAScopeScreeningView.as_view(), name="cra_scope_screening"),
     path("cra/start/<str:product_id>/", CRAStartAssessmentView.as_view(), name="cra_start_assessment"),
     path("cra/<str:assessment_id>/", CRAWizardShellView.as_view(), name="cra_wizard_shell"),

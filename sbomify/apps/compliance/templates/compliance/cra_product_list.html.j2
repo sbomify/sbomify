@@ -7,6 +7,7 @@
         <c-buttons.primary size="sm" @click="startOpen = true"><i class="fas fa-plus" aria-hidden="true"></i>Start assessment</c-buttons.primary>
     {% endif %}
     </c-layout.page-header>
+    {% include "compliance/components/cra_tabs.html.j2" %}
     {% if not has_cra_access %}
         <c-cards.card flush>
         <div class="p-8 text-center">

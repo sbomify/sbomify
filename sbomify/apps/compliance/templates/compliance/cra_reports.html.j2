@@ -1,0 +1,91 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% block title %}CRA reports · sbomify{% endblock %}
+{% block dashboard_content %}
+    <c-layout.frame>
+    <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act.">
+    {% if can_manage %}
+        <c-buttons.primary size="sm" @click="$dispatch('open-new-incident-report')">
+        <i class="fas fa-plus" aria-hidden="true"></i>New incident report
+        </c-buttons.primary>
+    {% endif %}
+    </c-layout.page-header>
+    {% include "compliance/components/cra_tabs.html.j2" %}
+    <c-feedback.alert icon="fas fa-circle-info" title="ENISA takes these reports through its portal">
+    sbomify lays each report out the way the Single Reporting Platform asks for it, tracks the Article 14 deadlines and keeps a record of what you filed. Submit each stage at <a href="https://portal.cra-srp.enisa.europa.eu/"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="underline">portal.cra-srp.enisa.europa.eu</a>.
+    </c-feedback.alert>
+    {% if reports %}
+        <c-cards.card flush>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Product</c-tables.header-cell>
+        <c-tables.header-cell>Report</c-tables.header-cell>
+        <c-tables.header-cell>Next deadline</c-tables.header-cell>
+        <c-tables.header-cell date>Due</c-tables.header-cell>
+        <c-tables.actions-cell as="th" label="Actions" />
+        </c-tables.head>
+        <tbody>
+            {% for row in reports %}
+                <c-tables.row>
+                <c-tables.cell nowrap class="font-medium">{{ row.report.product.name }}</c-tables.cell>
+                <c-tables.cell>{{ row.report.get_kind_display }}</c-tables.cell>
+                <c-tables.cell>
+                {% if not row.next_due %}
+                    <c-badges.success>Final report filed</c-badges.success>
+                {% elif row.next_due.overdue %}
+                    <c-badges.danger>{{ row.next_due.label }} overdue</c-badges.danger>
+                {% else %}
+                    <c-badges.warning>{{ row.next_due.label }}</c-badges.warning>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell date>
+                {% if row.next_due.due %}
+                    {{ row.next_due.due|date:"j M Y, H:i" }} UTC
+                {% elif row.next_due %}
+                    After a fix is available
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell end>
+                <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_detail' report_id=row.report.id %}">
+                Open <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                </c-buttons.ghost>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-cards.card>
+    {% else %}
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-tower-broadcast" title="No CRA reports" message="Start one from an advisory with a known exploited vulnerability, or record a severe incident here." />
+        </c-cards.card>
+    {% endif %}
+    {% if can_manage %}
+        <div class="contents"
+             x-data="{ open: false }"
+             @open-new-incident-report.window="open = true">
+            <c-modal id="newIncidentReportModal" title="New incident report" icon="fas fa-tower-broadcast">
+            <form id="newIncidentReportForm"
+                  method="post"
+                  action="{% url 'compliance:cra_report_create' %}"
+                  class="flex flex-col gap-4">
+                {% csrf_token %}
+                <input type="hidden" name="kind" value="incident" />
+                <c-forms.field label="Product" for="incidentProduct" required>
+                <c-forms.select id="incidentProduct" name="product_id" :options="products" required />
+                </c-forms.field>
+                <c-forms.field label="When you became aware (UTC)" for="incidentAwareAt" hint="Leave empty for now. The early warning is due 24 hours later.">
+                <c-forms.input id="incidentAwareAt" name="aware_at" type="datetime-local" />
+                </c-forms.field>
+            </form>
+            <c-slot name="footer">
+            <c-buttons.secondary @click="open = false">Cancel</c-buttons.secondary>
+            <c-buttons.primary type="submit" form="newIncidentReportForm">Start incident report</c-buttons.primary>
+            </c-slot>
+            </c-modal>
+        </div>
+    {% endif %}
+    </c-layout.frame>
+{% endblock dashboard_content %}
