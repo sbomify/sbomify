@@ -65,7 +65,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
 
 
 def _fix_prompt_demo() -> dict[str, object]:
-    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt, render_triage_prompt
 
     fix: dict[str, object] = {
         "advisory": "CVE-2026-10001",
@@ -80,12 +80,14 @@ def _fix_prompt_demo() -> dict[str, object]:
         "version": "1.0.0",
         "ecosystem": "pypi",
         "purl": "pkg:pypi/example-parser@1.0.0",
+        "vex_purl": "pkg:pypi/example-parser@1.0.0",
         "fixed": "1.0.4",
         "references": [],
         "component": "api-gateway",
         "sbom_version": "2.4.1",
     }
     fix["prompt"] = render_fix_prompt(fix)
+    fix["triage_prompt"] = render_triage_prompt(fix)
     return fix
 
 
