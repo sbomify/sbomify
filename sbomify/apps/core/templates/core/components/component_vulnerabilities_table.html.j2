@@ -66,6 +66,7 @@ was rendered with.{% endcomment %}
                     {% if vuln_data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
             </c-forms.select>
             <c-slot name="right">
+            {% include "core/components/component_vulnerabilities_bulk.html.j2" %}
             {% comment %}Search and the filters swap only the results, so the href rendered here goes stale. It is rebuilt from the form's current controls whenever the link is followed, opened in a new tab or copied.{% endcomment %}
             <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm" x-data="{ sync() { const params = new URLSearchParams(); for (const [key, value] of new FormData(this.$el.closest('form'))) { if (value) params.set(key, value); } params.set('component', '{{ component_id }}'); this.$el.search = params.toString(); } }" @click="sync()" @auxclick="sync()" @contextmenu="sync()" @focus="sync()">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
             <noscript>

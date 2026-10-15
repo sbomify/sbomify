@@ -1,0 +1,11 @@
+{% comment %}
+Opens the page's c-vulnerabilities.fix-prompt-dialog with one prompt for every
+open vulnerability the list's filters select, not only the page shown. It sits
+in the toolbar, which search and the filters do not re-render, so url carries
+only the scope the list was rendered with; the form's current controls are laid
+over it when the button is pressed, and a control cleared since drops its value.
+{% endcomment %}
+<c-vars url />
+<c-buttons.secondary size="sm" data-bulk-url="{{ url }}" @click="const url = new URL($el.dataset.bulkUrl, window.location.origin); for (const [key, value] of new FormData($el.closest('form'))) { if (value) { url.searchParams.set(key, value); } else { url.searchParams.delete(key); } } $dispatch('open-fix-prompt', { url: url.pathname + url.search, title: 'Fix prompt for every vulnerability listed' })">
+<i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>Fix prompt for all
+</c-buttons.secondary>
