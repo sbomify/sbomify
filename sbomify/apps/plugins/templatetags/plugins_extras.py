@@ -336,13 +336,14 @@ def vulnerability_total(summary: object) -> int:
     return sum(value for value in by_severity.values() if isinstance(value, int) and not isinstance(value, bool))
 
 
-#: Verdicts of a completed scan that produced nothing to list.
-NO_SCAN_RESULT = ("Could not scan", "No result")
+#: Verdicts of a completed scan that produced nothing to list. A skipped scan's
+#: caption is the reason, which waiting will not fix.
+NO_SCAN_RESULT = ("Could not scan", "No result", "Skipped")
 
 
 @register.filter
 def unfinished_scans(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Vulnerability scans with no results to read: queued, running, failed, or errored.
+    """Vulnerability scans with no results to read: queued, running, failed, errored or skipped.
 
     Scans with results are read on the Vulnerabilities list, so the assessments
     card leaves them out. One without has nothing there, and this card is the

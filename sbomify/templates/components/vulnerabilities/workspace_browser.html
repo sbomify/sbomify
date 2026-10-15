@@ -14,60 +14,64 @@ the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
 <c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
-{% comment %}A triage decision changes the totals as well as the rows, so the whole browser refreshes: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead.{% endcomment %}
+{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals and the results, never the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead.{% endcomment %}
 <div id="{{ browser_target }}"
      class="flex flex-col gap-4"
      x-data="{ refreshTimer: null }"
-     hx-get="{{ data.refresh_url }}"
-     hx-trigger="refresh-assessments from:body"
-     hx-target="this"
-     hx-swap="outerHTML"
-     hx-on::config-request="if (event.detail.elt === this) event.detail.path = window.location.pathname + window.location.search"
      @ws:message.window="if ($event.detail.type === 'vex_reapplied' || $event.detail.type === 'assessment_complete') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); }">
-    <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
-        {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
-            <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
+    <div hidden
+         hx-get="{{ data.refresh_url }}"
+         hx-trigger="refresh-assessments from:body"
+         hx-target="#{{ browser_target }}"
+         hx-swap="none"
+         hx-select-oob="#{{ browser_target }}-summary,#{{ results_target }}"
+         hx-on::config-request="event.detail.path = window.location.pathname + window.location.search"></div>
+    <div id="{{ browser_target }}-summary" class="flex flex-col gap-4">
+        <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
+            {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
+                <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
+            {% else %}
+                <c-layout.stat-card icon="fas fa-bug" :value="data.summary.vulnerabilities" label="Open vulnerabilities" />
+            {% endif %}
+            <c-layout.stat-card icon="fas fa-triangle-exclamation" accent="danger" :value="data.summary.critical_high" label="Critical or high" />
+            <c-layout.stat-card icon="fas fa-fire" accent="danger" :value="data.summary.exploited" label="Known exploited" />
+            <c-layout.stat-card icon="fas fa-clock" accent="warning" :value="data.summary.overdue" label="Past fix deadline" />
+        </div>
+        <c-typography.description size="sm">
+        {% if data.summary.vulnerabilities %}
+            {% if data.summary.occurrences %}
+                {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }},
+            {% else %}
+                Counted
+            {% endif %}
+            {% if data.scope_label %}
+                in {{ data.scope_label }}.
+            {% else %}
+                from each component's latest SBOM.
+            {% endif %}
+            {% if data.summary.occurrences %}
+                A vulnerability reported by several scanners or found in several components is counted once.
+            {% endif %}
+            {% if data.summary_only_components %}
+                {{ data.summary_only_components|intcomma }} component{{ data.summary_only_components|pluralize }} reported totals only, so {{ data.summary_only_components|pluralize:"it is,they are" }} counted but not listed.
+            {% endif %}
+        {% elif data.scope_label %}
+            Nothing open in {{ data.scope_label }}.
         {% else %}
-            <c-layout.stat-card icon="fas fa-bug" :value="data.summary.vulnerabilities" label="Open vulnerabilities" />
+            Vulnerabilities from each component's latest SBOM appear here once it is scanned.
         {% endif %}
-        <c-layout.stat-card icon="fas fa-triangle-exclamation" accent="danger" :value="data.summary.critical_high" label="Critical or high" />
-        <c-layout.stat-card icon="fas fa-fire" accent="danger" :value="data.summary.exploited" label="Known exploited" />
-        <c-layout.stat-card icon="fas fa-clock" accent="warning" :value="data.summary.overdue" label="Past fix deadline" />
+        {% if data.unassessed_components %}
+            {{ data.unassessed_components|intcomma }} component{{ data.unassessed_components|pluralize }} not scanned yet.
+        {% endif %}
+        </c-typography.description>
+        {% if data.missing_from_release %}
+            <c-feedback.alert variant="info" icon="fas fa-circle-info" title="Not in this release">
+            <c-slot name="body">
+            {{ data.selected_release.name }} has no SBOM for {{ data.missing_from_release|join:", " }}, so {{ data.missing_from_release|length|pluralize:"it is,they are" }} not counted here.
+            </c-slot>
+            </c-feedback.alert>
+        {% endif %}
     </div>
-    <c-typography.description size="sm">
-    {% if data.summary.vulnerabilities %}
-        {% if data.summary.occurrences %}
-            {{ data.summary.occurrences|intcomma }} occurrence{{ data.summary.occurrences|pluralize }} across {{ data.summary.components|intcomma }} component{{ data.summary.components|pluralize }},
-        {% else %}
-            Counted
-        {% endif %}
-        {% if data.scope_label %}
-            in {{ data.scope_label }}.
-        {% else %}
-            from each component's latest SBOM.
-        {% endif %}
-        {% if data.summary.occurrences %}
-            A vulnerability reported by several scanners or found in several components is counted once.
-        {% endif %}
-        {% if data.summary_only_components %}
-            {{ data.summary_only_components|intcomma }} component{{ data.summary_only_components|pluralize }} reported totals only, so {{ data.summary_only_components|pluralize:"it is,they are" }} counted but not listed.
-        {% endif %}
-    {% elif data.scope_label %}
-        Nothing open in {{ data.scope_label }}.
-    {% else %}
-        Vulnerabilities from each component's latest SBOM appear here once it is scanned.
-    {% endif %}
-    {% if data.unassessed_components %}
-        {{ data.unassessed_components|intcomma }} component{{ data.unassessed_components|pluralize }} not scanned yet.
-    {% endif %}
-    </c-typography.description>
-    {% if data.missing_from_release %}
-        <c-feedback.alert variant="info" icon="fas fa-circle-info" title="Not in this release">
-        <c-slot name="body">
-        {{ data.selected_release.name }} has no SBOM for {{ data.missing_from_release|join:", " }}, so {{ data.missing_from_release|length|pluralize:"it is,they are" }} not counted here.
-        </c-slot>
-        </c-feedback.alert>
-    {% endif %}
     <form method="get"
           action="{{ data.base_url }}"
           class="flex flex-col gap-4"
@@ -111,7 +115,13 @@ two HTMX roots the view answers.
         {% if data.query.component %}
             {% if data.version_locked %}
                 <c-forms.select size="md" id="vulnerabilities-version" label="Version, set by the release" disabled title="Set by the selected release">
-                <option>{% if data.selected_version %}{{ data.selected_version.version|default:data.selected_version.id }}{% else %}Not in this release{% endif %}</option>
+                <option>
+                    {% if data.selected_version %}
+                        {{ data.selected_version.version|default:data.selected_version.id }}
+                    {% else %}
+                        Not in this release
+                    {% endif %}
+                </option>
                 </c-forms.select>
             {% else %}
                 <c-forms.select size="md" name="version" id="vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#{{ browser_target }}" hx-swap="outerHTML" hx-push-url="true">
@@ -130,7 +140,8 @@ two HTMX roots the view answers.
         <option value="">All severities</option>
         <option value="critical"
                 {% if data.query.severity == 'critical' %}selected{% endif %}>Critical</option>
-        <option value="high" {% if data.query.severity == 'high' %}selected{% endif %}>High</option>
+        <option value="high"
+                {% if data.query.severity == 'high' %}selected{% endif %}>High</option>
         <option value="medium"
                 {% if data.query.severity == 'medium' %}selected{% endif %}>Medium</option>
         <option value="low" {% if data.query.severity == 'low' %}selected{% endif %}>Low</option>

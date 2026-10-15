@@ -1,8 +1,10 @@
 {% comment %}The component panel, in the workspace Vulnerabilities page's style: one row per
 vulnerability in this component, providers merged by alias, with triage and a fix
 prompt per row. Version picks which of the component's SBOMs is read; it starts at
-the newest. The toolbar swaps this whole region, the pager and a triage refresh
-swap only the results, as on the workspace page. The panel's URL is pushed, and
+the newest. Version swaps this whole region. Search, the other filters, the pager
+and a triage refresh swap only the results, as on the workspace page, so a
+response to an earlier keystroke never replaces the search box being typed in.
+The panel's URL is pushed, and
 a plain request to it redirects to the component page with the same filters, so
 a reload or Back keeps them.
 
@@ -17,11 +19,11 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
           action="{{ vuln_data.base_url }}"
           class="flex flex-col"
           hx-get="{{ vuln_data.base_url }}"
-          hx-target="#component-vulnerabilities-table"
+          hx-target="#component-vulnerabilities-results"
           hx-swap="outerHTML show:none"
           hx-push-url="true"
           hx-sync="this:replace"
-          hx-trigger="submit, change target:select, input changed delay:350ms target:input[type=search]">
+          hx-trigger="submit, change target:select:not([data-scope]), input changed delay:350ms target:input[type=search]">
         <input type="hidden" name="sort" value="{{ vuln_data.query.sort }}">
         <input type="hidden"
                name="direction"
@@ -29,7 +31,7 @@ scan of the displayed version finishes (assessment_complete).{% endcomment %}
         <div class="px-4 pb-4">
             <c-tables.toolbar flush>
             <c-forms.search-input size="sm" name="search" id="component-vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID or package" value="{{ vuln_data.query.search }}" />
-            <c-forms.select size="md" name="version" id="component-vulnerabilities-version" label="Filter by version">
+            <c-forms.select size="md" name="version" id="component-vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ vuln_data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#component-vulnerabilities-table" hx-swap="outerHTML show:none" hx-push-url="true">
             {% for version in vuln_data.versions %}
                 <option value="{% if not version.is_latest or version.id == vuln_data.query.version %}{{ version.id }}{% endif %}"
                         {% if version.id == vuln_data.query.version or version.is_latest and not vuln_data.query.version %}selected{% endif %}>
