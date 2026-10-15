@@ -177,6 +177,11 @@
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Exporting...</span>
                     </c-buttons.primary>
+                    <template x-if="signatureUrl">
+                        <c-buttons.secondary @click="downloadSignature()" data-testid="download-signature-btn" class="w-full">
+                        <i class="fas fa-signature mr-2" aria-hidden="true"></i> Download signature
+                        </c-buttons.secondary>
+                    </template>
                     {% comment %}
                     A named reason where there is one. An assessment can
                     show every step complete and 21/21 controls satisfied
@@ -236,6 +241,13 @@
                                 <code class="font-mono text-xs break-all"
                                       data-testid="bundle-content-hash"
                                       x-text="lastExport.content_hash"></code>
+                                <template x-if="lastExport.integrity.signature">
+                                    <p class="m-0 mt-1" data-testid="bundle-signed-by">
+                                        Signed by sbomify with export key
+                                        <code class="font-mono text-xs"
+                                              x-text="lastExport.integrity.signature.key_id"></code>
+                                    </p>
+                                </template>
                             </div>
                         </template>
                         {# Per-file manifest summary #}
