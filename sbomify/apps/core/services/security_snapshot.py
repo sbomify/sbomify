@@ -18,13 +18,17 @@ def build_component_security_picture(
     component_names: dict[str, str],
     sla_matrix: dict[str, Any],
     sbom_overrides: dict[str, list[str]] | None = None,
+    release_id: str | None = None,
 ) -> dict[str, Any]:
     """Worst non-suppressed findings across the given components.
 
     Each component is read at its newest SBOM unless ``sbom_overrides`` names
     the SBOMs to read for it instead: the ones a release shipped, or one
-    version picked by hand.
+    version picked by hand. ``release_id`` names the release those SBOMs came
+    from, so each is read at the newest run that covers that release.
     """
+    from django.db.models import Q
+
     from sbomify.apps.plugins.latest import latest_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
@@ -54,12 +58,30 @@ def build_component_security_picture(
         bom_type=SBOM.BomType.SBOM,
     ).values("id", "component_id", "version", "created_at")
     sbom_meta = {str(row["id"]): row for row in [*latest_sboms, *chosen_sboms]}
-    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys())
-    runs = (
-        AssessmentRun.objects.filter(id__in=latest_ids)
+    security_runs = AssessmentRun.objects.filter(category="security", status="completed")
+    latest_ids = latest_run_ids(security_runs, sbom_meta.keys())
+    # Two releases can share an SBOM yet each hold a live run of one scanner, because a
+    # run is annotated with its own releases' VEX. The newest run overall may then carry
+    # another release's suppressions, so a release reads the newest run that covers it,
+    # and falls back to the newest run for a scanner none of whose runs name it.
+    release_ids = set(
+        latest_run_ids(
+            security_runs.filter(releases=release_id), [sbom_id for ids in overrides.values() for sbom_id in ids]
+        )
+        if release_id
+        else []
+    )
+    candidates = list(
+        AssessmentRun.objects.filter(id__in=[*latest_ids, *release_ids])
         .order_by("sbom_id", "plugin_name")
         .values("id", "sbom_id", "plugin_name", "result_summary", "result_skipped", "created_at")
     )
+    release_pairs = {(run["sbom_id"], run["plugin_name"]) for run in candidates if run["id"] in release_ids}
+    runs = [
+        run
+        for run in candidates
+        if run["id"] in release_ids or (run["sbom_id"], run["plugin_name"]) not in release_pairs
+    ]
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
     scanned_at_by_sbom: dict[str, Any] = {}
     for run in runs:
@@ -72,11 +94,16 @@ def build_component_security_picture(
 
     # Workspace metrics need every occurrence, but never the full scanner blobs.
     # Use the projection maintained by scan completion and VEX re-annotation,
-    # scoped to the same latest runs as the summary and assessment state above.
+    # scoped to the same latest runs as the summary and assessment state above. A
+    # release's own run need not be the newest, so its rows are read without is_current.
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
+    run_ids = [run["id"] for run in runs]
+    for finding in Finding.objects.filter(
+        Q(run_id__in=[rid for rid in run_ids if rid not in release_ids], is_current=True)
+        | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
+    ).values(
         "run_id",
         "sbom_id",
         "advisory_id",
