@@ -79,3 +79,13 @@ class TestDesignSystemView:
         for kind, heading in (("products", "Products"), ("releases", "Releases"), ("components", "Components")):
             assert f'id="inventory-tab-{kind}"' in html
             assert f'data-inventory-heading="{heading}"' in html
+
+    def test_each_fix_prompt_demo_copies_its_own_prompt(self, debug_mode, sample_team_with_owner_member):
+        """The copy button finds its prompt by id, so the single and bulk demos cannot share one."""
+        member = sample_team_with_owner_member
+        client = Client()
+        setup_authenticated_client_session(client, member.team, member.user)
+        html = client.get(reverse("core:design_system")).content.decode()
+
+        assert html.count('id="fix-prompt-text"') == 1
+        assert html.count('id="bulk-fix-prompt-demo-text"') == 1

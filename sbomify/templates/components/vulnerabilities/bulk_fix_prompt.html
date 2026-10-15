@@ -3,9 +3,10 @@
 The body of the fix prompt dialog when it covers the whole list: what the
 prompt covers, then the prompt to paste into a coding agent and the copy
 action. fix comes from services/bulk_fix_prompt.py. error replaces everything
-when nothing open matches the filters.
+when nothing open matches the filters. code_id names the prompt for the copy
+button; a page showing another prompt beside it, like the gallery, passes its own.
 {% endcomment %}
-<c-vars fix error />
+<c-vars fix error code_id="fix-prompt-text" />
 {% if error %}
     <c-cards.body>
     <c-feedback.alert variant="warning">{{ error }}</c-feedback.alert>
@@ -33,8 +34,8 @@ when nothing open matches the filters.
         <c-typography.description size="sm">Paste this into Claude Code, Cursor or another coding agent. It asks for one upgrade per package, component by component, and nothing else.</c-typography.description>
     </div>
     </c-cards.body>
-    <c-code-prompt code="{{ fix.prompt }}" code_id="fix-prompt-text" max_height="20rem" />
+    <c-code-prompt code="{{ fix.prompt }}" code_id="{{ code_id }}" max_height="20rem" />
     <c-cards.body density="compact">
-    <c-copy-button-primary copy_from="fix-prompt-text" label="Copy prompt" />
+    <c-copy-button-primary copy_from="{{ code_id }}" label="Copy prompt" />
     </c-cards.body>
 {% endif %}
