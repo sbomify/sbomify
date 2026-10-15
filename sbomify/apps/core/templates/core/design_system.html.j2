@@ -1196,10 +1196,12 @@ first-of-type rule that drops the leading hairline reads the section's position
     <h3 id="vulnerability-browser" class="text-lg font-semibold text-text">Workspace vulnerabilities</h3>
     <p class="text-sm text-text-muted m-0">
         One row per vulnerability in a component; totals count each vulnerability once. Product and component replace the
-        whole browser, every other control only the results. Fix prompt opens the page's fix prompt dialog.
+        whole browser, every other control only the results. Each row's actions menu opens the page's fix prompt
+        dialog, and Triage loads its dialog into the page's triage host.
     </p>
     <c-vulnerabilities.workspace-browser :data="workspace_vulnerability_demo" browser_target="demo-vulnerabilities-browser" results_target="demo-vulnerabilities-results" />
     <c-vulnerabilities.fix-prompt-dialog />
+    <c-vulnerabilities.triage-host />
     <c-cards.card flush>
     <c-cards.header title="Fix prompt" />
     <c-vulnerabilities.fix-prompt :fix="fix_prompt_demo" />
