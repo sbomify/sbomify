@@ -37,7 +37,7 @@ def test_saving_a_prefix_and_start(client: Client, sample_team_with_owner_member
 
 def test_clearing_both_fields_restores_the_defaults(client: Client, sample_team_with_owner_member: Member) -> None:
     workspace = sample_team_with_owner_member.team
-    workspace.advisory_id_prefix = "OSPN"
+    workspace.advisory_id_prefix = "PSIRT"
     workspace.advisory_id_start_at = 500
     workspace.save(update_fields=["advisory_id_prefix", "advisory_id_start_at"])
 

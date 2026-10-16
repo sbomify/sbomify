@@ -56,7 +56,7 @@ class TestTheTwoStatusAxes:
             sample_team,
             remediation_status="fix_in_progress",
             status="published",
-            tracking_id="OSPN-2026-0001",
+            tracking_id="ACME-SA-2026-0001",
             published_at=timezone.now(),
         )
 
@@ -75,9 +75,9 @@ class TestTheTwoStatusAxes:
 
 class TestDisplayId:
     def test_the_tracking_id_is_shown_when_set(self, sample_team):
-        _advisory(sample_team, status="published", tracking_id="OSPN-2026-0034", published_at=timezone.now())
+        _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0034", published_at=timezone.now())
 
-        assert list_advisories(sample_team).value[0]["id"] == "OSPN-2026-0034"
+        assert list_advisories(sample_team).value[0]["id"] == "ACME-SA-2026-0034"
 
     def test_a_draft_falls_back_to_its_primary_key(self, sample_team):
         """The model assigns a tracking id at publication, so a draft has none
@@ -235,7 +235,7 @@ class TestSearchAndCounts:
             sample_team,
             remediation_status="resolved",
             status="published",
-            tracking_id="OSPN-2026-0002",
+            tracking_id="ACME-SA-2026-0002",
             published_at=timezone.now(),
         )
 
@@ -247,20 +247,20 @@ class TestSearchAndCounts:
 class TestLookup:
     def test_it_resolves_by_tracking_id_as_well_as_pk(self, sample_team):
         """The tracking id is what the list links and what a person pastes."""
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0099", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0099", published_at=timezone.now())
 
-        assert get_advisory(sample_team, "OSPN-2026-0099").value["id"] == "OSPN-2026-0099"
+        assert get_advisory(sample_team, "ACME-SA-2026-0099").value["id"] == "ACME-SA-2026-0099"
         assert get_advisory(sample_team, advisory.id).ok
 
     def test_it_takes_one_query_either_way(self, sample_team, django_assert_num_queries):
         """Two sequential lookups would rebuild the prefetches and re-run them
         for anything found by tracking id."""
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0100", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0100", published_at=timezone.now())
         AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0100", severity="high")
 
         # One for the advisory, then one per prefetched relation.
         with django_assert_num_queries(5):
-            get_advisory(sample_team, "OSPN-2026-0100")
+            get_advisory(sample_team, "ACME-SA-2026-0100")
 
 
 def test_the_display_id_is_always_a_string(sample_team):
@@ -679,9 +679,9 @@ class TestDelete:
         assert not AdvisoryVulnerability.objects.filter(id=vulnerability.id).exists()
 
     def test_it_resolves_by_tracking_id_too(self, sample_team):
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0001", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0001", published_at=timezone.now())
 
-        result = delete_advisory(sample_team, "OSPN-2026-0001")
+        result = delete_advisory(sample_team, "ACME-SA-2026-0001")
 
         assert result.ok
         assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()

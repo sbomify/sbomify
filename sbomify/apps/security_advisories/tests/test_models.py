@@ -219,12 +219,12 @@ def test_tracking_ids_default_to_a_prefix_from_the_workspace_name(team) -> None:
 
 
 def test_tracking_ids_use_the_workspace_prefix(team, advisory) -> None:
-    team.advisory_id_prefix = "OSPN"
+    team.advisory_id_prefix = "PSIRT"
     team.save(update_fields=["advisory_id_prefix"])
-    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "OSPN-2026-0001"
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "PSIRT-2026-0001"
 
-    _publish_as(advisory, "OSPN-2026-0001")
-    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "OSPN-2026-0002"
+    _publish_as(advisory, "PSIRT-2026-0001")
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "PSIRT-2026-0002"
 
 
 def test_changing_the_prefix_starts_its_own_sequence(team, advisory) -> None:
@@ -267,7 +267,7 @@ def test_numbers_past_9999_keep_counting(team, advisory) -> None:
 
 @pytest.mark.parametrize(
     ("value", "expected"),
-    [("acme-sa", "ACME-SA"), (" OSPN ", "OSPN"), ("", ""), ("PSIRT2", "PSIRT2"), ("GOOGLE", "GOOGLE")],
+    [("acme-sa", "ACME-SA"), (" PSIRT ", "PSIRT"), ("", ""), ("PSIRT2", "PSIRT2"), ("GOOGLE", "GOOGLE")],
 )
 def test_advisory_id_prefixes_are_normalised(value, expected) -> None:
     assert normalize_advisory_id_prefix(value) == expected

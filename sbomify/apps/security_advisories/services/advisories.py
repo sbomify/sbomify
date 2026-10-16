@@ -95,7 +95,7 @@ _UNKNOWN_EVENT = {"label": "Event", "variant": "secondary", "icon": "fas fa-circ
 def display_id(advisory: SecurityAdvisory) -> str:
     """The id a human quotes.
 
-    ``tracking_id`` is the workspace's own scheme (OSPN-2026-0034 and the like)
+    ``tracking_id`` is the workspace's own scheme (ACME-SA-2026-0034 and the like)
     and is what belongs on screen when set. The generated primary key is the
     fallback, since an advisory is addressable before anyone assigns a tracking
     id.
