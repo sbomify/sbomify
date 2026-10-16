@@ -22,6 +22,7 @@ from sbomify.apps.sboms.utils import SBOMContentMissingError, SBOMDataError, get
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
+from .public_assessment_utils import _is_run_passing
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .sdk.results import PluginMetadata
@@ -816,7 +817,7 @@ class PluginOrchestrator:
                     sbom_id=sbom_id,
                     category=dep_value,
                     status=RunStatus.COMPLETED.value,
-                ).only("plugin_name", "result")
+                ).only("plugin_name", "category", "status", "result")
                 for run in runs:
                     if self._is_passing(run):
                         passing.append(run.plugin_name)
@@ -831,7 +832,7 @@ class PluginOrchestrator:
                         plugin_name=dep_value,
                         status=RunStatus.COMPLETED.value,
                     )
-                    .only("plugin_name", "result")
+                    .only("plugin_name", "category", "status", "result")
                     .order_by("-created_at")
                     .first()
                 )
@@ -873,7 +874,7 @@ class PluginOrchestrator:
                     sbom_id=sbom_id,
                     category=dep_value,
                     status=RunStatus.COMPLETED.value,
-                ).only("plugin_name", "result")
+                ).only("plugin_name", "category", "status", "result")
                 for run in runs:
                     if self._is_passing(run):
                         passing.append(run.plugin_name)
@@ -889,7 +890,7 @@ class PluginOrchestrator:
                         plugin_name=dep_value,
                         status=RunStatus.COMPLETED.value,
                     )
-                    .only("plugin_name", "result")
+                    .only("plugin_name", "category", "status", "result")
                     .order_by("-created_at")
                     .first()
                 )
@@ -910,58 +911,8 @@ class PluginOrchestrator:
             "failed_plugins": list(set(failed)),
         }
 
-    def _is_passing(self, run: AssessmentRun) -> bool:
-        """Check if an assessment run is passing.
-
-        For security plugins: passing means no vulnerabilities found
-        (``by_severity`` all zero).
-
-        For compliance/attestation/other plugins: passing requires no
-        failures, no errors, AND at least one explicit pass. The
-        ``pass_count > 0`` requirement closes a latent hole where a
-        plugin emitting only warnings (e.g., the previous github-attestation
-        plugin returning a "no VCS info" warning) would silently satisfy
-        a ``requires_one_of`` dependency despite never having verified
-        anything. A run that produced only warnings has nothing positive
-        to assert; treating it as passing would let BSI/FDA/etc. dependency
-        gates pass on no evidence.
-
-        Args:
-            run: The AssessmentRun to check.
-
-        Returns:
-            True if the run is passing, False otherwise.
-        """
-        if not run.result or not isinstance(run.result, dict):
-            return False
-
-        summary = run.result.get("summary")
-        if not isinstance(summary, dict):
-            return False
-
-        if run.category == "security":
-            # A scan that errored out (error_count > 0, no by_severity) verified nothing, so it
-            # is not passing — otherwise a broken scanner silently satisfies a dependency gate.
-            if summary.get("error_count", 0) > 0:
-                return False
-            by_severity = summary.get("by_severity") or {}
-            total_from_severity: int = sum(
-                by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
-            )
-            return total_from_severity == 0
-
-        fail_count: int = summary.get("fail_count", 0)
-        error_count: int = summary.get("error_count", 0)
-        # ``pass_count`` was added to summary payloads at the same time as
-        # this stricter check. Older runs predating that may not carry the
-        # key at all — distinguish "key absent" (legacy schema) from "key
-        # present and zero" (modern run with no positive findings) so we
-        # don't retroactively un-pass historical runs that satisfied the
-        # gate under the old contract.
-        pass_count = summary.get("pass_count")
-        if pass_count is None:
-            return fail_count == 0 and error_count == 0
-        return fail_count == 0 and error_count == 0 and pass_count > 0
+    # The gate, control promotion and the public badge share one judgement.
+    _is_passing = staticmethod(_is_run_passing)
 
     def get_plugin_instance(
         self,
