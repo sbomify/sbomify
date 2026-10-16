@@ -54,6 +54,8 @@ def test_clearing_both_fields_restores_the_defaults(client: Client, sample_team_
         ({"advisory_id_prefix": "CVE", "advisory_id_start_at": "1"}, "another vulnerability database"),
         ({"advisory_id_prefix": "ACME SA", "advisory_id_start_at": "1"}, "single hyphens"),
         ({"advisory_id_prefix": "ACME", "advisory_id_start_at": "0"}, "greater than or equal to 1"),
+        # Uppercases past the column's limit; refused rather than a server error.
+        ({"advisory_id_prefix": "ß" * 11, "advisory_id_start_at": "1"}, "at most 20 characters"),
     ],
 )
 def test_invalid_values_are_refused(
@@ -114,3 +116,24 @@ def test_the_card_shows_the_next_id_and_refreshes_alone(
     # The refresh selects the form alone, so its starting values must be inside it.
     assert 'id="advisory-id-fields"' in form
     assert '"advisory_id_start_at": "43"' in form
+
+
+def test_a_rename_refreshes_the_generated_prefix_preview_alone(
+    client: Client, sample_team_with_owner_member: Member
+) -> None:
+    """The generated prefix comes from the name. A rename refreshes the preview
+    showing it, not the numbering form, which may hold unsaved edits."""
+    workspace = sample_team_with_owner_member.team
+    setup_authenticated_client_session(client, workspace, sample_team_with_owner_member.user)
+    url = reverse("workspaces:team_general", args=[workspace.key])
+
+    response = client.post(url, {"name": "Renamed Corp", "sbom_freshness_days": ""})
+
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert "refreshAdvisoryIdPreview" in trigger
+    assert "refreshAdvisoryIds" not in trigger
+    html = client.get(url, HTTP_HX_REQUEST="true").content.decode()
+    preview = html[html.index('id="advisory-id-preview"') :]
+    preview = preview[: preview.index("</h2>") + 400]
+    assert f"RENAMEDCORP-SA-{timezone.now().year}-0001" in preview
+    assert 'id="advisory-id-prefix"' not in preview

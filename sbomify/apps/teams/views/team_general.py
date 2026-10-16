@@ -144,7 +144,13 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
             # until the cache expires on its own.
             update_user_teams_session(request, cast(User, request.user))
 
-            return htmx_success_response("Workspace settings updated", triggers={"refreshWorkspaceCard": True})
+            # The generated advisory prefix comes from the name, so its preview
+            # refreshes too. Only the preview: the numbering fields may hold
+            # unsaved edits.
+            return htmx_success_response(
+                "Workspace settings updated",
+                triggers={"refreshWorkspaceCard": True, "refreshAdvisoryIdPreview": True},
+            )
 
         except Workspace.DoesNotExist:
             return htmx_error_response("Workspace not found")

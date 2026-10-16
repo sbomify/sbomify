@@ -138,7 +138,8 @@ def detect_reference_type(identifier: str | None) -> str:
     return ReferenceType.OTHER
 
 
-ADVISORY_ID_PREFIX_RE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+ADVISORY_ID_PREFIX_RE = re.compile(r"[A-Z0-9]+(?:-[A-Z0-9]+)*")
+ADVISORY_ID_PREFIX_MAX_LENGTH = 20
 
 
 def normalize_advisory_id_prefix(value: str) -> str:
@@ -151,8 +152,11 @@ def normalize_advisory_id_prefix(value: str) -> str:
     prefix = value.strip().upper()
     if not prefix:
         return ""
-    if not ADVISORY_ID_PREFIX_RE.match(prefix):
+    if not ADVISORY_ID_PREFIX_RE.fullmatch(prefix):
         raise ValidationError("Use letters, numbers and single hyphens, e.g. ACME-SA.")
+    # Measured after uppercasing, which can lengthen a value ("ß" becomes "SS").
+    if len(prefix) > ADVISORY_ID_PREFIX_MAX_LENGTH:
+        raise ValidationError(f"Use at most {ADVISORY_ID_PREFIX_MAX_LENGTH} characters.")
     if detect_reference_type(f"{prefix}-") != ReferenceType.OTHER:
         raise ValidationError(f"{prefix} is used by another vulnerability database. Choose a different prefix.")
     return prefix

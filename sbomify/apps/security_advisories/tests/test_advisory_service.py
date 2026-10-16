@@ -604,6 +604,20 @@ class TestPublishAdvisory:
         assert second.tracking_id.endswith("-0002")
         assert first.tracking_id[:-4] == second.tracking_id[:-4]
 
+    def test_the_id_follows_numbering_saved_after_the_caller_loaded_the_workspace(self, sample_team, sample_user):
+        """A prefix or floor saved while a publish is under way governs the id it
+        allocates, rather than the caller's stale copy of the workspace."""
+        from sbomify.apps.teams.models import Workspace
+
+        advisory = self._publishable(sample_team)
+        Workspace.objects.filter(pk=sample_team.pk).update(advisory_id_prefix="PSIRT", advisory_id_start_at=43)
+        assert sample_team.advisory_id_prefix == ""
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        assert advisory.tracking_id == f"PSIRT-{timezone.now().year}-0043"
+
     def test_publishing_lands_on_the_timeline(self, sample_team, sample_user):
         advisory = self._publishable(sample_team)
 

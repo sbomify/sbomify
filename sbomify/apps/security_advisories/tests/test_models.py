@@ -279,6 +279,13 @@ def test_malformed_advisory_id_prefixes_are_refused(value) -> None:
         normalize_advisory_id_prefix(value)
 
 
+def test_the_prefix_length_is_measured_after_uppercasing() -> None:
+    """Eleven "ß" pass a 20-character limit but uppercase to 22 letters."""
+    with pytest.raises(ValidationError, match="at most 20 characters"):
+        normalize_advisory_id_prefix("ß" * 11)
+    assert normalize_advisory_id_prefix("A" * 20) == "A" * 20
+
+
 @pytest.mark.parametrize("value", ["CVE", "ghsa", "SUSE-SU", "GO"])
 def test_another_databases_prefix_is_refused(value) -> None:
     """CVE-2026-0001 would be linked and searched as a real CVE."""

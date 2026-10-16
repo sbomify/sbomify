@@ -139,7 +139,9 @@ class SupportPeriodForm(forms.Form):
 class AdvisoryIdForm(forms.Form):
     """How new security advisories are numbered. Published ids never change."""
 
-    advisory_id_prefix = forms.CharField(required=False, max_length=20)
+    # No max_length here: uppercasing can lengthen a value, so the normaliser
+    # measures it afterwards.
+    advisory_id_prefix = forms.CharField(required=False)
     # Blank means "from 1" rather than an error, the same as a fresh workspace.
     advisory_id_start_at = forms.IntegerField(required=False, min_value=1, max_value=999_999)
 

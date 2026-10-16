@@ -99,9 +99,18 @@
             {% csrf_token %}
             <input type="hidden" name="action" value="update_advisory_ids">
             <c-cards.card flush>
-            <c-cards.header compact title="Security advisories" hint="The next advisory you publish will be {{ next_advisory_id }}." />
-            <c-forms.field horizontal label="Advisory id prefix" for="advisory-id-prefix" hint="New advisories are numbered prefix, year, then number. Leave empty to use {{ advisory_id_default_prefix }}. Published advisories keep their ids.">
-            <c-forms.input size="sm" id="advisory-id-prefix" name="advisory_id_prefix" value="{{ advisory_id_fields.advisory_id_prefix }}" placeholder="{{ advisory_id_default_prefix }}" maxlength="20" x-model="fields.advisory_id_prefix" />
+            {% comment %}Refreshed on its own after a rename, which changes the generated prefix, so unsaved edits in the fields below survive.{% endcomment %}
+            <div id="advisory-id-preview-wrapper"
+                 hx-get="{% url 'workspaces:team_general' team.key %}"
+                 hx-select="#advisory-id-preview"
+                 hx-trigger="refreshAdvisoryIdPreview from:body"
+                 hx-swap="innerHTML">
+                <div id="advisory-id-preview">
+                    <c-cards.header compact title="Security advisories" hint="The next advisory you publish will be {{ next_advisory_id }}. An empty prefix uses {{ advisory_id_default_prefix }}." />
+                </div>
+            </div>
+            <c-forms.field horizontal label="Advisory id prefix" for="advisory-id-prefix" hint="New advisories are numbered prefix, year, then number. Leave empty to use one made from the workspace name. Published advisories keep their ids.">
+            <c-forms.input size="sm" id="advisory-id-prefix" name="advisory_id_prefix" value="{{ advisory_id_fields.advisory_id_prefix }}" placeholder="Made from workspace name" maxlength="20" x-model="fields.advisory_id_prefix" />
             </c-forms.field>
             <c-forms.field horizontal label="Start numbering at" for="advisory-id-start-at" hint="Each year's numbers start here. Set it past the last number you issued elsewhere to avoid clashes.">
             <c-forms.input size="sm" id="advisory-id-start-at" name="advisory_id_start_at" type="number" min="1" max="999999" step="1" value="{{ advisory_id_fields.advisory_id_start_at }}" placeholder="1" x-model="fields.advisory_id_start_at" />
