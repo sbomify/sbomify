@@ -421,3 +421,83 @@ class TestInitialSuggestions:
 
     def test_workspace_examples_are_omitted_without_a_workspace(self) -> None:
         assert "api key" not in {item.get("query") for item in initial_suggestions(role="owner")}
+
+
+class TestUploadActions:
+    """Uploading happens on a component page, so the upload actions go through
+    the picker, which ends on that page with its upload dialog open."""
+
+    KINDS = {"Upload SBOM": "sbom", "Upload CBOM": "cbom", "Upload VEX": "vex", "Upload document": "document"}
+
+    def _destination(self, title):
+        return next(d for d in load_destinations() if d.title == title)
+
+    def _titles(self, query, role="member"):
+        return [r["title"] for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")]
+
+    @pytest.mark.parametrize("title", KINDS)
+    def test_roles_mirror_the_upload_gate(self, title):
+        """Derived from the tiers, not written out, so a tier change fails here
+        instead of quietly drifting: the page renders the uploader on MANAGE,
+        the API accepts on PUBLISH, and a VEX file also needs TRIAGE."""
+        from django.conf import settings
+
+        from sbomify.apps.core.authz import MANAGE, PUBLISH, TRIAGE
+
+        human_roles = {key for key, _label in settings.WORKSPACE_SUPPORTED_ROLES} - {"bot"}
+        expected = {r for r in human_roles if r in MANAGE and r in PUBLISH}
+        if self.KINDS[title] == "vex":
+            expected = {r for r in expected if r in TRIAGE}
+
+        assert set(self._destination(title).roles) == expected
+
+    @pytest.mark.parametrize(("title", "kind"), KINDS.items())
+    def test_each_points_at_the_picker_for_its_type(self, title, kind):
+        url = self._destination(title).resolve(workspace_key="AAAAAAAA")
+
+        assert url == f"{reverse('core:artifact_upload')}?type={kind}"
+
+    def test_vex_leads_with_the_upload_and_keeps_vulnerabilities(self):
+        titles = self._titles("vex")
+
+        assert titles[0] == "Upload VEX"
+        assert titles.index("Vulnerabilities") > 0
+
+    def test_typing_the_action_is_an_exact_match(self):
+        result = search_destinations("upload vex", role="member", workspace_key="AAAAAAAA")[0]
+
+        assert (result["title"], result["score"]) == ("Upload VEX", 100)
+
+    def test_cbom_ranks_the_upload_above_cryptography(self):
+        titles = self._titles("cbom")
+
+        assert titles.index("Upload CBOM") < titles.index("Cryptography")
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            ("openvex", "Upload VEX"),
+            ("csaf", "Upload VEX"),
+            ("import sbom", "Upload SBOM"),
+            ("upload document", "Upload document"),
+        ],
+    )
+    def test_the_words_people_type_find_the_upload(self, query, expected):
+        assert expected in self._titles(query)
+
+    def test_upload_offers_every_kind(self):
+        assert set(self.KINDS) <= set(self._titles("upload"))
+
+    @pytest.mark.parametrize("role", ["owner", "admin", "member"])
+    def test_upload_roles_see_every_kind(self, role):
+        assert set(self.KINDS) <= set(self._titles("upload", role=role))
+
+    @pytest.mark.parametrize("role", ["operator", "guest", ""])
+    def test_other_roles_see_none(self, role):
+        assert not set(self.KINDS) & set(self._titles("upload", role=role))
+
+    def test_an_operator_searching_vex_still_finds_where_it_triages(self):
+        titles = self._titles("vex", role="operator")
+
+        assert "Vulnerabilities" in titles
+        assert "Upload VEX" not in titles

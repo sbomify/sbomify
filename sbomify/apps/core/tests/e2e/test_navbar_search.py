@@ -1,10 +1,16 @@
 """The navigation palette keeps one selection and never scrolls the page behind it."""
 
+import os
+import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
+from django.urls import reverse
 from playwright.sync_api import Page, Route, expect
+
+from sbomify.apps.core.models import Component
 
 
 @pytest.fixture
@@ -260,3 +266,63 @@ def test_empty_workspace_dashboard_initializes_search(authenticated_page: Page) 
     page.get_by_role("tab", name="Terminal", exact=True).click()
     expect(page.locator("#repository-setup-command")).to_be_visible()
     assert errors == []
+
+
+@pytest.mark.django_db
+def test_an_upload_action_leads_to_the_next_step(authenticated_page: Page) -> None:
+    """Typing what to upload and pressing Enter lands on a page that says what to do next,
+    not on a list with no upload control."""
+    page = authenticated_page
+    page.goto("/products/")
+    search = page.get_by_role("combobox", name="Search products, components and pages")
+    panel = page.locator("#navbar-search-dropdown")
+    search.focus()
+    search.fill("vex")
+    expect(panel.get_by_role("option").first).to_contain_text("Upload VEX")
+    search.press("Enter")
+    page.wait_for_url(re.compile(r"/upload/\?type=vex$"))
+    expect(page.get_by_role("heading", name="Upload VEX", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="No components yet", exact=True)).to_be_visible()
+    expect(page.get_by_role("link", name="New component", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1280, 375])
+def test_the_upload_picker_filters_and_opens_the_dialog(
+    authenticated_page: Page, component_factory: Callable[..., Component], theme: str, width: int
+) -> None:
+    payments = component_factory("Payments service")
+    component_factory("Ledger")
+    component_factory("Policies", Component.ComponentType.DOCUMENT)
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 800})
+    page.goto(reverse("core:artifact_upload") + "?type=sbom")
+    table = page.get_by_role("table", name="Components")
+    expect(table.get_by_role("link")).to_have_count(2)
+    expect(table).not_to_contain_text("Policies")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if shots := os.environ.get("UPLOAD_PICKER_SHOTS"):
+        page.screenshot(path=f"{shots}/upload-picker-{theme}-{width}.png", full_page=True)
+    search = page.get_by_role("searchbox", name="Filter components")
+    expect(search).to_be_focused()
+    search.fill("zzz")
+    expect(page.get_by_role("heading", name="No components match", exact=True)).to_be_visible()
+    search.fill("pay")
+    expect(table.get_by_role("link")).to_have_count(1)
+    expect(page.get_by_text("1 component", exact=True)).to_be_visible()
+    search.press("Enter")
+    page.wait_for_url(re.compile(re.escape(reverse("core:component_details", args=[payments.pk])) + "#upload-sbom$"))
+    expect(page.get_by_role("dialog", name=re.compile(r"^Upload"))).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_a_single_candidate_opens_its_dialog_directly(
+    authenticated_page: Page, component_factory: Callable[..., Component]
+) -> None:
+    only = component_factory("Only component")
+    page = authenticated_page
+    page.goto(reverse("core:artifact_upload") + "?type=sbom")
+    page.wait_for_url(re.compile(re.escape(reverse("core:component_details", args=[only.pk])) + "#upload-sbom$"))
+    expect(page.get_by_role("dialog", name=re.compile(r"^Upload"))).to_be_visible()

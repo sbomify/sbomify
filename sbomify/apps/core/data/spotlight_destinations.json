@@ -10,10 +10,10 @@
     "     NOT use in the UI — someone searching 'api key' should land on tokens,",
     "     and someone searching '2fa' should land wherever that lives. Synonyms",
     "     are the whole point; the title is already matched separately.",
-    "  4. `roles` restricts visibility, and must match what the view itself",
-    "     allows: a destination the rail shows but search hides is worse than no",
-    "     entry at all. Omit for everyone; ['owner','admin'] for anything a guest",
-    "     must not see.",
+    "  4. `roles` restricts visibility, and must mirror the authz tier of the",
+    "     view or action the destination leads to (see core/authz.py): a",
+    "     destination the rail shows but search hides is worse than no entry at",
+    "     all. Omit only for pages every signed-in workspace member can use.",
     "  5. `args` names URL kwargs the resolver fills from the current session:",
     "     'workspace_key' is the only one supported today.",
     "",
@@ -260,20 +260,40 @@
       "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
     },
     {
-      "title": "Upload an SBOM",
-      "url_name": "core:components_dashboard",
+      "title": "Upload SBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "sbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["upload sbom", "import sbom", "add sbom", "new sbom", "sbom file", "cyclonedx", "spdx", "bom", "upload artifact", "upload file", "import"],
+      "roles": ["owner", "admin", "member"]
     },
     {
-      "title": "Upload a VEX",
-      "url_name": "core:components_dashboard",
+      "title": "Upload CBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "cbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import vex", "vex document", "suppress", "triage import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["cbom", "upload cbom", "import cbom", "crypto bom", "cryptography bom", "cryptographic inventory", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Upload VEX",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "vex"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["vex", "openvex", "csaf", "upload vex", "import vex", "add vex", "vex document", "vex statement", "not affected", "exploitability", "suppress", "triage import", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Upload document",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "document"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["upload document", "add document", "import document", "attach file", "pdf", "policy", "license file", "upload artifact", "upload file"],
+      "roles": ["owner", "admin", "member"]
     },
     {
       "title": "Vulnerabilities",

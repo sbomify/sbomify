@@ -1,0 +1,57 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}Upload {{ label }} · sbomify{% endblock %}
+{% block dashboard_content %}
+    <c-layout.frame id="artifact-upload-page" class="max-w-5xl">
+    <c-layout.page-header title="Upload {{ label }}" subtitle="{{ subtitle }}">
+    <c-buttons.ghost href="{% url 'core:components_dashboard' %}" size="sm"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to components</c-buttons.ghost>
+    </c-layout.page-header>
+    {% if rows %}
+        {% comment %}
+        The rows are server rendered; the filter only hides them. Enter follows
+        the first row still showing, so typing part of a name and pressing Enter
+        opens that component's upload dialog.
+        {% endcomment %}
+        <c-tables.shell x-data="{ q: '', names: [], init() { this.names = Array.from(this.$root.querySelectorAll('tr[data-name]')).map(r => r.dataset.name) }, get needle() { return this.q.trim().toLowerCase() }, get matched() { const n = this.needle; return this.names.reduce((acc, s, i) => { if (!n || s.includes(n)) acc.push(i); return acc; }, []) }, show(i) { return this.matched.includes(i) }, follow() { const i = this.matched[0]; const links = this.$root.querySelectorAll('tr[data-name] a[data-upload-target]'); if (i !== undefined && links[i]) window.location.assign(links[i].href) } }">
+        <c-tables.toolbar>
+        <c-forms.search-input size="sm" id="upload-target-search" label="Filter components" placeholder="Filter components" model="q" autofocus @keydown.enter.prevent="follow()" />
+        <c-slot name="right">
+        <c-tables.info aria-live="polite">
+        <strong x-text="matched.length">{{ rows|length }}</strong> <span x-text="matched.length === 1 ? 'component' : 'components'">component{{ rows|length|pluralize }}</span>
+        </c-tables.info>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table aria-label="Components">
+        <c-tables.head>
+        <c-tables.header-cell scope="col">Component</c-tables.header-cell>
+        <c-tables.header-cell scope="col">Products</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for row in rows %}
+                <c-tables.row data-name="{{ row.name|lower }}" x-show="show({{ forloop.counter0 }})">
+                <c-tables.cell>
+                {% if needs_sbom and not row.has_sbom %}
+                    <c-overview.record href="{{ row.url }}" title="{{ row.name }}" detail="No SBOM yet" data-upload-target />
+                {% else %}
+                    <c-overview.record href="{{ row.url }}" title="{{ row.name }}" data-upload-target />
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell muted>
+                {% if row.products %}
+                    {{ row.products|join:", " }}
+                {% else %}
+                    Not in a product
+                {% endif %}
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        <c-feedback.empty-state x-show="matched.length === 0" x-cloak size="sm" icon="fas fa-magnifying-glass" icon_variant="neutral" title="No components match" message="Try another name." />
+        </c-tables.shell>
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components yet" message="{{ empty_message }}">
+        <c-buttons.secondary href="{{ new_component_url }}"><i class="fas fa-plus" aria-hidden="true"></i>New component</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% endif %}
+    </c-layout.frame>
+{% endblock %}
