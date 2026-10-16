@@ -84,7 +84,13 @@ class TestWorkspaceSettingsSnapshot:
         team_with_business_plan,  # noqa: F811
         snapshot,
         width: int,
+        mocker: Any,
     ) -> None:
+        # The next advisory id carries the current year, which would move the baseline every January.
+        mocker.patch(
+            "sbomify.apps.security_advisories.models.SecurityAdvisory.allocate_tracking_id",
+            return_value="TESTBUSINESS-SA-2026-0001",
+        )
         self._shoot(authenticated_page, snapshot, width, f"/workspaces/{team_with_business_plan.key}/settings/general")
 
     def test_workspace_settings_members_snapshot(

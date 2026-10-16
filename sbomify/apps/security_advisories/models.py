@@ -44,6 +44,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Length
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
@@ -135,6 +136,32 @@ def detect_reference_type(identifier: str | None) -> str:
         if upper.startswith(prefix):
             return reference_type
     return ReferenceType.OTHER
+
+
+ADVISORY_ID_PREFIX_RE = re.compile(r"^[A-Z0-9]+(?:-[A-Z0-9]+)*$")
+
+
+def normalize_advisory_id_prefix(value: str) -> str:
+    """A workspace's advisory id prefix as stored, or raise ``ValidationError``.
+
+    Uppercased, like every other advisory scheme. A prefix that another
+    database already owns (``CVE``, ``GHSA``…) is refused: ``CVE-2026-0001``
+    would be classified, linked and searched as a real CVE.
+    """
+    prefix = value.strip().upper()
+    if not prefix:
+        return ""
+    if not ADVISORY_ID_PREFIX_RE.match(prefix):
+        raise ValidationError("Use letters, numbers and single hyphens, e.g. ACME-SA.")
+    if detect_reference_type(f"{prefix}-") != ReferenceType.OTHER:
+        raise ValidationError(f"{prefix} is used by another vulnerability database. Choose a different prefix.")
+    return prefix
+
+
+def default_advisory_id_prefix(team: Workspace) -> str:
+    """The generated prefix a workspace gets until it sets its own, e.g. ``ACME-SA``."""
+    token = re.sub(r"[^A-Z0-9]+", "", (team.name or "").upper())[:12] or "SA"
+    return f"{token}-SA"
 
 
 class SecurityAdvisory(models.Model):
@@ -266,26 +293,27 @@ class SecurityAdvisory(models.Model):
     def allocate_tracking_id(cls, team: Workspace, *, prefix: str | None = None, year: int | None = None) -> str:
         """Next per-team, per-year tracking id, e.g. ``ACME-SA-2026-0001``.
 
-        The sequence restarts each year, matching CVE and CSAF practice. Callers
-        must already hold a lock that serialises concurrent publishes for the team
-        (lock the ``Team`` row); there is no counter table to lock instead, and the
-        highest existing id for the year is the counter.
+        The prefix is the workspace's ``advisory_id_prefix``, or one derived from
+        its name when that is blank. The sequence restarts each year, matching
+        CVE and CSAF practice, and never goes below ``advisory_id_start_at``, so
+        a team moving from another platform can skip the numbers it already
+        issued there. Callers must already hold a lock that serialises concurrent
+        publishes for the team (lock the ``Team`` row); there is no counter table
+        to lock instead, and the highest existing id for the year is the counter.
         """
         year = year or timezone.now().year
-        token = (prefix or (team.name or "").upper()) or "SA"
-        token = re.sub(r"[^A-Z0-9]+", "", token.upper())[:12] or "SA"
-        stem = f"{token}-SA-{year}-"
+        prefix = prefix or team.advisory_id_prefix or default_advisory_id_prefix(team)
+        stem = f"{prefix}-{year}-"
 
-        # Descending order plus a lazy iterator means the first row is normally the
-        # only one fetched, rather than the whole year's ids. The loop continues
-        # only past ids whose tail is not a number, which the allocator never
-        # writes. Zero padding keeps the ordering numeric; a team that somehow
-        # published past 9999 in one year would read a stale maximum and hit the
-        # unique constraint, which fails loudly rather than reusing an id.
+        # Longest first, then descending, is numeric order for digit tails
+        # padded to at least four places, so 10000 sorts above 9999. A lazy
+        # iterator means the first row is normally the only one fetched, rather
+        # than the whole year's ids. The loop continues only past ids whose tail
+        # is not a number, which the allocator never writes.
         highest = 0
         existing = (
             cls.objects.filter(team=team, tracking_id__startswith=stem)
-            .order_by("-tracking_id")
+            .order_by(Length("tracking_id").desc(), "-tracking_id")
             .values_list("tracking_id", flat=True)
         )
         for value in existing.iterator():
@@ -293,7 +321,7 @@ class SecurityAdvisory(models.Model):
             if tail.isdigit():
                 highest = int(tail)
                 break
-        return f"{stem}{highest + 1:04d}"
+        return f"{stem}{max(highest + 1, team.advisory_id_start_at or 1):04d}"
 
     def clean(self) -> None:
         super().clean()
