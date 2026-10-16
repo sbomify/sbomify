@@ -49,9 +49,11 @@
         <c-feedback.empty-state x-show="matched.length === 0" x-cloak size="sm" icon="fas fa-magnifying-glass" icon_variant="neutral" title="No components match" message="Try another name." />
         </c-tables.shell>
     {% else %}
-        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components yet" message="{{ empty_message }}">
+        <c-cards.card flush>
+        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="{{ empty_title }}" message="{{ empty_message }}">
         <c-buttons.secondary href="{{ new_component_url }}"><i class="fas fa-plus" aria-hidden="true"></i>New component</c-buttons.secondary>
         </c-feedback.empty-state>
+        </c-cards.card>
     {% endif %}
     </c-layout.frame>
 {% endblock %}

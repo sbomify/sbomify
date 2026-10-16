@@ -27,6 +27,7 @@ class UploadKind:
     fragment: str
     label: str
     subtitle: str
+    empty_title: str
     empty_message: str
     needs_sbom: bool = False
 
@@ -38,6 +39,7 @@ UPLOAD_KINDS: dict[str, UploadKind] = {
         fragment="upload-sbom",
         label="SBOM",
         subtitle="Choose the component this SBOM is for.",
+        empty_title="No BOM components yet",
         empty_message="An SBOM belongs to a component. Create one, then upload it.",
     ),
     "cbom": UploadKind(
@@ -45,14 +47,15 @@ UPLOAD_KINDS: dict[str, UploadKind] = {
         fragment="upload-cbom",
         label="CBOM",
         subtitle="Choose the component this CBOM is for.",
+        empty_title="No BOM components yet",
         empty_message="A CBOM belongs to a component. Create one, then upload it.",
-        needs_sbom=True,
     ),
     "vex": UploadKind(
         component_type=Component.ComponentType.BOM,
         fragment="upload-vex",
         label="VEX",
         subtitle="Choose the component this VEX is for.",
+        empty_title="No BOM components yet",
         empty_message="A VEX belongs to a component. Create one, then upload it.",
         needs_sbom=True,
     ),
@@ -61,6 +64,7 @@ UPLOAD_KINDS: dict[str, UploadKind] = {
         fragment="upload-artifact",
         label="document",
         subtitle="Choose the document component this file is for.",
+        empty_title="No document components yet",
         empty_message="Documents belong to a document component. Create one, then upload.",
     ),
 }
@@ -110,6 +114,7 @@ def upload_targets(request: HttpRequest, kind: str) -> ServiceResult[dict[str, A
             "kind": kind,
             "label": upload_kind.label,
             "subtitle": upload_kind.subtitle,
+            "empty_title": upload_kind.empty_title,
             "empty_message": upload_kind.empty_message,
             "needs_sbom": upload_kind.needs_sbom,
             "new_component_url": f"{reverse('core:component_new')}?type={upload_kind.component_type}",

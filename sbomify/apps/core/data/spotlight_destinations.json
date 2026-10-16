@@ -265,7 +265,7 @@
       "query": {"type": "sbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["upload sbom", "import sbom", "add sbom", "new sbom", "sbom file", "cyclonedx", "spdx", "bom", "upload artifact", "upload file", "import"],
+      "keywords": ["upload sbom", "upload an sbom", "upload sboms", "sbom upload", "import sbom", "add sbom", "new sbom", "sboms", "sbom file", "cyclonedx", "spdx", "upload artifact", "upload file", "import"],
       "roles": ["owner", "admin", "member"]
     },
     {
@@ -274,7 +274,7 @@
       "query": {"type": "cbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["cbom", "upload cbom", "import cbom", "crypto bom", "cryptography bom", "cryptographic inventory", "upload artifact"],
+      "keywords": ["cbom", "upload cbom", "upload a cbom", "cbom upload", "import cbom", "crypto bom", "cryptography bom", "cryptographic inventory", "upload artifact"],
       "roles": ["owner", "admin", "member"]
     },
     {
@@ -283,7 +283,7 @@
       "query": {"type": "vex"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["vex", "openvex", "csaf", "upload vex", "import vex", "add vex", "vex document", "vex statement", "not affected", "exploitability", "suppress", "triage import", "upload artifact"],
+      "keywords": ["vex", "openvex", "csaf", "upload vex", "upload a vex", "vex upload", "upload vex file", "import vex", "add vex", "vex document", "vex statement", "not affected", "exploitability", "suppress", "triage import", "upload artifact"],
       "roles": ["owner", "admin", "member"]
     },
     {
@@ -292,7 +292,7 @@
       "query": {"type": "document"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["upload document", "add document", "import document", "attach file", "pdf", "policy", "license file", "upload artifact", "upload file"],
+      "keywords": ["upload document", "upload a document", "upload documents", "document upload", "documents", "add document", "import document", "attach file", "pdf", "policy", "license file", "upload artifact", "upload file"],
       "roles": ["owner", "admin", "member"]
     },
     {

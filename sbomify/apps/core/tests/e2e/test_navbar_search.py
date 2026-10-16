@@ -12,6 +12,8 @@ from playwright.sync_api import Page, Route, expect
 
 from sbomify.apps.core.models import Component
 
+pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
+
 
 @pytest.fixture
 def search_results() -> list[dict[str, Any]]:
@@ -282,7 +284,7 @@ def test_an_upload_action_leads_to_the_next_step(authenticated_page: Page) -> No
     search.press("Enter")
     page.wait_for_url(re.compile(r"/upload/\?type=vex$"))
     expect(page.get_by_role("heading", name="Upload VEX", exact=True)).to_be_visible()
-    expect(page.get_by_role("heading", name="No components yet", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="No BOM components yet", exact=True)).to_be_visible()
     expect(page.get_by_role("link", name="New component", exact=True)).to_be_visible()
 
 

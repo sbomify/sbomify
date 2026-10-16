@@ -103,11 +103,13 @@ class TestManyComponents:
         assert body.count("No SBOM yet") == 1
         assert "Upload VEX" in body
 
-    def test_sbom_keeps_name_order_and_does_not_ask_for_an_sbom(self, team, member_client):
+    @pytest.mark.parametrize("kind", ["sbom", "cbom"])
+    def test_keeps_name_order_and_does_not_ask_for_an_sbom(self, team, member_client, kind):
+        """Only a VEX applies to an SBOM. A CBOM stands on its own."""
         _bom(team, "Zulu", with_sbom=True)
         _bom(team, "Alpha")
 
-        response = member_client.get(UPLOAD_URL, {"type": "sbom"})
+        response = member_client.get(UPLOAD_URL, {"type": kind})
 
         assert [row["name"] for row in response.context["rows"]] == ["Alpha", "Zulu"]
         assert "No SBOM yet" not in response.content.decode()
@@ -133,7 +135,7 @@ class TestNoComponents:
 
         assert response.status_code == 200
         body = response.content.decode()
-        assert "No components yet" in body
+        assert "No BOM components yet" in body
         assert UPLOAD_KINDS["vex"].empty_message in body
         assert f"{reverse('core:component_new')}?type=bom" in body
         assert "#upload-" not in body
@@ -145,6 +147,8 @@ class TestNoComponents:
 
         assert response.status_code == 200
         body = response.content.decode()
+        assert "No document components yet" in body
+        assert "No BOM components yet" not in body
         assert UPLOAD_KINDS["document"].empty_message in body
         assert f"{reverse('core:component_new')}?type=document" in body
 
@@ -172,7 +176,7 @@ class TestIsolation:
         response = member_client.get(UPLOAD_URL, {"type": "sbom"})
 
         assert response.status_code == 200
-        assert "No components yet" in response.content.decode()
+        assert "No BOM components yet" in response.content.decode()
 
 
 class TestAccess:
@@ -290,7 +294,8 @@ class TestUploadTargetsService:
             assert result.value is not None
             return [row["name"] for row in result.value["rows"]]
 
-        vex, sbom = names("vex"), names("sbom")
+        vex, sbom, cbom = names("vex"), names("sbom"), names("cbom")
 
         assert vex == ["Alpha", "Charlie", "Bravo", "Delta"]
         assert sbom == ["Alpha", "Bravo", "Charlie", "Delta"]
+        assert cbom == sbom

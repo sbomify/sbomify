@@ -480,10 +480,30 @@ class TestUploadActions:
             ("csaf", "Upload VEX"),
             ("import sbom", "Upload SBOM"),
             ("upload document", "Upload document"),
+            ("upload a document", "Upload document"),
+            ("documents", "Upload document"),
+            ("sboms", "Upload SBOM"),
+            ("sbom upload", "Upload SBOM"),
+            ("vex upload", "Upload VEX"),
+            ("cbom upload", "Upload CBOM"),
         ],
     )
     def test_the_words_people_type_find_the_upload(self, query, expected):
         assert expected in self._titles(query)
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [("upload an sbom", "Upload SBOM"), ("upload a vex", "Upload VEX"), ("upload a cbom", "Upload CBOM")],
+    )
+    def test_the_old_titles_and_the_app_copy_still_lead(self, query, expected):
+        """These were the action titles before, and the app's own copy still says
+        "Upload an SBOM", so someone typing what they just read lands on it."""
+        assert self._titles(query)[0] == expected
+
+    def test_bom_offers_both_bom_uploads(self):
+        """Both titles contain "bom", so they tie on a title match and the
+        tiebreak is alphabetical: CBOM lists first. Accepted, as both show."""
+        assert self._titles("bom")[:2] == ["Upload CBOM", "Upload SBOM"]
 
     def test_upload_offers_every_kind(self):
         assert set(self.KINDS) <= set(self._titles("upload"))
