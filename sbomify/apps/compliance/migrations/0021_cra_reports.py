@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("compliance", "0019_alter_craassessment_harmonised_standard_applied_and_more"),
+        ("compliance", "0020_craexportpackage_signing_key_id"),
         ("core", "0030_user_email_case_insensitive_unique"),
         ("security_advisories", "0009_csaf_document_revision"),
         ("teams", "0049_rename_team_permissions"),
