@@ -1,8 +1,8 @@
-{# Upload artifact — a modal opened from the component header ⋮ menu (open-upload window event), not a body card. #}
+{# Upload artifact: a modal opened from the component header ⋮ menu (open-upload window event, optionally carrying the bomType to preselect), not a body card. #}
 <div class="contents"
      x-data="uploadDialog"
      @hashchange.window="openFromHash()"
-     @open-upload.window="uploadOpen = true"
+     @open-upload.window="openFromEvent($event)"
      @close-upload.window="uploadOpen = false"
      @keydown.escape.window="if (uploadOpen) uploadOpen = false">
     <c-modal id="upload-sbom" show="uploadOpen" title="{{ upload_title|default:'Upload Artifact' }}" icon="fas fa-upload" x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0, '{{ upload_bom_type|default:'sbom'|escapejs }}')">
