@@ -19,6 +19,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel, ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
+from sbomify.apps.billing.billing_processing import RESOURCE_TYPE_TO_LIMIT_FIELD, get_resource_limit
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
@@ -209,12 +210,9 @@ def _enforce_limit_under_lock(team_id: str, resource_type: str) -> tuple[bool, s
     except BillingPlan.DoesNotExist:
         return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
 
-    if resource_type == "product":
-        max_allowed = plan.max_products
-    elif resource_type == "component":
-        max_allowed = plan.max_components
-    else:
+    if resource_type not in RESOURCE_TYPE_TO_LIMIT_FIELD:
         return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+    max_allowed = get_resource_limit(plan, resource_type)
 
     if plan.key == "enterprise" or max_allowed is None:
         return True, "", None
@@ -601,12 +599,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             except BillingPlan.DoesNotExist:
                 log.warning("Target plan not found for scheduled downgrade, skipping check")
             else:
-                if resource_type == "product":
-                    max_allowed = target_plan.max_products
-                elif resource_type == "component":
-                    max_allowed = target_plan.max_components
-                else:
-                    max_allowed = None
+                max_allowed = get_resource_limit(target_plan, resource_type)
 
                 # Check if creating this resource would exceed target plan limits
                 if max_allowed is not None and (get_team_asset_count(team_id, resource_type) + 1) > max_allowed:
@@ -644,14 +637,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
 
     # Get current count and limits
-    if resource_type == "product":
-        current_count = get_team_asset_count(team_id, "product")
-        max_allowed = plan.max_products
-    elif resource_type == "component":
-        current_count = get_team_asset_count(team_id, "component")
-        max_allowed = plan.max_components
-    else:
+    if resource_type not in RESOURCE_TYPE_TO_LIMIT_FIELD:
         return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+    current_count = get_team_asset_count(team_id, resource_type)
+    max_allowed = get_resource_limit(plan, resource_type)
 
     # Enterprise plan or None (unlimited) values have no limits
     if plan.key == "enterprise" or max_allowed is None:
