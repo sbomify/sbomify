@@ -89,3 +89,5 @@ class TestDesignSystemView:
 
         assert html.count('id="fix-prompt-text"') == 1
         assert html.count('id="bulk-fix-prompt-demo-text"') == 1
+        assert html.count('id="triage-prompt-text"') == 1
+        assert html.count('id="bulk-triage-prompt-demo-text"') == 1
