@@ -529,10 +529,6 @@ class Workspace(models.Model):
         return self.get_company_nda_document() is not None
 
 
-# The old name answers until every open branch has re-run bin/rename_to_workspace.py.
-Team = Workspace  # rename-to-workspace: keep
-
-
 class Member(models.Model):
     class Meta:
         db_table = "workspaces_members"
