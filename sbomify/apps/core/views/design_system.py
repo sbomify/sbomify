@@ -65,7 +65,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
 
 
 def _fix_prompt_demo() -> dict[str, object]:
-    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt, render_triage_prompt
 
     fix: dict[str, object] = {
         "advisory": "CVE-2026-10001",
@@ -80,17 +80,23 @@ def _fix_prompt_demo() -> dict[str, object]:
         "version": "1.0.0",
         "ecosystem": "pypi",
         "purl": "pkg:pypi/example-parser@1.0.0",
+        "vex_purl": "pkg:pypi/example-parser@1.0.0",
         "fixed": "1.0.4",
         "references": [],
         "component": "api-gateway",
+        "component_id": "demo0000001",
         "sbom_version": "2.4.1",
     }
     fix["prompt"] = render_fix_prompt(fix)
+    fix["triage_prompt"] = render_triage_prompt(fix)
     return fix
 
 
 def _bulk_fix_prompt_demo() -> dict[str, object]:
-    from sbomify.apps.vulnerability_scanning.services.bulk_fix_prompt import render_bulk_fix_prompt
+    from sbomify.apps.vulnerability_scanning.services.bulk_fix_prompt import (
+        render_bulk_fix_prompt,
+        render_bulk_triage_prompt,
+    )
 
     advisory = {
         "aliases": [],
@@ -99,9 +105,11 @@ def _bulk_fix_prompt_demo() -> dict[str, object]:
         "malicious": False,
         "title": "Request parser vulnerability",
         "references": [],
+        "vex_purl": "pkg:pypi/example-parser@1.0.0",
     }
     components = [
         {
+            "id": "demo0000001",
             "name": "api-gateway",
             "sbom_version": "2.4.1",
             "repositories": [{"url": "https://github.com/example/api-gateway", "source": "named in this SBOM"}],
@@ -124,6 +132,7 @@ def _bulk_fix_prompt_demo() -> dict[str, object]:
     ]
     fix: dict[str, object] = {"components": components, "total": 2, "scope": "", "vulnerabilities": 2, "packages": 1}
     fix["prompt"] = render_bulk_fix_prompt(fix)
+    fix["triage_prompt"] = render_bulk_triage_prompt(fix)
     return fix
 
 
