@@ -124,6 +124,15 @@ def build_component_security_picture(
                     # package_scopes keeps two groupIds with one artifact name apart by it.
                     "purl": finding["purl"],
                 },
+                # The stored row exactly, so a reader of the run's result finds this finding without re-matching.
+                "origin": (
+                    str(finding["run_id"]),
+                    finding["advisory_id"],
+                    finding["package_name"],
+                    finding["package_version"],
+                    finding["ecosystem"],
+                    finding["purl"],
+                ),
             }
         )
     findings: list[dict[str, Any]] = []
@@ -160,9 +169,11 @@ def build_component_security_picture(
         ]
         scopes = package_scopes([*indexed, *row_components])
         sources: dict[tuple[str, tuple[str, ...]], set[str]] = {}
+        origins: dict[tuple[str, tuple[str, ...]], set[tuple[str, ...]]] = {}
         for occurrence, scope in zip(indexed, scopes[: len(indexed)], strict=True):
             for identifier in (occurrence["id"], *occurrence["aliases"]):
                 sources.setdefault((identifier.lower(), scope), set()).add(occurrence["plugin"])
+                origins.setdefault((identifier.lower(), scope), set()).add(occurrence["origin"])
         # A completed run that stored no result examined nothing it can vouch for,
         # so only a readable summary or listed findings count as an assessment.
         examined = [
@@ -203,9 +214,13 @@ def build_component_security_picture(
             row["suppressed"] = bool(row.get("vex_suppressed"))
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
             reported_by: set[str] = set()
+            found_in: set[tuple[str, ...]] = set()
             for alias in (row["id"], *row["aliases"]):
                 reported_by |= sources.get((alias.lower(), scope), set())
+                found_in |= origins.get((alias.lower(), scope), set())
             row["sources"] = sorted(reported_by - {""})
+            # The stored findings the row merged, each as (run, advisory, package, version, ecosystem, purl).
+            row["origins"] = sorted(found_in)
             findings.append(
                 {
                     **row,

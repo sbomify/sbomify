@@ -22,14 +22,20 @@ def sbom_with_findings(sbom_component_details, mocker):
     packages, severities, CVSS scores and references the table renders. The
     lists read projected rows, so the run is synced as a scan would be.
     """
-    from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
-    from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
     sbom = SBOM.objects.get(component=sbom_component_details)
     # This fixture creates database rows, not an uploaded artifact. Keep the
     # detail page's lazy crypto inventory from waiting on live object storage.
     mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
+    _scan_with_findings(sbom)
+    return sbom
+
+
+def _scan_with_findings(sbom):
+    """The second provider's run, synced as a scan completing would sync it."""
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
     register_plugin("dependency_track")
     run = AssessmentRun.objects.create(
@@ -106,7 +112,6 @@ def sbom_with_findings(sbom_component_details, mocker):
         },
     )
     sync_findings(run, statements=[])
-    return sbom
 
 
 def _pad_findings(sbom, *, in_triage_last: bool = False):
@@ -573,3 +578,40 @@ def test_the_broadcast_refreshes_the_panel_without_losing_the_readers_place(
     # And lands them back on it.
     expect(panel.locator('[aria-current="page"]')).to_have_text("2")
     expect(panel.locator("#vulnerabilities-page-size")).to_have_value("10")
+
+
+@pytest.mark.django_db
+def test_the_bulk_fix_prompt_button_follows_the_panels_refresh(authenticated_page, sbom_component_details, mocker):
+    """The button sits in the toolbar, which a refresh does not re-render: the refresh swaps its slot.
+
+    The panel opens before the scan lists anything, the refresh after the scan brings
+    the button, and the refresh after every finding is closed takes it away again.
+    """
+    from playwright.sync_api import expect
+
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.models import Finding
+
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
+    sbom = SBOM.objects.get(component=sbom_component_details)
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    panel = _open_component_panel(page, sbom)
+    button = panel.get_by_role("button", name="Fix prompt for all")
+    expect(panel).to_be_visible()
+    expect(button).to_have_count(0)
+
+    _scan_with_findings(sbom)
+    page.evaluate("document.body.dispatchEvent(new CustomEvent('refresh-assessments'))")
+    expect(button).to_be_visible()
+    _settled(page)
+    button.click()
+    prompt = page.locator("#fix-prompt-text")
+    expect(prompt).to_contain_text("Fix 3 vulnerabilities in 2 packages for the Test BOM Component component.")
+    expect(prompt).to_contain_text("Package: requests 2.31.0")
+    page.keyboard.press("Escape")
+    expect(prompt).not_to_be_visible()
+
+    Finding.objects.filter(sbom=sbom).update(vex_suppressed=True, vex_state="not_affected")
+    page.evaluate("document.body.dispatchEvent(new CustomEvent('refresh-assessments'))")
+    expect(button).to_have_count(0)

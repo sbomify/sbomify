@@ -14,7 +14,7 @@ the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
 <c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
-{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals, the version options and the results, never the rest of the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
+{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals, the version options, the Fix prompt for all button and the results, never the rest of the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
 <div id="{{ browser_target }}"
      class="flex flex-col gap-4"
      x-data="{ refreshTimer: null }"
@@ -25,7 +25,7 @@ two HTMX roots the view answers.
          hx-sync="#{{ browser_target }}-form:queue last"
          hx-target="#{{ browser_target }}"
          hx-swap="none"
-         hx-select-oob="#{{ browser_target }}-summary,#{{ browser_target }}-version,#{{ results_target }}"
+         hx-select-oob="#{{ browser_target }}-summary,#{{ browser_target }}-version,#{{ browser_target }}-bulk,#{{ results_target }}"
          hx-on::config-request="event.detail.path = window.location.pathname + window.location.search"></div>
     <div id="{{ browser_target }}-summary" class="flex flex-col gap-4">
         <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
@@ -170,6 +170,12 @@ two HTMX roots the view answers.
                 {% if data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
         </c-forms.select>
         <c-slot name="right">
+        {% comment %}Its own refresh target: a scan that lists the first vulnerabilities shows the button, and one that leaves nothing open hides it.{% endcomment %}
+        <div id="{{ browser_target }}-bulk" class="contents">
+            {% if data.summary.occurrences %}
+                <c-vulnerabilities.bulk-fix-prompt-button url="{{ data.bulk_fix_prompt_url }}" />
+            {% endif %}
+        </div>
         <noscript>
             <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
         </noscript>
