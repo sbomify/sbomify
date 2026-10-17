@@ -79,6 +79,7 @@ class ExportPackageSchema(Schema):
     content_hash: str
     manifest: dict[str, Any]
     created_at: datetime
+    signed: bool = False
 
 
 class SBOMStatusSchema(Schema):

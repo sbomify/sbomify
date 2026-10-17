@@ -160,3 +160,30 @@ def log_assessment_stale_transition(
         "reason": reason,
     }
     _LOG.info("cra.assessment.stale_transition %s", _payload_json(payload), extra=payload)
+
+
+def log_export_created(
+    *,
+    user: User | None,
+    assessment_id: str,
+    team_id: int,
+    package_id: str,
+    content_hash: str,
+    signing_key_id: str,
+) -> None:
+    """Record a built CRA bundle, signed or not.
+
+    ``content_hash`` is the SHA-256 of the ZIP bytes, so the trail binds a
+    downloaded bundle to the state it was built from. ``signing_key_id`` is
+    empty for an unsigned bundle.
+    """
+    payload = {
+        "event": "cra.export.created",
+        "user_id": getattr(user, "id", None),
+        "team_id": team_id,
+        "assessment_id": assessment_id,
+        "package_id": package_id,
+        "content_hash": content_hash,
+        "signing_key_id": signing_key_id,
+    }
+    _LOG.info("cra.export.created %s", _payload_json(payload), extra=payload)
