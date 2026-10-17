@@ -2,7 +2,9 @@ export const MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
 export const ALLOWED_MIME_TYPES = ['application/json', 'text/xml', 'application/xml'];
 export const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx', '.xml'];
 
-export type UploadBomType = 'sbom' | 'vex' | 'cbom'
+import type { UploadBomType } from '../../core/js/components/upload-dialog'
+
+export type { UploadBomType }
 
 export function bomTypeLabel(bomType: UploadBomType): string {
     if (bomType === 'vex') return 'VEX'

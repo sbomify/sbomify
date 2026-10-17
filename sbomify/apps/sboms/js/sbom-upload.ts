@@ -1,6 +1,8 @@
+import type { AlpineComponent } from 'alpinejs'
 import Alpine from '../../core/js/alpine-init'
 import { showSuccess, showError } from '../../core/js/alerts'
 import { getCsrfToken } from '../../core/js/csrf'
+import { resolveRequestedBomType, type UploadRequest } from '../../core/js/components/upload-dialog'
 import { bomTypeLabel, buildPreviewEndpoint, buildUploadEndpoint, validateUploadFile, type UploadBomType } from './sbom-upload-helpers'
 
 interface VexPreview {
@@ -21,10 +23,15 @@ interface SbomUploadState {
     isPreviewing: boolean
     componentId: string
     bomType: UploadBomType
+    initialBomType: UploadBomType
+    // Owned by the enclosing uploadDialog scope; a fresh object per open.
+    uploadRequest?: UploadRequest | null
     preview: VexPreview | null
     pendingFile: File | null
     abortController: AbortController | null
     readonly bomTypeLabel: string
+    init: () => void
+    applyUploadRequest: (request: UploadRequest | null | undefined) => void
     handleDrop: (event: DragEvent) => void
     handleFileSelect: (event: Event) => void
     handleFile: (file: File) => void
@@ -37,16 +44,28 @@ interface SbomUploadState {
 }
 
 export function registerSbomUpload(): void {
-    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false, initialBomType: UploadBomType = 'sbom'): SbomUploadState => ({
+    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false, initialBomType: UploadBomType = 'sbom'): AlpineComponent<SbomUploadState> => ({
         expanded: !hasSboms,
         isDragOver: false,
         isUploading: false,
         isPreviewing: false,
         componentId: componentId,
         bomType: initialBomType,
+        initialBomType,
         preview: null,
         pendingFile: null,
         abortController: null,
+
+        init(): void {
+            // The dialog may have opened from a deep link before this body
+            // initialised, so apply the current request as well as later ones.
+            this.applyUploadRequest(this.uploadRequest)
+            this.$watch('uploadRequest', (request: UploadRequest | null | undefined) => this.applyUploadRequest(request))
+        },
+
+        applyUploadRequest(request: UploadRequest | null | undefined): void {
+            this.bomType = resolveRequestedBomType(this, request, this.initialBomType)
+        },
 
         get bomTypeLabel(): string {
             return bomTypeLabel(this.bomType)
