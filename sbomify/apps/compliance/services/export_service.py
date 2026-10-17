@@ -235,11 +235,13 @@ def _article_14_reporting_readme() -> str:
         "Article 16 designates ENISA to operate the Single Reporting Platform "
         "(SRP). The SRP consumes the notifications above and routes them to "
         "the competent CSIRTs automatically. Submission interface:\n\n"
-        "- EC portal: https://digital-strategy.ec.europa.eu/en/policies/cra-reporting\n\n"
-        "sbomify does not yet auto-submit on the operator's behalf — templates "
-        "are provided for manual filing. An automated pipeline will land once "
-        "the SRP technical interface is publicly documented (tracked against "
-        "the 2026-09-11 obligation date).\n"
+        "- EC portal: https://digital-strategy.ec.europa.eu/en/policies/cra-reporting\n"
+        "- ENISA portal: https://portal.cra-srp.enisa.europa.eu/\n\n"
+        "The SRP accepts notifications through its web portal only, so sbomify "
+        "does not submit on the operator's behalf. In sbomify, CRA reports "
+        "(Compliance, Reports) lay each notification out field by field as the "
+        "portal asks for it, track the deadlines above and record each filing "
+        "with its ENISA reference.\n"
     )
 
 

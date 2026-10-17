@@ -1,0 +1,10 @@
+CRA {{ stage_label|lower }} {% if overdue %}overdue{% else %}due soon{% endif %}
+
+The {{ stage_label|lower }} for {{ report.product.name }} {% if overdue %}was{% else %}is{% endif %} due on {{ due|date:"j M Y, H:i" }} UTC.
+
+File it in ENISA's Single Reporting Platform, then record the filing in sbomify so the next deadline is tracked.
+
+Open the report: {{ base_url }}{% url 'compliance:cra_report_detail' report.id %}
+
+Cheers,
+The sbomify Team

@@ -7,4 +7,4 @@ class ComplianceConfig(AppConfig):
     label = "compliance"
 
     def ready(self) -> None:
-        from . import checks, signals  # noqa: F401
+        from . import checks, signals, tasks  # noqa: F401

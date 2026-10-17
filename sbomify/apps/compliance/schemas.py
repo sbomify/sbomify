@@ -137,3 +137,69 @@ class SignatureResponseSchema(Schema):
     image: str
     signed_at: str | None = None
     is_signed: bool
+
+
+class CRAReportCreateSchema(Schema):
+    kind: str
+    product_id: str
+    aware_at: datetime
+    advisory_id: str | None = None
+    occurred_at: datetime | None = None
+    measure_available_at: datetime | None = None
+
+
+class CRAReportUpdateSchema(Schema):
+    """Only what is sent changes. A value sent empty is cleared."""
+
+    values: dict[str, Any] | None = None
+    aware_at: datetime | None = None
+    occurred_at: datetime | None = None
+    measure_available_at: datetime | None = None
+
+
+class CRAFilingCreateSchema(Schema):
+    stage: str
+    srp_reference: str = ""
+    filed_at: datetime | None = None
+
+
+class CRAFilingSchema(Schema):
+    id: str
+    stage: str
+    srp_reference: str
+    filed_at: datetime
+
+
+class CRANextDueSchema(Schema):
+    stage: str
+    label: str
+    due: datetime | None
+    overdue: bool
+
+
+class CRAReportSchema(Schema):
+    id: str
+    kind: str
+    product_id: str
+    product_name: str
+    advisory_id: str | None
+    aware_at: datetime
+    occurred_at: datetime | None
+    measure_available_at: datetime | None
+    values: dict[str, Any]
+    filings: list[CRAFilingSchema]
+    next_due: CRANextDueSchema | None
+
+
+class SRPFieldSchema(Schema):
+    id: str
+    label: str
+    value: str
+    max_length: int | None
+    required: bool
+    missing: bool
+
+
+class SRPLayoutSchema(Schema):
+    stage: str
+    fields: list[SRPFieldSchema]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -679,3 +680,149 @@ class CRAScopeScreening(models.Model):
     def __str__(self) -> str:
         applies = "in scope" if self.cra_applies else "out of scope"
         return f"CRA Scope Screening for {self.product} ({applies})"
+
+
+class CRAReport(models.Model):
+    """One CRA Article 14 notification for one product, prepared for ENISA's portal.
+
+    The values the portal asks for live in ``srp_fields``, keyed by the ids in
+    ``reporting.SRP_FIELDS``, so a change to ENISA's form needs no migration.
+    The dates are columns because the deadlines are computed from them. The
+    report is editable until its final report is filed.
+    """
+
+    class Kind(models.TextChoices):
+        VULNERABILITY = "vulnerability", "Actively exploited vulnerability"
+        INCIDENT = "incident", "Severe incident"
+
+    class Meta:
+        db_table = "compliance_cra_reports"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["advisory", "product"],
+                condition=models.Q(advisory__isnull=False),
+                name="cra_report_one_per_advisory_product",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kind="incident") | models.Q(advisory__isnull=False),
+                name="cra_report_vulnerability_has_advisory",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    team = models.ForeignKey(
+        "teams.Workspace", on_delete=models.CASCADE, related_name="cra_reports", db_column="workspace_id"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    advisory = models.ForeignKey(
+        "security_advisories.SecurityAdvisory",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="cra_reports",
+    )
+    product = models.ForeignKey("core.Product", on_delete=models.CASCADE, related_name="cra_reports")
+    aware_at = models.DateTimeField()
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    measure_available_at = models.DateTimeField(null=True, blank=True)
+    srp_fields = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"CRA report for {self.product} ({self.kind})"
+
+    def filed_stages(self) -> dict[str, Any]:
+        """Stage to the time it was filed, for the stages filed once."""
+        return {f.stage: f.filed_at for f in self.filings.all() if f.stage != "intermediate"}
+
+    def next_due(self, now: Any = None) -> Any:
+        from .reporting import next_due
+
+        return next_due(
+            self.kind,
+            self.aware_at,
+            self.measure_available_at,
+            filed=self.filed_stages(),
+            now=now or timezone.now(),
+        )
+
+    @property
+    def is_closed(self) -> bool:
+        return "final_report" in self.filed_stages()
+
+
+class _AppendOnlyQuerySet(models.QuerySet["CRAReportFiling"]):
+    """Bulk ``update()`` and ``delete()`` bypass the model methods, so they refuse too."""
+
+    def update(self, **kwargs: Any) -> int:
+        raise ValidationError("Filings are append-only.")
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        raise ValidationError("Filings are append-only.")
+
+
+class CRAReportFiling(models.Model):
+    """What was filed in ENISA's portal, at which stage, with its reference. Append-only."""
+
+    class Stage(models.TextChoices):
+        EARLY_WARNING = "early_warning", "Early warning"
+        NOTIFICATION = "notification", "Notification"
+        INTERMEDIATE = "intermediate", "Intermediate report"
+        FINAL_REPORT = "final_report", "Final report"
+        USERS_INFORMED = "users_informed", "Users informed"
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        db_table = "compliance_cra_report_filings"
+        ordering = ["filed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["report", "stage"],
+                condition=~models.Q(stage="intermediate"),
+                name="cra_report_filing_once_per_stage",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="filings")
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    srp_reference = models.CharField(max_length=100, blank=True, default="")
+    filed_at = models.DateTimeField(default=timezone.now)
+    filed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.get_stage_display()} for {self.report_id}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValidationError("Filings are append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        raise ValidationError("Filings are append-only.")
+
+
+class CRAReportReminder(models.Model):
+    """One row per reminder email sent, so a message delivered twice mails once."""
+
+    class Meta:
+        db_table = "compliance_cra_report_reminders"
+        constraints = [
+            models.UniqueConstraint(fields=["report", "stage", "threshold"], name="cra_report_reminder_once"),
+        ]
+
+    report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="reminders")
+    stage = models.CharField(max_length=20)
+    # "soon" is six hours before the deadline, "due" is the deadline itself.
+    threshold = models.CharField(max_length=10)
+    sent_at = models.DateTimeField(auto_now_add=True)

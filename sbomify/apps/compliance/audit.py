@@ -187,3 +187,22 @@ def log_export_created(
         "signing_key_id": signing_key_id,
     }
     _LOG.info("cra.export.created %s", _payload_json(payload), extra=payload)
+
+
+def log_cra_report_event(
+    event: str,
+    *,
+    user: User | None,
+    team_id: int,
+    report_id: str,
+    detail: dict[str, Any],
+) -> None:
+    """Record a CRA Article 14 report write: created, edited, filed or deleted."""
+    payload = {
+        "event": event,
+        "user_id": getattr(user, "id", None),
+        "team_id": team_id,
+        "report_id": report_id,
+        "detail": detail,
+    }
+    _LOG.info("%s %s", event, _payload_json(payload), extra=payload)

@@ -30,11 +30,15 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_plan = current_team.get("billing_plan")
         has_access = check_cra_access(billing_plan_key=billing_plan)
 
+        from sbomify.apps.compliance.services.report_service import get_workspace
+        from sbomify.apps.compliance.views.cra_reports import cra_tabs
+
+        tabs = cra_tabs(request, get_workspace(team_id), "assessments")
         if not has_access:
             return render(
                 request,
                 "compliance/cra_product_list.html.j2",
-                {"assessments": [], "has_cra_access": False, "current_team": current_team},
+                {"assessments": [], "has_cra_access": False, "current_team": current_team, "tabs": tabs},
             )
 
         from sbomify.apps.compliance.services.wizard_service import (
@@ -54,5 +58,6 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "available_products": products.value if products.ok else [],
                 "has_cra_access": has_access,
                 "current_team": current_team,
+                "tabs": tabs,
             },
         )
