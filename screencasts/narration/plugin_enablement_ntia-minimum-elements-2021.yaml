@@ -1,0 +1,23 @@
+# Narration for the plugin_enablement_ntia-minimum-elements-2021 clip.
+#
+# Every plugin clip defines the same three beat keys; only the copy differs.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      The NTIA minimum elements are the closest thing there is to an agreed
+      definition of an acceptable SBOM.
+
+  what_it_does:
+    text: >-
+      Seven data fields, including supplier, component name, version, and the
+      dependency relationships between them. [pause] This plugin checks every
+      SBOM against them and reports what's missing, rather than leaving you to
+      find out when a customer rejects the file.
+
+  outro:
+    text: >-
+      It's the cheapest quality gate available. An SBOM that fails here will
+      fail everywhere else too.

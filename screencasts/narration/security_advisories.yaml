@@ -1,0 +1,45 @@
+# Narration for screencasts/security_advisories.py
+#
+# Thesis: an advisory is the outbound half of vulnerability handling. Scanning
+# tells you what you have; an advisory is how you tell your customers, and the
+# timeline is what proves you handled it.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Scanning tells you what's wrong with your software. An advisory is how
+      you tell everyone else.
+
+  navigate:
+    text: >-
+      It's the outbound half of vulnerability handling, and under the Cyber
+      Resilience Act it stops being optional.
+
+  the_list:
+    text: >-
+      Two here, and they show the shape of the whole process. One published and
+      resolved, which is the finished story a customer reads, and one still in
+      progress, which is the page a team actually works in.
+
+  open_advisory:
+    text: >-
+      This is the one being worked.
+
+  detail:
+    text: >-
+      Severity and status at the top, then the products it actually affects.
+      [pause] That link matters, because it's drawn from the releases you
+      published rather than typed in by hand, so it stays honest.
+
+  timeline:
+    text: >-
+      Underneath is the timeline, and it's the part worth caring about. Every
+      update, dated, in the order it happened.
+
+  outro:
+    text: >-
+      When a regulator or a customer asks how you handled something, this is
+      the answer. [pause] Not a recollection, but a record you were keeping
+      anyway.

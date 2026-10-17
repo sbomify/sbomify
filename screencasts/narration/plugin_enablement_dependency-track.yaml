@@ -1,0 +1,23 @@
+# Narration for the plugin_enablement_dependency-track clip.
+#
+# Every plugin clip defines the same three beat keys; only the copy differs.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      If you already run Dependency-Track, sbomify does not ask you to abandon
+      it.
+
+  what_it_does:
+    text: >-
+      This plugin forwards your SBOMs to your own Dependency-Track instance and
+      pulls the findings back, so the analysis keeps happening where your team
+      already tuned it. [pause] You point it at your server and give it an API
+      key.
+
+  outro:
+    text: >-
+      The result is one place to look. Dependency-Track carries on doing the
+      scanning, and sbomify carries on being the thing you hand to a customer.
