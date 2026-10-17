@@ -46,7 +46,7 @@
     "jsbarcode": "^3.12.3",
     "license-expressions": "^0.8.0",
     "marked": "^18.1.1",
-    "postcss": "^8.5.29",
+    "postcss": "^8.5.30",
     "signature_pad": "^5.1.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
@@ -69,7 +69,7 @@
     "@typescript-eslint/parser": "^8.71.2",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-prettier": "^5.5.7",
     "globals": "^17.13.0",
     "markdownlint-cli": "0.49.1",
     "prettier": "^3.9.10"
