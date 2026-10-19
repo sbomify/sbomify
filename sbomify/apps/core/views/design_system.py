@@ -107,7 +107,6 @@ def _vex_submission_demos() -> list[dict[str, object]]:
         "already_suppressed": 0,
         "unmatched": 0,
         "ignored": [],
-        "decide_url": "#vex-submission",
     }
     return [
         {
@@ -119,6 +118,7 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "format_label": "Decisions",
             "submitted_by": "Jane Doe",
             "submitted_via": "Claude fix agent",
+            "summary": '1 ruling · hides 1 open vulnerability · Jane Doe via "Claude fix agent"',
             "context": "example-parser is only imported by the release script, which never ships.\n\nNo code change.",
             "fix_reference": "https://github.com/example/api-gateway/pull/42",
             "fix_url": "https://github.com/example/api-gateway/pull/42",
@@ -141,6 +141,7 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "format_label": "OpenVEX",
             "submitted_by": "Sam Smith",
             "submitted_via": "",
+            "summary": "1 ruling · hides nothing · 1 not included · Sam Smith",
             "context": "",
             "fix_reference": "",
             "fix_url": "",
