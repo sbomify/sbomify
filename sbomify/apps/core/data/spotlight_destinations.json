@@ -285,6 +285,16 @@
       "roles": ["owner", "admin", "member", "operator"]
     },
     {
+      "title": "Review VEX",
+      "url_name": "vulnerability_scanning:vulnerability_scans",
+      "section": "actions",
+      "icon": "fa-clipboard-check",
+      "keywords": ["approve vex", "vex approval", "approval queue", "review queue", "pending vex", "agent vex", "ai agent", "vex submissions", "reject vex"],
+      "args": ["workspace_key"],
+      "query": {"view": "review"},
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
       "title": "Cryptography",
       "url_name": "sboms:workspace_crypto",
       "section": "navigate",
