@@ -1210,6 +1210,15 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Fix prompt for all" />
     <c-vulnerabilities.bulk-fix-prompt :fix="bulk_fix_prompt_demo" code_id="bulk-fix-prompt-demo-text" triage_code_id="bulk-triage-prompt-demo-text" />
     </c-cards.card>
+    <h3 id="vex-submission" class="text-lg font-semibold text-text">VEX submission</h3>
+    <p class="text-sm text-text-muted m-0">
+        A VEX ruling waiting for approval on the Review tab: an AI agent's decisions with its notes and fix link, then an
+        upload sent for approval with a statement the queue could not read. Shown read-only here; with can_decide the
+        footer carries the note and the Approve and Reject buttons.
+    </p>
+    {% for item in vex_submission_demos %}
+        <c-vulnerabilities.vex-submission :item="item" target="#vex-submission" />
+    {% endfor %}
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />

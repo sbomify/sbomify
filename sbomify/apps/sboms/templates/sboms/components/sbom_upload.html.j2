@@ -95,10 +95,15 @@
                 </template>
             </ul>
         </template>
+        <c-forms.checkbox id="upload-send-for-review" x-model="sendForReview" class="mb-3">
+        Send for approval first. Nothing changes until someone approves it.
+        </c-forms.checkbox>
         <div class="flex gap-2 justify-end">
             <c-buttons.secondary @click="cancelPreview()">Cancel</c-buttons.secondary>
             <c-buttons.primary @click="applyPreview()">
-            <i class="fas fa-upload mr-1"></i>Apply this VEX
+            <i class="fas mr-1"
+               :class="sendForReview ? 'fa-paper-plane' : 'fa-upload'"
+               aria-hidden="true"></i><span x-text="sendForReview ? 'Send for approval' : 'Apply this VEX'">Apply this VEX</span>
             </c-buttons.primary>
         </div>
         </c-cards.inset>

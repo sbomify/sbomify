@@ -1,0 +1,126 @@
+{% comment %}
+One VEX ruling waiting for a person to approve it, from an AI agent or from an
+upload sent for approval. It leads with the submitter's notes, because that is
+what a reviewer reads first, then the rulings, then what approving changes, so
+the decision sits under the evidence for it.
+
+item is a row from services/vex_review.submission_row. can_decide renders the
+decision form in the footer; without it the card is read-only. target is the
+selector the form's response replaces, the review panel the card sits in. The
+note is optional for both outcomes and is kept on the record.
+
+Statements the queue could not turn into a ruling are listed, not hidden: the
+reviewer is approving what the card shows, and should know what it leaves out.
+{% endcomment %}
+{% load humanize %}
+<c-vars item target can_decide />
+<c-cards.card>
+<c-slot name="header">
+<c-cards.header>
+<div class="flex w-full flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+        <h3 class="m-0 text-base font-semibold text-text">
+            <a href="{{ item.component_url }}"
+               class="text-text no-underline hover:text-primary hover:underline">{{ item.component_name }}</a>
+        </h3>
+        <c-typography.description size="sm">From {{ item.submitted_by }}{% if item.submitted_via %} with the token "{{ item.submitted_via }}"{% endif %}, {{ item.submitted_at|naturaltime }}</c-typography.description>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+        {% if item.from_agent %}
+            <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
+        {% else %}
+            <c-badges.secondary size="sm">Upload</c-badges.secondary>
+        {% endif %}
+        {% if item.is_file %}
+            <c-badges.secondary size="sm">{{ item.format_label }} file</c-badges.secondary>
+        {% endif %}
+    </div>
+</div>
+</c-cards.header>
+</c-slot>
+<div class="flex flex-col gap-5">
+    {% if item.context %}
+        <div class="flex flex-col gap-2">
+            <c-typography.eyebrow>Notes</c-typography.eyebrow>
+            <c-cards.inset>
+            <p class="m-0 whitespace-pre-line break-words text-sm text-text">{{ item.context }}</p>
+            </c-cards.inset>
+        </div>
+    {% endif %}
+    {% if item.fix_reference %}
+        <dl class="m-0">
+            <c-layout.description-row label="Fix">
+            {% if item.fix_url %}
+                <a href="{{ item.fix_url }}" target="_blank" rel="noopener noreferrer" class="break-all text-primary hover:underline">{{ item.fix_reference }}</a>
+            {% else %}
+                {{ item.fix_reference }}
+            {% endif %}
+            </c-layout.description-row>
+        </dl>
+    {% endif %}
+    {% if item.rulings %}
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Vulnerability</c-tables.header-cell>
+        <c-tables.header-cell>Package</c-tables.header-cell>
+        <c-tables.header-cell>Ruling</c-tables.header-cell>
+        <c-tables.header-cell>Detail</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for ruling in item.rulings %}
+                <c-tables.row>
+                <c-tables.cell nowrap class="font-mono">{{ ruling.vuln_id }}</c-tables.cell>
+                <c-tables.cell muted>{{ ruling.package }}</c-tables.cell>
+                <c-tables.cell>
+                {{ ruling.state }}
+                {% if ruling.reason %}<div class="text-xs text-text-muted">{{ ruling.reason }}</div>{% endif %}
+                </c-tables.cell>
+                <c-tables.cell muted>{{ ruling.detail }}</c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+    {% endif %}
+    {% if item.ignored %}
+        <c-feedback.alert variant="warning" title="Not included">
+        {% for skipped in item.ignored %}
+            {{ skipped.vuln_id }}: {{ skipped.reason }}.
+        {% endfor %}
+        </c-feedback.alert>
+    {% endif %}
+    <c-typography.description>
+    {% if item.would_suppress %}
+        Approving hides {{ item.would_suppress|intcomma }} open vulnerabilit{{ item.would_suppress|pluralize:"y,ies" }}.
+    {% else %}
+        Approving hides no open vulnerability today.
+    {% endif %}
+    {% if item.already_suppressed %}
+        {{ item.already_suppressed|intcomma }} already hidden.
+    {% endif %}
+    {% if item.unmatched %}
+        {{ item.unmatched|intcomma }} ruling{{ item.unmatched|pluralize }} match{{ item.unmatched|pluralize:"es," }} nothing scanned yet.
+    {% endif %}
+    {% if item.is_file %}Approving stores the file exactly as it was uploaded.{% endif %}
+    </c-typography.description>
+</div>
+{% if can_decide and item.status == "pending" %}
+    <c-slot name="footer">
+    <form method="post"
+          action="{{ item.decide_url }}"
+          hx-post="{{ item.decide_url }}"
+          hx-target="{{ target }}"
+          hx-swap="outerHTML"
+          class="flex flex-col gap-3">
+        {% csrf_token %}
+        <div class="flex flex-col gap-1">
+            <c-forms.label for="vex-note-{{ item.id }}">Note (optional)</c-forms.label>
+            <c-forms.textarea id="vex-note-{{ item.id }}" name="note" rows="2" placeholder="Why you approved or rejected it" />
+        </div>
+        <div class="flex flex-wrap justify-end gap-2">
+            <c-buttons.outline-danger type="submit" name="decision" value="reject">Reject</c-buttons.outline-danger>
+            <c-buttons.primary type="submit" name="decision" value="approve">Approve</c-buttons.primary>
+        </div>
+    </form>
+    </c-slot>
+{% endif %}
+</c-cards.card>
