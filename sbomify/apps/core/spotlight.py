@@ -170,8 +170,11 @@ def search_destinations(query: str, *, role: str = "", workspace_key: str = "", 
     """Ranked app destinations for a query.
 
     Ties break on the section order, so "Go to" beats "Settings" at equal
-    match quality; then on title *length*, because the shorter title is the
-    closer match ("plug" should land on Plugins, not Plugin summary); then
+    match quality; then on whether the query is one of the destination's
+    keywords exactly, so "vex" lands on Upload VEX, which lists it, rather
+    than on another VEX action that only shares the word; then on title
+    *length*, because the shorter title is the closer match ("plug" should
+    land on Plugins, not Plugin summary); then
     alphabetically for a stable result across keystrokes — a palette that
     reshuffles under the cursor is worse than a slightly worse-ranked one.
     """
@@ -179,7 +182,7 @@ def search_destinations(query: str, *, role: str = "", workspace_key: str = "", 
     if not query:
         return []
 
-    scored: list[tuple[int, int, int, str, Destination, str]] = []
+    scored: list[tuple[int, int, int, int, str, Destination, str]] = []
     for destination in load_destinations():
         if not destination.visible_to(role):
             continue
@@ -190,9 +193,10 @@ def search_destinations(query: str, *, role: str = "", workspace_key: str = "", 
         if url is None:
             continue
         section_rank = SECTION_ORDER.index(destination.section) if destination.section in SECTION_ORDER else 99
-        scored.append((-score, section_rank, len(destination.title), destination.title, destination, url))
+        named = 0 if query in (keyword.lower() for keyword in destination.keywords) else 1
+        scored.append((-score, section_rank, named, len(destination.title), destination.title, destination, url))
 
-    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
+    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3], row[4]))
     return [
         {
             "title": destination.title,
@@ -202,7 +206,7 @@ def search_destinations(query: str, *, role: str = "", workspace_key: str = "", 
             "icon": destination.icon,
             "score": -negative_score,
         }
-        for negative_score, _rank, _length, _title, destination, url in scored[:limit]
+        for negative_score, _rank, _named, _length, _title, destination, url in scored[:limit]
     ]
 
 
