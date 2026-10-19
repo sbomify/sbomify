@@ -1,0 +1,70 @@
+{% load humanize %}
+{% comment %}
+The release's vulnerabilities, deduplicated across its SBOMs and with VEX
+applied: the same rollup the product page prints for this release. The first
+ten rows show by default; the rest wait behind a toggle so a release carrying
+hundreds does not push its artifacts off the page.
+{% endcomment %}
+<c-tables.shell id="release-vulnerabilities" x-data="{ expanded: false }">
+<c-tables.toolbar>
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-shield-halved text-primary" aria-hidden="true"></i>
+    Vulnerabilities
+</h4>
+{% if vulnerabilities.unassessed %}
+    <c-slot name="right">
+    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }} not scanned yet</span>
+    </c-slot>
+{% endif %}
+</c-tables.toolbar>
+{% if vulnerabilities.assessed %}
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 px-4 py-4">
+        <c-layout.stat-card compact value="{{ vulnerabilities.counts.total }}" label="Open" />
+        <c-layout.stat-card compact accent="severity-critical" value="{{ vulnerabilities.counts.critical }}" label="Critical" />
+        <c-layout.stat-card compact accent="severity-high" value="{{ vulnerabilities.counts.high }}" label="High" />
+        <c-layout.stat-card compact accent="severity-medium" value="{{ vulnerabilities.counts.medium }}" label="Medium" />
+        <c-layout.stat-card compact accent="severity-low" value="{{ vulnerabilities.counts.low }}" label="Low" />
+    </div>
+    {% if vulnerabilities.findings %}
+        <c-tables.table sized variant_class="min-w-192" aria-label="Release vulnerabilities">
+        <c-tables.head>
+        <c-tables.header-cell class="w-32">Severity</c-tables.header-cell>
+        <c-tables.header-cell>Vulnerability</c-tables.header-cell>
+        <c-tables.header-cell class="w-56">Package</c-tables.header-cell>
+        <c-tables.header-cell class="w-36">Version</c-tables.header-cell>
+        <c-tables.header-cell class="w-40">Status</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for finding in vulnerabilities.findings|slice:":10" %}
+                {% include "core/components/release_vulnerability_row.html.j2" %}
+            {% endfor %}
+        </tbody>
+        {% if vulnerabilities.findings|length > 10 %}
+            <tbody id="release-vulnerabilities-more" x-show="expanded" x-cloak>
+                {% for finding in vulnerabilities.findings|slice:"10:" %}
+                    {% include "core/components/release_vulnerability_row.html.j2" %}
+                {% endfor %}
+            </tbody>
+        {% endif %}
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        {% if vulnerabilities.suppressed_count %}
+            {{ vulnerabilities.findings|length|intcomma }} finding{{ vulnerabilities.findings|length|pluralize }}, {{ vulnerabilities.suppressed_count|intcomma }} suppressed by VEX
+        {% else %}
+            {{ vulnerabilities.findings|length|intcomma }} finding{{ vulnerabilities.findings|length|pluralize }}
+        {% endif %}
+        </c-tables.info>
+        {% if vulnerabilities.findings|length > 10 %}
+            <c-buttons.secondary size="sm" type="button" @click="expanded = !expanded" ::aria-expanded="expanded" aria-controls="release-vulnerabilities-more">
+            <span x-text="expanded ? 'Show fewer' : 'Show all {{ vulnerabilities.findings|length|intcomma }}'">Show all {{ vulnerabilities.findings|length|intcomma }}</span>
+            </c-buttons.secondary>
+        {% endif %}
+        </c-tables.footer>
+    {% else %}
+        <c-feedback.empty-state size="sm" icon="fas fa-check" title="No vulnerabilities found" message="The latest scans found no known vulnerabilities in this release." />
+    {% endif %}
+{% else %}
+    <c-feedback.empty-state size="sm" icon="fas fa-hourglass-half" icon_variant="neutral" title="Not scanned yet" message="Scan results appear here once this release's SBOMs have been scanned." />
+{% endif %}
+</c-tables.shell>
