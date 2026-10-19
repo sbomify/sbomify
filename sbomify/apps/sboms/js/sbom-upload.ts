@@ -28,6 +28,8 @@ interface SbomUploadState {
     uploadRequest?: UploadRequest | null
     preview: VexPreview | null
     pendingFile: File | null
+    // Hold a VEX for someone to approve instead of applying it now.
+    sendForReview: boolean
     abortController: AbortController | null
     readonly bomTypeLabel: string
     init: () => void
@@ -54,6 +56,7 @@ export function registerSbomUpload(): void {
         initialBomType,
         preview: null,
         pendingFile: null,
+        sendForReview: false,
         abortController: null,
 
         init(): void {
@@ -97,7 +100,7 @@ export function registerSbomUpload(): void {
 
                 const csrfToken = getCsrfToken()
 
-                const response = await fetch(buildUploadEndpoint(this.componentId, this.bomType), {
+                const response = await fetch(buildUploadEndpoint(this.componentId, this.bomType, this.sendForReview), {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -117,7 +120,13 @@ export function registerSbomUpload(): void {
                     }
                 }
 
-                if (response.ok) {
+                if (response.status === 202) {
+                    // Held for approval: nothing was stored, so there is no
+                    // page to reload, only a queue to point at.
+                    showSuccess('VEX sent for review. It takes effect once someone approves it.')
+                    this.sendForReview = false
+                    window.dispatchEvent(new CustomEvent('close-upload'))
+                } else if (response.ok) {
                     showSuccess(`${this.bomTypeLabel} uploaded successfully! Reloading page...`)
                     // The upload is done; the modal has nothing left to say.
                     window.dispatchEvent(new CustomEvent('close-upload'))

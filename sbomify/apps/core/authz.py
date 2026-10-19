@@ -251,6 +251,14 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # this is the ``operator`` role's whole job. The VEX *file upload* endpoints
     # pair it with ``artifact:publish``, so they stay closed to operators.
     "artifact:publish_vex": TRIAGE,
+    # The VEX approval queue. Submitting changes nothing until someone approves,
+    # so it is open to everyone who may rule on a finding, CI bots and the AI
+    # agents working from a fix prompt included. Deciding applies the
+    # submission, which is a triage ruling, so it is open to every internal role
+    # but never to a bot: an agent must not approve its own work.
+    "vex_submission:create": TRIAGE,
+    "vex_submission:read": TRIAGE,
+    "vex_submission:decide": READ_INTERNAL,
     # internal reads — guests are external and hold none of these
     "workspace:read": READ_INTERNAL,
     "component:read_internal": READ_INTERNAL,
@@ -300,6 +308,10 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
     # then check / create / tag its release. Without the release actions a
     # publish-scoped CI token uploads fine but 403s the moment it cuts a release.
     "publish": ["artifact:publish", "release:read", "release:create", "release:tag"],
+    # An AI agent working from a fix prompt: read the prompt, then submit its VEX
+    # to the approval queue and check on it. It cannot apply a ruling itself, so
+    # nothing it sends takes effect until a person approves it.
+    "agent": ["workspace:read", "vex_submission:create", "vex_submission:read"],
     # Every read action (``<resource>:read`` / ``read_internal``) plus the ABAC
     # component:access read path, so a read-only token can still read
     # gated/public components (can() checks scope before ABAC). Keyed on the verb,
