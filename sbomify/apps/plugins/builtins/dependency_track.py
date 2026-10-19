@@ -515,9 +515,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         for version_row in version_rows:
             try:
                 client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
-                client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
-                logger.info(
-                    "[DT] sync_release_tags: set tags=%s on version %s for SBOM %s",
+                written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                (logger.info if written else logger.debug)(
+                    "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
+                    "set" if written else "already in sync,",
                     canonical_names,
                     version_row.dt_project_version_uuid,
                     sbom_id,
