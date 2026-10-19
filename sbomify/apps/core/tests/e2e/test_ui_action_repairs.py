@@ -160,19 +160,38 @@ def test_upload_menu_and_deep_links(
     page.add_init_script("localStorage.setItem('document-upload-expanded', 'false')")
     path = reverse("core:component_details", args=[component.pk])
     page.goto(path)
-    page.get_by_role("button", name="Component actions", exact=True).click()
-    page.get_by_role("menuitem", name="Upload artifact…", exact=True).click()
     dialog = page.get_by_role(
         "dialog", name="Upload Artifact" if component_type == "bom" else "Upload document", exact=True
     )
-    expect(dialog).to_be_visible()
-    dialog.get_by_role("button", name="Close", exact=True).click()
-    expect(dialog).to_be_hidden()
+    artifact_type = dialog.get_by_label("Artifact type", exact=True)
+    menu_items = ["Upload SBOM…", "Upload CBOM…", "Upload VEX…"] if component_type == "bom" else ["Upload document…"]
+    for label in menu_items:
+        page.get_by_role("button", name="Component actions", exact=True).click()
+        page.get_by_role("menuitem", name=label, exact=True).click()
+        expect(dialog).to_be_visible()
+        if component_type == "bom":
+            # Each item opens the one uploader with its own type selected.
+            expect(artifact_type).to_have_value(label.removeprefix("Upload ").removesuffix("…").lower())
+        dialog.get_by_role("button", name="Close", exact=True).click()
+        expect(dialog).to_be_hidden()
     page.goto(path + "#upload-artifact")
     expect(dialog).to_be_visible()
+    if component_type == "bom":
+        # A generic open after a typed one starts from the default again.
+        expect(artifact_type).to_have_value("sbom")
     dialog.get_by_role("button", name="Close", exact=True).click()
+    page.goto(path + "#upload-vex")
+    if component_type == "bom":
+        expect(dialog).to_be_visible()
+        expect(artifact_type).to_have_value("vex")
+        dialog.get_by_role("button", name="Close", exact=True).click()
+    else:
+        # A document component takes no VEX, so the link opens nothing.
+        expect(dialog).to_be_hidden()
     page.goto(path + "#upload-sbom")
     expect(dialog).to_be_visible()
+    if component_type == "bom":
+        expect(artifact_type).to_have_value("sbom")
     page.goto(path + "#upload-artifact")
     page.reload()
     expect(dialog).to_be_visible()
