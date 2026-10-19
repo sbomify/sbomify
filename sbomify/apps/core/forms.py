@@ -95,7 +95,7 @@ class CreateAccessTokenForm(forms.Form):
     SCOPE_CHOICES = [
         ("full", "Full access"),
         ("publish", "Publish only (CI/CD upload)"),
-        ("agent", "AI agent (fix prompts and VEX for approval)"),
+        ("agent", "AI agent"),
         ("read_only", "Read-only"),
     ]
     scope = forms.ChoiceField(

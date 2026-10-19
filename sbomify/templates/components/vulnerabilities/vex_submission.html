@@ -35,7 +35,7 @@ first, so the parent list needs no styling of its own.
                     {% if item.from_agent %}
                         <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
                     {% else %}
-                        <c-badges.secondary size="sm">Upload</c-badges.secondary>
+                        <c-badges.secondary size="sm">{{ item.source_label }}</c-badges.secondary>
                     {% endif %}
                 </span>
                 <span class="mt-0.5 block text-xs text-text-muted">{{ item.summary }} · {{ item.submitted_at|naturaltime }}</span>

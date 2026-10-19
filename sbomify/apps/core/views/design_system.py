@@ -137,6 +137,7 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "id": "demo-upload",
             "component_name": "billing-worker",
             "from_agent": False,
+            "source_label": "Upload",
             "is_file": True,
             "format_label": "OpenVEX",
             "submitted_by": "Sam Smith",
