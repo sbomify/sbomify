@@ -1197,7 +1197,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted m-0">
         One row per vulnerability in a component; totals count each vulnerability once. Product and component replace the
         whole browser, every other control only the results. Each row's actions menu opens the page's fix prompt
-        dialog, Fix prompt for all opens it with one prompt for every row the filters select, and Triage loads its dialog into the page's triage host.
+        dialog, and Triage loads its dialog into the page's triage host.
     </p>
     <c-vulnerabilities.workspace-browser :data="workspace_vulnerability_demo" browser_target="demo-vulnerabilities-browser" results_target="demo-vulnerabilities-results" />
     <c-vulnerabilities.fix-prompt-dialog />
@@ -1205,10 +1205,6 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.card flush>
     <c-cards.header title="Fix prompt" />
     <c-vulnerabilities.fix-prompt :fix="fix_prompt_demo" />
-    </c-cards.card>
-    <c-cards.card flush>
-    <c-cards.header title="Fix prompt for all" />
-    <c-vulnerabilities.bulk-fix-prompt :fix="bulk_fix_prompt_demo" code_id="bulk-fix-prompt-demo-text" triage_code_id="bulk-triage-prompt-demo-text" />
     </c-cards.card>
     <h3 id="vex-submission" class="text-lg font-semibold text-text">VEX submission</h3>
     <p class="text-sm text-text-muted m-0">
