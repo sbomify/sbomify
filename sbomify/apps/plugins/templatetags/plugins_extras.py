@@ -336,6 +336,31 @@ def vulnerability_total(summary: object) -> int:
     return sum(value for value in by_severity.values() if isinstance(value, int) and not isinstance(value, bool))
 
 
+#: Verdicts of a completed scan that produced nothing to list. A skipped scan's
+#: caption is the reason, which waiting will not fix.
+NO_SCAN_RESULT = ("Could not scan", "No result", "Skipped")
+
+
+@register.filter
+def unfinished_scans(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Vulnerability scans with no results to read: queued, running, failed, errored or skipped.
+
+    Scans with results are read on the Vulnerabilities list, so the assessments
+    card leaves them out. One without has nothing there, and this card is the
+    only place its state, and an error, shows. A scanner error is stored as a
+    completed run whose summary counts errors, so its verdict is what tells it apart.
+    """
+    from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
+
+    return [
+        tile
+        for tile in build_scorecards(assessment_runs)
+        if tile["run"]
+        and tile["run"].get("category") == "security"
+        and (tile["run"].get("status") in ("pending", "running", "failed") or tile["label"] in NO_SCAN_RESULT)
+    ]
+
+
 @register.filter
 def assessment_scorecards(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
     """One row per assessment, most urgent first. See services/assessment_scorecard.py."""

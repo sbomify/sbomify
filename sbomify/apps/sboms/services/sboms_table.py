@@ -97,6 +97,21 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         item["vuln"]["scanned_nothing"] = scanned_nothing
 
 
+def sbom_vulnerability_counts(sbom_ids_by_component: dict[str, list[str]]) -> dict[str, dict[str, Any] | None]:
+    """Each SBOM's merged, VEX-applied counts, for SBOMs spread over several components.
+
+    VEX statements belong to a component, so the counts are read one component
+    at a time, exactly as the component's own artifact table reads them. An SBOM
+    with no completed security run maps to ``None``.
+    """
+    counts: dict[str, dict[str, Any] | None] = {}
+    for component_id, sbom_ids in sbom_ids_by_component.items():
+        items: list[dict[str, Any]] = [{"sbom": {"id": sbom_id}} for sbom_id in sbom_ids]
+        _attach_vulnerability_counts(items, component_id)
+        counts.update({item["sbom"]["id"]: item.get("vuln") for item in items})
+    return counts
+
+
 def _summary_artifacts(sbom_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The compact card view: the newest artifact of each (format, bom_type).
 

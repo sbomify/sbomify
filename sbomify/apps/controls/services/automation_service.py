@@ -21,9 +21,8 @@ from sbomify.apps.controls.models import (
 )
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.plugins.orchestrator import PluginOrchestrator
+from sbomify.apps.plugins.public_assessment_utils import _is_run_passing
 from sbomify.apps.plugins.sdk.enums import RunStatus
-from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
 if TYPE_CHECKING:
     from sbomify.apps.teams.models import Workspace
@@ -147,8 +146,8 @@ def sync_from_latest_assessments(team: Workspace) -> ServiceResult[dict[str, Any
         if not latest_run:
             continue
 
-        # A skipped run stores no findings, which the orchestrator reads as a clean result.
-        passed = not result_scanned_nothing(latest_run.result) and PluginOrchestrator._is_passing(latest_run)
+        # The same judgement that satisfies a dependency gate and earns a public badge.
+        passed = _is_run_passing(latest_run)
         result = auto_update_from_assessment(team, plugin_name, passed)
         if result.ok and result.value:
             by_plugin[plugin_name] = result.value

@@ -136,7 +136,7 @@ def test_priority_link_opens_selected_vulnerability(
     panel = page.locator("#component-vulnerabilities")
     expect(panel).to_be_in_viewport()
     expect(panel.get_by_role("searchbox", name="Search vulnerabilities")).to_have_value("CVE-2026-10001")
-    table = panel.get_by_role("table", name="Vulnerabilities", exact=True)
+    table = panel.get_by_role("table", name="Open vulnerabilities", exact=True)
     expect(table).to_contain_text("CVE-2026-10001")
     expect(table).not_to_contain_text("CVE-2026-10002")
     expect(table.locator("tbody tr")).to_have_count(1)

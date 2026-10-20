@@ -65,7 +65,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
 
 
 def _fix_prompt_demo() -> dict[str, object]:
-    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import render_fix_prompt, render_triage_prompt
 
     fix: dict[str, object] = {
         "advisory": "CVE-2026-10001",
@@ -80,13 +80,86 @@ def _fix_prompt_demo() -> dict[str, object]:
         "version": "1.0.0",
         "ecosystem": "pypi",
         "purl": "pkg:pypi/example-parser@1.0.0",
+        "vex_purl": "pkg:pypi/example-parser@1.0.0",
         "fixed": "1.0.4",
         "references": [],
         "component": "api-gateway",
+        "component_id": "demo0000001",
         "sbom_version": "2.4.1",
     }
     fix["prompt"] = render_fix_prompt(fix)
+    fix["triage_prompt"] = render_triage_prompt(fix)
     return fix
+
+
+def _vex_submission_demos() -> list[dict[str, object]]:
+    """One submission from an AI agent and one upload sent for approval, as the review tab renders them."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    base: dict[str, object] = {
+        "status": "pending",
+        "status_label": "Awaiting review",
+        "component_url": "#vex-submission",
+        "submitted_at": timezone.now() - timedelta(minutes=12),
+        "would_suppress": 1,
+        "already_suppressed": 0,
+        "unmatched": 0,
+        "ignored": [],
+    }
+    return [
+        {
+            **base,
+            "id": "demo-agent",
+            "component_name": "api-gateway",
+            "from_agent": True,
+            "is_file": False,
+            "format_label": "Decisions",
+            "submitted_by": "Jane Doe",
+            "submitted_via": "Claude fix agent",
+            "summary": '1 ruling · hides 1 open vulnerability · Jane Doe via "Claude fix agent"',
+            "context": "example-parser is only imported by the release script, which never ships.\n\nNo code change.",
+            "fix_reference": "https://github.com/example/api-gateway/pull/42",
+            "fix_url": "https://github.com/example/api-gateway/pull/42",
+            "rulings": [
+                {
+                    "vuln_id": "CVE-2026-10001",
+                    "package": "example-parser@1.0.0",
+                    "state": "Not affected",
+                    "reason": "Code not reachable",
+                    "detail": "Only the release script imports it.",
+                }
+            ],
+        },
+        {
+            **base,
+            "id": "demo-upload",
+            "component_name": "billing-worker",
+            "from_agent": False,
+            "source_label": "Upload",
+            "is_file": True,
+            "format_label": "OpenVEX",
+            "submitted_by": "Sam Smith",
+            "submitted_via": "",
+            "summary": "1 ruling · hides nothing · 1 not included · Sam Smith",
+            "context": "",
+            "fix_reference": "",
+            "fix_url": "",
+            "would_suppress": 0,
+            "unmatched": 1,
+            "ignored": [{"vuln_id": "CVE-2026-20002", "reason": "No package URL; name the package with a purl"}],
+            "rulings": [
+                {
+                    "vuln_id": "CVE-2026-20001",
+                    "package": "Whole component",
+                    "state": "False positive",
+                    "reason": "",
+                    "detail": "",
+                }
+            ],
+        },
+    ]
 
 
 def _workspace_vulnerability_demo() -> dict[str, object]:
@@ -180,6 +253,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "vulnerability_demo": vulnerability_demo,
             "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
             "fix_prompt_demo": _fix_prompt_demo(),
+            "vex_submission_demos": _vex_submission_demos(),
             "plan_card_demos": [
                 {
                     "key": "community",

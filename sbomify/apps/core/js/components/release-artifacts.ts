@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs';
 import { artifactLink, type ArtifactRoutes } from './artifact-links';
-import { formatDate as sharedFormatDate } from '../utils';
+import { formatDate as sharedFormatDate, parseJsonScript } from '../utils';
 import { getCsrfToken } from '../csrf';
 import { showError, showSuccess } from '../alerts';
 
@@ -64,6 +64,16 @@ interface AvailableArtifact {
     };
 }
 
+interface ArtifactVulnerabilities {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    scanned_nothing: boolean;
+    url: string;
+}
+
 interface ReleaseArtifactsParams {
     routes: ArtifactRoutes;
     releaseId: string;
@@ -71,6 +81,7 @@ interface ReleaseArtifactsParams {
     initialArtifacts?: Artifact[];
     canEdit?: boolean;
     isLatest?: boolean;
+    vulnerabilitiesScriptId?: string;
 }
 
 function formatSbomDisplay(format?: string, version?: string): string {
@@ -86,7 +97,8 @@ export function registerReleaseArtifacts() {
         initialArtifacts = [],
         routes,
         canEdit = true,
-        isLatest = false
+        isLatest = false,
+        vulnerabilitiesScriptId = ''
     }: ReleaseArtifactsParams) => {
         return {
             artifacts: initialArtifacts as Artifact[],
@@ -102,6 +114,10 @@ export function registerReleaseArtifacts() {
             productId,
             canEdit,
             isLatest,
+            // Each SBOM's own scan counts, rendered by the server with the page.
+            vulnerabilities: (vulnerabilitiesScriptId
+                ? parseJsonScript<Record<string, ArtifactVulnerabilities | null>>(vulnerabilitiesScriptId)
+                : null) ?? {},
 
             // Main table filters
             search: '',
@@ -127,6 +143,13 @@ export function registerReleaseArtifacts() {
                 if (initialArtifacts.length === 0) {
                     this.loadArtifacts();
                 }
+            },
+
+            /** The artifact's scan counts: undefined when it is not a scannable SBOM, null when never scanned. */
+            getArtifactVulnerabilities(artifact: Artifact): ArtifactVulnerabilities | null | undefined {
+                const sbomId = artifact.sbom_id || artifact.sbom?.id;
+                if (!sbomId || !(sbomId in this.vulnerabilities)) return undefined;
+                return this.vulnerabilities[sbomId];
             },
 
             async loadArtifacts() {

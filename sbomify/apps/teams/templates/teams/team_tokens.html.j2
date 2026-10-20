@@ -11,7 +11,7 @@
     {% endif %}
     {% if new_encoded_access_token %}
         <c-feedback.alert variant="warning" title="Copy your token now">You cannot see this token again.</c-feedback.alert>
-        <c-token-display token="{{ new_encoded_access_token }}" masked />
+        <c-token-display label="Your new token" token="{{ new_encoded_access_token }}" masked />
     {% endif %}
     <c-cards.card flush>
     <c-cards.header compact title="Your tokens" />
@@ -56,7 +56,7 @@
     <c-modal teleport="false" id="createTokenModal" show="showCreateToken" title="Generate token" size="lg">
     <form method="post"
           id="tokenGenerationForm"
-          x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}' }"
+          x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}', scopeChoice: '{{ create_access_token_form.scope.value|default:"full"|escapejs }}' }"
           hx-post="{% url 'workspaces:team_tokens' team.key %}"
           hx-target="#team-tokens-content"
           hx-disabled-elt="#generate-token-button"
@@ -70,7 +70,7 @@
         {% endwith %}
         {% with field=create_access_token_form.scope %}
             <c-forms.field label="Access scope" for="{{ field.id_for_label }}" error="{{ field.errors|join:', ' }}">
-            <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}">
+            <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}" x-model="scopeChoice">
             {% for value, label in field.field.choices %}
                 <option value="{{ value }}"
                         {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
@@ -80,6 +80,9 @@
             </c-forms.select>
             </c-forms.field>
         {% endwith %}
+        <c-feedback.alert variant="info" icon="fas fa-robot" title="For an AI agent" x-show="scopeChoice === 'agent'" x-cloak>
+        This token can read fix prompts and send VEX rulings for approval. Nothing it sends changes your vulnerabilities until someone approves it, and its rulings are marked as coming from an AI agent.
+        </c-feedback.alert>
         {% with field=create_access_token_form.expires_in_hours %}
             <c-forms.field label="Expiration" for="{{ field.id_for_label }}" error="{{ field.errors|join:', ' }}">
             <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}" x-model="expiryChoice">

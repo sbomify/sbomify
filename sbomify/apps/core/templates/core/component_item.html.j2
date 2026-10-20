@@ -145,9 +145,9 @@
         {% if vulnerability_summary %}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header level="2" title="Vulnerability scan">
-                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
+                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider }}</c-slot>
                 <c-slot name="actions">
-                <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
+                <c-buttons.secondary size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' team_key %}?component={{ item.component_id }}&version={{ item.id }}">
                 Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>
                 </c-buttons.secondary>
                 </c-slot>

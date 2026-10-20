@@ -39,7 +39,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 | --------------------------- | ------------------------------------------------------ |
 | `models.py`                 | BillingPlan model, feature flags, price calculations   |
 | `views.py`                  | HTTP endpoints (plan selection, checkout, portal)      |
-| `billing_processing.py`     | Webhook event handlers                                 |
+| `billing_processing.py`     | Webhook event handlers, the plan-limit map             |
 | `stripe_client.py`          | Stripe API wrapper with error handling                 |
 | `stripe_pricing_service.py` | Fetches/caches pricing from Stripe                     |
 | `team_pricing_service.py`   | Calculates team-specific pricing display               |
@@ -98,29 +98,16 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 
 ## Billing Limits Enforcement
 
-Product and component creation enforce plan limits with two helpers in `sbomify/apps/core/apis.py`. Both take a workspace id and `"product"` or `"component"`, and return `(allowed, error_message, error_code)`:
+Products, components and seats are limited through one map and one count:
 
-- `_check_billing_limits` runs before the insert transaction opens. It checks the plan, a payment suspension and a scheduled downgrade, and can call Stripe.
-- `_enforce_limit_under_lock` runs inside the transaction that does the insert. It locks the workspace row, counts, and compares, so two requests cannot both take the last slot.
+- `RESOURCE_TYPE_TO_LIMIT_FIELD` in `billing_processing.py` names the plan field for each resource (`product`, `component`, `user`), and `get_resource_limit(plan, resource_type)` reads it.
+- `get_team_asset_count(team_id, resource_type)` in `core/queries.py` counts current usage. A seat is a member or an unexpired invitation, bots excluded.
 
-A new create path calls both:
+Creating a product or component goes through `_check_billing_limits` in `core/apis.py`, which also applies suspension and scheduled-downgrade rules, and `_enforce_limit_under_lock` re-checks under a row lock. Adding a member goes through `teams.utils.user_seat`, which holds the row lock while `can_add_user_to_team` decides. An invitee who is accepting already holds a counted seat, so they may join when every seat is taken.
 
-```python
-from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
+Limits are stored in `Workspace.billing_plan_limits` JSONField:
 
-allowed, error_message, error_code = _check_billing_limits(team_id, "component")
-if not allowed:
-    return 403, {"detail": error_message, "error_code": error_code}
-
-with transaction.atomic():
-    allowed, error_message, error_code = _enforce_limit_under_lock(team_id, "component")
-    if not allowed:
-        return 403, {"detail": error_message, "error_code": error_code}
-    # Create the component here, in the same transaction
-```
-
-- The limits come from the workspace's `BillingPlan` (`max_products`, `max_components`). `None` means unlimited, and the enterprise plan has no limit.
-- `Workspace.billing_plan_limits` keeps a copy for display. Saving a plan in the admin refreshes it on the workspaces on that plan.
+- `max_products`, `max_components`, `max_users`
 - When billing is disabled (`BILLING=FALSE`), all workspaces get unlimited access
 
 ## Async Tasks & Cron Jobs

@@ -35,6 +35,7 @@ from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_l
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.core.views.artifact_upload import ArtifactUploadView as ArtifactUploadView
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView

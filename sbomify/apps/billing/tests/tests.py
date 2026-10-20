@@ -10,3 +10,4 @@ from .fixtures import business_plan  # noqa: F401
 def test_billing_plan_str_representation(business_plan: BillingPlan):
     """Test string representation of BillingPlan model."""
     assert str(business_plan) == "Business (business)"
+

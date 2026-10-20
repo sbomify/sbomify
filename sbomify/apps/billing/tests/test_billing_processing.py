@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Member, Workspace
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from ..stripe_client import BillingRetryableError, StripeError
@@ -582,28 +582,31 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
 
 
 
+@override_settings(BILLING=False)
+def test_billing_disabled_unlimited_limits():
+    """Test that billing disabled returns unlimited limits."""
+    # Create a team
+    team = Workspace.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
+
+    # Get current limits (should be unlimited when billing is disabled)
+    limits = billing_processing.get_current_limits(team)
+
+    # With billing disabled, all limits should be None (unlimited)
+    assert limits.get("max_products") is None
+    assert limits.get("max_components") is None
+
+
 @override_settings(BILLING=True)
-def test_handle_payment_failed_stamps_the_failure_time():
-    """handle_payment_failed sets past_due and records when the payment failed."""
-    # Create test plan
+def test_payment_failed_records_when_it_happened():
+    """handle_payment_failed marks the subscription past_due and stamps the failure time."""
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
-    
-    # Create team with past_due status
     team = Workspace.objects.create(
-        name="Test Team", 
-        key="test-team-grace", 
+        name="Test Team",
+        key="test-team-grace",
         billing_plan="business",
-        billing_plan_limits={"subscription_status": "past_due"}
+        billing_plan_limits={"subscription_status": "active"},
     )
-    
-    # Setup user/member
-    user = User.objects.create_user(username="grace_user", email="grace@example.com")
-    Member.objects.create(team=team, user=user, role="owner")
-    
-    # Reset team
-    team.billing_plan_limits = {"subscription_status": "active"}
-    team.save()
-    
+
     invoice = MagicMock()
     invoice.subscription = "sub_test_grace"
     invoice.id = "in_grace_123"

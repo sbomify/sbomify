@@ -1,5 +1,15 @@
+{% comment %}
+The control tables come first and the framework picker last. Choosing a
+framework is a one-time decision; setting the statuses is the daily work, and
+eleven identical Activate rows used to push that work below the fold.
+{% endcomment %}
 <c-layout.frame>
 <c-layout.section-header title="Compliance controls" subtitle="Choose frameworks and set the defaults your products inherit." />
+{% for controls in active_controls_tables %}
+    {% include 'controls/controls_table.html.j2' %}
+{% empty %}
+    <c-feedback.empty-state compact icon="fas fa-list-check" title="No active frameworks" message="Activate a framework below to start recording control statuses." />
+{% endfor %}
 <c-tables.shell x-data="{ deleteCatalog: null }">
 <c-tables.toolbar>
 <c-forms.hint>Active frameworks appear on your Trust Center.</c-forms.hint>
@@ -64,7 +74,4 @@
 </c-modal>
 </c-tables.shell>
 {% include 'controls/components/catalog_import.html.j2' %}
-{% for controls in active_controls_tables %}
-    {% include 'controls/controls_table.html.j2' %}
-{% endfor %}
 </c-layout.frame>

@@ -1,5 +1,7 @@
 """Empty-state actions respect write access and never appear on public artifact lists."""
 
+from html import unescape
+
 import pytest
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -67,4 +69,6 @@ def test_empty_vex_upload_requires_write_access(has_crud_permissions: bool) -> N
             "has_crud_permissions": has_crud_permissions,
         },
     )
-    assert ("#upload-artifact" in html) is has_crud_permissions
+    # Opens the uploader on VEX, by click on the page and by link from elsewhere.
+    assert ("#upload-vex" in html) is has_crud_permissions
+    assert ("$dispatch('open-upload', { bomType: 'vex' })" in unescape(html)) is has_crud_permissions

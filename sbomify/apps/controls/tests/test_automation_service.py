@@ -239,6 +239,34 @@ class TestSyncFromLatestAssessments:
         assert result.value["total_updated"] == 4
         assert result.value["by_plugin"]["osv"] == 4
 
+    @pytest.mark.parametrize(
+        ("summary", "metadata"),
+        [
+            pytest.param({"by_severity": {}}, {"skipped": True}, id="a skipped scan"),
+            pytest.param({"error_count": 1}, {}, id="a scan that errored"),
+            pytest.param({"by_severity": {"critical": 0, "high": 0}, "malicious_count": 1}, {}, id="a malicious package"),
+        ],
+    )
+    def test_a_scan_that_proves_nothing_promotes_nothing(
+        self, sample_team_with_owner_member, automation_controls, _sbom_for_team, summary, metadata
+    ) -> None:
+        AssessmentRun.objects.create(
+            id=uuid.uuid4(),
+            sbom=_sbom_for_team,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="def456",
+            category="security",
+            run_reason="on_upload",
+            status=RunStatus.COMPLETED.value,
+            result={"summary": summary, "metadata": metadata},
+        )
+
+        result = sync_from_latest_assessments(sample_team_with_owner_member.team)
+
+        assert result.ok
+        assert result.value["total_updated"] == 0
+
 
 @pytest.mark.django_db
 class TestSecurityScanThatCheckedNothing:

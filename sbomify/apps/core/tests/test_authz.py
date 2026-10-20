@@ -620,7 +620,7 @@ class TestTheOperatorCanReachWhatItMayDo:
     def test_viewing_the_security_picture_is_a_read(self) -> None:
         from sbomify.apps.core import authz
 
-        # The action viewer_rights asks, and the one the scan report asks.
+        # The action viewer_rights asks, and the one SBOM reads ask.
         assert authz.ROLE_OPERATOR in authz._ROLE_ACTIONS["component:read_internal"]
         assert authz.ROLE_OPERATOR in authz._ROLE_ACTIONS["sbom:read"]
 
@@ -629,15 +629,10 @@ class TestTheOperatorCanReachWhatItMayDo:
         import inspect
 
         from sbomify.apps.core.services import component_security
-        from sbomify.apps.sboms.services import vulnerability_report
 
         rights = inspect.getsource(component_security.viewer_rights)
         assert '"component:read_internal"' in rights
         assert '"component:manage"' not in rights
-
-        report = inspect.getsource(vulnerability_report.build_sbom_vulnerabilities)
-        assert '"sbom:read"' in report
-        assert 'can(request, "sbom:manage"' not in report
 
     def test_recording_a_decision_is_still_a_separate_write(self) -> None:
         """Widening the read must not widen the write."""

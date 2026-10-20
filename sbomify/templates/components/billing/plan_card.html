@@ -87,20 +87,35 @@ size themselves naturally on smaller screens.
             {% endfor %}
         </ul>
         <c-feedback.alert variant="warning" x-show="getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak><span x-text="getDowngradeWarning('{{ plan.key|escapejs }}')"></span></c-feedback.alert>
-        {% if plan.downgrade and plan.key == "community" %}
+        {% if plan.downgrade and plan.lost_features or plan.ends_subscription %}
             {% comment %}
-                Community only: it is the one downgrade that cancels, because
-                plan-selection.ts sends every other plan to the portal's
-                subscription_update flow and only this one to subscription_cancel.
-                A downgrade from Enterprise to Business would read this sentence and
-                be told its subscription ends, which is not what that button does.
+                ends_subscription is the Community card of a workspace with a live
+                subscription: plan-selection.ts sends community to the portal's
+                subscription_cancel flow and every other plan to subscription_update,
+                and a workspace with nothing to cancel changes over at once. An
+                Enterprise workspace on the Business card is downgrading without
+                cancelling, so it is not told its subscription ends.
 
-                The button leaves for the Stripe portal's cancel flow, so this is the
-                last place we can say what moving here does. Hidden when the card is
-                already blocked, so a plan never carries two alerts at once.
+                The button leaves for the Stripe portal, so this is the last place we
+                can say what moving here does. Hidden when the card is already
+                blocked, so a plan never carries two alerts at once.
             {% endcomment %}
-            <c-feedback.alert variant="info" x-show="!getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak>
-            Moving here cancels your current subscription at the end of the billing period. Your workspace limits drop to the ones listed above.
+            <c-feedback.alert variant="warning" title="Moving here costs you" x-show="!getDowngradeWarning('{{ plan.key|escapejs }}')" x-cloak>
+            <c-slot name="body">
+            {% if plan.ends_subscription %}
+                <p class="m-0">Your subscription ends with this billing period, and your limits drop to the ones listed above.</p>
+            {% endif %}
+            {% if plan.lost_features %}
+                <ul class="{% if plan.ends_subscription %}mt-2 {% endif %}mb-0 flex list-none flex-col gap-1 p-0">
+                    {% for feature in plan.lost_features %}
+                        <li class="flex items-start gap-2.5">
+                            <i class="fas fa-xmark w-4 shrink-0 text-center leading-5"
+                               aria-hidden="true"></i><span>{{ feature }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            </c-slot>
             </c-feedback.alert>
         {% endif %}
     </div>

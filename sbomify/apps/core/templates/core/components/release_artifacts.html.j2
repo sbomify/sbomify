@@ -1,6 +1,7 @@
 {% load static %}
+{{ artifact_vulnerabilities|default:None|json_script:"release-artifact-vulnerabilities" }}
 {# The @ws:message handler repaints when someone pins or unpins in another tab or session. #}
-<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], routes: { sbom: '{% url 'core:component_item' '__COMPONENT__' 'sboms' '__ARTIFACT__' %}', cbom: '{% url 'core:component_item' '__COMPONENT__' 'cbom' '__ARTIFACT__' %}', vex: '{% url 'core:component_item' '__COMPONENT__' 'vex' '__ARTIFACT__' %}', document: '{% url 'core:component_item' '__COMPONENT__' 'documents' '__ARTIFACT__' %}', component: '{% url 'core:component_details' '__COMPONENT__' %}' }, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
+<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], routes: { sbom: '{% url 'core:component_item' '__COMPONENT__' 'sboms' '__ARTIFACT__' %}', cbom: '{% url 'core:component_item' '__COMPONENT__' 'cbom' '__ARTIFACT__' %}', vex: '{% url 'core:component_item' '__COMPONENT__' 'vex' '__ARTIFACT__' %}', document: '{% url 'core:component_item' '__COMPONENT__' 'documents' '__ARTIFACT__' %}', component: '{% url 'core:component_details' '__COMPONENT__' %}' }, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }}, vulnerabilitiesScriptId: 'release-artifact-vulnerabilities' })"
      @ws:message.window="if ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => loadArtifacts(), 500); }">
     {# The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
@@ -67,13 +68,14 @@
         </c-slot>
         </c-tables.toolbar>
         {# Artifacts Table #}
-        <c-tables.table sized variant_class="min-w-256" aria-label="Release artifacts">
+        <c-tables.table sized variant_class="min-w-304" aria-label="Release artifacts">
         <c-tables.head>
         <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
         <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
         <c-tables.header-cell sort="component" class="w-40">Component</c-tables.header-cell>
         <c-tables.header-cell sort="format" class="w-36">Format</c-tables.header-cell>
         <c-tables.header-cell sort="version" class="w-28">Version</c-tables.header-cell>
+        <c-tables.header-cell class="w-56">Vulnerabilities</c-tables.header-cell>
         <c-tables.header-cell sort="created_at" date class="w-40">Created</c-tables.header-cell>
         {% if can_edit and not is_latest %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
         </c-tables.head>
@@ -117,6 +119,43 @@
                       :title="getArtifactVersion(artifact)"
                       x-text="truncateText(getArtifactVersion(artifact) || '', 20)"></span>
                 <span x-show="!getArtifactVersion(artifact)" class="text-text-muted">—</span>
+                </c-tables.cell>
+                <c-tables.cell>
+                {% comment %}
+                    An SBOM's own latest scan, VEX applied, linking to its full
+                    report. Nothing scanned is not nothing found, as on the
+                    component's artifact table.
+                {% endcomment %}
+                <template x-if="getArtifactVulnerabilities(artifact) === undefined">
+                    <span class="text-text-muted">—</span>
+                </template>
+                <template x-if="getArtifactVulnerabilities(artifact) === null">
+                    <span class="text-text-muted text-sm">Not scanned</span>
+                </template>
+                <template x-if="getArtifactVulnerabilities(artifact)">
+                    <a :href="getArtifactVulnerabilities(artifact).url"
+                       class="inline-flex items-center gap-1.5 flex-wrap no-underline"
+                       :aria-label="'View vulnerabilities for ' + getArtifactName(artifact)">
+                        <template x-if="getArtifactVulnerabilities(artifact).total === 0 && getArtifactVulnerabilities(artifact).scanned_nothing">
+                            <c-badges.warning>Nothing scanned</c-badges.warning>
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).total === 0 && !getArtifactVulnerabilities(artifact).scanned_nothing">
+                            <c-badges.success>Clean</c-badges.success>
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).critical > 0">
+                            <c-badges.severity level="critical" x-text="$number(getArtifactVulnerabilities(artifact).critical) + ' Critical'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).high > 0">
+                            <c-badges.severity level="high" x-text="$number(getArtifactVulnerabilities(artifact).high) + ' High'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).medium > 0">
+                            <c-badges.severity level="medium" x-text="$number(getArtifactVulnerabilities(artifact).medium) + ' Medium'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).low > 0">
+                            <c-badges.severity level="low" x-text="$number(getArtifactVulnerabilities(artifact).low) + ' Low'" />
+                        </template>
+                    </a>
+                </template>
                 </c-tables.cell>
                 <c-tables.cell date>
                 <span class="text-text-muted text-sm" x-text="getArtifactDate(artifact)"></span>

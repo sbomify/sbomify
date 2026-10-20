@@ -516,7 +516,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 (
                     f"Could not retrieve an attestation from GitHub for this SBOM. sbomify asked "
                     f"{github_org}/{github_repo}{repo_provenance} for subject digest "
-                    f"sha256:{digest} — the SHA-256 of this SBOM as sbomify stored it. GitHub's "
+                    f"sha256:{digest}, the SHA-256 of this SBOM as sbomify stored it. GitHub's "
                     f"response: {bundle.get('error', 'unknown')}. If the attestation exists and "
                     f"the digest above does not match its subject, the workflow is attesting a "
                     f"different artifact, or attesting the SBOM before a later step rewrites it. "
@@ -618,22 +618,21 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             return {"success": False, "error": f"Error fetching attestation from GitHub: {exc}"}
 
         if response.status_code == 404:
-            # This message is what the user reads once the retry budget is
-            # spent, so it has to carry the one fact that distinguishes "not
-            # published yet" from "will never match": what the digest is a
-            # digest OF. A 404 here is indistinguishable between the two, and
-            # attesting a different subject — the container image, or a copy of
-            # the SBOM written before augmentation rewrote it — is the failure
-            # mode that never resolves no matter how long we retry.
+            # If the retries run out, this message and title become the
+            # finding the user reads, so it has to carry the one fact that
+            # distinguishes "not published yet" from "will never match": what
+            # the digest is a digest OF. A 404 here is indistinguishable
+            # between the two, and attesting a different subject (the container
+            # image, or a copy of the SBOM written before augmentation rewrote
+            # it) is the failure mode that never resolves however long we retry.
             raise AttestationNotYetAvailableError(
-                f"GitHub returned 404 for subject digest sha256:{digest} in "
-                f"{org}/{repo}{repo_provenance} — that "
-                f"digest is the SHA-256 of this SBOM as sbomify stored it. GitHub answers 404 "
-                f"here for three different reasons: the attestation has not been published yet, "
-                f"the workflow attested a different subject (a container image, or a copy of the "
-                f"SBOM written before a later step rewrote it), or the repository is private or "
-                f"does not exist, since this lookup is unauthenticated. Comparing the digest "
-                f"above against `gh attestation list` tells them apart."
+                f"GitHub returned no attestation for this SBOM from {org}/{repo}{repo_provenance}. "
+                f"sbomify asked for the SHA-256 of the SBOM as sbomify stored it: sha256:{digest}. "
+                f"If the workflow has no attest step, add actions/attest-build-provenance for the "
+                f"file you upload. If it already attests, it attested a different file, such as a "
+                f"container image or the SBOM before a later step changed it. sbomify looks this up "
+                f"without signing in to GitHub, so a private repository also returns nothing.",
+                title="No attestation found",
             )
         if response.status_code != 200:
             return {

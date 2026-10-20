@@ -5,6 +5,7 @@ Module for handling Stripe billing webhook events and related processing
 from __future__ import annotations
 
 import datetime
+from enum import Enum
 from types import SimpleNamespace
 from typing import Any, NoReturn
 
@@ -12,7 +13,6 @@ from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 
-from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
@@ -26,6 +26,7 @@ from .billing_helpers import (
     parse_cancel_at,
 )
 from .models import BillingPlan
+from .services.plan_selection import usage_over
 from .stripe_cache import invalidate_subscription_cache
 from .stripe_client import (
     LIVE_SUBSCRIPTION_STATUSES,
@@ -164,6 +165,30 @@ def _payment_already_recorded(billing_limits: dict[str, Any], webhook_id: str | 
         billing_limits.get("last_processed_webhook_id"),
         billing_limits.get("last_payment_webhook_id"),
     )
+
+
+class BillingResourceType(str, Enum):
+    """Resource types that are subject to billing limits."""
+
+    PRODUCT = "product"
+    COMPONENT = "component"
+    USER = "user"
+
+
+# Mapping from resource type to BillingPlan field name for limits
+RESOURCE_TYPE_TO_LIMIT_FIELD = {
+    BillingResourceType.PRODUCT.value: "max_products",
+    BillingResourceType.COMPONENT.value: "max_components",
+    BillingResourceType.USER.value: "max_users",
+}
+
+
+def get_resource_limit(plan: BillingPlan, resource_type: str) -> int | None:
+    """Get the limit for a resource type from a billing plan."""
+    field_name = RESOURCE_TYPE_TO_LIMIT_FIELD.get(resource_type)
+    if field_name:
+        return getattr(plan, field_name, None)
+    return None
 
 
 @handle_stripe_errors
@@ -628,22 +653,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     team.save()
                     downgrade_ended_subscription(team.pk, subscription.id)
                 else:
-                    counts = get_team_asset_counts(str(team.id))
-                    product_count = counts["products"]
-                    component_count = counts["components"]
+                    exceeded_resources = usage_over(team, target_plan)
 
-                    usage_exceeds_limits = False
-                    exceeded_resources: list[str] = []
-
-                    if target_plan.max_products is not None and product_count > target_plan.max_products:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
-
-                    if target_plan.max_components is not None and component_count > target_plan.max_components:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{component_count} components (limit: {target_plan.max_components})")
-
-                    if usage_exceeds_limits:
+                    if exceeded_resources:
                         existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {
