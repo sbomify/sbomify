@@ -24,7 +24,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
+from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -105,7 +105,7 @@ def register_tools(mcp: FastMCP) -> None:
                 # workspace's advisory as absent, which is the uniform
                 # not-found every other tool gives.
                 raise not_found("Advisory", advisory_id)
-            return serializers.advisory(result.value, detail=True)
+            return serializers.advisory(result.value, detail_limit=DETAIL_COLLECTION_LIMIT)
 
         return await run_db(query)
 
@@ -162,7 +162,7 @@ def register_tools(mcp: FastMCP) -> None:
             result = service.get_advisory(team, str(created.get("id", "")))
             if not result.ok or result.value is None:
                 raise ToolError("Advisory was created but could not be read back.")
-            return serializers.advisory(result.value, detail=True)
+            return serializers.advisory(result.value, detail_limit=DETAIL_COLLECTION_LIMIT)
 
         return await run_db(call)
 

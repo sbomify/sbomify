@@ -142,3 +142,35 @@ async def test_a_page_costs_one_page_of_projections(mcp_owner, make_token):
     assert payload["total"] == 8
     assert len(payload["items"]) == 3
     assert len(projected) == 3, f"projected {len(projected)} rows to return 3"
+
+
+def test_an_advisory_with_more_rows_than_fit_says_it_was_cut():
+    """A detail answer over the response cap left the agent nothing to retry with.
+
+    ``get_advisory`` takes no page arguments, so its collections are cut to
+    the detail limit and say so, the way the product and release details do.
+    """
+    from sbomify.apps.mcp import serializers
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+    over = DETAIL_COLLECTION_LIMIT + 10
+    projection = {
+        "id": "a1",
+        "publication_status": "draft",
+        "vulnerabilities": [{"cve_id": f"CVE-2026-{i:04d}"} for i in range(over)],
+        "references": [{"url": f"https://example.com/{i}"} for i in range(over)],
+    }
+
+    data = serializers.advisory(projection, detail_limit=DETAIL_COLLECTION_LIMIT)
+
+    for key in ("vulnerabilities", "references"):
+        assert len(data[key]["items"]) == DETAIL_COLLECTION_LIMIT
+        assert data[key]["total"] == over
+        assert data[key]["truncated"] is True
+
+    small = serializers.advisory(
+        {"id": "a2", "publication_status": "draft", "vulnerabilities": [{"cve_id": "CVE-2026-0001"}]},
+        detail_limit=DETAIL_COLLECTION_LIMIT,
+    )
+    assert small["vulnerabilities"] == {"items": [{"cve_id": "CVE-2026-0001"}], "total": 1}
+    assert "references" not in small, "an empty collection is omitted, as everywhere else"
