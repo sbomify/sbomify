@@ -82,7 +82,7 @@ interface DocStatus {
   generated_at: string;
 }
 
-function craStep5() {
+export function craStep5() {
   return {
     assessmentId: '',
     summary: {} as ComplianceSummary,
@@ -94,8 +94,9 @@ function craStep5() {
     docKinds: DOC_KINDS,
     isRefreshing: false,
     isExporting: false,
-    // Presigned for 15 minutes, so it is offered only right after an export.
-    signatureUrl: '',
+    // The signed package whose signature is on offer. Its URL is presigned for
+    // 15 minutes, so each click asks for a fresh one rather than keeping it.
+    signedPackageId: '',
     isFinishing: false,
     generatingDoc: null as string | null,
     previewContent: '',
@@ -114,6 +115,7 @@ function craStep5() {
         this.summary = data;
         this.steps = data.steps || {};
         this.lastExport = data.last_export || null;
+        this.signedPackageId = this.lastExport?.integrity?.signature ? this.lastExport.id : '';
         this.overallReady = !!(data.overall_ready);
         this.exportAvailable = !!(data.export_available);
         this.blockers = Object.values(data.steps || {})
@@ -304,7 +306,7 @@ function craStep5() {
           if (dlResp.ok) {
             const dl = await dlResp.json();
             window.open(dl.download_url, '_blank', 'noopener,noreferrer');
-            this.signatureUrl = dl.signature_url || '';
+            this.signedPackageId = dl.signature_url ? pkg.id : '';
             showSuccess('Export package ready');
           } else {
             showError('Failed to get download URL');
@@ -320,9 +322,21 @@ function craStep5() {
       }
     },
 
-    downloadSignature(): void {
-      if (this.signatureUrl) {
-        window.open(this.signatureUrl, '_blank', 'noopener,noreferrer');
+    async downloadSignature(): Promise<void> {
+      if (!this.signedPackageId) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.signedPackageId}/download`,
+          { headers: { 'X-CSRFToken': getCsrfToken() } },
+        );
+        const dl = resp.ok ? await resp.json() : null;
+        if (dl?.signature_url) {
+          window.open(dl.signature_url, '_blank', 'noopener,noreferrer');
+        } else {
+          showError('Failed to get the signature download URL');
+        }
+      } catch {
+        showError('Network error');
       }
     },
 

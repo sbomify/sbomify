@@ -177,7 +177,7 @@
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Exporting...</span>
                     </c-buttons.primary>
-                    <template x-if="signatureUrl">
+                    <template x-if="signedPackageId">
                         <c-buttons.secondary @click="downloadSignature()" data-testid="download-signature-btn" class="w-full">
                         <i class="fas fa-signature mr-2" aria-hidden="true"></i> Download signature
                         </c-buttons.secondary>

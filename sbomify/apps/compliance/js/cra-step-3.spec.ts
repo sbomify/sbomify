@@ -12,6 +12,7 @@ mock.module('../../core/js/csrf', () => ({
 }));
 mock.module('../../core/js/alerts', () => ({
   showError: () => {},
+  showSuccess: () => {},
 }));
 mock.module('./cra-shared', () => ({
   getAssessmentId: () => 'test-assessment-id',
