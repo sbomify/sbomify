@@ -347,11 +347,43 @@ async def test_scanner_text_in_the_prompt_response_is_bounded_like_every_other_t
     assert all(alias in triage for alias in result["aliases"])
 
 
-def test_a_prompt_over_the_ceiling_is_refused_rather_than_cut():
+def test_a_fix_prompt_over_the_ceiling_is_refused_rather_than_cut():
     """Cutting a prompt keeps the advisory text it quotes and drops the instructions after it."""
     from mcp.server.fastmcp.exceptions import ToolError
 
     from sbomify.apps.mcp.tools.triage import _bounded
 
     with pytest.raises(ToolError, match="too long to send whole"):
-        _bounded({"advisory": "CVE-2026-1", "fix_prompt": "", "triage_prompt": "x" * (PROMPT_CEILING + 1)})
+        _bounded({"advisory": "CVE-2026-1", "fix_prompt": "x" * (PROMPT_CEILING + 1), "triage_prompt": None})
+
+
+def test_a_triage_prompt_over_the_ceiling_is_dropped_and_the_fix_prompt_still_sent():
+    """A null triage prompt already tells an agent sbomify cannot take a ruling; the fix prompt still helps."""
+    from sbomify.apps.mcp.tools.triage import _bounded
+
+    prompt = _bounded(
+        {"advisory": "CVE-2026-1", "fix_prompt": "Upgrade lodash.", "triage_prompt": "x" * (PROMPT_CEILING + 1)}
+    )
+
+    assert prompt["triage_prompt"] is None
+    assert prompt["fix_prompt"] == "Upgrade lodash."
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_long_package_name_from_the_scan_does_not_cost_the_fix_prompt(make_token, mcp_owner):
+    """Without `package`, the prompt names the package as the scan does; a huge name must not refuse the call."""
+    _, bound, _ = mcp_owner
+
+    def seed():
+        component, sbom = _component(bound, "api")
+        _scan(sbom, [_finding("CVE-2026-1", package="p" * 20000)])
+        return component
+
+    component = await sync_to_async(seed)()
+    token = await sync_to_async(make_token)(AGENT)
+
+    result = structured(await _call(token, "get_fix_prompt", {"component_id": component.id, "advisory": "CVE-2026-1"}))
+
+    assert "p" * 512 in result["fix_prompt"]
+    assert "p" * 513 not in result["fix_prompt"]
