@@ -15,6 +15,8 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.compliance import tasks
 from sbomify.apps.compliance.forms import CRAFilingForm
 from sbomify.apps.compliance.models import CRAReport, CRAReportFiling, CRAReportReminder
@@ -1020,3 +1022,49 @@ def test_the_reminder_link_opens_the_report_in_its_own_workspace(team, report):
     message = mail.outbox[0]
     assert link in message.body
     assert link in message.alternatives[0][0]
+
+
+def _token_client(user: User, team: Workspace, scopes: list[str]) -> Client:
+    encoded = create_personal_access_token(user)
+    AccessToken.objects.create(user=user, encoded_token=encoded, description="reports", team=team, scopes=scopes)
+    return Client(HTTP_AUTHORIZATION=f"Bearer {encoded}")
+
+
+@pytest.mark.django_db
+class TestManageOnlyToken:
+    """A token scoped to manage reports can edit, file and delete them without also holding read."""
+
+    def test_it_edits_and_files(self, team, owner, report):
+        client = _token_client(owner, team, ["cra_report:manage"])
+
+        patched = client.patch(
+            f"/api/v1/compliance/cra-reports/{report.id}",
+            data=json.dumps({"values": {"general_information": "Exploited in the wild."}}),
+            content_type="application/json",
+        )
+        filed = client.post(
+            f"/api/v1/compliance/cra-reports/{report.id}/filings",
+            data=json.dumps({"stage": "early_warning", "srp_reference": "SRP-9"}),
+            content_type="application/json",
+        )
+
+        assert patched.status_code == 200, patched.content
+        assert filed.status_code == 201, filed.content
+
+    def test_it_deletes(self, team, owner, report):
+        client = _token_client(owner, team, ["cra_report:manage"])
+
+        assert client.delete(f"/api/v1/compliance/cra-reports/{report.id}").status_code == 204
+        assert not CRAReport.objects.filter(pk=report.pk).exists()
+
+    def test_a_token_with_neither_still_sees_no_report(self, team, owner, report):
+        client = _token_client(owner, team, ["workspace:read"])
+
+        patched = client.patch(
+            f"/api/v1/compliance/cra-reports/{report.id}",
+            data=json.dumps({"values": {"general_information": "x"}}),
+            content_type="application/json",
+        )
+
+        assert patched.status_code == 404
+        assert client.delete(f"/api/v1/compliance/cra-reports/{report.id}").status_code == 404

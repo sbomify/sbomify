@@ -892,10 +892,12 @@ def _report_or_error(request: HttpRequest, report_id: str, action: str) -> Any:
 
     team = _report_workspace(request)
     report = get_report(team, report_id) if team else None
-    # A report outside the caller's workspaces reads as absent.
-    if report is None or not can(request, "cra_report:read", report):
+    allowed = report is not None and can(request, action, report)
+    # A report outside the caller's workspaces reads as absent. The action asked
+    # for also makes it visible: a token scoped to manage need not also read.
+    if report is None or not (allowed or can(request, "cra_report:read", report)):
         return 404, ErrorResponse(error="Report not found", error_code="not_found")
-    if action != "cra_report:read" and not can(request, action, report):
+    if not allowed:
         return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
     return report
 
