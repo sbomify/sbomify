@@ -87,9 +87,9 @@ def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
 def _lookup_submission(principal: Principal, submission_id: str) -> None:
     """Refuse a submission outside the caller's workspace the same way as one that does not exist.
 
-    The REST views these tools delegate to answer 403 for another workspace's
-    component and 404 for a missing one. Every tool here resolves its id in the
-    caller's workspace first, as the catalog tools do, so the two read alike.
+    Every tool here resolves its id in the caller's workspace before it
+    delegates, as the catalog tools do, so an id from another workspace reads
+    exactly like one that does not exist.
     """
     from sbomify.apps.vulnerability_scanning.models import VexSubmission
 
