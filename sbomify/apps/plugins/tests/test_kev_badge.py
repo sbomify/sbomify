@@ -112,6 +112,7 @@ class TestBadgeMarkup:
                 "run": {"id": "run1", "category": "security"},
                 "is_security": True,
                 "findings": findings,
+                "vex_statements": [],
                 "can_triage": False,
                 "page": 1,
                 "page_count": 1,
