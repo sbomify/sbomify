@@ -130,6 +130,36 @@ class TestCreateReport:
 
         assert not result.ok and result.status_code == 404
 
+    def test_an_incident_from_an_advisory_takes_only_incident_fields(self, team, owner, product, advisory):
+        # The advisory's vulnerability carries a CVE id, which the incident form has
+        # no field for. Prefilling it made the values the API hands back fail PATCH.
+        client = _client_for(team, owner)
+        created = client.post(
+            "/api/v1/compliance/cra-reports",
+            data=json.dumps(
+                {
+                    "kind": "incident",
+                    "product_id": product.id,
+                    "advisory_id": advisory.id,
+                    "aware_at": AWARE.isoformat(),
+                }
+            ),
+            content_type="application/json",
+        )
+        assert created.status_code == 201, created.content
+        report_id = created.json()["id"]
+        values = client.get(f"/api/v1/compliance/cra-reports/{report_id}").json()["values"]
+        assert "cve_id" not in values
+        assert values["title"] == advisory.title
+
+        patched = client.patch(
+            f"/api/v1/compliance/cra-reports/{report_id}",
+            data=json.dumps({"values": values}),
+            content_type="application/json",
+        )
+
+        assert patched.status_code == 200, patched.content
+
 
 @pytest.mark.django_db
 class TestFilings:
@@ -461,6 +491,33 @@ class TestReminderDelivery:
         tasks.send_due_reminders(now=now)
 
         assert mail.outbox == []
+
+    def test_while_another_worker_sends_the_soon_reminder_the_due_one_waits(self, report):
+        # Both thresholds have passed. Another worker holds "soon" and is mailing
+        # this person; claiming "due" beside it would send them the same email twice.
+        due = AWARE + timedelta(hours=24)
+        now = due + timedelta(minutes=5)
+        CRAReportReminder.objects.create(
+            report=report,
+            stage=Stage.EARLY_WARNING,
+            due=due,
+            threshold="soon",
+            recipient=report.created_by.email,
+            claimed_at=now - timedelta(minutes=1),
+        )
+
+        with patch.object(tasks.send_cra_report_reminders, "send_with_options") as send:
+            tasks.send_due_reminders(report_id=report.pk, now=now)
+
+        assert mail.outbox == []
+        assert not CRAReportReminder.objects.filter(report=report, threshold="due", claimed_at__isnull=False).exists()
+        send.assert_called_once()
+
+        # The holder never finished: once its claim expires, one email covers both.
+        tasks.send_due_reminders(report_id=report.pk, now=now + tasks.CLAIM_TIMEOUT)
+
+        assert [message.to for message in mail.outbox] == [[report.created_by.email]]
+        assert CRAReportReminder.objects.filter(report=report, sent_at__isnull=False).count() == 2
 
     def test_a_claim_left_by_a_worker_that_died_is_taken_over(self, report):
         now = AWARE + timedelta(hours=19)

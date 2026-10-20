@@ -142,13 +142,20 @@ def send_due_reminders(*, report_id: str | None = None, now: datetime | None = N
             html = render_to_string("compliance/emails/cra_report_reminder.html.j2", context)
 
             for recipient in recipients:
-                claimed = []
+                # One email covers every crossed threshold, and every worker claims
+                # them in the same order. A threshold another worker holds means it
+                # is sending this email, so give back anything taken here and come
+                # back when its claim expires, rather than mail the person twice.
+                claimed: list[int] = []
                 for name in crossed:
                     outcome = _claim(report, stage, due, name, recipient, now)
-                    if isinstance(outcome, int):
-                        claimed.append(outcome)
-                    elif isinstance(outcome, datetime):
+                    if isinstance(outcome, datetime):
                         retry_at[report.pk] = min(outcome, retry_at.get(report.pk, outcome))
+                        CRAReportReminder.objects.filter(pk__in=claimed).update(claimed_at=None)
+                        claimed = []
+                        break
+                    if outcome is not None:
+                        claimed.append(outcome)
                 if not claimed:
                     continue
                 email = EmailMultiAlternatives(

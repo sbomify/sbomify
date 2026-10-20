@@ -120,7 +120,8 @@ def _known_exploited(vulnerabilities: list[Any]) -> list[Any]:
     ]
 
 
-def _prefill(product: Any, advisory: Any) -> dict[str, str]:
+def _prefill(product: Any, advisory: Any, kind: str) -> dict[str, str]:
+    """What sbomify already knows, limited to the fields a ``kind`` report has."""
     values: dict[str, str] = {"product_name": product.name}
     assessment = CRAAssessment.objects.filter(product=product).first()
     if assessment is not None:
@@ -139,7 +140,8 @@ def _prefill(product: Any, advisory: Any) -> dict[str, str]:
             values["cve_id"] = vulnerability.cve_id
             values["general_information"] = vulnerability.description[:4000]
             values["measures_for_users"] = vulnerability.recommendation[:4000]
-    return {key: value for key, value in values.items() if value}
+    on_form = {field.id for field in fields_for(kind)}
+    return {key: value for key, value in values.items() if value and key in on_form}
 
 
 def create_report(
@@ -186,7 +188,7 @@ def create_report(
                 aware_at=aware_at,
                 occurred_at=occurred_at,
                 measure_available_at=measure_available_at,
-                srp_fields=_prefill(product, advisory),
+                srp_fields=_prefill(product, advisory, kind),
                 created_by=user,
             )
     except IntegrityError:
