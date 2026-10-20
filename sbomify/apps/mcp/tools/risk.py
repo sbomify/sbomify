@@ -289,6 +289,8 @@ def _present(row: dict[str, Any], *, concise: bool = False) -> dict[str, Any]:
             "package": untrusted(row.get("package"), limit=512),
             "version": untrusted(row.get("version"), limit=128),
             "ecosystem": untrusted(row.get("ecosystem"), limit=64),
+            "purl": untrusted(row.get("purl"), limit=512) or None,
+            "aliases": [untrusted(alias, limit=128) for alias in row.get("aliases") or []] or None,
             "cvss_score": row.get("cvss_score"),
             "fixed_version": untrusted(row.get("fixed"), limit=128) or None,
             "suppressed": row.get("vex_suppressed") or None,

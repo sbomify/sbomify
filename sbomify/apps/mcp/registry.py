@@ -86,6 +86,8 @@ _FORBIDDEN_NAMED = frozenset(
         # Approving an access request makes the requester a guest of the
         # workspace, the same outward-facing act as publishing to the trust center.
         "access_request:decide",
+        # Approving a VEX submission applies an agent's ruling; a person decides it in the app.
+        "vex_submission:decide",
     }
 )
 
