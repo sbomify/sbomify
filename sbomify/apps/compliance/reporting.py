@@ -296,13 +296,20 @@ def missing_fields(kind: str, stage: str, values: dict[str, Any]) -> list[str]:
     return [field.id for field in required_fields(kind, stage) if not str(values.get(field.id) or "").strip()]
 
 
-def validate_values(values: dict[str, Any]) -> dict[str, str]:
-    """Field id to error, for the JSON-stored values. Column fields are not stored here."""
+def validate_values(values: dict[str, Any], kind: str | None = None) -> dict[str, str]:
+    """Field id to error, for the JSON-stored values. Column fields are not stored here.
+
+    With ``kind``, a field that only the other kind of report has is refused too:
+    it would be stored but never shown or sent.
+    """
     errors: dict[str, str] = {}
+    allowed = {field.id for field in fields_for(kind)} if kind else None
     for key, value in values.items():
         field = FIELDS_BY_ID.get(key)
         if field is None or field.column:
             errors[key] = "This is not a field of the ENISA form."
+        elif allowed is not None and key not in allowed:
+            errors[key] = f"This field is not on a {kind} report."
         elif field.choices and value and value not in field.choices:
             errors[key] = f"Choose one of: {', '.join(field.choices)}."
         elif field.max_length is not None and len(str(value or "")) > field.max_length:

@@ -3,7 +3,7 @@
 {% block dashboard_content %}
     <c-layout.frame>
     <c-layout.page-header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act.">
-    {% if can_manage %}
+    {% if can_manage_cra_reports %}
         <c-buttons.primary size="sm" @click="$dispatch('open-new-incident-report')">
         <i class="fas fa-plus" aria-hidden="true"></i>New incident report
         </c-buttons.primary>
@@ -62,7 +62,7 @@
         <c-feedback.empty-state icon="fas fa-tower-broadcast" title="No CRA reports" message="Start one from an advisory with a known exploited vulnerability, or record a severe incident here." />
         </c-cards.card>
     {% endif %}
-    {% if can_manage %}
+    {% if can_manage_cra_reports %}
         <div class="contents"
              x-data="{ open: false }"
              @open-new-incident-report.window="open = true">

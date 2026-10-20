@@ -50,27 +50,17 @@ def _schedule(report: CRAReport) -> None:
     """Queue reminders once the write commits, from the report as it then stands.
 
     The caller's instance may carry filings prefetched before this write, and
-    scheduling from it would queue reminders for a stage just filed. The report
-    is marked pending with the write and cleared once the broker took the
-    messages, so a broker outage neither fails a save that already committed
-    nor loses its reminders: the mark stays for ``dispatch_pending_reminders``.
+    scheduling from it would queue reminders for a stage just filed, so
+    ``schedule_pending`` reads the report afresh. The report is marked pending
+    with the write, and the mark survives a broker outage, so the outage neither
+    fails a save that already committed nor loses its reminders: the mark stays
+    for ``dispatch_pending_reminders``.
     """
-    from sbomify.apps.compliance.tasks import schedule_reminders
+    from sbomify.apps.compliance.tasks import schedule_pending
 
     CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
-
-    def schedule() -> None:
-        fresh = CRAReport.objects.prefetch_related("filings").filter(pk=report.pk).first()
-        if fresh is None:
-            return
-        try:
-            schedule_reminders(fresh)
-        except Exception:
-            logger.exception(f"Could not queue CRA reminders for report {report.pk}; they stay pending")
-            return
-        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=False)
-
-    transaction.on_commit(schedule)
+    report_id = report.pk
+    transaction.on_commit(lambda: schedule_pending(report_id))
 
 
 def _lock(report: CRAReport) -> CRAReport:
@@ -221,7 +211,7 @@ def update_report(
     dates: dict[str, datetime | None] | None = None,
 ) -> ServiceResult[CRAReport]:
     values = values or {}
-    errors = validate_values(values)
+    errors = validate_values(values, report.kind)
     if errors:
         return ServiceResult.failure("; ".join(f"{key}: {error}" for key, error in errors.items()), 400)
     dates = dates or {}
@@ -298,6 +288,11 @@ def record_filing(
     """Record a notification a person submitted in ENISA's portal."""
     if stage not in CRAReportFiling.Stage.values:
         return ServiceResult.failure("Choose what was filed.", 400)
+    srp_reference = srp_reference.strip()
+    # Filings are append-only, so a reference cut short here could never be corrected.
+    limit = CRAReportFiling._meta.get_field("srp_reference").max_length or 0
+    if len(srp_reference) > limit:
+        return ServiceResult.failure(f"The ENISA reference is at most {limit} characters.", status_code=400)
 
     try:
         with transaction.atomic():
@@ -309,7 +304,7 @@ def record_filing(
             filing = CRAReportFiling.objects.create(
                 report=report,
                 stage=stage,
-                srp_reference=srp_reference.strip()[:100],
+                srp_reference=srp_reference,
                 filed_at=filed_at or timezone.now(),
                 filed_by=user,
                 snapshot=_snapshot(report),

@@ -57,7 +57,7 @@ class CRAReportListView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
                 "tabs": cra_tabs(request, team, "reports"),
                 "reports": reports,
                 "products": report_service.products_for(team),
-                "can_manage": bool(can(request, "cra_report:manage", team)),
+                "can_manage_cra_reports": bool(can(request, "cra_report:manage", team)),
             },
         )
 
@@ -146,7 +146,7 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
                     {"value": value, "label": STAGE_LABELS[value]} for value in report_service.filable_stages(report)
                 ],
                 "filings": list(report.filings.all()),
-                "can_manage": bool(can(request, "cra_report:manage", report)),
+                "can_manage_cra_reports": bool(can(request, "cra_report:manage", report)),
             },
         )
 

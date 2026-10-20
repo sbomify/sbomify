@@ -200,19 +200,33 @@ def dispatch_pending_reminders(*, workspace_key: str | None = None) -> int:
     """
     from sbomify.apps.compliance.models import CRAReport
 
-    pending = CRAReport.objects.filter(reminders_pending=True).prefetch_related("filings")
+    pending = CRAReport.objects.filter(reminders_pending=True)
     if workspace_key:
         pending = pending.filter(team__key=workspace_key)
-    scheduled = 0
-    for report in pending:
-        try:
-            schedule_reminders(report)
-        except Exception:
-            logger.exception(f"Could not queue CRA reminders for report {report.pk}")
-            continue
-        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=False)
-        scheduled += 1
-    return scheduled
+    return sum(schedule_pending(pk) for pk in pending.values_list("pk", flat=True))
+
+
+def schedule_pending(report_id: str) -> bool:
+    """Queue a marked report's reminders, from the report as it stands once claimed.
+
+    The mark is cleared before scheduling, not after, so a write that marks the
+    report again meanwhile keeps its mark even if its own queueing fails. A
+    failure here puts the mark back. Returns whether this call scheduled it.
+    """
+    from sbomify.apps.compliance.models import CRAReport
+
+    if not CRAReport.objects.filter(pk=report_id, reminders_pending=True).update(reminders_pending=False):
+        return False
+    report = CRAReport.objects.prefetch_related("filings").filter(pk=report_id).first()
+    if report is None:
+        return False
+    try:
+        schedule_reminders(report)
+    except Exception:
+        CRAReport.objects.filter(pk=report_id).update(reminders_pending=True)
+        logger.exception(f"Could not queue CRA reminders for report {report_id}; they stay pending")
+        return False
+    return True
 
 
 @cron("15 * * * *")  # type: ignore[untyped-decorator]  # Hourly, wherever a scheduler runs

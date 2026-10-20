@@ -688,7 +688,9 @@ class TestPendingClaim:
 @pytest.fixture
 def two_products(team, product):
     other = Product.objects.create(name="Gateway", team=team)
-    advisory = SecurityAdvisory.objects.create(team=team, title="Shared library flaw", summary="One flaw, two products.")
+    advisory = SecurityAdvisory.objects.create(
+        team=team, title="Shared library flaw", summary="One flaw, two products."
+    )
     router = AdvisoryProduct.objects.create(advisory=advisory, product=product)
     AdvisoryProduct.objects.create(advisory=advisory, product=other)
     critical = AdvisoryVulnerability.objects.create(
@@ -846,3 +848,118 @@ class TestAdvisoryCardQueries:
 
         assert len(rows) == 5
         assert len(five.captured_queries) == len(two.captured_queries)
+
+
+def _incident_only_field() -> str:
+    from sbomify.apps.compliance.reporting import SRP_FIELDS
+
+    return next(field.id for field in SRP_FIELDS if field.section == "incident" and not field.column)
+
+
+@pytest.mark.django_db
+class TestFieldsOfTheOtherKind:
+    def test_a_field_of_the_other_kind_is_refused(self, report, owner):
+        key = _incident_only_field()
+
+        result = report_service.update_report(report, owner, values={key: "Ransomware on the update server."})
+
+        assert not result.ok and result.status_code == 400
+        report.refresh_from_db()
+        assert key not in report.srp_fields
+
+    def test_the_api_refuses_it_too(self, team, owner, report):
+        response = _client_for(team, owner).patch(
+            f"/api/v1/compliance/cra-reports/{report.pk}",
+            data=json.dumps({"values": {_incident_only_field(): "x"}}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400, response.content
+
+
+@pytest.mark.django_db
+class TestSrpReferenceLength:
+    def test_the_api_refuses_a_reference_the_portal_cannot_have_given(self, team, owner, report):
+        response = _client_for(team, owner).post(
+            f"/api/v1/compliance/cra-reports/{report.pk}/filings",
+            data=json.dumps({"stage": "early_warning", "srp_reference": "S" * 101}),
+            content_type="application/json",
+        )
+
+        assert response.status_code in (400, 422), response.content
+        assert not report.filings.exists()
+
+    def test_the_service_refuses_rather_than_truncates(self, report, owner):
+        result = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="S" * 101)
+
+        assert not result.ok and result.status_code == 400
+        assert not report.filings.exists()
+
+    def test_a_reference_of_a_hundred_characters_is_kept_whole(self, report, owner):
+        result = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="S" * 100)
+
+        assert result.ok and result.value.srp_reference == "S" * 100
+
+
+@pytest.mark.django_db
+class TestHeaderMenuOnReportPages:
+    def test_the_report_pages_leave_the_workspace_wide_can_manage_alone(self, team, report):
+        # can_manage is the context processor's MANAGE flag, which the header's
+        # New menu reads. The report pages name their own flag, so a member keeps
+        # the menu and any template that reads can_manage gets the workspace value.
+        client = _client_for(team, _member(team, "member", "contributor"))
+
+        for url in (reverse("compliance:cra_reports"), reverse("compliance:cra_report_detail", args=[report.id])):
+            response = client.get(url)
+            assert response.context["can_manage"] is True, url
+            assert response.context["can_manage_cra_reports"] is False, url
+            assert 'aria-label="Create new item"' in response.content.decode(), url
+        detail = client.get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+        assert "Record filing" not in detail
+
+    def test_an_admin_still_gets_the_report_controls(self, team, owner, report):
+        detail = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id]))
+
+        assert "Record filing" in detail.content.decode()
+
+
+@pytest.mark.django_db
+class TestPendingMark:
+    def test_a_write_that_marks_the_report_during_a_dispatch_keeps_its_mark(self, report):
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
+        def newer_write_marks_again(_report):
+            # A write that lands while this dispatch is scheduling, and whose own
+            # queueing then fails, leaves its mark for the next dispatch.
+            CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
+        with patch.object(tasks, "schedule_reminders", side_effect=newer_write_marks_again):
+            tasks.dispatch_pending_reminders()
+
+        report.refresh_from_db()
+        assert report.reminders_pending is True
+
+    def test_a_failed_dispatch_keeps_the_mark(self, report):
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
+        with patch.object(tasks, "schedule_reminders", side_effect=ConnectionError("down")):
+            assert tasks.dispatch_pending_reminders() == 0
+
+        report.refresh_from_db()
+        assert report.reminders_pending is True
+
+
+@pytest.mark.django_db
+class TestDispatchCooldown:
+    def test_a_broker_outage_costs_one_attempt_per_minute_of_page_views(self, team, owner, report):
+        from django.core.cache import cache
+
+        from sbomify.apps.compliance.notifications import get_notifications
+
+        cache.clear()
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+        with patch.object(tasks, "schedule_reminders", side_effect=ConnectionError("down")) as schedule:
+            get_notifications(_bell_request(team, owner))
+            get_notifications(_bell_request(team, owner))
+
+        assert schedule.call_count == 1

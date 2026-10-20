@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from ninja import Schema
-from pydantic import AwareDatetime
+from pydantic import AwareDatetime, Field
 
 
 class CRAAssessmentSchema(Schema):
@@ -162,7 +162,7 @@ class CRAReportUpdateSchema(Schema):
 
 class CRAFilingCreateSchema(Schema):
     stage: str
-    srp_reference: str = ""
+    srp_reference: str = Field("", max_length=100)
     filed_at: AwareDatetime | None = None
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +19,7 @@ from sbomify.apps.notifications.schemas import NotificationSchema
 # Early warnings are due a day after the report starts, so a day's notice
 # covers every stage without flagging a final report weeks ahead.
 WARNING_WINDOW = timedelta(hours=24)
+DISPATCH_COOLDOWN_SECONDS = 60
 
 
 def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
@@ -35,8 +37,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     from sbomify.apps.compliance.tasks import dispatch_pending_reminders
 
     # Production runs no scheduler, so an owner or admin page view is what
-    # schedules reminders a broker outage left unqueued.
-    dispatch_pending_reminders(workspace_key=workspace_key)
+    # schedules reminders a broker outage left unqueued. At most one view a
+    # minute per workspace tries, so an outage costs one attempt, not one per
+    # page view; an unreachable cache skips the attempt, as the broker is down too.
+    if cache.add(f"cra-reminder-dispatch:{workspace_key}", True, DISPATCH_COOLDOWN_SECONDS):
+        dispatch_pending_reminders(workspace_key=workspace_key)
 
     now = timezone.now()
     reports = (
