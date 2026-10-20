@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import type { Finding } from './cra-step-3';
+import { craSharedMock } from './cra-shared.mock';
 
 // Stub module-level imports BEFORE the dynamic import of `cra-step-3` so
 // importing it does not drag in the full Alpine/plugins tree and does not
@@ -14,10 +15,7 @@ mock.module('../../core/js/alerts', () => ({
   showError: () => {},
   showSuccess: () => {},
 }));
-mock.module('./cra-shared', () => ({
-  getAssessmentId: () => 'test-assessment-id',
-  saveStepAndNavigate: async () => {},
-}));
+mock.module('./cra-shared', () => craSharedMock());
 
 const { craStep3 } = await import('./cra-step-3');
 
