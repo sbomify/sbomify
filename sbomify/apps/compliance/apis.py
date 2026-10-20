@@ -930,9 +930,9 @@ def update_cra_report(request: HttpRequest, report_id: str, payload: CRAReportUp
     sent = payload.model_dump(exclude_unset=True)
     dates = {name: sent[name] for name in ("aware_at", "occurred_at", "measure_available_at") if name in sent}
     result = update_report(report, request.user, values=sent.get("values"), dates=dates)
-    if not result.ok:
+    if not result.ok or result.value is None:
         return result.status_code or 400, ErrorResponse(error=result.error or "Could not update the report")
-    return 200, _report_to_schema(report)
+    return 200, _report_to_schema(result.value)
 
 
 @router.delete(

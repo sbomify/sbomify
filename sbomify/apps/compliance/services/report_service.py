@@ -43,9 +43,30 @@ _DATE_FIELDS = ("aware_at", "occurred_at", "measure_available_at")
 
 
 def _schedule(report: CRAReport) -> None:
+    """Queue reminders once the write commits, from the report as it then stands.
+
+    The caller's instance may carry filings prefetched before this write, and
+    scheduling from it would queue reminders for a stage just filed.
+    """
     from sbomify.apps.compliance.tasks import schedule_reminders
 
-    transaction.on_commit(lambda: schedule_reminders(report))
+    def schedule() -> None:
+        fresh = CRAReport.objects.prefetch_related("filings").filter(pk=report.pk).first()
+        if fresh is not None:
+            schedule_reminders(fresh)
+
+    transaction.on_commit(schedule)
+
+
+def _lock(report: CRAReport) -> CRAReport:
+    """The report row, locked until the transaction ends and read fresh.
+
+    Editing, filing and deleting each check the filings and then write. Taking
+    the same row lock first means a filing cannot land between another
+    request's check and its write, and the check reads the filings as they are
+    now rather than as the caller fetched them.
+    """
+    return CRAReport.objects.select_for_update().get(pk=report.pk)
 
 
 def _prefill(product: Any, advisory: Any) -> dict[str, str]:
@@ -135,8 +156,6 @@ def update_report(
     values: dict[str, Any] | None = None,
     dates: dict[str, datetime | None] | None = None,
 ) -> ServiceResult[CRAReport]:
-    if report.is_closed:
-        return ServiceResult.failure("The final report is filed, so this report can no longer change.", 409)
     values = values or {}
     errors = validate_values(values)
     if errors:
@@ -145,19 +164,23 @@ def update_report(
     if "aware_at" in dates and dates["aware_at"] is None:
         return ServiceResult.failure("When you became aware is required.", 400)
 
-    before = {**report.srp_fields, **{name: getattr(report, name) for name in _DATE_FIELDS}}
-    merged = dict(report.srp_fields)
-    for key, value in values.items():
-        text = str(value or "").strip()
-        if text:
-            merged[key] = text
-        else:
-            merged.pop(key, None)
-    report.srp_fields = merged
-    for name, moment in dates.items():
-        if name in _DATE_FIELDS:
-            setattr(report, name, moment)
-    report.save()
+    with transaction.atomic():
+        report = _lock(report)
+        if report.is_closed:
+            return ServiceResult.failure("The final report is filed, so this report can no longer change.", 409)
+        before = {**report.srp_fields, **{name: getattr(report, name) for name in _DATE_FIELDS}}
+        merged = dict(report.srp_fields)
+        for key, value in values.items():
+            text = str(value or "").strip()
+            if text:
+                merged[key] = text
+            else:
+                merged.pop(key, None)
+        report.srp_fields = merged
+        for name, moment in dates.items():
+            if name in _DATE_FIELDS:
+                setattr(report, name, moment)
+        report.save()
 
     after = {**report.srp_fields, **{name: getattr(report, name) for name in _DATE_FIELDS}}
     changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
@@ -192,13 +215,14 @@ def record_filing(
     """Record a notification a person submitted in ENISA's portal."""
     if stage not in CRAReportFiling.Stage.values:
         return ServiceResult.failure("Choose what was filed.", 400)
-    if report.is_closed and stage != Stage.USERS_INFORMED:
-        return ServiceResult.failure("The final report is already filed.", 409)
-    if stage != Stage.INTERMEDIATE and report.filings.filter(stage=stage).exists():
-        return ServiceResult.failure(f"The {STAGE_LABELS[stage].lower()} is already recorded.", 409)
 
     try:
         with transaction.atomic():
+            report = _lock(report)
+            if report.is_closed and stage != Stage.USERS_INFORMED:
+                return ServiceResult.failure("The final report is already filed.", 409)
+            if stage != Stage.INTERMEDIATE and report.filings.filter(stage=stage).exists():
+                return ServiceResult.failure(f"The {STAGE_LABELS[stage].lower()} is already recorded.", 409)
             filing = CRAReportFiling.objects.create(
                 report=report,
                 stage=stage,
@@ -237,12 +261,15 @@ def record_filing(
 
 
 def delete_report(report: CRAReport, user: Any) -> ServiceResult[None]:
-    if report.filings.exists():
-        return ServiceResult.failure("A report with a recorded filing is kept as evidence.", 409)
+    with transaction.atomic():
+        report = _lock(report)
+        if report.filings.exists():
+            return ServiceResult.failure("A report with a recorded filing is kept as evidence.", 409)
+        report_id = report.pk  # delete() clears it
+        report.delete()
     log_cra_report_event(
-        "cra.report.deleted", user=user, team_id=report.team_id, report_id=report.pk, detail={"kind": report.kind}
+        "cra.report.deleted", user=user, team_id=report.team_id, report_id=report_id, detail={"kind": report.kind}
     )
-    report.delete()
     return ServiceResult.success(None)
 
 

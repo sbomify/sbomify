@@ -87,6 +87,29 @@ class NextDue:
         return STAGE_LABELS[self.stage]
 
 
+def open_deadlines(
+    kind: str,
+    aware_at: datetime,
+    measure_available_at: datetime | None,
+    *,
+    filed: dict[str, datetime],
+) -> list[tuple[str, datetime | None]]:
+    """Every deadline stage not yet filed with its due date, in order.
+
+    Empty once the final report is filed, even if a stage before it never was:
+    the final report closes the report.
+    """
+    if Stage.FINAL_REPORT in filed:
+        return []
+    due = due_dates(
+        kind,
+        aware_at=aware_at,
+        measure_available_at=measure_available_at,
+        notification_filed_at=filed.get(Stage.NOTIFICATION),
+    )
+    return [(stage, due[stage]) for stage in DEADLINE_STAGES if stage not in filed]
+
+
 def next_due(
     kind: str,
     aware_at: datetime,
@@ -96,16 +119,8 @@ def next_due(
     now: datetime,
 ) -> NextDue | None:
     """The first deadline stage not yet filed, or None once the final report is."""
-    due = due_dates(
-        kind,
-        aware_at=aware_at,
-        measure_available_at=measure_available_at,
-        notification_filed_at=filed.get(Stage.NOTIFICATION),
-    )
-    for stage in DEADLINE_STAGES:
-        if stage not in filed:
-            moment = due[stage]
-            return NextDue(stage, moment, moment is not None and now > moment)
+    for stage, moment in open_deadlines(kind, aware_at, measure_available_at, filed=filed):
+        return NextDue(stage, moment, moment is not None and now > moment)
     return None
 
 

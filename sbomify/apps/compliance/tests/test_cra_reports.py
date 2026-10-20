@@ -9,10 +9,14 @@ from unittest.mock import patch
 import pytest
 from django.core import mail
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.test import Client, RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.compliance import tasks
+from sbomify.apps.compliance.forms import CRAFilingForm
 from sbomify.apps.compliance.models import CRAReport, CRAReportFiling, CRAReportReminder
 from sbomify.apps.compliance.reporting import Stage
 from sbomify.apps.compliance.services import report_service
@@ -28,6 +32,10 @@ from sbomify.apps.security_advisories.models import (
 from sbomify.apps.teams.models import Member, Workspace
 
 AWARE = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
+
+
+def _ms(**delta: float) -> int:
+    return int(timedelta(**delta).total_seconds() * 1000)
 
 
 @pytest.fixture
@@ -345,13 +353,210 @@ class TestReminders:
         assert "boss@example.com" in recipients
         assert "worker@example.com" not in recipients
 
-    def test_scheduling_queues_a_message_before_and_at_the_next_deadline(self, report):
+    def test_scheduling_queues_a_message_before_and_at_every_open_deadline(self, report):
+        # The final report has no date until a fix exists, so it queues nothing yet.
         now = AWARE + timedelta(hours=1)
         with patch.object(tasks.send_cra_report_reminders, "send_with_options") as send:
             tasks.schedule_reminders(report, now=now)
 
         delays = sorted(call.kwargs["delay"] for call in send.call_args_list)
-        assert delays == [int(timedelta(hours=17).total_seconds() * 1000), int(timedelta(hours=23).total_seconds() * 1000)]
+        assert delays == [_ms(hours=17), _ms(hours=23), _ms(hours=65), _ms(hours=71)]
+
+    def test_a_missed_early_warning_still_brings_the_notification_reminder(self, report):
+        tasks.send_due_reminders(now=AWARE + timedelta(hours=67))
+
+        subjects = [message.subject for message in mail.outbox]
+        assert any("notification" in subject for subject in subjects), subjects
+        assert any("early warning" in subject for subject in subjects), subjects
+
+    def test_scheduling_reads_the_filing_just_recorded(self, team, owner, product, django_capture_on_commit_callbacks):
+        aware = timezone.now() - timedelta(hours=1)
+        created = report_service.create_report(team, owner, kind="incident", product_id=product.id, aware_at=aware)
+        fetched = report_service.get_report(team, created.value.pk)
+        list(fetched.filings.all())  # the prefetch the page and the API already hold
+
+        with patch.object(tasks.send_cra_report_reminders, "send_with_options") as send:
+            with django_capture_on_commit_callbacks(execute=True):
+                report_service.record_filing(fetched, owner, stage=Stage.EARLY_WARNING, srp_reference="A")
+
+        # Only the notification is still open, 72 hours after becoming aware.
+        delays = sorted(call.kwargs["delay"] for call in send.call_args_list)
+        assert len(delays) == 2, delays
+        assert abs(delays[0] - _ms(hours=65)) < _ms(minutes=1)
+        assert abs(delays[1] - _ms(hours=71)) < _ms(minutes=1)
+
+
+@pytest.mark.django_db
+class TestReminderDelivery:
+    def test_a_failed_send_is_retried_without_mailing_whoever_got_it(self, team, report):
+        _member(team, "admin", "boss")
+        original = tasks.EmailMultiAlternatives.send
+        failing = {"boss@example.com"}
+
+        def send(self, *args, **kwargs):
+            if self.to[0] in failing:
+                raise ConnectionError("mail server down")
+            return original(self, *args, **kwargs)
+
+        now = AWARE + timedelta(hours=19)
+        with patch.object(tasks.EmailMultiAlternatives, "send", send):
+            with pytest.raises(tasks.ReminderDeliveryFailed):
+                tasks.send_due_reminders(now=now)
+        assert [message.to for message in mail.outbox] == [[report.created_by.email]]
+
+        failing.clear()
+        with patch.object(tasks.EmailMultiAlternatives, "send", send):
+            tasks.send_due_reminders(now=now)
+
+        assert sorted(message.to[0] for message in mail.outbox) == sorted([report.created_by.email, "boss@example.com"])
+
+    def test_a_reminder_another_worker_is_sending_is_left_to_it(self, report):
+        now = AWARE + timedelta(hours=19)
+        CRAReportReminder.objects.create(
+            report=report,
+            stage=Stage.EARLY_WARNING,
+            threshold="soon",
+            recipient=report.created_by.email,
+            claimed_at=now,
+        )
+
+        tasks.send_due_reminders(now=now)
+
+        assert mail.outbox == []
+
+    def test_a_claim_left_by_a_worker_that_died_is_taken_over(self, report):
+        now = AWARE + timedelta(hours=19)
+        CRAReportReminder.objects.create(
+            report=report,
+            stage=Stage.EARLY_WARNING,
+            threshold="soon",
+            recipient=report.created_by.email,
+            claimed_at=now - timedelta(hours=1),
+        )
+
+        tasks.send_due_reminders(now=now)
+
+        assert [message.to for message in mail.outbox] == [[report.created_by.email]]
+        assert CRAReportReminder.objects.get(report=report, threshold="soon").sent_at is not None
+
+
+@pytest.mark.django_db
+class TestStaleReports:
+    """A report fetched before another request wrote to it, as two concurrent requests would."""
+
+    @staticmethod
+    def _stale(team, report):
+        fetched = report_service.get_report(team, report.pk)
+        list(fetched.filings.all())
+        return fetched
+
+    def test_a_report_filed_after_it_was_fetched_is_not_deleted(self, team, owner, report):
+        stale = self._stale(team, report)
+        report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="A")
+
+        result = report_service.delete_report(stale, owner)
+
+        assert result.status_code == 409
+        assert CRAReport.objects.filter(pk=report.pk).exists()
+
+    def test_a_report_closed_after_it_was_fetched_is_not_edited(self, team, owner, report):
+        stale = self._stale(team, report)
+        report_service.record_filing(report, owner, stage=Stage.FINAL_REPORT, srp_reference="F")
+
+        result = report_service.update_report(stale, owner, values={"general_information": "Late edit."})
+
+        assert result.status_code == 409
+        report.refresh_from_db()
+        assert "general_information" not in report.srp_fields
+
+    def test_a_report_closed_after_it_was_fetched_takes_no_more_stages(self, team, owner, report):
+        stale = self._stale(team, report)
+        report_service.record_filing(report, owner, stage=Stage.FINAL_REPORT, srp_reference="F")
+
+        result = report_service.record_filing(stale, owner, stage=Stage.NOTIFICATION, srp_reference="N")
+
+        assert result.status_code == 409
+        assert not CRAReportFiling.objects.filter(report=report, stage=Stage.NOTIFICATION).exists()
+
+    @pytest.mark.parametrize("action", ["update", "file", "delete"])
+    def test_each_write_locks_the_report_row(self, team, owner, report, action):
+        calls = {
+            "update": lambda: report_service.update_report(report, owner, values={"title": "T"}),
+            "file": lambda: report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING),
+            "delete": lambda: report_service.delete_report(report, owner),
+        }
+        with CaptureQueriesContext(connection) as queries:
+            calls[action]()
+
+        assert any("compliance_cra_reports" in q["sql"] and "FOR UPDATE" in q["sql"] for q in queries.captured_queries)
+
+
+@pytest.mark.django_db
+class TestTimestamps:
+    """A time without a zone cannot be compared with the deadlines, so the API refuses it."""
+
+    def test_creating_with_a_naive_time_is_refused(self, team, owner, product, advisory):
+        client = _client_for(team, owner)
+
+        response = client.post(
+            "/api/v1/compliance/cra-reports",
+            data=json.dumps(
+                {
+                    "kind": "vulnerability",
+                    "product_id": product.id,
+                    "advisory_id": advisory.id,
+                    "aware_at": "2026-10-01T09:00:00",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 422, response.content
+        assert not CRAReport.objects.exists()
+
+    def test_editing_with_a_naive_time_is_refused(self, team, owner, report):
+        client = _client_for(team, owner)
+
+        response = client.patch(
+            f"/api/v1/compliance/cra-reports/{report.pk}",
+            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00"}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 422, response.content
+        report.refresh_from_db()
+        assert report.measure_available_at is None
+
+    def test_filing_with_a_naive_time_is_refused(self, team, owner, report):
+        client = _client_for(team, owner)
+
+        response = client.post(
+            f"/api/v1/compliance/cra-reports/{report.pk}/filings",
+            data=json.dumps({"stage": "early_warning", "filed_at": "2026-10-01T12:00:00"}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 422, response.content
+        assert not report.filings.exists()
+
+    def test_an_aware_time_is_accepted(self, team, owner, report):
+        client = _client_for(team, owner)
+
+        response = client.patch(
+            f"/api/v1/compliance/cra-reports/{report.pk}",
+            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00+02:00"}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200, response.content
+        report.refresh_from_db()
+        assert report.measure_available_at == datetime(2026, 10, 3, 7, 0, tzinfo=UTC)
+
+    def test_the_page_forms_read_times_as_utc(self):
+        form = CRAFilingForm(data={"stage": "early_warning", "filed_at": "2026-10-01T12:00"})
+
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data["filed_at"] == datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
 
 @pytest.mark.django_db

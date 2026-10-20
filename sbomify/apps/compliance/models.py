@@ -813,16 +813,27 @@ class CRAReportFiling(models.Model):
 
 
 class CRAReportReminder(models.Model):
-    """One row per reminder email sent, so a message delivered twice mails once."""
+    """One reminder to one person: claimed by the worker sending it, then marked sent.
+
+    The unique row is the claim, so two workers that reach the same reminder
+    at once cannot both send it. Per person, so a send that fails for one
+    address is retried for that address alone.
+    """
 
     class Meta:
         db_table = "compliance_cra_report_reminders"
         constraints = [
-            models.UniqueConstraint(fields=["report", "stage", "threshold"], name="cra_report_reminder_once"),
+            models.UniqueConstraint(
+                fields=["report", "stage", "threshold", "recipient"], name="cra_report_reminder_once"
+            ),
         ]
 
     report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="reminders")
     stage = models.CharField(max_length=20)
     # "soon" is six hours before the deadline, "due" is the deadline itself.
     threshold = models.CharField(max_length=10)
-    sent_at = models.DateTimeField(auto_now_add=True)
+    recipient = models.EmailField()
+    # Set by the worker sending it. A claim older than the actor's time limit
+    # belongs to a worker that died, and another may take it over.
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)

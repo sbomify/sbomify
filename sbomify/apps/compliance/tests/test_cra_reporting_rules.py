@@ -93,6 +93,25 @@ def test_nothing_is_due_once_the_final_report_is_filed():
     assert reporting.next_due("vulnerability", AWARE, None, filed=filed, now=AWARE) is None
 
 
+def test_nothing_is_due_once_a_final_report_is_filed_ahead_of_the_earlier_stages():
+    # A filed final report closes the report, so a stage skipped before it is not owed.
+    filed = {Stage.FINAL_REPORT: AWARE}
+
+    assert reporting.next_due("vulnerability", AWARE, None, filed=filed, now=AWARE) is None
+    assert reporting.open_deadlines("vulnerability", AWARE, None, filed=filed) == []
+
+
+def test_every_unfiled_stage_with_a_date_stays_open():
+    # A missed early warning does not hide the notification due after it.
+    open_stages = reporting.open_deadlines("vulnerability", AWARE, None, filed={})
+
+    assert open_stages == [
+        (Stage.EARLY_WARNING, AWARE + timedelta(hours=24)),
+        (Stage.NOTIFICATION, AWARE + timedelta(hours=72)),
+        (Stage.FINAL_REPORT, None),
+    ]
+
+
 def test_the_registry_keeps_each_kind_to_its_own_fields():
     vulnerability = {f.id for f in reporting.fields_for("vulnerability")}
     incident = {f.id for f in reporting.fields_for("incident")}

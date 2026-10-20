@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from ninja import Schema
+from pydantic import AwareDatetime
 
 
 class CRAAssessmentSchema(Schema):
@@ -139,28 +140,30 @@ class SignatureResponseSchema(Schema):
     is_signed: bool
 
 
+# The deadlines are counted from these times, so one without a zone is refused
+# rather than guessed: it cannot be compared with the deadlines at all.
 class CRAReportCreateSchema(Schema):
     kind: str
     product_id: str
-    aware_at: datetime
+    aware_at: AwareDatetime
     advisory_id: str | None = None
-    occurred_at: datetime | None = None
-    measure_available_at: datetime | None = None
+    occurred_at: AwareDatetime | None = None
+    measure_available_at: AwareDatetime | None = None
 
 
 class CRAReportUpdateSchema(Schema):
     """Only what is sent changes. A value sent empty is cleared."""
 
     values: dict[str, Any] | None = None
-    aware_at: datetime | None = None
-    occurred_at: datetime | None = None
-    measure_available_at: datetime | None = None
+    aware_at: AwareDatetime | None = None
+    occurred_at: AwareDatetime | None = None
+    measure_available_at: AwareDatetime | None = None
 
 
 class CRAFilingCreateSchema(Schema):
     stage: str
     srp_reference: str = ""
-    filed_at: datetime | None = None
+    filed_at: AwareDatetime | None = None
 
 
 class CRAFilingSchema(Schema):
