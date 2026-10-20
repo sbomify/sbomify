@@ -27,11 +27,13 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return []
 
     from sbomify.apps.compliance.models import CRAReport
-    from sbomify.apps.core.authz import ADMINISTER
-    from sbomify.apps.teams.queries import get_member_role_by_key
+    from sbomify.apps.core.authz import can
+    from sbomify.apps.teams.models import Workspace
 
     workspace_key = (request.session.get("current_workspace") or {}).get("key")
-    if not workspace_key or get_member_role_by_key(request.user, workspace_key) not in ADMINISTER:
+    workspace = Workspace.objects.filter(key=workspace_key).first() if workspace_key else None
+    # Through can(), like the other providers, so a token's scope narrows it too.
+    if workspace is None or not can(request, "cra_report:manage", workspace):
         return []
 
     from sbomify.apps.compliance.tasks import dispatch_pending_reminders

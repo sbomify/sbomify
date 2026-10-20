@@ -19,7 +19,7 @@
     </p>
     <p>File it in ENISA's Single Reporting Platform, then record the filing in sbomify so the next deadline is tracked.</p>
     <p>
-        <a href="{{ base_url }}{% url 'compliance:cra_report_detail' report.id %}">Open the report</a>
+        <a href="{{ base_url }}{% url 'workspaces:switch_team' report.team.key %}?next={% url 'compliance:cra_report_detail' report.id %}">Open the report</a>
     </p>
     <p>
         Cheers,

@@ -97,7 +97,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="action" value="file" />
                 <c-forms.field label="Stage" for="filingStage" required>
-                <c-forms.select id="filingStage" name="stage" :options="filing_stages" required />
+                <c-forms.select id="filingStage" name="stage" :options="filing_stages" :selected="filing_stage" required />
                 </c-forms.field>
                 <c-forms.field label="ENISA reference" for="filingReference">
                 <c-forms.input id="filingReference" name="srp_reference" maxlength="100" />

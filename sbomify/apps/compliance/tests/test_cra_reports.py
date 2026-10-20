@@ -963,3 +963,60 @@ class TestDispatchCooldown:
             get_notifications(_bell_request(team, owner))
 
         assert schedule.call_count == 1
+
+
+@pytest.mark.django_db
+class TestFilingStageDefault:
+    """Filings are append-only, so the stage the form submits by default must be the one that is due."""
+
+    def _file_early_stages(self, report, owner):
+        for stage in (Stage.EARLY_WARNING, Stage.NOTIFICATION):
+            assert report_service.record_filing(report, owner, stage=stage).ok
+
+    def _selected(self, page):
+        import re
+
+        select = re.search(r'<select[^>]*id="filingStage".*?</select>', page.content.decode(), re.S).group(0)
+        return re.findall(r'<option value="([^"]*)"\s+selected', select)
+
+    def test_after_the_notification_the_form_defaults_to_the_final_report(self, team, owner, report):
+        self._file_early_stages(report, owner)
+
+        page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id]))
+
+        assert page.context["filing_stage"] == Stage.FINAL_REPORT
+        assert self._selected(page) == [Stage.FINAL_REPORT]
+
+    def test_a_copy_tab_on_a_filed_stage_does_not_become_the_default(self, team, owner, report):
+        self._file_early_stages(report, owner)
+
+        url = reverse("compliance:cra_report_detail", args=[report.id]) + "?stage=early_warning"
+        page = _client_for(team, owner).get(url)
+
+        assert self._selected(page) == [Stage.FINAL_REPORT]
+
+
+@pytest.mark.django_db
+class TestBellFollowsTokenScope:
+    def test_a_token_without_cra_report_manage_sees_no_cra_alerts(self, team, owner, report):
+        from types import SimpleNamespace
+
+        from sbomify.apps.compliance.notifications import get_notifications
+
+        request = _bell_request(team, owner)
+        with patch("sbomify.apps.compliance.notifications.timezone.now", return_value=AWARE + timedelta(hours=20)):
+            assert len(get_notifications(request)) == 1
+            request.access_token_record = SimpleNamespace(scopes=["workspace:read"])
+            assert get_notifications(request) == []
+
+
+@pytest.mark.django_db
+def test_the_reminder_link_opens_the_report_in_its_own_workspace(team, report):
+    """The detail view resolves a report in the session's workspace, so the link switches to it first."""
+    tasks.send_due_reminders(now=AWARE + timedelta(hours=23))
+
+    detail = reverse("compliance:cra_report_detail", args=[report.id])
+    link = f"{reverse('workspaces:switch_team', args=[team.key])}?next={detail}"
+    message = mail.outbox[0]
+    assert link in message.body
+    assert link in message.alternatives[0][0]

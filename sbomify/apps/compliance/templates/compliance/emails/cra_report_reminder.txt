@@ -4,7 +4,7 @@ The {{ stage_label|lower }} for {{ report.product.name }} {% if overdue %}was{% 
 
 File it in ENISA's Single Reporting Platform, then record the filing in sbomify so the next deadline is tracked.
 
-Open the report: {{ base_url }}{% url 'compliance:cra_report_detail' report.id %}
+Open the report: {{ base_url }}{% url 'workspaces:switch_team' report.team.key %}?next={% url 'compliance:cra_report_detail' report.id %}
 
 Cheers,
 The sbomify Team

@@ -129,6 +129,10 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
         if stage not in DEADLINE_STAGES:
             stage = Stage.FINAL_REPORT
         layout = report_service.srp_layout(report, stage)
+        filable = report_service.filable_stages(report)
+        # Filings are append-only, so the form must not fall back on the browser's
+        # first option: default to the stage on screen, else the one that is due.
+        filing_stage = next((s for s in (stage, nxt.stage if nxt else None) if s in filable), None)
         return render(
             request,
             "compliance/cra_report_detail.html.j2",
@@ -142,9 +146,8 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
                 "layout": layout,
                 "missing": [row["label"] for row in layout if row["missing"]],
                 "edit_rows": [row for row in layout if not row["column"]],
-                "filing_stages": [
-                    {"value": value, "label": STAGE_LABELS[value]} for value in report_service.filable_stages(report)
-                ],
+                "filing_stages": [{"value": value, "label": STAGE_LABELS[value]} for value in filable],
+                "filing_stage": filing_stage,
                 "filings": list(report.filings.all()),
                 "can_manage_cra_reports": bool(can(request, "cra_report:manage", report)),
             },
