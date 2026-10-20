@@ -320,6 +320,7 @@ export function craStep5() {
           } else {
             showError('Failed to get download URL');
           }
+          await this.reloadLastExport();
         } else {
           const err = await resp.json();
           showError(err.error || 'Failed to export');
@@ -329,6 +330,19 @@ export function craStep5() {
       } finally {
         this.isExporting = false;
       }
+    },
+
+    // A signature is checked against one ZIP's hash, so after a new export the
+    // card and the signing form must describe that ZIP, not the one the page
+    // loaded with. The step context builds it the same way the page does.
+    async reloadLastExport(): Promise<void> {
+      const resp = await fetch(`/api/v1/compliance/cra/${this.assessmentId}/step/5`, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
+      });
+      if (!resp.ok) return;
+      const ctx = await resp.json();
+      this.lastExport = ctx.data?.last_export || null;
+      this.signFile = null;
     },
 
     get signCommand(): string {

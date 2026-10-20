@@ -170,3 +170,33 @@ describe('craStep5 signature download', () => {
     expect(calls.some((x) => x.url.endsWith('/download'))).toBe(false);
   });
 });
+
+describe('craStep5 export', () => {
+  test('a new export replaces the one the page loaded with, so signing targets the new ZIP', async () => {
+    stubPage({ ...unsignedExport, signature });
+    const fresh = { ...unsignedExport, id: 'pkg-2', content_hash: 'def', file_name: 'cra-package-acme-def.zip' };
+    const base = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url === '/api/v1/compliance/cra/a1/export') {
+        calls.push({ url, init });
+        return { ok: true, json: async () => ({ id: 'pkg-2' }) };
+      }
+      if (url === '/api/v1/compliance/cra/a1/step/5') {
+        calls.push({ url, init });
+        return { ok: true, json: async () => ({ step: 5, data: { last_export: fresh }, is_complete: false }) };
+      }
+      return base(url, init);
+    }) as unknown as typeof fetch;
+    const c = craStep5();
+    c.init();
+
+    await c.exportBundle();
+
+    expect(c.lastExport?.id).toBe('pkg-2');
+    expect(c.lastExport?.signature).toBeNull();
+    expect(c.signCommand).toBe(
+      'cosign sign-blob cra-package-acme-def.zip --bundle cra-package-acme-def.zip.sigstore.json',
+    );
+    expect(opened).toEqual(['https://s3/zip']);
+  });
+});
