@@ -721,6 +721,31 @@ def create_export(request: HttpRequest, assessment_id: str) -> _Response:
 
 
 @router.get(
+    "/cra/{assessment_id}/export/{package_id}",
+    response={200: dict, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_export(request: HttpRequest, assessment_id: str, package_id: str) -> _Response:
+    """One export package as step 5 shows it.
+
+    A page that just exported reads its own package here rather than the
+    assessment's newest, which another export may already have replaced, so
+    the signing form names the ZIP that was downloaded.
+    """
+    result = _get_assessment_or_error(request, assessment_id)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    try:
+        package = CRAExportPackage.objects.get(pk=package_id, assessment=result)
+    except CRAExportPackage.DoesNotExist:
+        return 404, ErrorResponse(error="Export package not found", error_code="not_found")
+
+    from .services.wizard_service import export_summary
+
+    return 200, export_summary(package)
+
+
+@router.get(
     "/cra/{assessment_id}/export/{package_id}/download",
     response={200: dict, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )

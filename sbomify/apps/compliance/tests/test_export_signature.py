@@ -398,6 +398,68 @@ class TestSignatureApi:
 
 
 @pytest.mark.django_db
+class TestExportSummaryApi:
+    """One package's summary, so a page signs the ZIP it downloaded and not the newest one."""
+
+    def _get(self, client, token, assessment, package_id: str):
+        return client.get(f"/api/v1/compliance/cra/{assessment.id}/export/{package_id}", **get_api_headers(token))
+
+    def test_it_describes_the_package_asked_for_not_the_newest(self, settings, authenticated_api_client, assessment):
+        settings.BILLING = False
+        mine = _package(assessment)
+        _package(assessment, content_hash="b" * 64, signed_by=SIGNER, signed_by_issuer=GOOGLE)
+        client, token = authenticated_api_client
+
+        response = self._get(client, token, assessment, mine.id)
+
+        assert response.status_code == 200, response.content
+        body = response.json()
+        assert body["id"] == mine.id
+        assert body["file_name"] == f"cra-package-export-test-product-{SIGNED_DIGEST[:12]}.zip"
+        assert body["signature"] is None
+
+    def test_a_package_of_another_assessment_is_404(
+        self, settings, authenticated_api_client, assessment, sample_team_with_owner_member, sample_user
+    ):
+        from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
+        from sbomify.apps.core.models import Product
+
+        settings.BILLING = False
+        team = sample_team_with_owner_member.team
+        other_product = Product.objects.create(name="Other Product", team=team)
+        other = get_or_create_assessment(other_product.id, sample_user, team).value
+        theirs = _package(other)
+        client, token = authenticated_api_client
+
+        response = self._get(client, token, assessment, theirs.id)
+
+        assert response.status_code == 404
+
+    def test_a_member_is_refused_like_the_download(self, settings, sample_team_with_owner_member, assessment):
+        from django.test import Client
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+        from sbomify.apps.core.models import User
+        from sbomify.apps.teams.models import Member
+
+        settings.BILLING = False
+        package = _package(assessment)
+        member = User.objects.create_user(username="member_reader", email="reader@acme.test", password="x")
+        Member.objects.create(user=member, team=sample_team_with_owner_member.team, role="member")
+        token = AccessToken.objects.create(
+            user=member, encoded_token=create_personal_access_token(member), description="member-token"
+        )
+
+        summary = self._get(Client(), token, assessment, package.id)
+        download = Client().get(
+            f"/api/v1/compliance/cra/{assessment.id}/export/{package.id}/download", **get_api_headers(token)
+        )
+
+        assert summary.status_code == download.status_code == 403
+
+
+@pytest.mark.django_db
 class TestStepFivePage:
     """Driven through the real URL: the signer has to survive the summary, the step context and the template."""
 
