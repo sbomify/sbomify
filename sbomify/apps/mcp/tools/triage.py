@@ -1,7 +1,7 @@
 """The triage loop: read a vulnerability's prompts, send a ruling for a person to approve, and follow it.
 
 Each tool delegates to the REST view, so the gate, the source label and the
-response are the API's. An AI agent token reaches all four and nothing that
+response are the API's. An AI agent token reaches all five and nothing that
 writes a ruling directly: a submission waits in the approval queue until a
 person decides it in the app, and the registry refuses ``vex_submission:decide``
 outright, so no tool can approve one.
@@ -9,6 +9,7 @@ outright, so no tool can approve one.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
@@ -19,6 +20,26 @@ from ._base import clamp_page, mcp_tool, resolve_workspace, run_db, unwrap_view,
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
+
+# The REST duplicate refusal tells a caller to GET the pending submission; an MCP agent has a tool for that.
+_REST_CHECK = re.compile(r"GET /api/v\d+/vulnerability-scanning/vex-submissions/(\w+)")
+
+
+def _for_mcp(prompt: dict[str, Any]) -> dict[str, Any]:
+    """Swap the triage prompt's REST sending section for the MCP tools'. The rest is the API's, unchanged."""
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import triage_filename, triage_upload_lines
+
+    triage = prompt.get("triage_prompt")
+    if not triage:
+        return prompt
+    component_id = prompt["component_id"]
+    filename = triage_filename(prompt["component_name"], component_id)
+    rest = "\n".join(triage_upload_lines(filename, component_id))
+    if triage.endswith(rest):
+        mcp = "\n".join(triage_upload_lines(filename, component_id, channel="mcp"))
+        prompt["triage_prompt"] = triage[: -len(rest)] + mcp
+    return prompt
 
 
 class Decision(BaseModel):
@@ -65,7 +86,7 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.vulnerability_scanning import apis
 
             team = resolve_workspace(principal)
-            return unwrap_view(
+            prompt = unwrap_view(
                 apis.get_fix_prompt(
                     principal.request,
                     workspace_key(team),
@@ -80,6 +101,7 @@ def register_tools(mcp: FastMCP) -> None:
                 ),
                 action="Fix prompt",
             )
+            return _for_mcp(prompt)
 
         return await run_db(call)
 
@@ -115,9 +137,11 @@ def register_tools(mcp: FastMCP) -> None:
                 )
             except ValidationError as exc:
                 raise ToolError(f"Invalid decisions: {exc}") from exc
-            return unwrap_view(
-                apis.create_vex_submission(principal.request, component_id, payload), action="VEX submission"
-            )
+            status, body = apis.create_vex_submission(principal.request, component_id, payload)
+            if status == 409 and isinstance(body, dict) and isinstance(body.get("detail"), str):
+                detail = _REST_CHECK.sub(r'get_vex_submission with submission_id "\1"', body["detail"])
+                body = {**body, "detail": detail}
+            return unwrap_view((status, body), action="VEX submission")
 
         return await run_db(call)
 
@@ -164,5 +188,24 @@ def register_tools(mcp: FastMCP) -> None:
 
             resolve_workspace(principal)
             return unwrap_view(apis.get_vex_submission(principal.request, submission_id), action="VEX submission")
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "withdraw_vex_submission", "vex_submission:create", writes=True, idempotent=False)
+    async def withdraw_vex_submission(principal: Principal, submission_id: str) -> dict[str, Any]:
+        """Take back one of your submissions that nobody has approved or rejected yet.
+
+        Use it when you sent the wrong ruling or a newer finding changes it.
+        Only the submitter can withdraw a submission, and only while it is
+        still pending.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.vulnerability_scanning import apis
+
+            resolve_workspace(principal)
+            return unwrap_view(
+                apis.withdraw_vex_submission(principal.request, submission_id), action="Withdrawing VEX submission"
+            )
 
         return await run_db(call)
