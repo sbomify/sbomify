@@ -272,6 +272,20 @@ class Workspace(models.Model):
             "miss the removal."
         ),
     )
+    # The workspace's own advisory numbering, for a team that already publishes
+    # under a scheme or is moving from a platform that issued numbers in it.
+    # Blank keeps the generated ``<NAME>-SA`` prefix.
+    advisory_id_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Prefix for new security advisory ids, e.g. ACME-SA. Blank uses one derived from the name.",
+    )
+    advisory_id_start_at = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(999_999)],
+        help_text="Lowest number a new security advisory id may take in each year's sequence.",
+    )
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,

@@ -57,7 +57,7 @@
         <c-forms.field horizontal label="Preferred languages" for="security_txt_preferred_languages" hint="Comma-separated language codes, such as en, de or fr.">
         <c-forms.input size="sm" id="security_txt_preferred_languages" name="security_txt_preferred_languages" value="{{ security_txt_config.preferred_languages|default:'en' }}" disabled="{{ can_administer|yesno:',1' }}" />
         </c-forms.field>
-        <c-forms.field horizontal label="Canonical URL" hint="Set automatically from your Trust Center address.">
+        <c-forms.field horizontal wide label="Canonical URL" hint="Set automatically from your Trust Center address.">
         {% if trust_center_url %}
             <c-forms.input size="sm" readonly aria-label="Canonical URL" value="{{ trust_center_url }}/.well-known/security.txt" />
         {% else %}
@@ -68,9 +68,11 @@
                value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
         </c-forms.field>
     </div>
-    </c-cards.card>
+    <c-slot name="footer">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <c-forms.hint>Saving sets the file's expiry to one year from now.</c-forms.hint>
+        <c-forms.hint compact>Saving sets the file's expiry to one year from now.</c-forms.hint>
         <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">Save security.txt</c-buttons.primary>
     </div>
+    </c-slot>
+    </c-cards.card>
 </form>

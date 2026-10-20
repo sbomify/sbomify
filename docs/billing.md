@@ -39,7 +39,7 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 | --------------------------- | ------------------------------------------------------ |
 | `models.py`                 | BillingPlan model, feature flags, price calculations   |
 | `views.py`                  | HTTP endpoints (plan selection, checkout, portal)      |
-| `billing_processing.py`     | Webhook event handlers, check_billing_limits decorator |
+| `billing_processing.py`     | Webhook event handlers, the plan-limit map             |
 | `stripe_client.py`          | Stripe API wrapper with error handling                 |
 | `stripe_pricing_service.py` | Fetches/caches pricing from Stripe                     |
 | `team_pricing_service.py`   | Calculates team-specific pricing display               |
@@ -98,20 +98,16 @@ sbomify uses Stripe for payment processing and subscription management. The bill
 
 ## Billing Limits Enforcement
 
-Use the `check_billing_limits` decorator to enforce plan limits:
+Products, components and seats are limited through one map and one count:
 
-```python
-from sbomify.apps.billing.billing_processing import check_billing_limits
+- `RESOURCE_TYPE_TO_LIMIT_FIELD` in `billing_processing.py` names the plan field for each resource (`product`, `component`, `user`), and `get_resource_limit(plan, resource_type)` reads it.
+- `get_team_asset_count(team_id, resource_type)` in `core/queries.py` counts current usage. A seat is a member or an unexpired invitation, bots excluded.
 
-class MyCreateView(View):
-    @check_billing_limits('product')  # or 'component'
-    def post(self, request, *args, **kwargs):
-        # Create logic here
-```
+Creating a product or component goes through `_check_billing_limits` in `core/apis.py`, which also applies suspension and scheduled-downgrade rules, and `_enforce_limit_under_lock` re-checks under a row lock. Adding a member goes through `teams.utils.user_seat`, which holds the row lock while `can_add_user_to_team` decides. An invitee who is accepting already holds a counted seat, so they may join when every seat is taken.
 
 Limits are stored in `Workspace.billing_plan_limits` JSONField:
 
-- `max_products`, `max_components`
+- `max_products`, `max_components`, `max_users`
 - When billing is disabled (`BILLING=FALSE`), all workspaces get unlimited access
 
 ## Async Tasks & Cron Jobs

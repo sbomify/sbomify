@@ -1,6 +1,6 @@
 <div class="contents"
-     x-data="uploadDialog"
-     @open-upload.window="uploadOpen = true"
+     x-data="uploadDialog({ bomTypes: false })"
+     @open-upload.window="openFromEvent($event)"
      @close-upload.window="uploadOpen = false"
      @hashchange.window="openFromHash()">
     <c-modal id="upload-document" show="uploadOpen" title="Upload document" icon="fas fa-upload" x-data="documentUpload('{{ component_id }}', {{ max_upload_size_mb }})" x-init="documentTypeSubcategories = window.parseJsonScript('document-type-subcategories-{{ component_id }}')">

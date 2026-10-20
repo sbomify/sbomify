@@ -34,6 +34,10 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+#: How a scanner is named to a reader. Plugin names are identifiers, not copy.
+SCANNER_NAMES = {"osv": "OSV", "dependency-track": "Dependency-Track"}
+
+
 class ComponentItemPublicView(View):
     @staticmethod
     def _owns_artifact(item_type: str, item_id: str, component_id: str) -> bool:
@@ -409,7 +413,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     # was scanned.
                     vulnerability_summary = {
                         **counts,
-                        "provider": ", ".join(sorted({name for name, _, _ in provider_runs})),
+                        "provider": ", ".join(sorted({SCANNER_NAMES.get(name, name) for name, _, _ in provider_runs})),
                         "scan_date": max(created_at for _, _, created_at in provider_runs),
                     }
 

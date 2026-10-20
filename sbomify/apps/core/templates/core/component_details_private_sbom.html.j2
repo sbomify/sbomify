@@ -9,16 +9,16 @@
          hx-swap="innerHTML">
         <c-feedback.loading-table message="Loading SBOMs..." />
     </div>
-    {# Vulnerabilities drill-down for the latest SBOM — hidden when the latest scan is clean #}
+    {# Vulnerabilities: the workspace list scoped to this component, at the version the reader picks #}
     {% include "core/components/component_vulnerabilities.html.j2" %}
     {# CBOM issues drill-down for the latest CBOM — hidden when crypto assessments are clean #}
     {% include "core/components/component_cbom_issues.html.j2" %}
-    {% comment %}Outside the panel, which HTMX swaps on its own: a modal inside
-    that region would be torn out from under an open dialog on the next filter
-    keystroke. One instance serves every row.{% endcomment %}
-    {% if can_triage %}
-        {% include "plugins/components/triage_modal.html.j2" %}
-    {% endif %}
+    {% comment %}Outside the panel, which HTMX swaps on its own: a dialog inside
+    that region would be torn out from under the reader on the next filter
+    keystroke. A row's Triage loads its dialog into the host; one fix prompt
+    dialog serves every row.{% endcomment %}
+    {% if can_triage %}<c-vulnerabilities.triage-host />{% endif %}
+    <c-vulnerabilities.fix-prompt-dialog />
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}

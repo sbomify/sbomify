@@ -74,8 +74,8 @@ def sbom(tmp_path: Path) -> tuple[Path, str]:
 
 
 class TestTheNotFoundMessage:
-    """This text becomes the run's error once the retry budget is spent, so it
-    is the only thing most users will ever see about the failure."""
+    """This text becomes the finding's description once the retries run out,
+    so it is the only thing most users will ever see about the failure."""
 
     def _raise_404(self, sbom: tuple[Path, str]) -> AttestationNotYetAvailableError:
         sbom_file, sha256 = sbom
@@ -112,7 +112,7 @@ class TestTheNotFoundMessage:
         """The retry ladder only helps a slow publish. A mismatched subject is
         permanent, and the message has to admit that possibility or the user
         waits for something that will never arrive."""
-        assert "different subject" in str(self._raise_404(sbom))
+        assert "attested a different file" in str(self._raise_404(sbom))
 
     def test_it_does_not_assert_the_attestation_is_absent(self, sbom) -> None:
         """GitHub answers 404 for a private or nonexistent repo too, because
@@ -122,11 +122,21 @@ class TestTheNotFoundMessage:
         message = str(self._raise_404(sbom))
 
         assert "private" in message
-        assert "unauthenticated" in message
+        assert "without signing in to GitHub" in message
+        assert "has no attestation" not in message
 
-    def test_it_still_admits_the_attestation_may_simply_be_late(self, sbom) -> None:
-        """The reason this is a retryable error in the first place."""
-        assert "not been published yet" in str(self._raise_404(sbom))
+    def test_it_says_what_to_add_when_nothing_is_attested(self, sbom) -> None:
+        """A repository that never set attestation up is the commonest cause,
+        and the one instruction that clears it is the attest step."""
+        assert "actions/attest-build-provenance" in str(self._raise_404(sbom))
+
+    def test_it_titles_the_finding_left_when_the_retries_run_out(self, sbom) -> None:
+        assert self._raise_404(sbom).title == "No attestation found"
+
+    def test_it_follows_the_copy_rules(self, sbom) -> None:
+        message = str(self._raise_404(sbom))
+
+        assert "\u2014" not in message and "\u2013" not in message
 
 
 class TestTheFindingOnOtherFailures:
@@ -178,6 +188,11 @@ class TestTheFindingOnOtherFailures:
         dropped it, leaving those users with advice about a step they do not
         have."""
         assert "attest-build-provenance" in self._finding(sbom).description
+
+    def test_it_follows_the_copy_rules(self, sbom) -> None:
+        description = self._finding(sbom).description
+
+        assert "\u2014" not in description and "\u2013" not in description
 
 
 def _cyclonedx_with_dependency_vcs(tmp_path: Path) -> tuple[Path, str]:

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timezone as dt_timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from django.db import DatabaseError, OperationalError, transaction
 
@@ -15,6 +15,17 @@ from sbomify.logging import getLogger
 from .models import BillingPlan
 from .stripe_client import StripeError, get_stripe_client
 from .stripe_pricing_service import StripePricingService
+
+
+class QuotaDisplay(TypedDict):
+    """One quota tile: what the plan allows and what the workspace is using."""
+
+    icon: str
+    label: str
+    value: str
+    used: str
+    unlimited: bool
+
 
 logger = getLogger(__name__)
 
@@ -315,40 +326,34 @@ class TeamPricingService:
 
         return {"amount": "Custom", "period": "pricing", "billing_period": None}
 
-    def get_plan_limits(self, team: Any, billing_plan_obj: BillingPlan | None = None) -> list[dict[str, str]]:
-        """
-        Get formatted plan limits for display.
+    def get_plan_limits(self, team: Any, billing_plan_obj: BillingPlan | None = None) -> list[QuotaDisplay]:
+        """Each quota the plan enforces, with what the workspace is using against it.
 
-        Args:
-            team: Team instance
-            billing_plan_obj: Optional BillingPlan instance
-
-        Returns:
-            List of limit dictionaries with icon, label, and value
+        A bare limit does not answer the question anyone opens this page with,
+        which is how close they are to it. Members is here because it is an
+        enforced quota: leaving it out hid the one limit that blocks an invite.
         """
-        # Define PLAN_LIMITS locally to avoid circular import.
-        # Members first, matching the order the plan comparison cards use. It is a
-        # real quota: max_users is enforced on invite, so leaving it out hid the
-        # one limit that stops a workspace growing.
         PLAN_LIMITS: dict[str, dict[str, str]] = {
             "max_users": {
                 "label": "Members",
                 "icon": "users",
+                "usage": "members",
             },
             "max_products": {
                 "label": "Products",
                 "icon": "cube",
+                "usage": "products",
             },
             "max_components": {
                 "label": "Components",
                 "icon": "puzzle-piece",
+                "usage": "components",
             },
         }
 
-        plan_limits: list[dict[str, str]] = []
+        usage = self.get_workspace_usage(team)
         billing_plan_limits = team.billing_plan_limits or {}
 
-        # Fetch billing plan if not provided
         if billing_plan_obj is None:
             billing_plan = team.billing_plan or "community"
             try:
@@ -356,46 +361,56 @@ class TeamPricingService:
             except BillingPlan.DoesNotExist:
                 billing_plan_obj = None
 
-        if billing_plan_obj:
-            # Build limits dict - prefer billing_plan_limits, fallback to model
-            limits_dict: dict[str, Any] = {}
-            for limit_key in PLAN_LIMITS:
-                if limit_key in billing_plan_limits:
-                    limits_dict[limit_key] = billing_plan_limits[limit_key]
-                else:
-                    # None on the model means no cap, which reads as "Unlimited"
-                    # below. Skipping the key instead dropped the whole tile, so an
-                    # unlimited quota looked like a quota the plan does not have.
-                    limits_dict[limit_key] = getattr(billing_plan_obj, limit_key, None)
+        # An unlimited quota is stored as None on the model and as -1 in the
+        # cached limits. Both are a value to show, so the key is always kept:
+        # dropping it left the tile out and the row half empty.
+        limits_dict: dict[str, Any] = {}
+        for limit_key in PLAN_LIMITS:
+            # Seats come from the plan, which is all the seat check reads. Not
+            # every downgrade path refreshes the cached seat limit, so a former
+            # Business workspace would otherwise read "of 10" on Community.
+            from_plan = limit_key == "max_users" and billing_plan_obj is not None
+            if limit_key in billing_plan_limits and not from_plan:
+                limits_dict[limit_key] = billing_plan_limits[limit_key]
+            elif billing_plan_obj is not None:
+                limits_dict[limit_key] = getattr(billing_plan_obj, limit_key, None)
 
-            # Build plan_limits list
-            for limit_key, limit_value in limits_dict.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-
-                if limit_value is None or limit_value == -1:
-                    limit_display = "Unlimited"
-                else:
-                    limit_display = str(limit_value)
-
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": limit_display,
-                    }
+        plan_limits: list[QuotaDisplay] = []
+        for limit_key, limit_value in limits_dict.items():
+            unlimited = limit_value is None or limit_value == -1
+            label = PLAN_LIMITS[limit_key]["label"]
+            if limit_key == "max_users" and usage["pending_invites"]:
+                # Pending invitations hold a seat, so the quota counts them. A
+                # tile reading "Members" alone would disagree with the number
+                # above it and with the guard that blocks the next invite.
+                label = "Members and invitations"
+            plan_limits.append(
+                QuotaDisplay(
+                    icon=PLAN_LIMITS[limit_key]["icon"],
+                    label=label,
+                    value="Unlimited" if unlimited else str(limit_value),
+                    used=str(usage[PLAN_LIMITS[limit_key]["usage"]]),
+                    unlimited=unlimited,
                 )
-        else:
-            # Fallback: use billing_plan_limits if BillingPlan doesn't exist
-            for limit_key, limit_value in billing_plan_limits.items():
-                if limit_key not in PLAN_LIMITS:
-                    continue
-                plan_limits.append(
-                    {
-                        "icon": PLAN_LIMITS[limit_key]["icon"],
-                        "label": PLAN_LIMITS[limit_key]["label"],
-                        "value": "Unlimited" if limit_value == -1 or limit_value is None else str(limit_value),
-                    }
-                )
+            )
 
         return plan_limits
+
+    def get_workspace_usage(self, team: Any) -> dict[str, int]:
+        """What the workspace is currently using, keyed like the quotas.
+
+        Seats come from the query the seat check itself uses: human members with
+        bots excluded, plus the invitations already holding a place. A plain
+        member count would read under on a workspace with invitations out and
+        over on one with OIDC publishers.
+        """
+        from sbomify.apps.core.models import Component, Product
+        from sbomify.apps.teams.queries import get_team_user_counts
+
+        _, pending_invites, seats = get_team_user_counts(team.id)
+        return {
+            "members": seats,
+            "pending_invites": pending_invites,
+            "products": Product.objects.filter(team=team).count(),
+            "components": Component.objects.filter(team=team).count(),
+        }
