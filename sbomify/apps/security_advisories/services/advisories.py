@@ -95,7 +95,7 @@ _UNKNOWN_EVENT = {"label": "Event", "variant": "secondary", "icon": "fas fa-circ
 def display_id(advisory: SecurityAdvisory) -> str:
     """The id a human quotes.
 
-    ``tracking_id`` is the workspace's own scheme (OSPN-2026-0034 and the like)
+    ``tracking_id`` is the workspace's own scheme (ACME-SA-2026-0034 and the like)
     and is what belongs on screen when set. The generated primary key is the
     fallback, since an advisory is addressable before anyone assigns a tracking
     id.
@@ -743,14 +743,17 @@ def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str)
 
     The team row is locked because ``allocate_tracking_id`` counts by reading
     the highest existing id for the year: two publishes racing would read the
-    same maximum and one would lose to the unique constraint.
+    same maximum and one would lose to the unique constraint. The locked row
+    also carries the current prefix and starting number.
     """
     if visibility not in PUBLISHABLE_VISIBILITIES:
         return ServiceResult.failure("Choose whether to publish publicly or to NDA readers.", status_code=400)
 
     from sbomify.apps.teams.models import Workspace
 
-    Workspace.objects.select_for_update().filter(pk=team.pk).first()
+    # Allocate from the row just locked, not the caller's copy: numbering
+    # settings saved since that copy was loaded must govern the new id.
+    team = Workspace.objects.select_for_update().filter(pk=team.pk).first() or team
 
     advisory = (
         SecurityAdvisory.objects.select_for_update()

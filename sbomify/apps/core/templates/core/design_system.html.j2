@@ -1197,7 +1197,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <p class="text-sm text-text-muted m-0">
         One row per vulnerability in a component; totals count each vulnerability once. Product and component replace the
         whole browser, every other control only the results. Each row's actions menu opens the page's fix prompt
-        dialog, Fix prompt for all opens it with one prompt for every row the filters select, and Triage loads its dialog into the page's triage host.
+        dialog, and Triage loads its dialog into the page's triage host.
     </p>
     <c-vulnerabilities.workspace-browser :data="workspace_vulnerability_demo" browser_target="demo-vulnerabilities-browser" results_target="demo-vulnerabilities-results" />
     <c-vulnerabilities.fix-prompt-dialog />
@@ -1206,9 +1206,18 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-cards.header title="Fix prompt" />
     <c-vulnerabilities.fix-prompt :fix="fix_prompt_demo" />
     </c-cards.card>
+    <h3 id="vex-submission" class="text-lg font-semibold text-text">VEX submission</h3>
+    <p class="text-sm text-text-muted m-0">
+        A row of the Review tab's list: one line saying what the ruling is, opening to the submitter's notes, each
+        ruling, the fix link and anything the queue could not read. The first row starts open. Shown read-only here;
+        with can_decide the row carries Approve and Reject.
+    </p>
     <c-cards.card flush>
-    <c-cards.header title="Fix prompt for all" />
-    <c-vulnerabilities.bulk-fix-prompt :fix="bulk_fix_prompt_demo" code_id="bulk-fix-prompt-demo-text" triage_code_id="bulk-triage-prompt-demo-text" />
+    <ul class="m-0 list-none p-0">
+        {% for item in vex_submission_demos %}
+            <c-vulnerabilities.vex-submission :item="item" :open="forloop.first" />
+        {% endfor %}
+    </ul>
     </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
