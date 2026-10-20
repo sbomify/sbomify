@@ -6,6 +6,7 @@ import { registerAlpineComponent } from '../../core/js/alpine-components';
 import { getCsrfToken } from '../../core/js/csrf';
 import { showError, showSuccess } from '../../core/js/alerts';
 import { getAssessmentId } from './cra-shared';
+import { shellQuote } from '../../core/js/components/repository-setup';
 
 interface StepStatus {
   complete: boolean;
@@ -355,7 +356,9 @@ export function craStep5() {
       const sig = this.lastExport?.signature;
       return (
         `cosign verify-blob ${file} --bundle ${file}.sigstore.json` +
-        ` --certificate-identity ${sig?.signed_by ?? '<signer>'} --certificate-oidc-issuer ${sig?.issuer ?? '<issuer>'}`
+        // A workflow identity can carry &, ; or $( in its git ref.
+        ` --certificate-identity ${sig ? shellQuote(sig.signed_by) : '<signer>'}` +
+        ` --certificate-oidc-issuer ${sig ? shellQuote(sig.issuer) : '<issuer>'}`
       );
     },
 
@@ -380,10 +383,11 @@ export function craStep5() {
         showError('This file is not a Sigstore bundle.');
         return;
       }
+      const packageId = this.lastExport.id;
       this.isSigning = true;
       try {
         const resp = await fetch(
-          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.lastExport.id}/signature`,
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${packageId}/signature`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
@@ -396,7 +400,10 @@ export function craStep5() {
         );
         const body = await resp.json().catch(() => ({}));
         if (resp.ok) {
-          this.lastExport = { ...this.lastExport, signature: body as ExportSignature };
+          // A new export can replace the card while the signature is checked.
+          if (this.lastExport?.id === packageId) {
+            this.lastExport = { ...this.lastExport, signature: body as ExportSignature };
+          }
           showSuccess('Signature verified and saved');
         } else {
           showError(body.error || 'Failed to upload the signature');

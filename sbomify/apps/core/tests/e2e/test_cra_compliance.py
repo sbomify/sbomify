@@ -291,6 +291,7 @@ def test_step_five_offers_keyless_signing_then_names_the_signer(
     form = page.get_by_test_id("signature-upload-form")
     expect(form).to_be_visible()
     expect(form.locator("pre code")).to_have_text(f"cosign sign-blob {file_name} --bundle {file_name}.sigstore.json")
+    expect(form.get_by_role("button", name="Copy code")).to_be_visible()
     expect(page.locator("#signature-issuer")).to_have_value("https://github.com/login/oauth")
     upload = page.get_by_test_id("upload-signature-btn")
     expect(upload).to_be_disabled()
@@ -310,7 +311,7 @@ def test_step_five_offers_keyless_signing_then_names_the_signer(
 
     expect(page.get_by_test_id("bundle-signed-by")).to_contain_text("security@acme.test through Google on Aug 6, 2026")
     expect(page.get_by_test_id("bundle-signature").locator("pre code")).to_contain_text(
-        "--certificate-identity security@acme.test --certificate-oidc-issuer https://accounts.google.com"
+        "--certificate-identity 'security@acme.test' --certificate-oidc-issuer 'https://accounts.google.com'"
     )
     expect(page.get_by_test_id("download-signature-btn")).to_be_visible()
     expect(form).to_have_count(0)

@@ -93,10 +93,21 @@ describe('craStep5 signing commands', () => {
     c.init();
     expect(c.verifyCommand).toBe(
       'cosign verify-blob cra-package-acme-abc.zip --bundle cra-package-acme-abc.zip.sigstore.json' +
-        ' --certificate-identity security@acme.test --certificate-oidc-issuer https://accounts.google.com',
+        " --certificate-identity 'security@acme.test' --certificate-oidc-issuer 'https://accounts.google.com'",
     );
     expect(c.issuerLabel(signature.issuer)).toBe('Google');
     expect(c.issuerLabel('https://gitlab.example.test')).toBe('https://gitlab.example.test');
+  });
+  test('quote a signer the shell would otherwise read as commands', () => {
+    const identity = "https://github.com/acme/app/.github/workflows/sign.yml@refs/heads/a&b;c|d$(id)'e";
+    stubPage({ ...unsignedExport, signature: { ...signature, signed_by: identity } });
+    const c = craStep5();
+    c.init();
+    expect(c.verifyCommand).toBe(
+      'cosign verify-blob cra-package-acme-abc.zip --bundle cra-package-acme-abc.zip.sigstore.json' +
+        " --certificate-identity 'https://github.com/acme/app/.github/workflows/sign.yml@refs/heads/a&b;c|d$(id)'\"'\"'e'" +
+        " --certificate-oidc-issuer 'https://accounts.google.com'",
+    );
   });
 });
 
@@ -198,5 +209,38 @@ describe('craStep5 export', () => {
       'cosign sign-blob cra-package-acme-def.zip --bundle cra-package-acme-def.zip.sigstore.json',
     );
     expect(opened).toEqual(['https://s3/zip']);
+  });
+});
+
+describe('craStep5 signature response', () => {
+  test('a signature that lands after a new export stays with the package it was made for', async () => {
+    stubPage(unsignedExport);
+    const fresh = { ...unsignedExport, id: 'pkg-2', content_hash: 'def', file_name: 'cra-package-acme-def.zip' };
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => (release = resolve));
+    const base = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/pkg-1/signature')) {
+        await pending;
+        return { ok: true, status: 201, json: async () => signature };
+      }
+      if (url === '/api/v1/compliance/cra/a1/export') return { ok: true, json: async () => ({ id: 'pkg-2' }) };
+      if (url === '/api/v1/compliance/cra/a1/step/5') {
+        return { ok: true, json: async () => ({ step: 5, data: { last_export: fresh }, is_complete: false }) };
+      }
+      return base(url, init);
+    }) as unknown as typeof fetch;
+    const c = craStep5();
+    c.init();
+    c.signFile = bundleFile('{}');
+    c.signForm.identity = 'security@acme.test';
+
+    const upload = c.uploadSignature();
+    await c.exportBundle();
+    release();
+    await upload;
+
+    expect(c.lastExport?.id).toBe('pkg-2');
+    expect(c.lastExport?.signature).toBeNull();
   });
 });
