@@ -390,3 +390,24 @@ class TestSystemCheck:
 
         assert check_export_signing_key(None) == []
 
+    def test_a_usable_key_without_a_base_url_warns(self, settings):
+        # The key URL written into every signed bundle is APP_BASE_URL plus a
+        # path, so with no base URL a recipient gets a path they cannot fetch.
+        from sbomify.apps.compliance.checks import check_export_signing_key
+
+        settings.CRA_EXPORT_SIGNING_KEY = _private_pem(ec.generate_private_key(ec.SECP256R1()))
+        settings.APP_BASE_URL = ""
+
+        messages = check_export_signing_key(None)
+
+        assert [m.id for m in messages] == ["compliance.W002"]
+        assert "APP_BASE_URL" in messages[0].msg
+
+    def test_no_key_and_no_base_url_is_quiet(self, settings):
+        from sbomify.apps.compliance.checks import check_export_signing_key
+
+        settings.CRA_EXPORT_SIGNING_KEY = ""
+        settings.APP_BASE_URL = ""
+
+        assert check_export_signing_key(None) == []
+
