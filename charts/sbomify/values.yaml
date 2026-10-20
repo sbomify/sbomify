@@ -48,14 +48,9 @@ app:
   #  - name: SENTRY_ENVIRONMENT
   #    value: production
   # Extra envFrom sources (ConfigMap/Secret refs) applied to every sbomify workload.
-  # Optional CRA export signing: a Secret holding CRA_EXPORT_SIGNING_KEY (an
-  # unencrypted PKCS#8 EC P-256 PEM) and, after a rotation,
-  # CRA_EXPORT_SIGNING_RETIRED_PUBLIC_KEYS. Without it, CRA bundles go out unsigned.
   extraEnvFrom: []
   #  - secretRef:
   #      name: sbomify-stripe
-  #  - secretRef:
-  #      name: sbomify-cra-export-signing
 
 # -- Secrets the application needs. Leave `existingSecret` empty to have the
 # chart create a Secret from the inline values below.

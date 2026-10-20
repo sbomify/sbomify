@@ -177,11 +177,6 @@
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Exporting...</span>
                     </c-buttons.primary>
-                    <template x-if="signedPackageId">
-                        <c-buttons.secondary @click="downloadSignature()" data-testid="download-signature-btn" class="w-full">
-                        <i class="fas fa-signature mr-2" aria-hidden="true"></i> Download signature
-                        </c-buttons.secondary>
-                    </template>
                     {% comment %}
                     A named reason where there is one. An assessment can
                     show every step complete and 21/21 controls satisfied
@@ -241,15 +236,68 @@
                                 <code class="font-mono text-xs break-all"
                                       data-testid="bundle-content-hash"
                                       x-text="lastExport.content_hash"></code>
-                                <template x-if="lastExport.integrity.signature">
-                                    <p class="m-0 mt-1" data-testid="bundle-signed-by">
-                                        Signed by sbomify with export key
-                                        <code class="font-mono text-xs"
-                                              x-text="lastExport.integrity.signature.key_id"></code>
-                                    </p>
-                                </template>
                             </div>
                         </template>
+                        {% comment %}
+                        The manufacturer's keyless Sigstore signature over this ZIP. sbomify
+                        keeps no signing key: the manufacturer signs with cosign as themselves
+                        or as a CI workflow, and the upload is verified against the signer named.
+                        {% endcomment %}
+                        <div class="text-xs text-text-muted space-y-2"
+                             data-testid="bundle-signature">
+                            <p class="m-0 font-medium text-text">
+                                <i class="fas fa-signature mr-1" aria-hidden="true"></i>
+                                Signature
+                            </p>
+                            <template x-if="lastExport.signature">
+                                <div class="space-y-2">
+                                    <p class="m-0" data-testid="bundle-signed-by">
+                                        Signed by
+                                        <code class="font-mono text-xs break-all"
+                                              x-text="lastExport.signature.signed_by"></code>
+                                        through <span x-text="issuerLabel(lastExport.signature.issuer)"></span>
+                                        on <span x-text="signedOn(lastExport.signature.signed_at)"></span>.
+                                    </p>
+                                    <p class="m-0">Anyone with the ZIP and the signature can check it:</p>
+                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="verifyCommand"></code></pre>
+                                    <c-buttons.secondary size="sm" @click="downloadSignature()" data-testid="download-signature-btn">
+                                    <i class="fas fa-download mr-2" aria-hidden="true"></i> Download signature
+                                    </c-buttons.secondary>
+                                </div>
+                            </template>
+                            <template x-if="!lastExport.signature">
+                                <form class="space-y-3"
+                                      @submit.prevent="uploadSignature()"
+                                      data-testid="signature-upload-form">
+                                    <p class="m-0">sbomify keeps no signing key. Sign this ZIP yourself with cosign 3 or later:</p>
+                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="signCommand"></code></pre>
+                                    <p class="m-0">
+                                        cosign signs you in through your browser, or uses a CI workflow's identity. It records who signed and the ZIP's SHA-256 in Sigstore's public log. The ZIP's contents stay private.
+                                    </p>
+                                    <c-forms.file-upload size="sm" id="signature-file" accept=".json,application/json" on_change="pickSignatureFile($event)" icon="fas fa-file-signature" hint="The .sigstore.json file cosign wrote">
+                                    <span x-text="signFile ? signFile.name : 'Choose the signature file'"></span>
+                                    </c-forms.file-upload>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <c-forms.field label="Signed as" for="signature-identity" hint="Your email, or the CI workflow URI" required>
+                                        <c-forms.input id="signature-identity" x-model="signForm.identity" placeholder="security@example.com" maxlength="512" required />
+                                        </c-forms.field>
+                                        <c-forms.field label="Signed in through" for="signature-issuer">
+                                        <c-forms.select id="signature-issuer" x-model="signForm.issuer">
+                                        <template x-for="option in signerIssuers" :key="option.value">
+                                            <option :value="option.value"
+                                                    :selected="option.value === signForm.issuer"
+                                                    x-text="option.label"></option>
+                                        </template>
+                                        </c-forms.select>
+                                        </c-forms.field>
+                                    </div>
+                                    <c-buttons.primary type="submit" size="sm" ::disabled="isSigning || !signFile || !signForm.identity.trim()" data-testid="upload-signature-btn">
+                                    <span x-show="!isSigning"><i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload signature</span>
+                                    <span x-show="isSigning" x-cloak>Checking signature...</span>
+                                    </c-buttons.primary>
+                                </form>
+                            </template>
+                        </div>
                         {# Per-file manifest summary #}
                         <div class="border border-border rounded-lg overflow-hidden">
                             <div class="px-3 py-2 bg-surface-hover text-xs font-medium text-text-muted flex items-center justify-between">

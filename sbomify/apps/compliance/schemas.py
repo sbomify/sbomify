@@ -81,6 +81,23 @@ class ExportPackageSchema(Schema):
     manifest: dict[str, Any]
     created_at: datetime
     signed: bool = False
+    signed_by: str = ""
+    signed_by_issuer: str = ""
+    signed_at: datetime | None = None
+
+
+class ExportSignatureUploadSchema(Schema):
+    """The bundle ``cosign sign-blob --bundle`` wrote, and who it says signed."""
+
+    bundle: dict[str, Any]
+    identity: str = Field(min_length=1, max_length=512)
+    issuer: str = Field(min_length=1, max_length=255)
+
+
+class ExportSignatureSchema(Schema):
+    signed_by: str
+    issuer: str
+    signed_at: datetime
 
 
 class SBOMStatusSchema(Schema):

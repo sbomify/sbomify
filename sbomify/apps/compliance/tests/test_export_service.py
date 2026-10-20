@@ -282,12 +282,11 @@ class TestBuildExportPackage:
         """Manifest format bumped to 1.2 when the per-document PDF
         rendering shipped — downstream consumers that pin on the version
         can decide whether to expect a sibling ``.pdf`` next to each
-        ``.md`` in the manifest's files array. 1.3 added the optional
-        ``integrity.signature`` block."""
+        ``.md`` in the manifest's files array."""
         mock_get_content.return_value = b"mock content"
 
         result = build_export_package(assessment_with_docs, sample_user)
-        assert result.value.manifest["format_version"] == "1.3"
+        assert result.value.manifest["format_version"] == "1.2"
 
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_sha256_round_trips_through_shasum(
@@ -647,14 +646,17 @@ class TestIntegrityReadmeFormatVersion:
         assert "`metadata/manifest.sha256`" in readme
         assert "`metadata/INTEGRITY.md`" in readme
 
-    def test_readme_references_downstream_signing(self):
-        """README carries the "About signatures" section pointing
-        operators at ``cosign sign-blob`` / ``gpg --detach-sign`` as
-        the downstream-signing path. Bundle signing itself is not
-        implemented in-tree."""
+    def test_readme_explains_keyless_signing_and_verification(self):
+        """sbomify holds no key: the manufacturer signs keyless with cosign,
+        and a recipient verifies against a signer they did not take from
+        the bundle."""
         readme = _integrity_readme("deadbeef" * 8, date(2036, 3, 1))
-        assert "About signatures" in readme
-        assert "cosign sign-blob" in readme
+        assert "holds no signing key" in readme
+        assert "cosign sign-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json" in readme
+        assert "cosign verify-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json" in readme
+        assert "--certificate-identity <signer>" in readme
+        assert "--certificate-oidc-issuer <issuer>" in readme
+        assert "public transparency log" in readme
 
 
 @pytest.mark.django_db

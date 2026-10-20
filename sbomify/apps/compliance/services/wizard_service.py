@@ -22,6 +22,7 @@ from sbomify.apps.compliance.models import (
     CRAGeneratedDocument,
     OSCALFinding,
 )
+from sbomify.apps.compliance.services.export_service import export_file_name
 from sbomify.apps.compliance.services.oscal_service import (
     create_assessment_result,
     ensure_cra_catalog,
@@ -578,6 +579,16 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
         export_data = {
             "id": last_export.id,
             "content_hash": last_export.content_hash,
+            "file_name": export_file_name(last_export),
+            "signature": (
+                {
+                    "signed_by": last_export.signed_by,
+                    "issuer": last_export.signed_by_issuer,
+                    "signed_at": last_export.signed_at.isoformat() if last_export.signed_at else None,
+                }
+                if last_export.signed_by
+                else None
+            ),
             "created_at": last_export.created_at.isoformat(),
             "format_version": manifest.get("format_version"),
             "manufacturer_is_placeholder": bool((manifest.get("manufacturer") or {}).get("is_placeholder", False)),

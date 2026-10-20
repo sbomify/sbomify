@@ -169,13 +169,11 @@ def log_export_created(
     team_id: int,
     package_id: str,
     content_hash: str,
-    signing_key_id: str,
 ) -> None:
-    """Record a built CRA bundle, signed or not.
+    """Record a built CRA bundle.
 
     ``content_hash`` is the SHA-256 of the ZIP bytes, so the trail binds a
-    downloaded bundle to the state it was built from. ``signing_key_id`` is
-    empty for an unsigned bundle.
+    downloaded bundle to the state it was built from.
     """
     payload = {
         "event": "cra.export.created",
@@ -184,9 +182,32 @@ def log_export_created(
         "assessment_id": assessment_id,
         "package_id": package_id,
         "content_hash": content_hash,
-        "signing_key_id": signing_key_id,
     }
     _LOG.info("cra.export.created %s", _payload_json(payload), extra=payload)
+
+
+def log_export_signed(
+    *,
+    user: User | None,
+    assessment_id: str,
+    team_id: int,
+    package_id: str,
+    content_hash: str,
+    signed_by: str,
+    issuer: str,
+) -> None:
+    """Record a verified Sigstore signature attached to a CRA bundle, and who made it."""
+    payload = {
+        "event": "cra.export.signed",
+        "user_id": getattr(user, "id", None),
+        "team_id": team_id,
+        "assessment_id": assessment_id,
+        "package_id": package_id,
+        "content_hash": content_hash,
+        "signed_by": signed_by,
+        "issuer": issuer,
+    }
+    _LOG.info("cra.export.signed %s", _payload_json(payload), extra=payload)
 
 
 def log_cra_report_event(
