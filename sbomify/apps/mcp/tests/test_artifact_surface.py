@@ -377,3 +377,73 @@ async def test_a_truncated_artifact_list_is_the_same_fifty_every_time(
         ]
     )()
     assert [a["sbom_id"] for a in first["items"]] == newest
+
+
+def _head_refused(self, name):
+    from botocore.exceptions import ClientError
+
+    raise ClientError({"Error": {"Code": "AccessDenied"}}, "HeadObject")
+
+
+def _whole_object(self, name):
+    raise AssertionError("the whole object was downloaded")
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_store_without_head_reads_one_byte_past_the_ceiling(
+    mcp_owner, make_token, component_in_bound_workspace, monkeypatch
+):
+    """A store that refuses HEAD used to fall back to downloading the whole object.
+
+    The parse ceiling then only refused an oversized artifact after its full
+    transfer and its full place in memory. A ranged read of one byte past the
+    ceiling answers the same question with GetObject alone.
+    """
+    from sbomify.apps.core import object_store
+    from sbomify.apps.mcp.limits import MAX_ARTIFACT_PARSE_BYTES
+
+    artifact = await sync_to_async(_artifact)(component_in_bound_workspace, "too-big", SBOM.BomType.SBOM)
+    asked: list[int] = []
+
+    def prefix(self, name, length):
+        asked.append(length)
+        return b"x" * length
+
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", _head_refused)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data_prefix", prefix, raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", _whole_object)
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    body = json.dumps(parse(await _call(token, "get_artifact_packages", artifact_id=artifact.id)))
+
+    assert "over the" in body
+    assert asked == [MAX_ARTIFACT_PARSE_BYTES + 1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_store_without_head_still_reads_an_artifact_under_the_ceiling(
+    mcp_owner, make_token, component_in_bound_workspace, monkeypatch
+):
+    """Under the ceiling, the bounded read is the whole document, so nothing is fetched twice."""
+    from sbomify.apps.core import object_store
+
+    artifact = await sync_to_async(_artifact)(component_in_bound_workspace, "small", SBOM.BomType.SBOM)
+    document = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "components": [{"type": "library", "name": "libexample", "version": "1.0.0"}],
+        }
+    ).encode()
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", _head_refused)
+    monkeypatch.setattr(
+        object_store.StorageClient, "get_sbom_data_prefix", lambda self, name, length: document, raising=False
+    )
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", _whole_object)
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    packages = structured(await _call(token, "get_artifact_packages", artifact_id=artifact.id))
+
+    assert [pkg["name"] for pkg in packages["items"]] == ["libexample"]

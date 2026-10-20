@@ -53,6 +53,9 @@ class ObjectStoreClient(ABC):
     def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
 
     @abstractmethod
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None: ...
+
+    @abstractmethod
     def delete_object(self, bucket_name: str, key: str) -> None: ...
 
     @abstractmethod
@@ -158,6 +161,24 @@ class S3ObjectStoreClient(ObjectStoreClient):
             # NoSuchBucket, so it still raises rather than reading as empty.
             if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
                 return None
+            raise
+
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of the object, or ``None`` if it is not there.
+
+        A ranged GET, so a caller with a size ceiling gets a bounded read from a
+        store that answers GetObject but not HEAD.
+        """
+        try:
+            response = self._resource.Bucket(bucket_name).Object(key).get(Range=f"bytes=0-{length - 1}")
+            return response["Body"].read()  # type: ignore[no-any-return]
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in ("NoSuchKey", "404"):
+                return None
+            # A range starting at 0 is unsatisfiable only for an empty object.
+            if code in ("InvalidRange", "416"):
+                return b""
             raise
 
     def delete_object(self, bucket_name: str, key: str) -> None:
@@ -294,6 +315,13 @@ class StorageClient:
             raise ValueError("This method is only for SBOMS bucket")
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
+    def get_sbom_data_prefix(self, object_name: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of a stored SBOM, or ``None`` if it is missing."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.get_object_prefix(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, length)
 
     def get_sbom_size(self, object_name: str) -> int | None:
         """Size of a stored SBOM in bytes, without downloading it."""
