@@ -152,6 +152,7 @@ class ComponentTriageModalView(HtmxFragmentMixin, GuestAccessBlockedMixin, Login
                 "triage_payload": {
                     "id": finding["id"],
                     "purl": finding["triage_purl"],
+                    "anchor": finding["triage_anchor_purl"],
                     "state": finding["vex_state"],
                     "justification": finding["vex_justification"],
                     "detail": finding["vex_detail"],
