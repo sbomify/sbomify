@@ -259,7 +259,7 @@
                                         on <span x-text="signedOn(lastExport.signature.signed_at)"></span>.
                                     </p>
                                     <p class="m-0">Anyone with the ZIP and the signature can check it:</p>
-                                    <pre class="bg-surface-hover text-text rounded p-2 overflow-x-auto text-xs m-0"><code x-text="verifyCommand"></code></pre>
+                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="verifyCommand"></code></pre>
                                     <c-buttons.secondary size="sm" @click="downloadSignature()" data-testid="download-signature-btn">
                                     <i class="fas fa-download mr-2" aria-hidden="true"></i> Download signature
                                     </c-buttons.secondary>
@@ -270,7 +270,7 @@
                                       @submit.prevent="uploadSignature()"
                                       data-testid="signature-upload-form">
                                     <p class="m-0">sbomify keeps no signing key. Sign this ZIP yourself with cosign 3 or later:</p>
-                                    <pre class="bg-surface-hover text-text rounded p-2 overflow-x-auto text-xs m-0"><code x-text="signCommand"></code></pre>
+                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="signCommand"></code></pre>
                                     <p class="m-0">
                                         cosign signs you in through your browser, or uses a CI workflow's identity. It records who signed and the ZIP's SHA-256 in Sigstore's public log. The ZIP's contents stay private.
                                     </p>
@@ -278,8 +278,8 @@
                                     <span x-text="signFile ? signFile.name : 'Choose the signature file'"></span>
                                     </c-forms.file-upload>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <c-forms.field label="Signed as" for="signature-identity" hint="The email or workflow URI you signed with" required>
-                                        <c-forms.input id="signature-identity" size="sm" x-model="signForm.identity" placeholder="security@example.com" maxlength="512" required />
+                                        <c-forms.field label="Signed as" for="signature-identity" hint="Your email, or the CI workflow URI" required>
+                                        <c-forms.input id="signature-identity" x-model="signForm.identity" placeholder="security@example.com" maxlength="512" required />
                                         </c-forms.field>
                                         <c-forms.field label="Signed in through" for="signature-issuer">
                                         <c-forms.select id="signature-issuer" x-model="signForm.issuer">

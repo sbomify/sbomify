@@ -263,3 +263,54 @@ def test_the_dependent_scope_rows_grey_with_their_own_control(authenticated_page
     radio.uncheck()
     expect(dependent).to_be_disabled()
     assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_step_five_offers_keyless_signing_then_names_the_signer(
+    authenticated_page: Page, cra_assessment, theme: str
+) -> None:
+    """An unsigned export shows the cosign command for its own file and the
+    upload form; once signed, the page names the signer and how to verify."""
+    from datetime import UTC, datetime
+
+    from sbomify.apps.compliance.models import CRAExportPackage
+
+    digest = "ab" * 32
+    file_name = f"cra-package-cra-test-product-{digest[:12]}.zip"
+    package = CRAExportPackage.objects.create(
+        assessment=cra_assessment,
+        storage_key=f"compliance/exports/{cra_assessment.id}/{digest}.zip",
+        content_hash=digest,
+        manifest={"format_version": "1.2"},
+    )
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/5/")
+
+    form = page.get_by_test_id("signature-upload-form")
+    expect(form).to_be_visible()
+    expect(form.locator("pre code")).to_have_text(f"cosign sign-blob {file_name} --bundle {file_name}.sigstore.json")
+    expect(page.locator("#signature-issuer")).to_have_value("https://github.com/login/oauth")
+    upload = page.get_by_test_id("upload-signature-btn")
+    expect(upload).to_be_disabled()
+    page.locator("#signature-identity").fill("security@acme.test")
+    page.locator("#signature-file").set_input_files(
+        files=[{"name": f"{file_name}.sigstore.json", "mimeType": "application/json", "buffer": b"{}"}]
+    )
+    expect(upload).to_be_enabled()
+    expect(form).to_contain_text(f"{file_name}.sigstore.json")
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+    package.signed_by = "security@acme.test"
+    package.signed_by_issuer = "https://accounts.google.com"
+    package.signed_at = datetime(2026, 8, 6, 1, 3, 1, tzinfo=UTC)
+    package.save(update_fields=["signed_by", "signed_by_issuer", "signed_at"])
+    page.reload()
+
+    expect(page.get_by_test_id("bundle-signed-by")).to_contain_text("security@acme.test through Google on Aug 6, 2026")
+    expect(page.get_by_test_id("bundle-signature").locator("pre code")).to_contain_text(
+        "--certificate-identity security@acme.test --certificate-oidc-issuer https://accounts.google.com"
+    )
+    expect(page.get_by_test_id("download-signature-btn")).to_be_visible()
+    expect(form).to_have_count(0)
