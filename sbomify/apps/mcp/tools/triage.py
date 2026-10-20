@@ -16,6 +16,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field, ValidationError
 
 from ..auth import Principal
+from ..limits import untrusted
 from ._base import clamp_page, mcp_tool, resolve_workspace, run_db, unwrap_view, workspace_key
 
 if TYPE_CHECKING:
@@ -39,6 +40,43 @@ def _for_mcp(prompt: dict[str, Any]) -> dict[str, Any]:
     if triage.endswith(rest):
         mcp = "\n".join(triage_upload_lines(filename, component_id, channel="mcp"))
         prompt["triage_prompt"] = triage[: -len(rest)] + mcp
+    return prompt
+
+
+# Most advisories carry a handful of aliases; a scanner listing dozens adds nothing an agent needs.
+_MAX_ALIASES = 20
+
+
+def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
+    """Pass every scanner- or artifact-derived field through `untrusted()`, as the other tools do.
+
+    The service already clips title, details, the reference count and the
+    displayed purl. The rest arrived at whatever length the scanner or the
+    uploaded SBOM wrote. The prompts are bounded too: they quote the advisory.
+    """
+    text = {
+        "advisory": 128,
+        "title": 300,
+        "details": 1200,
+        "package": 512,
+        "version": 128,
+        "ecosystem": 64,
+        "purl": 512,
+        "fixed_version": 256,
+        "component_name": 256,
+        "sbom_name": 256,
+        "sbom_version": 128,
+        "fix_prompt": 16000,
+        "triage_prompt": 16000,
+    }
+    for field, limit in text.items():
+        if isinstance(prompt.get(field), str):
+            prompt[field] = untrusted(prompt[field], limit=limit)
+    prompt["aliases"] = [untrusted(alias, limit=128) for alias in (prompt.get("aliases") or [])[:_MAX_ALIASES]]
+    prompt["references"] = [untrusted(url, limit=512) for url in prompt.get("references") or []]
+    prompt["products"] = [untrusted(name, limit=256) for name in prompt.get("products") or []]
+    for repository in prompt.get("repositories") or []:
+        repository["url"] = untrusted(repository.get("url"), limit=512)
     return prompt
 
 
@@ -101,7 +139,7 @@ def register_tools(mcp: FastMCP) -> None:
                 ),
                 action="Fix prompt",
             )
-            return _for_mcp(prompt)
+            return _bounded(_for_mcp(prompt))
 
         return await run_db(call)
 

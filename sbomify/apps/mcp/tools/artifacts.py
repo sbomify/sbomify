@@ -10,7 +10,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ..limits import enforce_parse_size, enforce_stored_size, untrusted
+from ..limits import MAX_ARTIFACT_PARSE_BYTES, enforce_parse_size, enforce_stored_size, untrusted
 from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 from .catalog import _lookup_component
 
@@ -311,18 +311,23 @@ def register_tools(mcp: FastMCP) -> None:
                 # artifact still cost its full transfer and its full place in
                 # memory before anything refused it, which is the OOM the cap
                 # exists to prevent.
+                raw: bytes | None = None
                 if obj.sbom_filename:
+                    store = object_store.StorageClient("SBOMS")
                     try:
-                        stored_size = object_store.StorageClient("SBOMS").get_sbom_size(obj.sbom_filename)
+                        stored_size = store.get_sbom_size(obj.sbom_filename)
                     except (ClientError, BotoCoreError):
-                        # Best effort. A store that cannot answer a HEAD — a
-                        # least-privilege policy granting GetObject only, a
-                        # backend without one — must not cost the read, because
-                        # enforce_parse_size below is still the authoritative
-                        # check. Only the saving is lost, never the ceiling.
-                        stored_size = None
-                    enforce_stored_size(stored_size, artifact_id=artifact_id)
-                _, raw = get_sbom_data_bytes(artifact_id)
+                        # A store that cannot answer a HEAD (a least-privilege
+                        # policy granting GetObject only, a backend without one)
+                        # still answers a ranged GET. One byte past the ceiling
+                        # tells an oversized artifact apart without fetching it
+                        # whole, and anything under the ceiling is the whole
+                        # document, so it is not fetched twice.
+                        raw = store.get_sbom_data_prefix(obj.sbom_filename, MAX_ARTIFACT_PARSE_BYTES + 1)
+                    else:
+                        enforce_stored_size(stored_size, artifact_id=artifact_id)
+                if raw is None:
+                    _, raw = get_sbom_data_bytes(artifact_id)
                 # Still checked after the fetch: the store is the authority on
                 # what it holds, but a key rewritten between the two calls, or a
                 # backend that cannot answer a HEAD, must not slip past.
