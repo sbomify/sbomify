@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field, ValidationError
 
+from .. import serializers
 from ..auth import Principal
 from ..limits import untrusted
 from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
@@ -81,7 +82,21 @@ def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
     prompt["products"] = [untrusted(name, limit=256) for name in prompt.get("products") or []]
     for repository in prompt.get("repositories") or []:
         repository["url"] = untrusted(repository.get("url"), limit=512)
-    return prompt
+    # A component can sit in any number of products, and this tool pages nothing.
+    return serializers.cut(serializers.cut(prompt, "products"), "repositories")
+
+
+def _capped_submissions(payload: dict[str, Any]) -> dict[str, Any]:
+    """Cut each submission's lists, on one submission or on a page of them.
+
+    A submission holds up to a thousand decisions, and a page of submissions
+    multiplies that, so the lists are cut and say so rather than tripping the
+    response cap with no argument to narrow by.
+    """
+    for submission in payload.get("items", [payload]):
+        for field in ("decisions", "ignored", "advisory_ids"):
+            serializers.cut(submission, field)
+    return payload
 
 
 def _lookup_submission(principal: Principal, submission_id: str) -> None:
@@ -199,7 +214,7 @@ def register_tools(mcp: FastMCP) -> None:
             if status == 409 and isinstance(body, dict) and isinstance(body.get("detail"), str):
                 detail = _REST_CHECK.sub(r'get_vex_submission with submission_id "\1"', body["detail"])
                 body = {**body, "detail": detail}
-            return unwrap_view((status, body), action="VEX submission")
+            return _capped_submissions(unwrap_view((status, body), action="VEX submission"))
 
         return await run_db(call)
 
@@ -234,7 +249,7 @@ def register_tools(mcp: FastMCP) -> None:
                     page=safe_page,
                     page_size=safe_size,
                 )
-            return unwrap_view(result, action="Listing VEX submissions")
+            return _capped_submissions(unwrap_view(result, action="Listing VEX submissions"))
 
         return await run_db(call)
 
@@ -246,7 +261,9 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.vulnerability_scanning import apis
 
             _lookup_submission(principal, submission_id)
-            return unwrap_view(apis.get_vex_submission(principal.request, submission_id), action="VEX submission")
+            return _capped_submissions(
+                unwrap_view(apis.get_vex_submission(principal.request, submission_id), action="VEX submission")
+            )
 
         return await run_db(call)
 
@@ -263,8 +280,10 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.vulnerability_scanning import apis
 
             _lookup_submission(principal, submission_id)
-            return unwrap_view(
-                apis.withdraw_vex_submission(principal.request, submission_id), action="Withdrawing VEX submission"
+            return _capped_submissions(
+                unwrap_view(
+                    apis.withdraw_vex_submission(principal.request, submission_id), action="Withdrawing VEX submission"
+                )
             )
 
         return await run_db(call)

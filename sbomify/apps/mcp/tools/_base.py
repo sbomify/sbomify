@@ -27,6 +27,7 @@ from sbomify.apps.core.authz import scope_permits
 
 from .. import registry
 from ..auth import WORKSPACE_ATTR, MCPAuthError, Principal, authenticate, current_request, throttle_write
+from ..limits import DETAIL_COLLECTION_LIMIT as DETAIL_COLLECTION_LIMIT
 from ..limits import audit, enforce_response_size, untrusted
 
 if TYPE_CHECKING:
@@ -46,15 +47,6 @@ AUDIT_DETAIL_LIMIT = 500
 Enough to tell one refusal from another, short enough that a delegated
 validation error quoting an artifact cannot spill it into the log, and that
 failing on purpose is not a way to write unbounded text there."""
-
-DETAIL_COLLECTION_LIMIT = 50
-"""How many rows a detail tool returns from one of its folded-in collections.
-
-A detail tool answers with several collections at once and so takes no page
-arguments. Left unbounded, a large enough product tripped the response cap and
-the agent was told to narrow a query it had no argument to narrow with. Fifty
-is enough to answer "what is in this" for almost everything and small enough
-that the several collections together stay well inside the cap."""
 
 MAX_PAGE = 1_000_000
 """Upper bound on the page number. An unbounded page becomes a raw SQL OFFSET,

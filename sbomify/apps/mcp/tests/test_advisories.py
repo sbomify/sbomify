@@ -174,3 +174,21 @@ def test_an_advisory_with_more_rows_than_fit_says_it_was_cut():
     )
     assert small["vulnerabilities"] == {"items": [{"cve_id": "CVE-2026-0001"}], "total": 1}
     assert "references" not in small, "an empty collection is omitted, as everywhere else"
+
+
+def test_an_advisory_naming_more_products_than_fit_says_it_was_cut():
+    """Both the list rows and the detail name the advisory's products, and neither pages them."""
+    from sbomify.apps.mcp import serializers
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+    over = DETAIL_COLLECTION_LIMIT + 2
+    projection = {
+        "id": "a1",
+        "publication_status": "draft",
+        "products": [{"id": f"p{i}", "name": f"Product {i}"} for i in range(over)],
+    }
+
+    for data in (serializers.advisory(projection), serializers.advisory(projection, detail_limit=DETAIL_COLLECTION_LIMIT)):
+        assert len(data["products"]["items"]) == DETAIL_COLLECTION_LIMIT
+        assert data["products"]["total"] == over
+        assert data["products"]["truncated"] is True

@@ -56,6 +56,15 @@ MAX_RESPONSE_BYTES: int = settings.MCP_MAX_RESPONSE_BYTES
 """Ceiling on a single tool's serialized response. Pagination should keep every
 response far below this; tripping it means a tool has an unbounded field."""
 
+DETAIL_COLLECTION_LIMIT = 50
+"""How many rows a detail tool returns from one of its folded-in collections.
+
+A detail tool answers with several collections at once and so takes no page
+arguments. Left unbounded, a large enough product tripped the response cap and
+the agent was told to narrow a query it had no argument to narrow with. Fifty
+is enough to answer "what is in this" for almost everything and small enough
+that the several collections together stay well inside the cap."""
+
 
 def enforce_upload_size(raw: bytes, *, label: str) -> None:
     """Reject an oversized upload before it reaches storage.

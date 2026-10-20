@@ -416,3 +416,48 @@ async def test_a_long_package_name_from_the_scan_does_not_cost_the_fix_prompt(ma
 
     assert "p" * 512 in result["fix_prompt"]
     assert "p" * 513 not in result["fix_prompt"]
+
+
+def test_the_prompt_names_only_so_many_products_and_repositories():
+    """A component can sit in any number of products, and the prompt tool takes no page argument."""
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+    from sbomify.apps.mcp.tools.triage import _bounded
+
+    over = DETAIL_COLLECTION_LIMIT + 5
+    prompt = _bounded(
+        {
+            "advisory": "CVE-2026-1",
+            "fix_prompt": "Upgrade lodash.",
+            "triage_prompt": None,
+            "products": [f"Product {i}" for i in range(over)],
+            "repositories": [{"url": f"https://example.com/r{i}"} for i in range(over)],
+        }
+    )
+
+    for field in ("products", "repositories"):
+        assert len(prompt[field]) == DETAIL_COLLECTION_LIMIT
+        assert prompt[f"{field}_total"] == over
+        assert prompt[f"{field}_truncated"] is True
+
+
+def test_a_submission_names_only_so_many_decisions():
+    """A submission holds up to a thousand decisions, and a page of submissions multiplies them."""
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+    from sbomify.apps.mcp.tools.triage import _capped_submissions
+
+    over = DETAIL_COLLECTION_LIMIT + 4
+    submission = {
+        "id": "s1",
+        "decisions": [{"vuln_id": f"CVE-2026-{i}"} for i in range(over)],
+        "ignored": [{"vuln_id": f"CVE-2025-{i}", "reason": "unknown"} for i in range(over)],
+        "advisory_ids": [f"CVE-2026-{i}" for i in range(over)],
+    }
+
+    for data in (_capped_submissions(dict(submission)), _capped_submissions({"items": [dict(submission)]})["items"][0]):
+        for field in ("decisions", "ignored", "advisory_ids"):
+            assert len(data[field]) == DETAIL_COLLECTION_LIMIT
+            assert data[f"{field}_total"] == over
+            assert data[f"{field}_truncated"] is True
+
+    small = _capped_submissions({"id": "s2", "decisions": [{"vuln_id": "CVE-2026-1"}]})
+    assert small == {"id": "s2", "decisions": [{"vuln_id": "CVE-2026-1"}]}, "nothing added when nothing was cut"

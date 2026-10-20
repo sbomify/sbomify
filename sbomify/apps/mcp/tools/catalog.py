@@ -222,7 +222,13 @@ def register_tools(mcp: FastMCP) -> None:
 
             obj = _get_component(principal, component_id)
             data = serializers.component(obj, detail=True)
-            data["products"] = [{"id": p.id, "name": p.name} for p in obj.products.all()]
+            products = obj.products.all().order_by("name")
+            data["products"] = serializers.capped(
+                [{"id": p.id, "name": p.name} for p in products[:DETAIL_COLLECTION_LIMIT]],
+                total=products.count(),
+                limit=DETAIL_COLLECTION_LIMIT,
+                # No more_with: list_products does not filter by component.
+            )
             data["recent_sboms"] = [
                 serializers.sbom(s) for s in SBOM.objects.filter(component=obj).order_by("-created_at")[:10]
             ]
