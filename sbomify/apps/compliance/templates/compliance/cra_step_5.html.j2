@@ -171,7 +171,7 @@
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                     Preparing PDF…</span>
                     </c-buttons.secondary>
-                    <c-buttons.primary @click="exportBundle()" ::disabled="isExporting || !exportAvailable" class="w-full">
+                    <c-buttons.primary @click="exportBundle()" ::disabled="isExporting || isSigning || !exportAvailable" class="w-full">
                     <span x-show="!isExporting"><i class="fas fa-download mr-2" aria-hidden="true"></i> Export compliance bundle</span>
                     <span x-show="isExporting" x-cloak>
                         {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
@@ -259,7 +259,7 @@
                                         on <span x-text="signedOn(lastExport.signature.signed_at)"></span>.
                                     </p>
                                     <p class="m-0">Anyone with the ZIP and the signature can check it:</p>
-                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="verifyCommand"></code></pre>
+                                    <c-code-terminal code_binding="verifyCommand" />
                                     <c-buttons.secondary size="sm" @click="downloadSignature()" data-testid="download-signature-btn">
                                     <i class="fas fa-download mr-2" aria-hidden="true"></i> Download signature
                                     </c-buttons.secondary>
@@ -270,7 +270,7 @@
                                       @submit.prevent="uploadSignature()"
                                       data-testid="signature-upload-form">
                                     <p class="m-0">sbomify keeps no signing key. Sign this ZIP yourself with cosign 3 or later:</p>
-                                    <pre class="bg-surface-hover text-text rounded p-2 whitespace-pre-wrap break-all text-xs m-0"><code x-text="signCommand"></code></pre>
+                                    <c-code-terminal code_binding="signCommand" />
                                     <p class="m-0">
                                         cosign signs you in through your browser, or uses a CI workflow's identity. It records who signed and the ZIP's SHA-256 in Sigstore's public log. The ZIP's contents stay private.
                                     </p>
@@ -291,7 +291,7 @@
                                         </c-forms.select>
                                         </c-forms.field>
                                     </div>
-                                    <c-buttons.primary type="submit" size="sm" ::disabled="isSigning || !signFile || !signForm.identity.trim()" data-testid="upload-signature-btn">
+                                    <c-buttons.primary type="submit" size="sm" ::disabled="isSigning || isExporting || !signFile || !signForm.identity.trim()" data-testid="upload-signature-btn">
                                     <span x-show="!isSigning"><i class="fas fa-upload mr-2" aria-hidden="true"></i> Upload signature</span>
                                     <span x-show="isSigning" x-cloak>Checking signature...</span>
                                     </c-buttons.primary>
