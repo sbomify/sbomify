@@ -68,7 +68,7 @@ client calling a tool it was never shown is refused exactly as the REST API
 would refuse it. Hiding impossible tools stops agents burning turns on calls
 that cannot succeed.
 
-### Hand-write ~20 task-oriented tools rather than generating them
+### Hand-write 33 task-oriented tools rather than generating them
 
 Generating one tool per REST endpoint would be nearly free and always in sync,
 but it produces ~140 low-level tools with verbose schemas, which measurably
@@ -169,9 +169,11 @@ is the first place to extend when a tool is added.
   S3 artifact. Answering this per query would mean fetching and parsing every
   SBOM in the workspace. It needs an indexed package table first, which is its
   own project. `get_artifact_packages` covers the single-artifact case.
-* **Triage, CRA compliance steps, control status, and workspace
-  administration.** The initial surface is reads, artifact publishing, and
-  contact-profile management.
+* **Deciding a triage ruling, CRA compliance steps, control status, and
+  workspace administration.** The surface is reads, artifact publishing,
+  contact-profile management, draft advisories, and triage through the approval
+  queue: an agent can submit a ruling, check its status and withdraw it, but a
+  person approves or rejects it in the app, and no tool can do that.
 * **Deletion of anything.** Structurally excluded, per the injection discussion
   above, not merely unimplemented.
 * **MCP resources and prompts.** Tools only, for now.

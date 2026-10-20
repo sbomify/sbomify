@@ -282,6 +282,11 @@ def _present(row: dict[str, Any], *, concise: bool = False) -> dict[str, Any]:
                 "suppressed": row.get("vex_suppressed") or None,
             }
         )
+    # Aliases are scanner output too, so their count is capped as well as
+    # their length, at the bound the triage prompt uses.
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import MAX_ALIASES
+
+    aliases = row.get("aliases") or []
     return serializers.compact(
         {
             "id": untrusted(row.get("id"), limit=128),
@@ -290,7 +295,8 @@ def _present(row: dict[str, Any], *, concise: bool = False) -> dict[str, Any]:
             "version": untrusted(row.get("version"), limit=128),
             "ecosystem": untrusted(row.get("ecosystem"), limit=64),
             "purl": untrusted(row.get("purl"), limit=512) or None,
-            "aliases": [untrusted(alias, limit=128) for alias in row.get("aliases") or []] or None,
+            "aliases": [untrusted(alias, limit=128) for alias in aliases[:MAX_ALIASES]] or None,
+            "aliases_truncated": len(aliases) > MAX_ALIASES or None,
             "cvss_score": row.get("cvss_score"),
             "fixed_version": untrusted(row.get("fixed"), limit=128) or None,
             "suppressed": row.get("vex_suppressed") or None,

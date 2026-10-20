@@ -251,3 +251,22 @@ def test_one_provider_skipping_leaves_the_sbom_scanned(mcp_owner):
 
     assert scanned == {sbom.id}
     assert risk._counts(rows)["critical"] == 1
+
+
+def test_a_finding_with_more_aliases_than_fit_says_it_was_cut():
+    """Aliases come from scanner output, so their count is the supplier's to choose.
+
+    Each alias was clipped but the list was not, so one finding could push a
+    page of ``list_vulnerabilities`` past the response cap after all the work
+    was done. The list is capped at the bound the triage prompt uses.
+    """
+    from sbomify.apps.mcp.tools.risk import _present
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import MAX_ALIASES
+
+    row = {"id": "CVE-2026-1", "aliases": [f"GHSA-{i:04d}-aaaa-bbbb" for i in range(MAX_ALIASES + 40)]}
+
+    shaped = _present(row)
+
+    assert len(shaped["aliases"]) == MAX_ALIASES
+    assert shaped["aliases_truncated"] is True
+    assert "aliases_truncated" not in _present({"id": "CVE-2026-1", "aliases": ["GHSA-aaaa-bbbb-cccc"]})

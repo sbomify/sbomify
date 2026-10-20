@@ -189,7 +189,7 @@ def document(obj: Document, *, detail: bool = False) -> dict[str, Any]:
     return compact(data)
 
 
-def advisory(projection: dict[str, Any], *, detail: bool = False) -> dict[str, Any]:
+def advisory(projection: dict[str, Any], *, detail_limit: int | None = None) -> dict[str, Any]:
     """One advisory, from the service projection the web pages already use.
 
     The projection is shaped for a template: it carries icons, badge variants,
@@ -207,6 +207,9 @@ def advisory(projection: dict[str, Any], *, detail: bool = False) -> dict[str, A
     publication under ``status``, following the model), so handing this one of
     those would swap the axes without any error. Only the projection is
     accepted, and anything else is refused rather than quietly mis-labelled.
+
+    ``detail_limit`` asks for the full advisory, with its vulnerabilities and
+    references cut to that many rows each, through ``capped``.
     """
     if "publication_status" not in projection:
         raise ValueError(
@@ -236,31 +239,45 @@ def advisory(projection: dict[str, Any], *, detail: bool = False) -> dict[str, A
         "withdrawn_at": _stamp(projection.get("withdrawn_at")),
         "withdrawal_reason": untrusted(str(projection.get("withdrawal_reason") or ""), limit=1000),
     }
-    if detail:
+    if detail_limit is not None:
+        vulnerabilities = projection.get("vulnerabilities") or []
+        references = projection.get("references") or []
         data |= {
             "description": untrusted(str(projection.get("description") or ""), limit=8000),
             # Vulnerability rows are seeded from scanner and feed output, so
             # their text is as supplier-controlled as a package name.
-            "vulnerabilities": [
-                compact(
-                    {
-                        "cve_id": item.get("cve_id"),
-                        "severity": item.get("severity"),
-                        "cvss_score": item.get("cvss_score"),
-                        "description": untrusted(str(item.get("description") or ""), limit=2000),
-                    }
-                )
-                for item in projection.get("vulnerabilities") or []
-            ],
-            "references": [
-                compact(
-                    {
-                        "url": untrusted(str(item.get("url") or ""), limit=1024),
-                        "title": untrusted(str(item.get("title") or ""), limit=256),
-                    }
-                )
-                for item in projection.get("references") or []
-            ],
+            "vulnerabilities": capped(
+                [
+                    compact(
+                        {
+                            "cve_id": item.get("cve_id"),
+                            "severity": item.get("severity"),
+                            "cvss_score": item.get("cvss_score"),
+                            "description": untrusted(str(item.get("description") or ""), limit=2000),
+                        }
+                    )
+                    for item in vulnerabilities[:detail_limit]
+                ],
+                total=len(vulnerabilities),
+                limit=detail_limit,
+            )
+            if vulnerabilities
+            else None,
+            "references": capped(
+                [
+                    compact(
+                        {
+                            "url": untrusted(str(item.get("url") or ""), limit=1024),
+                            "title": untrusted(str(item.get("title") or ""), limit=256),
+                        }
+                    )
+                    for item in references[:detail_limit]
+                ],
+                total=len(references),
+                limit=detail_limit,
+            )
+            if references
+            else None,
         }
     return compact(data)
 
