@@ -302,12 +302,35 @@ class TestTheCredentialContractHolds:
 
         assert is_authorised_for_component(request, SimpleNamespace(id="anything")) is True
 
-    @pytest.mark.django_db
-    def test_a_real_pat_row_still_reaches_the_binding_check(self) -> None:
-        """The defensive reads must not blunt the check for the credential it guards."""
+    def test_a_request_without_a_credential_is_not_a_bot(self) -> None:
         from sbomify.apps.oidc.permissions import request_is_oidc_authed
 
         assert request_is_oidc_authed(self._request(None)) is False
+
+    @pytest.mark.django_db
+    def test_a_real_pat_row_still_reaches_the_binding_check(self, make_token, component_in_bound_workspace) -> None:
+        """The defensive reads must not blunt the check for the credential it guards.
+
+        A PAT row carries no OIDC `token_type`, so only the binding lookup can
+        mark it a trusted-publishing bot: not one without a binding, one as
+        soon as a binding names its user.
+        """
+        from sbomify.apps.oidc.models import OIDCBinding
+        from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+        token = make_token()
+        assert request_is_oidc_authed(self._request(token)) is False
+
+        OIDCBinding.objects.create(
+            component=component_in_bound_workspace,
+            provider=OIDCBinding.PROVIDER_GITHUB,
+            repository="acme/widget",
+            repository_id=12345,
+            repository_owner_id=67890,
+            bot_user=token.user,
+            created_by=token.user,
+        )
+        assert request_is_oidc_authed(self._request(token)) is True
 
     def test_an_immutable_credential_is_not_written_to(self) -> None:
         """The contract says `.scopes` and `.pk`, so nothing may require a writable object.
