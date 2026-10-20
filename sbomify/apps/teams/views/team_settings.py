@@ -15,7 +15,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
-from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.billing.team_pricing_service import QuotaDisplay, TeamPricingService
 from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
@@ -142,7 +142,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_plan = team.billing_plan or Workspace.Plan.COMMUNITY
         plan_features: list[Any] = []
         plan_pricing: dict[str, Any] = {}
-        plan_limits: list[dict[str, str]] = []
+        plan_limits: list[QuotaDisplay] = []
 
         if wants_fresh_billing:
             plan_features = list(PLAN_FEATURES.get(billing_plan, ()))
@@ -356,7 +356,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
     def _delete_invitation(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
-        # Managing invitations is ADMINISTER, but the class gate is MANAGE so
+        # Managing invitations is ADMINISTER, but the class gate is READ_INTERNAL so
         # members can reach their own tabs — so this has to re-check for itself,
         # as its siblings do. Without it a member could cancel any invitation in
         # the workspace, including an owner-level one. A 403 rather than a

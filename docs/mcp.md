@@ -11,7 +11,8 @@ repository and should change alongside it.
 
 ## Connecting a client
 
-The endpoint is `https://<your sbomify host>/mcp` and speaks streamable HTTP. Authenticate with a
+The endpoint is `/mcp` under `APP_BASE_URL`, so `https://<your sbomify host>/mcp`, or `http://` on a
+deployment whose `APP_BASE_URL` is plain HTTP. It speaks streamable HTTP. Authenticate with a
 personal access token, sent as a bearer token.
 
 1. Create a token under Settings, Access tokens. Scope it to one workspace and to the actions the

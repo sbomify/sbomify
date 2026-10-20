@@ -19,7 +19,7 @@ let pendingRequest: AbortController | null = null;
 
 function actionLabel(type: string): string {
   if (type === 'pending_invitation') return 'Respond';
-  if (type === 'access_request_pending') return 'Review';
+  if (type === 'access_request_pending' || type === 'vex_submission_pending') return 'Review';
   if (type === 'community_upgrade' || type.includes('billing')) return 'Upgrade';
   if (type.includes('payment')) return 'Fix payment';
   return 'View';
@@ -134,6 +134,12 @@ function initializeNotificationsDropdown(): void {
 
 // Register document listeners once; HTMX can replace the panel many times.
 document.addEventListener('notifications-open', refreshNotifications);
+// The bell otherwise polls every few minutes; a queue someone is waiting on
+// should not wait that long. The socket only says the queue changed, and the
+// fetch decides what this viewer sees.
+window.addEventListener('ws:vex_submission_updated', () => {
+  if (document.getElementById('notifications-dropdown')) void fetchNotifications();
+});
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     stopPolling();

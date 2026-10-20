@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from asgiref.sync import SyncToAsync
+from django.db import connections
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
@@ -21,6 +23,20 @@ def _enforce_async_safety(monkeypatch):
     app's tests restores the invariant without touching e2e.
     """
     monkeypatch.delenv("DJANGO_ALLOW_ASYNC_UNSAFE", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _close_executor_thread_connections():
+    """Close the DB connection these tests leave on asgiref's shared executor thread.
+
+    The tests drive the MCP app without a ThreadSensitiveContext, so their own
+    ``sync_to_async`` calls run on the one process-wide executor thread, and a
+    plain ``sync_to_async`` never closes the connection it opened. The next
+    async test on that worker then reaches for it while pytest-django blocks
+    database access, which failed the websocket tests in ``core``.
+    """
+    yield
+    SyncToAsync.single_thread_executor.submit(connections.close_all).result()
 
 
 def _make_team(name: str) -> Workspace:

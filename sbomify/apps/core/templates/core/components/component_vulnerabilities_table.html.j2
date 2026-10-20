@@ -1,23 +1,79 @@
-{% comment %}The component panel and its filters swap together. Its modal remains
-outside this region.
+{% comment %}The component panel, in the workspace Vulnerabilities page's style: one row per
+vulnerability in this component, providers merged by alias, with triage and a fix
+prompt per row. Version picks which of the component's SBOMs is read; it starts at
+the newest. Version swaps this whole region. Search, the other filters, the pager
+and a triage refresh swap only the results, as on the workspace page, so a
+response to an earlier keystroke never replaces the search box being typed in.
+The panel's URL is pushed, and
+a plain request to it redirects to the component page with the same filters, so
+a reload or Back keeps them.
 
-A triage decision re-annotates findings in a background task, so the panel
-refreshes twice: once straight away, on the refresh-assessments the triage modal
-dispatches when it saves, and again when the re-apply broadcasts vex_reapplied,
-which the bridge below turns into the same event for this component only. The
-debounce matches the artifact page's: one re-apply can broadcast more than once.
-Both refreshes carry vuln_refresh_query, which keeps the filters and the page the
-reader was on, and morph keeps their scroll position and focus.{% endcomment %}
+A triage decision re-annotates findings in a background task, so the results also
+refresh when the re-apply broadcasts vex_reapplied for this component, and when a
+scan of the displayed version finishes (assessment_complete). On the rolling latest
+an upload to this component (sbom_uploaded) refreshes too, so the new SBOM becomes
+the latest version. The SBOM watched is read from the version slot, which each
+results refresh swaps out of band, so it never stays pinned to an older version.
+
+The refresh sits outside the swapped results and queues behind the form's
+requests: a search or version change in flight runs first, and a new one cancels
+a refresh still in flight. When it runs it reads the refresh URL from the results
+then on screen, so it asks for the query the controls show, not the one the panel
+was rendered with.{% endcomment %}
 <div id="component-vulnerabilities-table"
+     class="flex flex-col"
      x-data="{ refreshTimer: null }"
-     hx-target="this"
-     hx-swap="morph"
-     hx-get="{{ vuln_panel_url }}?{{ vuln_refresh_query }}"
-     hx-trigger="refresh-assessments from:body"
-     @ws:message.window=" if ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
-    <c-tables.shell nested>
-    <c-vulnerabilities.filters :panel="vuln_panel" url="{{ vuln_panel_url }}" target="component-vulnerabilities-table" id="vuln" prefix="vuln_" push_url="true" />
-    <c-vulnerabilities.table :rows="vuln_panel.rows" :can_triage="can_triage" />
-    <c-vulnerabilities.footer :panel="vuln_panel" url="{{ vuln_panel_url }}" query="{{ vuln_query_string }}" prefix="vuln_" />
-    </c-tables.shell>
+     @ws:message.window=" const watch = document.getElementById('component-vulnerabilities-version-slot').dataset; if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'sbom_uploaded' && $event.detail.component_id === '{{ component_id }}' && 'rolling' in watch) || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === watch.sbom)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+    <div hidden
+         hx-get="{{ vuln_data.refresh_url }}"
+         hx-trigger="refresh-assessments from:body"
+         hx-sync="#component-vulnerabilities-form:queue last"
+         hx-target="#component-vulnerabilities-results"
+         hx-swap="outerHTML"
+         hx-on::config-request="event.detail.path = document.getElementById('component-vulnerabilities-results').dataset.refreshUrl">
+    </div>
+    <form id="component-vulnerabilities-form"
+          method="get"
+          action="{{ vuln_data.base_url }}"
+          class="flex flex-col"
+          hx-get="{{ vuln_data.base_url }}"
+          hx-target="#component-vulnerabilities-results"
+          hx-swap="outerHTML show:none"
+          hx-push-url="true"
+          hx-sync="this:replace"
+          hx-trigger="submit, change target:select:not([data-scope]), input changed delay:350ms target:input[type=search]">
+        <div class="px-4 pb-4">
+            <c-tables.toolbar flush>
+            <c-forms.search-input size="sm" name="search" id="component-vulnerabilities-search" label="Search vulnerabilities" placeholder="Search by ID or package" value="{{ vuln_data.query.search }}" />
+            {% include "core/components/component_vulnerabilities_version.html.j2" %}
+            <c-forms.select size="md" name="severity" id="component-vulnerabilities-severity" label="Filter by severity">
+            <option value="">All severities</option>
+            {% for value, label in severity_choices %}
+                <option value="{{ value }}"
+                        {% if vuln_data.query.severity == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+            </c-forms.select>
+            <c-forms.select size="md" name="exposure" id="component-vulnerabilities-exposure" label="Filter by urgency">
+            <option value="">Any urgency</option>
+            <option value="exploited"
+                    {% if vuln_data.query.exposure == 'exploited' %}selected{% endif %}>Known exploited</option>
+            <option value="overdue"
+                    {% if vuln_data.query.exposure == 'overdue' %}selected{% endif %}>Past fix deadline</option>
+            </c-forms.select>
+            <c-forms.select size="md" name="status" id="component-vulnerabilities-status" label="Filter by status">
+            <option value="">Open</option>
+            <option value="decided"
+                    {% if vuln_data.query.status == 'decided' %}selected{% endif %}>Closed by a decision</option>
+            </c-forms.select>
+            <c-slot name="right">
+            {% comment %}Search and the filters swap only the results, so the href rendered here goes stale. It is rebuilt from the form's current controls whenever the link is followed, opened in a new tab or copied.{% endcomment %}
+            <c-buttons.ghost href="{{ vuln_data.workspace_url }}" size="sm" x-data="{ sync() { const params = new URLSearchParams(); for (const [key, value] of new FormData(this.$el.closest('form'))) { if (value) params.set(key, value); } params.set('component', '{{ component_id }}'); this.$el.search = params.toString(); } }" @click="sync()" @auxclick="sync()" @contextmenu="sync()" @focus="sync()">Open in Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+            <noscript>
+                <c-buttons.secondary size="sm" type="submit">Apply</c-buttons.secondary>
+            </noscript>
+            </c-slot>
+            </c-tables.toolbar>
+        </div>
+        <c-vulnerabilities.workspace-results :data="vuln_data" results_target="component-vulnerabilities-results" />
+    </form>
 </div>

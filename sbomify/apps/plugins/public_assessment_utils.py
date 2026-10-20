@@ -118,6 +118,12 @@ def _is_run_skipped(run: AssessmentRun) -> bool:
 def _is_run_passing(run: AssessmentRun) -> bool:
     """Check if an assessment run is passing (completed and actually scanned clean).
 
+    This is the one judgement the dependency gate, control promotion and the
+    public badge all apply, so a run cannot satisfy one and be refused by
+    another. Warnings never block: they are usually an optional thing that was
+    absent, and the verification plugin's own aggregate finding is the fail
+    signal when nothing verified.
+
     Skipped runs are NOT passing — the plugin never executed its scan, so
     "no findings" carries no signal. They're excluded from public "all
     clean" aggregations to avoid showing a green badge for an SBOM whose
@@ -125,9 +131,9 @@ def _is_run_passing(run: AssessmentRun) -> bool:
 
     Security scanners (OSV, Dependency Track) report vulnerabilities via
     ``by_severity`` and never set ``fail_count``, so a public "pass" for them
-    additionally requires zero findings at every severity — otherwise an SBOM
-    with open criticals would earn a green shield. Mirrors the orchestrator's
-    dependency-gate predicate.
+    additionally requires zero findings at every severity, and no package
+    flagged as malicious. Otherwise an SBOM with open criticals would earn a
+    green shield, or satisfy a gate.
 
     Compliance-style runs additionally require at least one actual pass:
     a warnings-only result (``pass_count == 0``) asserts nothing worth a badge.
@@ -137,8 +143,11 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     if _is_run_skipped(run):
         return False
 
-    result = run.result or {}
-    summary = result.get("summary", {})
+    result = run.result
+    summary = result.get("summary") if isinstance(result, dict) else None
+    if not isinstance(summary, dict):
+        # A completed run with no summary graded nothing, so it asserts nothing.
+        return False
     fail_count: int = summary.get("fail_count", 0)
     error_count: int = summary.get("error_count", 0)
     if fail_count != 0 or error_count != 0:
@@ -150,10 +159,8 @@ def _is_run_passing(run: AssessmentRun) -> bool:
         return findings_total == 0 and not summary.get("malicious_count")
 
     # ``pass_count`` was added to summary payloads later, so a run predating it
-    # carries no key at all. ``orchestrator._is_passing`` distinguishes that from
-    # a present-and-zero count and lets the legacy run pass; reading a default of
-    # 0 here did not, so the same run satisfied a dependency gate and showed no
-    # public badge. The two encode one judgement and now answer alike.
+    # carries no key at all. That legacy run passes on no failures and no errors,
+    # while a modern run that graded nothing (present and zero) does not.
     pass_count = summary.get("pass_count")
     if pass_count is None:
         return True

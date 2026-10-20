@@ -8,9 +8,8 @@ scanner that ran and disagreed with the others.
 
 from __future__ import annotations
 
+import pytest
 from django.template.loader import render_to_string
-
-from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
 
 # The row's verdict takes its ink from its tone; this is the warning recipe, and
 # its absence is what "not a warning" means.
@@ -52,11 +51,30 @@ def _run(**overrides) -> dict:
     return run
 
 
-def _render(run: dict) -> str:
-    """The row as the page renders it: the run beside the verdict computed for it."""
+def _card(*runs: dict, **context) -> str:
+    """The assessments card as the artifact page renders it.
+
+    Compliance runs are listed as rows in its sources list. Vulnerability scans
+    are not rows here: the page links to the Vulnerabilities list instead.
+    """
     return render_to_string(
-        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "status_summary": {"overall_status": "", "total_assessments": len(runs)},
+                "latest_runs": list(runs),
+                "requirements": {"columns": [], "sources": list(runs), "met": 0},
+            },
+            **context,
+        },
     )
+
+
+def _render(run: dict) -> str:
+    """The run's own row in the card, so the card's heading badge cannot answer for it."""
+    html = _card(run)
+    start = html.index(f'id="plugin-{run["plugin_name"]}"')
+    return html[start : html.index("</li>", start)]
 
 
 def _findings_of(run: dict) -> str:
@@ -84,19 +102,15 @@ def _findings_of(run: dict) -> str:
     )
 
 
-def _header(run: dict) -> str:
-    """What a reader sees before opening the row.
-
-    The findings live in the collapsed details, so asserting against the whole
-    render would pass on text nobody can see.
-    """
-    return _render(run).split("x-collapse")[0]
+def _compliance_run(**overrides) -> dict:
+    """The row's subject: the card lists compliance runs, not scans."""
+    return _run(plugin_name="pqc", plugin_display_name="Post-Quantum Readiness", category="compliance", **overrides)
 
 
 class TestSkippedRunBadge:
     def test_skipped_run_reads_as_skipped(self):
-        """DT on an SPDX SBOM: it never scanned, so "Warnings only" is a lie."""
-        run = _run()
+        """A plugin that never ran on the artifact: "Warnings only" is a lie."""
+        run = _compliance_run()
         run["result"]["metadata"] = {"skipped": True}
 
         html = _render(run)
@@ -105,30 +119,24 @@ class TestSkippedRunBadge:
         assert "Warnings only" not in html
 
     def test_skipped_run_names_the_reason_without_expanding(self):
-        """A finding count says nothing about why the plugin stood down, and the
-        finding that explains it stays hidden until the row is opened."""
-        run = _run()
+        """A finding count says nothing about why the plugin stood down."""
+        run = _compliance_run()
         run["result"]["metadata"] = {"skipped": True}
 
-        header = _header(run)
+        html = _render(run)
 
-        assert "Format Not Supported" in header
-        assert "1 findings" not in header
+        assert "Format Not Supported" in html
+        assert "1 findings" not in html
 
     def test_skipped_run_is_not_coloured_as_a_warning(self):
-        run = _run()
+        run = _compliance_run()
         run["result"]["metadata"] = {"skipped": True}
 
-        assert WARNING_INK not in _header(run)
+        assert WARNING_INK not in _render(run)
 
-    def test_a_skipped_compliance_run_reads_the_same(self):
-        """PQC skips a document with no crypto assets. Different category, same
-        rendering branch, so it was mislabelled the same way."""
-        run = _run(
-            plugin_name="pqc",
-            plugin_display_name="Post-Quantum Readiness",
-            category="compliance",
-        )
+    def test_a_skipped_compliance_run_names_its_own_reason(self):
+        """PQC skips a document with no crypto assets."""
+        run = _compliance_run()
         run["result"]["metadata"] = {"skipped": True}
         run["result"]["findings"] = [
             {
@@ -140,15 +148,15 @@ class TestSkippedRunBadge:
             }
         ]
 
-        header = _header(run)
+        html = _render(run)
 
-        assert "Skipped" in header
-        assert "Warnings only" not in header
-        assert "No cryptographic assets found" in header
+        assert "Skipped" in html
+        assert "Warnings only" not in html
+        assert "No cryptographic assets found" in html
 
     def test_a_real_warnings_only_run_is_untouched(self):
         """A plugin that ran and produced only warnings still reads that way."""
-        html = _render(_run(category="compliance"))
+        html = _render(_compliance_run())
 
         assert "Warnings only" in html
         assert "Skipped" not in html
@@ -156,13 +164,13 @@ class TestSkippedRunBadge:
     def test_a_run_with_no_result_still_renders(self):
         """Pending and running rows carry result=None, so the verdict must not
         reach into it for the skipped flag."""
-        html = _render(_run(status="running", result=None))
+        html = _render(_compliance_run(status="running", result=None))
 
         assert "Running" in html
         assert "Skipped" not in html
 
     def test_a_passing_run_is_untouched(self):
-        run = _run(category="compliance")
+        run = _compliance_run()
         run["result"]["summary"] = {
             "total_findings": 3,
             "pass_count": 3,
@@ -177,7 +185,7 @@ class TestSkippedRunBadge:
         assert "Skipped" not in html
 
     def test_a_failing_run_is_untouched(self):
-        run = _run(category="compliance")
+        run = _compliance_run()
         run["result"]["summary"] = {
             "total_findings": 2,
             "pass_count": 0,
@@ -192,96 +200,13 @@ class TestSkippedRunBadge:
         assert "Skipped" not in html
 
 
-def _security_run(**overrides) -> dict:
-    """A security run as the plugins actually emit it, with ``by_severity``.
-
-    ``_run`` omits it. The verdict is chosen by category, so the passing,
-    failing and warnings-only cases above say compliance outright. Dependency Track fills it in even when it skips (one ``info``), so
-    the card renders through the security branch instead, and that is the path
-    that called the skip "1 Vulnerability".
-    """
-    run = _run(**overrides)
-    run["result"]["summary"]["by_severity"] = {
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-        "info": 1,
-        "unknown": 0,
-    }
-    return run
-
-
-class TestSkippedSecurityRunBadge:
-    """Same rule, security branch: DT handed an SPDX SBOM scanned nothing."""
-
-    def test_skipped_run_reads_as_skipped_not_as_a_vulnerability(self):
-        run = _security_run()
-        run["result"]["metadata"] = {"skipped": True}
-
-        header = _header(run)
-
-        assert "Skipped" in header
-        assert "Vulnerabilit" not in header
-
-    def test_skipped_run_names_the_reason_without_expanding(self):
-        run = _security_run()
-        run["result"]["metadata"] = {"skipped": True}
-
-        header = _header(run)
-
-        assert "Format Not Supported" in header
-        assert "1 findings" not in header
-
-    def test_skipped_run_is_not_coloured_as_a_warning(self):
-        run = _security_run()
-        run["result"]["metadata"] = {"skipped": True}
-
-        assert WARNING_INK not in _header(run)
-
-    def test_a_real_scan_is_untouched(self):
-        """The case beside it on the same page: OSV reporting real findings."""
-        run = _security_run(plugin_name="osv", plugin_display_name="OSV Vulnerability Scanner")
-        run["result"]["summary"]["total_findings"] = 117
-        run["result"]["summary"]["by_severity"] = {
-            "critical": 7,
-            "high": 32,
-            "medium": 23,
-            "low": 55,
-            "info": 0,
-            "unknown": 0,
-        }
-
-        header = _header(run)
-
-        assert "117 vulnerabilities" in header
-        assert "Skipped" not in header
-
-    def test_a_clean_scan_is_untouched(self):
-        run = _security_run()
-        run["result"]["summary"]["total_findings"] = 0
-        run["result"]["summary"]["by_severity"] = {
-            "critical": 0,
-            "high": 0,
-            "medium": 0,
-            "low": 0,
-            "info": 0,
-            "unknown": 0,
-        }
-
-        header = _header(run)
-
-        assert "No vulnerabilities" in header
-        assert "Skipped" not in header
-
-
 class TestStatusMarkersAreNotVulnerabilities:
     """The status marker a skipped scanner leaves in the findings array
     explains the run; it is not a vulnerability. It must not appear in the
-    vulnerabilities list, grow a Triage button, or count in the Total card."""
+    vulnerabilities list or grow a Triage button."""
 
     def _skipped_security_run(self) -> dict:
-        run = _security_run()
+        run = _run()
         run["result"]["metadata"] = {"skipped": True}
         run["result"]["findings"] = [
             {
@@ -299,19 +224,8 @@ class TestStatusMarkersAreNotVulnerabilities:
         assert "findings-list" not in html
         assert "Triage" not in html
 
-    def test_the_marker_is_not_counted_as_a_vulnerability(self):
-        # The stored summary counts 1 (the marker) in by_severity; the row
-        # must count none, draw no bar and write no breakdown.
-        run = self._skipped_security_run()
-        tile = scorecard_for_run(run)
-        header = _header(run)
-
-        assert tile["segments"] == []
-        assert 'role="img"' not in header
-        assert "1 vulnerability" not in header
-
     def test_real_findings_still_render(self):
-        run = _security_run()
+        run = _run()
         run["result"]["findings"] = [
             {
                 "id": "CVE-2025-1111",
@@ -323,3 +237,88 @@ class TestStatusMarkersAreNotVulnerabilities:
         html = _findings_of(run)
         assert "CVE-2025-1111" in html
         assert 'aria-label="Vulnerabilities"' in html
+
+
+def test_a_vulnerability_scan_is_offered_no_rerun():
+    """The plan and the backend schedule decide when a scan repeats, so even a
+    caller allowed to re-run the artifact's other assessments is not handed one."""
+    scan = _run()
+    standard = _compliance_run()
+
+    html = _card(scan, standard, sbom_id="sbom1", can_rerun=True)
+
+    assert "/sbom1/pqc/rerun" in html
+    assert "/dependency-track/rerun" not in html
+    assert 'id="plugin-dependency-track"' not in html
+
+
+@pytest.mark.parametrize(
+    ("status", "label"), [("failed", "Could not run"), ("pending", "Queued"), ("running", "Running")]
+)
+def test_an_unfinished_vulnerability_scan_still_shows_its_state(status, label):
+    """The Vulnerabilities list has nothing from a scan that has not finished, so the card keeps its row."""
+    from django.template.loader import render_to_string
+
+    run = {
+        "id": "r1",
+        "plugin_name": "osv",
+        "plugin_display_name": "OSV",
+        "category": "security",
+        "status": status,
+        "error_message": "Scanner timed out" if status == "failed" else None,
+        "result": None,
+    }
+    html = render_to_string(
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "latest_runs": [run],
+                "status_summary": {"total_assessments": 1, "overall_status": status},
+                "requirements": {"columns": [], "sources": []},
+                "unassessed_plugins": [],
+            },
+            "sbom_id": "s1",
+        },
+    )
+    assert label in html
+    if status == "failed":
+        assert "Scanner timed out" in html
+
+
+def test_a_completed_scan_that_errored_still_shows_its_state():
+    """Scanner errors are stored as completed runs; the list has nothing from them, so the card keeps the row."""
+    from django.template.loader import render_to_string
+
+    run = {
+        "id": "r1",
+        "plugin_name": "osv",
+        "plugin_display_name": "OSV",
+        "category": "security",
+        "status": "completed",
+        "result": {"summary": {"error_count": 1}, "findings": []},
+    }
+    html = render_to_string(
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "latest_runs": [run],
+                "status_summary": {"total_assessments": 1, "overall_status": "has_failures"},
+                "requirements": {"columns": [], "sources": []},
+                "unassessed_plugins": [],
+            },
+            "sbom_id": "s1",
+        },
+    )
+    assert "Could not scan" in html
+
+
+def test_a_completed_scan_error_shows_what_the_scanner_said():
+    """The scanner's diagnostic is the only place the reason survives, so the row shows it."""
+    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
+
+    marker = {"id": "osv:scan-error", "status": "error", "title": "Scan Error", "description": "OSV timed out"}
+    run = {"category": "security", "status": "completed", "result": {"summary": {"error_count": 1}, "findings": [marker]}}
+    assert scorecard_for_run(run)["caption"] == "OSV timed out"
+
+    run["result"]["findings"] = []
+    assert scorecard_for_run(run)["caption"] == "The scanner reported an error."

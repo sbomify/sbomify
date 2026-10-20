@@ -12,13 +12,17 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
+from django.db import connection, transaction
+from django.db.models import F
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
+from sbomify.apps.sboms.utils import SBOMContentMissingError, SBOMDataError, get_sbom_data_bytes
 from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
+from .public_assessment_utils import _is_run_passing
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .sdk.results import PluginMetadata
@@ -359,15 +363,22 @@ class PluginOrchestrator:
             assessment_run.result = result.to_dict()
             assessment_run.result_schema_version = result.schema_version
             assessment_run.status = RunStatus.COMPLETED.value
-            assessment_run.completed_at = timezone.now()
-            assessment_run.save(
-                update_fields=[
-                    "result",
-                    "result_schema_version",
-                    "status",
-                    "completed_at",
-                ]
-            )
+            # Settled under the missing-content report lock, so a check that
+            # is reading the preceding run either sees this success or settles
+            # before it. Without it, this could land between that read and the
+            # failure's own completed_at, and the failure would be ordered
+            # after a success it never saw.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                assessment_run.completed_at = timezone.now()
+                assessment_run.save(
+                    update_fields=[
+                        "result",
+                        "result_schema_version",
+                        "status",
+                        "completed_at",
+                    ]
+                )
 
             # Fold the run into the component's vulnerability lifecycle. The
             # stored run stays immutable (ADR-004); this is a separate index
@@ -421,6 +432,25 @@ class PluginOrchestrator:
                 f"with {result.summary.total_findings} findings"
             )
 
+        except SBOMContentMissingError as e:
+            # The stored document is gone, and it will still be gone on the next
+            # sweep, which retries a failed run once a day indefinitely. One
+            # report is worth having -- it is data loss -- so the first failure
+            # is an error and each identical repeat after it is a warning.
+            #
+            # Nothing upstream serialises runs for one SBOM and plugin (an
+            # upload, the sweep and a manual rerun can overlap), so the check
+            # and the write that the next check reads are made under one lock.
+            # A second worker waits here until the first has committed its
+            # failure, and then sees it.
+            with transaction.atomic():
+                self._lock_missing_content_report(assessment_run)
+                if self._previous_run_failed_with(assessment_run, str(e)):
+                    logger.warning(f"[PLUGIN] SBOM content still missing for run {assessment_run.id}: {e}")
+                else:
+                    logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
+                self._mark_failed(assessment_run, str(e))
+
         except SBOMDataError as e:
             # SBOM fetch error
             logger.error(f"[PLUGIN] SBOM fetch error for run {assessment_run.id}: {e}")
@@ -444,6 +474,38 @@ class PluginOrchestrator:
 
         return assessment_run
 
+    @staticmethod
+    def _lock_missing_content_report(assessment_run: AssessmentRun) -> None:
+        """Hold the SBOM and plugin's report lock until the current transaction ends.
+
+        Every terminal transition takes it before stamping ``completed_at``,
+        so the missing-content check's read of the preceding run and the
+        order runs settle in are serialised together.
+        """
+        key = f"plugin-missing-content:{assessment_run.sbom_id}:{assessment_run.plugin_name}"
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", [key])
+
+    def _previous_run_failed_with(self, assessment_run: AssessmentRun, error_message: str) -> bool:
+        """Whether the run before this one, for the same SBOM and plugin,
+        failed with exactly this error.
+
+        Only the immediately preceding terminal run counts, so a success in
+        between -- the object restored -- makes the next loss report again.
+        "Preceding" is by when a run settled, not when it was enqueued: runs
+        can overlap and finish out of order. This is the same ordering, and
+        the same index, as the failure-backoff probe in ``tasks``.
+        """
+        previous = (
+            AssessmentRun.objects.filter(sbom_id=assessment_run.sbom_id, plugin_name=assessment_run.plugin_name)
+            .exclude(id=assessment_run.id)
+            .exclude(status__in=[RunStatus.PENDING.value, RunStatus.RUNNING.value])
+            .order_by(Coalesce("completed_at", "created_at").desc(), F("id").desc())
+            .values_list("status", "error_message")
+            .first()
+        )
+        return previous == (RunStatus.FAILED.value, error_message)
+
     def _mark_failed(self, assessment_run: AssessmentRun, error_message: str) -> None:
         """Mark an assessment run as failed.
 
@@ -453,10 +515,17 @@ class PluginOrchestrator:
         """
         assessment_run.status = RunStatus.FAILED.value
         assessment_run.error_message = error_message
-        assessment_run.completed_at = timezone.now()
-        assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+        # Any failure resets the missing-content report just as a success
+        # does, so it settles under the same lock. Advisory locks stack, so
+        # the missing-content handler, which already holds it, is unaffected.
+        with transaction.atomic():
+            self._lock_missing_content_report(assessment_run)
+            assessment_run.completed_at = timezone.now()
+            assessment_run.save(update_fields=["status", "error_message", "completed_at"])
 
-    def finalize_retry_exhausted(self, run_id: str, error_message: str) -> AssessmentRun | None:
+    def finalize_retry_exhausted(
+        self, run_id: str, error_message: str, title: str | None = None
+    ) -> AssessmentRun | None:
         """Settle a run that has burnt through every ``RetryLaterError`` slot.
 
         The orchestrator's ``RetryLaterError`` handler resets the run to
@@ -489,15 +558,20 @@ class PluginOrchestrator:
         Idempotent: if the run is already in a terminal state, no-op.
         Returns the run on success, ``None`` if the run isn't found.
         """
+        # The finding renders on the compliance page, so it says what the user
+        # is left with rather than how the retries were scheduled. The plugin's
+        # message carries the substance; ``title`` lets it name the outcome.
+        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS
+
+        minutes = sum(RETRY_LATER_DELAYS_MS) // 60_000
+        message = error_message.strip()
+        if message and not message.endswith((".", "!", "?")):
+            message += "."
         return self._finalize_unfinished(
             run_id,
             kind="retry-exhausted",
-            title="Assessment Retry Budget Exhausted",
-            description=(
-                "The plugin reported a transient condition for every retry attempt "
-                "in the configured budget. The condition may have become permanent "
-                f"(e.g., the upstream resource never became available). Last error: {error_message}"
-            ),
+            title=title or "Check did not finish",
+            description=f"{message} sbomify checked again for {minutes} minutes before stopping.".lstrip(),
             error_message=f"Retry budget exhausted: {error_message}",
             last_error=error_message,
         )
@@ -578,6 +652,28 @@ class PluginOrchestrator:
         }
 
         with transaction.atomic():
+            # Settled under the missing-content report lock like every other
+            # terminal transition, with ``completed_at`` stamped only once the
+            # lock is held. Otherwise this could land between a missing-content
+            # check's read of the preceding run and that failure's own
+            # completed_at, ordering the failure after a run it never saw.
+            #
+            # The row is locked first, and the report lock only once it is
+            # held. A worker still on this run holds the row from its RUNNING
+            # save until its task transaction ends, and takes the report lock
+            # inside that; taking them here in the other order would deadlock
+            # against it. Waiting on the row instead lets the worker settle,
+            # and the filter below then finds nothing left to finalise.
+            locked = (
+                AssessmentRun.objects.select_for_update()
+                .filter(id=run_id, status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value))
+                .values_list("id", flat=True)
+                .first()
+            )
+            if locked is not None:
+                self._lock_missing_content_report(run)
+            now = timezone.now()
+            synthesized_result["assessed_at"] = now.isoformat()
             updated = AssessmentRun.objects.filter(
                 id=run_id,
                 status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),
@@ -721,7 +817,7 @@ class PluginOrchestrator:
                     sbom_id=sbom_id,
                     category=dep_value,
                     status=RunStatus.COMPLETED.value,
-                ).only("plugin_name", "result")
+                ).only("plugin_name", "category", "status", "result")
                 for run in runs:
                     if self._is_passing(run):
                         passing.append(run.plugin_name)
@@ -736,7 +832,7 @@ class PluginOrchestrator:
                         plugin_name=dep_value,
                         status=RunStatus.COMPLETED.value,
                     )
-                    .only("plugin_name", "result")
+                    .only("plugin_name", "category", "status", "result")
                     .order_by("-created_at")
                     .first()
                 )
@@ -778,7 +874,7 @@ class PluginOrchestrator:
                     sbom_id=sbom_id,
                     category=dep_value,
                     status=RunStatus.COMPLETED.value,
-                ).only("plugin_name", "result")
+                ).only("plugin_name", "category", "status", "result")
                 for run in runs:
                     if self._is_passing(run):
                         passing.append(run.plugin_name)
@@ -794,7 +890,7 @@ class PluginOrchestrator:
                         plugin_name=dep_value,
                         status=RunStatus.COMPLETED.value,
                     )
-                    .only("plugin_name", "result")
+                    .only("plugin_name", "category", "status", "result")
                     .order_by("-created_at")
                     .first()
                 )
@@ -815,58 +911,8 @@ class PluginOrchestrator:
             "failed_plugins": list(set(failed)),
         }
 
-    def _is_passing(self, run: AssessmentRun) -> bool:
-        """Check if an assessment run is passing.
-
-        For security plugins: passing means no vulnerabilities found
-        (``by_severity`` all zero).
-
-        For compliance/attestation/other plugins: passing requires no
-        failures, no errors, AND at least one explicit pass. The
-        ``pass_count > 0`` requirement closes a latent hole where a
-        plugin emitting only warnings (e.g., the previous github-attestation
-        plugin returning a "no VCS info" warning) would silently satisfy
-        a ``requires_one_of`` dependency despite never having verified
-        anything. A run that produced only warnings has nothing positive
-        to assert; treating it as passing would let BSI/FDA/etc. dependency
-        gates pass on no evidence.
-
-        Args:
-            run: The AssessmentRun to check.
-
-        Returns:
-            True if the run is passing, False otherwise.
-        """
-        if not run.result or not isinstance(run.result, dict):
-            return False
-
-        summary = run.result.get("summary")
-        if not isinstance(summary, dict):
-            return False
-
-        if run.category == "security":
-            # A scan that errored out (error_count > 0, no by_severity) verified nothing, so it
-            # is not passing — otherwise a broken scanner silently satisfies a dependency gate.
-            if summary.get("error_count", 0) > 0:
-                return False
-            by_severity = summary.get("by_severity") or {}
-            total_from_severity: int = sum(
-                by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
-            )
-            return total_from_severity == 0
-
-        fail_count: int = summary.get("fail_count", 0)
-        error_count: int = summary.get("error_count", 0)
-        # ``pass_count`` was added to summary payloads at the same time as
-        # this stricter check. Older runs predating that may not carry the
-        # key at all — distinguish "key absent" (legacy schema) from "key
-        # present and zero" (modern run with no positive findings) so we
-        # don't retroactively un-pass historical runs that satisfied the
-        # gate under the old contract.
-        pass_count = summary.get("pass_count")
-        if pass_count is None:
-            return fail_count == 0 and error_count == 0
-        return fail_count == 0 and error_count == 0 and pass_count > 0
+    # The gate, control promotion and the public badge share one judgement.
+    _is_passing = staticmethod(_is_run_passing)
 
     def get_plugin_instance(
         self,

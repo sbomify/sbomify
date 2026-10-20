@@ -14,10 +14,26 @@ from sbomify.apps.vulnerability_scanning.utils import state_label
 
 
 def build_component_security_picture(
-    component_ids: list[str], component_names: dict[str, str], sla_matrix: dict[str, Any]
+    component_ids: list[str],
+    component_names: dict[str, str],
+    sla_matrix: dict[str, Any],
+    sbom_overrides: dict[str, list[str]] | None = None,
+    release_id: str | None = None,
+    include_suppressed: bool = False,
 ) -> dict[str, Any]:
-    """Worst non-suppressed findings across the given components."""
-    from sbomify.apps.plugins.latest import latest_run_ids
+    """Worst non-suppressed findings across the given components.
+
+    Each component is read at its newest SBOM unless ``sbom_overrides`` names
+    the SBOMs to read for it instead: the ones a release shipped, or one
+    version picked by hand. ``release_id`` names the release those SBOMs came
+    from, so each is read at the newest run that covers that release.
+
+    ``include_suppressed`` also lists the findings a VEX decision closed, marked
+    ``suppressed``, so a decision can be found again and revised.
+    """
+    from django.db.models import Q
+
+    from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.models import Finding
@@ -25,22 +41,37 @@ def build_component_security_picture(
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
+        package_scopes,
+        result_scan_failed,
         result_scanned_nothing,
         severity_counts_from_rows,
+        vulnerability_findings,
     )
 
+    overrides = {key: value for key, value in (sbom_overrides or {}).items() if key in set(component_ids)}
     latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids, bom_type=SBOM.BomType.SBOM)
+        SBOM.objects.filter(
+            component_id__in=[cid for cid in component_ids if cid not in overrides], bom_type=SBOM.BomType.SBOM
+        )
         .order_by("component_id", "-created_at")
         .distinct("component_id")
         .values("id", "component_id", "version", "created_at")
     )
-    sbom_meta = {str(row["id"]): row for row in latest_sboms}
-    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys())
-    runs = (
-        AssessmentRun.objects.filter(id__in=latest_ids)
+    chosen_sboms = SBOM.objects.filter(
+        id__in=[sbom_id for ids in overrides.values() for sbom_id in ids],
+        component_id__in=list(overrides),
+        bom_type=SBOM.BomType.SBOM,
+    ).values("id", "component_id", "version", "created_at")
+    sbom_meta = {str(row["id"]): row for row in [*latest_sboms, *chosen_sboms]}
+    # A release reads the runs that cover it; see release_run_ids. The release reads only
+    # SBOMs it shipped, so every SBOM read here is one of them.
+    run_ids, release_ids = release_run_ids(
+        AssessmentRun.objects.filter(category="security", status="completed"), sbom_meta.keys(), release_id
+    )
+    runs = list(
+        AssessmentRun.objects.filter(id__in=run_ids)
         .order_by("sbom_id", "plugin_name")
-        .values("id", "sbom_id", "result_summary", "result_skipped", "created_at")
+        .values("id", "sbom_id", "plugin_name", "result_summary", "result_skipped", "created_at")
     )
     results_by_sbom: dict[str, list[dict[str, Any] | None]] = {}
     scanned_at_by_sbom: dict[str, Any] = {}
@@ -54,10 +85,16 @@ def build_component_security_picture(
 
     # Workspace metrics need every occurrence, but never the full scanner blobs.
     # Use the projection maintained by scan completion and VEX re-annotation,
-    # scoped to the same latest runs as the summary and assessment state above.
+    # scoped to the same latest runs as the summary and assessment state above. A
+    # release's own run need not be the newest, so its rows are read without is_current.
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
-    for finding in Finding.objects.filter(run_id__in=[run["id"] for run in runs], is_current=True).values(
+    plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
+    for finding in Finding.objects.filter(
+        Q(run_id__in=[rid for rid in run_ids if rid not in release_ids], is_current=True)
+        | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
+    ).values(
+        "run_id",
         "sbom_id",
         "advisory_id",
         "aliases",
@@ -66,6 +103,7 @@ def build_component_security_picture(
         "package_name",
         "package_version",
         "ecosystem",
+        "purl",
         "vex_state",
         "malicious",
     ):
@@ -75,6 +113,7 @@ def build_component_security_picture(
             {
                 "id": finding["advisory_id"],
                 "aliases": finding["aliases"],
+                "plugin": plugin_by_run.get(finding["run_id"], ""),
                 "severity": finding["severity"],
                 "cvss_score": finding["cvss_score"],
                 "analysis_state": finding["vex_state"],
@@ -82,41 +121,100 @@ def build_component_security_picture(
                     "name": finding["package_name"],
                     "version": finding["package_version"],
                     "ecosystem": finding["ecosystem"],
+                    # package_scopes keeps two groupIds with one artifact name apart by it.
+                    "purl": finding["purl"],
                 },
             }
         )
     findings: list[dict[str, Any]] = []
     counts_by_component: dict[str, dict[str, int]] = {}
     unassessed: set[str] = set(component_ids)
+    summary_only: set[str] = set()
+    # A component counts as totals-only when none of its SBOMs read here lists findings.
+    itemised: set[str] = set()
+    # A component counts as failed when its scans errored and none of them succeeded.
+    errored: set[str] = set()
+    scanned: set[str] = set()
     kev_ids = kev_ids_for_serialization() if results_by_sbom else frozenset()
     for sbom_id, provider_results in results_by_sbom.items():
         meta = sbom_meta[sbom_id]
         component_id = meta["component_id"]
         # One pass over the SBOM, as its card merges: package_scopes keys on the
         # canonical ecosystem, so OSV's "PyPI" and a purl's "pypi" meet here.
-        rows = extract_finding_rows(
-            merge_findings_by_alias([{"findings": indexed_by_sbom.get(sbom_id, [])}]), kev_ids=kev_ids
-        )
-        if not all(result_scanned_nothing(result) for result in provider_results):
+        indexed = vulnerability_findings([{"findings": indexed_by_sbom.get(sbom_id, [])}])
+        rows = extract_finding_rows(merge_findings_by_alias([{"findings": indexed}]), kev_ids=kev_ids)
+        # Which scanners reported each row, keyed by every id and alias in the package scope
+        # the merge used, so OSV's "com.foo:shared" without a purl and Dependency-Track's
+        # "shared" with one meet here as they did there. Each row is scoped alongside the
+        # findings it came from: it carries one of their purls, so it joins their scope.
+        row_components = [
+            {
+                "component": {
+                    "name": row["package"],
+                    "version": row["version"],
+                    "ecosystem": row["ecosystem"],
+                    "purl": row["purl"],
+                }
+            }
+            for row in rows
+        ]
+        scopes = package_scopes([*indexed, *row_components])
+        sources: dict[tuple[str, tuple[str, ...]], set[str]] = {}
+        for occurrence, scope in zip(indexed, scopes[: len(indexed)], strict=True):
+            for identifier in (occurrence["id"], *occurrence["aliases"]):
+                sources.setdefault((identifier.lower(), scope), set()).add(occurrence["plugin"])
+        # A completed run that stored no result examined nothing it can vouch for,
+        # so only a readable summary or listed findings count as an assessment.
+        examined = [
+            result
+            for result in provider_results
+            if result and not result_scanned_nothing(result) and isinstance(result.get("summary"), dict)
+        ]
+        if rows or examined:
             unassessed.discard(component_id)
-        # Keep summary-only providers visible, as on the product detail page.
-        counts_by_component[component_id] = (
+        # A scan that errored lists nothing, which must not read as nothing open.
+        if any(result_scan_failed(result) for result in examined):
+            errored.add(component_id)
+        if any(not result_scan_failed(result) for result in examined):
+            scanned.add(component_id)
+        # Keep summary-only providers visible, as on the product detail page. A component
+        # whose scans report totals but no finding rows at all is recorded as such: it has
+        # no details to list, unlike one whose findings are all suppressed.
+        if rows:
+            itemised.add(component_id)
+        elif any(extract_severity_counts(result)["total"] for result in provider_results):
+            summary_only.add(component_id)
+        counts = (
             severity_counts_from_rows(rows)
             if rows
             else max(
                 (extract_severity_counts(result) for result in provider_results), key=lambda counts: counts["total"]
             )
         )
-        for row in rows:
-            if row.get("vex_suppressed"):
+        # A release can read several SBOMs of one component, usually one build in two
+        # formats. Keep the largest report rather than whichever SBOM came last: adding
+        # them would count one build twice, and order must not decide the number.
+        previous = counts_by_component.get(component_id)
+        if previous is None or counts["total"] > previous["total"]:
+            counts_by_component[component_id] = counts
+        for row, scope in zip(rows, scopes[len(indexed) :], strict=True):
+            if row.get("vex_suppressed") and not include_suppressed:
                 continue
+            row["suppressed"] = bool(row.get("vex_suppressed"))
             row["malicious"] = any(alias.lower() in malicious_ids for alias in (row["id"], *row["aliases"]))
+            reported_by: set[str] = set()
+            for alias in (row["id"], *row["aliases"]):
+                reported_by |= sources.get((alias.lower(), scope), set())
+            row["sources"] = sorted(reported_by - {""})
             findings.append(
                 {
                     **row,
                     "component_id": component_id,
                     "component_name": component_names.get(component_id, ""),
+                    "sbom_id": sbom_id,
                     "sbom_version": meta["version"],
+                    # The release it was read in, so its actions read the same runs.
+                    "release_id": release_id or "",
                     "scanned_at": scanned_at_by_sbom.get(sbom_id),
                 }
             )
@@ -143,7 +241,9 @@ def build_component_security_picture(
     return {
         "findings": findings,
         "counts": counts_by_component,
+        "summary_only": summary_only - itemised,
         "unassessed": unassessed,
+        "failed": errored - scanned,
         "latest_sboms": {row["component_id"]: row for row in sbom_meta.values()},
         "last_scans": {
             sbom_meta[sbom_id]["component_id"]: scanned_at for sbom_id, scanned_at in scanned_at_by_sbom.items()

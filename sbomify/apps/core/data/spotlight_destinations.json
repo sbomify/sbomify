@@ -10,10 +10,10 @@
     "     NOT use in the UI — someone searching 'api key' should land on tokens,",
     "     and someone searching '2fa' should land wherever that lives. Synonyms",
     "     are the whole point; the title is already matched separately.",
-    "  4. `roles` restricts visibility, and must match what the view itself",
-    "     allows: a destination the rail shows but search hides is worse than no",
-    "     entry at all. Omit for everyone; ['owner','admin'] for anything a guest",
-    "     must not see.",
+    "  4. `roles` restricts visibility, and must mirror the authz tier of the",
+    "     view or action the destination leads to (see core/authz.py): a",
+    "     destination the rail shows but search hides is worse than no entry at",
+    "     all. Omit only for pages every signed-in workspace member can use.",
     "  5. `args` names URL kwargs the resolver fills from the current session:",
     "     'workspace_key' is the only one supported today.",
     "",
@@ -167,7 +167,7 @@
       "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-sliders",
-      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years"],
+      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years", "advisory prefix", "advisory id", "advisory numbering"],
       "args": ["workspace_key"],
       "roles": ["owner", "admin"]
     },
@@ -200,7 +200,7 @@
       "keywords": ["mcp", "model context protocol", "ai agent", "agent", "claude", "cursor", "llm"],
       "args": ["workspace_key"],
       "fragment": "tokens",
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Parties",
@@ -270,28 +270,58 @@
       "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
     },
     {
-      "title": "Upload an SBOM",
-      "url_name": "core:components_dashboard",
+      "title": "Upload SBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "sbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["upload sbom", "upload an sbom", "upload sboms", "sbom upload", "import sbom", "add sbom", "new sbom", "sboms", "sbom file", "cyclonedx", "spdx", "upload artifact", "upload file", "import"],
+      "roles": ["owner", "admin", "member"]
     },
     {
-      "title": "Upload a VEX",
-      "url_name": "core:components_dashboard",
+      "title": "Upload CBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "cbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import vex", "vex document", "suppress", "triage import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["cbom", "upload cbom", "upload a cbom", "cbom upload", "import cbom", "crypto bom", "cryptography bom", "cryptographic inventory", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Upload VEX",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "vex"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["vex", "openvex", "csaf", "upload vex", "upload a vex", "vex upload", "upload vex file", "import vex", "add vex", "vex document", "vex statement", "not affected", "exploitability", "suppress", "triage import", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Upload document",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "document"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["upload document", "upload a document", "upload documents", "document upload", "documents", "add document", "import document", "attach file", "pdf", "policy", "license file", "upload artifact", "upload file"],
+      "roles": ["owner", "admin", "member"]
     },
     {
       "title": "Vulnerabilities",
       "url_name": "vulnerability_scanning:vulnerability_scans",
       "section": "navigate",
       "icon": "fa-bug",
-      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history"],
+      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history", "release vulnerabilities", "vulnerabilities by version", "triage", "vex"],
       "args": ["workspace_key"],
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
+      "title": "Review VEX",
+      "url_name": "vulnerability_scanning:vulnerability_scans",
+      "section": "actions",
+      "icon": "fa-clipboard-check",
+      "keywords": ["approve vex", "vex approval", "approval queue", "review queue", "pending vex", "agent vex", "ai agent", "vex submissions", "reject vex"],
+      "args": ["workspace_key"],
+      "query": {"view": "review"},
       "roles": ["owner", "admin", "member", "operator"]
     },
     {

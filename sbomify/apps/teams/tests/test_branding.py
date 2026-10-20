@@ -313,16 +313,24 @@ class TestBrandingOffNotice:
         assert response.status_code == 200
         assert self.NOTICE in response.content.decode()
 
-    def test_the_notice_stays_away_when_branding_is_on(self, client, sample_team_with_owner_member):
+    def test_the_notice_tracks_the_switch_rather_than_the_saved_value(self, client, sample_team_with_owner_member):
+        """Alpine can only reveal markup the server rendered.
+
+        Gating this on the saved value meant turning branding off showed no
+        warning until a save and a reload, which matters now the switch is the
+        first control on the form. It ships either way, bound to the checkbox,
+        with x-cloak keeping it down until Alpine can answer.
+        """
         team = sample_team_with_owner_member.team
         team.branding_info = {"branding_enabled": True}
         team.save(update_fields=["branding_info"])
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = self._render(client, team)
+        html = self._render(client, team).content.decode()
 
-        assert response.status_code == 200
-        assert self.NOTICE not in response.content.decode()
+        assert self.NOTICE in html
+        assert 'x-show="!localBrandingInfo.branding_enabled"' in html
+        assert "x-cloak" in html
 
     def test_the_page_names_no_alpine_variable_it_does_not_define(self, client, sample_team_with_owner_member):
         """x-show on a server-only name is invisible until a browser runs it."""
