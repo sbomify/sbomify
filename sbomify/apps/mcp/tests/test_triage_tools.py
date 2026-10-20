@@ -19,7 +19,13 @@ from sbomify.apps.vulnerability_scanning.tests.test_workspace_vulnerabilities im
 from .test_protocol import call, mcp_http, parse, structured
 
 AGENT = SCOPE_PRESETS["agent"]
-TRIAGE_TOOLS = {"get_fix_prompt", "submit_vex_for_approval", "list_vex_submissions", "get_vex_submission"}
+TRIAGE_TOOLS = {
+    "get_fix_prompt",
+    "submit_vex_for_approval",
+    "list_vex_submissions",
+    "get_vex_submission",
+    "withdraw_vex_submission",
+}
 
 DECISION = {
     "vuln_id": "CVE-2026-1",
@@ -167,3 +173,130 @@ async def test_another_workspaces_submission_is_not_found(make_token, mcp_owner)
     assert "not found" in _refused(await _call(token, "get_vex_submission", {"submission_id": submitted["id"]})).lower()
     listed = structured(await _call(token, "list_vex_submissions", {}))
     assert listed["items"] == []
+
+
+PROMPT_ARGS = {"advisory": "CVE-2026-1", "purl": "pkg:npm/lodash@4.17.15"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_triage_prompt_tells_an_mcp_agent_to_use_the_tools(make_token, mcp_owner):
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import triage_filename, triage_upload_lines
+
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+
+    prompt = structured(await _call(token, "get_fix_prompt", {"component_id": component.id, **PROMPT_ARGS}))[
+        "triage_prompt"
+    ]
+
+    assert "submit_vex_for_approval" in prompt
+    assert "get_vex_submission" in prompt
+    assert component.id in prompt
+    assert "curl" not in prompt
+    assert "/api/v2/" not in prompt
+    filename = triage_filename(component.name, component.id)
+    assert prompt.endswith("\n".join(triage_upload_lines(filename, component.id, channel="mcp")))
+
+
+@pytest.mark.django_db
+def test_only_the_send_section_differs_from_the_rest_prompt(sample_team_with_owner_member):
+    from sbomify.apps.vulnerability_scanning.services.fix_prompt import (
+        build_fix_prompt,
+        triage_filename,
+        triage_upload_lines,
+    )
+
+    component = _seed(sample_team_with_owner_member.team)
+    params = {"component": component.id, **{"advisory": "CVE-2026-1", "purl": "pkg:npm/lodash@4.17.15"}}
+    rest = build_fix_prompt(sample_team_with_owner_member.team, params).value["triage_prompt"]
+    filename = triage_filename(component.name, component.id)
+    api_section = "\n".join(triage_upload_lines(filename, component.id))
+    mcp_section = "\n".join(triage_upload_lines(filename, component.id, channel="mcp"))
+
+    assert "curl -X POST" in api_section
+    assert rest.endswith(api_section)
+    assert api_section != mcp_section
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_ruling_already_waiting_names_get_vex_submission(make_token, mcp_owner, monkeypatch):
+    from sbomify.apps.vulnerability_scanning import apis
+
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+    detail = (
+        "These rulings are already waiting for review in submission Ab12Cd34Ef56. "
+        "Check it with GET /api/v2/vulnerability-scanning/vex-submissions/Ab12Cd34Ef56"
+    )
+    monkeypatch.setattr(apis, "create_vex_submission", lambda *args, **kwargs: (409, {"detail": detail}))
+
+    refused = _refused(await _submit(token, component.id))
+
+    assert 'get_vex_submission with submission_id \\"Ab12Cd34Ef56\\"' in refused
+    assert "/api/v2/" not in refused
+
+
+async def _withdraw(token, submission_id: str):
+    return await _call(token, "withdraw_vex_submission", {"submission_id": submission_id})
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_an_agent_withdraws_its_own_pending_submission(make_token, mcp_owner):
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+    submitted = structured(await _submit(token, component.id))
+
+    withdrawn = structured(await _withdraw(token, submitted["id"]))
+
+    assert withdrawn["id"] == submitted["id"]
+    assert withdrawn["status"] == "withdrawn"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_decided_submission_cannot_be_withdrawn(make_token, mcp_owner):
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+    submitted = structured(await _submit(token, component.id))
+    await sync_to_async(VexSubmission.objects.filter(pk=submitted["id"]).update)(
+        status=VexSubmission.Status.APPROVED
+    )
+
+    assert "no longer awaiting review" in _refused(await _withdraw(token, submitted["id"]))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_another_workspaces_submission_cannot_be_withdrawn(make_token, mcp_owner):
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    _, _, other = mcp_owner
+    component = await sync_to_async(_seed)(other)
+    other_token = await sync_to_async(make_token)(AGENT, other)
+    submitted = structured(await _submit(other_token, component.id))
+    token = await sync_to_async(make_token)(AGENT)
+
+    assert "not found" in _refused(await _withdraw(token, submitted["id"])).lower()
+    stored = await sync_to_async(VexSubmission.objects.get)(pk=submitted["id"])
+    assert stored.status == VexSubmission.Status.PENDING
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_read_only_token_cannot_withdraw(make_token, mcp_owner):
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    agent = await sync_to_async(make_token)(AGENT)
+    submitted = structured(await _submit(agent, component.id))
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+
+    assert "Not permitted" in _refused(await _withdraw(token, submitted["id"]))

@@ -27,6 +27,7 @@ WRITE_TOOLS = {
     "assign_contact_profile",
     "create_advisory",
     "submit_vex_for_approval",
+    "withdraw_vex_submission",
 }
 
 
@@ -42,7 +43,7 @@ def test_all_tools_are_registered():
     """Pins the surface: adding or removing a tool is a deliberate change."""
     specs = registry.all_specs()
 
-    assert len(specs) == 32
+    assert len(specs) == 33
     assert WRITE_TOOLS <= set(specs)
     assert {spec.name for spec in specs.values() if spec.writes} == WRITE_TOOLS
 
