@@ -93,7 +93,7 @@ def _findings_of(run: dict) -> str:
             "run": run,
             "is_security": is_security,
             "findings": vulnerability_findings(findings) if is_security else findings,
-            "vex_statements": [],
+            "triage": {},
             "can_triage": True,
             "page": 1,
             "page_count": 1,

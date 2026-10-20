@@ -140,6 +140,7 @@ def build_component_vulnerabilities(
     from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.services.finding_browse import browse_finding_rows
+    from sbomify.apps.vulnerability_scanning.triage import triage_decisions
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
         extract_severity_counts,
@@ -189,6 +190,8 @@ def build_component_vulnerabilities(
         merge_findings_by_alias(provider_results),
         vex_statements=triage_statements(component_id),
         kev_ids=kev_ids_for_serialization(),
+        # Only the triage dialog reopens a decision, and it asks for one occurrence.
+        triage_decisions=triage_decisions(component_id) if triage_identity is not None else None,
     )
 
     # The header badge counts the same merged view the table shows, minus what
