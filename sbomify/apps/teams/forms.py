@@ -7,6 +7,7 @@ from django.conf import settings
 from django.forms import inlineformset_factory
 
 from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
+from sbomify.apps.security_advisories.models import normalize_advisory_id_prefix
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Workspace
 
 if TYPE_CHECKING:
@@ -133,6 +134,22 @@ class PatchSLAForm(forms.Form):
 
 class SupportPeriodForm(forms.Form):
     default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
+
+
+class AdvisoryIdForm(forms.Form):
+    """How new security advisories are numbered. Published ids never change."""
+
+    # No max_length here: uppercasing can lengthen a value, so the normaliser
+    # measures it afterwards.
+    advisory_id_prefix = forms.CharField(required=False)
+    # Blank means "from 1" rather than an error, the same as a fresh workspace.
+    advisory_id_start_at = forms.IntegerField(required=False, min_value=1, max_value=999_999)
+
+    def clean_advisory_id_prefix(self) -> str:
+        return normalize_advisory_id_prefix(self.cleaned_data.get("advisory_id_prefix") or "")
+
+    def clean_advisory_id_start_at(self) -> int:
+        return self.cleaned_data.get("advisory_id_start_at") or 1
 
 
 class OnboardingProductForm(forms.Form):

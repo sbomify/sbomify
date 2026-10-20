@@ -52,6 +52,9 @@
     <c-forms.field horizontal label="Theme"><c-chrome.theme-picker standalone /></c-forms.field>
     <c-forms.field horizontal label="Email" hint="A value set elsewhere reads as text, not as a read-only input."><c-forms.static>member@example.com</c-forms.static></c-forms.field>
     <c-forms.field horizontal label="Member"><c-overview.record title="Example member" detail="member@example.com" /></c-forms.field>
+    <c-forms.field horizontal wide label="Public URL" for="ds-settings-url" hint="wide gives the control column the room, for a row whose value is the point: an address you hand a customer, a long message. Without it every control takes the same narrow column whatever it holds.">
+    <c-copy-field value="https://trust.example.com/public/workspace/abc123" label="public URL" id="ds-settings-url" />
+    </c-forms.field>
     </c-cards.card>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5"
          x-data="teamBranding('{}')">
@@ -1193,13 +1196,28 @@ first-of-type rule that drops the leading hairline reads the section's position
     <h3 id="vulnerability-browser" class="text-lg font-semibold text-text">Workspace vulnerabilities</h3>
     <p class="text-sm text-text-muted m-0">
         One row per vulnerability in a component; totals count each vulnerability once. Product and component replace the
-        whole browser, every other control only the results. Fix prompt opens the page's fix prompt dialog.
+        whole browser, every other control only the results. Each row's actions menu opens the page's fix prompt
+        dialog, and Triage loads its dialog into the page's triage host.
     </p>
     <c-vulnerabilities.workspace-browser :data="workspace_vulnerability_demo" browser_target="demo-vulnerabilities-browser" results_target="demo-vulnerabilities-results" />
     <c-vulnerabilities.fix-prompt-dialog />
+    <c-vulnerabilities.triage-host />
     <c-cards.card flush>
     <c-cards.header title="Fix prompt" />
     <c-vulnerabilities.fix-prompt :fix="fix_prompt_demo" />
+    </c-cards.card>
+    <h3 id="vex-submission" class="text-lg font-semibold text-text">VEX submission</h3>
+    <p class="text-sm text-text-muted m-0">
+        A row of the Review tab's list: one line saying what the ruling is, opening to the submitter's notes, each
+        ruling, the fix link and anything the queue could not read. The first row starts open. Shown read-only here;
+        with can_decide the row carries Approve and Reject.
+    </p>
+    <c-cards.card flush>
+    <ul class="m-0 list-none p-0">
+        {% for item in vex_submission_demos %}
+            <c-vulnerabilities.vex-submission :item="item" :open="forloop.first" />
+        {% endfor %}
+    </ul>
     </c-cards.card>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
@@ -1264,6 +1282,18 @@ first-of-type rule that drops the leading hairline reads the section's position
         leaves out. Pass it as an attribute for a fixed sentence, or as a <code class="tw-code-inline">note</code>
         slot when the sentence is assembled from template logic. It is a part of the card rather than a paragraph
         the page styles, so a strip of cards cannot drift apart one card at a time.
+    </p>
+    <div class="flex flex-col gap-3 mb-4">
+        <c-typography.eyebrow>With a limit, for usage read against a cap</c-typography.eyebrow>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <c-layout.stat-card compact icon="fas fa-users" value="3" label="Members and invitations" limit="10" />
+            <c-layout.stat-card compact icon="fas fa-cube" value="240" label="Components" limit="1000" />
+            <c-layout.stat-card compact icon="fas fa-box" value="12" label="Products" limit="unlimited" />
+        </div>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <c-code-inline>limit</c-code-inline> renders "of N" beside the value. The card sets its type and ink,
+        so a page passes the cap and nothing else.
     </p>
     <p class="tw-data-label">Compact, the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">

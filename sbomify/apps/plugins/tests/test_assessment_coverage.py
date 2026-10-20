@@ -369,11 +369,9 @@ def test_the_heading_counts_agree_with_their_nouns(to_fix: int, columns: int, ex
     assert absent not in text
 
 
-def test_a_crowded_run_header_wraps_and_leaves_the_chevron_clear():
-    """At 375 px one-line badges ran into the chevron. The name and its badge
-    wrap instead, and the chevron never gives up its width."""
-    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
-
+def test_a_crowded_run_header_wraps_and_leaves_the_action_clear():
+    """At 375 px one-line badges ran into the control at the row's end. The
+    name and its badge wrap instead, and the control never gives up its width."""
     run = {
         "id": "r1",
         "plugin_name": NTIA,
@@ -385,12 +383,24 @@ def test_a_crowded_run_header_wraps_and_leaves_the_chevron_clear():
         "result": {"summary": {"total_findings": 5, "fail_count": 3, "pass_count": 2}, "findings": []},
     }
     html = render_to_string(
-        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "status_summary": {"overall_status": "has_failures", "total_assessments": 1},
+                "latest_runs": [run],
+                "requirements": {"columns": [], "sources": [run], "met": 0},
+            },
+            "sbom_id": "abc",
+            "can_rerun": True,
+        },
     )
+    row = html[html.index(f'id="plugin-{NTIA}"') :]
+    row = row[: row.index("</li>")]
 
-    assert '<span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">' in html
-    assert "fa-chevron-down w-4 shrink-0" in html
-    assert "3 issues" in html
+    assert '<span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">' in row
+    assert '<span class="shrink-0">' in row
+    assert "/rerun" in row[row.index('<span class="shrink-0">') :]
+    assert "3 issues" in row
     # "Out of date" stays whole rather than breaking across two lines.
-    badge = html[: html.index("Out of date")]
+    badge = row[: row.index("Out of date")]
     assert "whitespace-nowrap" in badge[badge.rindex("<span") :]

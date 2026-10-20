@@ -15,10 +15,15 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.forms import PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
+from sbomify.apps.teams.forms import AdvisoryIdForm, PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
 from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
-from sbomify.apps.teams.services.settings_page import general_context, update_patch_sla, update_support_period
+from sbomify.apps.teams.services.settings_page import (
+    general_context,
+    update_advisory_ids,
+    update_patch_sla,
+    update_support_period,
+)
 from sbomify.apps.teams.utils import (
     delete_workspace_with_billing_cleanup,
     refresh_current_team_session,
@@ -68,7 +73,26 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
             result = update_support_period(workspace_key, support_form.cleaned_data["default_support_period_years"])
             if not result.ok:
                 return htmx_error_response(result.error or "Unable to save support period")
-            return htmx_success_response("Default support period updated")
+            # Re-render this form alone so it compares against what was saved.
+            # Without it Save and Discard stay live and Discard restores the
+            # pre-save value over the one the server already holds; refreshing
+            # the whole tab instead would drop an unsaved edit in the card above.
+            return htmx_success_response("Default support period updated", triggers={"refreshSupportPeriod": True})
+
+        if action == "update_advisory_ids":
+            advisory_form = AdvisoryIdForm(request.POST)
+            if not advisory_form.is_valid():
+                return htmx_error_response(
+                    " ".join(str(m) for messages in advisory_form.errors.values() for m in messages)
+                )
+            result = update_advisory_ids(
+                workspace_key,
+                advisory_form.cleaned_data["advisory_id_prefix"],
+                advisory_form.cleaned_data["advisory_id_start_at"],
+            )
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save advisory ids")
+            return htmx_success_response("Advisory ids updated", triggers={"refreshAdvisoryIds": True})
 
         if action == "update_patch_sla":
             form = PatchSLAForm(request.POST)
@@ -120,7 +144,13 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
             # until the cache expires on its own.
             update_user_teams_session(request, cast(User, request.user))
 
-            return htmx_success_response("Workspace settings updated", triggers={"refreshTeamGeneral": True})
+            # The generated advisory prefix comes from the name, so its preview
+            # refreshes too. Only the preview: the numbering fields may hold
+            # unsaved edits.
+            return htmx_success_response(
+                "Workspace settings updated",
+                triggers={"refreshWorkspaceCard": True, "refreshAdvisoryIdPreview": True},
+            )
 
         except Workspace.DoesNotExist:
             return htmx_error_response("Workspace not found")
@@ -143,7 +173,7 @@ class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMix
 
             return htmx_success_response(
                 f"{membership.team.name} is now your default workspace",
-                triggers={"refreshTeamGeneral": True},
+                triggers={"refreshWorkspaceCard": True},
             )
 
         except Member.DoesNotExist:

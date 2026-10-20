@@ -21,7 +21,9 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryVulnerability,
     ReferenceType,
     SecurityAdvisory,
+    default_advisory_id_prefix,
     detect_reference_type,
+    normalize_advisory_id_prefix,
     validate_publishable,
 )
 
@@ -190,7 +192,7 @@ def test_published_public_advisory_is_externally_visible(make_publishable) -> No
 
 
 def test_tracking_ids_increment_per_team_and_year(team, advisory) -> None:
-    first = SecurityAdvisory.allocate_tracking_id(team, prefix="ACME", year=2026)
+    first = SecurityAdvisory.allocate_tracking_id(team, prefix="ACME-SA", year=2026)
     assert first == "ACME-SA-2026-0001"
 
     advisory.tracking_id = first
@@ -198,9 +200,97 @@ def test_tracking_ids_increment_per_team_and_year(team, advisory) -> None:
     advisory.status = SecurityAdvisory.Status.PUBLISHED
     advisory.save()
 
-    assert SecurityAdvisory.allocate_tracking_id(team, prefix="ACME", year=2026) == "ACME-SA-2026-0002"
+    assert SecurityAdvisory.allocate_tracking_id(team, prefix="ACME-SA", year=2026) == "ACME-SA-2026-0002"
     # The sequence restarts each year, matching CVE and CSAF practice.
-    assert SecurityAdvisory.allocate_tracking_id(team, prefix="ACME", year=2027) == "ACME-SA-2027-0001"
+    assert SecurityAdvisory.allocate_tracking_id(team, prefix="ACME-SA", year=2027) == "ACME-SA-2027-0001"
+
+
+def _publish_as(advisory: SecurityAdvisory, tracking_id: str) -> None:
+    advisory.tracking_id = tracking_id
+    advisory.published_at = timezone.now()
+    advisory.status = SecurityAdvisory.Status.PUBLISHED
+    advisory.save()
+
+
+def test_tracking_ids_default_to_a_prefix_from_the_workspace_name(team) -> None:
+    team.name = "Acme Widgets"
+    assert default_advisory_id_prefix(team) == "ACMEWIDGETS-SA"
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "ACMEWIDGETS-SA-2026-0001"
+
+
+def test_tracking_ids_use_the_workspace_prefix(team, advisory) -> None:
+    team.advisory_id_prefix = "PSIRT"
+    team.save(update_fields=["advisory_id_prefix"])
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "PSIRT-2026-0001"
+
+    _publish_as(advisory, "PSIRT-2026-0001")
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "PSIRT-2026-0002"
+
+
+def test_changing_the_prefix_starts_its_own_sequence(team, advisory) -> None:
+    """Ids already issued under the old prefix do not advance the new one."""
+    _publish_as(advisory, "ACME-SA-2026-0007")
+    team.advisory_id_prefix = "PSIRT"
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "PSIRT-2026-0001"
+
+
+def test_start_at_skips_numbers_issued_elsewhere(team) -> None:
+    """A team moving platforms continues after its last number instead of clashing with it."""
+    team.advisory_id_prefix = "ACME-SA"
+    team.advisory_id_start_at = 43
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "ACME-SA-2026-0043"
+    # A new year restarts at the same floor rather than at 1.
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2027) == "ACME-SA-2027-0043"
+
+
+def test_start_at_is_a_floor_not_a_reset(team, advisory) -> None:
+    """Lowering or raising it never hands out a number already issued."""
+    team.advisory_id_prefix = "ACME-SA"
+    _publish_as(advisory, "ACME-SA-2026-0050")
+
+    team.advisory_id_start_at = 10
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "ACME-SA-2026-0051"
+    team.advisory_id_start_at = 100
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "ACME-SA-2026-0100"
+
+
+def test_numbers_past_9999_keep_counting(team, advisory) -> None:
+    """A start at 10000 is common on support platforms. The ids are compared as
+    numbers, not text, so 10000 is not read as lower than 9999."""
+    team.advisory_id_prefix = "ACME-SA"
+    _publish_as(advisory, "ACME-SA-2026-10000")
+    second = SecurityAdvisory(team=team, title="Second")
+    _publish_as(second, "ACME-SA-2026-9999")
+
+    assert SecurityAdvisory.allocate_tracking_id(team, year=2026) == "ACME-SA-2026-10001"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("acme-sa", "ACME-SA"), (" PSIRT ", "PSIRT"), ("", ""), ("PSIRT2", "PSIRT2"), ("GOOGLE", "GOOGLE")],
+)
+def test_advisory_id_prefixes_are_normalised(value, expected) -> None:
+    assert normalize_advisory_id_prefix(value) == expected
+
+
+@pytest.mark.parametrize("value", ["ACME SA", "ACME--SA", "-ACME", "ACME-", "ACME_SA", "ACMÉ"])
+def test_malformed_advisory_id_prefixes_are_refused(value) -> None:
+    with pytest.raises(ValidationError, match="letters, numbers and single hyphens"):
+        normalize_advisory_id_prefix(value)
+
+
+def test_the_prefix_length_is_measured_after_uppercasing() -> None:
+    """Eleven "ß" pass a 20-character limit but uppercase to 22 letters."""
+    with pytest.raises(ValidationError, match="at most 20 characters"):
+        normalize_advisory_id_prefix("ß" * 11)
+    assert normalize_advisory_id_prefix("A" * 20) == "A" * 20
+
+
+@pytest.mark.parametrize("value", ["CVE", "ghsa", "SUSE-SU", "GO"])
+def test_another_databases_prefix_is_refused(value) -> None:
+    """CVE-2026-0001 would be linked and searched as a real CVE."""
+    with pytest.raises(ValidationError, match="another vulnerability database"):
+        normalize_advisory_id_prefix(value)
 
 
 def test_tracking_id_unique_per_team(team, advisory) -> None:

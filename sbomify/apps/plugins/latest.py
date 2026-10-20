@@ -39,6 +39,37 @@ def latest_run_ids(runs: QuerySet[Any], sbom_ids: Any) -> list[Any]:
     return [run_id for row in rows for run_id in row if run_id is not None]
 
 
+def release_run_ids(runs: QuerySet[Any], sbom_ids: Any, release_id: Any) -> tuple[list[Any], set[Any]]:
+    """The runs a release reads for its SBOMs, and which of them cover the release itself.
+
+    Two releases can share an SBOM yet each hold a live run of one scanner, because a
+    run is annotated with its own releases' VEX. The newest run overall may then carry
+    another release's suppressions, so a release reads the newest run that covers it,
+    and falls back to the newest run for a scanner none of whose runs name it. Without
+    a release this is :func:`latest_run_ids` and the second set is empty.
+
+    The list, its Triage dialog and its fix prompt all select runs here, so an action
+    never reads another scan than the row it was opened from.
+    """
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    sbom_ids = list(sbom_ids)
+    latest_ids = latest_run_ids(runs, sbom_ids)
+    if not release_id:
+        return latest_ids, set()
+    covering = set(latest_run_ids(runs.filter(releases=release_id), sbom_ids))
+    candidates = list(
+        AssessmentRun.objects.filter(id__in=[*latest_ids, *covering])
+        .order_by("sbom_id", "plugin_name")
+        .values_list("id", "sbom_id", "plugin_name")
+    )
+    covered = {(sbom_id, plugin) for run_id, sbom_id, plugin in candidates if run_id in covering}
+    chosen = [
+        run_id for run_id, sbom_id, plugin in candidates if run_id in covering or (sbom_id, plugin) not in covered
+    ]
+    return chosen, covering
+
+
 def status_runs(run_ids: Any, order_by: str) -> list[Any]:
     """The runs with only what status readers use, so no findings list leaves the database.
 

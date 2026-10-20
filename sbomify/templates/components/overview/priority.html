@@ -36,7 +36,7 @@ the value with a leading newline.
     <tbody>
         {% for finding in dashboard.needs_attention %}
             <c-tables.row>
-            <c-tables.cell><c-overview.record href="{% url 'core:component_details' finding.component_id %}?vuln_search={{ finding.id|urlencode }}#component-vulnerabilities" title="{{ finding.id }}" detail="{{ finding.package }} {{ finding.version }}" mono /></c-tables.cell>
+            <c-tables.cell><c-overview.record href="{% url 'core:component_details' finding.component_id %}?search={{ finding.id|urlencode }}#component-vulnerabilities" title="{{ finding.id }}" detail="{{ finding.package }} {{ finding.version }}" mono /></c-tables.cell>
             <c-tables.cell>
             <div class="flex flex-wrap gap-1">
                 <c-badges.severity level="{{ finding.severity }}">{{ finding.severity|capfirst }}</c-badges.severity>

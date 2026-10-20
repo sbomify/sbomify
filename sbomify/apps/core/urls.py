@@ -92,6 +92,7 @@ urlpatterns = [
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path("components/new/", views.ComponentCreateView.as_view(), name="component_new"),
+    path("upload/", views.ArtifactUploadView.as_view(), name="artifact_upload"),
     path(
         "component/<str:component_id>/",
         views.ComponentDetailsPrivateView.as_view(),

@@ -3,7 +3,6 @@
 import re
 from typing import Any
 
-import pytest
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 
@@ -42,32 +41,20 @@ def assessment_breakdown(run: dict[str, Any]) -> str | None:
     The row replaced the per-run stat cards; this is where those counts live
     now, and what a screen reader hears in place of the bar.
     """
-    from sbomify.apps.plugins.services.assessment_scorecard import scorecard_for_run
-
     html = render_to_string(
-        "plugins/components/_assessment_run_item.html.j2", {"run": run, "tile": scorecard_for_run(run)}
+        "plugins/components/assessment_results_card.html.j2",
+        {
+            "assessment_runs": {
+                "status_summary": {"overall_status": "", "total_assessments": 1},
+                "latest_runs": [run],
+                "requirements": {"columns": [], "sources": [run], "met": 0},
+            }
+        },
     )
+    # The row itself has to be there, or "no breakdown" would pass on an empty card.
+    assert f'id="plugin-{run["plugin_name"]}"' in html
     found = re.search(r'role="img" aria-label="([^"]*)"', html)
     return found.group(1) if found else None
-
-
-@pytest.mark.parametrize("skipped", [False, True])
-def test_security_assessment_counts_keep_severities_and_skip_marker_out(skipped: bool) -> None:
-    breakdown = assessment_breakdown(
-        {
-            "id": "run1",
-            "plugin_name": "osv",
-            "category": "security",
-            "status": "completed",
-            "result": {
-                "metadata": {"skipped": skipped},
-                "summary": {"by_severity": {"critical": 2, "high": 3, "low": 1}},
-                "findings": [{"title": "Skipped"}],
-            },
-        }
-    )
-    # A skipped scan counts nothing: no bar, so no breakdown at all.
-    assert breakdown == (None if skipped else "2 critical, 3 high, 1 medium or low")
 
 
 def test_compliance_assessment_counts_keep_nonzero_outcomes() -> None:
@@ -81,3 +68,21 @@ def test_compliance_assessment_counts_keep_nonzero_outcomes() -> None:
         }
     )
     assert breakdown == "8 passed, 1 warning, 2 failed"
+
+
+def test_a_skipped_assessment_writes_no_breakdown() -> None:
+    """A skipped run counts nothing: no bar, so no breakdown at all."""
+    breakdown = assessment_breakdown(
+        {
+            "id": "run1",
+            "plugin_name": "pqc",
+            "category": "compliance",
+            "status": "completed",
+            "result": {
+                "metadata": {"skipped": True},
+                "summary": {"pass_count": 0, "warning_count": 1, "total_findings": 1},
+                "findings": [{"title": "Skipped"}],
+            },
+        }
+    )
+    assert breakdown is None
