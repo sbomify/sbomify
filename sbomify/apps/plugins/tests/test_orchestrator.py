@@ -667,7 +667,7 @@ def test_the_task_hands_the_plugins_title_to_the_settled_finding(test_sbom, mock
     from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
 
     orchestrator = mocker.patch("sbomify.apps.plugins.tasks.PluginOrchestrator").return_value
-    orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+    orchestrator.run_assessment.side_effect = AttestationNotYetAvailableError(
         "GitHub returned no attestation.", assessment_run_id="run-1", title="No attestation found"
     )
 
