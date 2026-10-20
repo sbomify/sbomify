@@ -532,15 +532,17 @@ class CRAExportPackage(models.Model):
             "treated as retained forever."
         ),
     )
-    signing_key_id = models.CharField(
-        max_length=32,
+    # The manufacturer's keyless Sigstore signature over the ZIP, verified on
+    # upload. sbomify holds no signing key. The bundle cosign wrote is stored
+    # beside the ZIP at storage_key + ".sigstore.json".
+    signed_by = models.CharField(
+        max_length=512,
         blank=True,
         default="",
-        help_text=(
-            "Id of the export key that signed the bundle, empty when unsigned. "
-            "The signature is stored beside the bundle at storage_key + '.sig'."
-        ),
+        help_text="Certificate identity that signed the bundle: an email or a CI workflow URI. Empty when unsigned.",
     )
+    signed_by_issuer = models.CharField(max_length=255, blank=True, default="", help_text="OIDC issuer of the signer.")
+    signed_at = models.DateTimeField(null=True, blank=True, help_text="When the signing certificate was issued.")
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"

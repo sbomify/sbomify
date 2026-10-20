@@ -1,4 +1,5 @@
 import { formatNumber } from '../../core/js/number-format';
+import { formatDate } from '../../core/js/utils';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
@@ -29,19 +30,17 @@ interface ExportFileEntry {
   cra_reference: string;
 }
 
-interface ExportSignature {
-  algorithm: string;
-  encoding: string;
-  key_id: string;
-  public_key_url: string;
-}
-
 interface ExportIntegrity {
   hash_algorithm: string;
   manifest_hash_file: string;
   verification_doc: string;
-  /** Present only when sbomify signed the bundle. */
-  signature?: ExportSignature | null;
+}
+
+/** The manufacturer's keyless Sigstore signature over the ZIP, verified on upload. */
+interface ExportSignature {
+  signed_by: string;
+  issuer: string;
+  signed_at: string;
 }
 
 interface ExportInfo {
@@ -52,6 +51,8 @@ interface ExportInfo {
   manufacturer_is_placeholder?: boolean;
   integrity?: ExportIntegrity | null;
   files?: ExportFileEntry[];
+  file_name?: string;
+  signature?: ExportSignature | null;
 }
 
 interface ComplianceSummary {
@@ -75,6 +76,15 @@ const DOC_KINDS = [
   { key: 'declaration_of_conformity', label: 'Declaration of Conformity' },
 ];
 
+// The OIDC issuers a manufacturer is likely to sign keyless through.
+const SIGNER_ISSUERS = [
+  { value: 'https://github.com/login/oauth', label: 'GitHub' },
+  { value: 'https://accounts.google.com', label: 'Google' },
+  { value: 'https://login.microsoftonline.com', label: 'Microsoft' },
+  { value: 'https://token.actions.githubusercontent.com', label: 'GitHub Actions' },
+  { value: 'https://gitlab.com', label: 'GitLab' },
+];
+
 interface DocStatus {
   exists: boolean;
   version: number;
@@ -94,9 +104,10 @@ export function craStep5() {
     docKinds: DOC_KINDS,
     isRefreshing: false,
     isExporting: false,
-    // The signed package whose signature is on offer. Its URL is presigned for
-    // 15 minutes, so each click asks for a fresh one rather than keeping it.
-    signedPackageId: '',
+    signerIssuers: SIGNER_ISSUERS,
+    signForm: { identity: '', issuer: SIGNER_ISSUERS[0].value },
+    signFile: null as File | null,
+    isSigning: false,
     isFinishing: false,
     generatingDoc: null as string | null,
     previewContent: '',
@@ -115,7 +126,6 @@ export function craStep5() {
         this.summary = data;
         this.steps = data.steps || {};
         this.lastExport = data.last_export || null;
-        this.signedPackageId = this.lastExport?.integrity?.signature ? this.lastExport.id : '';
         this.overallReady = !!(data.overall_ready);
         this.exportAvailable = !!(data.export_available);
         this.blockers = Object.values(data.steps || {})
@@ -306,7 +316,6 @@ export function craStep5() {
           if (dlResp.ok) {
             const dl = await dlResp.json();
             window.open(dl.download_url, '_blank', 'noopener,noreferrer');
-            this.signedPackageId = dl.signature_url ? pkg.id : '';
             showSuccess('Export package ready');
           } else {
             showError('Failed to get download URL');
@@ -322,11 +331,76 @@ export function craStep5() {
       }
     },
 
-    async downloadSignature(): Promise<void> {
-      if (!this.signedPackageId) return;
+    get signCommand(): string {
+      const file = this.lastExport?.file_name || '<bundle>.zip';
+      return `cosign sign-blob ${file} --bundle ${file}.sigstore.json`;
+    },
+
+    get verifyCommand(): string {
+      const file = this.lastExport?.file_name || '<bundle>.zip';
+      const sig = this.lastExport?.signature;
+      return (
+        `cosign verify-blob ${file} --bundle ${file}.sigstore.json` +
+        ` --certificate-identity ${sig?.signed_by ?? '<signer>'} --certificate-oidc-issuer ${sig?.issuer ?? '<issuer>'}`
+      );
+    },
+
+    issuerLabel(issuer: string): string {
+      return SIGNER_ISSUERS.find((i) => i.value === issuer)?.label ?? issuer;
+    },
+
+    signedOn(signedAt: string): string {
+      return formatDate(signedAt);
+    },
+
+    pickSignatureFile(event: Event): void {
+      this.signFile = (event.target as HTMLInputElement).files?.[0] ?? null;
+    },
+
+    async uploadSignature(): Promise<void> {
+      if (!this.lastExport || !this.signFile || this.isSigning) return;
+      let bundle: unknown;
+      try {
+        bundle = JSON.parse(await this.signFile.text());
+      } catch {
+        showError('This file is not a Sigstore bundle.');
+        return;
+      }
+      this.isSigning = true;
       try {
         const resp = await fetch(
-          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.signedPackageId}/download`,
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.lastExport.id}/signature`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+            body: JSON.stringify({
+              bundle,
+              identity: this.signForm.identity.trim(),
+              issuer: this.signForm.issuer,
+            }),
+          },
+        );
+        const body = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          this.lastExport = { ...this.lastExport, signature: body as ExportSignature };
+          showSuccess('Signature verified and saved');
+        } else {
+          showError(body.error || 'Failed to upload the signature');
+        }
+      } catch {
+        showError('Network error');
+      } finally {
+        this.isSigning = false;
+      }
+    },
+
+    // The signature URL is presigned for 15 minutes, so each click asks for a
+    // fresh one rather than keeping it.
+    async downloadSignature(): Promise<void> {
+      if (!this.lastExport?.signature) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.lastExport.id}/download`,
           { headers: { 'X-CSRFToken': getCsrfToken() } },
         );
         const dl = resp.ok ? await resp.json() : null;

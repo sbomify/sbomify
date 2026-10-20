@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings as django_settings
-from django.urls import reverse
 from django.utils.text import slugify
 
 from sbomify.apps.compliance import audit
@@ -18,7 +17,6 @@ from sbomify.apps.compliance.models import (
     CRAExportPackage,
     CRAGeneratedDocument,
 )
-from sbomify.apps.compliance.services import export_signing
 from sbomify.apps.compliance.services._manufacturer_policy import (
     is_placeholder_manufacturer as _is_placeholder_manufacturer,
 )
@@ -72,8 +70,8 @@ _FORMAT_EXT_MAP: dict[str, str] = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
 # Bump here; the integrity README and the manifest body both read from
 # this constant so they can't drift. 1.0 was the original CRA export
 # scaffolding; 1.1 added manufacturer.is_placeholder and the integrity
-# block; 1.2 added the PDF renderings; 1.3 added integrity.signature.
-_MANIFEST_FORMAT_VERSION = "1.3"
+# block; bump to 1.2+ on the next schema change.
+_MANIFEST_FORMAT_VERSION = "1.2"
 
 # Human-readable PDF document titles per CRA document kind. Used as
 # the ``<title>`` of the rendered PDF (the PDF reader's tab/header)
@@ -94,7 +92,7 @@ _DOC_PDF_TITLE: dict[CRAGeneratedDocument.DocumentKind, str] = {
 }
 
 
-def _integrity_readme(manifest_sha256: str, retain_until: Any, signature: dict[str, str] | None = None) -> str:
+def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
     """Human-readable bundle verification guide and retention notice.
 
     The commands below are tested end-to-end against the real bundle
@@ -122,9 +120,7 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any, signature: dict[s
         "  rendering for paper-shaped regulatory filings. If the\n"
         "  rendering pipeline was unavailable when the bundle was\n"
         "  built, the `.pdf` entry is simply absent — its omission\n"
-        "  is benign.\n"
-        "- 1.3: `integrity.signature` names the key that signed the ZIP,\n"
-        "  present only when sbomify signed it.\n\n"
+        "  is benign.\n\n"
         "This CRA export bundle ships with two integrity primitives:\n\n"
         "- `metadata/manifest.json` — per-file SHA-256 hashes for every "
         "artifact listed in its `files` array. `metadata/manifest.json`, "
@@ -153,8 +149,29 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any, signature: dict[s
         "since export. The `jq` `sub` expression strips the "
         "`cra-package-<slug>/` prefix so `sha256sum` resolves paths "
         "against the current working directory (the bundle root).\n\n"
-        "## 3. About signatures\n\n"
-        f"{_signature_section(signature)}"
+        "## 3. Signing the bundle\n\n"
+        "sbomify does not sign the bundle and holds no signing key. Sign "
+        "the ZIP yourself, keyless, with cosign 3 or later and your own "
+        "identity: a person signing in with GitHub, Google or Microsoft, "
+        "or a CI workflow signing with its own identity token. Run it "
+        "against the ZIP as exported, not the extracted folder:\n\n"
+        "```sh\n"
+        "cosign sign-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json\n"
+        "```\n\n"
+        "cosign records the signer's identity and the ZIP's SHA-256 in "
+        "Sigstore's public transparency log. The bundle's contents stay "
+        "private. Upload the `.sigstore.json` file to sbomify on the "
+        "export step so it is kept beside this ZIP.\n\n"
+        "A recipient verifies the signature with the identity and OIDC "
+        "issuer it was made under:\n\n"
+        "```sh\n"
+        "cosign verify-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json \\\n"
+        "  --certificate-identity <signer> \\\n"
+        "  --certificate-oidc-issuer <issuer>\n"
+        "```\n\n"
+        "It prints `Verified OK`. Get the expected signer and issuer from "
+        "the manufacturer, not from these files: whoever can replace the "
+        "ZIP can also replace the signature beside it.\n\n"
         "## 4. Retention obligation\n\n"
         "Article 13(15) of Regulation (EU) 2024/2847 requires this evidence "
         "to be kept for ten years from placing the product on the market, or "
@@ -165,49 +182,6 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any, signature: dict[s
         "once this bundle leaves sbomify, retaining the copy you were given "
         "is yours to do, and any object-store lifecycle rule it comes to rest "
         "under must not expire it before the date above.\n"
-    )
-
-
-def _signature_section(signature: dict[str, str] | None) -> str:
-    """Section 3 of INTEGRITY.md: how to check sbomify's signature, or how to add your own."""
-    if signature is None:
-        return (
-            "sbomify does not sign the bundle itself. Operators who need a "
-            "stronger integrity / provenance guarantee for regulatory filings "
-            "should sign the whole ZIP downstream with `cosign sign-blob` "
-            "or `gpg --detach-sign` and distribute the detached signature "
-            "alongside the bundle. The self-hash above bounds the manifest's "
-            "integrity; a downstream signature bounds the whole package.\n\n"
-        )
-    return (
-        "sbomify signs this bundle. The signature downloads beside the ZIP, "
-        "under the ZIP's file name with `.sig` added. It is an ECDSA P-256 "
-        "signature over the ZIP's SHA-256, base64 encoded, made with sbomify's "
-        f"export key `{signature['key_id']}`.\n\n"
-        f"Get the public key from {signature['public_key_url']} and save it as "
-        "`sbomify.pub`.\n\n"
-        "Check the key before you trust the signature. Whoever can replace "
-        "this ZIP and its signature can also replace the key URL and key id "
-        "written here, so they only tell you which key to fetch. Print the "
-        "key's SHA-256 fingerprint:\n\n"
-        "```sh\n"
-        "openssl pkey -pubin -in sbomify.pub -outform DER | sha256sum\n"
-        "```\n\n"
-        "Compare all 64 characters with the fingerprint you got from your "
-        "sbomify operator, not from this bundle. The key id above is its "
-        "first 16 characters. If they differ, do not trust the signature.\n\n"
-        "Then run either command against the ZIP as you received it, not the "
-        "extracted folder:\n\n"
-        "```sh\n"
-        "cosign verify-blob --key sbomify.pub --signature <bundle>.zip.sig \\\n"
-        "  --insecure-ignore-tlog=true <bundle>.zip\n"
-        "base64 -d <bundle>.zip.sig > signature.der\n"
-        "openssl dgst -sha256 -verify sbomify.pub -signature signature.der <bundle>.zip\n"
-        "```\n\n"
-        "Both print `Verified OK`. sbomify does not record the signature in a "
-        "public transparency log, because that would publish when each bundle "
-        "was exported; `--insecure-ignore-tlog=true` tells cosign not to look "
-        "for one.\n\n"
     )
 
 
@@ -320,18 +294,6 @@ def build_export_package(
     # INTEGRITY.md and the one stored on the row are the same date — computing
     # it twice would let a build that straddles midnight disagree with itself.
     retain_until = CRAExportPackage.retention_floor(assessment)
-    # Decided before the ZIP is written, so INTEGRITY.md and the manifest
-    # describe the signature the bundle actually gets.
-    signer = export_signing.signing_key()
-    signature: dict[str, str] | None = None
-    if signer is not None:
-        kid = signer[1]
-        signature = {
-            "algorithm": export_signing.ALGORITHM,
-            "encoding": export_signing.ENCODING,
-            "key_id": kid,
-            "public_key_url": django_settings.APP_BASE_URL.rstrip("/") + reverse("cra_export_key", kwargs={"kid": kid}),
-        }
     # Spool to disk if ZIP exceeds 10MB to avoid OOM on large products
     buf = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
 
@@ -453,7 +415,6 @@ def build_export_package(
                 "hash_algorithm": "sha256",
                 "manifest_hash_file": "metadata/manifest.sha256",
                 "verification_doc": "metadata/INTEGRITY.md",
-                **({"signature": signature} if signature else {}),
             },
             "files": manifest_files,
         }
@@ -463,10 +424,14 @@ def build_export_package(
 
         # 8. Self-hash of the manifest so a consumer can verify the
         # manifest hasn't been altered before trusting its per-file
-        # hashes. The self-hash bounds the manifest's integrity; the
-        # whole package is bounded by sbomify's detached signature when
-        # an export key is configured, or by the operator's own
-        # downstream signature as ``metadata/INTEGRITY.md`` describes.
+        # hashes. This export does not sign the bundle itself here;
+        # as documented in ``metadata/INTEGRITY.md``, operators who
+        # need stronger whole-package provenance guarantees should
+        # sign the final ZIP downstream (cosign sign-blob, gpg
+        # --detach-sign) and distribute the detached signature
+        # alongside the bundle. The self-hash therefore bounds the
+        # manifest's integrity, while any whole-package provenance
+        # guarantee comes from downstream signing.
         manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
         # The checksum file declares the manifest path as
         # ``metadata/manifest.json`` (relative to the bundle root, not
@@ -482,7 +447,7 @@ def build_export_package(
         # 9. INTEGRITY.md — human-readable verification guide.
         zf.writestr(
             f"{prefix}/metadata/INTEGRITY.md",
-            _integrity_readme(manifest_sha256, retain_until, signature).encode("utf-8"),
+            _integrity_readme(manifest_sha256, retain_until).encode("utf-8"),
         )
 
     # Read entire ZIP into memory for hashing and upload. This is acceptable because
@@ -494,19 +459,6 @@ def build_export_package(
     buf.close()
     content_hash = hashlib.sha256(zip_bytes).hexdigest()
     storage_key = f"compliance/exports/{assessment.id}/{content_hash}.zip"
-
-    # The signature goes up first: a bundle whose INTEGRITY.md promises one
-    # must not reach storage without it.
-    if signer is not None:
-        try:
-            docs_storage.upload_data_as_file(
-                django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
-                f"{storage_key}.sig",
-                export_signing.sign(zip_bytes, signer[0]),
-            )
-        except Exception:
-            logger.exception("Failed to upload export signature to storage")
-            return ServiceResult.failure("Failed to upload export signature to storage", status_code=502)
 
     # Upload to object storage (reuse the docs_storage client)
     try:
@@ -524,7 +476,6 @@ def build_export_package(
         # Pinned at creation: the Art. 13(15) floor must survive later
         # changes to the product's declared support period.
         retain_until=retain_until,
-        signing_key_id=signature["key_id"] if signature else "",
     )
     audit.log_export_created(
         user=user,
@@ -532,7 +483,6 @@ def build_export_package(
         team_id=assessment.team_id,
         package_id=package.id,
         content_hash=content_hash,
-        signing_key_id=package.signing_key_id,
     )
 
     return ServiceResult.success(package)
@@ -594,16 +544,20 @@ def _write_md_with_pdf(
 _PRESIGNED_URL_EXPIRY_SECONDS = 900
 
 
-def _presigned_url(package: CRAExportPackage, storage_key: str, suffix: str, content_type: str) -> str:
-    """A short-lived URL that downloads ``storage_key`` as ``cra-package-<slug>-<hash12><suffix>``."""
+def export_file_name(package: CRAExportPackage) -> str:
+    """``cra-package-<product-slug>-<hash12>.zip``, so auditors can tell bundles apart on disk."""
     product_slug = slugify(package.assessment.product.name) or package.assessment.product.id
-    filename = f"cra-package-{product_slug}-{package.content_hash[:12]}{suffix}"
+    return f"cra-package-{product_slug}-{package.content_hash[:12]}.zip"
+
+
+def _presigned_url(package: CRAExportPackage, storage_key: str, suffix: str, content_type: str) -> str:
+    """A short-lived URL that downloads ``storage_key`` as the bundle's file name plus ``suffix``."""
     return StorageClient("DOCUMENTS").generate_presigned_url(
         django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
         storage_key,
         expires_in=_PRESIGNED_URL_EXPIRY_SECONDS,
         response_headers={
-            "ResponseContentDisposition": f'attachment; filename="{filename}"',
+            "ResponseContentDisposition": f'attachment; filename="{export_file_name(package)}{suffix}"',
             "ResponseContentType": content_type,
         },
     )
@@ -620,18 +574,25 @@ def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
     name + short hash so auditors can tell bundles apart on disk.
     """
     try:
-        return ServiceResult.success(_presigned_url(package, package.storage_key, ".zip", "application/zip"))
+        return ServiceResult.success(_presigned_url(package, package.storage_key, "", "application/zip"))
     except Exception:
         logger.exception("Failed to generate presigned URL")
         return ServiceResult.failure("Failed to generate download URL", status_code=500)
 
 
 def get_signature_url(package: CRAExportPackage) -> ServiceResult[str | None]:
-    """A presigned URL for the bundle's detached signature, or None when it is unsigned."""
-    if not package.signing_key_id:
+    """A presigned URL for the manufacturer's Sigstore bundle, or None while the ZIP is unsigned."""
+    if not package.signed_by:
         return ServiceResult.success(None)
     try:
-        return ServiceResult.success(_presigned_url(package, f"{package.storage_key}.sig", ".zip.sig", "text/plain"))
+        return ServiceResult.success(
+            _presigned_url(package, signature_storage_key(package), ".sigstore.json", "application/json")
+        )
     except Exception:
         logger.exception("Failed to generate presigned signature URL")
         return ServiceResult.failure("Failed to generate signature download URL", status_code=500)
+
+
+def signature_storage_key(package: CRAExportPackage) -> str:
+    """Where the manufacturer's Sigstore bundle is kept, beside the ZIP it signs."""
+    return f"{package.storage_key}.sigstore.json"

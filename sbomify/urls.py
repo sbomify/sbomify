@@ -26,7 +26,6 @@ from django.views.generic import RedirectView
 
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
-from sbomify.apps.compliance.wellknown import ExportKeyView
 from sbomify.apps.core.admin import admin_site
 from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
 from sbomify.apps.security_advisories.wellknown import (
@@ -71,12 +70,6 @@ urlpatterns = [
         ".well-known/csaf/white/<str:year>/<str:filename>",
         WhiteDocumentView.as_view(),
         name="csaf_white_document",
-    ),
-    # Public halves of the keys that sign CRA export bundles, current and retired.
-    re_path(
-        r"^\.well-known/sbomify/export-keys/(?P<kid>[0-9a-f]{16})\.pem$",
-        ExportKeyView.as_view(),
-        name="cra_export_key",
     ),
     # TEA (Transparency Exchange API) .well-known endpoint for server discovery
     path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),

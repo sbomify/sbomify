@@ -14,47 +14,60 @@ mock.module('../../core/js/csrf', () => ({
   getCsrfToken: () => 'test-csrf-token',
 }));
 const errors: string[] = [];
+const successes: string[] = [];
 mock.module('../../core/js/alerts', () => ({
   showError: (message: string) => errors.push(message),
-  showSuccess: () => {},
+  showSuccess: (message: string) => successes.push(message),
 }));
 mock.module('./cra-shared', () => craSharedMock({ getAssessmentId: () => 'a1' }));
 
 const { craStep5 } = await import('./cra-step-5');
 
-const signedExport = {
+const signature = {
+  signed_by: 'security@acme.test',
+  issuer: 'https://accounts.google.com',
+  signed_at: '2026-08-06T01:03:01+00:00',
+};
+const unsignedExport = {
   id: 'pkg-1',
   content_hash: 'abc',
   created_at: '2026-10-20T00:00:00Z',
-  integrity: {
-    hash_algorithm: 'sha256',
-    manifest_hash_file: 'metadata/manifest.sha256',
-    verification_doc: 'metadata/INTEGRITY.md',
-    signature: { algorithm: 'ecdsa-p256-sha256', encoding: 'base64-der', key_id: '0123456789abcdef', public_key_url: 'https://x' },
-  },
+  file_name: 'cra-package-acme-abc.zip',
+  signature: null,
 };
 
-let fetched: string[];
+interface Call {
+  url: string;
+  init?: RequestInit;
+}
+let calls: Call[];
 let opened: string[];
 let signatureUrls: (string | null)[];
+let signResponse: { ok: boolean; status: number; body: unknown };
 
 function stubPage(lastExport: unknown): void {
   win.parseJsonScript = (id: string) =>
     id === 'step-data' ? { steps: {}, last_export: lastExport, overall_ready: true, export_available: true } : {};
 }
 
+function bundleFile(text: string): File {
+  return { name: 'cra-package-acme-abc.zip.sigstore.json', text: async () => text } as unknown as File;
+}
+
 beforeEach(() => {
-  fetched = [];
+  calls = [];
   opened = [];
   errors.length = 0;
+  successes.length = 0;
   signatureUrls = ['https://s3/sig-1', 'https://s3/sig-2'];
-  globalThis.fetch = (async (url: string) => {
-    fetched.push(url);
+  signResponse = { ok: true, status: 201, body: signature };
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
     if (url.endsWith('/download')) {
       return { ok: true, json: async () => ({ download_url: 'https://s3/zip', signature_url: signatureUrls.shift() ?? null }) };
     }
-    if (url.endsWith('/export')) {
-      return { ok: true, json: async () => ({ id: 'pkg-2' }) };
+    if (url.endsWith('/signature')) {
+      return { ok: signResponse.ok, status: signResponse.status, json: async () => signResponse.body };
     }
     return { ok: true, json: async () => ({ data: { documents: {} } }) };
   }) as unknown as typeof fetch;
@@ -64,45 +77,96 @@ beforeEach(() => {
   };
 });
 
+describe('craStep5 signing commands', () => {
+  test('name the exported file', () => {
+    stubPage(unsignedExport);
+    const c = craStep5();
+    c.init();
+    expect(c.signCommand).toBe(
+      'cosign sign-blob cra-package-acme-abc.zip --bundle cra-package-acme-abc.zip.sigstore.json',
+    );
+  });
+
+  test('verification names the signer and issuer once signed', () => {
+    stubPage({ ...unsignedExport, signature });
+    const c = craStep5();
+    c.init();
+    expect(c.verifyCommand).toBe(
+      'cosign verify-blob cra-package-acme-abc.zip --bundle cra-package-acme-abc.zip.sigstore.json' +
+        ' --certificate-identity security@acme.test --certificate-oidc-issuer https://accounts.google.com',
+    );
+    expect(c.issuerLabel(signature.issuer)).toBe('Google');
+    expect(c.issuerLabel('https://gitlab.example.test')).toBe('https://gitlab.example.test');
+  });
+});
+
+describe('craStep5 signature upload', () => {
+  test('sends the bundle with the signer, and shows who signed', async () => {
+    stubPage(unsignedExport);
+    const c = craStep5();
+    c.init();
+    c.signFile = bundleFile('{"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"}');
+    c.signForm.identity = ' security@acme.test ';
+    c.signForm.issuer = 'https://accounts.google.com';
+
+    await c.uploadSignature();
+
+    const call = calls.find((x) => x.url === '/api/v1/compliance/cra/a1/export/pkg-1/signature');
+    expect(call?.init?.method).toBe('POST');
+    expect(JSON.parse(call?.init?.body as string)).toEqual({
+      bundle: { mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json' },
+      identity: 'security@acme.test',
+      issuer: 'https://accounts.google.com',
+    });
+    expect(c.lastExport?.signature).toEqual(signature);
+    expect(errors).toEqual([]);
+  });
+
+  test('a file that is not JSON is refused before anything is sent', async () => {
+    stubPage(unsignedExport);
+    const c = craStep5();
+    c.init();
+    c.signFile = bundleFile('not json');
+    c.signForm.identity = 'security@acme.test';
+
+    await c.uploadSignature();
+
+    expect(calls.some((x) => x.url.endsWith('/signature'))).toBe(false);
+    expect(errors).toEqual(['This file is not a Sigstore bundle.']);
+  });
+
+  test("the server's reason is shown when it refuses", async () => {
+    stubPage(unsignedExport);
+    signResponse = { ok: false, status: 400, body: { error: 'The signature does not match this bundle.' } };
+    const c = craStep5();
+    c.init();
+    c.signFile = bundleFile('{}');
+    c.signForm.identity = 'security@acme.test';
+
+    await c.uploadSignature();
+
+    expect(errors).toEqual(['The signature does not match this bundle.']);
+    expect(c.lastExport?.signature).toBeNull();
+    expect(c.isSigning).toBe(false);
+  });
+});
+
 describe('craStep5 signature download', () => {
-  test('a saved signed export offers its signature after a reload', () => {
-    stubPage(signedExport);
-    const c = craStep5();
-    c.init();
-    expect(c.signedPackageId).toBe('pkg-1');
-  });
-
-  test('an unsigned saved export offers no signature', () => {
-    stubPage({ ...signedExport, integrity: { ...signedExport.integrity, signature: null } });
-    const c = craStep5();
-    c.init();
-    expect(c.signedPackageId).toBe('');
-  });
-
   test('each click asks for a fresh signature URL', async () => {
-    stubPage(signedExport);
+    stubPage({ ...unsignedExport, signature });
     const c = craStep5();
     c.init();
     await c.downloadSignature();
     await c.downloadSignature();
-    expect(fetched.filter((u) => u === '/api/v1/compliance/cra/a1/export/pkg-1/download')).toHaveLength(2);
+    expect(calls.filter((x) => x.url === '/api/v1/compliance/cra/a1/export/pkg-1/download')).toHaveLength(2);
     expect(opened).toEqual(['https://s3/sig-1', 'https://s3/sig-2']);
   });
 
-  test('a fresh export offers its own signature', async () => {
-    stubPage(null);
+  test('an unsigned export offers nothing to download', async () => {
+    stubPage(unsignedExport);
     const c = craStep5();
     c.init();
-    await c.exportBundle();
-    expect(c.signedPackageId).toBe('pkg-2');
-  });
-
-  test('an export that came back unsigned offers none', async () => {
-    stubPage(signedExport);
-    signatureUrls = [null];
-    const c = craStep5();
-    c.init();
-    await c.exportBundle();
-    expect(c.signedPackageId).toBe('');
+    await c.downloadSignature();
+    expect(calls.some((x) => x.url.endsWith('/download'))).toBe(false);
   });
 });

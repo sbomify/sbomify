@@ -21,6 +21,8 @@ from .schemas import (
     DocumentSchema,
     ErrorResponse,
     ExportPackageSchema,
+    ExportSignatureSchema,
+    ExportSignatureUploadSchema,
     FindingSchema,
     FindingUpdateSchema,
     ObservationCreateSchema,
@@ -703,7 +705,10 @@ def create_export(request: HttpRequest, assessment_id: str) -> _Response:
         content_hash=pkg.content_hash,
         manifest=pkg.manifest,
         created_at=pkg.created_at,
-        signed=bool(pkg.signing_key_id),
+        signed=bool(pkg.signed_by),
+        signed_by=pkg.signed_by,
+        signed_by_issuer=pkg.signed_by_issuer,
+        signed_at=pkg.signed_at,
     )
 
 
@@ -717,8 +722,8 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     Response shape (200):
 
     - ``download_url``: presigned URL for the ZIP.
-    - ``signature_url``: presigned URL for its detached signature, or
-      ``null`` when sbomify did not sign the bundle.
+    - ``signature_url``: presigned URL for the manufacturer's Sigstore
+      bundle (``.sigstore.json``), or ``null`` while the ZIP is unsigned.
 
     The response carries ``Cache-Control: no-store`` and
     ``Pragma: no-cache`` so intermediate caches (Caddy, corporate
@@ -752,6 +757,49 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
         return signature_url.status_code or 500, ErrorResponse(error=signature_url.error or "Unknown error")
 
     return 200, {"download_url": url.value, "signature_url": signature_url.value}
+
+
+@router.post(
+    "/cra/{assessment_id}/export/{package_id}/signature",
+    response={
+        201: ExportSignatureSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        502: ErrorResponse,
+    },
+)
+def sign_export(
+    request: HttpRequest, assessment_id: str, package_id: str, payload: ExportSignatureUploadSchema
+) -> _Response:
+    """Attach the manufacturer's keyless Sigstore signature to an export package.
+
+    Sign the ZIP with ``cosign sign-blob <zip> --bundle <zip>.sigstore.json``
+    and send that bundle with the certificate identity and OIDC issuer it was
+    signed under. sbomify verifies it as ``cosign verify-blob`` would and keeps
+    it beside the ZIP. A package takes one signature.
+    """
+    result = _get_assessment_or_error(request, assessment_id, require_mutable=True)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    try:
+        package = CRAExportPackage.objects.get(pk=package_id, assessment=result)
+    except CRAExportPackage.DoesNotExist:
+        return 404, ErrorResponse(error="Export package not found", error_code="not_found")
+
+    from .services.export_signature import sign_export as _sign
+
+    user: User = request.user  # type: ignore[assignment]
+    signed = _sign(package, bundle=payload.bundle, identity=payload.identity, issuer=payload.issuer, user=user)
+    if not signed.ok:
+        return signed.status_code or 400, ErrorResponse(error=signed.error or "Unknown error")
+
+    assert signed.value is not None and signed.value.signed_at is not None
+    return 201, ExportSignatureSchema(
+        signed_by=signed.value.signed_by, issuer=signed.value.signed_by_issuer, signed_at=signed.value.signed_at
+    )
 
 
 @router.get(
