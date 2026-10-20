@@ -43,16 +43,18 @@ def _for_mcp(prompt: dict[str, Any]) -> dict[str, Any]:
     return prompt
 
 
-# Most advisories carry a handful of aliases; a scanner listing dozens adds nothing an agent needs.
-_MAX_ALIASES = 20
+# The prompts are sent whole or not at all. Their instructions follow the advisory text they quote,
+# so cutting one keeps the scanner's words and drops the rules. The service bounds what they quote;
+# a prompt still over this has a package name or the like no prompt should carry.
+PROMPT_CEILING = 32000
 
 
 def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
     """Pass every scanner- or artifact-derived field through `untrusted()`, as the other tools do.
 
-    The service already clips title, details, the reference count and the
+    The service already bounds title, details, aliases, references and the
     displayed purl. The rest arrived at whatever length the scanner or the
-    uploaded SBOM wrote. The prompts are bounded too: they quote the advisory.
+    uploaded SBOM wrote.
     """
     text = {
         "advisory": 128,
@@ -66,14 +68,13 @@ def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
         "component_name": 256,
         "sbom_name": 256,
         "sbom_version": 128,
-        "fix_prompt": 16000,
-        "triage_prompt": 16000,
     }
     for field, limit in text.items():
         if isinstance(prompt.get(field), str):
             prompt[field] = untrusted(prompt[field], limit=limit)
-    prompt["aliases"] = [untrusted(alias, limit=128) for alias in (prompt.get("aliases") or [])[:_MAX_ALIASES]]
-    prompt["references"] = [untrusted(url, limit=512) for url in prompt.get("references") or []]
+    for field in ("fix_prompt", "triage_prompt"):
+        if len(prompt.get(field) or "") > PROMPT_CEILING:
+            raise ToolError(f"The {field.replace('_', ' ')} for {prompt.get('advisory')} is too long to send whole.")
     prompt["products"] = [untrusted(name, limit=256) for name in prompt.get("products") or []]
     for repository in prompt.get("repositories") or []:
         repository["url"] = untrusted(repository.get("url"), limit=512)
