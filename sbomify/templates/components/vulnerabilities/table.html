@@ -109,7 +109,7 @@
         </c-tables.cell>
         {% if can_triage %}
             <c-tables.cell nowrap>
-            <c-vulnerabilities.triage-action :id="vuln.id" :purl="vuln.triage_purl" :anchor="vuln.triage_anchor_purl" :state="vuln.triage_state" :justification="vuln.triage_justification" :detail="vuln.triage_detail" :aliases="vuln.aliases" />
+            <c-vulnerabilities.triage-action :id="vuln.triage_id" :purl="vuln.triage_purl" :anchor="vuln.triage_anchor_purl" :state="vuln.triage_state" :justification="vuln.triage_justification" :detail="vuln.triage_detail" :aliases="vuln.triage_aliases" :accepted_until="vuln.triage_accepted_until" :risk_owner="vuln.triage_risk_owner" />
             </c-tables.cell>
         {% endif %}
         </c-tables.row>
