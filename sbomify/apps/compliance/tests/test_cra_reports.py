@@ -763,3 +763,86 @@ class TestClosedReportForm:
 
         assert page.context["filing_stages"] == []
         assert "Record filing" not in page.content.decode()
+
+
+def _bell_request(team, user):
+    request = RequestFactory().get("/")
+    request.user = user
+    request.session = {"current_workspace": {"key": team.key, "id": team.id}}
+    return request
+
+
+@pytest.mark.django_db
+class TestCorrectedDeadlineBell:
+    def test_a_dismissed_alert_does_not_hide_the_corrected_deadline(self, team, owner, report):
+        from sbomify.apps.compliance.notifications import get_notifications
+
+        with patch("sbomify.apps.compliance.notifications.timezone.now", return_value=AWARE + timedelta(hours=20)):
+            before = get_notifications(_bell_request(team, owner))
+        assert report_service.update_report(report, owner, dates={"aware_at": AWARE - timedelta(hours=2)}).ok
+        with patch("sbomify.apps.compliance.notifications.timezone.now", return_value=AWARE + timedelta(hours=20)):
+            after = get_notifications(_bell_request(team, owner))
+
+        assert len(before) == len(after) == 1
+        assert before[0].id != after[0].id
+
+
+@pytest.mark.django_db
+class TestFilingEvents:
+    def test_each_intermediate_report_lands_on_the_timeline(self, report, owner):
+        for reference in ("SRP-C", "SRP-D"):
+            assert report_service.record_filing(report, owner, stage=Stage.INTERMEDIATE, srp_reference=reference).ok
+
+        events = AdvisoryEvent.objects.filter(advisory=report.advisory, event_type="cra_intermediate_report")
+        assert [event.payload["srp_reference"] for event in events.order_by("created_at")] == ["SRP-C", "SRP-D"]
+
+    def test_a_filing_event_says_what_was_filed_for_which_product(self, report, owner):
+        filed_at = datetime(2026, 10, 2, 8, 30, tzinfo=UTC)
+        assert report_service.record_filing(
+            report, owner, stage=Stage.NOTIFICATION, srp_reference="SRP-9", filed_at=filed_at
+        ).ok
+
+        event = AdvisoryEvent.objects.get(advisory=report.advisory, event_type="cra_notification")
+        assert "Router OS" in event.body
+        assert "SRP-9" in event.body
+        assert "02 Oct 2026 08:30" in event.body
+
+
+@pytest.mark.django_db
+class TestBrokerDown:
+    def test_a_saved_filing_survives_a_broker_failure_and_is_scheduled_later(
+        self, team, owner, report, django_capture_on_commit_callbacks
+    ):
+        from sbomify.apps.compliance.notifications import get_notifications
+
+        with patch.object(tasks.send_cra_report_reminders, "send_with_options", side_effect=ConnectionError("down")):
+            with django_capture_on_commit_callbacks(execute=True):
+                result = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="A")
+
+        assert result.ok
+        report.refresh_from_db()
+        assert report.reminders_pending is True
+
+        # The next owner or admin page view is the dispatcher production has.
+        with patch.object(tasks.send_cra_report_reminders, "send_with_options") as send:
+            get_notifications(_bell_request(team, owner))
+
+        assert send.called
+        report.refresh_from_db()
+        assert report.reminders_pending is False
+
+
+@pytest.mark.django_db
+class TestAdvisoryCardQueries:
+    def test_the_card_costs_the_same_queries_however_many_products(self, team, two_products):
+        advisory, _router, _gateway = two_products
+        with CaptureQueriesContext(connection) as two:
+            report_service.advisory_reporting(team, advisory.pk)
+        for number in range(3):
+            extra = Product.objects.create(name=f"Extra {number}", team=team)
+            AdvisoryProduct.objects.create(advisory=advisory, product=extra)
+        with CaptureQueriesContext(connection) as five:
+            rows = report_service.advisory_reporting(team, advisory.pk)["rows"]
+
+        assert len(rows) == 5
+        assert len(five.captured_queries) == len(two.captured_queries)

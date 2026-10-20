@@ -727,6 +727,10 @@ class CRAReport(models.Model):
     occurred_at = models.DateTimeField(null=True, blank=True)
     measure_available_at = models.DateTimeField(null=True, blank=True)
     srp_fields = models.JSONField(default=dict, blank=True)
+    reminders_pending = models.BooleanField(
+        default=False,
+        help_text="Set with each write until its reminders reached the broker; a later dispatch clears it.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )

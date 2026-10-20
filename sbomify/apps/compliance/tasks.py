@@ -10,7 +10,9 @@ so a message delivered twice, or a sweep that overlaps one, mails nobody twice,
 and a failed send is retried for that person alone. A claim still held by a
 worker that may have died queues the report's message again for when it
 expires. A message checks the report when it runs, so one queued before a
-filing sends nothing after it.
+filing sends nothing after it. A write that cannot reach the broker leaves its
+report marked ``reminders_pending``, and :func:`dispatch_pending_reminders`
+queues it later, from an owner or admin page view or from the sweep.
 """
 
 from __future__ import annotations
@@ -188,7 +190,33 @@ def schedule_reminders(report: "CRAReport", *, now: datetime | None = None) -> N
             send_cra_report_reminders.send_with_options(args=(report.pk,), delay=delay)
 
 
+def dispatch_pending_reminders(*, workspace_key: str | None = None) -> int:
+    """Queue the reminders of reports whose scheduling never reached the broker.
+
+    A write marks its report ``reminders_pending`` before it tries to queue
+    anything and clears the mark once it has, so a broker outage leaves the mark
+    set. Returns how many reports were scheduled; one that fails again stays
+    marked for the next call.
+    """
+    from sbomify.apps.compliance.models import CRAReport
+
+    pending = CRAReport.objects.filter(reminders_pending=True).prefetch_related("filings")
+    if workspace_key:
+        pending = pending.filter(team__key=workspace_key)
+    scheduled = 0
+    for report in pending:
+        try:
+            schedule_reminders(report)
+        except Exception:
+            logger.exception(f"Could not queue CRA reminders for report {report.pk}")
+            continue
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=False)
+        scheduled += 1
+    return scheduled
+
+
 @cron("15 * * * *")  # type: ignore[untyped-decorator]  # Hourly, wherever a scheduler runs
 @dramatiq.actor(queue_name="cra_reports", max_retries=1, time_limit=300000)
 def sweep_cra_report_reminders() -> None:
+    dispatch_pending_reminders()
     logger.info("Sent %s CRA report reminders", send_due_reminders())

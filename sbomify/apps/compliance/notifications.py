@@ -32,6 +32,12 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     if not workspace_key or get_member_role_by_key(request.user, workspace_key) not in ADMINISTER:
         return []
 
+    from sbomify.apps.compliance.tasks import dispatch_pending_reminders
+
+    # Production runs no scheduler, so an owner or admin page view is what
+    # schedules reminders a broker outage left unqueued.
+    dispatch_pending_reminders(workspace_key=workspace_key)
+
     now = timezone.now()
     reports = (
         CRAReport.objects.filter(team__key=workspace_key)
@@ -44,6 +50,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         nxt = report.next_due(now)
         if nxt is None or nxt.due is None or nxt.due - now > WARNING_WINDOW:
             continue
+        state = "overdue" if nxt.overdue else "soon"
         if nxt.overdue:
             when = "is overdue"
         else:
@@ -52,8 +59,9 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         notifications.append(
             NotificationSchema(
                 # Changes when the report goes overdue, so a dismissed "due soon"
-                # comes back as "overdue".
-                id=f"cra_report_{report.pk}_{nxt.stage}_{'overdue' if nxt.overdue else 'soon'}",
+                # comes back as "overdue", and when the deadline is corrected, so
+                # a dismissed alert does not hide the new date.
+                id=f"cra_report_{report.pk}_{nxt.stage}_{int(nxt.due.timestamp())}_{state}",
                 type="cra_report_deadline",
                 message=f"{nxt.label} for {report.product.name} {when}.",
                 action_url=reverse("compliance:cra_report_detail", args=[report.pk]),

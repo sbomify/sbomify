@@ -24,10 +24,14 @@ from sbomify.apps.compliance.reporting import (
     validate_values,
 )
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
 
 _ADVISORY_EVENTS = {
     Stage.EARLY_WARNING: "cra_early_warning",
     Stage.NOTIFICATION: "cra_notification",
+    Stage.INTERMEDIATE: "cra_intermediate_report",
     Stage.FINAL_REPORT: "cra_final_report",
     Stage.USERS_INFORMED: "users_notified",
 }
@@ -46,14 +50,25 @@ def _schedule(report: CRAReport) -> None:
     """Queue reminders once the write commits, from the report as it then stands.
 
     The caller's instance may carry filings prefetched before this write, and
-    scheduling from it would queue reminders for a stage just filed.
+    scheduling from it would queue reminders for a stage just filed. The report
+    is marked pending with the write and cleared once the broker took the
+    messages, so a broker outage neither fails a save that already committed
+    nor loses its reminders: the mark stays for ``dispatch_pending_reminders``.
     """
     from sbomify.apps.compliance.tasks import schedule_reminders
 
+    CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
     def schedule() -> None:
         fresh = CRAReport.objects.prefetch_related("filings").filter(pk=report.pk).first()
-        if fresh is not None:
+        if fresh is None:
+            return
+        try:
             schedule_reminders(fresh)
+        except Exception:
+            logger.exception(f"Could not queue CRA reminders for report {report.pk}; they stay pending")
+            return
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=False)
 
     transaction.on_commit(schedule)
 
@@ -81,11 +96,19 @@ def applicable_vulnerabilities(advisory: Any, product: Any) -> list[Any]:
     unrecorded status is no reason to skip a reporting duty. Fixed still
     applies, since the final report falls due after the fix.
     """
-    from sbomify.apps.security_advisories.models import AdvisoryProductStatus, AdvisoryVulnerability
-
     advisory_product = advisory.products.filter(product=product).first()
     if advisory_product is None:
         return []
+    return _applicable(_advisory_vulnerabilities(advisory), advisory_product)
+
+
+def _advisory_vulnerabilities(advisory: Any) -> list[Any]:
+    """Every vulnerability on the advisory with its statuses, loaded once for any number of products."""
+    return list(advisory.vulnerabilities.prefetch_related("product_statuses"))
+
+
+def _applicable(vulnerabilities: list[Any], advisory_product: Any) -> list[Any]:
+    from sbomify.apps.security_advisories.models import AdvisoryProductStatus, AdvisoryVulnerability
 
     def applies(vulnerability: Any) -> bool:
         statuses = list(vulnerability.product_statuses.all())
@@ -95,7 +118,7 @@ def applicable_vulnerabilities(advisory: Any, product: Any) -> list[Any]:
         return status is None or status.status not in AdvisoryProductStatus.SUPPRESSING_STATES
 
     exploited = AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED
-    found = [v for v in advisory.vulnerabilities.prefetch_related("product_statuses") if applies(v)]
+    found = [v for v in vulnerabilities if applies(v)]
     return sorted(found, key=lambda v: (v.exploitation_status != exploited, -_SEVERITY_RANK.get(v.severity, 0)))
 
 
@@ -245,6 +268,14 @@ def _snapshot(report: CRAReport) -> dict[str, Any]:
     return snapshot
 
 
+def _filing_note(report: CRAReport, filing: CRAReportFiling) -> str:
+    note = (
+        f"{STAGE_LABELS[filing.stage]} for {report.product.name} filed in ENISA's portal "
+        f"on {filing.filed_at.astimezone(UTC):%d %b %Y %H:%M} UTC"
+    )
+    return f"{note}, reference {filing.srp_reference}." if filing.srp_reference else f"{note}."
+
+
 def filable_stages(report: CRAReport) -> list[str]:
     """What can still be recorded: intermediate reports repeat, and a closed report takes only users informed."""
     filed = report.filed_stages()
@@ -291,6 +322,9 @@ def record_filing(
                     advisory_id=report.advisory_id,
                     event_type=event_type,
                     actor=user,
+                    # The timeline shows the body, so it carries what tells two
+                    # products' filings on one advisory apart.
+                    body=_filing_note(report, filing),
                     payload={
                         "report_id": report.pk,
                         "product": report.product.name,
@@ -389,8 +423,17 @@ def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:
         for report in CRAReport.objects.prefetch_related("filings").filter(advisory_id=advisory_pk, team=team)
     }
     now = timezone.now()
+    links = list(
+        AdvisoryProduct.objects.filter(advisory_id=advisory_pk, product__isnull=False).select_related("product")
+    )
+    # Loaded once, only when some product has no report yet, then read for each.
+    vulnerabilities = (
+        _advisory_vulnerabilities(advisory)
+        if advisory is not None and any(row.product_id not in reports for row in links)
+        else []
+    )
     rows = []
-    for row in AdvisoryProduct.objects.filter(advisory_id=advisory_pk, product__isnull=False).select_related("product"):
+    for row in links:
         if row.product is None:
             continue
         report = reports.get(row.product.pk)
@@ -401,9 +444,7 @@ def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:
                 "report": report,
                 "next_due": report.next_due(now) if report else None,
                 # Per product: a status saying it is not affected leaves nothing to report for it.
-                "can_start": report is None
-                and advisory is not None
-                and bool(_known_exploited(applicable_vulnerabilities(advisory, row.product))),
+                "can_start": report is None and bool(_known_exploited(_applicable(vulnerabilities, row))),
             }
         )
     known_exploited = any(row["can_start"] for row in rows)
