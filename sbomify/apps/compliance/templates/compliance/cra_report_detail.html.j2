@@ -96,6 +96,7 @@
                   class="grid gap-4 sm:grid-cols-3 items-end">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="file" />
+                <input type="hidden" name="revision" value="{{ report.revision }}" />
                 <c-forms.field label="Stage" for="filingStage" required>
                 <c-forms.select id="filingStage" name="stage" :options="filing_stages" :selected="filing_stage" required />
                 </c-forms.field>
@@ -171,6 +172,8 @@
         <c-tables.header-cell nowrap>Stage</c-tables.header-cell>
         <c-tables.header-cell>ENISA reference</c-tables.header-cell>
         <c-tables.header-cell date>Filed</c-tables.header-cell>
+        <c-tables.header-cell>Filed by</c-tables.header-cell>
+        <c-tables.actions-cell as="th" label="Actions" />
         </c-tables.head>
         <tbody>
             {% for filing in filings %}
@@ -178,6 +181,12 @@
                 <c-tables.cell nowrap>{{ filing.get_stage_display }}</c-tables.cell>
                 <c-tables.cell>{{ filing.srp_reference|default:"Not recorded" }}</c-tables.cell>
                 <c-tables.cell date>{{ filing.filed_at|date:"j M Y, H:i" }} UTC</c-tables.cell>
+                <c-tables.cell>{{ filing.filer|default:"Account removed" }}</c-tables.cell>
+                <c-tables.cell end>
+                <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_filing' report_id=report.id filing_id=filing.id %}">
+                Open <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                </c-buttons.ghost>
+                </c-tables.cell>
                 </c-tables.row>
             {% endfor %}
         </tbody>

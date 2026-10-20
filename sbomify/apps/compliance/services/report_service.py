@@ -17,6 +17,7 @@ from django.utils import timezone
 from sbomify.apps.compliance.audit import log_cra_report_event
 from sbomify.apps.compliance.models import CRAAssessment, CRAReport, CRAReportFiling
 from sbomify.apps.compliance.reporting import (
+    DEADLINE_STAGES,
     STAGE_LABELS,
     Stage,
     fields_for,
@@ -286,8 +287,14 @@ def record_filing(
     stage: str,
     srp_reference: str = "",
     filed_at: datetime | None = None,
+    revision: str | None = None,
 ) -> ServiceResult[CRAReportFiling]:
-    """Record a notification a person submitted in ENISA's portal."""
+    """Record a notification a person submitted in ENISA's portal.
+
+    ``revision`` is the report's ``revision`` when its values were copied into
+    the portal. The filing keeps a snapshot of the report, so an edit made
+    since then would be recorded as filed when it never was.
+    """
     if stage not in CRAReportFiling.Stage.values:
         return ServiceResult.failure("Choose what was filed.", 400)
     srp_reference = srp_reference.strip()
@@ -299,6 +306,10 @@ def record_filing(
     try:
         with transaction.atomic():
             report = _lock(report)
+            if revision is not None and revision != report.revision:
+                return ServiceResult.failure(
+                    "This report changed after you opened it. Check the values, then record the filing again.", 409
+                )
             if stage not in filable_stages(report):
                 if report.is_closed and stage != Stage.USERS_INFORMED:
                     return ServiceResult.failure("The final report is already filed.", 409)
@@ -359,7 +370,7 @@ def delete_report(report: CRAReport, user: Any) -> ServiceResult[None]:
 def get_report(team: Any, report_id: str) -> CRAReport | None:
     return (
         CRAReport.objects.select_related("product", "advisory")
-        .prefetch_related("filings")
+        .prefetch_related("filings__filed_by")
         .filter(pk=report_id, team=team)
         .first()
     )
@@ -368,7 +379,7 @@ def get_report(team: Any, report_id: str) -> CRAReport | None:
 def reports_for_team(team: Any) -> list[CRAReport]:
     """Open reports first, soonest deadline first; then closed ones."""
     reports = list(
-        CRAReport.objects.select_related("product", "advisory").prefetch_related("filings").filter(team=team)
+        CRAReport.objects.select_related("product", "advisory").prefetch_related("filings__filed_by").filter(team=team)
     )
     now = timezone.now()
 
@@ -408,6 +419,18 @@ def srp_layout(report: CRAReport, stage: str) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def filing_layout(filing: CRAReportFiling) -> list[dict[str, Any]]:
+    """The fields a filing carried, as its snapshot holds them, in the portal's order."""
+    snapshot = filing.snapshot
+    as_filed = CRAReport(
+        kind=filing.report.kind,
+        srp_fields=dict(snapshot.get("srp_fields", {})),
+        **{name: datetime.fromisoformat(snapshot[name]) if snapshot.get(name) else None for name in _DATE_FIELDS},
+    )
+    stage = filing.stage if filing.stage in DEADLINE_STAGES else Stage.FINAL_REPORT
+    return [row for row in srp_layout(as_filed, stage) if row["value"]]
 
 
 def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:

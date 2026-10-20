@@ -271,10 +271,13 @@ class TestApi:
         assert patched.status_code == 200
         filed = client.post(
             f"/api/v1/compliance/cra-reports/{report_id}/filings",
-            data=json.dumps({"stage": "early_warning", "srp_reference": "SRP-9"}),
+            data=json.dumps(
+                {"stage": "early_warning", "srp_reference": "SRP-9", "revision": patched.json()["revision"]}
+            ),
             content_type="application/json",
         )
         assert filed.status_code == 201
+        assert filed.json()["filed_by"] == owner.email
         srp = client.get(f"/api/v1/compliance/cra-reports/{report_id}/srp?stage=notification")
         assert srp.status_code == 200
         fields = {row["id"]: row for row in srp.json()["fields"]}
@@ -289,7 +292,9 @@ class TestApi:
         assert client.get(f"/api/v1/compliance/cra-reports/{report.id}").status_code == 200
         refused = client.post(
             f"/api/v1/compliance/cra-reports/{report.id}/filings",
-            data=json.dumps({"stage": "early_warning", "srp_reference": "X"}),
+            data=json.dumps(
+                {"stage": "early_warning", "srp_reference": "X", "revision": report.revision}
+            ),
             content_type="application/json",
         )
         assert refused.status_code == 403
@@ -317,7 +322,13 @@ class TestPages:
 
         response = client.post(
             reverse("compliance:cra_report_detail", args=[report.id]),
-            {"action": "file", "stage": "early_warning", "srp_reference": "SRP-77", "filed_at": ""},
+            {
+                "action": "file",
+                "stage": "early_warning",
+                "srp_reference": "SRP-77",
+                "filed_at": "",
+                "revision": report.revision,
+            },
         )
 
         assert response.status_code == 302
@@ -668,7 +679,7 @@ class TestTimestamps:
         assert report.measure_available_at == datetime(2026, 10, 3, 7, 0, tzinfo=UTC)
 
     def test_the_page_forms_read_times_as_utc(self):
-        form = CRAFilingForm(data={"stage": "early_warning", "filed_at": "2026-10-01T12:00"})
+        form = CRAFilingForm(data={"stage": "early_warning", "filed_at": "2026-10-01T12:00", "revision": "r1"})
 
         assert form.is_valid(), form.errors
         assert form.cleaned_data["filed_at"] == datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -1101,7 +1112,9 @@ class TestManageOnlyToken:
         )
         filed = client.post(
             f"/api/v1/compliance/cra-reports/{report.id}/filings",
-            data=json.dumps({"stage": "early_warning", "srp_reference": "SRP-9"}),
+            data=json.dumps(
+                {"stage": "early_warning", "srp_reference": "SRP-9", "revision": patched.json()["revision"]}
+            ),
             content_type="application/json",
         )
 
@@ -1125,3 +1138,129 @@ class TestManageOnlyToken:
 
         assert patched.status_code == 404
         assert client.delete(f"/api/v1/compliance/cra-reports/{report.id}").status_code == 404
+
+
+@pytest.mark.django_db
+class TestFilingWhatWasCopied:
+    """A filing records the draft that was copied into ENISA, not one edited since."""
+
+    def test_a_draft_edited_after_it_was_copied_is_not_filed(self, report, owner):
+        copied = report.revision
+        report_service.update_report(report, owner, values={"general_information": "Edited by someone else."})
+
+        stale = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, revision=copied)
+
+        assert stale.status_code == 409
+        assert "changed" in stale.error
+        assert not report.filings.exists()
+        report.refresh_from_db()
+        current = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, revision=report.revision)
+        assert current.ok, current.error
+        assert current.value.snapshot["srp_fields"]["general_information"] == "Edited by someone else."
+
+    def test_the_page_files_only_the_revision_it_showed(self, team, owner, report):
+        client = _client_for(team, owner)
+        detail = client.get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+        shown = report.revision
+        assert f'name="revision" value="{shown}"' in detail
+        report_service.update_report(report, owner, values={"general_information": "Edited by someone else."})
+
+        response = client.post(
+            reverse("compliance:cra_report_detail", args=[report.id]),
+            {"action": "file", "stage": "early_warning", "srp_reference": "SRP-1", "revision": shown},
+            follow=True,
+        )
+
+        assert not report.filings.exists()
+        assert "This report changed" in response.content.decode()
+
+    def test_the_api_refuses_a_stale_revision_and_requires_one(self, team, owner, report):
+        client = _client_for(team, owner)
+        copied = report.revision
+        report_service.update_report(report, owner, values={"general_information": "Edited by someone else."})
+        url = f"/api/v1/compliance/cra-reports/{report.id}/filings"
+
+        stale = client.post(
+            url,
+            data=json.dumps({"stage": "early_warning", "revision": copied}),
+            content_type="application/json",
+        )
+        missing = client.post(url, data=json.dumps({"stage": "early_warning"}), content_type="application/json")
+
+        assert stale.status_code == 409
+        assert missing.status_code in (400, 422)
+        assert not report.filings.exists()
+
+
+@pytest.mark.django_db
+class TestFilingEvidence:
+    """What a filing contained, and who recorded it, stays readable after the draft moves on."""
+
+    def _filed_then_edited(self, report, owner):
+        filing = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="SRP-1").value
+        report_service.update_report(report, owner, values={"general_information": "Written after the filing."})
+        return filing
+
+    def test_the_api_returns_the_snapshot_and_the_filer(self, team, owner, report):
+        filing = self._filed_then_edited(report, owner)
+        client = _client_for(team, _member(team, "member", "reader"))
+
+        listed = client.get(f"/api/v1/compliance/cra-reports/{report.id}").json()["filings"]
+        detail = client.get(f"/api/v1/compliance/cra-reports/{report.id}/filings/{filing.id}")
+
+        assert listed[0]["filed_by"] == owner.email
+        assert detail.status_code == 200, detail.content
+        body = detail.json()
+        assert body["filed_by"] == owner.email
+        assert body["snapshot"]["srp_fields"]["title"] == "Router OS remote code execution"
+        assert "general_information" not in body["snapshot"]["srp_fields"]
+
+    def test_another_reports_filing_reads_as_absent(self, team, owner, product, report):
+        filing = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).value
+        other = report_service.create_report(team, owner, kind="incident", product_id=product.id, aware_at=AWARE).value
+        client = _client_for(team, owner)
+
+        response = client.get(f"/api/v1/compliance/cra-reports/{other.id}/filings/{filing.id}")
+        page = client.get(reverse("compliance:cra_report_filing", args=[other.id, filing.id]))
+
+        assert response.status_code == 404
+        assert page.status_code == 404
+
+    def test_the_filings_table_links_each_filing_to_what_it_contained(self, team, owner, report):
+        filing = self._filed_then_edited(report, owner)
+        client = _client_for(team, _member(team, "member", "reader"))
+        url = reverse("compliance:cra_report_filing", args=[report.id, filing.id])
+
+        detail = client.get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+        evidence = client.get(url)
+
+        assert url in detail
+        assert owner.email in detail
+        assert evidence.status_code == 200
+        html = evidence.content.decode()
+        assert "Router OS remote code execution" in html
+        assert "Written after the filing." not in html
+        assert "SRP-1" in html
+
+    def test_a_guest_cannot_read_a_filing(self, team, owner, report):
+        filing = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).value
+        client = _client_for(team, _member(team, "guest", "visitor"))
+
+        response = client.get(reverse("compliance:cra_report_filing", args=[report.id, filing.id]))
+
+        assert response.status_code in (302, 403, 404)
+
+
+@pytest.mark.django_db
+class TestClosedReportDeadlines:
+    def test_a_closed_report_shows_no_stage_overdue(self, team, owner, product):
+        # Filed straight to the final report, long after the early warning was due.
+        report = report_service.create_report(
+            team, owner, kind="incident", product_id=product.id, aware_at=timezone.now() - timedelta(days=60)
+        ).value
+        report_service.record_filing(report, owner, stage=Stage.FINAL_REPORT, srp_reference="F")
+        client = _client_for(team, owner)
+
+        html = client.get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+
+        assert "Overdue" not in html

@@ -35,3 +35,8 @@ def test_an_owner_records_an_early_warning(
 
     expect(page.get_by_text("Filing recorded.")).to_be_visible()
     expect(page.get_by_role("cell", name="SRP-2020-0001", exact=True)).to_be_visible()
+
+    # The filing opens as it was recorded, kept as evidence.
+    page.get_by_role("link", name="Open").click()
+    expect(page.get_by_role("heading", name="Early warning as filed")).to_be_visible()
+    expect(page.get_by_text("SRP-2020-0001")).to_be_visible()

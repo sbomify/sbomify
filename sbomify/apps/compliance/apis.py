@@ -19,6 +19,7 @@ from .permissions import check_cra_access
 from .schemas import (
     CRAAssessmentSchema,
     CRAFilingCreateSchema,
+    CRAFilingDetailSchema,
     CRAFilingSchema,
     CRANextDueSchema,
     CRAReportCreateSchema,
@@ -947,11 +948,19 @@ def _report_to_schema(report: Any) -> CRAReportSchema:
         occurred_at=report.occurred_at,
         measure_available_at=report.measure_available_at,
         values=report.srp_fields,
-        filings=[
-            CRAFilingSchema(id=f.id, stage=f.stage, srp_reference=f.srp_reference, filed_at=f.filed_at)
-            for f in report.filings.all()
-        ],
+        filings=[_filing_to_schema(f) for f in report.filings.all()],
         next_due=CRANextDueSchema(stage=nxt.stage, label=nxt.label, due=nxt.due, overdue=nxt.overdue) if nxt else None,
+        revision=report.revision,
+    )
+
+
+def _filing_to_schema(filing: Any) -> CRAFilingSchema:
+    return CRAFilingSchema(
+        id=filing.id,
+        stage=filing.stage,
+        srp_reference=filing.srp_reference,
+        filed_at=filing.filed_at,
+        filed_by=filing.filer,
     )
 
 
@@ -1045,14 +1054,28 @@ def record_cra_filing(request: HttpRequest, report_id: str, payload: CRAFilingCr
     if isinstance(report, tuple):
         return report
     result = record_filing(
-        report, request.user, stage=payload.stage, srp_reference=payload.srp_reference, filed_at=payload.filed_at
+        report,
+        request.user,
+        stage=payload.stage,
+        srp_reference=payload.srp_reference,
+        filed_at=payload.filed_at,
+        revision=payload.revision,
     )
     if not result.ok or result.value is None:
         return result.status_code or 400, ErrorResponse(error=result.error or "Could not record the filing")
-    filing = result.value
-    return 201, CRAFilingSchema(
-        id=filing.id, stage=filing.stage, srp_reference=filing.srp_reference, filed_at=filing.filed_at
-    )
+    return 201, _filing_to_schema(result.value)
+
+
+@router.get("/cra-reports/{report_id}/filings/{filing_id}", response={200: CRAFilingDetailSchema, 404: ErrorResponse})
+def get_cra_filing(request: HttpRequest, report_id: str, filing_id: str) -> _Response:
+    """One filing with the report as it stood when the filing was recorded."""
+    report = _report_or_error(request, report_id, "cra_report:read")
+    if isinstance(report, tuple):
+        return report
+    filing = next((f for f in report.filings.all() if f.id == filing_id), None)
+    if filing is None:
+        return 404, ErrorResponse(error="Filing not found", error_code="not_found")
+    return 200, CRAFilingDetailSchema(**_filing_to_schema(filing).model_dump(), snapshot=filing.snapshot)
 
 
 @router.get("/cra-reports/{report_id}/srp", response={200: SRPLayoutSchema, 400: ErrorResponse, 404: ErrorResponse})

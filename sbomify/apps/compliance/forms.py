@@ -24,6 +24,8 @@ class CRAFilingForm(forms.Form):
     stage = forms.ChoiceField(choices=CRAReportFiling.Stage.choices)
     srp_reference = forms.CharField(max_length=100, required=False)
     filed_at = forms.DateTimeField(required=False, input_formats=_DATETIME_FORMATS)
+    # The revision the page showed when its values were copied into the portal.
+    revision = forms.CharField(max_length=64)
 
 
 class CRAReportForm(forms.Form):

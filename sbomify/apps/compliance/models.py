@@ -742,6 +742,11 @@ class CRAReport(models.Model):
     def __str__(self) -> str:
         return f"CRA report for {self.product} ({self.kind})"
 
+    @property
+    def revision(self) -> str:
+        """Changes with every edit. Sent back when filing, to show which draft was copied into the portal."""
+        return self.updated_at.isoformat()
+
     def filed_stages(self) -> dict[str, Any]:
         """Stage to the time it was filed, for the stages filed once."""
         return {f.stage: f.filed_at for f in self.filings.all() if f.stage != "intermediate"}
@@ -808,6 +813,12 @@ class CRAReportFiling(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_stage_display()} for {self.report_id}"
+
+    @property
+    def filer(self) -> str:
+        """Who recorded the filing, by email: evidence names one person, not a display name."""
+        user = self.filed_by
+        return (user.email or user.username) if user else ""
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:

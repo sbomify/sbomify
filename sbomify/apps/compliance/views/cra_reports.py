@@ -90,6 +90,8 @@ class CRAReportCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
 
 def _stage_rows(report: Any) -> list[dict[str, Any]]:
     filings = {filing.stage: filing for filing in report.filings.all()}
+    # The final report closes the report: a stage never filed before it is no longer owed.
+    closed = Stage.FINAL_REPORT in filings
     notification = filings.get(Stage.NOTIFICATION)
     due = due_dates(
         report.kind,
@@ -107,7 +109,7 @@ def _stage_rows(report: Any) -> list[dict[str, Any]]:
                 "label": STAGE_LABELS[stage],
                 "due": due_at,
                 "filing": filing,
-                "overdue": filing is None and due_at is not None and now > due_at,
+                "overdue": not closed and filing is None and due_at is not None and now > due_at,
             }
         )
     return rows
@@ -177,6 +179,7 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
             stage=form.cleaned_data["stage"],
             srp_reference=form.cleaned_data["srp_reference"],
             filed_at=form.cleaned_data["filed_at"],
+            revision=form.cleaned_data["revision"],
         )
         if result.ok:
             messages.success(request, "Filing recorded.")
@@ -202,3 +205,25 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
             return True
         messages.error(request, result.error or "Could not delete the report.")
         return False
+
+
+class CRAReportFilingView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
+    """One filing as it was recorded: the report's values then, read-only, kept as evidence."""
+
+    allowed_roles = list(READ_INTERNAL)
+
+    def get(self, request: HttpRequest, report_id: str, filing_id: str) -> HttpResponse:
+        report = report_service.get_report(_workspace(request), report_id)
+        filing = next((f for f in report.filings.all() if f.id == filing_id), None) if report else None
+        if report is None or filing is None:
+            raise Http404("Filing not found")
+        return render(
+            request,
+            "compliance/cra_report_filing.html.j2",
+            {
+                "tabs": cra_tabs(request, report.team, "reports"),
+                "report": report,
+                "filing": filing,
+                "rows": report_service.filing_layout(filing),
+            },
+        )

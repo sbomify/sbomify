@@ -180,6 +180,8 @@ class CRAFilingCreateSchema(Schema):
     stage: str
     srp_reference: str = Field("", max_length=100)
     filed_at: AwareDatetime | None = None
+    # The report's ``revision`` when its values were copied into the portal.
+    revision: str = Field(min_length=1, max_length=64)
 
 
 class CRAFilingSchema(Schema):
@@ -187,6 +189,13 @@ class CRAFilingSchema(Schema):
     stage: str
     srp_reference: str
     filed_at: datetime
+    filed_by: str
+
+
+class CRAFilingDetailSchema(CRAFilingSchema):
+    """A filing with the report as it stood when the filing was recorded."""
+
+    snapshot: dict[str, Any]
 
 
 class CRANextDueSchema(Schema):
@@ -208,6 +217,8 @@ class CRAReportSchema(Schema):
     values: dict[str, Any]
     filings: list[CRAFilingSchema]
     next_due: CRANextDueSchema | None
+    # Opaque: send it back unchanged when recording a filing.
+    revision: str
 
 
 class SRPFieldSchema(Schema):
