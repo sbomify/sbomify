@@ -332,6 +332,8 @@ def register_tools(mcp: FastMCP) -> None:
                 # what it holds, but a key rewritten between the two calls, or a
                 # backend that cannot answer a HEAD, must not slip past.
                 enforce_parse_size(raw, artifact_id=artifact_id)
+                if not raw:
+                    raise ToolError(f"Could not read artifact {artifact_id}: it is empty.")
                 payload = json.loads(raw)
             except SBOMDataError as exc:
                 raise ToolError(f"Could not read artifact {artifact_id}: {exc}") from exc
@@ -343,7 +345,7 @@ def register_tools(mcp: FastMCP) -> None:
                 # what is a retryable storage fault. Message kept generic: a
                 # botocore message can carry bucket names and key paths.
                 raise ToolError(f"Could not read artifact {artifact_id}: artifact storage is unavailable.") from exc
-            except json.JSONDecodeError as exc:
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                 raise ToolError(f"Artifact {artifact_id} is not valid JSON: {exc}") from exc
 
             if not isinstance(payload, dict):

@@ -449,3 +449,31 @@ async def test_a_store_without_head_still_reads_an_artifact_under_the_ceiling(
     packages = structured(await _call(token, "get_artifact_packages", artifact_id=artifact.id))
 
     assert [pkg["name"] for pkg in packages["items"]] == ["libexample"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [(b"", "is empty"), (b'{"name": "\xff"}', "is not valid JSON")],
+)
+async def test_a_store_without_head_reports_an_unreadable_artifact_plainly(
+    mcp_owner, make_token, component_in_bound_workspace, monkeypatch, stored, expected
+):
+    """The ranged read hands back the bytes as stored: an empty object, or bytes that are not UTF-8.
+
+    Both must come back as a clear refusal, not as an opaque internal error.
+    """
+    from sbomify.apps.core import object_store
+
+    artifact = await sync_to_async(_artifact)(component_in_bound_workspace, "odd", SBOM.BomType.SBOM)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", _head_refused)
+    monkeypatch.setattr(
+        object_store.StorageClient, "get_sbom_data_prefix", lambda self, name, length: stored, raising=False
+    )
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", _whole_object)
+    token = await sync_to_async(make_token)(["sbom:read"])
+
+    body = json.dumps(parse(await _call(token, "get_artifact_packages", artifact_id=artifact.id)))
+
+    assert expected in body
