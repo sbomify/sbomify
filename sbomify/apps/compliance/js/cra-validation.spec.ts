@@ -1,7 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
+import { craSharedMock } from './cra-shared.mock';
 
 mock.module('../../core/js/alpine-components', () => ({ registerAlpineComponent: () => {} }));
-mock.module('./cra-shared', () => ({ getAssessmentId: () => 'test', saveStepAndNavigate: async () => {} }));
+mock.module('./cra-shared', () => craSharedMock({ getAssessmentId: () => 'test' }));
 
 const { craStep1 } = await import('./cra-step-1');
 const { craStep4 } = await import('./cra-step-4');

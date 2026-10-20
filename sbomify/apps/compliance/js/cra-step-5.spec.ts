@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { craSharedMock } from './cra-shared.mock';
 
 // No DOM here: the component only touches window.parseJsonScript and window.open.
 const win = ((globalThis as unknown as { window?: object }).window ??= {}) as {
@@ -17,9 +18,7 @@ mock.module('../../core/js/alerts', () => ({
   showError: (message: string) => errors.push(message),
   showSuccess: () => {},
 }));
-mock.module('./cra-shared', () => ({
-  getAssessmentId: () => 'a1',
-}));
+mock.module('./cra-shared', () => craSharedMock({ getAssessmentId: () => 'a1' }));
 
 const { craStep5 } = await import('./cra-step-5');
 
