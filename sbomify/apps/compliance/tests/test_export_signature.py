@@ -17,6 +17,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from sigstore.errors import TUFError
 from sigstore.verify import Verifier
 
@@ -37,8 +38,13 @@ SIGNER = "keyless@projectsigstore.iam.gserviceaccount.com"
 GOOGLE = "https://accounts.google.com"
 
 
-def _bundle() -> dict:
-    return json.loads(BUNDLE_PATH.read_bytes())
+def _bundle() -> bytes:
+    return BUNDLE_PATH.read_bytes()
+
+
+def _reformatted() -> bytes:
+    """The same bundle as another tool might save it: indented, keys sorted, a final newline."""
+    return json.dumps(json.loads(_bundle()), indent=4, sort_keys=True).encode() + b"\n"
 
 
 class _Store:
@@ -117,7 +123,17 @@ class TestSignExport:
         assert package.signed_by_issuer == GOOGLE
         # Fulcio issued the signing certificate at signing time; it lives ten minutes.
         assert package.signed_at == datetime(2026, 8, 6, 1, 3, 1, tzinfo=UTC)
-        assert json.loads(store.uploads[package.storage_key + ".sigstore.json"]) == _bundle()
+        assert store.uploads[package.storage_key + ".sigstore.json"] == _bundle()
+
+    def test_the_uploaded_bytes_are_kept_exactly_as_sent(self, assessment, store, sample_user):
+        # A signature file is a security artifact: kept as the manufacturer
+        # saved it, whitespace and key order included, never re-serialised.
+        package = _package(assessment)
+
+        result = sign_export(package, bundle=_reformatted(), identity=SIGNER, issuer=GOOGLE, user=sample_user)
+
+        assert result.ok, result.error
+        assert store.uploads[package.storage_key + ".sigstore.json"] == _reformatted()
 
     def test_surrounding_whitespace_is_not_part_of_the_identity(self, assessment, store, sample_user):
         package = _package(assessment)
@@ -166,10 +182,11 @@ class TestSignExport:
     def test_a_file_that_is_not_a_bundle_is_refused(self, assessment, store, sample_user):
         package = _package(assessment)
 
-        result = sign_export(package, bundle={"signature": "abc"}, identity=SIGNER, issuer=GOOGLE, user=sample_user)
+        for raw in (b'{"signature": "abc"}', b"not json"):
+            result = sign_export(package, bundle=raw, identity=SIGNER, issuer=GOOGLE, user=sample_user)
 
-        assert result.status_code == 400
-        assert result.error.startswith("This file is not a Sigstore bundle.")
+            assert result.status_code == 400
+            assert result.error.startswith("This file is not a Sigstore bundle.")
 
     def test_an_oversized_bundle_is_refused_before_it_is_read(self, assessment, store, sample_user):
         package = _package(assessment)
@@ -177,7 +194,7 @@ class TestSignExport:
 
         with patch("sbomify.apps.compliance.services.export_signature._verifier", return_value=verifier):
             result = sign_export(
-                package, bundle={**_bundle(), "padding": "x" * 70_000}, identity=SIGNER, issuer=GOOGLE, user=sample_user
+                package, bundle=_bundle() + b" " * 70_000, identity=SIGNER, issuer=GOOGLE, user=sample_user
             )
 
         assert result.status_code == 400
@@ -314,9 +331,11 @@ class TestSignatureApi:
     def _url(self, assessment, package) -> str:
         return f"/api/v1/compliance/cra/{assessment.id}/export/{package.id}/signature"
 
-    def _post(self, client, url, token, **body):
-        payload = {"bundle": _bundle(), "identity": SIGNER, "issuer": GOOGLE, **body}
-        return client.post(url, data=json.dumps(payload), content_type="application/json", **get_api_headers(token))
+    def _post(self, client, url, token, bundle: bytes | None = None, **fields):
+        """The bundle goes up as the file cosign wrote, beside the signer's identity and issuer."""
+        upload = SimpleUploadedFile("cra.zip.sigstore.json", _bundle() if bundle is None else bundle, "application/json")
+        data = {"identity": SIGNER, "issuer": GOOGLE, **fields, "bundle": upload}
+        return client.post(url, data=data, **get_api_headers(token))
 
     def test_an_owner_uploads_a_signature(self, settings, authenticated_api_client, assessment, store):
         settings.BILLING = False
@@ -327,6 +346,26 @@ class TestSignatureApi:
 
         assert response.status_code == 201, response.content
         assert response.json() == {"signed_by": SIGNER, "issuer": GOOGLE, "signed_at": "2026-08-06T01:03:01Z"}
+
+    def test_the_file_is_stored_byte_for_byte(self, settings, authenticated_api_client, assessment, store):
+        settings.BILLING = False
+        package = _package(assessment)
+        client, token = authenticated_api_client
+
+        response = self._post(client, self._url(assessment, package), token, bundle=_reformatted())
+
+        assert response.status_code == 201, response.content
+        assert store.uploads[package.storage_key + ".sigstore.json"] == _reformatted()
+
+    def test_a_file_that_is_not_json_is_a_400(self, settings, authenticated_api_client, assessment, store):
+        settings.BILLING = False
+        package = _package(assessment)
+        client, token = authenticated_api_client
+
+        response = self._post(client, self._url(assessment, package), token, bundle=b"not json")
+
+        assert response.status_code == 400
+        assert response.json()["error"].startswith("This file is not a Sigstore bundle.")
 
     def test_the_download_endpoint_offers_the_signature_once_signed(
         self, settings, authenticated_api_client, assessment, mock_s3_client

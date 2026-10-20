@@ -380,27 +380,18 @@ export function craStep5() {
 
     async uploadSignature(): Promise<void> {
       if (!this.lastExport || !this.signFile || this.isSigning) return;
-      let bundle: unknown;
-      try {
-        bundle = JSON.parse(await this.signFile.text());
-      } catch {
-        showError('This file is not a Sigstore bundle.');
-        return;
-      }
+      // The file goes up as chosen: sbomify keeps the signature exactly as the
+      // manufacturer saved it, so it is never parsed and rewritten here.
+      const form = new FormData();
+      form.append('bundle', this.signFile);
+      form.append('identity', this.signForm.identity.trim());
+      form.append('issuer', this.signForm.issuer);
       const packageId = this.lastExport.id;
       this.isSigning = true;
       try {
         const resp = await fetch(
           `/api/v1/compliance/cra/${this.assessmentId}/export/${packageId}/signature`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
-            body: JSON.stringify({
-              bundle,
-              identity: this.signForm.identity.trim(),
-              issuer: this.signForm.issuer,
-            }),
-          },
+          { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }, body: form },
         );
         const body = await resp.json().catch(() => ({}));
         if (resp.ok) {

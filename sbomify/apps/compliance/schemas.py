@@ -87,9 +87,8 @@ class ExportPackageSchema(Schema):
 
 
 class ExportSignatureUploadSchema(Schema):
-    """The bundle ``cosign sign-blob --bundle`` wrote, and who it says signed."""
+    """Who the bundle says signed. The bundle itself arrives as a file part beside these fields."""
 
-    bundle: dict[str, Any]
     identity: str = Field(min_length=1, max_length=512)
     issuer: str = Field(min_length=1, max_length=255)
 
