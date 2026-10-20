@@ -83,6 +83,45 @@
             </div>
         </form>
     </div>
+    <div id="advisory-ids-wrapper"
+         hx-get="{% url 'workspaces:team_general' team.key %}"
+         hx-select="#advisory-ids-form"
+         hx-trigger="refreshAdvisoryIds from:body"
+         hx-swap="innerHTML">
+        <form id="advisory-ids-form"
+              method="post"
+              hx-post="{% url 'workspaces:team_general' team.key %}"
+              hx-swap="none"
+              hx-disabled-elt="find button[type='submit']"
+              x-data="dirtySettingsForm(window.parseJsonScript('advisory-id-fields'))"
+              class="flex flex-col gap-4">
+            {{ advisory_id_fields|json_script:"advisory-id-fields" }}
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_advisory_ids">
+            <c-cards.card flush>
+            {% comment %}Refreshed on its own after a rename, which changes the generated prefix, so unsaved edits in the fields below survive.{% endcomment %}
+            <div id="advisory-id-preview-wrapper"
+                 hx-get="{% url 'workspaces:team_general' team.key %}"
+                 hx-select="#advisory-id-preview"
+                 hx-trigger="refreshAdvisoryIdPreview from:body"
+                 hx-swap="innerHTML">
+                <div id="advisory-id-preview">
+                    <c-cards.header compact title="Security advisories" hint="The next advisory you publish will be {{ next_advisory_id }}. An empty prefix uses {{ advisory_id_default_prefix }}." />
+                </div>
+            </div>
+            <c-forms.field horizontal label="Advisory id prefix" for="advisory-id-prefix" hint="New advisories are numbered prefix, year, then number. Leave empty to use one made from the workspace name. Published advisories keep their ids.">
+            <c-forms.input size="sm" id="advisory-id-prefix" name="advisory_id_prefix" value="{{ advisory_id_fields.advisory_id_prefix }}" placeholder="Made from workspace name" maxlength="20" x-model="fields.advisory_id_prefix" />
+            </c-forms.field>
+            <c-forms.field horizontal label="Start numbering at" for="advisory-id-start-at" hint="Each year's numbers start here. Set it past the last number you issued elsewhere to avoid clashes.">
+            <c-forms.input size="sm" id="advisory-id-start-at" name="advisory_id_start_at" type="number" min="1" max="999999" step="1" value="{{ advisory_id_fields.advisory_id_start_at }}" placeholder="1" x-model="fields.advisory_id_start_at" />
+            </c-forms.field>
+            </c-cards.card>
+            <div class="flex items-center justify-end gap-2">
+                <c-buttons.secondary size="sm" disabled ::disabled="!hasUnsavedChanges()" @click="discard()">Discard</c-buttons.secondary>
+                <c-buttons.primary size="sm" type="submit" disabled ::disabled="!hasUnsavedChanges()">Save advisory ids</c-buttons.primary>
+            </div>
+        </form>
+    </div>
     {% if is_owner %}
         {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
     {% endif %}

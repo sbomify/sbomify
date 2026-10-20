@@ -155,9 +155,12 @@
         </div>
         </c-cards.card>
     {% endif %}
+    {% if vulnerabilities.assessed or vulnerabilities.unassessed %}
+        {% include 'core/components/release_vulnerabilities.html.j2' %}
+    {% endif %}
     {# Release Artifacts #}
     <div>
-        {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
+        {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
     </div>
     {# Danger Zone #}
     {% if can_delete_release %}

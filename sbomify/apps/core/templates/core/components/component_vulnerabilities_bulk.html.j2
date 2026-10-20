@@ -1,8 +1,0 @@
-{% comment %}The Fix prompt for all button. Every results refresh swaps it out of band (oob), so it appears once a scan lists something and goes when nothing is left to fix.{% endcomment %}
-<div id="component-vulnerabilities-bulk-slot"
-     class="contents"
-     {% if oob %}hx-swap-oob="true"{% endif %}>
-    {% if vuln_data.summary.occurrences %}
-        <c-vulnerabilities.bulk-fix-prompt-button url="{{ vuln_data.bulk_fix_prompt_url }}" />
-    {% endif %}
-</div>

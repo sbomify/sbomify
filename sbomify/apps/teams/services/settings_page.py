@@ -14,6 +14,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.services.dashboard_page import dashboard_cache_key
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.security_advisories.models import SecurityAdvisory, default_advisory_id_prefix
 from sbomify.apps.teams.apis import get_team_branding
 from sbomify.apps.teams.forms import ContactProfileForm, PatchSLAForm
 from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
@@ -26,6 +27,8 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
     targets = membership.team.patch_sla_days if membership else default_patch_sla_days()
     workspace = membership.team if membership else None
     support_period = workspace.default_support_period_years if workspace else None
+    advisory_id_prefix = workspace.advisory_id_prefix if workspace else ""
+    advisory_id_start_at = workspace.advisory_id_start_at if workspace else 1
     # Each form's starting values, for the shared dirty-tracking component. They
     # are strings so an emptied field compares equal to an unset one.
     patch_sla_fields = {"mode": "recommended" if targets == default_patch_sla_days() else "custom"}
@@ -41,6 +44,12 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
             },
             "patch_sla_fields": patch_sla_fields,
             "support_period_fields": {"default_support_period_years": _as_field_value(support_period)},
+            "advisory_id_fields": {
+                "advisory_id_prefix": advisory_id_prefix,
+                "advisory_id_start_at": _as_field_value(advisory_id_start_at),
+            },
+            "advisory_id_default_prefix": default_advisory_id_prefix(workspace) if workspace else "",
+            "next_advisory_id": SecurityAdvisory.allocate_tracking_id(workspace) if workspace else "",
         }
     )
 
@@ -108,6 +117,13 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
 
 def update_support_period(workspace_key: str, years: int | None) -> ServiceResult[None]:
     if not Workspace.objects.filter(key=workspace_key).update(default_support_period_years=years):
+        return ServiceResult.failure("Workspace not found", status_code=404)
+    return ServiceResult.success()
+
+
+def update_advisory_ids(workspace_key: str, prefix: str, start_at: int) -> ServiceResult[None]:
+    """Change how new advisories are numbered. Advisories already published keep their ids."""
+    if not Workspace.objects.filter(key=workspace_key).update(advisory_id_prefix=prefix, advisory_id_start_at=start_at):
         return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success()
 

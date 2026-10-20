@@ -107,35 +107,6 @@ class TestATriagePanelRefreshesWhereTheReaderIs:
         assert "dataset.refreshUrl" in refresh["hx-on::config-request"]
         assert _root_attributes(html, "component-vulnerabilities-form")
 
-    def test_a_results_refresh_brings_the_bulk_fix_prompt_button(
-        self, sample_team_with_owner_member, sample_user
-    ) -> None:
-        """The panel can open before the first scan lists anything; the refresh that lists it adds the button."""
-        from django.test import Client
-        from django.urls import reverse
-
-        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-        from sbomify.apps.core.tests.test_panel_triage_and_page_size import _component_with_findings
-
-        team = sample_team_with_owner_member.team
-        component = _component_with_findings(team)
-        client = Client()
-        setup_authenticated_client_session(client, team, sample_user)
-
-        html = client.get(
-            reverse("core:component_vulnerabilities_panel", args=[component.id]),
-            headers={"hx-request": "true", "hx-target": "component-vulnerabilities-results"},
-        ).content.decode()
-        slot = _root_attributes(html, "component-vulnerabilities-bulk-slot")
-        assert slot["hx-swap-oob"] == "true"
-        assert "Fix prompt for all" in html
-
-    def test_the_workspace_refresh_swaps_the_bulk_fix_prompt_button(self) -> None:
-        source = _source("templates/components/vulnerabilities/workspace_browser.html")
-        oob = re.search(r'hx-select-oob="([^"]+)"', source)
-        assert oob and "#{{ browser_target }}-bulk" in oob.group(1)
-        assert 'id="{{ browser_target }}-bulk"' in source
-
     def test_a_search_with_no_matches_keeps_the_page_size(self, sample_team_with_owner_member, sample_user) -> None:
         """No matches means no footer and no Rows select, so the next search would drop back to 25."""
         from django.test import Client

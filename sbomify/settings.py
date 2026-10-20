@@ -1402,6 +1402,7 @@ NOTIFICATION_PROVIDERS = [
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
+    "sbomify.apps.vulnerability_scanning.notifications.get_vex_submission_notifications",
 ]
 
 # Optionally override refresh interval

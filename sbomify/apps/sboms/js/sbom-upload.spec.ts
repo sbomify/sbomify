@@ -250,6 +250,13 @@ describe('SBOM Upload Business Logic', () => {
             expect(buildUploadEndpoint('my-component', 'vex')).toBe('/api/v1/sboms/upload-file/my-component?bom_type=vex')
         })
 
+        test('should hold a VEX for approval only when asked, and never another type', () => {
+            expect(buildUploadEndpoint('c1', 'vex', true)).toBe('/api/v1/sboms/upload-file/c1?bom_type=vex&review=true')
+            expect(buildUploadEndpoint('c1', 'vex', false)).toBe('/api/v1/sboms/upload-file/c1?bom_type=vex')
+            expect(buildUploadEndpoint('c1', 'cbom', true)).toBe('/api/v1/sboms/upload-file/c1?bom_type=cbom')
+            expect(buildUploadEndpoint('c1', 'sbom', true)).toBe('/api/v1/sboms/upload-file/c1')
+        })
+
         test('should label the artifact type for user-facing messages', () => {
             expect(bomTypeLabel('sbom')).toBe('SBOM')
             expect(bomTypeLabel('vex')).toBe('VEX')
