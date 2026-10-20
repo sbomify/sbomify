@@ -520,9 +520,10 @@ async def test_a_profile_with_many_entities_and_contacts_names_only_so_many(
         supplier = profile.entities.get()
         for i in range(over):
             ContactProfileContact.objects.create(entity=supplier, name=f"Contact {i:03d}", email=f"c{i}@example.com")
-        # One manufacturer and one supplier per profile, but any number of authors.
+        # One manufacturer and one supplier per profile, but any number of
+        # authors. Named to sort after the supplier, which carries the contacts.
         for i in range(over):
-            ContactEntity.objects.create(profile=profile, name=f"Author {i:03d}", is_author=True)
+            ContactEntity.objects.create(profile=profile, name=f"Writer {i:03d}", is_author=True)
 
     await sync_to_async(setup)()
     token = await sync_to_async(make_token)(["workspace:read"])
