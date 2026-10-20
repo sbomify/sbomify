@@ -183,9 +183,11 @@ describe('craStep5 signature download', () => {
 });
 
 describe('craStep5 export', () => {
-  test('a new export replaces the one the page loaded with, so signing targets the new ZIP', async () => {
-    stubPage({ ...unsignedExport, signature });
-    const fresh = { ...unsignedExport, id: 'pkg-2', content_hash: 'def', file_name: 'cra-package-acme-def.zip' };
+  const fresh = { ...unsignedExport, id: 'pkg-2', content_hash: 'def', file_name: 'cra-package-acme-def.zip' };
+  // Another admin's export, newer than the one this page made.
+  const other = { ...unsignedExport, id: 'pkg-3', content_hash: '123', file_name: 'cra-package-acme-123.zip' };
+
+  function stubExport(packageResponse: { ok: boolean; body: unknown }): void {
     const base = globalThis.fetch;
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
       if (url === '/api/v1/compliance/cra/a1/export') {
@@ -193,11 +195,19 @@ describe('craStep5 export', () => {
         return { ok: true, json: async () => ({ id: 'pkg-2' }) };
       }
       if (url === '/api/v1/compliance/cra/a1/step/5') {
+        return { ok: true, json: async () => ({ step: 5, data: { last_export: other }, is_complete: false }) };
+      }
+      if (url === '/api/v1/compliance/cra/a1/export/pkg-2') {
         calls.push({ url, init });
-        return { ok: true, json: async () => ({ step: 5, data: { last_export: fresh }, is_complete: false }) };
+        return { ok: packageResponse.ok, json: async () => packageResponse.body };
       }
       return base(url, init);
     }) as unknown as typeof fetch;
+  }
+
+  test('the card shows the package this export made, even when another export is newer', async () => {
+    stubPage({ ...unsignedExport, signature });
+    stubExport({ ok: true, body: fresh });
     const c = craStep5();
     c.init();
 
@@ -209,6 +219,20 @@ describe('craStep5 export', () => {
       'cosign sign-blob cra-package-acme-def.zip --bundle cra-package-acme-def.zip.sigstore.json',
     );
     expect(opened).toEqual(['https://s3/zip']);
+  });
+
+  test('when the new package cannot be loaded, nothing is left to sign the old ZIP with', async () => {
+    stubPage(unsignedExport);
+    stubExport({ ok: false, body: { error: 'Export package not found' } });
+    const c = craStep5();
+    c.init();
+    c.signFile = bundleFile('{}');
+
+    await c.exportBundle();
+
+    expect(c.lastExport).toBeNull();
+    expect(c.signFile).toBeNull();
+    expect(errors).toEqual(['The export is ready, but this page could not load it. Reload the page to sign it.']);
   });
 });
 
@@ -225,9 +249,7 @@ describe('craStep5 signature response', () => {
         return { ok: true, status: 201, json: async () => signature };
       }
       if (url === '/api/v1/compliance/cra/a1/export') return { ok: true, json: async () => ({ id: 'pkg-2' }) };
-      if (url === '/api/v1/compliance/cra/a1/step/5') {
-        return { ok: true, json: async () => ({ step: 5, data: { last_export: fresh }, is_complete: false }) };
-      }
+      if (url === '/api/v1/compliance/cra/a1/export/pkg-2') return { ok: true, json: async () => fresh };
       return base(url, init);
     }) as unknown as typeof fetch;
     const c = craStep5();
