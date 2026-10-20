@@ -171,9 +171,38 @@ async def test_another_workspaces_submission_is_not_found(make_token, mcp_owner)
     submitted = structured(await _submit(other_token, component.id))
     token = await sync_to_async(make_token)(AGENT)
 
-    assert "not found" in _refused(await _call(token, "get_vex_submission", {"submission_id": submitted["id"]})).lower()
+    response = await _call(token, "get_vex_submission", {"submission_id": submitted["id"]})
+    assert "no vex submission found" in _refused(response).lower()
     listed = structured(await _call(token, "list_vex_submissions", {}))
     assert listed["items"] == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_another_workspaces_ids_read_exactly_like_ids_that_do_not_exist(make_token, mcp_owner):
+    _, _, other = mcp_owner
+    component = await sync_to_async(_seed)(other)
+    other_token = await sync_to_async(make_token)(AGENT, other)
+    submitted = structured(await _submit(other_token, component.id))
+    token = await sync_to_async(make_token)(AGENT)
+
+    async def error(name: str, arguments: dict, identifier: str) -> str:
+        text = json.loads(_refused(await _call(token, name, arguments)))["result"]["content"][0]["text"]
+        return text.replace(identifier, "<id>")
+
+    by_component = {
+        "submit_vex_for_approval": {"decisions": [DECISION], "context": "Checked every caller of merge."},
+        "list_vex_submissions": {},
+        "get_fix_prompt": {"advisory": "CVE-2026-1"},
+    }
+    for name, arguments in by_component.items():
+        elsewhere = await error(name, {"component_id": component.id, **arguments}, component.id)
+        absent = await error(name, {"component_id": "nosuchcomp01", **arguments}, "nosuchcomp01")
+        assert elsewhere == absent, name
+    for name in ("get_vex_submission", "withdraw_vex_submission"):
+        elsewhere = await error(name, {"submission_id": submitted["id"]}, submitted["id"])
+        absent = await error(name, {"submission_id": "nosuchsubm01"}, "nosuchsubm01")
+        assert elsewhere == absent, name
 
 
 PROMPT_ARGS = {"advisory": "CVE-2026-1", "purl": "pkg:npm/lodash@4.17.15"}
@@ -284,7 +313,7 @@ async def test_another_workspaces_submission_cannot_be_withdrawn(make_token, mcp
     submitted = structured(await _submit(other_token, component.id))
     token = await sync_to_async(make_token)(AGENT)
 
-    assert "not found" in _refused(await _withdraw(token, submitted["id"])).lower()
+    assert "no vex submission found" in _refused(await _withdraw(token, submitted["id"])).lower()
     stored = await sync_to_async(VexSubmission.objects.get)(pk=submitted["id"])
     assert stored.status == VexSubmission.Status.PENDING
 

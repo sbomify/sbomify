@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 from ..auth import Principal
 from ..limits import untrusted
-from ._base import clamp_page, mcp_tool, resolve_workspace, run_db, unwrap_view, workspace_key
+from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
+from .catalog import _lookup_component
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -83,6 +84,19 @@ def _bounded(prompt: dict[str, Any]) -> dict[str, Any]:
     return prompt
 
 
+def _lookup_submission(principal: Principal, submission_id: str) -> None:
+    """Refuse a submission outside the caller's workspace the same way as one that does not exist.
+
+    The REST views these tools delegate to answer 403 for another workspace's
+    component and 404 for a missing one. Every tool here resolves its id in the
+    caller's workspace first, as the catalog tools do, so the two read alike.
+    """
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    if not VexSubmission.objects.filter(id=submission_id, team=resolve_workspace(principal)).exists():
+        raise not_found("VEX submission", submission_id)
+
+
 class Decision(BaseModel):
     """One ruling, in the shape the triage prompt asks for."""
 
@@ -128,6 +142,7 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.vulnerability_scanning import apis
 
             team = resolve_workspace(principal)
+            _lookup_component(principal, component_id)
             prompt = unwrap_view(
                 apis.get_fix_prompt(
                     principal.request,
@@ -171,6 +186,7 @@ def register_tools(mcp: FastMCP) -> None:
         def call() -> dict[str, Any]:
             from sbomify.apps.vulnerability_scanning import apis
 
+            _lookup_component(principal, component_id)
             try:
                 payload = apis.VexSubmissionIn(
                     decisions=[apis.TriageDecisionIn(**decision.model_dump()) for decision in decisions],
@@ -206,6 +222,7 @@ def register_tools(mcp: FastMCP) -> None:
 
             safe_page, safe_size = clamp_page(page, page_size, default_size=15)
             if component_id is not None:
+                _lookup_component(principal, component_id)
                 result = apis.list_component_vex_submissions(
                     principal.request, component_id, status=status, page=safe_page, page_size=safe_size
                 )
@@ -228,7 +245,7 @@ def register_tools(mcp: FastMCP) -> None:
         def call() -> dict[str, Any]:
             from sbomify.apps.vulnerability_scanning import apis
 
-            resolve_workspace(principal)
+            _lookup_submission(principal, submission_id)
             return unwrap_view(apis.get_vex_submission(principal.request, submission_id), action="VEX submission")
 
         return await run_db(call)
@@ -245,7 +262,7 @@ def register_tools(mcp: FastMCP) -> None:
         def call() -> dict[str, Any]:
             from sbomify.apps.vulnerability_scanning import apis
 
-            resolve_workspace(principal)
+            _lookup_submission(principal, submission_id)
             return unwrap_view(
                 apis.withdraw_vex_submission(principal.request, submission_id), action="Withdrawing VEX submission"
             )
