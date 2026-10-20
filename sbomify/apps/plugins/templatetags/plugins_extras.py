@@ -274,7 +274,7 @@ def vulnerability_findings(findings: Any) -> list[Any]:
 
 
 @register.filter
-def vulnerability_table_rows(findings: Any) -> list[dict[str, Any]]:
+def vulnerability_table_rows(findings: Any, vex_statements: Any = None) -> list[dict[str, Any]]:
     """A page of stored findings as c-vulnerabilities.table rows.
 
     The shape the component and report pages render, so a scan opened on the
@@ -283,12 +283,17 @@ def vulnerability_table_rows(findings: Any) -> list[dict[str, Any]]:
     each finding goes through on its own. What the builder leaves out and this
     panel always showed rides along: the read-time exploited and malicious
     marks, and the advisory's own text and links.
+
+    ``vex_statements`` are the component's live rulings, which the component
+    page reads too. A result stored before a ruling's scope was recorded on it
+    has only them to say whether the ruling covers the whole component, and
+    the triage dialog has to reopen it there.
     """
     from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows
 
     rows = []
     for finding in vulnerability_findings(findings):
-        extracted = extract_finding_rows({"findings": [finding]})
+        extracted = extract_finding_rows({"findings": [finding]}, vex_statements or None)
         if not extracted:
             continue
         references = finding.get("references") or []

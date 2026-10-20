@@ -211,6 +211,7 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
     def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
         from sbomify.apps.core.authz import can
         from sbomify.apps.vulnerability_scanning.services.finding_browse import query_string
+        from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
         from .services.run_findings import PAGE_SIZE, PARAM_PREFIX, build_run_findings_page
 
@@ -244,6 +245,8 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "run": found.run,
                 "is_security": found.is_security,
                 "findings": found.findings,
+                # Read once for the page, from the cache the component page shares.
+                "vex_statements": load_vex_suppressions(found.sbom.component_id) if found.is_security else [],
                 "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
