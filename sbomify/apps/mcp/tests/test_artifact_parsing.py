@@ -97,6 +97,19 @@ class TestExtractPackages:
         # worse than reporting none.
         assert packages[1]["licenses"] == []
 
+    def test_a_package_with_too_many_licences_is_cut_and_says_so(self):
+        """Each package's licences are artifact content, and a page of packages multiplies them."""
+        from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+        over = DETAIL_COLLECTION_LIMIT + 3
+        payload = {"components": [{"name": "many", "licenses": [{"license": {"id": f"L-{i}"}} for i in range(over)]}]}
+
+        [package] = _extract_packages(payload, "cyclonedx")
+
+        assert len(package["licenses"]) == DETAIL_COLLECTION_LIMIT
+        assert package["licenses_total"] == over
+        assert package["licenses_truncated"] is True
+
 
 class TestBounded:
     def test_truncates_values(self):
@@ -123,6 +136,25 @@ class TestBounded:
         payload = {"count": 7, "ok": True, "missing": None}
 
         assert _bounded(payload) == payload
+
+    def test_cuts_a_long_list_and_says_how_much_is_left(self):
+        """Plugin summaries derive from the artifact, so a list in one can be as long as the artifact makes it."""
+        from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+        result = _bounded({"rows": list(range(DETAIL_COLLECTION_LIMIT + 7))})
+
+        assert result["rows"][:DETAIL_COLLECTION_LIMIT] == list(range(DETAIL_COLLECTION_LIMIT))
+        assert len(result["rows"]) == DETAIL_COLLECTION_LIMIT + 1
+        assert result["rows"][-1] == "[truncated by sbomify: 7 more]"
+
+    def test_cuts_a_wide_mapping_and_says_how_much_is_left(self):
+        """A summary keyed on artifact content (a licence id, a package) is as wide as the artifact."""
+        from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+        result = _bounded({f"key-{i:03d}": i for i in range(DETAIL_COLLECTION_LIMIT + 4)})
+
+        assert len(result) == DETAIL_COLLECTION_LIMIT + 1
+        assert result["[truncated by sbomify]"] == "4 more keys"
 
 
 NESTED_CYCLONEDX = {

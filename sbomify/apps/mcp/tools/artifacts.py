@@ -58,13 +58,21 @@ def _bounded(value: Any, *, limit: int = 1024, depth: int = 0) -> Any:
         return "… [truncated by sbomify: nested too deeply]"
     if isinstance(value, str):
         return untrusted(value, limit=limit)
+    # Width is bounded like depth: a summary keyed on or listing artifact content
+    # is as long as the artifact makes it.
     if isinstance(value, dict):
-        return {
+        bounded = {
             (untrusted(key, limit=limit) if isinstance(key, str) else key): _bounded(item, limit=limit, depth=depth + 1)
-            for key, item in value.items()
+            for key, item in list(value.items())[:DETAIL_COLLECTION_LIMIT]
         }
+        if len(value) > DETAIL_COLLECTION_LIMIT:
+            bounded["[truncated by sbomify]"] = f"{len(value) - DETAIL_COLLECTION_LIMIT} more keys"
+        return bounded
     if isinstance(value, list):
-        return [_bounded(item, limit=limit, depth=depth + 1) for item in value]
+        items = [_bounded(item, limit=limit, depth=depth + 1) for item in value[:DETAIL_COLLECTION_LIMIT]]
+        if len(value) > DETAIL_COLLECTION_LIMIT:
+            items.append(f"[truncated by sbomify: {len(value) - DETAIL_COLLECTION_LIMIT} more]")
+        return items
     return value
 
 
@@ -151,13 +159,15 @@ def _iter_packages(payload: dict[str, Any], artifact_format: str) -> Iterator[di
     if artifact_format.lower() == "cyclonedx":
         for entry in _cyclonedx_components(payload.get("components")):
             licenses = [_license_label(lic) for lic in entry.get("licenses", []) or [] if isinstance(lic, dict)]
-            yield (
+            # Cut per package because a page of packages multiplies whatever one carries.
+            yield serializers.cut(
                 {
                     "name": _field(entry, "name"),
                     "version": _field(entry, "version"),
                     "purl": _field(entry, "purl"),
                     "licenses": [untrusted(lic, limit=256) for lic in licenses if isinstance(lic, str)],
-                }
+                },
+                "licenses",
             )
     elif isinstance(payload.get("@graph"), list):
         # SPDX 3.0: packages are software_Package elements in the graph

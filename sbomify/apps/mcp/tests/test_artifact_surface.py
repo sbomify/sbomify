@@ -477,3 +477,66 @@ async def test_a_store_without_head_reports_an_unreadable_artifact_plainly(
     body = json.dumps(parse(await _call(token, "get_artifact_packages", artifact_id=artifact.id)))
 
     assert expected in body
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_component_in_many_products_names_only_so_many(mcp_owner, make_token, component_in_bound_workspace):
+    """A shared component can sit in any number of products, and get_component takes no page argument."""
+    from sbomify.apps.core.models import Product
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+
+    _, bound, _ = mcp_owner
+    over = DETAIL_COLLECTION_LIMIT + 3
+
+    def setup() -> None:
+        for i in range(over):
+            Product.objects.create(name=f"product-{i:03d}", team=bound).components.add(component_in_bound_workspace)
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["component:read_internal"])
+
+    detail = structured(await _call(token, "get_component", component_id=component_in_bound_workspace.id))
+
+    products = detail["products"]
+    assert len(products["items"]) == DETAIL_COLLECTION_LIMIT
+    assert products["total"] == over
+    assert products["truncated"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_profile_with_many_entities_and_contacts_names_only_so_many(
+    mcp_owner, make_token, contact_profile_in_bound_workspace
+):
+    """Neither profile tool pages a profile's entities or their contacts, so both are cut and say so."""
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    profile = contact_profile_in_bound_workspace
+    over = DETAIL_COLLECTION_LIMIT + 2
+
+    def setup() -> None:
+        supplier = profile.entities.get()
+        for i in range(over):
+            ContactProfileContact.objects.create(entity=supplier, name=f"Contact {i:03d}", email=f"c{i}@example.com")
+        # One manufacturer and one supplier per profile, but any number of
+        # authors. Named to sort after the supplier, which carries the contacts.
+        for i in range(over):
+            ContactEntity.objects.create(profile=profile, name=f"Writer {i:03d}", is_author=True)
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["workspace:read"])
+
+    detail = structured(await _call(token, "get_contact_profile", profile_id=profile.id))
+    listed = structured(await _call(token, "list_contact_profiles"))["items"][0]
+
+    for data in (detail, listed):
+        entities = data["entities"]
+        assert len(entities["items"]) == DETAIL_COLLECTION_LIMIT
+        assert entities["total"] == over + 1
+        assert entities["truncated"] is True
+        [supplier] = [e for e in entities["items"] if e["name"] == "Bound Supplier Ltd"]
+        assert len(supplier["contacts"]["items"]) == DETAIL_COLLECTION_LIMIT
+        assert supplier["contacts"]["total"] == over
+        assert supplier["contacts"]["truncated"] is True

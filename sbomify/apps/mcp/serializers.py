@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
-from .limits import untrusted
+from .limits import DETAIL_COLLECTION_LIMIT, untrusted
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -68,6 +68,23 @@ def capped(items: list[Any], *, total: int, limit: int, more_with: str | None = 
         data["truncated"] = True
         if more_with:
             data["more_with"] = more_with
+    return data
+
+
+def cut(data: dict[str, Any], field: str, *, limit: int = DETAIL_COLLECTION_LIMIT) -> dict[str, Any]:
+    """Cut ``data[field]`` to ``limit`` items in place, and record beside it what was cut.
+
+    ``capped`` reshapes a collection into ``{items, total}``. That suits the
+    collections these tools assemble themselves, but not a list another layer
+    already shaped, such as a REST payload or an artifact's licence list, whose
+    type an agent may know. Those keep their type and gain ``<field>_total`` and
+    ``<field>_truncated`` when, and only when, something was left out.
+    """
+    items = data.get(field)
+    if isinstance(items, list) and len(items) > limit:
+        data[field] = items[:limit]
+        data[f"{field}_total"] = len(items)
+        data[f"{field}_truncated"] = True
     return data
 
 
@@ -215,6 +232,7 @@ def advisory(projection: dict[str, Any], *, detail_limit: int | None = None) -> 
         raise ValueError(
             "advisory() takes the service projection, not the REST shape: the two disagree about what 'status' means."
         )
+    products = projection.get("products") or []
     data: dict[str, Any] = {
         "id": projection.get("id"),
         "title": untrusted(str(projection.get("title") or ""), limit=256),
@@ -229,10 +247,16 @@ def advisory(projection: dict[str, Any], *, detail_limit: int | None = None) -> 
         "visibility": projection.get("visibility"),
         "vulnerability_count": projection.get("vulnerability_count"),
         "vulnerability_id": projection.get("vulnerability_id"),
-        "products": [
-            compact({"id": item.get("id"), "name": untrusted(str(item.get("name") or ""), limit=256)})
-            for item in projection.get("products") or []
-        ],
+        "products": capped(
+            [
+                compact({"id": item.get("id"), "name": untrusted(str(item.get("name") or ""), limit=256)})
+                for item in products[:DETAIL_COLLECTION_LIMIT]
+            ],
+            total=len(products),
+            limit=DETAIL_COLLECTION_LIMIT,
+        )
+        if products
+        else None,
         "created_at": _stamp(projection.get("created_at")),
         "updated_at": _stamp(projection.get("updated_at")),
         "published_at": _stamp(projection.get("published_at")),

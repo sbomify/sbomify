@@ -24,7 +24,16 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
+from ._base import (
+    DETAIL_COLLECTION_LIMIT,
+    clamp_page,
+    mcp_tool,
+    not_found,
+    resolve_workspace,
+    run_db,
+    unwrap_view,
+    workspace_key,
+)
 from .catalog import _lookup_component
 
 if TYPE_CHECKING:
@@ -39,30 +48,48 @@ def _profile_summary(payload: Any) -> dict[str, Any]:
     triples the token cost and invites the model to reason about the wrong copy.
     """
     data = payload if isinstance(payload, dict) else payload.dict()
-    entities = [
-        serializers.compact(
-            {
-                "name": entity.get("name"),
-                "email": entity.get("email"),
-                "phone": entity.get("phone"),
-                "address": entity.get("address"),
-                "website_urls": entity.get("website_urls"),
-                "is_manufacturer": entity.get("is_manufacturer"),
-                "is_supplier": entity.get("is_supplier"),
-                "contacts": [
-                    serializers.compact({"name": c.get("name"), "email": c.get("email"), "phone": c.get("phone")})
-                    for c in entity.get("contacts", []) or []
-                ],
-            }
+    # No tool pages a profile's entities or their contacts, so both are cut and
+    # say so, like a detail tool's collections.
+    all_entities = data.get("entities", []) or []
+    entities = []
+    for entity in all_entities[:DETAIL_COLLECTION_LIMIT]:
+        contacts = entity.get("contacts", []) or []
+        entities.append(
+            serializers.cut(
+                serializers.compact(
+                    {
+                        "name": entity.get("name"),
+                        "email": entity.get("email"),
+                        "phone": entity.get("phone"),
+                        "address": entity.get("address"),
+                        "website_urls": entity.get("website_urls"),
+                        "is_manufacturer": entity.get("is_manufacturer"),
+                        "is_supplier": entity.get("is_supplier"),
+                        "contacts": serializers.capped(
+                            [
+                                serializers.compact(
+                                    {"name": c.get("name"), "email": c.get("email"), "phone": c.get("phone")}
+                                )
+                                for c in contacts[:DETAIL_COLLECTION_LIMIT]
+                            ],
+                            total=len(contacts),
+                            limit=DETAIL_COLLECTION_LIMIT,
+                        )
+                        if contacts
+                        else None,
+                    }
+                ),
+                "website_urls",
+            )
         )
-        for entity in data.get("entities", []) or []
-    ]
     return serializers.compact(
         {
             "id": data.get("id"),
             "name": data.get("name"),
             "is_default": data.get("is_default"),
-            "entities": entities,
+            "entities": serializers.capped(entities, total=len(all_entities), limit=DETAIL_COLLECTION_LIMIT)
+            if entities
+            else None,
         }
     )
 
