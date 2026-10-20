@@ -51,8 +51,22 @@ class CRAReportForm(forms.Form):
     def values(self) -> dict[str, Any]:
         return {name: value for name, value in self.cleaned_data.items() if name not in self._dates()}
 
-    def dates(self) -> dict[str, Any]:
-        return {name: self.cleaned_data.get(name) for name in self._dates() if name in self.fields}
+    def dates(self, report: Any) -> dict[str, Any]:
+        """The dates the person changed.
+
+        The inputs show minutes, so a stored time with seconds posts back
+        without them. Same minute means untouched: saving it would move the
+        deadlines and log an edit nobody made.
+        """
+        changed = {}
+        for name in self._dates():
+            if name not in self.fields:
+                continue
+            posted, stored = self.cleaned_data.get(name), getattr(report, name)
+            if posted and stored and posted == stored.replace(second=0, microsecond=0):
+                continue
+            changed[name] = posted
+        return changed
 
     @staticmethod
     def _dates() -> tuple[str, ...]:

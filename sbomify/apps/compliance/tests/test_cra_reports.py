@@ -290,6 +290,40 @@ class TestPages:
         assert response.status_code == 302
         assert report.filings.get().srp_reference == "SRP-77"
 
+    def test_saving_the_page_keeps_the_seconds_the_form_does_not_show(self, team, owner, product):
+        # The date inputs show minutes, so a time saved with seconds comes back
+        # without them. That is not an edit, and must not move the deadlines.
+        aware = AWARE + timedelta(seconds=37)
+        created = report_service.create_report(team, owner, kind="incident", product_id=product.id, aware_at=aware)
+        report = created.value
+        client = _client_for(team, owner)
+
+        with patch.object(report_service, "log_cra_report_event") as audit:
+            response = client.post(
+                reverse("compliance:cra_report_detail", args=[report.id]),
+                {**report.srp_fields, "action": "save", "aware_at": "2026-10-01T09:00", "occurred_at": ""},
+            )
+
+        assert response.status_code == 302
+        report.refresh_from_db()
+        assert report.aware_at == aware
+        assert not audit.called
+
+    def test_saving_the_page_with_a_new_minute_changes_the_time(self, team, owner, product):
+        created = report_service.create_report(
+            team, owner, kind="incident", product_id=product.id, aware_at=AWARE + timedelta(seconds=37)
+        )
+        report = created.value
+        client = _client_for(team, owner)
+
+        client.post(
+            reverse("compliance:cra_report_detail", args=[report.id]),
+            {**report.srp_fields, "action": "save", "aware_at": "2026-10-01T09:05", "occurred_at": ""},
+        )
+
+        report.refresh_from_db()
+        assert report.aware_at == AWARE + timedelta(minutes=5)
+
     def test_a_member_reads_the_report_without_the_forms(self, team, report):
         client = _client_for(team, _member(team, "member", "reader"))
 
@@ -489,6 +523,25 @@ class TestStaleReports:
             calls[action]()
 
         assert any("compliance_cra_reports" in q["sql"] and "FOR UPDATE" in q["sql"] for q in queries.captured_queries)
+
+
+@pytest.mark.django_db
+class TestSrpStage:
+    def test_an_unknown_stage_is_refused(self, team, owner, report):
+        client = _client_for(team, owner)
+
+        response = client.get(f"/api/v1/compliance/cra-reports/{report.pk}/srp?stage=foo")
+
+        assert response.status_code == 400, response.content
+
+    @pytest.mark.parametrize("stage", ["early_warning", "notification", "final_report"])
+    def test_each_deadline_stage_lays_out(self, team, owner, report, stage):
+        client = _client_for(team, owner)
+
+        response = client.get(f"/api/v1/compliance/cra-reports/{report.pk}/srp?stage={stage}")
+
+        assert response.status_code == 200
+        assert response.json()["stage"] == stage
 
 
 @pytest.mark.django_db

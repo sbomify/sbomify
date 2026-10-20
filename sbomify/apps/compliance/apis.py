@@ -972,11 +972,14 @@ def record_cra_filing(request: HttpRequest, report_id: str, payload: CRAFilingCr
     )
 
 
-@router.get("/cra-reports/{report_id}/srp", response={200: SRPLayoutSchema, 404: ErrorResponse})
+@router.get("/cra-reports/{report_id}/srp", response={200: SRPLayoutSchema, 400: ErrorResponse, 404: ErrorResponse})
 def get_cra_report_srp(request: HttpRequest, report_id: str, stage: str = "") -> _Response:
     """The report laid out field by field as ENISA's portal asks for it."""
+    from .reporting import DEADLINE_STAGES
     from .services.report_service import srp_layout
 
+    if stage and stage not in DEADLINE_STAGES:
+        return 400, ErrorResponse(error=f"stage must be one of: {', '.join(DEADLINE_STAGES)}")
     report = _report_or_error(request, report_id, "cra_report:read")
     if isinstance(report, tuple):
         return report
