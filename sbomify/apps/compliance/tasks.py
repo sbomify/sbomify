@@ -7,8 +7,10 @@ no scheduler, so these delayed messages are what reminds people there; the
 hourly cron sweep is a backstop wherever a scheduler does run. Each reminder to
 each person is claimed before it is sent (:class:`~.models.CRAReportReminder`),
 so a message delivered twice, or a sweep that overlaps one, mails nobody twice,
-and a failed send is retried for that person alone. A message checks the
-report when it runs, so one queued before a filing sends nothing after it.
+and a failed send is retried for that person alone. A claim still held by a
+worker that may have died queues the report's message again for when it
+expires. A message checks the report when it runs, so one queued before a
+filing sends nothing after it.
 """
 
 from __future__ import annotations
@@ -52,28 +54,36 @@ class ReminderDeliveryFailed(Exception):
     """Some reminders could not be sent. Raised after the rest went out, so the retry sends only those."""
 
 
-def _claim(report: "CRAReport", stage: str, threshold: str, recipient: str, now: datetime) -> int | None:
-    """Claim one reminder for one person. None when it was sent, or another worker is sending it."""
+def _claim(
+    report: "CRAReport", stage: str, due: datetime, threshold: str, recipient: str, now: datetime
+) -> int | datetime | None:
+    """Claim one reminder for one person.
+
+    Returns the row's id when this worker may send it, None when it was already
+    sent, or the time another worker's claim expires when one still holds it.
+    """
     from sbomify.apps.compliance.models import CRAReportReminder
 
+    identity = {"report": report, "stage": stage, "due": due, "threshold": threshold, "recipient": recipient}
     try:
         with transaction.atomic():
-            row = CRAReportReminder.objects.create(
-                report=report, stage=stage, threshold=threshold, recipient=recipient, claimed_at=now
-            )
+            row = CRAReportReminder.objects.create(**identity, claimed_at=now)
         return row.pk
     except IntegrityError:
         pass
     # The row exists. Take it over only if it is unsent and its claim was
     # released after a failed send or left by a worker that died. The
     # conditional update is the atomic step: two workers cannot both win it.
-    takeable = CRAReportReminder.objects.filter(
-        report=report, stage=stage, threshold=threshold, recipient=recipient, sent_at__isnull=True
-    ).filter(Q(claimed_at__isnull=True) | Q(claimed_at__lt=now - CLAIM_TIMEOUT))
+    takeable = CRAReportReminder.objects.filter(**identity, sent_at__isnull=True).filter(
+        Q(claimed_at__isnull=True) | Q(claimed_at__lt=now - CLAIM_TIMEOUT)
+    )
     pk = takeable.values_list("pk", flat=True).first()
-    if pk is None or not takeable.filter(pk=pk).update(claimed_at=now):
+    if pk is not None and takeable.filter(pk=pk).update(claimed_at=now):
+        return pk
+    held = CRAReportReminder.objects.filter(**identity).values_list("sent_at", "claimed_at").first()
+    if held is None or held[0] is not None or held[1] is None:
         return None
-    return pk
+    return held[1] + CLAIM_TIMEOUT
 
 
 def send_due_reminders(*, report_id: str | None = None, now: datetime | None = None) -> int:
@@ -95,6 +105,10 @@ def send_due_reminders(*, report_id: str | None = None, now: datetime | None = N
 
     sent = 0
     failed: list[str] = []
+    # A claim another worker still holds may belong to one that died. Nothing
+    # else would come back for it without the sweep, so the report's own
+    # message is queued again for when the claim expires.
+    retry_at: dict[str, datetime] = {}
     for report in reports:
         deadlines = open_deadlines(
             report.kind, report.aware_at, report.measure_available_at, filed=report.filed_stages()
@@ -126,7 +140,13 @@ def send_due_reminders(*, report_id: str | None = None, now: datetime | None = N
             html = render_to_string("compliance/emails/cra_report_reminder.html.j2", context)
 
             for recipient in recipients:
-                claimed = [pk for name in crossed if (pk := _claim(report, stage, name, recipient, now)) is not None]
+                claimed = []
+                for name in crossed:
+                    outcome = _claim(report, stage, due, name, recipient, now)
+                    if isinstance(outcome, int):
+                        claimed.append(outcome)
+                    elif isinstance(outcome, datetime):
+                        retry_at[report.pk] = min(outcome, retry_at.get(report.pk, outcome))
                 if not claimed:
                     continue
                 email = EmailMultiAlternatives(
@@ -143,6 +163,9 @@ def send_due_reminders(*, report_id: str | None = None, now: datetime | None = N
                     continue
                 CRAReportReminder.objects.filter(pk__in=claimed).update(sent_at=now)
                 sent += 1
+    for pk, at in retry_at.items():
+        delay = max(0, int((at - now).total_seconds() * 1000)) + 1000
+        send_cra_report_reminders.send_with_options(args=(pk,), delay=delay)
     if failed:
         raise ReminderDeliveryFailed(f"{len(failed)} CRA reminder email(s) could not be sent: {', '.join(failed)}")
     return sent

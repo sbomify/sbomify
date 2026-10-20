@@ -18,7 +18,6 @@ from django.utils import timezone
 from django.views import View
 
 from sbomify.apps.compliance.forms import CRAFilingForm, CRAReportCreateForm, CRAReportForm
-from sbomify.apps.compliance.models import CRAReportFiling
 from sbomify.apps.compliance.reporting import DEADLINE_STAGES, STAGE_LABELS, Stage, due_dates
 from sbomify.apps.compliance.services import report_service
 from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, can
@@ -130,7 +129,6 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
         if stage not in DEADLINE_STAGES:
             stage = Stage.FINAL_REPORT
         layout = report_service.srp_layout(report, stage)
-        filed = report.filed_stages()
         return render(
             request,
             "compliance/cra_report_detail.html.j2",
@@ -145,9 +143,7 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
                 "missing": [row["label"] for row in layout if row["missing"]],
                 "edit_rows": [row for row in layout if not row["column"]],
                 "filing_stages": [
-                    {"value": value, "label": label}
-                    for value, label in CRAReportFiling.Stage.choices
-                    if value == Stage.INTERMEDIATE or value not in filed
+                    {"value": value, "label": STAGE_LABELS[value]} for value in report_service.filable_stages(report)
                 ],
                 "filings": list(report.filings.all()),
                 "can_manage": bool(can(request, "cra_report:manage", report)),

@@ -26,6 +26,7 @@ from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_s
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
+    AdvisoryProductStatus,
     AdvisoryVulnerability,
     SecurityAdvisory,
 )
@@ -449,6 +450,7 @@ class TestReminderDelivery:
         CRAReportReminder.objects.create(
             report=report,
             stage=Stage.EARLY_WARNING,
+            due=AWARE + timedelta(hours=24),
             threshold="soon",
             recipient=report.created_by.email,
             claimed_at=now,
@@ -463,6 +465,7 @@ class TestReminderDelivery:
         CRAReportReminder.objects.create(
             report=report,
             stage=Stage.EARLY_WARNING,
+            due=AWARE + timedelta(hours=24),
             threshold="soon",
             recipient=report.created_by.email,
             claimed_at=now - timedelta(hours=1),
@@ -641,3 +644,122 @@ def test_the_export_points_operators_at_the_in_app_tracker():
     from sbomify.apps.compliance.services.export_service import _article_14_reporting_readme
 
     assert "CRA reports" in _article_14_reporting_readme()
+
+
+@pytest.mark.django_db
+class TestCorrectedDeadline:
+    def test_a_corrected_deadline_gets_its_own_reminders(self, report, owner):
+        tasks.send_due_reminders(now=AWARE + timedelta(hours=24))
+        assert len(mail.outbox) == 1
+
+        result = report_service.update_report(report, owner, dates={"aware_at": AWARE + timedelta(hours=5)})
+        assert result.ok, result.error
+        tasks.send_due_reminders(now=AWARE + timedelta(hours=29))
+
+        assert len(mail.outbox) == 2
+
+
+@pytest.mark.django_db
+class TestPendingClaim:
+    def test_a_claim_still_held_brings_another_attempt_when_it_expires(self, report):
+        now = AWARE + timedelta(hours=19)
+        CRAReportReminder.objects.create(
+            report=report,
+            stage=Stage.EARLY_WARNING,
+            due=AWARE + timedelta(hours=24),
+            threshold="soon",
+            recipient=report.created_by.email,
+            claimed_at=now - timedelta(minutes=1),
+        )
+
+        with patch.object(tasks.send_cra_report_reminders, "send_with_options") as send:
+            tasks.send_due_reminders(report_id=report.pk, now=now)
+
+        assert mail.outbox == []
+        send.assert_called_once()
+        assert send.call_args.kwargs["args"] == (report.pk,)
+        assert send.call_args.kwargs["delay"] >= _ms(minutes=9)
+
+        tasks.send_due_reminders(report_id=report.pk, now=now + tasks.CLAIM_TIMEOUT)
+
+        assert [message.to for message in mail.outbox] == [[report.created_by.email]]
+
+
+@pytest.fixture
+def two_products(team, product):
+    other = Product.objects.create(name="Gateway", team=team)
+    advisory = SecurityAdvisory.objects.create(team=team, title="Shared library flaw", summary="One flaw, two products.")
+    router = AdvisoryProduct.objects.create(advisory=advisory, product=product)
+    AdvisoryProduct.objects.create(advisory=advisory, product=other)
+    critical = AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-1111",
+        severity="critical",
+        description="Only the gateway ships this.",
+        exploitation_status=AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED,
+    )
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-2222",
+        severity="high",
+        description="Both ship this.",
+        exploitation_status=AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED,
+    )
+    AdvisoryProductStatus.objects.create(
+        vulnerability=critical, advisory_product=router, status=AdvisoryProductStatus.Status.NOT_AFFECTED
+    )
+    return advisory, product, other
+
+
+@pytest.mark.django_db
+class TestProductStatus:
+    def test_the_prefill_skips_a_vulnerability_the_product_is_not_affected_by(self, team, owner, two_products):
+        advisory, router, gateway = two_products
+
+        for product, cve in ((router, "CVE-2026-2222"), (gateway, "CVE-2026-1111")):
+            result = report_service.create_report(
+                team, owner, kind="vulnerability", product_id=product.id, advisory_id=advisory.id, aware_at=AWARE
+            )
+            assert result.ok, result.error
+            assert result.value.srp_fields["cve_id"] == cve
+
+    def test_no_report_is_offered_for_a_product_nothing_exploited_affects(self, team, owner, two_products):
+        advisory, router, gateway = two_products
+        AdvisoryProductStatus.objects.create(
+            vulnerability=advisory.vulnerabilities.get(cve_id="CVE-2026-2222"),
+            advisory_product=advisory.products.get(product=router),
+            status=AdvisoryProductStatus.Status.FALSE_POSITIVE,
+        )
+
+        rows = {row["product_name"]: row for row in report_service.advisory_reporting(team, advisory.pk)["rows"]}
+        refused = report_service.create_report(
+            team, owner, kind="vulnerability", product_id=router.id, advisory_id=advisory.id, aware_at=AWARE
+        )
+
+        assert rows["Router OS"]["can_start"] is False
+        assert rows["Gateway"]["can_start"] is True
+        assert refused.status_code == 400
+
+
+@pytest.mark.django_db
+class TestClosedReportForm:
+    def _close(self, report, owner):
+        for stage in (Stage.EARLY_WARNING, Stage.NOTIFICATION, Stage.FINAL_REPORT):
+            assert report_service.record_filing(report, owner, stage=stage).ok
+
+    def test_a_closed_report_offers_only_users_informed(self, team, owner, report):
+        self._close(report, owner)
+
+        page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id]))
+
+        assert [s["value"] for s in page.context["filing_stages"]] == [Stage.USERS_INFORMED]
+        assert "Record filing" in page.content.decode()
+
+    def test_the_form_goes_once_nothing_is_left_to_file(self, team, owner, report):
+        self._close(report, owner)
+        assert report_service.record_filing(report, owner, stage=Stage.USERS_INFORMED).ok
+
+        page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id]))
+
+        assert page.context["filing_stages"] == []
+        assert "Record filing" not in page.content.decode()

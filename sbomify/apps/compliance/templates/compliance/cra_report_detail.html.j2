@@ -89,26 +89,28 @@
     </div>
     </c-cards.card>
     {% if can_manage %}
-        <c-cards.card title="Record filing" subtitle="After you submit a stage in the ENISA portal, record it here with the reference the portal gave you.">
-        <form method="post"
-              action="{% url 'compliance:cra_report_detail' report.id %}"
-              class="grid gap-4 sm:grid-cols-3 items-end">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="file" />
-            <c-forms.field label="Stage" for="filingStage" required>
-            <c-forms.select id="filingStage" name="stage" :options="filing_stages" required />
-            </c-forms.field>
-            <c-forms.field label="ENISA reference" for="filingReference">
-            <c-forms.input id="filingReference" name="srp_reference" maxlength="100" />
-            </c-forms.field>
-            <c-forms.field label="Filed at (UTC)" for="filingAt" hint="Leave empty for now.">
-            <c-forms.input id="filingAt" name="filed_at" type="datetime-local" />
-            </c-forms.field>
-            <div class="sm:col-span-3">
-                <c-buttons.primary type="submit" size="sm">Record filing</c-buttons.primary>
-            </div>
-        </form>
-        </c-cards.card>
+        {% if filing_stages %}
+            <c-cards.card title="Record filing" subtitle="After you submit a stage in the ENISA portal, record it here with the reference the portal gave you.">
+            <form method="post"
+                  action="{% url 'compliance:cra_report_detail' report.id %}"
+                  class="grid gap-4 sm:grid-cols-3 items-end">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="file" />
+                <c-forms.field label="Stage" for="filingStage" required>
+                <c-forms.select id="filingStage" name="stage" :options="filing_stages" required />
+                </c-forms.field>
+                <c-forms.field label="ENISA reference" for="filingReference">
+                <c-forms.input id="filingReference" name="srp_reference" maxlength="100" />
+                </c-forms.field>
+                <c-forms.field label="Filed at (UTC)" for="filingAt" hint="Leave empty for now.">
+                <c-forms.input id="filingAt" name="filed_at" type="datetime-local" />
+                </c-forms.field>
+                <div class="sm:col-span-3">
+                    <c-buttons.primary type="submit" size="sm">Record filing</c-buttons.primary>
+                </div>
+            </form>
+            </c-cards.card>
+        {% endif %}
         {% if not report.is_closed %}
             <c-cards.card title="Edit report" subtitle="What sbomify fills in for you comes from the advisory, the product and its CRA assessment.">
             <form method="post"

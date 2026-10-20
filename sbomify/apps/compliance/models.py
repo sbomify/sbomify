@@ -817,19 +817,24 @@ class CRAReportReminder(models.Model):
 
     The unique row is the claim, so two workers that reach the same reminder
     at once cannot both send it. Per person, so a send that fails for one
-    address is retried for that address alone.
+    address is retried for that address alone. Per deadline, so correcting
+    ``aware_at`` or ``measure_available_at`` brings fresh reminders for the
+    corrected time instead of matching the ones already sent for the old one.
     """
 
     class Meta:
         db_table = "compliance_cra_report_reminders"
         constraints = [
             models.UniqueConstraint(
-                fields=["report", "stage", "threshold", "recipient"], name="cra_report_reminder_once"
+                fields=["report", "stage", "due", "threshold", "recipient"], name="cra_report_reminder_once"
             ),
         ]
 
     report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="reminders")
     stage = models.CharField(max_length=20)
+    # The deadline this reminder is for. Rows written before it was recorded
+    # hold NULL, which the unique constraint treats as distinct.
+    due = models.DateTimeField(null=True, blank=True)
     # "soon" is six hours before the deadline, "due" is the deadline itself.
     threshold = models.CharField(max_length=10)
     recipient = models.EmailField()

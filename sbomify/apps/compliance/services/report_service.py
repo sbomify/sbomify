@@ -69,6 +69,44 @@ def _lock(report: CRAReport) -> CRAReport:
     return CRAReport.objects.select_for_update().get(pk=report.pk)
 
 
+_SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+
+
+def applicable_vulnerabilities(advisory: Any, product: Any) -> list[Any]:
+    """The advisory's vulnerabilities that affect this product, known exploited and most severe first.
+
+    A vulnerability applies unless the product's own status, or failing that
+    the advisory's portfolio-wide one, says not affected or false positive.
+    With no status at all it applies: the advisory names the product, and an
+    unrecorded status is no reason to skip a reporting duty. Fixed still
+    applies, since the final report falls due after the fix.
+    """
+    from sbomify.apps.security_advisories.models import AdvisoryProductStatus, AdvisoryVulnerability
+
+    advisory_product = advisory.products.filter(product=product).first()
+    if advisory_product is None:
+        return []
+
+    def applies(vulnerability: Any) -> bool:
+        statuses = list(vulnerability.product_statuses.all())
+        status = next((s for s in statuses if s.advisory_product_id == advisory_product.pk), None) or next(
+            (s for s in statuses if s.advisory_product_id is None and s.advisory_component_id is None), None
+        )
+        return status is None or status.status not in AdvisoryProductStatus.SUPPRESSING_STATES
+
+    exploited = AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED
+    found = [v for v in advisory.vulnerabilities.prefetch_related("product_statuses") if applies(v)]
+    return sorted(found, key=lambda v: (v.exploitation_status != exploited, -_SEVERITY_RANK.get(v.severity, 0)))
+
+
+def _known_exploited(vulnerabilities: list[Any]) -> list[Any]:
+    from sbomify.apps.security_advisories.models import AdvisoryVulnerability
+
+    return [
+        v for v in vulnerabilities if v.exploitation_status == AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED
+    ]
+
+
 def _prefill(product: Any, advisory: Any) -> dict[str, str]:
     values: dict[str, str] = {"product_name": product.name}
     assessment = CRAAssessment.objects.filter(product=product).first()
@@ -82,10 +120,9 @@ def _prefill(product: Any, advisory: Any) -> dict[str, str]:
     if advisory is not None:
         values["title"] = advisory.title[:255]
         values["summary"] = (advisory.summary or advisory.description)[:4000]
-        vulnerabilities = list(advisory.vulnerabilities.all())
-        exploited = [v for v in vulnerabilities if v.exploitation_status == "known_exploited"] or vulnerabilities
-        if exploited:
-            vulnerability = exploited[0]
+        applicable = applicable_vulnerabilities(advisory, product)
+        if applicable:
+            vulnerability = applicable[0]
             values["cve_id"] = vulnerability.cve_id
             values["general_information"] = vulnerability.description[:4000]
             values["measures_for_users"] = vulnerability.recommendation[:4000]
@@ -119,6 +156,10 @@ def create_report(
             return ServiceResult.failure("Advisory not found", status_code=404)
         if not advisory.products.filter(product=product).exists():
             return ServiceResult.failure("This advisory does not name that product.", status_code=400)
+        if kind == CRAReport.Kind.VULNERABILITY and not _known_exploited(applicable_vulnerabilities(advisory, product)):
+            return ServiceResult.failure(
+                "No known exploited vulnerability in this advisory affects that product.", status_code=400
+            )
     elif kind == CRAReport.Kind.VULNERABILITY:
         return ServiceResult.failure("A vulnerability report starts from an advisory.", status_code=400)
 
@@ -204,6 +245,17 @@ def _snapshot(report: CRAReport) -> dict[str, Any]:
     return snapshot
 
 
+def filable_stages(report: CRAReport) -> list[str]:
+    """What can still be recorded: intermediate reports repeat, and a closed report takes only users informed."""
+    filed = report.filed_stages()
+    closed = Stage.FINAL_REPORT in filed
+    return [
+        stage
+        for stage in CRAReportFiling.Stage.values
+        if (not closed or stage == Stage.USERS_INFORMED) and (stage == Stage.INTERMEDIATE or stage not in filed)
+    ]
+
+
 def record_filing(
     report: CRAReport,
     user: Any,
@@ -219,9 +271,9 @@ def record_filing(
     try:
         with transaction.atomic():
             report = _lock(report)
-            if report.is_closed and stage != Stage.USERS_INFORMED:
-                return ServiceResult.failure("The final report is already filed.", 409)
-            if stage != Stage.INTERMEDIATE and report.filings.filter(stage=stage).exists():
+            if stage not in filable_stages(report):
+                if report.is_closed and stage != Stage.USERS_INFORMED:
+                    return ServiceResult.failure("The final report is already filed.", 409)
                 return ServiceResult.failure(f"The {STAGE_LABELS[stage].lower()} is already recorded.", 409)
             filing = CRAReportFiling.objects.create(
                 report=report,
@@ -329,13 +381,9 @@ def srp_layout(report: CRAReport, stage: str) -> list[dict[str, Any]]:
 
 def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:
     """What the advisory page shows: per tracked product, its report or a way to start one."""
-    from sbomify.apps.security_advisories.models import AdvisoryProduct, AdvisoryVulnerability
+    from sbomify.apps.security_advisories.models import AdvisoryProduct, SecurityAdvisory
 
-    known_exploited = AdvisoryVulnerability.objects.filter(
-        advisory_id=advisory_pk,
-        advisory__team=team,
-        exploitation_status=AdvisoryVulnerability.ExploitationStatus.KNOWN_EXPLOITED,
-    ).exists()
+    advisory = SecurityAdvisory.objects.filter(pk=advisory_pk, team=team).first()
     reports = {
         report.product_id: report
         for report in CRAReport.objects.prefetch_related("filings").filter(advisory_id=advisory_pk, team=team)
@@ -352,8 +400,13 @@ def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:
                 "product_name": row.product.name,
                 "report": report,
                 "next_due": report.next_due(now) if report else None,
+                # Per product: a status saying it is not affected leaves nothing to report for it.
+                "can_start": report is None
+                and advisory is not None
+                and bool(_known_exploited(applicable_vulnerabilities(advisory, row.product))),
             }
         )
+    known_exploited = any(row["can_start"] for row in rows)
     return {"known_exploited": known_exploited, "rows": rows, "show": known_exploited or bool(reports)}
 
 

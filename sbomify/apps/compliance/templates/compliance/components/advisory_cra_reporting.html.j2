@@ -20,7 +20,7 @@
                         {{ row.next_due.label }} due
                     {% endif %}
                     </c-buttons.ghost>
-                {% elif can_manage_cra_reports and cra_reporting.known_exploited %}
+                {% elif can_manage_cra_reports and row.can_start %}
                     <form method="post" action="{% url 'compliance:cra_report_create' %}">
                         {% csrf_token %}
                         <input type="hidden" name="kind" value="vulnerability" />
