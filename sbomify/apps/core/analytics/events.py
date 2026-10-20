@@ -590,6 +590,7 @@ SEARCH_PERFORMED = _register(
         properties={
             "query_length": "Character length of the query string.",
             "result_count": "Number of results returned (products + components).",
+            "destination_count": "Number of navigation destinations offered for the query.",
         },
         pii_notes=(
             "The raw query string is NEVER shipped — it can contain customer "
@@ -645,6 +646,11 @@ BILLING_SUBSCRIPTION_UPDATED = _register(
         name="billing:subscription_updated",
         description="A Stripe subscription update was processed.",
         distinct_id_kind="workspace",
+        properties={
+            "status": "Stripe subscription status after the update.",
+            "previous_status": "Subscription status before the update; empty when unknown.",
+            "plan": "Billing plan key of the workspace after the update.",
+        },
     )
 )
 
@@ -653,6 +659,9 @@ BILLING_SUBSCRIPTION_CANCELED = _register(
         name="billing:subscription_canceled",
         description="A Stripe subscription ended.",
         distinct_id_kind="workspace",
+        properties={
+            "plan": "Billing plan key of the workspace once the cancellation is applied.",
+        },
     )
 )
 
@@ -661,6 +670,10 @@ BILLING_PAYMENT_FAILED = _register(
         name="billing:payment_failed",
         description="A Stripe invoice payment failed.",
         distinct_id_kind="workspace",
+        properties={
+            "invoice_id": "Stripe invoice id.",
+            "plan": "Billing plan key of the workspace.",
+        },
     )
 )
 
@@ -669,6 +682,12 @@ BILLING_PAYMENT_SUCCEEDED = _register(
         name="billing:payment_succeeded",
         description="A Stripe invoice payment succeeded.",
         distinct_id_kind="workspace",
+        properties={
+            "amount": "Amount paid, in major currency units.",
+            "currency": "ISO 4217 currency code, lowercase as Stripe reports it.",
+            "invoice_id": "Stripe invoice id.",
+            "plan": "Billing plan key of the workspace.",
+        },
     )
 )
 
@@ -677,6 +696,12 @@ BILLING_CHECKOUT_COMPLETED = _register(
         name="billing:checkout_completed",
         description="A Stripe checkout session completed successfully.",
         distinct_id_kind="workspace",
+        properties={
+            "plan": "Key of the plan that was purchased.",
+            "amount": "Session total, in major currency units.",
+            "currency": "ISO 4217 currency code, lowercase as Stripe reports it.",
+            "subscription_status": "Stripe status of the subscription the checkout created.",
+        },
     )
 )
 
