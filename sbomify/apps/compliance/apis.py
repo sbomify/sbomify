@@ -7,7 +7,7 @@ import binascii
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
-from ninja import Router
+from ninja import File, Form, Router, UploadedFile
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
@@ -796,14 +796,19 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     },
 )
 def sign_export(
-    request: HttpRequest, assessment_id: str, package_id: str, payload: ExportSignatureUploadSchema
+    request: HttpRequest,
+    assessment_id: str,
+    package_id: str,
+    payload: Form[ExportSignatureUploadSchema],
+    bundle: File[UploadedFile],
 ) -> _Response:
     """Attach the manufacturer's keyless Sigstore signature to an export package.
 
     Sign the ZIP with ``cosign sign-blob <zip> --bundle <zip>.sigstore.json``
-    and send that bundle with the certificate identity and OIDC issuer it was
-    signed under. sbomify verifies it as ``cosign verify-blob`` would and keeps
-    it beside the ZIP. A package takes one signature.
+    and send that file as the multipart ``bundle`` part, with the certificate
+    ``identity`` and OIDC ``issuer`` it was signed under as form fields.
+    sbomify verifies it as ``cosign verify-blob`` would and keeps the file
+    beside the ZIP exactly as sent. A package takes one signature.
     """
     result = _get_assessment_or_error(request, assessment_id, require_mutable=True)
     if not isinstance(result, CRAAssessment):
@@ -814,10 +819,13 @@ def sign_export(
     except CRAExportPackage.DoesNotExist:
         return 404, ErrorResponse(error="Export package not found", error_code="not_found")
 
+    from .services.export_signature import MAX_BUNDLE_BYTES
     from .services.export_signature import sign_export as _sign
 
     user: User = request.user  # type: ignore[assignment]
-    signed = _sign(package, bundle=payload.bundle, identity=payload.identity, issuer=payload.issuer, user=user)
+    # One byte past the cap is enough for the service to refuse an oversized file.
+    raw = bundle.read(MAX_BUNDLE_BYTES + 1)
+    signed = _sign(package, bundle=raw, identity=payload.identity, issuer=payload.issuer, user=user)
     if not signed.ok:
         return signed.status_code or 400, ErrorResponse(error=signed.error or "Unknown error")
 

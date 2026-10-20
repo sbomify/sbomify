@@ -4,14 +4,14 @@ sbomify holds no signing key. The manufacturer signs the exported ZIP keyless
 with ``cosign sign-blob --bundle``, as a person or as a CI workflow, and uploads
 the bundle cosign writes. It is verified here against the identity and OIDC
 issuer they name, the way ``cosign verify-blob`` would, and kept beside the ZIP,
-which stays exactly as exported.
+which stays exactly as exported. The bundle is kept byte for byte as uploaded:
+it is a security artifact too, so nothing here parses and re-serialises it.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.conf import settings as django_settings
 from django.db import transaction
@@ -45,7 +45,7 @@ def _verifier() -> Verifier:
 def sign_export(
     package: CRAExportPackage,
     *,
-    bundle: dict[str, Any],
+    bundle: bytes,
     identity: str,
     issuer: str,
     user: User | None,
@@ -55,11 +55,10 @@ def sign_export(
     if package.signed_by:
         return ServiceResult.failure("This bundle is already signed.", status_code=409)
 
-    raw = json.dumps(bundle).encode()
-    if len(raw) > MAX_BUNDLE_BYTES:
+    if len(bundle) > MAX_BUNDLE_BYTES:
         return ServiceResult.failure("The signature file is larger than 64 KB.", status_code=400)
     try:
-        sigstore_bundle = Bundle.from_json(raw)
+        sigstore_bundle = Bundle.from_json(bundle)
     except InvalidBundle:
         return ServiceResult.failure(
             "This file is not a Sigstore bundle. Sign with cosign 3 or later, which writes one with --bundle.",
@@ -89,7 +88,7 @@ def sign_export(
             return ServiceResult.failure("This bundle is already signed.", status_code=409)
         try:
             StorageClient("DOCUMENTS").upload_data_as_file(
-                django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, signature_storage_key(locked), raw
+                django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, signature_storage_key(locked), bundle
             )
         except Exception:
             logger.exception("Failed to store the export signature")

@@ -51,7 +51,7 @@ function stubPage(lastExport: unknown): void {
 }
 
 function bundleFile(text: string): File {
-  return { name: 'cra-package-acme-abc.zip.sigstore.json', text: async () => text } as unknown as File;
+  return new File([text], 'cra-package-acme-abc.zip.sigstore.json', { type: 'application/json' });
 }
 
 beforeEach(() => {
@@ -112,11 +112,13 @@ describe('craStep5 signing commands', () => {
 });
 
 describe('craStep5 signature upload', () => {
-  test('sends the bundle with the signer, and shows who signed', async () => {
+  test('sends the file as chosen, with the signer, and shows who signed', async () => {
     stubPage(unsignedExport);
     const c = craStep5();
     c.init();
-    c.signFile = bundleFile('{"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json"}');
+    // Spacing and key order are the manufacturer's: the signature file is kept as they saved it.
+    const file = bundleFile('{ "mediaType" : "application/vnd.dev.sigstore.bundle.v0.3+json" }\n');
+    c.signFile = file;
     c.signForm.identity = ' security@acme.test ';
     c.signForm.issuer = 'https://accounts.google.com';
 
@@ -124,26 +126,15 @@ describe('craStep5 signature upload', () => {
 
     const call = calls.find((x) => x.url === '/api/v1/compliance/cra/a1/export/pkg-1/signature');
     expect(call?.init?.method).toBe('POST');
-    expect(JSON.parse(call?.init?.body as string)).toEqual({
-      bundle: { mediaType: 'application/vnd.dev.sigstore.bundle.v0.3+json' },
-      identity: 'security@acme.test',
-      issuer: 'https://accounts.google.com',
-    });
+    const form = call?.init?.body as FormData;
+    expect(form).toBeInstanceOf(FormData);
+    expect(await (form.get('bundle') as File).text()).toBe(await file.text());
+    expect(form.get('identity')).toBe('security@acme.test');
+    expect(form.get('issuer')).toBe('https://accounts.google.com');
+    // The browser sets the multipart boundary; a JSON content type would break it.
+    expect(new Headers(call?.init?.headers).get('Content-Type')).toBeNull();
     expect(c.lastExport?.signature).toEqual(signature);
     expect(errors).toEqual([]);
-  });
-
-  test('a file that is not JSON is refused before anything is sent', async () => {
-    stubPage(unsignedExport);
-    const c = craStep5();
-    c.init();
-    c.signFile = bundleFile('not json');
-    c.signForm.identity = 'security@acme.test';
-
-    await c.uploadSignature();
-
-    expect(calls.some((x) => x.url.endsWith('/signature'))).toBe(false);
-    expect(errors).toEqual(['This file is not a Sigstore bundle.']);
   });
 
   test("the server's reason is shown when it refuses", async () => {
