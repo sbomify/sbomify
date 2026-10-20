@@ -147,6 +147,20 @@ class TestSignedBundle:
         assert "cosign verify-blob" in readme
         assert "sbomify does not sign the bundle itself" not in readme
 
+    def test_the_readme_has_the_key_checked_against_a_fingerprint_from_elsewhere(
+        self, signing_key, store, assessment_with_docs, sample_user
+    ):
+        # Whoever can replace the ZIP and its signature can replace the key URL
+        # this file names too, so the URL picks the key and a fingerprint from
+        # outside the bundle is what makes it trustworthy.
+        result = build_export_package(assessment_with_docs, sample_user)
+
+        readme = _zip_text(store.uploads[result.value.storage_key], "metadata/INTEGRITY.md")
+        assert "openssl pkey -pubin -in sbomify.pub -outform DER | sha256sum" in readme
+        assert "fingerprint" in readme
+        assert "not from this bundle" in readme
+        assert readme.index("-outform DER | sha256sum") < readme.index("cosign verify-blob")
+
     def test_the_key_url_uses_the_app_base_url(self, settings, signing_key, store, assessment_with_docs, sample_user):
         settings.APP_BASE_URL = "https://app.example.com/"
 
