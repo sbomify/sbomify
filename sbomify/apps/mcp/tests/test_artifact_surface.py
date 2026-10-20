@@ -104,6 +104,7 @@ async def test_every_bom_type_is_readable_end_to_end(
         }
     ).encode()
     monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", lambda self, name: document, raising=False)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", lambda self, name: len(document))
     token = await sync_to_async(make_token)(["sbom:read"])
 
     listed = structured(
@@ -203,6 +204,7 @@ async def test_concise_packages_drop_what_a_yes_or_no_question_does_not_need(
         }
     ).encode()
     monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", lambda self, name: document)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", lambda self, name: len(document))
     token = await sync_to_async(make_token)(["sbom:read"])
 
     detailed = structured(await _call(token, "get_artifact_packages", artifact_id=artifact.id))
