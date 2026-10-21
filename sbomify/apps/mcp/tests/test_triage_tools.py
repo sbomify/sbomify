@@ -461,3 +461,57 @@ def test_a_submission_names_only_so_many_decisions():
 
     small = _capped_submissions({"id": "s2", "decisions": [{"vuln_id": "CVE-2026-1"}]})
     assert small == {"id": "s2", "decisions": [{"vuln_id": "CVE-2026-1"}]}, "nothing added when nothing was cut"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "oversized",
+    [
+        {"detail": "x" * 4001},
+        {"vuln_id": "CVE-" + "9" * 200},
+        {"aliases": [f"GHSA-{i:04d}-bbbb-cccc" for i in range(21)]},
+        {"aliases": ["GHSA-" + "a" * 200]},
+    ],
+    ids=["detail", "vuln_id", "alias count", "alias length"],
+)
+async def test_an_oversized_decision_is_refused_before_anything_is_written(make_token, mcp_owner, oversized):
+    """A submission is written before the tool answers, so a size limit checked after it is too late."""
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+
+    response = await _call(
+        token,
+        "submit_vex_for_approval",
+        {"component_id": component.id, "decisions": [{**DECISION, **oversized}], "context": "Checked."},
+    )
+
+    _refused(response)
+    assert await sync_to_async(VexSubmission.objects.count)() == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_submission_saved_with_an_answer_over_the_cap_still_reports_success(
+    make_token, mcp_owner, monkeypatch
+):
+    """Refusing after the write would read as a failure, and a retry would send the ruling twice."""
+    from sbomify.apps.mcp import limits
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    _, bound, _ = mcp_owner
+    component = await sync_to_async(_seed)(bound)
+    token = await sync_to_async(make_token)(AGENT)
+    monkeypatch.setattr(limits, "MAX_RESPONSE_BYTES", 600)
+
+    submitted = structured(await _submit(token, component.id))
+
+    stored = await sync_to_async(VexSubmission.objects.get)()
+    assert submitted["id"] == stored.id
+    assert submitted["status"] == "pending"
+    assert submitted["response_truncated"] is True
+    assert submitted["decisions_total"] == 1
+    assert "decisions" not in submitted

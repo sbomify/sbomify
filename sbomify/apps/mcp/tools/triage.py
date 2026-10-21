@@ -10,10 +10,17 @@ outright, so no tool can approve one.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field, ValidationError
+
+from sbomify.apps.vulnerability_scanning.services.fix_prompt import MAX_ALIASES
+from sbomify.apps.vulnerability_scanning.services.vex_submissions import (
+    MAX_CONTEXT_LENGTH,
+    MAX_DECISIONS,
+    MAX_FIX_REFERENCE_LENGTH,
+)
 
 from .. import serializers
 from ..auth import Principal
@@ -113,16 +120,27 @@ def _lookup_submission(principal: Principal, submission_id: str) -> None:
 
 
 class Decision(BaseModel):
-    """One ruling, in the shape the triage prompt asks for."""
+    """One ruling, in the shape the triage prompt asks for.
 
-    vuln_id: str = Field(description="The advisory id the prompt names, such as a CVE or GHSA id")
-    purl: str | None = Field(None, description="The affected package's purl, from the prompt")
+    Bounded here because the submission is saved before the tool answers: a
+    limit found afterwards would leave the ruling written and the agent told it
+    failed. The bounds match what the triage prompt can hand out.
+    """
+
+    vuln_id: str = Field(max_length=128, description="The advisory id the prompt names, such as a CVE or GHSA id")
+    purl: str | None = Field(None, max_length=512, description="The affected package's purl, from the prompt")
     state: Literal["not_affected", "false_positive", "exploitable", "in_triage"]
     justification: str | None = Field(
-        None, description="For not_affected only: one of the justifications the triage prompt lists"
+        None, max_length=64, description="For not_affected only: one of the justifications the triage prompt lists"
     )
-    detail: str | None = Field(None, description="The evidence: the files, build options or code paths checked")
-    aliases: list[str] = Field(default_factory=list, description="The advisory's other ids, from the prompt")
+    detail: str | None = Field(
+        None,
+        max_length=MAX_CONTEXT_LENGTH,
+        description="The evidence: the files, build options or code paths checked",
+    )
+    aliases: list[Annotated[str, Field(max_length=128)]] = Field(
+        default_factory=list, max_length=MAX_ALIASES, description="The advisory's other ids, from the prompt"
+    )
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -181,9 +199,9 @@ def register_tools(mcp: FastMCP) -> None:
     async def submit_vex_for_approval(
         principal: Principal,
         component_id: str,
-        decisions: list[Decision],
-        context: str,
-        fix_reference: str = "",
+        decisions: Annotated[list[Decision], Field(min_length=1, max_length=MAX_DECISIONS)],
+        context: Annotated[str, Field(max_length=MAX_CONTEXT_LENGTH)],
+        fix_reference: Annotated[str, Field(max_length=MAX_FIX_REFERENCE_LENGTH)] = "",
     ) -> dict[str, Any]:
         """Send triage decisions for a person to approve. Nothing changes until they do.
 

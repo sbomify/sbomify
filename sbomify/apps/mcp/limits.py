@@ -105,20 +105,50 @@ def enforce_stored_size(size: int | None, *, artifact_id: str) -> None:
         )
 
 
-def enforce_response_size(payload: Any, *, tool: str) -> Any:
+def enforce_response_size(payload: Any, *, tool: str, wrote: bool = False) -> Any:
     """Guard against a tool returning an unbounded response.
 
     A backstop, not the primary control: tools paginate, so reaching this means
     a field grew without a cap and the agent's context would have been flooded.
+
+    A tool that ``wrote`` has already saved its change, so it answers with a
+    short receipt instead: an error now would read as a failure, and a retry
+    would make the change a second time.
     """
     size = len(json.dumps(payload, default=str).encode("utf-8"))
     if size > MAX_RESPONSE_BYTES:
+        if wrote:
+            return written_receipt(payload)
         raise ToolError(
             f"{tool} produced a {size // 1024} KB response, over the "
             f"{MAX_RESPONSE_BYTES // 1024} KB limit. Narrow the query "
             "(filter, or a smaller page_size)."
         )
     return payload
+
+
+RECEIPT_TEXT_LIMIT = 256
+
+
+def written_receipt(payload: Any) -> dict[str, Any]:
+    """The fields that identify a write's result, each short, for an answer over the cap.
+
+    Text is cut, a list becomes its count, and nested objects are left out, so
+    the receipt's size depends only on how many fields the tool returns.
+    """
+    receipt: dict[str, Any] = {}
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if isinstance(value, str):
+                receipt[key] = untrusted(value, limit=RECEIPT_TEXT_LIMIT)
+            elif isinstance(value, list | tuple):
+                # A total the tool reported for a list it cut is the true one.
+                receipt.setdefault(f"{key}_total", len(value))
+            elif value is None or isinstance(value, bool | int | float):
+                receipt[key] = value
+    receipt["response_truncated"] = True
+    receipt["note"] = "The change was saved. Its answer was over the size limit: read it with the get or list tool."
+    return receipt
 
 
 def _team_id(principal: Principal) -> str | None:
