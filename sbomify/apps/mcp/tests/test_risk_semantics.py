@@ -360,3 +360,34 @@ async def test_the_tools_say_when_a_scan_could_not_be_read(mcp_owner, make_token
     assert summary["sboms_unavailable"] == 1
     assert listing["sboms_unavailable"] == 1
     assert listing["items"] == []
+
+
+@pytest.mark.django_db
+def test_a_workspace_list_holds_one_sboms_scans_at_a_time(mcp_owner, monkeypatch):
+    """Every SBOM in scope is read, but never all of their scans at once."""
+    import gc
+    import weakref
+
+    from sbomify.apps.plugins import result_store
+
+    _, bound, _ = mcp_owner
+    for index in range(12):
+        _run(_sbom(bound, f"many-{index}"))
+
+    held: weakref.WeakSet = weakref.WeakSet()
+    peaks: list[int] = []
+    real = result_store.load_result
+
+    def watching(run):
+        held.add(run)
+        gc.collect()
+        peaks.append(len(held))
+        return real(run)
+
+    monkeypatch.setattr(result_store, "load_result", watching)
+
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
+
+    assert len(rows) == 12
+    assert len(scanned) == 12
+    assert max(peaks) <= 2

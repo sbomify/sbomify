@@ -9,6 +9,20 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def _admit_every_mcp_request(monkeypatch):
+    """These tests are about slots and executor contexts, so the router's door lets everyone in.
+
+    What the door itself refuses is tested in ``sbomify/apps/mcp/tests/test_door.py``.
+    """
+
+    async def authenticated(scope):
+        return None
+
+    monkeypatch.setattr("sbomify.asgi.authenticate_request", authenticated)
+    monkeypatch.setattr("sbomify.asgi.may_send_large_body", lambda scope: True)
+
+
 @pytest.mark.anyio
 async def test_asgi_lifespan_startup_shutdown(anyio_backend) -> None:
     """Test that ASGI application handles lifespan startup and shutdown events."""

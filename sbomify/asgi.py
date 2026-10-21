@@ -34,6 +34,7 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
+from sbomify.apps.mcp.auth import authenticate_request, may_send_large_body  # noqa: E402
 from sbomify.apps.mcp.server import MCP_PATH_PREFIX, build_app, mcp  # noqa: E402
 
 # Builds the MCP Starlette app and registers its tools. Must run after
@@ -45,38 +46,31 @@ mcp_application = build_app()
 # How long an MCP request waits for a free slot before it is told to retry.
 MCP_SLOT_WAIT_SECONDS = 5.0
 
-# A body over this size, or one of unstated size, also needs an upload slot.
-# Ordinary tool calls are a few kilobytes; uploads carry whole artifacts.
-MCP_LARGE_BODY_BYTES = 1024 * 1024
-
-_BUSY_BODY = json.dumps(
-    {"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "The server is busy. Retry in a moment."}}
-).encode()
 
 
-async def _send_busy(send: Send) -> None:
-    await send(
-        {
-            "type": "http.response.start",
-            "status": 503,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"retry-after", b"1"),
-                (b"content-length", str(len(_BUSY_BODY)).encode()),
-            ],
-        }
-    )
-    await send({"type": "http.response.body", "body": _BUSY_BODY})
+async def _send_error(send: Send, status: int, message: str, *, retry_after: int | None = None) -> None:
+    """A JSON-RPC error sent before the body is read, so it cannot name the request's id."""
+    body = json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": message}}).encode()
+    headers = [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]
+    if retry_after is not None:
+        headers.append((b"retry-after", str(retry_after).encode()))
+    await send({"type": "http.response.start", "status": status, "headers": headers})
+    await send({"type": "http.response.body", "body": body})
 
 
 def _may_carry_large_body(scope: Scope) -> bool:
-    """A request without Content-Length or Transfer-Encoding has no body (RFC 9112 6.3)."""
+    """Whether the body may exceed ``MCP_MAX_REQUEST_BYTES``.
+
+    A request without Content-Length or Transfer-Encoding has no body (RFC 9112
+    6.3), and the server holds the client to the length it states, so the
+    header answers before anything is read.
+    """
     headers = dict(scope.get("headers") or [])
     length = headers.get(b"content-length")
     if length is None:
         return b"transfer-encoding" in headers
     try:
-        return int(length) > MCP_LARGE_BODY_BYTES
+        return int(length) > settings.MCP_MAX_REQUEST_BYTES
     except ValueError:
         return True
 
@@ -95,9 +89,16 @@ class MCPRouter:
     503 with ``Retry-After``. Django requests never wait behind it.
 
     The transport buffers a body of up to three times ``MCP_MAX_UPLOAD_BYTES``,
-    so a request whose body may exceed ``MCP_LARGE_BODY_BYTES`` also needs one
+    so a request whose body may exceed ``MCP_MAX_REQUEST_BYTES`` also needs one
     of ``MCP_MAX_CONCURRENT_UPLOADS`` slots. It takes that slot first, holding
     nothing else while it waits, so small calls are not queued behind uploads.
+
+    Then, before the MCP app reads anything, the request is authenticated from
+    its headers (``authenticate_request``): every request is charged and
+    audited, including a malformed one FastMCP would refuse before any tool
+    code ran. A caller over its budget is refused here, and so is a body over
+    ``MCP_MAX_REQUEST_BYTES`` from anyone whose token cannot call an upload
+    tool, since only an artifact needs that much. Neither body is read.
     """
 
     def __init__(self, django_app: ASGIApp, mcp_app: ASGIApp) -> None:
@@ -121,7 +122,7 @@ class MCPRouter:
                             await slot.acquire()
                             held.append(slot)
                 except TimeoutError:
-                    await _send_busy(send)
+                    await _send_error(send, 503, "The server is busy. Retry in a moment.", retry_after=1)
                     return
                 # Django's ASGIHandler opens a ThreadSensitiveContext per request;
                 # this dispatch happens before Django, so without one here every
@@ -132,6 +133,17 @@ class MCPRouter:
                 # A per-request context gives each request its own executor, the
                 # same isolation Django requests get.
                 async with ThreadSensitiveContext():
+                    if (over_budget := await authenticate_request(scope)) is not None:
+                        await _send_error(send, 429, str(over_budget), retry_after=over_budget.retry_after)
+                        return
+                    if _may_carry_large_body(scope) and not may_send_large_body(scope):
+                        await _send_error(
+                            send,
+                            413,
+                            f"Request body over {settings.MCP_MAX_REQUEST_BYTES} bytes. "
+                            "Only a token that may upload artifacts can send one this large.",
+                        )
+                        return
                     await self.mcp_app(scope, receive, send)
             finally:
                 for slot in held:

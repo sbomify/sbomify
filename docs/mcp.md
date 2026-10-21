@@ -48,14 +48,19 @@ nothing to call.
 | `APP_BASE_URL` | Its hostname is added to the MCP `Host` allow-list |
 | `MCP_ALLOWED_HOSTS` | Comma-separated extra hostnames (staging aliases, extra CNAMEs) |
 | `MCP_MAX_UPLOAD_BYTES` | Largest artifact an MCP tool accepts (default: `DATA_UPLOAD_MAX_MEMORY_SIZE`, 100 MB) |
-| `MCP_MAX_ARTIFACT_PARSE_BYTES` | Largest stored artifact `get_artifact_packages` will parse (default 50 MB) |
+| `MCP_MAX_ARTIFACT_PARSE_BYTES` | Largest stored artifact `get_artifact_packages` will parse (default 25 MB). Parsing takes two to four times an SBOM's size in memory; a document built of so many small parts that it would take more than eight times this is refused too |
 | `MCP_MAX_RESPONSE_BYTES` | Ceiling on one tool's response (default 1 MB) |
+| `MCP_MAX_REQUEST_BYTES` | Largest request body from a token that cannot upload artifacts; a larger one is refused before it is read (default 1 MiB) |
 | `MCP_MAX_CONCURRENT_REQUESTS` | MCP requests one worker process runs at once; more wait up to 5 s, then get a 503 with `Retry-After` (default 8) |
-| `MCP_MAX_CONCURRENT_UPLOADS` | Of those, requests whose body is over 1 MiB or of unstated size, such as `upload_artifact`; more wait the same way (default 2) |
+| `MCP_MAX_CONCURRENT_UPLOADS` | Of those, requests whose body is over `MCP_MAX_REQUEST_BYTES` or of unstated size, such as `upload_artifact`; more wait the same way (default 2) |
 
 Per-token rate limiting is shared with the REST API (`API_TOKEN_RATE_LIMIT`), with the stricter
 `API_TOKEN_HEAVY_RATE_LIMIT` applied to the tools that write. An agent and a CI job sharing a token
 share one budget, so give agents their own.
+
+Every `/mcp` request is authenticated and charged once, from its headers, before its body is read,
+so a malformed call costs the same as a valid one. A token over its budget gets a 429 with
+`Retry-After`.
 
 ## Logs
 
@@ -66,8 +71,8 @@ Two structured audit streams cover MCP traffic:
   whole SBOMs in the log. A request refused before its credential resolves (no bearer token, an
   unknown or expired one, or an address over its budget) gets one event too, with the client
   address and no token fields.
-- `sbomify.audit.token_auth`: the existing token-authentication events. MCP calls appear with an
-  `attempted_action` of `mcp <tool_name>`.
+- `sbomify.audit.token_auth`: the existing token-authentication events. MCP requests appear with an
+  `attempted_action` of `mcp request`; the `mcp_tool_call` event names the tool.
 
 ## Troubleshooting
 
@@ -88,6 +93,12 @@ not.
 handler and therefore its `request_finished` signal, so tools reach the ORM through channels'
 `database_sync_to_async`, which calls `close_old_connections` around each call. If you see
 `InterfaceError` persisting on `/mcp` while REST requests recover, that wiring is the place to look.
+
+**413 on a tool call**: the request body is over `MCP_MAX_REQUEST_BYTES` and the token cannot upload
+artifacts. Only an upload needs a body that large.
+
+**429 with `Retry-After`**: the token, or for a request without a usable token its address, is over
+its rate limit. The body was not read.
 
 **Empty `tools/list`**: the caller presented no token or an invalid one. Unauthenticated callers are
 deliberately offered nothing, since every tool would refuse them anyway.

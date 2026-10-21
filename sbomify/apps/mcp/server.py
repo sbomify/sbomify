@@ -26,7 +26,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Tool as MCPTool
 
 from . import registry
-from .auth import MCPAuthError, MCPRateLimitedError, authenticate, current_request
+from .auth import MCPAuthError, MCPRateLimitedError, current_request, principal_for
 from .limits import MAX_UPLOAD_BYTES
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ class ScopedFastMCP(FastMCP):
             return tools
 
         try:
-            principal = await authenticate(request, attempted_action="tools/list")
+            principal = await principal_for(request, attempted_action="tools/list")
         except MCPRateLimitedError:
             # The credential is fine, the caller is just over budget. This must
             # NOT read as an empty catalogue: clients cache the handshake's tool
