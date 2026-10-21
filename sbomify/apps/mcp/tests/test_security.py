@@ -138,6 +138,28 @@ def test_oversized_stored_artifact_is_not_parsed():
         limits.enforce_parse_size(b"x" * (limits.MAX_ARTIFACT_PARSE_BYTES + 1), artifact_id="abc")
 
 
+
+def test_a_document_of_tiny_objects_is_refused_before_it_is_parsed(monkeypatch):
+    """Under the byte ceiling, but its parsed form would be many times bigger."""
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    monkeypatch.setattr(limits, "MAX_ARTIFACT_PARSE_BYTES", 100_000)
+    # 90 KB of text that parses into 30,000 dicts, about 2 MB of Python.
+    raw = b"[" + b"{}," * 30_000 + b"{}]"
+
+    with pytest.raises(ToolError, match="too many small parts"):
+        limits.enforce_parse_size(raw, artifact_id="abc")
+
+
+def test_a_real_sbom_as_large_as_the_ceiling_is_still_read(monkeypatch):
+    """The densest SBOM fixture, as large as the ceiling allows, passes the budget."""
+    from pathlib import Path
+
+    raw = (Path(__file__).resolve().parents[2] / "sboms/tests/test_data/sbomify_syft.cdx.json").read_bytes()
+    monkeypatch.setattr(limits, "MAX_ARTIFACT_PARSE_BYTES", len(raw))
+
+    limits.enforce_parse_size(raw, artifact_id="abc")
+
 @pytest.mark.parametrize(
     ("check", "kwargs", "ceiling"),
     [

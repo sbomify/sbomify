@@ -90,7 +90,28 @@ class MCPRateLimitedError(MCPAuthError):
     apart: a bad token means advertise nothing, but a throttled one must get
     an error it can retry — an empty catalogue would be cached by the client
     as "this server has no tools".
+
+    ``retry_after`` is the wait in seconds, for the router's ``Retry-After``.
     """
+
+    def __init__(self, message: str, *, retry_after: int = 1) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+PRINCIPAL_STATE = "mcp_principal"
+REFUSAL_STATE = "mcp_refusal"
+"""Where the router leaves its answer in the ASGI scope's ``state``: the caller, or why it was refused.
+
+The router authenticates every ``/mcp`` request before the MCP app reads it
+(see ``authenticate_request``). FastMCP parses the body and validates a call's
+arguments before any tool code runs, so a check living only in the tool
+wrapper never saw a malformed call; and the SDK runs ``tools/list`` inside
+every ``tools/call``, so authenticating in both places charged one call twice.
+"""
+
+UPLOAD_TOOLS = ("upload_artifact", "upload_vex")
+"""The tools whose arguments carry a whole artifact, the only reason for a body larger than an envelope."""
 
 
 WORKSPACE_ATTR = "mcp_workspace"
@@ -299,9 +320,54 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         # refusal that reaches an authenticated, identifiable caller.
         message = f"Rate limit exceeded for this access token.{_retry_hint(stub)}"
         audit(attempted_action, principal, outcome="denied", detail=message)
-        raise MCPRateLimitedError(message)
+        raise MCPRateLimitedError(message, retry_after=_retry_seconds(stub) or 1)
 
     return principal
+
+
+async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
+    """Authenticate an ``/mcp`` request once, from its headers, before its body is read.
+
+    Every request is charged and audited here, whatever it goes on to call.
+    The answer is left in ``scope["state"]`` for ``principal_for``. A caller
+    over its budget is returned so the router can refuse it without reading
+    the body; any other refusal is left for the call to report, so a client
+    without a usable token still sees an empty ``tools/list`` rather than an
+    HTTP error.
+    """
+    from starlette.requests import Request
+
+    state = scope.setdefault("state", {})
+    try:
+        state[PRINCIPAL_STATE] = await authenticate(Request(scope), attempted_action="request")
+    except MCPRateLimitedError as exc:
+        return exc
+    except MCPAuthError as exc:
+        state[REFUSAL_STATE] = exc
+    return None
+
+
+async def principal_for(starlette_request: Request, *, attempted_action: str) -> Principal:
+    """The caller as the router authenticated it, or that refusal again.
+
+    Authenticates here only when nothing upstream did, which is the case for an
+    app driven without the router, as the tests drive it.
+    """
+    state = starlette_request.scope.get("state") or {}
+    principal: Principal | None = state.get(PRINCIPAL_STATE)
+    if principal is not None:
+        return principal
+    if (refusal := state.get(REFUSAL_STATE)) is not None:
+        raise type(refusal)(*refusal.args)
+    return await authenticate(starlette_request, attempted_action=attempted_action)
+
+
+def may_send_large_body(scope: Any) -> bool:
+    """Whether this request's caller may call a tool whose arguments carry an artifact."""
+    from . import registry
+
+    principal = (scope.get("state") or {}).get(PRINCIPAL_STATE)
+    return principal is not None and bool(set(UPLOAD_TOOLS) & registry.permitted_by(principal.scopes))
 
 
 async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
@@ -337,7 +403,21 @@ async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
     if not over_budget or first_this_window:
         audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=client_ip)
     if over_budget:
-        raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
+        raise MCPRateLimitedError(
+            "Too many failed authentication attempts from this address. Retry later.",
+            retry_after=max(1, int(throttle.wait() or 1)),
+        )
+
+
+def _retry_seconds(stub: HttpRequest) -> int | None:
+    """Seconds until the token's window resets, from the budget the throttle stashed on the request."""
+    import time
+
+    budget = getattr(stub, "_access_token_ratelimit", None)
+    if budget is None:
+        return None
+    _, _, reset = budget
+    return max(1, int(reset - time.time()))
 
 
 def _retry_hint(stub: HttpRequest) -> str:
@@ -348,13 +428,8 @@ def _retry_hint(stub: HttpRequest) -> str:
     the only channel an MCP client has, and without it the natural agent
     behaviour is an immediate retry loop that keeps the window saturated.
     """
-    import time
-
-    budget = getattr(stub, "_access_token_ratelimit", None)
-    if budget is None:
-        return " Retry shortly."
-    _, _, reset = budget
-    return f" Retry in {max(1, int(reset - time.time()))} seconds."
+    seconds = _retry_seconds(stub)
+    return " Retry shortly." if seconds is None else f" Retry in {seconds} seconds."
 
 
 async def throttle_write(principal: Principal, *, tool: str) -> None:

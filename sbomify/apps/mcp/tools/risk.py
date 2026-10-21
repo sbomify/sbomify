@@ -23,6 +23,8 @@ SBOM content is passed through ``limits.untrusted`` before it reaches the model.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from itertools import groupby
 from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
@@ -112,17 +114,18 @@ def _release_sbom_ids(release_obj: Any) -> Any:
     )
 
 
-def _latest_per_provider(runs: QuerySet[Any]) -> dict[str, list[Any]]:
-    """Group runs by SBOM, keeping the newest run per (sbom, plugin)."""
-    seen: set[tuple[str, str]] = set()
-    by_sbom: dict[str, list[Any]] = {}
-    for run in runs:
-        key = (run.sbom_id, run.plugin_name)
-        if key in seen:
-            continue
-        seen.add(key)
-        by_sbom.setdefault(run.sbom_id, []).append(run)
-    return by_sbom
+RUN_CHUNK = 25
+"""Runs fetched per round trip. Each carries its whole stored result, so this bounds how many are in memory."""
+
+
+def _runs_by_sbom(runs: QuerySet[Any]) -> Iterator[tuple[Any, list[Any]]]:
+    """Each SBOM's runs in turn, streamed so only one SBOM's results are held at a time.
+
+    ``_security_runs`` already returns the newest run per (SBOM, provider),
+    ordered by SBOM, so grouping consecutive rows is all that is left to do.
+    """
+    for sbom_id, group in groupby(runs.iterator(chunk_size=RUN_CHUNK), key=lambda run: run.sbom_id):
+        yield sbom_id, list(group)
 
 
 def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str], set[str]]:
@@ -154,7 +157,7 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str], set[
     # assessments panel badges known-exploited findings from.
     kev_ids = kev_ids_for_serialization()
 
-    for sbom_id, sbom_runs in _latest_per_provider(runs).items():
+    for sbom_id, sbom_runs in _runs_by_sbom(runs):
         results: list[dict[str, Any] | None] = []
         skipped: list[bool] = []
         for run in sbom_runs:
