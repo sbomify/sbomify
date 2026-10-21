@@ -328,12 +328,22 @@ def audit_rejected(scope: Any, status: int, answer: bytes | None, tail: bytes) -
     stream. A request the wrapper reached is left alone: it wrote its own
     event. The detail is the error's code, never the caller's input.
     """
+    if (reason := _rejection(status, answer, tail)) is not None:
+        audit_invalid_request(scope, reason)
+
+
+def audit_invalid_request(scope: Any, reason: str) -> None:
+    """Write the one ``invalid_request`` event for an authenticated request no tool answered.
+
+    Used for calls FastMCP rejects and for bodies the router refuses as too
+    large. A request without a principal was already audited when it was
+    refused at the door, and one the tool wrapper reached wrote its own event.
+    """
     state = scope.get("state") or {}
     principal = state.get(PRINCIPAL_STATE)
     if principal is None or state.get(TOOL_AUDITED_STATE):
         return
-    if (reason := _rejection(status, answer, tail)) is not None:
-        audit("request", principal, outcome="invalid_request", detail=reason)
+    audit("request", principal, outcome="invalid_request", detail=reason)
 
 
 def may_send_large_body(scope: Any) -> bool:

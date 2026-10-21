@@ -71,8 +71,9 @@ Two structured audit streams cover MCP traffic:
   whole SBOMs in the log. A request refused before its credential resolves (no bearer token, an
   unknown or expired one, or an address over its budget) gets one event too, with the client
   address and no token fields. So does an authenticated call the server rejects before any tool
-  runs (unparseable JSON, an unknown tool, arguments that fail the tool's schema): outcome
-  `invalid_request`, tool `request`, and the error code as the detail, never the input.
+  runs (unparseable JSON, an unknown tool, arguments that fail the tool's schema, a body over its
+  size cap): outcome `invalid_request`, tool `request`, and the error code (or `body_too_large`)
+  as the detail, never the input.
 - `sbomify.audit.token_auth`: the existing token-authentication events. MCP requests appear with an
   `attempted_action` of `mcp request`; the `mcp_tool_call` event names the tool.
 
