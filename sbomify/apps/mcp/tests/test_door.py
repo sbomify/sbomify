@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from unittest.mock import patch
 
 import httpx
 import pytest
 from asgiref.sync import sync_to_async
 
 from sbomify.apps.core.authz import SCOPE_PRESETS
+from sbomify.apps.mcp import limits
 from sbomify.apps.mcp.server import build_app, mcp
 
 LARGE = 2 * 1024 * 1024
@@ -300,3 +302,88 @@ async def test_the_real_transport_answers_413_when_the_body_is_cut_off(make_toke
 
     starts = [m for m in sent if m["type"] == "http.response.start"]
     assert [m["status"] for m in starts] == [413]
+
+
+def _tool_call_outcomes(spy) -> list[str]:
+    """The outcomes of the mcp_tool_call events a patched ``limits.log`` received."""
+    extras = [c.kwargs.get("extra", {}) for c in spy.method_calls]
+    return [extra["outcome"] for extra in extras if extra.get("event") == "mcp_tool_call"]
+
+
+async def _post(client, payload: str | dict, token: str):
+    return await client.post(
+        "/mcp",
+        headers={
+            "content-type": "application/json",
+            "accept": "application/json, text/event-stream",
+            "authorization": f"Bearer {token}",
+        },
+        content=payload if isinstance(payload, str) else json.dumps(payload),
+    )
+
+
+def _call(name: str, arguments: dict) -> dict:
+    return {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(_call("get_product", {}), id="schema-invalid-arguments"),
+        pytest.param(_call("no_such_tool", {}), id="unknown-tool"),
+        pytest.param("{not json", id="malformed-json"),
+    ],
+)
+async def test_a_call_the_transport_rejects_with_a_valid_token_is_audited_once(make_token, payload):
+    """FastMCP rejects these before the tool wrapper runs, so the router writes the one event."""
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+    with patch.object(limits, "log") as spy:
+        async with _routed_mcp_client() as client:
+            await _post(client, payload, token.encoded_token)
+
+    assert _tool_call_outcomes(spy) == ["invalid_request"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_call_the_wrapper_answers_is_audited_once_by_the_wrapper(make_token):
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+    with patch.object(limits, "log") as spy:
+        async with _routed_mcp_client() as client:
+            await _post(client, _call("list_products", {}), token.encoded_token)
+
+    assert _tool_call_outcomes(spy) == ["success"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_listing_the_tools_writes_no_tool_call_event(make_token):
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+    with patch.object(limits, "log") as spy:
+        async with _routed_mcp_client() as client:
+            await _post(client, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}, token.encoded_token)
+
+    assert _tool_call_outcomes(spy) == []
+
+
+@pytest.mark.parametrize(
+    ("status", "answer", "tail", "reason"),
+    [
+        (200, None, b'"text":"big"}],"isError":true}}', "tool call rejected"),
+        (200, None, b'"text":"big"}],"isError":false}}', None),
+        (
+            400,
+            b'{"jsonrpc":"2.0","id":"x","error":{"code":-32700,"message":"Parse error"}}',
+            b"",
+            "JSON-RPC error -32700",
+        ),
+        (200, b'{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', b"", None),
+        (500, b"not json", b"", "HTTP 500"),
+    ],
+)
+def test_a_rejection_is_read_from_the_answer_however_long(status, answer, tail, reason):
+    from sbomify.apps.mcp.auth import _rejection
+
+    assert _rejection(status, answer, tail) == reason

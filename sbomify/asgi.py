@@ -34,7 +34,7 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
-from sbomify.apps.mcp.auth import authenticate_request, may_send_large_body  # noqa: E402
+from sbomify.apps.mcp.auth import audit_rejected, authenticate_request, may_send_large_body  # noqa: E402
 from sbomify.apps.mcp.server import MCP_PATH_PREFIX, build_app, mcp  # noqa: E402
 
 # Builds the MCP Starlette app and registers its tools. Must run after
@@ -82,6 +82,10 @@ def _may_carry_large_body(scope: Scope) -> bool:
     return b"content-length" not in headers and scope.get("http_version") not in ("1.0", "1.1")
 
 
+_ANSWER_KEPT = 64 * 1024
+"""How much of an answer the router keeps to tell a rejection apart. Rejections are a few hundred bytes."""
+
+
 class _BodyCap:
     """Counts the body as the app reads it and stops it at ``cap`` bytes.
 
@@ -89,6 +93,9 @@ class _BodyCap:
     is the limit that holds. Past the cap the app is told the client hung up,
     so it reads nothing more, and whatever it answers to that is dropped: the
     router sends the 413 itself.
+
+    It also keeps the answer's status and its first and last bytes, so the
+    router can audit a call the app rejected before any tool ran.
     """
 
     def __init__(self, receive: Receive, send: Send, cap: int) -> None:
@@ -98,6 +105,10 @@ class _BodyCap:
         self.seen = 0
         self.exceeded = False
         self.started = False
+        self.status = 0
+        self.answer = bytearray()
+        self.answer_size = 0
+        self.tail = b""
 
     async def receive(self) -> Any:
         if self.exceeded:
@@ -115,7 +126,19 @@ class _BodyCap:
             return
         if message["type"] == "http.response.start":
             self.started = True
+            self.status = message["status"]
+        elif message["type"] == "http.response.body":
+            chunk = message.get("body", b"")
+            self.answer_size += len(chunk)
+            if len(self.answer) < _ANSWER_KEPT:
+                self.answer += chunk[: _ANSWER_KEPT - len(self.answer)]
+            self.tail = (self.tail + chunk)[-256:]
         await self._send(message)
+
+    @property
+    def whole_answer(self) -> bytes | None:
+        """The whole answer when it was small enough to keep, else None."""
+        return bytes(self.answer) if self.answer_size <= _ANSWER_KEPT else None
 
 
 async def _send_too_large(send: Send, cap: int, *, may_upload: bool) -> None:
@@ -146,7 +169,10 @@ class MCPRouter:
     audited, including a malformed one FastMCP would refuse before any tool
     code ran. A caller over its budget is refused here, and so is a body over
     ``MCP_MAX_REQUEST_BYTES`` from anyone whose token cannot call an upload
-    tool, since only an artifact needs that much. Neither body is read.
+    tool, since only an artifact needs that much. Neither body is read. When
+    FastMCP refuses an authenticated call itself (a parse error, an unknown
+    tool, arguments that fail the schema), the router audits it after the
+    answer, since the tool wrapper never saw it (``audit_rejected``).
 
     Headers cannot size every body: HTTP/2 and HTTP/3 send one without stating
     its length. So the body is also counted as the app reads it, and cut off
@@ -203,6 +229,8 @@ class MCPRouter:
                             raise
                     if body.exceeded and not body.started:
                         await _send_too_large(send, cap, may_upload=may_upload)
+                    elif not body.exceeded:
+                        audit_rejected(scope, body.status, body.whole_answer, body.tail)
             finally:
                 for slot in held:
                     slot.release()
