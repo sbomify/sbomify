@@ -205,3 +205,98 @@ async def test_a_call_through_the_door_charges_the_token_once(make_token, monkey
     assert response.status_code == 200
     assert json.loads(response.text)["result"].get("isError") is not True
     assert len(checks) == 1
+
+
+class _Reader:
+    """A stand-in MCP app that reads the whole body, as the transport does, then answers."""
+
+    def __init__(self) -> None:
+        self.read = 0
+
+    async def __call__(self, scope, receive, send):
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            self.read += len(message.get("body", b""))
+            if not message.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+
+def _body(total: int, chunk: int = 64 * 1024):
+    """A receive callable that streams ``total`` bytes in chunks, as an HTTP/2 client may."""
+    sent = 0
+
+    async def receive():
+        nonlocal sent
+        size = min(chunk, total - sent)
+        sent += size
+        return {"type": "http.request", "body": b"x" * size, "more_body": sent < total}
+
+    return receive
+
+
+def _h2_scope(token: str | None) -> dict:
+    """HTTP/2 needs neither Content-Length nor Transfer-Encoding to carry a body."""
+    scope = _scope(token, length=None)
+    scope["http_version"] = "2"
+    return scope
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_body_of_no_stated_length_is_cut_off_at_the_cap_as_it_arrives(make_token, settings):
+    """The headers cannot size an HTTP/2 body, so the bytes are counted as they come in."""
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    reader = _Reader()
+
+    sent = await _drive(_router(reader), _h2_scope(token.encoded_token), _body(3 * settings.MCP_MAX_REQUEST_BYTES))
+
+    assert sent[0]["status"] == 413
+    assert reader.read <= settings.MCP_MAX_REQUEST_BYTES
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_small_body_of_no_stated_length_still_goes_through(make_token):
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    reader = _Reader()
+
+    sent = await _drive(_router(reader), _h2_scope(token.encoded_token), _body(200))
+
+    assert sent[0]["status"] == 200
+    assert reader.read == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_an_upload_of_no_stated_length_goes_through_up_to_the_upload_cap(make_token):
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["publish"])
+    reader = _Reader()
+
+    sent = await _drive(_router(reader), _h2_scope(token.encoded_token), _body(LARGE))
+
+    assert sent[0]["status"] == 200
+    assert reader.read == LARGE
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_real_transport_answers_413_when_the_body_is_cut_off(make_token, settings):
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    build_app()
+    mcp._session_manager = None
+    app = mcp.streamable_http_app()
+    scope = _h2_scope(token.encoded_token)
+    scope["headers"].append((b"accept", b"application/json, text/event-stream"))
+    try:
+        async with mcp.session_manager.run():
+            sent = await _drive(_router(app), scope, _body(3 * settings.MCP_MAX_REQUEST_BYTES))
+    finally:
+        mcp._session_manager = None
+        mcp.streamable_http_app()
+
+    starts = [m for m in sent if m["type"] == "http.response.start"]
+    assert [m["status"] for m in starts] == [413]
