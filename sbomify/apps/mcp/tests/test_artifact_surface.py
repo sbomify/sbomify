@@ -540,3 +540,46 @@ async def test_a_profile_with_many_entities_and_contacts_names_only_so_many(
         assert len(supplier["contacts"]["items"]) == DETAIL_COLLECTION_LIMIT
         assert supplier["contacts"]["total"] == over
         assert supplier["contacts"]["truncated"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_profile_with_many_entities_and_contacts_is_never_loaded_whole(
+    mcp_owner, make_token, contact_profile_in_bound_workspace
+):
+    """Cutting the answer is not enough: a profile's every entity and contact was
+    loaded first, so the work grew with the profile however short the reply."""
+    from django.db.models.signals import post_init
+
+    from sbomify.apps.mcp.tools._base import DETAIL_COLLECTION_LIMIT
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    profile = contact_profile_in_bound_workspace
+    over = DETAIL_COLLECTION_LIMIT + 2
+
+    def setup() -> None:
+        supplier = profile.entities.get()
+        for i in range(over):
+            ContactProfileContact.objects.create(entity=supplier, name=f"Contact {i:03d}", email=f"c{i}@example.com")
+        for i in range(over):
+            ContactEntity.objects.create(profile=profile, name=f"Writer {i:03d}", is_author=True)
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["workspace:read"])
+
+    built: dict[str, int] = {}
+
+    def count(sender, **kwargs):
+        built[sender.__name__] = built.get(sender.__name__, 0) + 1
+
+    loaded = []
+    post_init.connect(count, weak=False)
+    try:
+        for tool, args in (("get_contact_profile", {"profile_id": profile.id}), ("list_contact_profiles", {})):
+            built.clear()
+            await _call(token, tool, **args)
+            loaded.append((built.get("ContactEntity", 0), built.get("ContactProfileContact", 0)))
+    finally:
+        post_init.disconnect(count)
+
+    assert loaded == [(DETAIL_COLLECTION_LIMIT, DETAIL_COLLECTION_LIMIT)] * 2

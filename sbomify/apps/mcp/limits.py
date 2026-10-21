@@ -159,7 +159,7 @@ def _team_id(principal: Principal) -> str | None:
 
 def audit(
     tool: str,
-    principal: Principal,
+    principal: Principal | None,
     *,
     outcome: str,
     detail: str | None = None,
@@ -170,12 +170,14 @@ def audit(
     Mirrors the token-auth audit events in ``access_tokens.utils``: never logs
     artifact content or the raw token, only identifiers. ``arguments`` are
     deliberately not logged — they can contain a whole SBOM.
+
+    ``principal`` is None for a request refused before any credential resolved.
     """
     event = {
         "outcome": outcome,
         "tool": tool,
-        "token_id": str(principal.token.pk),
-        "user_id": str(principal.user.pk),
+        "token_id": str(principal.token.pk) if principal else None,
+        "user_id": str(principal.user.pk) if principal else None,
         # The workspace the call operated in, not the one the token names.
         # ``AccessToken.team`` is nullable, and such a token falls back to the
         # user's default in ``resolve_workspace`` — so recording the token's own
@@ -183,8 +185,8 @@ def audit(
         # the opposite of "abuse is reconstructable after the fact". Falls back
         # to the token's field for the refusals that happen before any tool body
         # runs, where nothing has been resolved yet.
-        "team_id": _team_id(principal),
-        "scoped": principal.scopes is not None,
+        "team_id": _team_id(principal) if principal else None,
+        "scoped": principal.scopes is not None if principal else None,
         "detail": detail,
         **fields,
     }

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from django.db.models import Count, Prefetch, QuerySet
 from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
@@ -40,17 +41,70 @@ if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
 
-def _profile_summary(payload: Any) -> dict[str, Any]:
+def _bounded(queryset: QuerySet[Any]) -> QuerySet[Any]:
+    """Load at most a detail page of entities per profile, and of contacts per entity.
+
+    The summary cuts both lists, but cutting the answer after loading every row
+    still made the work grow with the profile. The counts give the true totals.
+    A sliced prefetch needs ``to_attr``, so the rows land in ``loaded_entities``
+    and ``loaded_contacts`` rather than behind ``.all()``.
+    """
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    entities = ContactEntity.objects.annotate(contact_total=Count("contacts")).order_by("name", "pk")
+    contacts = ContactProfileContact.objects.order_by("order", "name", "pk")
+    bounded: QuerySet[Any] = queryset.annotate(entity_total=Count("entities", distinct=True)).prefetch_related(
+        Prefetch("entities", queryset=entities[:DETAIL_COLLECTION_LIMIT], to_attr="loaded_entities"),
+        Prefetch("loaded_entities__contacts", queryset=contacts[:DETAIL_COLLECTION_LIMIT], to_attr="loaded_contacts"),
+    )
+    return bounded
+
+
+def _loaded_summary(profile: Any) -> dict[str, Any]:
+    """Summarise a profile loaded through ``_bounded``, with its true totals."""
+    payload = {
+        "id": profile.id,
+        "name": profile.name,
+        "is_default": profile.is_default,
+        "entities": [
+            {
+                "id": entity.id,
+                "name": entity.name or None,
+                "email": entity.email or None,
+                "phone": entity.phone or None,
+                "address": entity.address or None,
+                "website_urls": list(dict.fromkeys(url for url in entity.website_urls or [] if url)),
+                "is_manufacturer": entity.is_manufacturer,
+                "is_supplier": entity.is_supplier,
+                "contacts": [{"name": c.name, "email": c.email, "phone": c.phone} for c in entity.loaded_contacts],
+            }
+            for entity in profile.loaded_entities
+        ],
+    }
+    return _profile_summary(
+        payload,
+        entity_total=profile.entity_total,
+        contact_totals={entity.id: entity.contact_total for entity in profile.loaded_entities},
+    )
+
+
+def _profile_summary(
+    payload: Any, *, entity_total: int | None = None, contact_totals: dict[Any, int] | None = None
+) -> dict[str, Any]:
     """Trim the REST serializer's output to what an agent needs.
 
     The full schema carries entities, their contacts, and a parallel set of
     legacy flat fields — three views of the same data. Emitting all of it
     triples the token cost and invites the model to reason about the wrong copy.
+
+    The totals come from ``_bounded`` when the lists were cut at load time;
+    otherwise the payload holds every row and its length is the total.
     """
     data = payload if isinstance(payload, dict) else payload.dict()
     # No tool pages a profile's entities or their contacts, so both are cut and
     # say so, like a detail tool's collections.
     all_entities = data.get("entities", []) or []
+    contact_totals = contact_totals or {}
     entities = []
     for entity in all_entities[:DETAIL_COLLECTION_LIMIT]:
         contacts = entity.get("contacts", []) or []
@@ -72,7 +126,7 @@ def _profile_summary(payload: Any) -> dict[str, Any]:
                                 )
                                 for c in contacts[:DETAIL_COLLECTION_LIMIT]
                             ],
-                            total=len(contacts),
+                            total=contact_totals.get(entity.get("id"), len(contacts)),
                             limit=DETAIL_COLLECTION_LIMIT,
                         )
                         if contacts
@@ -87,7 +141,11 @@ def _profile_summary(payload: Any) -> dict[str, Any]:
             "id": data.get("id"),
             "name": data.get("name"),
             "is_default": data.get("is_default"),
-            "entities": serializers.capped(entities, total=len(all_entities), limit=DETAIL_COLLECTION_LIMIT)
+            "entities": serializers.capped(
+                entities,
+                total=len(all_entities) if entity_total is None else entity_total,
+                limit=DETAIL_COLLECTION_LIMIT,
+            )
             if entities
             else None,
         }
@@ -112,13 +170,7 @@ def register_tools(mcp: FastMCP) -> None:
             # profiles are per-component bookkeeping rows, and the assignment
             # view refuses them — listing them here would advertise profiles
             # that assign_contact_profile is certain to 404 on.
-            queryset = (
-                ContactProfile.objects.filter(team=team, is_component_private=False)
-                .prefetch_related("entities__contacts")
-                .order_by("name")
-            )
-
-            from sbomify.apps.teams.apis import serialize_contact_profile
+            queryset = _bounded(ContactProfile.objects.filter(team=team, is_component_private=False)).order_by("name")
 
             # Paginated like every other list. Returning the lot meant a
             # workspace with enough profiles tripped the response cap and got a
@@ -127,7 +179,7 @@ def register_tools(mcp: FastMCP) -> None:
             safe_page, safe_size = clamp_page(page, page_size)
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
             result = serializers.paginated(
-                [_profile_summary(serialize_contact_profile(row).dict()) for row in rows],
+                [_loaded_summary(row) for row in rows],
                 page=safe_page,
                 page_size=safe_size,
                 total=total,
@@ -142,19 +194,15 @@ def register_tools(mcp: FastMCP) -> None:
         """Full detail for one contact profile."""
 
         def query() -> dict[str, Any]:
-            from sbomify.apps.teams.apis import serialize_contact_profile
             from sbomify.apps.teams.models import ContactProfile
 
             team = resolve_workspace(principal)
             require(principal, "workspace:read", team)
-            profile = (
-                ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False)
-                .prefetch_related("entities__contacts")
-                .first()
-            )
+            visible = ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False)
+            profile = _bounded(visible).first()
             if profile is None:
                 raise not_found("contact profile", profile_id)
-            return _profile_summary(serialize_contact_profile(profile).dict())
+            return _loaded_summary(profile)
 
         return await run_db(query)
 
