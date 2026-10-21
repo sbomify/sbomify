@@ -81,6 +81,11 @@
             <c-layout.stat-card compact accent="warning" x_value="preview.unmatched_statements" label="Statements matching nothing" />
             <c-layout.stat-card compact x_value="preview.findings_checked" label="Findings checked" />
         </div>
+        <div class="mb-3">
+            <c-typography.description>
+            Counted on the newest version of each format and every released version. Applying it also updates older versions.
+            </c-typography.description>
+        </div>
         <template x-if="preview.matched.length">
             <ul class="text-sm text-text-muted mb-3 space-y-1">
                 <template x-for="match in preview.matched.slice(0, 8)"

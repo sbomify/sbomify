@@ -1350,6 +1350,9 @@ class TeamDomainResponseSchema(BaseModel):
 @router.patch(
     "/{team_key}/domain",
     response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # Both methods share the view, and Ninja names an operation after its view, so
+    # without this the PATCH duplicates the PUT's operationId in the schema.
+    operation_id="sbomify_apps_teams_apis_patch_team_domain",
 )
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
