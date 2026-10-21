@@ -45,6 +45,10 @@ mcp_application = build_app()
 # How long an MCP request waits for a free slot before it is told to retry.
 MCP_SLOT_WAIT_SECONDS = 5.0
 
+# A body over this size, or one of unstated size, also needs an upload slot.
+# Ordinary tool calls are a few kilobytes; uploads carry whole artifacts.
+MCP_LARGE_BODY_BYTES = 1024 * 1024
+
 _BUSY_BODY = json.dumps(
     {"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "The server is busy. Retry in a moment."}}
 ).encode()
@@ -65,6 +69,18 @@ async def _send_busy(send: Send) -> None:
     await send({"type": "http.response.body", "body": _BUSY_BODY})
 
 
+def _may_carry_large_body(scope: Scope) -> bool:
+    """A request without Content-Length or Transfer-Encoding has no body (RFC 9112 6.3)."""
+    headers = dict(scope.get("headers") or [])
+    length = headers.get(b"content-length")
+    if length is None:
+        return b"transfer-encoding" in headers
+    try:
+        return int(length) > MCP_LARGE_BODY_BYTES
+    except ValueError:
+        return True
+
+
 class MCPRouter:
     """Routes ``/mcp`` to the MCP server; everything else to Django.
 
@@ -77,20 +93,32 @@ class MCPRouter:
     per-token throttle, which only runs once a request is inside. A request
     over the cap waits up to ``MCP_SLOT_WAIT_SECONDS`` for a slot, then gets a
     503 with ``Retry-After``. Django requests never wait behind it.
+
+    The transport buffers a body of up to three times ``MCP_MAX_UPLOAD_BYTES``,
+    so a request whose body may exceed ``MCP_LARGE_BODY_BYTES`` also needs one
+    of ``MCP_MAX_CONCURRENT_UPLOADS`` slots. It takes that slot first, holding
+    nothing else while it waits, so small calls are not queued behind uploads.
     """
 
     def __init__(self, django_app: ASGIApp, mcp_app: ASGIApp) -> None:
         self.django_app = django_app
         self.mcp_app = mcp_app
         self.mcp_slots = asyncio.Semaphore(settings.MCP_MAX_CONCURRENT_REQUESTS)
+        self.upload_slots = asyncio.Semaphore(settings.MCP_MAX_CONCURRENT_UPLOADS)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
         if path == MCP_PATH_PREFIX or path.startswith(f"{MCP_PATH_PREFIX}/"):
+            wanted = [self.upload_slots, self.mcp_slots] if _may_carry_large_body(scope) else [self.mcp_slots]
+            held: list[asyncio.Semaphore] = []
             try:
                 async with asyncio.timeout(MCP_SLOT_WAIT_SECONDS):
-                    await self.mcp_slots.acquire()
+                    for slot in wanted:
+                        await slot.acquire()
+                        held.append(slot)
             except TimeoutError:
+                for slot in held:
+                    slot.release()
                 await _send_busy(send)
                 return
             try:
@@ -105,7 +133,8 @@ class MCPRouter:
                 async with ThreadSensitiveContext():
                     await self.mcp_app(scope, receive, send)
             finally:
-                self.mcp_slots.release()
+                for slot in held:
+                    slot.release()
         else:
             await self.django_app(scope, receive, send)
 

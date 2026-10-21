@@ -1113,6 +1113,9 @@ MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 102
 # a database connection. Two workers at the default use 16 connections, well
 # inside PostgreSQL's default of 100. See MCPRouter in sbomify/asgi.py.
 MCP_MAX_CONCURRENT_REQUESTS = int(os.environ.get("MCP_MAX_CONCURRENT_REQUESTS", 8))
+# Of those, how many may carry a body over 1 MiB. The transport buffers up to
+# three times MCP_MAX_UPLOAD_BYTES per request, so this bounds a worker's memory.
+MCP_MAX_CONCURRENT_UPLOADS = int(os.environ.get("MCP_MAX_CONCURRENT_UPLOADS", 2))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:

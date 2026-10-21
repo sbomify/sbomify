@@ -181,3 +181,97 @@ async def test_an_mcp_request_that_cannot_get_a_slot_is_told_to_retry(anyio_back
 
     release.set()
     await held
+
+
+def _sized_scope(name: str, headers: list[tuple[bytes, bytes]]) -> dict:
+    return {"type": "http", "path": "/mcp", "method": "POST", "headers": headers, "name": name}
+
+
+@pytest.mark.anyio
+async def test_requests_that_may_carry_a_large_body_share_a_smaller_limit(anyio_backend, settings) -> None:
+    """The transport buffers a body of up to three times the upload cap per request.
+
+    The general limit is sized for database connections, so it alone would let
+    a burst of uploads hold several of those bodies at once. A request whose
+    body may be large also needs one of the few upload slots, and it waits for
+    that slot holding nothing else, so a small call still gets a general slot.
+    """
+    import asyncio
+
+    from sbomify.asgi import MCPRouter
+
+    settings.MCP_MAX_CONCURRENT_REQUESTS = 2
+    settings.MCP_MAX_CONCURRENT_UPLOADS = 1
+    running: set[str] = set()
+    peak_large = 0
+    release = asyncio.Event()
+
+    async def slow_mcp(scope, receive, send):
+        nonlocal peak_large
+        running.add(scope["name"])
+        peak_large = max(peak_large, len(running & {"large-1", "large-2", "chunked"}))
+        await release.wait()
+        running.discard(scope["name"])
+
+    async def send(message):
+        pass
+
+    router = MCPRouter(django_app=slow_mcp, mcp_app=slow_mcp)
+    large = [(b"content-length", str(50 * 1024 * 1024).encode())]
+    calls = [
+        asyncio.create_task(router(_sized_scope("large-1", large), _no_body, send)),
+        asyncio.create_task(router(_sized_scope("large-2", large), _no_body, send)),
+        asyncio.create_task(router(_sized_scope("chunked", [(b"transfer-encoding", b"chunked")]), _no_body, send)),
+    ]
+    await asyncio.sleep(0.05)
+    small = asyncio.create_task(router(_sized_scope("small", [(b"content-length", b"200")]), _no_body, send))
+    no_body = asyncio.create_task(router(_sized_scope("no-body", []), _no_body, send))
+    await asyncio.sleep(0.05)
+
+    try:
+        assert len(running & {"large-1", "large-2", "chunked"}) == 1, "only one request that may be large runs"
+        assert "small" in running, "a small request must not wait behind uploads"
+        assert "no-body" not in running, "the general limit still applies to every request"
+    finally:
+        release.set()
+        await asyncio.gather(*calls, small, no_body)
+    assert peak_large == 1
+
+
+@pytest.mark.anyio
+async def test_an_upload_that_cannot_get_an_upload_slot_is_told_to_retry(anyio_backend, settings, monkeypatch) -> None:
+    import asyncio
+
+    import sbomify.asgi
+    from sbomify.asgi import MCPRouter
+
+    settings.MCP_MAX_CONCURRENT_REQUESTS = 4
+    settings.MCP_MAX_CONCURRENT_UPLOADS = 1
+    monkeypatch.setattr(sbomify.asgi, "MCP_SLOT_WAIT_SECONDS", 0.05)
+    release = asyncio.Event()
+    reached: list[str] = []
+
+    async def slow_mcp(scope, receive, send):
+        reached.append(scope["name"])
+        await release.wait()
+
+    sent: list[dict] = []
+
+    async def send(message):
+        sent.append(message)
+
+    router = MCPRouter(django_app=slow_mcp, mcp_app=slow_mcp)
+    large = [(b"content-length", str(2 * 1024 * 1024).encode())]
+    held = asyncio.create_task(router(_sized_scope("first", large), _no_body, lambda message: asyncio.sleep(0)))
+    await asyncio.sleep(0.01)
+
+    second = asyncio.create_task(router(_sized_scope("second", large), _no_body, send))
+    await asyncio.sleep(0.2)
+
+    try:
+        assert reached == ["first"]
+        assert sent[0]["status"] == 503
+        assert (b"retry-after", b"1") in sent[0]["headers"]
+    finally:
+        release.set()
+        await asyncio.gather(held, second)
