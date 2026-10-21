@@ -267,6 +267,7 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
     meta = EVENT_META.get(event.event_type, _UNKNOWN_EVENT)
     payload = event.payload if isinstance(event.payload, dict) else {}
     actor = event.actor
+    via = payload["via"] if isinstance(payload.get("via"), dict) else {}
 
     # A status change reads as the state it moved to, not as the words
     # "Status change" — five entries all labelled the same tell a reader
@@ -300,6 +301,10 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
         "to_status": payload.get("to"),
         "from_status": payload.get("from"),
         "actor": actor.get_full_name() or actor.username if actor else "",
+        # How the change was sent: "agent", "api" or "ci" through the API, blank
+        # for the app and for anything recorded before this was kept.
+        "channel": via.get("channel", ""),
+        "token_id": via.get("token_id", ""),
         "is_internal": event.event_type == AdvisoryEvent.EventType.COMMENT,
         "created_at": event.created_at,
     }
@@ -455,6 +460,16 @@ def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
     return ServiceResult.success(products)
 
 
+def _stamped(payload: dict[str, Any], via: dict[str, str] | None) -> dict[str, Any]:
+    """An event payload carrying how the change was sent, when the caller said.
+
+    ``actor`` names the person, but every API token belongs to a person, so the
+    actor alone cannot tell an owner's own edit from one their AI agent made
+    with their token. ``via`` is that answer: the channel and the token id.
+    """
+    return {**payload, "via": via} if via else payload
+
+
 @transaction.atomic
 def create_advisory(
     team: Any,
@@ -469,6 +484,7 @@ def create_advisory(
     cvss_vector: str = "",
     products: list[Product] | None = None,
     affected_releases: list[Release] | None = None,
+    via: dict[str, str] | None = None,
 ) -> ServiceResult[str]:
     """The New Advisory modal's write: the whole initial graph, atomically.
 
@@ -551,7 +567,7 @@ def create_advisory(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
-        payload={"to": opening_status},
+        payload=_stamped({"to": opening_status}, via),
     )
     return ServiceResult.success(advisory.id)
 
@@ -597,6 +613,7 @@ def update_advisory(
     description: str = "",
     cvss_score: str | None = None,
     cvss_vector: str | None = None,
+    via: dict[str, str] | None = None,
 ) -> ServiceResult[str]:
     """Edit an advisory's own fields.
 
@@ -692,7 +709,7 @@ def update_advisory(
             event_type=AdvisoryEvent.EventType.FIELD_CHANGE,
             actor=user,
             body=_field_change_body("cvss", old_display, new_display),
-            payload={"field": "cvss", "old": old_display, "new": new_display},
+            payload=_stamped({"field": "cvss", "old": old_display, "new": new_display}, via),
         )
 
     for field, old, new in changes:
@@ -706,7 +723,7 @@ def update_advisory(
             # than pasted, since a rewritten description would otherwise bury
             # every other entry on the page.
             body=_field_change_body(field, old, new),
-            payload={"field": field, "old": old, "new": new},
+            payload=_stamped({"field": field, "old": old, "new": new}, via),
         )
     return ServiceResult.success(advisory.id)
 
@@ -728,7 +745,9 @@ PUBLISHABLE_VISIBILITIES: dict[str, dict[str, str]] = {
 
 
 @transaction.atomic
-def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str) -> ServiceResult[str]:
+def publish_advisory(
+    team: Any, user: Any, advisory_id: str, *, visibility: str, via: dict[str, str] | None = None
+) -> ServiceResult[str]:
     """Disclose an advisory: the one write that makes it readable outside the workspace.
 
     Until this runs an advisory is a draft with private visibility, and the
@@ -792,13 +811,15 @@ def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str)
         event_type=AdvisoryEvent.EventType.PUBLISHED,
         actor=user,
         body=f"Published as {advisory.tracking_id} ({PUBLISHABLE_VISIBILITIES[visibility]['label'].lower()}).",
-        payload={"visibility": visibility, "tracking_id": advisory.tracking_id},
+        payload=_stamped({"visibility": visibility, "tracking_id": advisory.tracking_id}, via),
     )
     return ServiceResult.success(advisory.id)
 
 
 @transaction.atomic
-def withdraw_advisory(team: Any, user: Any, advisory_id: str, *, reason: str) -> ServiceResult[str]:
+def withdraw_advisory(
+    team: Any, user: Any, advisory_id: str, *, reason: str, via: dict[str, str] | None = None
+) -> ServiceResult[str]:
     """Retract a published advisory without erasing that it was published.
 
     The row keeps its tracking id, its publication date and its visibility: a
@@ -840,13 +861,15 @@ def withdraw_advisory(team: Any, user: Any, advisory_id: str, *, reason: str) ->
         event_type=AdvisoryEvent.EventType.WITHDRAWN,
         actor=user,
         body=reason,
-        payload={"reason": reason},
+        payload=_stamped({"reason": reason}, via),
     )
     return ServiceResult.success(advisory.id)
 
 
 @transaction.atomic
-def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str = "") -> ServiceResult[str]:
+def post_update(
+    team: Any, user: Any, advisory_id: str, *, kind: str, note: str = "", via: dict[str, str] | None = None
+) -> ServiceResult[str]:
     """The timeline composer's write: a note, or a status move with commentary.
 
     ``kind`` is either ``update`` (a note that moves nothing) or a
@@ -873,7 +896,11 @@ def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str 
         if not note:
             return ServiceResult.failure("An update needs a note.", status_code=400)
         AdvisoryEvent.objects.create(
-            advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, actor=user, body=note
+            advisory=advisory,
+            event_type=AdvisoryEvent.EventType.UPDATE,
+            actor=user,
+            body=note,
+            payload=_stamped({}, via),
         )
         return ServiceResult.success(advisory.id)
 
@@ -888,7 +915,7 @@ def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str 
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
         body=note,
-        payload={"from": advisory.remediation_status, "to": kind},
+        payload=_stamped({"from": advisory.remediation_status, "to": kind}, via),
     )
     advisory.remediation_status = kind
     advisory.save(update_fields=["remediation_status", "updated_at"])

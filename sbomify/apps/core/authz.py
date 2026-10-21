@@ -348,6 +348,24 @@ def is_agent_scope(scopes: list[str] | None) -> bool:
     return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
 
 
+def credential_channel(request: Any) -> str:
+    """How an API request was sent, read off its credential: ``ci``, ``agent`` or ``api``.
+
+    ``ci`` is an OIDC trusted-publishing token. ``agent`` is a token made with
+    the AI agent preset: a choice a person made when creating it, which is as
+    close to "this is an agent" as a token, always owned by a person, can say.
+    Anything else, a signed-in session calling the API included, is ``api``.
+    """
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    if request_is_oidc_authed(request):
+        return "ci"
+    token = getattr(request, "access_token_record", None)
+    if token is not None and is_agent_scope(token.scopes):
+        return "agent"
+    return "api"
+
+
 def _scope_permits(scopes: list[str] | None, action: str) -> bool:
     """Does a token's ``scopes`` grant ``action``?
 

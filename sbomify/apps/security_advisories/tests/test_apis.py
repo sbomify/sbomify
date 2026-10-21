@@ -16,8 +16,10 @@ from django.test import Client
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
+from django.urls import reverse
+
 from sbomify.apps.core import authz
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers, setup_authenticated_client_session
 from sbomify.apps.security_advisories.models import SecurityAdvisory
 
 from .conftest import publish
@@ -561,6 +563,92 @@ class TestTheAgentToken:
         response = client.post(LIST, data={"title": "Nope"}, content_type="application/json", **headers)
 
         assert response.status_code == 403
+
+
+class TestWhoMadeTheChange:
+    """Every API token belongs to a person, so the actor alone cannot say whether
+    an owner made a change or their AI agent did. The timeline records how."""
+
+    @pytest.fixture
+    def agent_token(self, sample_user, sample_team_with_owner_member):
+        return AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=create_personal_access_token(sample_user),
+            description="Advisory agent",
+            scopes=authz.SCOPE_PRESETS["agent"],
+        )
+
+    def _timeline(self, client, headers, advisory_id: str) -> list[dict]:
+        return client.get(_detail(advisory_id), **headers).json()["timeline"]
+
+    def test_an_agent_token_is_named_on_every_event_it_writes(self, agent_token) -> None:
+        client, headers = Client(), get_api_headers(agent_token)
+        advisory_id = client.post(LIST, data={"title": "Drafted"}, content_type="application/json", **headers).json()[
+            "id"
+        ]
+        client.patch(_detail(advisory_id), data={"title": "Redrafted"}, content_type="application/json", **headers)
+        client.post(
+            f"{_detail(advisory_id)}/updates",
+            data={"kind": "update", "note": "Root cause found."},
+            content_type="application/json",
+            **headers,
+        )
+
+        timeline = self._timeline(client, headers, advisory_id)
+
+        assert len(timeline) == 3
+        assert {event["channel"] for event in timeline} == {"agent"}
+        assert {event["token_id"] for event in timeline} == {str(agent_token.pk)}
+        assert all(event["actor"] for event in timeline), "the person who owns the token is still named"
+
+    def test_any_other_token_is_api(self, client_and_headers) -> None:
+        client, headers = client_and_headers
+        advisory_id = client.post(LIST, data={"title": "By hand"}, content_type="application/json", **headers).json()[
+            "id"
+        ]
+
+        (event,) = self._timeline(client, headers, advisory_id)
+
+        assert event["channel"] == "api"
+        assert event["token_id"]
+
+    def test_publishing_and_withdrawing_record_the_token(self, client_and_headers, advisory, make_publishable) -> None:
+        client, headers = client_and_headers
+        client.post(
+            f"{_detail(advisory.id)}/publish",
+            data={"visibility": SecurityAdvisory.Visibility.PUBLIC},
+            content_type="application/json",
+            **headers,
+        )
+        client.post(
+            f"{_detail(advisory.id)}/withdraw", data={"reason": "no"}, content_type="application/json", **headers
+        )
+
+        kinds = {event["kind"]: event["channel"] for event in self._timeline(client, headers, advisory.id)}
+
+        assert kinds["published"] == "api"
+        assert kinds["withdrawn"] == "api"
+
+    def test_a_change_made_in_the_app_has_no_channel(self, client_and_headers, advisory) -> None:
+        """Events written before this was kept look the same, so blank must not mean agent."""
+        client, headers = client_and_headers
+        advisory.events.create(event_type="update", actor=None, body="From the app.")
+
+        (event,) = self._timeline(client, headers, advisory.id)
+
+        assert event["channel"] == ""
+        assert event["token_id"] == ""
+
+    def test_the_timeline_page_marks_the_agent(self, agent_token, sample_team_with_owner_member) -> None:
+        api, headers = Client(), get_api_headers(agent_token)
+        advisory_id = api.post(LIST, data={"title": "Drafted"}, content_type="application/json", **headers).json()["id"]
+        page = Client()
+        setup_authenticated_client_session(page, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+        html = page.get(reverse("core:security_advisory_detail", args=[advisory_id])).content.decode()
+
+        assert "AI agent" in html
+        assert "fa-robot" in html
 
 
 class TestWithdrawing:
