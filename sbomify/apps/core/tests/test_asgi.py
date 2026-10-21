@@ -275,3 +275,51 @@ async def test_an_upload_that_cannot_get_an_upload_slot_is_told_to_retry(anyio_b
     finally:
         release.set()
         await asyncio.gather(held, second)
+
+
+@pytest.mark.anyio
+async def test_an_upload_cancelled_while_it_waits_gives_back_the_slot_it_holds(
+    anyio_backend, settings, monkeypatch
+) -> None:
+    """A client that hangs up while waiting cancels the task, which is not a timeout.
+
+    The upload slot is taken first and kept while the request waits for a
+    general slot. If the cancellation skipped the release, every hang-up would
+    cost the worker one of its few upload slots for good.
+    """
+    import asyncio
+
+    import sbomify.asgi
+    from sbomify.asgi import MCPRouter
+
+    settings.MCP_MAX_CONCURRENT_REQUESTS = 1
+    settings.MCP_MAX_CONCURRENT_UPLOADS = 1
+    monkeypatch.setattr(sbomify.asgi, "MCP_SLOT_WAIT_SECONDS", 0.2)
+    release = asyncio.Event()
+    reached: list[str] = []
+
+    async def slow_mcp(scope, receive, send):
+        reached.append(scope["name"])
+        await release.wait()
+
+    sent: list[dict] = []
+
+    async def send(message):
+        sent.append(message)
+
+    router = MCPRouter(django_app=slow_mcp, mcp_app=slow_mcp)
+    large = [(b"content-length", str(2 * 1024 * 1024).encode())]
+    holder = asyncio.create_task(router(_sized_scope("holder", []), _no_body, send))
+    await asyncio.sleep(0.01)
+    hung_up = asyncio.create_task(router(_sized_scope("hung-up", large), _no_body, send))
+    await asyncio.sleep(0.01)
+    hung_up.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await hung_up
+    release.set()
+    await holder
+
+    await router(_sized_scope("next", large), _no_body, send)
+
+    assert reached == ["holder", "next"]
+    assert all(message.get("status") != 503 for message in sent)

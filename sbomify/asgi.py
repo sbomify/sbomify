@@ -111,17 +111,18 @@ class MCPRouter:
         if path == MCP_PATH_PREFIX or path.startswith(f"{MCP_PATH_PREFIX}/"):
             wanted = [self.upload_slots, self.mcp_slots] if _may_carry_large_body(scope) else [self.mcp_slots]
             held: list[asyncio.Semaphore] = []
+            # One finally gives back whatever was taken however the request
+            # ends: a timeout, a client that hangs up mid-wait (a cancellation,
+            # not a timeout), or a normal finish.
             try:
-                async with asyncio.timeout(MCP_SLOT_WAIT_SECONDS):
-                    for slot in wanted:
-                        await slot.acquire()
-                        held.append(slot)
-            except TimeoutError:
-                for slot in held:
-                    slot.release()
-                await _send_busy(send)
-                return
-            try:
+                try:
+                    async with asyncio.timeout(MCP_SLOT_WAIT_SECONDS):
+                        for slot in wanted:
+                            await slot.acquire()
+                            held.append(slot)
+                except TimeoutError:
+                    await _send_busy(send)
+                    return
                 # Django's ASGIHandler opens a ThreadSensitiveContext per request;
                 # this dispatch happens before Django, so without one here every
                 # thread-sensitive sync call from every concurrent MCP request
