@@ -251,6 +251,55 @@ async def test_the_risk_report_counts_every_bom_kind_the_release_ships(
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_the_risk_report_counts_a_release_without_loading_its_artifact_rows(
+    mcp_owner, make_token, component_in_bound_workspace, product_in_bound_workspace
+):
+    """The report reads ids and BOM types only, so building a model instance (and
+    joining its SBOM or document) for every row a release tags was wasted work
+    that grew with the release."""
+    from django.db.models.signals import post_init
+
+    from sbomify.apps.core.models import Release, ReleaseArtifact
+    from sbomify.apps.documents.models import Document
+
+    def setup() -> str:
+        release = Release.objects.create(product=product_in_bound_workspace, name="v1", version="1")
+        for index, bom_type in enumerate((SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.VEX)):
+            artifact = _artifact(component_in_bound_workspace, f"the-{bom_type}", bom_type, version=f"1.0.{index}")
+            ReleaseArtifact.objects.create(release=release, sbom=artifact)
+        document = Document.objects.create(
+            name="policy",
+            version="1",
+            document_filename="policy.pdf",
+            component=component_in_bound_workspace,
+            source="manual_upload",
+            content_type="application/pdf",
+            file_size=1,
+        )
+        ReleaseArtifact.objects.create(release=release, document=document)
+        return release.id
+
+    release_id = await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["release:read", "workspace:read"])
+    built: dict[str, int] = {}
+
+    def count(sender, **kwargs) -> None:
+        built[sender.__name__] = built.get(sender.__name__, 0) + 1
+
+    post_init.connect(count, weak=False)
+    try:
+        report = structured(await _call(token, "get_release_risk_report", release_id=release_id))
+    finally:
+        post_init.disconnect(count)
+
+    assert report["artifact_counts"] == {"boms": 3, "documents": 1}
+    assert report["unscanned_sboms"] == 1
+    assert built.get("ReleaseArtifact", 0) == 0
+    assert built.get("Document", 0) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_detail_tool_cuts_its_collections_rather_than_tripping_the_cap(
     mcp_owner, make_token, product_in_bound_workspace
 ):

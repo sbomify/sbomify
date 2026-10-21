@@ -245,7 +245,16 @@ async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
     client_ip = get_client_ip(stub)
     # Past the budget, one line a window says the address is being refused. A line a request
     # would hand a loop of bad requests the stream the budget exists to protect.
-    if not over_budget or await cache.aadd(f"mcp:refusal-audited:{client_ip}", True, timeout=throttle.duration):
+    first_this_window = False
+    if over_budget:
+        try:
+            first_this_window = await cache.aadd(f"mcp:refusal-audited:{client_ip}", True, timeout=throttle.duration)
+        except Exception:
+            # The marker lives in the Redis the throttle reads, and the throttle has already
+            # refused this request and logged the outage once. Without the marker a first
+            # refusal looks like a repeat, so write nothing rather than a line a request.
+            first_this_window = False
+    if not over_budget or first_this_window:
         audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=client_ip)
     if over_budget:
         raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
