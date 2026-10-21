@@ -396,7 +396,7 @@ class TestComponentItemVexAliasEnrichment:
 @pytest.mark.django_db
 class TestComponentVulnFilterContext:
     """The component page's vulnerability counts: the header excludes VEX-suppressed
-    findings so it reconciles with the Trust Center posture, and the panel lists
+    findings so it reconciles with the release posture, and the panel lists
     the same open vulnerabilities the header counts, KEV flags included."""
 
     def _component_with_vex(self, team):

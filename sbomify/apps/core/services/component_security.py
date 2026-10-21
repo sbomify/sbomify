@@ -195,7 +195,7 @@ def build_component_vulnerabilities(
     )
 
     # The header badge counts the same merged view the table shows, minus what
-    # VEX suppressed, matching the Trust Center posture, which lists suppressed
+    # VEX suppressed, matching the release posture, which lists suppressed
     # findings separately rather than inside the severity counts.
     summary: dict[str, Any] | None = None
     if rows:

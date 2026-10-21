@@ -303,9 +303,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, workspace_key)
 
-        if request.POST.get("vulnerability_posture_action") == "update":
-            return self._update_vulnerability_posture(request, workspace_key)
-
         if request.POST.get("security_txt_action") == "update":
             return self._update_security_txt(request, workspace_key)
 
@@ -671,35 +668,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
-        return self._redirect_with_tab(request, workspace_key)
-
-    def _update_vulnerability_posture(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
-        user = cast(User, request.user)
-        try:
-            team = Workspace.objects.get(key=workspace_key)
-        except Workspace.DoesNotExist:
-            messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, workspace_key)
-
-        membership = Member.objects.filter(user=user, team=team).first()
-        if not membership or membership.role not in ADMINISTER:
-            messages.error(request, "Only workspace owners and admins can change Trust Center settings")
-            return self._redirect_with_tab(request, workspace_key)
-
-        values = request.POST.getlist("publish_vulnerability_posture")
-        team.publish_vulnerability_posture = self._parse_checkbox_value(
-            values, default=team.publish_vulnerability_posture
-        )
-        team.save()
-
-        refresh_current_team_session(request, team)
-
-        messages.success(
-            request,
-            "Vulnerability posture is now published on your Trust Center."
-            if team.publish_vulnerability_posture
-            else "Vulnerability posture is no longer published on your Trust Center.",
-        )
         return self._redirect_with_tab(request, workspace_key)
 
     def _update_security_txt(self, request: HttpRequest, workspace_key: str) -> HttpResponse:

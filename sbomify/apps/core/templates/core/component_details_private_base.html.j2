@@ -122,7 +122,7 @@
                 {% endif %}
                 <c-chips.metric.value>{{ vuln_summary.low|intcomma }} Low</c-chips.metric.value>
             {% endif %}
-            {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
+            {% comment %}Counts above exclude what VEX cleared, matching the release posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
             {% if vuln_summary.suppressed %}
                 <c-chips.metric.label>· {{ vuln_summary.suppressed }} suppressed</c-chips.metric.label>
             {% endif %}

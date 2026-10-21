@@ -5,7 +5,6 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_release
-from sbomify.apps.core.authz import can
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
@@ -66,23 +65,9 @@ class ReleaseDetailsPublicView(View):
         # Get workspace public URL for breadcrumbs
         workspace_public_url = get_workspace_public_url(request, team)
 
-        # The release's VEX-applied posture, published only where the workspace
-        # has asked for it to be. A Trust Center is readable by anyone holding
-        # the link, so which vulnerabilities a workspace is carrying stays the
-        # workspace's own to disclose; a member who can manage the release is
-        # not the public and keeps seeing it either way.
-        from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_posture
-
-        can_manage = can(request, "release:manage", product_obj).allowed
-        if can_manage or (team and team.publish_vulnerability_posture):
-            vuln_posture = build_release_vuln_posture(release_obj, include_private_components=can_manage)
-        else:
-            vuln_posture = {"has_data": False}
-
         context = {
             "brand": brand,
             "release": release,
-            "vuln_posture": vuln_posture,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the
             # releases list and component pages. The current release isn't

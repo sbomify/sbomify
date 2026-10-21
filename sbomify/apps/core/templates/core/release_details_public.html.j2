@@ -96,64 +96,6 @@
             </div>
         </div>
     {% endif %}
-    {# Vulnerability Posture — the release's VEX-applied posture #}
-    {% if vuln_posture.has_data %}
-        {{ vuln_posture|json_script:"vuln-posture-data" }}
-        <div class="tc-panel"
-             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); } }"
-             x-init="init()">
-            <h2 class="tc-panel-title">Vulnerability posture</h2>
-            <div class="space-y-5">
-                {# Severity breakdown (VEX applied) #}
-                <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    <c-layout.stat-card compact x_value="data.counts.total" label="Total" />
-                    <c-layout.stat-card compact accent="severity-critical" x_value="data.counts.critical" label="Critical" />
-                    <c-layout.stat-card compact accent="severity-high" x_value="data.counts.high" label="High" />
-                    <c-layout.stat-card compact accent="severity-medium" x_value="data.counts.medium" label="Medium" />
-                    <c-layout.stat-card compact accent="severity-low" x_value="data.counts.low" label="Low" />
-                    <c-layout.stat-card compact accent="muted" x_value="data.counts.unknown" label="Unknown" />
-                </div>
-                {# Suppression note #}
-                <p class="text-sm text-text-muted m-0 flex items-center gap-2 flex-wrap"
-                   x-show="data.suppressed_count > 0"
-                   x-cloak>
-                    <i class="fas fa-circle-check text-success" aria-hidden="true"></i>
-                    <span>
-                        <span class="font-semibold text-text"
-                              x-text="$number(data.suppressed_count)"></span>
-                        finding<span x-show="data.suppressed_count !== 1">s</span>
-                        suppressed by VEX (not affected, false positive or fixed).
-                    </span>
-                </p>
-                {# Findings list #}
-                <div class="divide-y divide-border" x-show="data.findings.length" x-cloak>
-                    <template x-for="f in data.findings" :key="f.idx">
-                        <div class="py-2.5 flex items-start gap-3"
-                             :class="f.suppressed ? 'opacity-50' : ''">
-                            {# The band comes from the row Alpine builds, so it binds data-level. #}
-                            <c-badges.severity class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <c-code-inline x-text="f.id" />
-                                    <span class="text-text-muted text-xs"
-                                          x-show="f.component"
-                                          x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
-                                    {# state_label, never state: the raw one is the document's enum. #}
-                                    <c-badges.secondary x-show="f.suppressed" x-text="f.state_label" />
-                                </div>
-                                <p class="text-xs text-text-muted mb-0 mt-0.5"
-                                   x-show="f.suppressed &amp;&amp; f.justification"
-                                   x-text="'VEX: ' + (f.justification_label || f.justification)"></p>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <p class="text-sm text-text-muted m-0"
-                   x-show="!data.findings.length"
-                   x-cloak>No vulnerabilities found in this release.</p>
-            </div>
-        </div>
-    {% endif %}
     {# Release Artifacts #}
     {% include 'core/components/public_release_artifacts.html.j2' %}
 {% endblock %}

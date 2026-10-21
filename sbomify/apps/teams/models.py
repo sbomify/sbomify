@@ -253,14 +253,6 @@ class Workspace(models.Model):
         default=False,
         help_text="Enable Transparency Exchange API (TEA) for this workspace",
     )
-    publish_vulnerability_posture = models.BooleanField(
-        default=False,
-        help_text=(
-            "Publish the vulnerability posture of a release on the public Trust Center. "
-            "Off by default: which vulnerabilities a workspace is carrying is its own to "
-            "disclose, and a Trust Center is readable by anyone holding the link."
-        ),
-    )
     csaf_feed_updated_at = models.DateTimeField(
         null=True,
         blank=True,

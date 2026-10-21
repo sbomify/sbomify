@@ -41,7 +41,6 @@
         {% endif %}
         <c-cards.card flush>
         <c-cards.header compact title="Sharing" />
-        {% include 'teams/components/trust_center_toggle.html.j2' with label='Publish vulnerability posture' hint='Show vulnerability details on public release pages. Only public components are counted, after applying VEX statements.' control_id='vuln-posture-toggle' control_label='Publish vulnerability posture on the Trust Center' action_name='vulnerability_posture_action' field_name='publish_vulnerability_posture' enabled=team_obj.publish_vulnerability_posture save_label='Save vulnerability posture setting' %}
         {% include 'teams/components/trust_center_toggle.html.j2' with label='Transparency Exchange API (TEA)' hint='Let tools discover and retrieve your software transparency information. This feature is in beta.' control_id='tea-toggle' control_label='Enable Transparency Exchange API' action_name='tea_action' field_name='tea_enabled' enabled=team_obj.tea_enabled save_label='Save TEA setting' %}
         {% if team_obj.tea_enabled %}
             <c-forms.field horizontal label="TEA discovery endpoint">
