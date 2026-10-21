@@ -417,3 +417,25 @@ class TestAdvisoryProse:
 
     def test_plain_prose_is_unchanged(self) -> None:
         assert advisory_prose("A plain sentence about a package.") == "A plain sentence about a package."
+
+
+def test_the_scan_panel_indexes_the_rulings_once_for_every_row(mocker) -> None:
+    """The panel built each row on its own, so the component's statements were indexed
+    again for every finding on the page: a full page against a large VEX visited the
+    same statements once per row on every refresh.
+    """
+    from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_table_rows
+    from sbomify.apps.vulnerability_scanning import vex
+
+    indexed = mocker.patch.object(vex, "statement_index", wraps=vex.statement_index)
+    findings = [
+        {"id": f"CVE-2026-{n}", "severity": severity, "component": {"name": "lodash", "version": "4.17.15"}}
+        for n, severity in ((1, "low"), (2, "critical"), (3, "medium"))
+    ]
+    statements = [{"ids": ["cve-2026-2"], "packages": set(), "state": "not_affected", "product_scoped": True}]
+
+    rows = vulnerability_table_rows(findings, {"statements": statements})
+
+    assert indexed.call_count == 1
+    assert [row["id"] for row in rows] == ["CVE-2026-1", "CVE-2026-2", "CVE-2026-3"]
+    assert [row["vex_state"] for row in rows] == ["", "not_affected", ""]

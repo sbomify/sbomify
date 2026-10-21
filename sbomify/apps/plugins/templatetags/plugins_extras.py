@@ -291,14 +291,17 @@ def vulnerability_table_rows(findings: Any, triage: Any = None) -> list[dict[str
     covers the whole component.
     """
     from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows
+    from sbomify.apps.vulnerability_scanning.vex import statement_index
 
     triage = triage if isinstance(triage, dict) else {}
+    # Indexed once for the page; each row would otherwise index the same rulings again.
+    index = statement_index(triage["statements"]) if triage.get("statements") else None
     rows = []
     for finding in vulnerability_findings(findings):
         extracted = extract_finding_rows(
             {"findings": [finding]},
-            triage.get("statements") or None,
             triage_decisions=triage.get("decisions") or None,
+            vex_index=index,
         )
         if not extracted:
             continue
