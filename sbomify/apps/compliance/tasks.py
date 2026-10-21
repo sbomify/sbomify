@@ -44,11 +44,13 @@ CLAIM_TIMEOUT = timedelta(minutes=10)
 
 
 def _recipients(team_id: int) -> list[str]:
-    """Owners and admins: filing is theirs to do."""
+    """Owners and admins: filing is theirs to do. A deleted account keeps its membership but is disabled."""
     from sbomify.apps.core.authz import ADMINISTER
     from sbomify.apps.teams.models import Member
 
-    emails = Member.objects.filter(team_id=team_id, role__in=ADMINISTER).values_list("user__email", flat=True)
+    emails = Member.objects.filter(team_id=team_id, role__in=ADMINISTER, user__is_active=True).values_list(
+        "user__email", flat=True
+    )
     return sorted({email for email in emails if email})
 
 
@@ -216,21 +218,24 @@ def dispatch_pending_reminders(*, workspace_key: str | None = None) -> int:
 def schedule_pending(report_id: str) -> bool:
     """Queue a marked report's reminders, from the report as it stands once claimed.
 
-    The mark is cleared before scheduling, not after, so a write that marks the
-    report again meanwhile keeps its mark even if its own queueing fails. A
-    failure here puts the mark back. Returns whether this call scheduled it.
+    Clearing the mark, reading the report and queueing commit together, so a
+    failure at any step, or a worker stopped part way, leaves the report marked
+    for the next dispatch. The clear holds the report's row until then, so a
+    write that marks it meanwhile lands after this commit and keeps its mark.
+    Queueing a report twice mails nobody twice, since every reminder is claimed
+    before it is sent. Returns whether this call scheduled it.
     """
     from sbomify.apps.compliance.models import CRAReport
 
-    if not CRAReport.objects.filter(pk=report_id, reminders_pending=True).update(reminders_pending=False):
-        return False
-    report = CRAReport.objects.prefetch_related("filings").filter(pk=report_id).first()
-    if report is None:
-        return False
     try:
-        schedule_reminders(report)
+        with transaction.atomic():
+            if not CRAReport.objects.filter(pk=report_id, reminders_pending=True).update(reminders_pending=False):
+                return False
+            report = CRAReport.objects.prefetch_related("filings").filter(pk=report_id).first()
+            if report is None:
+                return False
+            schedule_reminders(report)
     except Exception:
-        CRAReport.objects.filter(pk=report_id).update(reminders_pending=True)
         logger.exception(f"Could not queue CRA reminders for report {report_id}; they stay pending")
         return False
     return True

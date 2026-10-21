@@ -431,6 +431,19 @@ class TestReminders:
         assert "boss@example.com" in recipients
         assert "worker@example.com" not in recipients
 
+    def test_a_deleted_account_gets_no_reminder(self, team, report):
+        # Deleting an account in a shared workspace keeps its membership and disables the user.
+        former = _member(team, "admin", "former")
+        former.is_active = False
+        former.deleted_at = timezone.now()
+        former.save(update_fields=["is_active", "deleted_at"])
+
+        tasks.send_due_reminders(now=AWARE + timedelta(hours=23))
+
+        recipients = {message.to[0] for message in mail.outbox}
+        assert recipients, "the owner should still be reminded"
+        assert "former@example.com" not in recipients
+
     def test_scheduling_queues_a_message_before_and_at_every_open_deadline(self, report):
         # The final report has no date until a fix exists, so it queues nothing yet.
         now = AWARE + timedelta(hours=1)
@@ -1014,6 +1027,30 @@ class TestPendingMark:
 
         with patch.object(tasks, "schedule_reminders", side_effect=ConnectionError("down")):
             assert tasks.dispatch_pending_reminders() == 0
+
+        report.refresh_from_db()
+        assert report.reminders_pending is True
+
+    def test_a_reload_that_fails_keeps_the_mark(self, report):
+        from django.db import DatabaseError
+
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
+        with patch.object(CRAReport.objects, "prefetch_related", side_effect=DatabaseError("connection lost")):
+            assert tasks.dispatch_pending_reminders() == 0
+
+        report.refresh_from_db()
+        assert report.reminders_pending is True
+
+    def test_a_dispatch_interrupted_after_the_claim_keeps_the_mark(self, report):
+        class Interrupted(BaseException):
+            """What a worker killed mid-dispatch looks like to the code it was running."""
+
+        CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
+
+        with patch.object(tasks, "schedule_reminders", side_effect=Interrupted):
+            with pytest.raises(Interrupted):
+                tasks.dispatch_pending_reminders()
 
         report.refresh_from_db()
         assert report.reminders_pending is True
