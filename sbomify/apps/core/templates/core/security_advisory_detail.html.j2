@@ -143,6 +143,12 @@
                                 {% endif %}
                                 {% comment %}The variant is a value the projection carries, so the badge takes it on the data attribute it keys every recipe from rather than as an interpolated class name.{% endcomment %}
                                 <c-badges.dynamic variant="{{ u.variant }}">{{ u.label }}</c-badges.dynamic>
+                                {% if u.channel == "agent" %}
+                                    <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
+                                {% elif u.channel %}
+                                    <c-badges.secondary size="sm">{{ u.channel|upper }}</c-badges.secondary>
+                                {% endif %}
+                                {% if u.actor %}<span class="text-xs text-text-muted truncate">{{ u.actor }}</span>{% endif %}
                             </span>
                             <div class="flex items-center gap-3 shrink-0">
                                 <span class="text-xs text-text-muted">{{ u.date_display }}</span>

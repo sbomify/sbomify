@@ -178,7 +178,6 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             - len(picture["findings"])
             + sum(finding["sla"]["label"] == "Awaiting history" for finding in picture["findings"]),
             "known_exploited": known_exploited,
-            "stale": len(stale_components),
             # The same zero the product page cannot stand behind, on the surface
             # a reader lands on first. All three counts read the newest SBOM per
             # component, so a component whose newest SBOM has not finished
@@ -187,9 +186,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             #
             # Only a zero, and only while something is unassessed. A non-zero
             # count is real information even when partial, and the alert under
-            # the cards already says what is still missing. "Components with
-            # stale SBOMs" is measured from upload timestamps rather than scan
-            # results, so its zero is always honest and stays a number.
+            # the cards already says what is still missing.
             "unmeasured_open": open_findings == 0 and unassessed > 0,
             "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
             "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,
