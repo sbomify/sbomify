@@ -7,8 +7,9 @@ longer in the latest scan.
 Fix asks the agent to upgrade. Triage asks it to decide whether the
 vulnerability affects what ships and write a triage decision, for builds with
 no lockfile to change, such as a Yocto image, or releases that cannot take an
-upgrade. Both prompts arrive together, so switching is client state. A
-malicious package, or one without a purl, has no triage prompt.
+upgrade. Both prompts arrive together, so switching is client state. When
+there is no triage prompt, fix.triage_unavailable says why, so the reader
+is not left looking for it.
 {% endcomment %}
 <c-vars fix error />
 {% if error %}
@@ -57,6 +58,9 @@ malicious package, or one without a purl, has no triage prompt.
             </c-navigation.segmented>
         {% endif %}
         <c-typography.description size="sm" x-show="promptMode === 'fix'">Paste this into Claude Code, Cursor or another coding agent in the repository that builds {{ fix.component }}. It asks for this one fix and nothing else.</c-typography.description>
+        {% if fix.triage_unavailable %}
+            <c-typography.description size="sm">No triage prompt. {{ fix.triage_unavailable }}</c-typography.description>
+        {% endif %}
         {% if fix.triage_prompt %}
             <c-typography.description size="sm" x-show="promptMode === 'triage'" x-cloak>Use this when an upgrade is not the answer, such as a Yocto image or a frozen release. The agent checks whether {{ fix.component }} is affected and writes a decision for you to review and record in sbomify. It changes no code.</c-typography.description>
         {% endif %}
