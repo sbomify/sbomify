@@ -271,6 +271,7 @@
                     {% endfor %}
                 </div>
             </div>
+            {% include "compliance/components/advisory_cra_reporting.html.j2" %}
             {% comment %}Reads the advisory's stored references rather than rebuilding an NVD URL from the CVE: the model records the real url per reference, so GHSA, EUVD, OSV and vendor advisories all appear instead of only CVEs.{% endcomment %}
             {% if advisory.references %}
                 <div class="space-y-3 border-t border-border/60 pt-6">

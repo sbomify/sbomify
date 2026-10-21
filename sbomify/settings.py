@@ -1393,6 +1393,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.compliance.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
