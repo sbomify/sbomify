@@ -428,22 +428,27 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
-        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_collection_safely
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import (
+            component_collection_safely,
+            is_newest_tracked,
+        )
 
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         project_version = str(sbom.id)
 
-        # Born in its component's collection, and the newest upload is always
-        # the latest version. None when the key may not make collections: the
-        # upload then goes ahead as it always did.
+        # Born in its component's collection. None when the key may not make
+        # collections: the upload then goes ahead as it always did. Latest only
+        # when it is the newest tracked SBOM, since first scans can finish out
+        # of order and setting the flag clears it on every other version.
         parent_uuid = component_collection_safely(client, sbom.component, dt_server)
+        is_latest = is_newest_tracked(sbom, dt_server)
         client.upload_sbom_with_project_creation(
             project_name=project_name,
             project_version=project_version,
             sbom_data=sbom_bytes,
             auto_create=True,
             parent_uuid=parent_uuid,
-            is_latest=True,
+            is_latest=is_latest,
         )
 
         project_data = client.find_project_by_name_version(project_name, project_version)
@@ -461,7 +466,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version_uuid": version_uuid,
                 "last_sbom_upload": dj_timezone.now(),
                 "dt_active": True,
-                "dt_is_latest": True,
+                "dt_is_latest": is_latest,
                 "dt_parent_uuid": parent_uuid,
             },
         )
@@ -534,6 +539,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
             try:
                 client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
                 written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                if written:
+                    # The tag write sent back the whole project as it was read,
+                    # which may be from before a reconcile retired it. Forget
+                    # what we last wrote, so the reconcile below re-reads it.
+                    version_row.dt_active = None
+                    version_row.save(update_fields=["dt_active", "updated_at"])
                 (logger.info if written else logger.debug)(
                     "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
                     "set" if written else "already in sync,",
