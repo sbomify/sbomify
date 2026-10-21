@@ -7,11 +7,14 @@ For more information on this file, see
 https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
 """
 
+import asyncio
+import json
 import os
 from contextlib import AsyncExitStack
 from typing import Any
 
 from asgiref.sync import ThreadSensitiveContext
+from django.conf import settings
 from django.core.asgi import get_asgi_application
 from starlette.types import Receive, Scope, Send
 
@@ -39,31 +42,70 @@ from sbomify.apps.mcp.server import MCP_PATH_PREFIX, build_app, mcp  # noqa: E40
 # LifespanApp starts below — ``mcp.session_manager`` raises until it has.
 mcp_application = build_app()
 
+# How long an MCP request waits for a free slot before it is told to retry.
+MCP_SLOT_WAIT_SECONDS = 5.0
+
+_BUSY_BODY = json.dumps(
+    {"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": "The server is busy. Retry in a moment."}}
+).encode()
+
+
+async def _send_busy(send: Send) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 503,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"retry-after", b"1"),
+                (b"content-length", str(len(_BUSY_BODY)).encode()),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": _BUSY_BODY})
+
 
 class MCPRouter:
     """Routes ``/mcp`` to the MCP server; everything else to Django.
 
     Dispatch happens on the unmodified scope path, so the MCP app's single route
     (``streamable_http_path``) must equal ``MCP_PATH_PREFIX``.
+
+    Each in-flight MCP request holds an executor thread and a database
+    connection of its own (see below), so the number in flight is capped per
+    process at ``MCP_MAX_CONCURRENT_REQUESTS``. The cap applies before the
+    per-token throttle, which only runs once a request is inside. A request
+    over the cap waits up to ``MCP_SLOT_WAIT_SECONDS`` for a slot, then gets a
+    503 with ``Retry-After``. Django requests never wait behind it.
     """
 
     def __init__(self, django_app: ASGIApp, mcp_app: ASGIApp) -> None:
         self.django_app = django_app
         self.mcp_app = mcp_app
+        self.mcp_slots = asyncio.Semaphore(settings.MCP_MAX_CONCURRENT_REQUESTS)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
         if path == MCP_PATH_PREFIX or path.startswith(f"{MCP_PATH_PREFIX}/"):
-            # Django's ASGIHandler opens a ThreadSensitiveContext per request;
-            # this dispatch happens before Django, so without one here every
-            # thread-sensitive sync call from every concurrent MCP request —
-            # all ORM work via database_sync_to_async — shares asgiref's single
-            # process-wide executor thread. One agent parsing a large SBOM
-            # would then head-of-line-block every other MCP call in the worker.
-            # A per-request context gives each request its own executor, the
-            # same isolation Django requests get.
-            async with ThreadSensitiveContext():
-                await self.mcp_app(scope, receive, send)
+            try:
+                async with asyncio.timeout(MCP_SLOT_WAIT_SECONDS):
+                    await self.mcp_slots.acquire()
+            except TimeoutError:
+                await _send_busy(send)
+                return
+            try:
+                # Django's ASGIHandler opens a ThreadSensitiveContext per request;
+                # this dispatch happens before Django, so without one here every
+                # thread-sensitive sync call from every concurrent MCP request
+                # (all ORM work via database_sync_to_async) shares asgiref's single
+                # process-wide executor thread. One agent parsing a large SBOM
+                # would then head-of-line-block every other MCP call in the worker.
+                # A per-request context gives each request its own executor, the
+                # same isolation Django requests get.
+                async with ThreadSensitiveContext():
+                    await self.mcp_app(scope, receive, send)
+            finally:
+                self.mcp_slots.release()
         else:
             await self.django_app(scope, receive, send)
 
