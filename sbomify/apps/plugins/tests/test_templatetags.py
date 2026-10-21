@@ -439,3 +439,24 @@ def test_the_scan_panel_indexes_the_rulings_once_for_every_row(mocker) -> None:
     assert indexed.call_count == 1
     assert [row["id"] for row in rows] == ["CVE-2026-1", "CVE-2026-2", "CVE-2026-3"]
     assert [row["vex_state"] for row in rows] == ["", "not_affected", ""]
+
+
+def test_the_scan_panel_groups_the_recorded_rulings_once_for_every_row(mocker) -> None:
+    """The panel built each row on its own, so the recorded rulings were grouped by advisory
+    again for every finding: a full page walked every ruling once per row on each refresh.
+    """
+    from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_table_rows
+    from sbomify.apps.vulnerability_scanning import utils
+
+    grouped = mocker.patch.object(utils, "_scoped_by_advisory", wraps=utils._scoped_by_advisory)
+    findings = [
+        {"id": f"CVE-2026-{n}", "severity": "medium", "component": {"name": f"pkg-{n}", "version": "1.0.0"}}
+        for n in range(25)
+    ]
+    unrelated = {"ref": "pkg:npm/other@1.0.0", "component_wide": False}
+    decisions = {(f"cve-2026-{9000 + n}", f"pkg:npm/other-{n}@1.0.0"): unrelated for n in range(100)}
+
+    rows = vulnerability_table_rows(findings, {"decisions": decisions})
+
+    assert len(rows) == 25
+    assert grouped.call_count == 1

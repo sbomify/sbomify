@@ -290,18 +290,21 @@ def vulnerability_table_rows(findings: Any, triage: Any = None) -> list[dict[str
     ruling's scope was recorded on it has only these to say whether the ruling
     covers the whole component.
     """
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows
+    from sbomify.apps.vulnerability_scanning.utils import _scoped_by_advisory, extract_finding_rows
     from sbomify.apps.vulnerability_scanning.vex import statement_index
 
     triage = triage if isinstance(triage, dict) else {}
-    # Indexed once for the page; each row would otherwise index the same rulings again.
+    # Indexed and grouped once for the page; each row would otherwise redo both.
     index = statement_index(triage["statements"]) if triage.get("statements") else None
+    decisions = triage.get("decisions") or None
+    scoped = _scoped_by_advisory(decisions) if decisions else None
     rows = []
     for finding in vulnerability_findings(findings):
         extracted = extract_finding_rows(
             {"findings": [finding]},
-            triage_decisions=triage.get("decisions") or None,
+            triage_decisions=decisions,
             vex_index=index,
+            scoped_index=scoped,
         )
         if not extracted:
             continue
