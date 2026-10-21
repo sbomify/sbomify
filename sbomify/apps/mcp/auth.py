@@ -250,7 +250,7 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     try:
         token = _bearer_token(starlette_request)
     except MCPAuthError:
-        await _charge_refusal(stub)
+        await _charge_refusal(stub, tool=attempted_action, reason="no bearer token")
         raise
 
     # database_sync_to_async, not a bare sync_to_async: this is the first DB
@@ -265,7 +265,7 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         attempted_action=f"mcp {attempted_action}",
     )
     if user is None or record is None:
-        await _charge_refusal(stub)
+        await _charge_refusal(stub, tool=attempted_action, reason="invalid or expired token")
         raise MCPAuthError("Invalid or expired access token.")
 
     stub.user = user  # type: ignore[assignment]
@@ -304,8 +304,8 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     return principal
 
 
-async def _charge_refusal(stub: HttpRequest) -> None:
-    """Charge a refused request to its address, or refuse it as over budget.
+async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
+    """Charge a refused request to its address and audit it, or refuse it as over budget.
 
     A request with no usable token, or a token that does not resolve, never
     reaches the per-token throttle, so it is charged to the per-IP window the
@@ -313,8 +313,14 @@ async def _charge_refusal(stub: HttpRequest) -> None:
     and for a token a JWT decode plus an audit-log line, so without a budget a
     loop of them amplifies both for free. Only refusals are charged: valid
     tokens stay on their own, larger, budget.
+
+    Audited here because these refusals happen before the tool wrapper's audit
+    block, and unauthenticated probing is what the stream exists to show. One
+    line per refusal, with the address and a fixed reason, never the header.
     """
-    if not await sync_to_async(AnonymousIPRateThrottle().allow_request)(stub):
+    over_budget = not await sync_to_async(AnonymousIPRateThrottle().allow_request)(stub)
+    audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=get_client_ip(stub))
+    if over_budget:
         raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
 
 

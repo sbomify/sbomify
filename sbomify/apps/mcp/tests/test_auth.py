@@ -63,6 +63,67 @@ async def test_a_request_without_a_usable_bearer_token_is_charged_to_its_address
         await authenticate(request, attempted_action="tools/list")
 
 
+def _audit_events(spy) -> list[dict]:
+    """The mcp_tool_call events a patched ``limits.log`` received."""
+    calls = spy.method_calls
+    return [c.kwargs["extra"] for c in calls if c.kwargs.get("extra", {}).get("event") == "mcp_tool_call"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "authorization",
+    [None, "Basic abc123", "Bearer   ", "Bearer not-a-real-token"],
+    ids=["none", "basic", "empty", "unknown-token"],
+)
+async def test_every_refused_credential_is_audited_once_without_its_secret(authorization, settings):
+    """A refusal raised before the tool wrapper's audit block left unauthenticated
+    probing out of the MCP audit stream entirely."""
+    from unittest.mock import patch
+
+    from django.core.cache import cache
+
+    from sbomify.apps.mcp import limits
+
+    cache.clear()
+    settings.API_ANONYMOUS_RATE_LIMIT = "100/min"
+
+    with patch.object(limits, "log") as spy, pytest.raises(MCPAuthError):
+        await authenticate(fake_request(authorization, client_host="10.7.7.7"), attempted_action="list_products")
+
+    [event] = _audit_events(spy)
+    assert event["tool"] == "list_products"
+    assert event["outcome"] == "denied"
+    assert event["client_ip"] == "10.7.7.7"
+    assert event["token_id"] is None
+    logged = repr(spy.method_calls)
+    assert "not-a-real-token" not in logged
+    assert "abc123" not in logged
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_over_the_address_budget_is_audited_as_rate_limited(settings):
+    from unittest.mock import patch
+
+    from django.core.cache import cache
+
+    from sbomify.apps.mcp import limits
+    from sbomify.apps.mcp.auth import MCPRateLimitedError
+
+    cache.clear()
+    settings.API_ANONYMOUS_RATE_LIMIT = "1/min"
+    request = fake_request(None, client_host="10.8.8.8")
+    with pytest.raises(MCPAuthError):
+        await authenticate(request, attempted_action="tools/list")
+
+    with patch.object(limits, "log") as spy, pytest.raises(MCPRateLimitedError):
+        await authenticate(request, attempted_action="tools/list")
+
+    [event] = _audit_events(spy)
+    assert event["outcome"] == "rate_limited"
+    assert event["client_ip"] == "10.8.8.8"
+
+
 @pytest.mark.asyncio
 @pytest.mark.django_db
 async def test_garbage_token_is_rejected():

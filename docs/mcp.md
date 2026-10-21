@@ -62,7 +62,9 @@ Two structured audit streams cover MCP traffic:
 
 - `sbomify.audit.mcp`: one `mcp_tool_call` event per invocation, carrying outcome, tool, token,
   user and workspace. Deliberately never arguments or artifact content; logging those would put
-  whole SBOMs in the log.
+  whole SBOMs in the log. A request refused before its credential resolves (no bearer token, an
+  unknown or expired one, or an address over its budget) gets one event too, with the client
+  address and no token fields.
 - `sbomify.audit.token_auth`: the existing token-authentication events. MCP calls appear with an
   `attempted_action` of `mcp <tool_name>`.
 
