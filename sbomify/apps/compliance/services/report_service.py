@@ -212,7 +212,14 @@ def update_report(
     *,
     values: dict[str, Any] | None = None,
     dates: dict[str, datetime | None] | None = None,
+    revision: str | None = None,
 ) -> ServiceResult[CRAReport]:
+    """Change the report's values and dates.
+
+    ``revision`` is the report's ``revision`` from the read the edit is based
+    on. A form posts every field, so an edit made since then would be silently
+    undone, deadlines included.
+    """
     values = values or {}
     errors = validate_values(values, report.kind)
     if errors:
@@ -225,6 +232,10 @@ def update_report(
         report = _lock(report)
         if report.is_closed:
             return ServiceResult.failure("The final report is filed, so this report can no longer change.", 409)
+        if revision is not None and revision != report.revision:
+            return ServiceResult.failure(
+                "This report changed after you opened it. Reload the page to see the changes, then save again.", 409
+            )
         before = {**report.srp_fields, **{name: getattr(report, name) for name in _DATE_FIELDS}}
         merged = dict(report.srp_fields)
         for key, value in values.items():
@@ -320,6 +331,7 @@ def record_filing(
                 srp_reference=srp_reference,
                 filed_at=filed_at or timezone.now(),
                 filed_by=user,
+                filer=(user.email or user.username) if user else "",
                 snapshot=_snapshot(report),
             )
             event_type = _ADVISORY_EVENTS.get(stage)
@@ -370,7 +382,7 @@ def delete_report(report: CRAReport, user: Any) -> ServiceResult[None]:
 def get_report(team: Any, report_id: str) -> CRAReport | None:
     return (
         CRAReport.objects.select_related("product", "advisory")
-        .prefetch_related("filings__filed_by")
+        .prefetch_related("filings")
         .filter(pk=report_id, team=team)
         .first()
     )
@@ -379,7 +391,7 @@ def get_report(team: Any, report_id: str) -> CRAReport | None:
 def reports_for_team(team: Any) -> list[CRAReport]:
     """Open reports first, soonest deadline first; then closed ones."""
     reports = list(
-        CRAReport.objects.select_related("product", "advisory").prefetch_related("filings__filed_by").filter(team=team)
+        CRAReport.objects.select_related("product", "advisory").prefetch_related("filings").filter(team=team)
     )
     now = timezone.now()
 

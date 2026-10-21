@@ -34,6 +34,8 @@ class CRAReportForm(forms.Form):
     aware_at = forms.DateTimeField(input_formats=_DATETIME_FORMATS)
     occurred_at = forms.DateTimeField(required=False, input_formats=_DATETIME_FORMATS)
     measure_available_at = forms.DateTimeField(required=False, input_formats=_DATETIME_FORMATS)
+    # The revision the page showed, so a save from a page opened before another edit is refused.
+    revision = forms.CharField(max_length=64)
 
     def __init__(self, *args: Any, kind: str, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -51,7 +53,7 @@ class CRAReportForm(forms.Form):
                 )
 
     def values(self) -> dict[str, Any]:
-        return {name: value for name, value in self.cleaned_data.items() if name not in self._dates()}
+        return {name: value for name, value in self.cleaned_data.items() if name not in (*self._dates(), "revision")}
 
     def dates(self, report: Any) -> dict[str, Any]:
         """The dates the person changed.

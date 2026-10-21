@@ -148,13 +148,14 @@ class TestCreateReport:
         )
         assert created.status_code == 201, created.content
         report_id = created.json()["id"]
-        values = client.get(f"/api/v1/compliance/cra-reports/{report_id}").json()["values"]
+        read = client.get(f"/api/v1/compliance/cra-reports/{report_id}").json()
+        values = read["values"]
         assert "cve_id" not in values
         assert values["title"] == advisory.title
 
         patched = client.patch(
             f"/api/v1/compliance/cra-reports/{report_id}",
-            data=json.dumps({"values": values}),
+            data=json.dumps({"values": values, "revision": read["revision"]}),
             content_type="application/json",
         )
 
@@ -265,7 +266,9 @@ class TestApi:
 
         patched = client.patch(
             f"/api/v1/compliance/cra-reports/{report_id}",
-            data=json.dumps({"values": {"general_information": "Exploited in the wild."}}),
+            data=json.dumps(
+                {"values": {"general_information": "Exploited in the wild."}, "revision": created.json()["revision"]}
+            ),
             content_type="application/json",
         )
         assert patched.status_code == 200
@@ -345,7 +348,13 @@ class TestPages:
         with patch.object(report_service, "log_cra_report_event") as audit:
             response = client.post(
                 reverse("compliance:cra_report_detail", args=[report.id]),
-                {**report.srp_fields, "action": "save", "aware_at": "2026-10-01T09:00", "occurred_at": ""},
+                {
+                    **report.srp_fields,
+                    "action": "save",
+                    "aware_at": "2026-10-01T09:00",
+                    "occurred_at": "",
+                    "revision": report.revision,
+                },
             )
 
         assert response.status_code == 302
@@ -362,7 +371,13 @@ class TestPages:
 
         client.post(
             reverse("compliance:cra_report_detail", args=[report.id]),
-            {**report.srp_fields, "action": "save", "aware_at": "2026-10-01T09:05", "occurred_at": ""},
+            {
+                **report.srp_fields,
+                "action": "save",
+                "aware_at": "2026-10-01T09:05",
+                "occurred_at": "",
+                "revision": report.revision,
+            },
         )
 
         report.refresh_from_db()
@@ -658,7 +673,7 @@ class TestTimestamps:
 
         response = client.patch(
             f"/api/v1/compliance/cra-reports/{report.pk}",
-            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00"}),
+            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00", "revision": report.revision}),
             content_type="application/json",
         )
 
@@ -683,7 +698,7 @@ class TestTimestamps:
 
         response = client.patch(
             f"/api/v1/compliance/cra-reports/{report.pk}",
-            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00+02:00"}),
+            data=json.dumps({"measure_available_at": "2026-10-03T09:00:00+02:00", "revision": report.revision}),
             content_type="application/json",
         )
 
@@ -953,7 +968,7 @@ class TestFieldsOfTheOtherKind:
     def test_the_api_refuses_it_too(self, team, owner, report):
         response = _client_for(team, owner).patch(
             f"/api/v1/compliance/cra-reports/{report.pk}",
-            data=json.dumps({"values": {_incident_only_field(): "x"}}),
+            data=json.dumps({"values": {_incident_only_field(): "x"}, "revision": report.revision}),
             content_type="application/json",
         )
 
@@ -1144,7 +1159,7 @@ class TestManageOnlyToken:
 
         patched = client.patch(
             f"/api/v1/compliance/cra-reports/{report.id}",
-            data=json.dumps({"values": {"general_information": "Exploited in the wild."}}),
+            data=json.dumps({"values": {"general_information": "Exploited in the wild."}, "revision": report.revision}),
             content_type="application/json",
         )
         filed = client.post(
@@ -1169,7 +1184,7 @@ class TestManageOnlyToken:
 
         patched = client.patch(
             f"/api/v1/compliance/cra-reports/{report.id}",
-            data=json.dumps({"values": {"general_information": "x"}}),
+            data=json.dumps({"values": {"general_information": "x"}, "revision": report.revision}),
             content_type="application/json",
         )
 
@@ -1301,3 +1316,100 @@ class TestClosedReportDeadlines:
         html = client.get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
 
         assert "Overdue" not in html
+
+
+@pytest.mark.django_db
+class TestLayoutRevision:
+    """The portal layout names the draft its fields came from, so a client files what it copied."""
+
+    def test_filing_with_the_layouts_revision_after_an_edit_is_refused(self, team, owner, report):
+        client = _client_for(team, owner)
+        layout = client.get(f"/api/v1/compliance/cra-reports/{report.id}/srp?stage=early_warning").json()
+        report_service.update_report(report, owner, values={"general_information": "Edited by someone else."})
+
+        filed = client.post(
+            f"/api/v1/compliance/cra-reports/{report.id}/filings",
+            data=json.dumps({"stage": "early_warning", "revision": layout["revision"]}),
+            content_type="application/json",
+        )
+
+        assert filed.status_code == 409, filed.content
+        assert not report.filings.exists()
+
+
+@pytest.mark.django_db
+class TestFilerIsRecordedWhenFiled:
+    """Who filed is evidence: it stays as it was when the filing was recorded."""
+
+    def test_an_email_change_after_filing_leaves_the_evidence_alone(self, team, owner, report):
+        filer = _member(team, "admin", "filer")
+        filing = report_service.record_filing(report, filer, stage=Stage.EARLY_WARNING).value
+        filer.email = "renamed@example.com"
+        filer.save()
+        client = _client_for(team, owner)
+
+        body = client.get(f"/api/v1/compliance/cra-reports/{report.id}/filings/{filing.id}").json()
+        page = client.get(reverse("compliance:cra_report_filing", args=[report.id, filing.id])).content.decode()
+
+        assert body["filed_by"] == "filer@example.com"
+        assert "filer@example.com" in page
+        assert "renamed@example.com" not in page
+
+    def test_deleting_the_account_keeps_who_filed(self, team, owner, product):
+        report = report_service.create_report(team, owner, kind="incident", product_id=product.id, aware_at=AWARE).value
+        filer = _member(team, "admin", "filer")
+        filing = report_service.record_filing(report, filer, stage=Stage.EARLY_WARNING).value
+
+        filer.delete()
+
+        assert CRAReportFiling.objects.get(pk=filing.pk).filer == "filer@example.com"
+
+
+@pytest.mark.django_db
+class TestStaleEdit:
+    """An edit made from a page or a read that is out of date does not undo a newer one."""
+
+    def _form(self, report, revision, text):
+        return {
+            **report.srp_fields,
+            "action": "save",
+            "aware_at": "2026-10-01T09:00",
+            "occurred_at": "",
+            "general_information": text,
+            "revision": revision,
+        }
+
+    def test_a_second_open_form_cannot_undo_the_first_save(self, team, owner, report):
+        client = _client_for(team, owner)
+        url = reverse("compliance:cra_report_detail", args=[report.id])
+        shown = report.revision
+        page = client.get(url).content.decode()
+        assert page.count(f'name="revision" value="{shown}"') == 2
+
+        first = client.post(url, self._form(report, shown, "Saved first."))
+        second = client.post(url, self._form(report, shown, "Saved from a stale page."), follow=True)
+
+        assert first.status_code == 302
+        report.refresh_from_db()
+        assert report.srp_fields["general_information"] == "Saved first."
+        assert "This report changed" in second.content.decode()
+
+    def test_the_api_refuses_a_stale_revision_and_requires_one(self, team, owner, report):
+        client = _client_for(team, owner)
+        url = f"/api/v1/compliance/cra-reports/{report.id}"
+        read = report.revision
+        report_service.update_report(report, owner, values={"general_information": "Saved first."})
+
+        stale = client.patch(
+            url,
+            data=json.dumps({"values": {"general_information": "Stale."}, "revision": read}),
+            content_type="application/json",
+        )
+        missing = client.patch(
+            url, data=json.dumps({"values": {"general_information": "Stale."}}), content_type="application/json"
+        )
+
+        assert stale.status_code == 409, stale.content
+        assert missing.status_code in (400, 422)
+        report.refresh_from_db()
+        assert report.srp_fields["general_information"] == "Saved first."

@@ -119,6 +119,7 @@
                   class="flex flex-col gap-4">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save" />
+                <input type="hidden" name="revision" value="{{ report.revision }}" />
                 <div class="grid gap-4 sm:grid-cols-3">
                     <c-forms.field label="When you became aware (UTC)" for="reportAwareAt" required>
                     <c-forms.input id="reportAwareAt" name="aware_at" type="datetime-local" value="{{ report.aware_at|date:'Y-m-d\TH:i' }}" required />

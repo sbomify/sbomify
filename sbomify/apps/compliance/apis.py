@@ -1021,7 +1021,7 @@ def update_cra_report(request: HttpRequest, report_id: str, payload: CRAReportUp
         return report
     sent = payload.model_dump(exclude_unset=True)
     dates = {name: sent[name] for name in ("aware_at", "occurred_at", "measure_available_at") if name in sent}
-    result = update_report(report, request.user, values=sent.get("values"), dates=dates)
+    result = update_report(report, request.user, values=sent.get("values"), dates=dates, revision=payload.revision)
     if not result.ok or result.value is None:
         return result.status_code or 400, ErrorResponse(error=result.error or "Could not update the report")
     return 200, _report_to_schema(result.value)
@@ -1091,4 +1091,6 @@ def get_cra_report_srp(request: HttpRequest, report_id: str, stage: str = "") ->
         return report
     nxt = report.next_due()
     chosen = stage or (nxt.stage if nxt else "final_report")
-    return 200, SRPLayoutSchema(stage=chosen, fields=[SRPFieldSchema(**row) for row in srp_layout(report, chosen)])
+    return 200, SRPLayoutSchema(
+        stage=chosen, fields=[SRPFieldSchema(**row) for row in srp_layout(report, chosen)], revision=report.revision
+    )

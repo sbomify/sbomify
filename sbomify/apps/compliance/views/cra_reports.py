@@ -192,7 +192,13 @@ class CRAReportDetailView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginR
             labels = ", ".join(str(form.fields[name].label or name) for name in form.errors)
             messages.error(request, f"Nothing was saved. Check these values: {labels}.")
             return
-        result = report_service.update_report(report, request.user, values=form.values(), dates=form.dates(report))
+        result = report_service.update_report(
+            report,
+            request.user,
+            values=form.values(),
+            dates=form.dates(report),
+            revision=form.cleaned_data["revision"],
+        )
         if result.ok:
             messages.success(request, "Report saved.")
         else:

@@ -808,17 +808,14 @@ class CRAReportFiling(models.Model):
     filed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # Who recorded the filing, by email: evidence names one person, not a display
+    # name. Kept as text because the account can change its email or be deleted.
+    filer = models.CharField(max_length=254, blank=True, default="")
     snapshot = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return f"{self.get_stage_display()} for {self.report_id}"
-
-    @property
-    def filer(self) -> str:
-        """Who recorded the filing, by email: evidence names one person, not a display name."""
-        user = self.filed_by
-        return (user.email or user.username) if user else ""
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:

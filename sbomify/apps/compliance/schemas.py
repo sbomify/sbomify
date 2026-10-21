@@ -174,6 +174,9 @@ class CRAReportUpdateSchema(Schema):
     aware_at: AwareDatetime | None = None
     occurred_at: AwareDatetime | None = None
     measure_available_at: AwareDatetime | None = None
+    # The report's ``revision`` from the read this edit is based on. If the
+    # report changed since, the edit is refused with 409 instead of undoing it.
+    revision: str = Field(min_length=1, max_length=64)
 
 
 class CRAFilingCreateSchema(Schema):
@@ -233,3 +236,6 @@ class SRPFieldSchema(Schema):
 class SRPLayoutSchema(Schema):
     stage: str
     fields: list[SRPFieldSchema]
+    # The report's ``revision`` these fields come from: send it when recording
+    # the filing, so a draft edited after copying is not recorded as filed.
+    revision: str
