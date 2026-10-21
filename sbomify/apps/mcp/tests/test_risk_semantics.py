@@ -67,13 +67,13 @@ def test_pending_rescan_does_not_shadow_the_last_completed_result(mcp_owner):
     _run(sbom, status="completed")
     _run(sbom, status="pending")
 
-    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
 
     assert scanned == {sbom.id}
     assert risk._counts(rows)["critical"] == 1
 
     _run(sbom, status="failed")
-    rows, _ = risk._rows_for(risk._security_runs(bound))
+    rows, _, _ = risk._rows_for(risk._security_runs(bound))
     assert risk._counts(rows)["critical"] == 1
 
 
@@ -108,7 +108,7 @@ def test_vex_uploaded_after_the_scan_suppresses_the_finding(mcp_owner, monkeypat
         ],
     )
 
-    rows, _ = risk._rows_for(risk._security_runs(bound))
+    rows, _, _ = risk._rows_for(risk._security_runs(bound))
 
     assert len(rows) == 1
     assert rows[0]["vex_suppressed"] is True
@@ -131,7 +131,7 @@ def test_every_summary_bucket_is_reachable_through_the_list_filter(mcp_owner):
         },
     )
 
-    rows, _ = risk._rows_for(risk._security_runs(bound))
+    rows, _, _ = risk._rows_for(risk._security_runs(bound))
     counts = risk._counts(rows)
 
     assert counts["info"] == 1
@@ -185,7 +185,7 @@ def test_only_the_latest_sbom_per_component_counts(mcp_owner):
     )
     _run(new, status="completed")
 
-    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
     counts = risk._counts(rows)
 
     assert scanned == {new.id}
@@ -208,7 +208,7 @@ def test_a_clean_sbom_never_fetches_its_vex(mcp_owner, monkeypatch):
         lambda component_id, cache=None: calls.append(component_id) or [],
     )
 
-    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
 
     assert scanned == {sbom.id}
     assert rows == []
@@ -229,7 +229,7 @@ def test_a_skipped_run_does_not_count_as_scanned(mcp_owner):
     sbom = _sbom(bound)
     _run(sbom, status="completed", result={"findings": [], "metadata": {"skipped": True}})
 
-    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
 
     assert rows == []
     assert scanned == set(), "a skipped run reads as scanned-and-clean"
@@ -247,7 +247,7 @@ def test_one_provider_skipping_leaves_the_sbom_scanned(mcp_owner):
     skipped.save(update_fields=["plugin_name"])
     _run(sbom, status="completed")
 
-    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    rows, scanned, _ = risk._rows_for(risk._security_runs(bound))
 
     assert scanned == {sbom.id}
     assert risk._counts(rows)["critical"] == 1
@@ -270,3 +270,93 @@ def test_a_finding_with_more_aliases_than_fit_says_it_was_cut():
     assert len(shaped["aliases"]) == MAX_ALIASES
     assert shaped["aliases_truncated"] is True
     assert "aliases_truncated" not in _present({"id": "CVE-2026-1", "aliases": ["GHSA-aaaa-bbbb-cccc"]})
+
+
+class _Bucket:
+    """The result store's bucket, in memory."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def get_file_data(self, bucket: str, key: str) -> bytes | None:
+        return self.objects.get(key)
+
+
+@pytest.fixture
+def result_bucket(monkeypatch) -> _Bucket:
+    bucket = _Bucket()
+    monkeypatch.setattr("sbomify.apps.plugins.result_store._client", lambda: bucket)
+    monkeypatch.setattr("sbomify.apps.plugins.result_store._bucket", lambda: "test-bucket")
+    return bucket
+
+
+def _offload(run: AssessmentRun, bucket: _Bucket, *, keep_object: bool = True) -> None:
+    """Move a run's payload to object storage the way the offload sweep does: key and NULL in one UPDATE."""
+    from sbomify.apps.plugins.result_store import object_key_for, serialise_result
+
+    payload = serialise_result(run.result)
+    key = object_key_for(run.id, payload)
+    if keep_object:
+        bucket.objects[key] = payload
+    AssessmentRun.objects.filter(pk=run.pk).update(result=None, result_object_key=key)
+
+
+@pytest.mark.django_db
+def test_an_offloaded_scan_still_counts_its_findings(mcp_owner, result_bucket):
+    """A scan whose payload moved to object storage still found what it found.
+
+    Its ``result`` column is NULL once offloaded, so reading the column instead of
+    the result store reported the SBOM as scanned and clean.
+    """
+    _, bound, _ = mcp_owner
+    sbom = _sbom(bound)
+    _offload(_run(sbom), result_bucket)
+
+    rows, scanned, unavailable = risk._rows_for(risk._security_runs(bound))
+
+    assert risk._counts(rows)["critical"] == 1
+    assert scanned == {sbom.id}
+    assert unavailable == set()
+
+
+@pytest.mark.django_db
+def test_a_scan_whose_payload_is_gone_reads_as_unavailable_not_clean(mcp_owner, result_bucket):
+    """No findings and "we cannot read what was found" are different answers.
+
+    The scan still ran (its stored skipped flag says so), so the SBOM stays
+    scanned; the findings it holds are reported as unavailable rather than as none.
+    """
+    _, bound, _ = mcp_owner
+    sbom = _sbom(bound)
+    _offload(_run(sbom), result_bucket, keep_object=False)
+
+    rows, scanned, unavailable = risk._rows_for(risk._security_runs(bound))
+
+    assert rows == []
+    assert scanned == {sbom.id}
+    assert unavailable == {sbom.id}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_tools_say_when_a_scan_could_not_be_read(mcp_owner, make_token, result_bucket):
+    """The agent relays the counts, so they must carry the gap, not hide it."""
+    from asgiref.sync import sync_to_async
+
+    from .test_artifact_surface import _call
+    from .test_protocol import structured
+
+    _, bound, _ = mcp_owner
+
+    def setup() -> None:
+        _offload(_run(_sbom(bound)), result_bucket, keep_object=False)
+
+    await sync_to_async(setup)()
+    token = await sync_to_async(make_token)(["workspace:read"])
+
+    summary = structured(await _call(token, "get_vulnerability_summary"))
+    listing = structured(await _call(token, "list_vulnerabilities"))
+
+    assert summary["sboms_unavailable"] == 1
+    assert listing["sboms_unavailable"] == 1
+    assert listing["items"] == []

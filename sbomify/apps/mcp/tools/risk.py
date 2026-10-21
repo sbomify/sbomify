@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp.exceptions import ToolError
 
+from sbomify.logging import getLogger
+
 from .. import serializers
 from ..auth import Principal, require
 from ..limits import untrusted
@@ -36,6 +38,8 @@ from .catalog import _get_release, _lookup_component, _lookup_product, _lookup_r
 if TYPE_CHECKING:
     from django.db.models import QuerySet
     from mcp.server.fastmcp import FastMCP
+
+logger = getLogger(__name__)
 
 # Mirrors utils.SEVERITY_RANK plus the no-severity bucket. Hand-written rather
 # than derived so this module keeps its imports lazy; test_risk_semantics
@@ -121,12 +125,16 @@ def _latest_per_provider(runs: QuerySet[Any]) -> dict[str, list[Any]]:
     return by_sbom
 
 
-def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
+def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str], set[str]]:
     """Flatten ``runs`` into finding rows, merged across providers.
 
-    Returns ``(rows, scanned_sbom_ids)``. Each row carries the SBOM and component
-    it came from so a finding can be traced back to what ships it.
+    Returns ``(rows, scanned_sbom_ids, unavailable_sbom_ids)``. Each row carries
+    the SBOM and component it came from so a finding can be traced back to what
+    ships it. Results are read through the result store, because a superseded
+    run's payload may live in object storage with its column empty; an SBOM
+    whose payload cannot be read is reported as unavailable, never as clean.
     """
+    from sbomify.apps.plugins.result_store import ResultObjectMissing, load_result
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
@@ -138,6 +146,7 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
 
     rows: list[dict[str, Any]] = []
     scanned: set[str] = set()
+    unavailable: set[str] = set()
     # One S3 fetch per component per call, like the dashboards' request-scoped
     # cache — several SBOMs usually share a component.
     vex_cache: dict[Any, list[dict[str, Any]]] = {}
@@ -146,7 +155,21 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
     kev_ids = kev_ids_for_serialization()
 
     for sbom_id, sbom_runs in _latest_per_provider(runs).items():
-        merged = merge_findings_by_alias([run.result for run in sbom_runs])
+        results: list[dict[str, Any] | None] = []
+        skipped: list[bool] = []
+        for run in sbom_runs:
+            try:
+                result = load_result(run)
+            except ResultObjectMissing:
+                logger.warning("AssessmentRun %s has an offloaded result that could not be read", run.id)
+                unavailable.add(sbom_id)
+                # The skipped flag is copied to its own column at write time, so
+                # whether this provider looked survives the payload going missing.
+                skipped.append(run.result_skipped is True)
+                continue
+            results.append(result)
+            skipped.append(result_scanned_nothing(result))
+        merged = merge_findings_by_alias(results)
         merged["findings"] = [
             finding
             for finding in merged.get("findings") or []
@@ -159,7 +182,7 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
         # for an SBOM nobody read. Only when *every* provider skipped, matching
         # product_page and sboms_table: one provider skipping while another
         # scanned still leaves the SBOM scanned.
-        if not all(result_scanned_nothing(run.result) for run in sbom_runs):
+        if not all(skipped):
             scanned.add(sbom_id)
 
         sbom = sbom_runs[0].sbom
@@ -189,7 +212,7 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
             -(row.get("cvss_score") or 0),
         )
     )
-    return rows, scanned
+    return rows, scanned, unavailable
 
 
 def _severity_bucket(row: dict[str, Any]) -> str:
@@ -330,18 +353,21 @@ def register_tools(mcp: FastMCP) -> None:
 
         Counts exclude findings the customer has dispositioned via VEX (reported
         separately as `suppressed`), and match what the sbomify dashboards show.
+        `sboms_unavailable`, when present, counts SBOMs whose stored scan could
+        not be read: their findings are missing from the counts, not absent.
         """
 
         def query() -> dict[str, Any]:
             runs, scope = _scoped_runs(
                 principal, product_id=product_id, component_id=component_id, release_id=release_id
             )
-            rows, scanned = _rows_for(runs)
+            rows, scanned, unavailable = _rows_for(runs)
             return {
                 "scope": scope,
                 "severity_counts": _counts(rows),
                 "suppressed": sum(1 for row in rows if row.get("vex_suppressed")),
                 "sboms_scanned": len(scanned),
+                **({"sboms_unavailable": len(unavailable)} if unavailable else {}),
             }
 
         return await run_db(query)
@@ -377,14 +403,15 @@ def register_tools(mcp: FastMCP) -> None:
         and the severity and suppression filters read fields that live inside
         each run's stored JSON, so neither can be pushed into SQL while findings
         have no table of their own. Paging an unfiltered workspace repeats that
-        work per page.
+        work per page. `sboms_unavailable`, when present, counts SBOMs whose
+        stored scan could not be read, so their findings are not in the list.
         """
 
         def query() -> dict[str, Any]:
             runs, _scope = _scoped_runs(
                 principal, product_id=product_id, component_id=component_id, release_id=release_id
             )
-            rows, _scanned = _rows_for(runs)
+            rows, _scanned, unavailable = _rows_for(runs)
 
             if not include_suppressed:
                 rows = [row for row in rows if not row.get("vex_suppressed")]
@@ -400,12 +427,15 @@ def register_tools(mcp: FastMCP) -> None:
 
             safe_page, safe_size = clamp_page(page, page_size)
             start = (safe_page - 1) * safe_size
-            return serializers.paginated(
+            page_of = serializers.paginated(
                 [_present(row, concise=response_format == "concise") for row in rows[start : start + safe_size]],
                 page=safe_page,
                 page_size=safe_size,
                 total=len(rows),
             )
+            if unavailable:
+                page_of["sboms_unavailable"] = len(unavailable)
+            return page_of
 
         return await run_db(query)
 
@@ -450,7 +480,7 @@ def register_tools(mcp: FastMCP) -> None:
                 sbom_id for sbom_id, bom_type, _ in artifacts if sbom_id and bom_type == SBOM.BomType.SBOM.value
             ]
 
-            rows, scanned = _rows_for(_security_runs(release_obj.product.team, sbom_ids=scannable_ids))
+            rows, scanned, unavailable = _rows_for(_security_runs(release_obj.product.team, sbom_ids=scannable_ids))
 
             # Latest per (sbom, plugin) resolved in the database; only
             # plugin_name and status are read, so the result blob stays deferred.
@@ -482,6 +512,7 @@ def register_tools(mcp: FastMCP) -> None:
                     "suppressed": sum(1 for row in rows if row.get("vex_suppressed")),
                     "sboms_scanned": len(scanned),
                     "unscanned_sboms": len(set(scannable_ids) - scanned),
+                    "sboms_unavailable": len(unavailable) or None,
                     "compliance": {
                         plugin: {"runs": len(statuses), "statuses": sorted(set(statuses))}
                         for plugin, statuses in compliance.items()
