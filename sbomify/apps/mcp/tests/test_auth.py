@@ -43,6 +43,26 @@ async def test_empty_bearer_token_is_rejected():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("authorization", [None, "Basic abc123", "Bearer   "], ids=["none", "basic", "empty"])
+async def test_a_request_without_a_usable_bearer_token_is_charged_to_its_address(authorization, settings):
+    """Refusing before the per-IP budget is checked would leave every request
+    that sends no usable token free of any limit at all."""
+    from django.core.cache import cache
+
+    from sbomify.apps.mcp.auth import MCPRateLimitedError
+
+    cache.clear()
+    settings.API_ANONYMOUS_RATE_LIMIT = "2/min"
+    request = fake_request(authorization, client_host="10.9.9.9")
+
+    for _ in range(2):
+        with pytest.raises(MCPAuthError, match="Missing bearer token"):
+            await authenticate(request, attempted_action="tools/list")
+    with pytest.raises(MCPRateLimitedError):
+        await authenticate(request, attempted_action="tools/list")
+
+
+@pytest.mark.asyncio
 @pytest.mark.django_db
 async def test_garbage_token_is_rejected():
     with pytest.raises(MCPAuthError, match="Invalid or expired"):

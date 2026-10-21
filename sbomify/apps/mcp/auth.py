@@ -246,8 +246,12 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     Raises ``MCPAuthError`` when the token is absent, invalid, expired, or over
     its rate limit.
     """
-    token = _bearer_token(starlette_request)
     stub = _stub_request(starlette_request)
+    try:
+        token = _bearer_token(starlette_request)
+    except MCPAuthError:
+        await _charge_refusal(stub)
+        raise
 
     # database_sync_to_async, not a bare sync_to_async: this is the first DB
     # access of every MCP request — and the only one on the tools/list path —
@@ -261,14 +265,7 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         attempted_action=f"mcp {attempted_action}",
     )
     if user is None or record is None:
-        # A rejected credential never reaches the per-token throttle, so charge
-        # the per-IP window the REST API keeps for tokenless surfaces instead —
-        # each attempt costs a JWT decode plus an audit-log line, and without a
-        # budget a loop of them amplifies both for free. Only failures are
-        # charged: valid tokens stay on their own (larger) budget.
-        anon_throttle = AnonymousIPRateThrottle()
-        if not await sync_to_async(anon_throttle.allow_request)(stub):
-            raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
+        await _charge_refusal(stub)
         raise MCPAuthError("Invalid or expired access token.")
 
     stub.user = user  # type: ignore[assignment]
@@ -305,6 +302,20 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
         raise MCPRateLimitedError(message)
 
     return principal
+
+
+async def _charge_refusal(stub: HttpRequest) -> None:
+    """Charge a refused request to its address, or refuse it as over budget.
+
+    A request with no usable token, or a token that does not resolve, never
+    reaches the per-token throttle, so it is charged to the per-IP window the
+    REST API keeps for tokenless surfaces instead. Each one still costs a parse,
+    and for a token a JWT decode plus an audit-log line, so without a budget a
+    loop of them amplifies both for free. Only refusals are charged: valid
+    tokens stay on their own, larger, budget.
+    """
+    if not await sync_to_async(AnonymousIPRateThrottle().allow_request)(stub):
+        raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
 
 
 def _retry_hint(stub: HttpRequest) -> str:
