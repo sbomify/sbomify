@@ -30,7 +30,7 @@ from ninja.decorators import decorate_view
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_token_auth
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import can, credential_channel
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.url_utils import build_custom_domain_url, get_base_url
 from sbomify.apps.core.views.workspace_public import fetch_public_team
@@ -130,6 +130,8 @@ def _api_shape(projection: dict[str, Any]) -> dict[str, Any]:
                 "kind": event["kind"],
                 "body": event.get("body", ""),
                 "actor": event.get("actor", ""),
+                "channel": event.get("channel", ""),
+                "token_id": event.get("token_id", ""),
                 "from_status": event.get("from_status"),
                 "to_status": event.get("to_status"),
                 "created_at": event["created_at"],
@@ -137,6 +139,15 @@ def _api_shape(projection: dict[str, Any]) -> dict[str, Any]:
             for event in projection.get("timeline", [])
         ]
     return shape
+
+
+def _via(request: HttpRequest) -> dict[str, str]:
+    """How this request reached the API, for the timeline events it writes."""
+    token = getattr(request, "access_token_record", None)
+    return {
+        "channel": credential_channel(request),
+        "token_id": str(token.pk) if token is not None else "",
+    }
 
 
 def _failed(result: Any) -> tuple[int, ErrorResponse]:
@@ -211,6 +222,7 @@ def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tupl
         cvss_vector=payload.cvss_vector,
         products=products,
         affected_releases=releases,
+        via=_via(request),
     )
     if not created.ok:
         return _failed(created)
@@ -284,6 +296,7 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
         description=sent["description"] or "" if "description" in sent else stored.get("description", ""),
         cvss_score=cvss_score,
         cvss_vector=cvss_vector,
+        via=_via(request),
     )
     if not updated.ok:
         return _failed(updated)
@@ -313,7 +326,7 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
     if error:
         return error
     assert team is not None
-    if not can(request, "advisory:manage", team):
+    if not can(request, "advisory:delete", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
     result = advisory_service.delete_advisory(team, advisory_id)
@@ -337,7 +350,9 @@ def post_advisory_update(request: HttpRequest, advisory_id: str, payload: Adviso
     if not can(request, "advisory:manage", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    posted = advisory_service.post_update(team, request.user, advisory_id, kind=payload.kind, note=payload.note)
+    posted = advisory_service.post_update(
+        team, request.user, advisory_id, kind=payload.kind, note=payload.note, via=_via(request)
+    )
     if not posted.ok:
         return _failed(posted)
 
@@ -364,7 +379,9 @@ def publish_advisory(request: HttpRequest, advisory_id: str, payload: PublishAdv
     if not can(request, "advisory:publish", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    published = advisory_service.publish_advisory(team, request.user, advisory_id, visibility=payload.visibility)
+    published = advisory_service.publish_advisory(
+        team, request.user, advisory_id, visibility=payload.visibility, via=_via(request)
+    )
     if not published.ok:
         return _failed(published)
 
@@ -392,7 +409,9 @@ def withdraw_advisory(request: HttpRequest, advisory_id: str, payload: WithdrawA
     if not can(request, "advisory:publish", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    withdrawn = advisory_service.withdraw_advisory(team, request.user, advisory_id, reason=payload.reason)
+    withdrawn = advisory_service.withdraw_advisory(
+        team, request.user, advisory_id, reason=payload.reason, via=_via(request)
+    )
     if not withdrawn.ok:
         return _failed(withdrawn)
 
