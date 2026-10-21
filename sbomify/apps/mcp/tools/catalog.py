@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .. import serializers
-from ..auth import Principal, require
+from ..auth import MCPAuthError, Principal, require
 from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, narrow, not_found, resolve_workspace, run_db
 
 if TYPE_CHECKING:
@@ -64,8 +64,19 @@ def _get_component(principal: Principal, component_id: str) -> Any:
 
 
 def _get_release(principal: Principal, release_id: str) -> Any:
+    """A release and what it contains, read as REST's release endpoints read it.
+
+    ``release:read`` holds across the workspace for a CI bot, so it can list
+    releases and see whether one exists. Its contents are confined to products
+    holding the bot's bound component, the rule REST applies; ``list_releases``
+    stays workspace-wide, as REST's list does.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
     obj = _lookup_release(principal, release_id)
     require(principal, "release:read", obj.product)
+    if not is_authorised_for_product(principal.request, obj.product):
+        raise MCPAuthError("Not permitted (release:read): this token publishes to another product.")
     return obj
 
 

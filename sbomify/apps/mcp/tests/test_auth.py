@@ -124,6 +124,31 @@ async def test_a_refusal_over_the_address_budget_is_audited_as_rate_limited(sett
 
 
 @pytest.mark.asyncio
+async def test_an_address_over_its_budget_is_audited_once_a_window_not_once_a_request(settings):
+    """The budget exists so a loop of bad requests cannot grow the audit stream.
+    A line per refused request past it handed that loop the stream back."""
+    from unittest.mock import patch
+
+    from django.core.cache import cache
+
+    from sbomify.apps.mcp import limits
+    from sbomify.apps.mcp.auth import MCPRateLimitedError
+
+    cache.clear()
+    settings.API_ANONYMOUS_RATE_LIMIT = "1/min"
+    request = fake_request(None, client_host="10.6.6.6")
+    with pytest.raises(MCPAuthError):
+        await authenticate(request, attempted_action="tools/list")
+
+    with patch.object(limits, "log") as spy:
+        for _ in range(5):
+            with pytest.raises(MCPRateLimitedError):
+                await authenticate(request, attempted_action="tools/list")
+
+    assert [e["outcome"] for e in _audit_events(spy)] == ["rate_limited"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.django_db
 async def test_garbage_token_is_rejected():
     with pytest.raises(MCPAuthError, match="Invalid or expired"):
