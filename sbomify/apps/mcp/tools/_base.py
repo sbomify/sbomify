@@ -181,8 +181,9 @@ def mcp_tool(
 
                 result = await fn(principal, *args, **kwargs)
                 # Inside the try so an over-cap response is audited as a refusal
-                # rather than logged as a success it never was.
-                checked = enforce_response_size(result, tool=name)
+                # rather than logged as a success it never was. A write is past
+                # refusing by now, so it answers with a receipt instead.
+                checked = enforce_response_size(result, tool=name, wrote=writes)
             except ToolError as exc:
                 # Expected refusals (denied, not found, over a limit). Recorded
                 # so a probing pattern is visible in the audit log, then

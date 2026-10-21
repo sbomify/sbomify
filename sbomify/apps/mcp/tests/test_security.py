@@ -172,6 +172,30 @@ def test_response_under_the_cap_passes_through_unchanged():
     assert limits.enforce_response_size(payload, tool="list_products") is payload
 
 
+def test_a_write_over_the_cap_answers_with_a_short_receipt_instead_of_an_error():
+    """The write has happened, so the agent must not read the answer as a failure and retry it."""
+    payload = {
+        "id": "s1",
+        "status": "pending",
+        "count": 3,
+        "context": "x" * (limits.MAX_RESPONSE_BYTES + 1),
+        "decisions": [{"detail": "y" * 100}] * 5,
+        "decisions_total": 1000,
+        "impact": {"would_suppress": 4},
+    }
+
+    receipt = limits.enforce_response_size(payload, tool="submit_vex_for_approval", wrote=True)
+
+    assert receipt["id"] == "s1"
+    assert receipt["status"] == "pending"
+    assert receipt["count"] == 3
+    assert receipt["decisions_total"] == 1000, "a total the tool already reported wins over the cut list's length"
+    assert receipt["response_truncated"] is True
+    assert "decisions" not in receipt and "impact" not in receipt
+    assert len(receipt["context"]) < 300
+    assert len(json.dumps(receipt)) < 2000
+
+
 def test_untrusted_text_is_truncated():
     """Bounds how much injected text one artifact field can carry to the model."""
     assert limits.untrusted("a" * 10, limit=100) == "a" * 10
