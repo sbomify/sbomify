@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -20,7 +21,7 @@ from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.compliance import tasks
 from sbomify.apps.compliance.forms import CRAFilingForm
 from sbomify.apps.compliance.models import CRAReport, CRAReportFiling, CRAReportReminder
-from sbomify.apps.compliance.reporting import Stage
+from sbomify.apps.compliance.reporting import DEADLINE_STAGES, Stage
 from sbomify.apps.compliance.services import report_service
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
@@ -1413,3 +1414,35 @@ class TestStaleEdit:
         assert missing.status_code in (400, 422)
         report.refresh_from_db()
         assert report.srp_fields["general_information"] == "Saved first."
+
+
+def _nav_links(page: str, label: str) -> list[str]:
+    """The links one tab row renders, read up to that row's own closing scroll button."""
+    start = page.index(f'aria-label="{label}"')
+    return re.findall(r'<a href="([^"]*)"', page[start : page.index("Scroll tabs right", start)])
+
+
+@pytest.mark.django_db
+class TestTabRowsHoldOnlyTheirOwnLinks:
+    # The tab row component renders a `tabs` list before its slot, and every
+    # CRA page has one in its context for the section links. Only
+    # COTTON_ENABLE_CONTEXT_ISOLATION keeps the page's list out of each row;
+    # with it off, both rows render the section links as well as their own.
+    def test_each_cra_page_lists_its_sections_once(self, team, owner, report):
+        filing = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).value
+        client = _client_for(team, owner)
+        sections = [reverse("compliance:cra_product_list"), reverse("compliance:cra_reports")]
+
+        for url in (
+            reverse("compliance:cra_product_list"),
+            reverse("compliance:cra_reports"),
+            reverse("compliance:cra_report_detail", args=[report.id]),
+            reverse("compliance:cra_report_filing", args=[report.id, filing.id]),
+        ):
+            page = client.get(url).content.decode()
+            assert _nav_links(page, "CRA compliance sections") == sections, url
+
+    def test_the_stage_row_offers_only_the_reporting_stages(self, team, owner, report):
+        page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+
+        assert _nav_links(page, "Stage to file") == [f"?stage={stage}" for stage in DEADLINE_STAGES]
