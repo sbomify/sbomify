@@ -313,7 +313,7 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
     if error:
         return error
     assert team is not None
-    if not can(request, "advisory:manage", team):
+    if not can(request, "advisory:delete", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
     result = advisory_service.delete_advisory(team, advisory_id)

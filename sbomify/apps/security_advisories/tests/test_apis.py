@@ -12,7 +12,11 @@ contract says a field means, and whether one workspace can see another's.
 from __future__ import annotations
 
 import pytest
+from django.test import Client
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core import authz
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.security_advisories.models import SecurityAdvisory
 
@@ -470,6 +474,93 @@ class TestWhoMayWrite:
         response = client.post(LIST, data={"title": "Admin wrote this"}, content_type="application/json", **headers)
 
         assert response.status_code == 201, response.content
+
+
+class TestTheAgentToken:
+    """An AI agent drafts and edits advisories; a person publishes them.
+
+    Driven with an owner's token, so every refusal below is the scope talking,
+    not the role.
+    """
+
+    @pytest.fixture
+    def agent(self, sample_user, sample_team_with_owner_member):
+        token = AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=create_personal_access_token(sample_user),
+            description="Advisory agent",
+            scopes=authz.SCOPE_PRESETS["agent"],
+        )
+        return Client(), get_api_headers(token)
+
+    def test_it_creates_reads_and_edits(self, agent) -> None:
+        client, headers = agent
+
+        created = client.post(LIST, data={"title": "Drafted by an agent"}, content_type="application/json", **headers)
+        assert created.status_code == 201, created.content
+        advisory_id = created.json()["id"]
+
+        edited = client.patch(
+            _detail(advisory_id), data={"title": "Edited by an agent"}, content_type="application/json", **headers
+        )
+        assert edited.status_code == 200, edited.content
+        assert client.get(_detail(advisory_id), **headers).json()["title"] == "Edited by an agent"
+
+    def test_it_posts_timeline_updates(self, agent, advisory) -> None:
+        client, headers = agent
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "update", "note": "Root cause found."},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200, response.content
+
+    def test_it_cannot_publish(self, agent, advisory, make_publishable) -> None:
+        client, headers = agent
+
+        response = client.post(
+            f"{_detail(advisory.id)}/publish",
+            data={"visibility": SecurityAdvisory.Visibility.PUBLIC},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 403
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+
+    def test_it_cannot_withdraw(self, agent, make_publishable) -> None:
+        client, headers = agent
+        advisory = publish(make_publishable)
+
+        response = client.post(
+            f"{_detail(advisory.id)}/withdraw", data={"reason": "no"}, content_type="application/json", **headers
+        )
+
+        assert response.status_code == 403
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.PUBLISHED
+
+    def test_it_cannot_delete(self, agent, make_publishable) -> None:
+        """Deleting a published advisory takes it off the trust center, which is a publishing act."""
+        client, headers = agent
+        advisory = publish(make_publishable)
+
+        assert client.delete(_detail(advisory.id), **headers).status_code == 403
+        assert SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_a_member_agent_token_still_cannot_write(self, agent, sample_team_with_owner_member) -> None:
+        """The scope narrows; it never lifts a member to advisory author."""
+        client, headers = agent
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save()
+
+        response = client.post(LIST, data={"title": "Nope"}, content_type="application/json", **headers)
+
+        assert response.status_code == 403
 
 
 class TestWithdrawing:

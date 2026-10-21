@@ -210,8 +210,11 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # and the API is the same door. Publishing and withdrawing move an
     # advisory in and out of the trust center, the same act as setting a
     # product's visibility, so they share this tier rather than MANAGE.
+    # Deleting is its own action so the AI agent preset can draft and edit
+    # without being able to take a published advisory off the trust center.
     "advisory:manage": ADMINISTER,
     "advisory:publish": ADMINISTER,
+    "advisory:delete": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -310,8 +313,16 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
     "publish": ["artifact:publish", "release:read", "release:create", "release:tag"],
     # An AI agent working from a fix prompt: read the prompt, then submit its VEX
     # to the approval queue and check on it. It cannot apply a ruling itself, so
-    # nothing it sends takes effect until a person approves it.
-    "agent": ["workspace:read", "vex_submission:create", "vex_submission:read"],
+    # nothing it sends takes effect until a person approves it. It may also draft
+    # and edit security advisories, but publishing, withdrawing and deleting stay
+    # with a person, so nothing it writes reaches the trust center on its own.
+    "agent": [
+        "workspace:read",
+        "vex_submission:create",
+        "vex_submission:read",
+        "advisory:read",
+        "advisory:manage",
+    ],
     # Every read action (``<resource>:read`` / ``read_internal``) plus the ABAC
     # component:access read path, so a read-only token can still read
     # gated/public components (can() checks scope before ABAC). Keyed on the verb,
@@ -321,6 +332,20 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
         [action for action in _ROLE_ACTIONS if action.split(":", 1)[1].startswith("read")] + list(_ABAC_ACTIONS)
     ),
 }
+
+
+# Every scope list the AI agent preset has ever stored. Tokens keep the list they
+# were created with, so recognising an agent token means matching any of these,
+# not just today's preset.
+_AGENT_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
+    frozenset({"workspace:read", "vex_submission:create", "vex_submission:read"}),
+    frozenset(SCOPE_PRESETS["agent"] or []),
+)
+
+
+def is_agent_scope(scopes: list[str] | None) -> bool:
+    """True iff ``scopes`` is a list the AI agent preset produced, now or before."""
+    return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
 
 
 def _scope_permits(scopes: list[str] | None, action: str) -> bool:
