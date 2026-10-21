@@ -47,7 +47,6 @@ mcp_application = build_app()
 MCP_SLOT_WAIT_SECONDS = 5.0
 
 
-
 async def _send_error(send: Send, status: int, message: str, *, retry_after: int | None = None) -> None:
     """A JSON-RPC error sent before the body is read, so it cannot name the request's id."""
     body = json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": message}}).encode()
@@ -58,13 +57,8 @@ async def _send_error(send: Send, status: int, message: str, *, retry_after: int
     await send({"type": "http.response.body", "body": body})
 
 
-def _may_carry_large_body(scope: Scope) -> bool:
-    """Whether the body may exceed ``MCP_MAX_REQUEST_BYTES``.
-
-    A request without Content-Length or Transfer-Encoding has no body (RFC 9112
-    6.3), and the server holds the client to the length it states, so the
-    header answers before anything is read.
-    """
+def _states_large_body(scope: Scope) -> bool:
+    """Whether the headers say the body is over ``MCP_MAX_REQUEST_BYTES``, or of unbounded length."""
     headers = dict(scope.get("headers") or [])
     length = headers.get(b"content-length")
     if length is None:
@@ -73,6 +67,60 @@ def _may_carry_large_body(scope: Scope) -> bool:
         return int(length) > settings.MCP_MAX_REQUEST_BYTES
     except ValueError:
         return True
+
+
+def _may_carry_large_body(scope: Scope) -> bool:
+    """Whether the body may exceed ``MCP_MAX_REQUEST_BYTES``.
+
+    Under HTTP/1.1 a request without Content-Length or Transfer-Encoding has no
+    body (RFC 9112 6.3). HTTP/2 and HTTP/3 need neither header to send one, so
+    there an unstated length may be large.
+    """
+    if _states_large_body(scope):
+        return True
+    headers = dict(scope.get("headers") or [])
+    return b"content-length" not in headers and scope.get("http_version") not in ("1.0", "1.1")
+
+
+class _BodyCap:
+    """Counts the body as the app reads it and stops it at ``cap`` bytes.
+
+    The headers cannot size every body (see ``_may_carry_large_body``), so this
+    is the limit that holds. Past the cap the app is told the client hung up,
+    so it reads nothing more, and whatever it answers to that is dropped: the
+    router sends the 413 itself.
+    """
+
+    def __init__(self, receive: Receive, send: Send, cap: int) -> None:
+        self._receive = receive
+        self._send = send
+        self.cap = cap
+        self.seen = 0
+        self.exceeded = False
+        self.started = False
+
+    async def receive(self) -> Any:
+        if self.exceeded:
+            return {"type": "http.disconnect"}
+        message = await self._receive()
+        if message["type"] == "http.request":
+            self.seen += len(message.get("body", b""))
+            if self.seen > self.cap:
+                self.exceeded = True
+                return {"type": "http.disconnect"}
+        return message
+
+    async def send(self, message: Any) -> None:
+        if self.exceeded:
+            return
+        if message["type"] == "http.response.start":
+            self.started = True
+        await self._send(message)
+
+
+async def _send_too_large(send: Send, cap: int, *, may_upload: bool) -> None:
+    reason = "" if may_upload else " Only a token that may upload artifacts can send one this large."
+    await _send_error(send, 413, f"Request body over {cap} bytes.{reason}")
 
 
 class MCPRouter:
@@ -99,6 +147,11 @@ class MCPRouter:
     code ran. A caller over its budget is refused here, and so is a body over
     ``MCP_MAX_REQUEST_BYTES`` from anyone whose token cannot call an upload
     tool, since only an artifact needs that much. Neither body is read.
+
+    Headers cannot size every body: HTTP/2 and HTTP/3 send one without stating
+    its length. So the body is also counted as the app reads it, and cut off
+    with a 413 past the same cap, or past the transport's own cap for a token
+    that may upload (``_BodyCap``).
     """
 
     def __init__(self, django_app: ASGIApp, mcp_app: ASGIApp) -> None:
@@ -136,15 +189,20 @@ class MCPRouter:
                     if (over_budget := await authenticate_request(scope)) is not None:
                         await _send_error(send, 429, str(over_budget), retry_after=over_budget.retry_after)
                         return
-                    if _may_carry_large_body(scope) and not may_send_large_body(scope):
-                        await _send_error(
-                            send,
-                            413,
-                            f"Request body over {settings.MCP_MAX_REQUEST_BYTES} bytes. "
-                            "Only a token that may upload artifacts can send one this large.",
-                        )
+                    may_upload = may_send_large_body(scope)
+                    cap = mcp.settings.max_request_body_size if may_upload else settings.MCP_MAX_REQUEST_BYTES
+                    if _states_large_body(scope) and not may_upload:
+                        await _send_too_large(send, cap, may_upload=False)
                         return
-                    await self.mcp_app(scope, receive, send)
+                    body = _BodyCap(receive, send, cap)
+                    try:
+                        await self.mcp_app(scope, body.receive, body.send)
+                    except Exception:
+                        # The app may raise on the hang-up it was told about.
+                        if not body.exceeded:
+                            raise
+                    if body.exceeded and not body.started:
+                        await _send_too_large(send, cap, may_upload=may_upload)
             finally:
                 for slot in held:
                     slot.release()

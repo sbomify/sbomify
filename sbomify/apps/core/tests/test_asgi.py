@@ -337,3 +337,22 @@ async def test_an_upload_cancelled_while_it_waits_gives_back_the_slot_it_holds(
 
     assert reached == ["holder", "next"]
     assert all(message.get("status") != 503 for message in sent)
+
+
+@pytest.mark.parametrize(
+    ("http_version", "headers", "large"),
+    [
+        ("1.1", [], False),
+        ("1.1", [(b"content-length", b"200")], False),
+        ("2", [], True),
+        ("3", [], True),
+        ("2", [(b"content-length", b"200")], False),
+    ],
+)
+def test_a_body_of_no_stated_length_counts_as_large_beyond_http_1(http_version, headers, large) -> None:
+    """HTTP/1.1 without a length header has no body; HTTP/2 and 3 may still send one."""
+    from sbomify.asgi import _may_carry_large_body
+
+    scope = {"type": "http", "path": "/mcp", "headers": headers, "http_version": http_version}
+
+    assert _may_carry_large_body(scope) is large
