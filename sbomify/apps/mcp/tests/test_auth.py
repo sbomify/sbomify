@@ -151,6 +151,37 @@ async def test_an_address_over_its_budget_is_audited_once_a_window_not_once_a_re
 
 @pytest.mark.asyncio
 @pytest.mark.django_db
+async def test_an_unreachable_cache_still_refuses_an_over_budget_address_politely(settings):
+    """The once-a-window marker lives in a cache that can be down. The throttle
+    already refuses quietly through an outage; the marker must not turn that
+    refusal into a 500, nor fall back to a line a request."""
+    from unittest.mock import patch
+
+    from django.core.cache import cache
+    from django_redis.exceptions import ConnectionInterrupted
+
+    from sbomify.apps.mcp import limits
+    from sbomify.apps.mcp.auth import MCPRateLimitedError
+
+    cache.clear()
+    settings.API_ANONYMOUS_RATE_LIMIT = "1/min"
+    request = fake_request(None, client_host="10.6.6.7")
+    with pytest.raises(MCPAuthError):
+        await authenticate(request, attempted_action="tools/list")
+
+    with (
+        patch.object(cache, "aadd", side_effect=ConnectionInterrupted("redis is down")),
+        patch.object(limits, "log") as spy,
+    ):
+        for _ in range(3):
+            with pytest.raises(MCPRateLimitedError):
+                await authenticate(request, attempted_action="tools/list")
+
+    assert _audit_events(spy) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db
 async def test_garbage_token_is_rejected():
     with pytest.raises(MCPAuthError, match="Invalid or expired"):
         await authenticate(fake_request("Bearer not-a-real-token"), attempted_action="tools/list")

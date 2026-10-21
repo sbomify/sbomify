@@ -436,15 +436,19 @@ def register_tools(mcp: FastMCP) -> None:
             # posture that get_vulnerability_summary refuses it, which is the
             # leak the comment on this tool's registration warns about.
             require(principal, "workspace:read", release_obj.product.team)
-            artifacts = list(release_obj.artifacts.select_related("sbom", "document").all())
+            # Ids and the BOM type are all the counts need, so no row becomes a
+            # model instance and no SBOM or document is joined in whole.
+            artifacts = list(release_obj.artifacts.values_list("sbom_id", "sbom__bom_type", "document_id"))
             # Two scopes, split like the release surfaces split them. Security
             # scanning covers bom_type=sbom only (a tagged VEX or CBOM row can
             # never earn a security run, so counting one would report it
             # forever "unscanned" — posture.build_release_vuln_posture filters
             # the same way). Compliance keeps every SBOM-table artifact: the
             # crypto/PQC plugins are compliance-category and run on CBOMs.
-            sbom_ids = [a.sbom_id for a in artifacts if a.sbom_id]
-            scannable_ids = [a.sbom_id for a in artifacts if a.sbom_id and a.sbom.bom_type == SBOM.BomType.SBOM.value]
+            sbom_ids = [sbom_id for sbom_id, _, _ in artifacts if sbom_id]
+            scannable_ids = [
+                sbom_id for sbom_id, bom_type, _ in artifacts if sbom_id and bom_type == SBOM.BomType.SBOM.value
+            ]
 
             rows, scanned = _rows_for(_security_runs(release_obj.product.team, sbom_ids=scannable_ids))
 
@@ -472,7 +476,7 @@ def register_tools(mcp: FastMCP) -> None:
                         # and a VEX alongside its SBOM ships three. The
                         # SBOM-only counts are the scan fields below.
                         "boms": len(sbom_ids),
-                        "documents": sum(1 for a in artifacts if a.document_id),
+                        "documents": sum(1 for _, _, document_id in artifacts if document_id),
                     },
                     "severity_counts": _counts(rows),
                     "suppressed": sum(1 for row in rows if row.get("vex_suppressed")),
