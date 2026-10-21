@@ -34,7 +34,12 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
-from sbomify.apps.mcp.auth import audit_rejected, authenticate_request, may_send_large_body  # noqa: E402
+from sbomify.apps.mcp.auth import (  # noqa: E402
+    audit_invalid_request,
+    audit_rejected,
+    authenticate_request,
+    may_send_large_body,
+)
 from sbomify.apps.mcp.server import MCP_PATH_PREFIX, build_app, mcp  # noqa: E402
 
 # Builds the MCP Starlette app and registers its tools. Must run after
@@ -141,7 +146,8 @@ class _BodyCap:
         return bytes(self.answer) if self.answer_size <= _ANSWER_KEPT else None
 
 
-async def _send_too_large(send: Send, cap: int, *, may_upload: bool) -> None:
+async def _send_too_large(scope: Scope, send: Send, cap: int, *, may_upload: bool) -> None:
+    audit_invalid_request(scope, "body_too_large")
     reason = "" if may_upload else " Only a token that may upload artifacts can send one this large."
     await _send_error(send, 413, f"Request body over {cap} bytes.{reason}")
 
@@ -218,7 +224,7 @@ class MCPRouter:
                     may_upload = may_send_large_body(scope)
                     cap = mcp.settings.max_request_body_size if may_upload else settings.MCP_MAX_REQUEST_BYTES
                     if _states_large_body(scope) and not may_upload:
-                        await _send_too_large(send, cap, may_upload=False)
+                        await _send_too_large(scope, send, cap, may_upload=False)
                         return
                     body = _BodyCap(receive, send, cap)
                     try:
@@ -228,7 +234,7 @@ class MCPRouter:
                         if not body.exceeded:
                             raise
                     if body.exceeded and not body.started:
-                        await _send_too_large(send, cap, may_upload=may_upload)
+                        await _send_too_large(scope, send, cap, may_upload=may_upload)
                     elif not body.exceeded:
                         audit_rejected(scope, body.status, body.whole_answer, body.tail)
             finally:

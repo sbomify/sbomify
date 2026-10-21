@@ -310,6 +310,53 @@ def _tool_call_outcomes(spy) -> list[str]:
     return [extra["outcome"] for extra in extras if extra.get("event") == "mcp_tool_call"]
 
 
+def _tool_call_events(spy) -> list[tuple[str, str | None]]:
+    """The outcome and detail of each mcp_tool_call event a patched ``limits.log`` received."""
+    extras = [c.kwargs.get("extra", {}) for c in spy.method_calls]
+    return [(extra["outcome"], extra.get("detail")) for extra in extras if extra.get("event") == "mcp_tool_call"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("stated", [pytest.param(True, id="stated-length"), pytest.param(False, id="chunked")])
+async def test_a_body_its_headers_call_too_large_is_audited_once(make_token, stated):
+    """Refused unread for a token that may not upload, and still one event in the stream."""
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    scope = _scope(token.encoded_token, length=LARGE if stated else None)
+    if not stated:
+        scope["headers"].append((b"transfer-encoding", b"chunked"))
+    with patch.object(limits, "log") as spy:
+        sent = await _drive(_router(_Recorder()), scope)
+
+    assert sent[0]["status"] == 413
+    assert _tool_call_events(spy) == [("invalid_request", "body_too_large")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_large_body_without_a_token_keeps_its_one_door_event():
+    """The door already audited the missing token, so the 413 adds nothing."""
+    with patch.object(limits, "log") as spy:
+        sent = await _drive(_router(_Recorder()), _scope(None, length=LARGE))
+
+    assert sent[0]["status"] == 413
+    assert _tool_call_outcomes(spy) == ["denied"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_body_cut_off_as_it_arrives_is_audited_once(make_token, settings):
+    """An HTTP/2 body is only found too large while it is read, and is audited the same way."""
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    with patch.object(limits, "log") as spy:
+        sent = await _drive(
+            _router(_Reader()), _h2_scope(token.encoded_token), _body(3 * settings.MCP_MAX_REQUEST_BYTES)
+        )
+
+    assert sent[0]["status"] == 413
+    assert _tool_call_events(spy) == [("invalid_request", "body_too_large")]
+
+
 async def _post(client, payload: str | dict, token: str):
     return await client.post(
         "/mcp",
