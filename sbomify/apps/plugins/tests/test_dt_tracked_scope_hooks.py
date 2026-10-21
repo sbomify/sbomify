@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import connection
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
@@ -188,21 +190,34 @@ class FakeDT(MagicMock):
             if other["name"] == name:
                 other["isLatest"] = other_uuid == project_uuid
 
+    def _check_parent(self, parent_uuid, message):
+        if parent_uuid is not None and parent_uuid not in self.projects:
+            raise DependencyTrackAPIError(f"DT API request failed (404): {message}", status_code=404)
+
     def create_collection_project(self, name, version, **kw):
+        self._check_parent(kw.get("parent_uuid"), "The UUID of the parent project could not be found.")
+        existing = self._lookup(name, version)
+        if existing:
+            return existing
         return {"uuid": self.add(name, version, parent=kw.get("parent_uuid"))}
 
     def upload_sbom_with_project_creation(self, project_name, project_version, sbom_data, **kw):
+        self._check_parent(kw.get("parent_uuid"), "The parent component could not be found.")
         project_uuid = self.add(project_name, project_version, parent=kw.get("parent_uuid"))
         if kw.get("is_latest"):
             self._make_latest(project_uuid)
         return {"token": "t"}
 
-    def find_project_by_name_version(self, name, version):
+    def _lookup(self, name, version):
         return next(
             ({"uuid": u} for u, p in self.projects.items() if (p["name"], p["version"]) == (name, version)), None
         )
 
+    def find_project_by_name_version(self, name, version):
+        return self._lookup(name, version)
+
     def set_project_state(self, project_uuid, *, active=None, is_latest=None, parent_uuid=None):
+        self._check_parent(parent_uuid, "The UUID of the parent project could not be found.")
         project = self.projects[project_uuid]
         before = {**project}
         if active is not None:
@@ -277,3 +292,154 @@ class TestOrderDoesNotBreakTheScope:
         assert by_version[str(newer.id)]["active"] is True
         assert by_version[str(older.id)]["isLatest"] is False
         assert by_version[str(older.id)]["active"] is False
+
+
+@pytest.mark.django_db
+class TestADeletedCollectionIsMadeAgain:
+    def test_an_upload_whose_collection_was_deleted_lands_flat_and_moves_under_a_new_one(self, env, tmp_path):
+        _, _, component, server = env
+        dt = FakeDT()
+        plugin = DependencyTrackPlugin()
+        first = _sbom(component, "first")
+        _first_scan(plugin, first, server, dt, tmp_path)
+        dead = str(DependencyTrackCollection.objects.get(dt_server=server, component=component).dt_project_uuid)
+        dt.projects.pop(dead)  # someone deletes the component's collection in Dependency-Track
+
+        second = _sbom(component, "second")
+        _first_scan(plugin, second, server, dt, tmp_path)
+
+        live = str(DependencyTrackCollection.objects.get(dt_server=server, component=component).dt_project_uuid)
+        assert live != dead
+        assert live in dt.projects
+        parents = {p["version"]: p["parent"] for p in dt.projects.values()}
+        assert parents[str(first.id)] == live
+        assert parents[str(second.id)] == live
+
+    def test_a_reconcile_whose_collection_was_deleted_makes_it_again(self, env):
+        _, _, component, server = env
+        dt = FakeDT()
+        for sbom in (_sbom(component, "old"), _sbom(component, "new")):
+            SbomDependencyTrackProjectVersion.objects.create(
+                sbom=sbom,
+                dt_server=server,
+                dt_project_version=str(sbom.id),
+                dt_project_version_uuid=dt.add(f"local-sbomify-{component.id}", str(sbom.id)),
+            )
+        reconcile_component(component, server, client=dt)
+        dead = str(DependencyTrackCollection.objects.get(dt_server=server, component=component).dt_project_uuid)
+        dt.projects.pop(dead)
+
+        counts = reconcile_component(component, server, force=True, client=dt)
+
+        live = str(DependencyTrackCollection.objects.get(dt_server=server, component=component).dt_project_uuid)
+        assert counts["failed"] == 0
+        assert live != dead
+        assert live in dt.projects
+        rows = SbomDependencyTrackProjectVersion.objects.filter(dt_server=server)
+        assert {dt.projects[str(row.dt_project_version_uuid)]["parent"] for row in rows} == {live}
+
+
+class GatedDT(FakeDT):
+    """FakeDT whose first call to ``method`` holds until ``release`` is set.
+
+    Every call is recorded with the name of the thread that made it, so a test
+    can see whether a second writer touched Dependency-Track while the first
+    was still in the middle of its read-modify-write.
+    """
+
+    def __init__(self, method: str) -> None:
+        super().__init__()
+        self.gate_method = method
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.calls: list[str] = []
+
+    def _record(self, method: str) -> None:
+        self.calls.append(threading.current_thread().name)
+        if method == self.gate_method and not self.entered.is_set():
+            self.entered.set()
+            assert self.release.wait(10)
+
+    def set_project_state(self, project_uuid, **kw):
+        self._record("set_project_state")
+        return super().set_project_state(project_uuid, **kw)
+
+    def find_project_by_name_version(self, name, version):
+        self._record("find_project_by_name_version")
+        return super().find_project_by_name_version(name, version)
+
+
+def _in_thread(name: str, target) -> threading.Thread:
+    def run() -> None:
+        try:
+            target()
+        except RetryLaterError:
+            pass
+        finally:
+            connection.close()
+
+    thread = threading.Thread(target=run, name=name)
+    thread.start()
+    return thread
+
+
+@pytest.mark.django_db(transaction=True)
+class TestOneWriterAtATime:
+    def test_two_reconciles_of_one_component_take_turns(self, env):
+        _, _, component, server = env
+        dt = GatedDT("set_project_state")
+        for sbom in (_sbom(component, "old"), _sbom(component, "new")):
+            SbomDependencyTrackProjectVersion.objects.create(
+                sbom=sbom,
+                dt_server=server,
+                dt_project_version=str(sbom.id),
+                dt_project_version_uuid=dt.add(f"local-sbomify-{component.id}", str(sbom.id)),
+            )
+
+        first = _in_thread("first", lambda: reconcile_component(component, server, force=True, client=dt))
+        assert dt.entered.wait(10)
+        second = _in_thread("second", lambda: reconcile_component(component, server, force=True, client=dt))
+        second.join(2)
+        touched_while_held = "second" in dt.calls
+        dt.release.set()
+        first.join(10)
+        second.join(10)
+
+        assert not first.is_alive() and not second.is_alive()
+        assert not touched_while_held
+        for row in SbomDependencyTrackProjectVersion.objects.filter(dt_server=server):
+            project = dt.projects[str(row.dt_project_version_uuid)]
+            assert (project["active"], project["isLatest"]) == (row.dt_active, row.dt_is_latest)
+
+    def test_two_first_scans_at_once_leave_latest_on_the_newer(self, env, tmp_path):
+        _, product, component, server = env
+        older = _sbom(component, "older")
+        newer = _sbom(component, "newer")
+        # Both are tracked: the newer as the newest, the older because a release ships it.
+        ReleaseArtifact.objects.create(release=Release.objects.create(product=product, name="11.5"), sbom=older)
+        dt = GatedDT("find_project_by_name_version")
+        path = tmp_path / "sbom.json"
+        path.write_bytes(b'{"bomFormat":"CycloneDX","specVersion":"1.6"}')
+
+        def scan(sbom):
+            return lambda: DependencyTrackPlugin().assess(sbom_id=sbom.id, sbom_path=path, context=None)
+
+        with (
+            patch(CLIENT, return_value=dt),
+            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
+            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
+        ):
+            # The newer SBOM's upload reaches Dependency-Track first and pauses
+            # before its row exists; the older one's scan runs in that gap.
+            first = _in_thread("newer", scan(newer))
+            assert dt.entered.wait(10)
+            second = _in_thread("older", scan(older))
+            second.join(2)
+            dt.release.set()
+            first.join(10)
+            second.join(10)
+
+        assert not first.is_alive() and not second.is_alive()
+        by_version = {p["version"]: p for p in dt.projects.values()}
+        assert by_version[str(newer.id)]["isLatest"] is True
+        assert by_version[str(older.id)]["isLatest"] is False

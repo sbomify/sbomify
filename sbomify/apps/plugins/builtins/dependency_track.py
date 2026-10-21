@@ -426,11 +426,35 @@ class DependencyTrackPlugin(AssessmentPlugin):
             Exception: if upload, lookup, or DB write fails. The caller wraps
             in a DT-setup-failed error result.
         """
-        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
+
+        # Under the component's lock, so a first scan running beside this one
+        # decides latest only after this version's row exists.
+        with component_lock(sbom.component_id, dt_server.id):
+            return self._upload_new_sbom_version_locked(
+                sbom=sbom,
+                sbom_bytes=sbom_bytes,
+                dt_server=dt_server,
+                project_name=project_name,
+                current_release_names=current_release_names,
+            )
+
+    def _upload_new_sbom_version_locked(
+        self,
+        *,
+        sbom: Any,
+        sbom_bytes: bytes,
+        dt_server: Any,
+        project_name: str,
+        current_release_names: list[str],
+    ) -> Any:
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError, DependencyTrackClient
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
         from sbomify.apps.vulnerability_scanning.services.dt_scope import (
             component_collection_safely,
+            forget_collections,
             is_newest_tracked,
+            parent_missing,
         )
 
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
@@ -442,14 +466,28 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # of order and setting the flag clears it on every other version.
         parent_uuid = component_collection_safely(client, sbom.component, dt_server)
         is_latest = is_newest_tracked(sbom, dt_server)
-        client.upload_sbom_with_project_creation(
-            project_name=project_name,
-            project_version=project_version,
-            sbom_data=sbom_bytes,
-            auto_create=True,
-            parent_uuid=parent_uuid,
-            is_latest=is_latest,
-        )
+
+        def upload(parent: str | None) -> None:
+            client.upload_sbom_with_project_creation(
+                project_name=project_name,
+                project_version=project_version,
+                sbom_data=sbom_bytes,
+                auto_create=True,
+                parent_uuid=parent,
+                is_latest=is_latest,
+            )
+
+        try:
+            upload(parent_uuid)
+        except DependencyTrackAPIError as exc:
+            # The recorded collection was deleted in Dependency-Track. Upload
+            # flat, as before collections existed; the reconcile that follows
+            # makes the collection again and moves this version under it.
+            if parent_uuid is None or not parent_missing(exc):
+                raise
+            forget_collections(sbom.component, dt_server)
+            parent_uuid = None
+            upload(None)
 
         project_data = client.find_project_by_name_version(project_name, project_version)
         if not project_data:
@@ -535,38 +573,40 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
             return
 
-        for version_row in version_rows:
-            try:
-                client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
-                written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
-                if written:
-                    # The tag write sent back the whole project as it was read,
-                    # which may be from before a reconcile retired it. Forget
-                    # what we last wrote, so the reconcile below re-reads it.
-                    version_row.dt_active = None
-                    version_row.save(update_fields=["dt_active", "updated_at"])
-                (logger.info if written else logger.debug)(
-                    "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
-                    "set" if written else "already in sync,",
-                    canonical_names,
-                    version_row.dt_project_version_uuid,
-                    sbom_id,
-                )
-            except Exception:
-                logger.warning(
-                    "[DT] sync_release_tags: failed to set tags on version %s for SBOM %s",
-                    version_row.dt_project_version_uuid,
-                    sbom_id,
-                    exc_info=True,
-                )
-
-        # A release gaining or losing this SBOM can bring a version of the
-        # component into what sbomify tracks, or take one out of it.
-        from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component_safely
 
         component = version_rows[0].sbom.component
-        for dt_server in {row.dt_server_id: row.dt_server for row in version_rows}.values():
-            reconcile_component_safely(component, dt_server)
+        for version_row in version_rows:
+            # The tag write and the reconcile under one lock, so no reconcile
+            # elsewhere writes the project between this read and this write.
+            with component_lock(component.id, version_row.dt_server_id):
+                try:
+                    client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
+                    written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                    if written:
+                        # The tag write sent back the whole project as it was read,
+                        # which may be from before a reconcile retired it. Forget
+                        # what we last wrote, so the reconcile below re-reads it.
+                        version_row.dt_active = None
+                        version_row.save(update_fields=["dt_active", "updated_at"])
+                    (logger.info if written else logger.debug)(
+                        "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
+                        "set" if written else "already in sync,",
+                        canonical_names,
+                        version_row.dt_project_version_uuid,
+                        sbom_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "[DT] sync_release_tags: failed to set tags on version %s for SBOM %s",
+                        version_row.dt_project_version_uuid,
+                        sbom_id,
+                        exc_info=True,
+                    )
+
+                # A release gaining or losing this SBOM can bring a version of the
+                # component into what sbomify tracks, or take one out of it.
+                reconcile_component_safely(component, version_row.dt_server)
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
