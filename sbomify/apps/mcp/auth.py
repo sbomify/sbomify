@@ -36,7 +36,10 @@ endpoints ``upload_artifact`` and ``create_release`` delegate into, to decide
 whether the caller is a Trusted Publishing bot confined to its bound component.
 It reads both defensively: a credential carrying neither is not a bot, which is
 the answer that predicate exists to give, and the call falls through to the
-ordinary ``can()`` path rather than raising.
+ordinary ``can()`` path rather than raising. The VEX approval queue, which
+``submit_vex_for_approval`` delegates into, links a submission to the row only
+when the credential is an ``AccessToken``; any other credential is attributed
+through the request's user.
 
 ``token_team`` on the stub is ours rather than the row's contract. It is the
 workspace the credential is scoped to, the same value ``Principal.workspace``

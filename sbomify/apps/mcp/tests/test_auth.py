@@ -302,6 +302,47 @@ class TestTheCredentialContractHolds:
 
         assert is_authorised_for_component(request, SimpleNamespace(id="anything")) is True
 
+    @pytest.mark.django_db
+    def test_a_ruling_sent_with_it_is_queued_without_a_token_row(self, sample_team_with_owner_member) -> None:
+        """`submit_vex_for_approval` records who sent a ruling. A row is kept only when there is one."""
+        from sbomify.apps.vulnerability_scanning.models import VexSubmission
+        from sbomify.apps.vulnerability_scanning.services.vex_submissions import create_submission, parse_decisions
+        from sbomify.apps.vulnerability_scanning.tests.test_workspace_vulnerabilities import (
+            _component,
+            _finding,
+            _scan,
+        )
+
+        team, user = sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        component, sbom = _component(team, "api")
+        _scan(sbom, [_finding("CVE-2026-1")])
+        channel = VexSubmission.Channel.AGENT
+        parsed = parse_decisions(
+            [
+                {
+                    "vuln_id": "CVE-2026-1",
+                    "purl": "pkg:npm/lodash@4.17.15",
+                    "state": "not_affected",
+                    "justification": "code_not_reachable",
+                    "detail": "Never called with user input.",
+                }
+            ],
+            channel=channel,
+        )
+        assert parsed.ok and parsed.value is not None, parsed.error
+
+        result = create_submission(
+            component=component,
+            parsed=parsed.value,
+            channel=channel,
+            user=user,
+            token=self.MinimalCredential(["vex_submission:create"]),
+        )
+
+        assert result.ok and result.value is not None, result.error
+        assert result.value.submitted_token is None
+        assert result.value.submitted_by == user
+
     def test_a_request_without_a_credential_is_not_a_bot(self) -> None:
         from sbomify.apps.oidc.permissions import request_is_oidc_authed
 
