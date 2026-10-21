@@ -469,7 +469,7 @@ def test_a_submission_names_only_so_many_decisions():
     "oversized",
     [
         {"detail": "x" * 4001},
-        {"vuln_id": "CVE-" + "9" * 200},
+        {"vuln_id": "CVE-" + "9" * 252},
         {"aliases": [f"GHSA-{i:04d}-bbbb-cccc" for i in range(21)]},
         {"aliases": ["GHSA-" + "a" * 200]},
     ],
@@ -491,6 +491,41 @@ async def test_an_oversized_decision_is_refused_before_anything_is_written(make_
 
     _refused(response)
     assert await sync_to_async(VexSubmission.objects.count)() == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_ruling_the_prompt_hands_out_is_accepted_however_long_its_purl(make_token, mcp_owner):
+    """A refused ruling leaves dropping the purl as the agent's way out, and that reads as component-wide."""
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+    from sbomify.apps.vulnerability_scanning.tests.test_workspace_vulnerabilities import _decisions
+
+    _, bound, _ = mcp_owner
+    advisory = "CVE-" + "9" * 200
+
+    def seed():
+        component, sbom = _component(bound, "api")
+        _scan(sbom, [_finding(advisory, package="p" * 980)])
+        return component
+
+    component = await sync_to_async(seed)()
+    token = await sync_to_async(make_token)(AGENT)
+    prompt = structured(await _call(token, "get_fix_prompt", {"component_id": component.id, "advisory": advisory}))
+    decision = _decisions(prompt["triage_prompt"])["decisions"][0]
+    assert len(decision["purl"]) > 512 and len(decision["vuln_id"]) > 128
+    decision.update(state="not_affected", justification="code_not_reachable", detail="Never called.")
+
+    submitted = structured(
+        await _call(
+            token,
+            "submit_vex_for_approval",
+            {"component_id": component.id, "decisions": [decision], "context": "Checked."},
+        )
+    )
+
+    stored = await sync_to_async(VexSubmission.objects.get)()
+    assert submitted["id"] == stored.id
+    assert stored.decisions[0]["purl"] == decision["purl"]
 
 
 @pytest.mark.asyncio

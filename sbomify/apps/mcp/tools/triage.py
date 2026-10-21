@@ -15,7 +15,12 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field, ValidationError
 
-from sbomify.apps.vulnerability_scanning.services.fix_prompt import MAX_ALIASES
+from sbomify.apps.vulnerability_scanning.services.fix_prompt import (
+    MAX_ADVISORY_LENGTH,
+    MAX_ALIAS_LENGTH,
+    MAX_ALIASES,
+    MAX_PURL_LENGTH,
+)
 from sbomify.apps.vulnerability_scanning.services.vex_submissions import (
     MAX_CONTEXT_LENGTH,
     MAX_DECISIONS,
@@ -127,8 +132,12 @@ class Decision(BaseModel):
     failed. The bounds match what the triage prompt can hand out.
     """
 
-    vuln_id: str = Field(max_length=128, description="The advisory id the prompt names, such as a CVE or GHSA id")
-    purl: str | None = Field(None, max_length=512, description="The affected package's purl, from the prompt")
+    vuln_id: str = Field(
+        max_length=MAX_ADVISORY_LENGTH, description="The advisory id the prompt names, such as a CVE or GHSA id"
+    )
+    purl: str | None = Field(
+        None, max_length=MAX_PURL_LENGTH, description="The affected package's purl, from the prompt"
+    )
     state: Literal["not_affected", "false_positive", "exploitable", "in_triage"]
     justification: str | None = Field(
         None, max_length=64, description="For not_affected only: one of the justifications the triage prompt lists"
@@ -138,7 +147,7 @@ class Decision(BaseModel):
         max_length=MAX_CONTEXT_LENGTH,
         description="The evidence: the files, build options or code paths checked",
     )
-    aliases: list[Annotated[str, Field(max_length=128)]] = Field(
+    aliases: list[Annotated[str, Field(max_length=MAX_ALIAS_LENGTH)]] = Field(
         default_factory=list, max_length=MAX_ALIASES, description="The advisory's other ids, from the prompt"
     )
 
