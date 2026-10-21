@@ -8,6 +8,7 @@ enforcement silently stops happening — so that is asserted explicitly.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -422,8 +423,8 @@ class TestTheCredentialContractHolds:
         claim is absent, which is right for authorization and wrong for a
         label: read-only tools never touch the binding otherwise.
         """
-        from django.test.utils import CaptureQueriesContext
         from django.db import connection
+        from django.test.utils import CaptureQueriesContext
 
         from sbomify.apps.mcp.auth import _credential_kind
 
