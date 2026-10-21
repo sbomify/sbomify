@@ -49,6 +49,8 @@ workspace from.
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -109,6 +111,9 @@ arguments before any tool code runs, so a check living only in the tool
 wrapper never saw a malformed call; and the SDK runs ``tools/list`` inside
 every ``tools/call``, so authenticating in both places charged one call twice.
 """
+
+TOOL_AUDITED_STATE = "mcp_tool_audited"
+"""Set by the tool wrapper once it owns this request's audit event, so the router writes none."""
 
 UPLOAD_TOOLS = ("upload_artifact", "upload_vex")
 """The tools whose arguments carry a whole artifact, the only reason for a body larger than an envelope."""
@@ -360,6 +365,55 @@ async def principal_for(starlette_request: Request, *, attempted_action: str) ->
     if (refusal := state.get(REFUSAL_STATE)) is not None:
         raise type(refusal)(*refusal.args)
     return await authenticate(starlette_request, attempted_action=attempted_action)
+
+
+def mark_tool_audited(starlette_request: Request) -> None:
+    """Note that the tool wrapper audits this call: every path past ``principal_for`` writes one event."""
+    starlette_request.scope.setdefault("state", {})[TOOL_AUDITED_STATE] = True
+
+
+_IS_ERROR_TAIL = re.compile(rb'"isError"\s*:\s*true\s*}\s*}\s*$')
+
+
+def _rejection(status: int, answer: bytes | None, tail: bytes) -> str | None:
+    """Why the MCP app rejected a request, from its answer, or None when it did not.
+
+    ``answer`` is the whole response when it was small enough to keep, which a
+    rejection always is; ``tail`` is its last bytes, enough to see a tool
+    result's ``isError`` at the end of a long one.
+    """
+    if answer is None:
+        return "tool call rejected" if _IS_ERROR_TAIL.search(tail) else None
+    try:
+        payload = json.loads(answer)
+    except ValueError:
+        return f"HTTP {status}" if status >= 400 else None
+    for message in payload if isinstance(payload, list) else [payload]:
+        if not isinstance(message, dict):
+            continue
+        if isinstance(message.get("error"), dict):
+            return f"JSON-RPC error {message['error'].get('code')}"
+        result = message.get("result")
+        if isinstance(result, dict) and result.get("isError") is True:
+            return "tool call rejected"
+    return f"HTTP {status}" if status >= 400 else None
+
+
+def audit_rejected(scope: Any, status: int, answer: bytes | None, tail: bytes) -> None:
+    """Audit an authenticated request the MCP app rejected before any tool ran.
+
+    FastMCP answers a parse error, an unknown tool or arguments that fail the
+    tool's schema itself, so the tool wrapper never sees them. Without this
+    they were charged to the token but missing from the ``mcp_tool_call``
+    stream. A request the wrapper reached is left alone: it wrote its own
+    event. The detail is the error's code, never the caller's input.
+    """
+    state = scope.get("state") or {}
+    principal = state.get(PRINCIPAL_STATE)
+    if principal is None or state.get(TOOL_AUDITED_STATE):
+        return
+    if (reason := _rejection(status, answer, tail)) is not None:
+        audit("request", principal, outcome="invalid_request", detail=reason)
 
 
 def may_send_large_body(scope: Any) -> bool:

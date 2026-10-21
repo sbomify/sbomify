@@ -26,7 +26,15 @@ from mcp.types import ToolAnnotations
 from sbomify.apps.core.authz import scope_permits
 
 from .. import registry
-from ..auth import WORKSPACE_ATTR, MCPAuthError, Principal, current_request, principal_for, throttle_write
+from ..auth import (
+    WORKSPACE_ATTR,
+    MCPAuthError,
+    Principal,
+    current_request,
+    mark_tool_audited,
+    principal_for,
+    throttle_write,
+)
 from ..limits import DETAIL_COLLECTION_LIMIT as DETAIL_COLLECTION_LIMIT
 from ..limits import audit, enforce_response_size, untrusted
 
@@ -156,6 +164,7 @@ def mcp_tool(
             if request is None:
                 raise MCPAuthError("This tool must be called over HTTP with a bearer token.")
             principal = await principal_for(request, attempted_action=name)
+            mark_tool_audited(request)
 
             try:
                 # Defence in depth: refuse anything the token's scopes don't grant,
