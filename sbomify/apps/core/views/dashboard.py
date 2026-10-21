@@ -9,6 +9,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
@@ -92,6 +93,17 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
             "dashboard": dashboard,
             "show_repository_setup": show_repository_setup,
         }
+
+        # The approval queue is read per request rather than from the cached
+        # snapshot: an approval elsewhere must take the count down at once, and
+        # whether the card shows at all depends on the reader, not the workspace.
+        if team and not show_repository_setup and can(request, "vex_submission:read", team):
+            from sbomify.apps.vulnerability_scanning.services.vex_submissions import pending_count
+
+            context["vex_review"] = {
+                "pending": pending_count(team.id),
+                "url": reverse("vulnerability_scanning:vulnerability_scans", args=[team.key]) + "?view=review",
+            }
 
         # An SBOM upload needs a BOM component. Without one, the empty state
         # links to component creation instead.

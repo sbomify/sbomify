@@ -239,15 +239,19 @@ def test_overview_freshness_honours_component_override(sample_team_with_owner_me
     workspace = sample_team_with_owner_member.team
     workspace.sbom_freshness_days = 30
     workspace.save(update_fields=["sbom_freshness_days"])
+    from sbomify.apps.core.models import Product
+
+    product = Product.objects.create(name="Evidence", team=workspace)
     for name, override in (("stale", None), ("fresh", 90)):
         component = Component.objects.create(name=name, team=workspace, sbom_freshness_days=override)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         SBOM.objects.filter(id=sbom.id).update(created_at=timezone.now() - timedelta(days=45))
     cache.clear()
 
     result = build_dashboard_context(workspace.id)
     assert result.ok and result.value is not None
-    assert result.value["metrics"]["stale"] == 1
+    assert result.value["products"][0]["stale"] == 1
 
 
 def test_overview_kev_priority_keeps_suppressed_findings_out(
