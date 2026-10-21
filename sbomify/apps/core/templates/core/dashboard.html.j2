@@ -22,7 +22,10 @@
             <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
             <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
             <c-layout.stat-card :value="dashboard.metrics.known_exploited" :unmeasured="dashboard.metrics.unmeasured_known_exploited" unmeasured_label="Not scanned yet" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
-            {# djlint:on #}            <c-layout.stat-card :value="dashboard.metrics.stale" label="Components with stale SBOMs" icon="fas fa-arrows-rotate" accent="warning" />
+            {% if vex_review %}
+                <c-layout.stat-card :value="vex_review.pending" label="VEX submissions awaiting review" icon="fas fa-clipboard-check" accent="warning" href="{{ vex_review.url }}" />
+            {% endif %}
+            {# djlint:on #}
         </div>
         {% if can_manage %}
             <c-overview.quick-actions>
