@@ -307,6 +307,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 # Another concurrent scan created it — fine, nothing to reconcile.
                 pass
 
+            # The upload may have replaced the component's previous SBOM in its
+            # latest release, which takes that version out of what is tracked.
+            from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
+
+            reconcile_component_safely(sbom.component, dt_server)
+
             logger.info(
                 f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
             )
@@ -422,15 +428,22 @@ class DependencyTrackPlugin(AssessmentPlugin):
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_collection_safely
 
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         project_version = str(sbom.id)
 
+        # Born in its component's collection, and the newest upload is always
+        # the latest version. None when the key may not make collections: the
+        # upload then goes ahead as it always did.
+        parent_uuid = component_collection_safely(client, sbom.component, dt_server)
         client.upload_sbom_with_project_creation(
             project_name=project_name,
             project_version=project_version,
             sbom_data=sbom_bytes,
             auto_create=True,
+            parent_uuid=parent_uuid,
+            is_latest=True,
         )
 
         project_data = client.find_project_by_name_version(project_name, project_version)
@@ -447,6 +460,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version": project_version,
                 "dt_project_version_uuid": version_uuid,
                 "last_sbom_upload": dj_timezone.now(),
+                "dt_active": True,
+                "dt_is_latest": True,
+                "dt_parent_uuid": parent_uuid,
             },
         )
 
@@ -503,7 +519,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Find the DT version row. There may be multiple dt_servers per
         # (sbom, ...), so update all.
         version_rows = list(
-            SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).select_related("dt_server")
+            SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).select_related(
+                "dt_server", "sbom__component__team"
+            )
         )
         if not version_rows:
             logger.debug(
@@ -530,6 +548,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     sbom_id,
                     exc_info=True,
                 )
+
+        # A release gaining or losing this SBOM can bring a version of the
+        # component into what sbomify tracks, or take one out of it.
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
+
+        component = version_rows[0].sbom.component
+        for dt_server in {row.dt_server_id: row.dt_server for row in version_rows}.values():
+            reconcile_component_safely(component, dt_server)
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
