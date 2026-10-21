@@ -318,8 +318,15 @@ async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
     block, and unauthenticated probing is what the stream exists to show. One
     line per refusal, with the address and a fixed reason, never the header.
     """
-    over_budget = not await sync_to_async(AnonymousIPRateThrottle().allow_request)(stub)
-    audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=get_client_ip(stub))
+    from django.core.cache import cache
+
+    throttle = AnonymousIPRateThrottle()
+    over_budget = not await sync_to_async(throttle.allow_request)(stub)
+    client_ip = get_client_ip(stub)
+    # Past the budget, one line a window says the address is being refused. A line a request
+    # would hand a loop of bad requests the stream the budget exists to protect.
+    if not over_budget or await cache.aadd(f"mcp:refusal-audited:{client_ip}", True, timeout=throttle.duration):
+        audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=client_ip)
     if over_budget:
         raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
 

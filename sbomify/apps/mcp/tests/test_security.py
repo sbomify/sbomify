@@ -519,6 +519,56 @@ async def test_a_bot_token_is_refused_the_internal_reads(mcp_owner, make_token, 
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_a_bound_bot_reads_only_the_releases_of_products_holding_its_component(mcp_owner, make_token):
+    """A CI bot holds release:read across its workspace so it can see whether a release exists.
+
+    What a release contains is another matter: REST serves it only on a product
+    that holds the bot's bound component, and the MCP tool has to draw the same
+    line. Listing stays workspace-wide, as it does over REST.
+    """
+    from sbomify.apps.core.models import Component, Product, Release
+    from sbomify.apps.oidc.models import OIDCBinding
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+
+    def setup() -> tuple[str, str]:
+        Member.objects.filter(user=user, team=bound).update(role="bot")
+        component = Component.objects.create(name="Bound", team=bound)
+        own = Product.objects.create(name="Own", team=bound)
+        own.components.add(component)
+        other = Product.objects.create(name="Other", team=bound)
+        OIDCBinding.objects.create(
+            component=component,
+            repository="acme/widget",
+            repository_id=1,
+            repository_owner_id=2,
+            bot_user=user,
+            created_by=user,
+        )
+        own_release = Release.objects.create(product=own, name="v1", version="1")
+        other_release = Release.objects.create(product=other, name="v1", version="1")
+        return own_release.id, other_release.id
+
+    own_id, other_id = await sync_to_async(setup)()
+    async with mcp_http() as client:
+        own = await call(
+            client, "tools/call", token=token.encoded_token, name="get_release", arguments={"release_id": own_id}
+        )
+        other = await call(
+            client, "tools/call", token=token.encoded_token, name="get_release", arguments={"release_id": other_id}
+        )
+        listed = await call(client, "tools/call", token=token.encoded_token, name="list_releases", arguments={})
+
+    assert own_id in json.dumps(parse(own))
+    assert "Not permitted" in json.dumps(parse(other))
+    assert other_id not in json.dumps(parse(other))
+    assert own_id in json.dumps(parse(listed)) and other_id in json.dumps(parse(listed))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_token_whose_user_left_the_workspace_is_refused(mcp_owner, make_token):
     """Removal is not revocation: nothing deletes the PAT when the row goes.
 
