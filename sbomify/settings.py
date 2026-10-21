@@ -1109,6 +1109,10 @@ MCP_ALLOWED_HOSTS = os.environ.get("MCP_ALLOWED_HOSTS", "")
 MCP_MAX_UPLOAD_BYTES = int(os.environ.get("MCP_MAX_UPLOAD_BYTES", DATA_UPLOAD_MAX_MEMORY_SIZE))
 MCP_MAX_ARTIFACT_PARSE_BYTES = int(os.environ.get("MCP_MAX_ARTIFACT_PARSE_BYTES", 50 * 1024 * 1024))
 MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 1024))
+# MCP requests in flight per worker process, each holding an executor thread and
+# a database connection. Two workers at the default use 16 connections, well
+# inside PostgreSQL's default of 100. See MCPRouter in sbomify/asgi.py.
+MCP_MAX_CONCURRENT_REQUESTS = int(os.environ.get("MCP_MAX_CONCURRENT_REQUESTS", 8))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:
