@@ -64,6 +64,12 @@ class AdvisoryEventSchema(Schema):
     kind: str
     body: str = ""
     actor: str = ""
+    channel: str = Field(
+        "",
+        description="How the change was sent: agent (an AI agent token), api (any other token), ci, "
+        "or blank for a change made in the app.",
+    )
+    token_id: str = Field("", description="The API token that made the change, when one did.")
     from_status: str | None = None
     to_status: str | None = None
     created_at: datetime
