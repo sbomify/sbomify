@@ -51,6 +51,7 @@ nothing to call.
 | `MCP_MAX_ARTIFACT_PARSE_BYTES` | Largest stored artifact `get_artifact_packages` will parse (default 50 MB) |
 | `MCP_MAX_RESPONSE_BYTES` | Ceiling on one tool's response (default 1 MB) |
 | `MCP_MAX_CONCURRENT_REQUESTS` | MCP requests one worker process runs at once; more wait up to 5 s, then get a 503 with `Retry-After` (default 8) |
+| `MCP_MAX_CONCURRENT_UPLOADS` | Of those, requests whose body is over 1 MiB or of unstated size, such as `upload_artifact`; more wait the same way (default 2) |
 
 Per-token rate limiting is shared with the REST API (`API_TOKEN_RATE_LIMIT`), with the stricter
 `API_TOKEN_HEAVY_RATE_LIMIT` applied to the tools that write. An agent and a CI job sharing a token
