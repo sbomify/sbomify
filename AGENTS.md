@@ -367,7 +367,7 @@ Read them when changing shared components, page structure or interaction flows.
 - **Server data to Alpine**: `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')`, never client-side fetch
 - **HTMX partials**: views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
 - **Theme**: `.dark` / `.light` class on `<html>`; dark is the default
-- **Vite entry points** in `vite.config.ts`: core, sboms, teams, billing, documents, vulnerability_scanning, plugins (plus alerts, djangoMessages, htmxBundle, tailwind). Dev server runs on port **5170**
+- **Vite entry points** in `vite.config.ts`: core, teams, documents, plugins (plus htmxBundle, tailwind). Dev server runs on port **5170**
 - **Changing an existing page**: it probably has an e2e snapshot. Change structure
   only, and if the baselines move, confirm every move was intended before
   regenerating them.

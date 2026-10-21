@@ -3,7 +3,6 @@
 {% load django_htmx %}
 {% load cache %}
 {% load schema_tags %}
-{% load breadcrumb_tags %}
 {% load brand_tags %}
 {% load public_url_tags %}
 <!DOCTYPE html>
@@ -1104,8 +1103,6 @@
                 {% block page_header %}
                 {% endblock %}
                 <div class="public-content-container">
-                    {# Breadcrumb Navigation #}
-                    {% block breadcrumb %}{% endblock %}
                     {# Page Content #}
                     {% block content %}{% endblock %}
                 </div>

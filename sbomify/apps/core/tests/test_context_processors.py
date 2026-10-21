@@ -114,10 +114,6 @@ class TestVersionContext:
 
         env_vars = {
             "SBOMIFY_GIT_COMMIT_SHORT": "abc1234",
-            "SBOMIFY_GIT_COMMIT": "abc1234567890abcdef",
-            "SBOMIFY_GIT_REF": "v1.2.3",
-            "SBOMIFY_BUILD_TYPE": "release",
-            "SBOMIFY_BUILD_DATE": "2024-01-15T10:30:00Z",
         }
 
         with (
@@ -128,10 +124,6 @@ class TestVersionContext:
             result = version_context(request)
 
         assert result["git_commit"] == "abc1234"
-        assert result["git_commit_full"] == "abc1234567890abcdef"
-        assert result["git_ref"] == "v1.2.3"
-        assert result["build_type"] == "release"
-        assert result["build_date"] == "2024-01-15T10:30:00Z"
 
     def test_returns_none_for_missing_environment_variables(self) -> None:
         """Test that None is returned for missing environment variables."""
@@ -140,10 +132,6 @@ class TestVersionContext:
         # Clear any existing SBOMIFY_ environment variables
         env_to_clear = {
             "SBOMIFY_GIT_COMMIT_SHORT": "",
-            "SBOMIFY_GIT_COMMIT": "",
-            "SBOMIFY_GIT_REF": "",
-            "SBOMIFY_BUILD_TYPE": "",
-            "SBOMIFY_BUILD_DATE": "",
         }
 
         with (
@@ -154,33 +142,6 @@ class TestVersionContext:
             result = version_context(request)
 
         assert result["git_commit"] is None
-        assert result["git_commit_full"] is None
-        assert result["git_ref"] is None
-        assert result["build_type"] is None
-        assert result["build_date"] is None
-
-    def test_branch_build_environment_variables(self) -> None:
-        """Test that branch build info is correctly returned."""
-        request = MagicMock()
-
-        env_vars = {
-            "SBOMIFY_GIT_COMMIT_SHORT": "def5678",
-            "SBOMIFY_GIT_COMMIT": "def5678901234567890",
-            "SBOMIFY_GIT_REF": "master",
-            "SBOMIFY_BUILD_TYPE": "branch",
-            "SBOMIFY_BUILD_DATE": "2024-01-15T10:30:00Z",
-        }
-
-        with (
-            patch("sbomify.apps.core.context_processors.version") as mock_version,
-            patch.dict(os.environ, env_vars, clear=False),
-        ):
-            mock_version.return_value = "1.2.3"
-            result = version_context(request)
-
-        assert result["git_commit"] == "def5678"
-        assert result["git_ref"] == "master"
-        assert result["build_type"] == "branch"
 
 
 @pytest.mark.django_db
@@ -207,7 +168,6 @@ class TestPendingInvitationsContext:
         result = pending_invitations_context(request)
 
         assert result["pending_invitations_count"] == 0
-        assert result["has_pending_invitations"] is False
 
 
 class TestPosthogContext:

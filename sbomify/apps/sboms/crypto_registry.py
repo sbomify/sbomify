@@ -30,7 +30,6 @@ _NAMESPACE_RANK = {"nist": 0, "secg": 1, "x962": 2, "brainpool": 3}
 class _RegistryTables:
     curve_by_name: dict[str, str]
     curve_by_oid: dict[str, str]
-    aliases_by_canonical: dict[str, tuple[str, ...]]
     family_by_name: dict[str, str]
     last_updated: str | None
 
@@ -50,7 +49,6 @@ def build_tables(data: dict[str, Any]) -> _RegistryTables:
     """
     curve_by_name: dict[str, str] = {}
     curve_by_oid: dict[str, str] = {}
-    aliases_by_canonical: dict[str, tuple[str, ...]] = {}
     for family in data.get("ellipticCurves") or []:
         if not isinstance(family, dict):
             continue
@@ -68,7 +66,6 @@ def build_tables(data: dict[str, Any]) -> _RegistryTables:
                 curve_by_name.setdefault(name.lower(), canonical)
             if isinstance(curve.get("oid"), str):
                 curve_by_oid.setdefault(curve["oid"], canonical)
-            aliases_by_canonical.setdefault(canonical, tuple(sorted(set(bare_names))))
     family_by_name = {
         str(algo["family"]).lower(): str(algo["family"])
         for algo in data.get("algorithms") or []
@@ -77,7 +74,6 @@ def build_tables(data: dict[str, Any]) -> _RegistryTables:
     return _RegistryTables(
         curve_by_name=curve_by_name,
         curve_by_oid=curve_by_oid,
-        aliases_by_canonical=aliases_by_canonical,
         family_by_name=family_by_name,
         last_updated=data.get("lastUpdated") if isinstance(data.get("lastUpdated"), str) else None,
     )
@@ -90,7 +86,7 @@ def _tables() -> _RegistryTables:
     except (OSError, ValueError):
         # A missing/corrupt vendored file degrades to no normalization rather
         # than crashing every inventory, posture, and dashboard render.
-        return _RegistryTables({}, {}, {}, {}, None)
+        return _RegistryTables({}, {}, {}, None)
     return build_tables(data if isinstance(data, dict) else {})
 
 
@@ -105,11 +101,6 @@ def curve_for_oid(oid: str | None) -> str | None:
     if not oid or not isinstance(oid, str):
         return None
     return _tables().curve_by_oid.get(oid.strip())
-
-
-def curve_aliases(canonical: str) -> tuple[str, ...]:
-    """Every bare (un-namespaced) name the registry lists for a canonical curve."""
-    return _tables().aliases_by_canonical.get(canonical, ())
 
 
 def normalize_family(value: str | None) -> str | None:

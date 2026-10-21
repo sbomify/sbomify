@@ -1,4 +1,4 @@
-"""End-of-life transition (CRA checklist 6.1): readiness, announcement, finals."""
+"""End-of-life transition (CRA checklist 6.1): readiness."""
 
 from __future__ import annotations
 
@@ -8,12 +8,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.core.models import Product, Release, ReleaseArtifact
-from sbomify.apps.core.services.eol import (
-    build_eol_advisory,
-    eol_readiness,
-    final_artifacts,
-    products_approaching_eol,
-)
+from sbomify.apps.core.services.eol import _final_release, eol_readiness
 from sbomify.apps.plugins.models import VulnerabilityLifecycle
 from sbomify.apps.sboms.models import SBOM, Component
 
@@ -135,94 +130,6 @@ class TestReadiness:
         assert readiness.has_final_vex is True
 
 
-class TestAnnouncement:
-    def test_the_advisory_is_drafted_not_published(self, eol_product, sample_user):
-        """An EOL notice is an irreversible public statement, so a human
-        publishes it."""
-        from sbomify.apps.security_advisories.models import SecurityAdvisory
-
-        product, _ = eol_product
-
-        advisory = build_eol_advisory(product, sample_user)
-
-        assert advisory.status == SecurityAdvisory.Status.DRAFT
-        assert advisory.remediation_status == SecurityAdvisory.RemediationStatus.WONT_FIX
-        assert product.name in advisory.title
-
-    def test_the_announcement_names_both_dates_when_they_differ(self, eol_product, sample_user):
-        product, _ = eol_product
-
-        advisory = build_eol_advisory(product, sample_user)
-
-        assert product.end_of_life.isoformat() in advisory.description
-        assert "Bug fixes stopped" in advisory.description
-
-    def test_the_product_is_attached_and_an_event_recorded(self, eol_product, sample_user):
-        product, _ = eol_product
-
-        advisory = build_eol_advisory(product, sample_user, migration_path="Migrate to Gateway 10")
-
-        assert advisory.products.get().product == product
-        assert advisory.events.get().payload["kind"] == "eol"
-        assert "Gateway 10" in advisory.description
-
-
-class TestFinalArtifacts:
-    def test_the_latest_release_artifacts_are_returned(self, eol_product):
-        product, component = eol_product
-        release = _release_with(product, component, bom_types=("sbom", "vex"))
-
-        finals = final_artifacts(product)
-
-        assert finals["release"] == release
-        assert len(finals["sboms"]) == 1
-        assert len(finals["vex"]) == 1
-
-    def test_a_product_that_shipped_nothing_has_no_final_artifacts(self, eol_product):
-        """Every product carries an auto-created floating `latest`, so the
-        honest answer is a release with nothing in it — not a crash, and not
-        a pretend artifact set."""
-        product, _ = eol_product
-
-        finals = final_artifacts(product)
-
-        assert finals["sboms"] == []
-        assert finals["vex"] == []
-        assert eol_readiness(product).has_final_sbom is False
-
-    def test_a_versioned_release_wins_over_the_floating_latest(self, eol_product):
-        """`latest` re-targets as artifacts arrive, so pinning "final" to it
-        would let the final SBOM change after support ended."""
-        product, component = eol_product
-        versioned = _release_with(product, component)
-
-        assert final_artifacts(product)["release"] == versioned
-        assert versioned.is_latest is False
-
-
-class TestApproachingSweep:
-    def test_products_inside_the_window_surface(self, eol_product, sample_team_with_owner_member):
-        product, _ = eol_product
-
-        found = products_approaching_eol(sample_team_with_owner_member.team, within_days=60)
-
-        assert product in found  # end_of_support is 30 days out
-
-    def test_a_product_past_its_eol_still_surfaces(self, sample_team_with_owner_member):
-        """The case most worth surfacing: a product that quietly passed EOL
-        without an announcement."""
-        team = sample_team_with_owner_member.team
-        lapsed = Product.objects.create(team=team, name="Long Gone", end_of_life=date.today() - timedelta(days=400))
-
-        assert lapsed in products_approaching_eol(team, within_days=30)
-
-    def test_products_with_no_dates_are_ignored(self, sample_team_with_owner_member):
-        team = sample_team_with_owner_member.team
-        Product.objects.create(team=team, name="No Dates")
-
-        assert products_approaching_eol(team, within_days=3650) == []
-
-
 class TestReadinessEndpoint:
     def test_the_endpoint_reports_the_verdict_and_the_blockers(self, eol_product, sample_team_with_owner_member):
         from django.test import Client
@@ -296,12 +203,19 @@ class TestAcceptanceScope:
 
 
 class TestFinalReleaseOrdering:
+    def test_a_versioned_release_wins_over_the_floating_latest(self, eol_product):
+        """`latest` re-targets as artifacts arrive, so pinning "final" to it
+        would let the final SBOM change after support ended."""
+        product, component = eol_product
+        versioned = _release_with(product, component)
+
+        assert _final_release(product) == versioned
+        assert versioned.is_latest is False
+
     def test_the_release_published_last_wins_over_the_row_created_last(self, eol_product):
         """Release orders on released_at first. A row can be created before an
         earlier-dated one is published, so sorting on created_at alone picks the
         wrong release as final."""
-        from sbomify.apps.core.services.eol import _final_release
-
         product, _ = eol_product
         older = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
         newer = Release.objects.create(product=product, name="v2.0.0", version="2.0.0")

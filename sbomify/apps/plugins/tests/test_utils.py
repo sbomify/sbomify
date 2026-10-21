@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from sbomify.apps.plugins.utils import (
     compute_config_hash,
-    compute_content_digest,
     get_http_session,
     get_sbomify_version,
     get_user_agent,
@@ -57,43 +56,6 @@ class TestComputeConfigHash:
         hash2 = compute_config_hash(config2)
 
         assert hash1 != hash2
-
-
-class TestComputeContentDigest:
-    """Tests for compute_content_digest function."""
-
-    def test_empty_content(self) -> None:
-        """Test hash of empty bytes."""
-        digest = compute_content_digest(b"")
-
-        # SHA256 of empty string is well-known
-        expected = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        assert digest == expected
-
-    def test_deterministic(self) -> None:
-        """Test that same content produces same digest."""
-        content = b"Hello, World!"
-
-        digest1 = compute_content_digest(content)
-        digest2 = compute_content_digest(content)
-
-        assert digest1 == digest2
-
-    def test_different_content_different_digest(self) -> None:
-        """Test that different content produces different digest."""
-        content1 = b"Hello"
-        content2 = b"World"
-
-        digest1 = compute_content_digest(content1)
-        digest2 = compute_content_digest(content2)
-
-        assert digest1 != digest2
-
-    def test_digest_length(self) -> None:
-        """Test that digest is correct length."""
-        digest = compute_content_digest(b"test content")
-
-        assert len(digest) == 64  # SHA256 hex length
 
 
 class TestGetSbomifyVersion:

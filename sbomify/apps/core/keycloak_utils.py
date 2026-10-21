@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from typing import Any
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 
 from keycloak import KeycloakAdmin, KeycloakOpenID
 
 logger = logging.getLogger(__name__)
-User = get_user_model()
 
 
 class KeycloakManager:
@@ -104,12 +101,6 @@ class KeycloakManager:
             logger.error(f"Failed to find user with email {email} in Keycloak: {str(e)}")
             return []
 
-    def _get_current_time(self) -> str:
-        """Get the current time in ISO format."""
-        from datetime import datetime
-
-        return datetime.utcnow().isoformat()
-
     def set_temporary_password(self, user_id: str, password: str, temporary: bool = True) -> None:
         """Set a temporary password for a user."""
         try:
@@ -185,15 +176,7 @@ class KeycloakManager:
                     return None
 
             # Prepare redirect URIs
-            redirect_uris = [f"{settings.APP_BASE_URL}/*"]
-
-            # Add WEBSITE_BASE_URL if it exists
-            if hasattr(settings, "WEBSITE_BASE_URL"):
-                redirect_uris.append(f"{settings.WEBSITE_BASE_URL}/*")
-            # If not available, check if defined in environment but not loaded in settings
-            elif hasattr(settings, "VITE_WEBSITE_BASE_URL"):
-                base_url = settings.VITE_WEBSITE_BASE_URL  # type: ignore[misc]
-                redirect_uris.append(f"{base_url}/*")
+            redirect_uris = [f"{settings.APP_BASE_URL}/*", f"{settings.WEBSITE_BASE_URL}/*"]
 
             # Client configuration
             client_representation = {
@@ -238,21 +221,6 @@ class KeycloakManager:
 
         # Create client if needed and return the client secret
         return self.create_client()
-
-    def create_user_data(self, user: User) -> dict[str, Any]:  # type: ignore[valid-type]
-        """Create user data for Keycloak."""
-        return {
-            "username": user.username,  # type: ignore[attr-defined]
-            "email": user.email,  # type: ignore[attr-defined]
-            "firstName": user.first_name,  # type: ignore[attr-defined]
-            "lastName": user.last_name,  # type: ignore[attr-defined]
-            "enabled": True,
-            "emailVerified": True,  # Assume emails are verified since they were verified in social login
-            "attributes": {
-                "company": [user.company] if hasattr(user, "company") else [],  # type: ignore[attr-defined]
-                "supplier_contact": [json.dumps(user.supplier_contact)] if hasattr(user, "supplier_contact") else [],  # type: ignore[attr-defined]
-            },
-        }
 
     def disable_user(self, user_id: str) -> bool:
         """Disable a user in Keycloak (sets enabled=False).

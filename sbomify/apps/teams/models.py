@@ -533,15 +533,6 @@ class Workspace(models.Model):
 
         return None
 
-    def requires_nda_for_gated_access(self) -> bool:
-        """Check if this team requires NDA signing for gated access.
-
-        Returns:
-            bool: True if the workspace has a company-wide NDA document,
-                  False otherwise.
-        """
-        return self.get_company_nda_document() is not None
-
 
 # The old name answers until every open branch has re-run bin/rename_to_workspace.py.
 Team = Workspace  # rename-to-workspace: keep
@@ -807,15 +798,6 @@ class ContactEntity(models.Model):
             existing = ContactEntity.objects.filter(profile=self.profile, is_supplier=True).exclude(pk=self.pk)
             if existing.exists():
                 raise ValidationError("A profile can have only one supplier entity")
-
-    def clean_contacts(self) -> None:
-        """Validate contacts for CycloneDX compliance.
-
-        Note: For backward compatibility with legacy API, entities without contacts
-        are allowed. The new entity-based API enforces contacts in _upsert_entities().
-        This method is kept for documentation but doesn't enforce the constraint.
-        """
-        pass
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure validation is always called."""

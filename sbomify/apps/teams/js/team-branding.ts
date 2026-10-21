@@ -3,7 +3,7 @@ import { showSuccess, showError } from '../../core/js/alerts';
 import { brandFill, inkOnColor } from './brand-ink';
 import { defaultBrandColors } from '../../core/js/constants/colors';
 import { getCsrfToken } from '../../core/js/csrf';
-import { formatLastChecked as sharedFormatLastChecked } from '../../core/js/utils';
+import { formatDateTime } from '../../core/js/utils';
 
 interface BrandingInfo {
     icon: File | null;
@@ -65,7 +65,7 @@ export function registerCustomDomain() {
         },
 
         formatLastChecked() {
-            return sharedFormatLastChecked(this.lastChecked);
+            return formatDateTime(this.lastChecked, { use24Hour: false, fallback: 'Never' });
         },
 
         async saveDomain() {
@@ -250,18 +250,6 @@ export function registerTeamBranding() {
             setDefaultColors() {
                 this.updateColor('brand_color', defaultColors.brand_color);
                 this.updateColor('accent_color', defaultColors.accent_color);
-            },
-
-            displayColor(field: 'brand_color' | 'accent_color') {
-                const value = this.localBrandingInfo[field];
-                const hasInitial = !!this.initialBrandingInfo[field];
-                const isFallbackDefault = !hasInitial && value === defaultColors[field];
-
-                if (!value || isFallbackDefault) {
-                    return 'Not set';
-                }
-
-                return value;
             },
         };
     });

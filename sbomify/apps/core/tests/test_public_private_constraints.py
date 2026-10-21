@@ -7,7 +7,6 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.apis import _private_items_allowed
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.sboms.tests.test_views import setup_test_session
@@ -30,7 +29,7 @@ def test_private_items_invalid_plan_treated_as_public(sample_team_with_owner_mem
     team.billing_plan = "invalid_plan"
     team.save()
 
-    assert _private_items_allowed(team) is False
+    assert team.can_be_private() is False
 
 
 @pytest.mark.django_db

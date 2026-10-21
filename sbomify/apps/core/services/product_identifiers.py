@@ -16,20 +16,9 @@ from sbomify.apps.core.apis import (
 )
 from sbomify.apps.core.schemas import ProductIdentifierCreateSchema, ProductIdentifierUpdateSchema
 from sbomify.apps.core.services.results import ServiceResult, extract_pydantic_error_message
+from sbomify.apps.sboms.models import ProductIdentifier
 
-# Identifier types mapping
-IDENTIFIER_TYPES = {
-    "gtin_12": "GTIN-12 (UPC-A)",
-    "gtin_13": "GTIN-13 (EAN-13)",
-    "gtin_14": "GTIN-14 / ITF-14",
-    "gtin_8": "GTIN-8",
-    "sku": "SKU",
-    "mpn": "MPN",
-    "asin": "ASIN",
-    "gs1_gpc_brick": "GS1 GPC Brick code",
-    "cpe": "CPE",
-    "purl": "PURL",
-}
+IDENTIFIER_TYPES = dict(ProductIdentifier.IdentifierType.choices)
 
 # Types that can render barcodes
 BARCODE_TYPES = ["gtin_12", "gtin_13", "gtin_14", "gtin_8"]

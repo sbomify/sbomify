@@ -62,13 +62,14 @@ class BillingConfig(AppConfig):
     verbose_name = "Billing"
 
     def ready(self) -> None:
-        # Import signals, tasks, and cron to register them with Django and Dramatiq.
-        # Without importing cron here the `daily_stale_trial_check` actor is
-        # never registered with the dramatiq worker.
+        # Import signals and tasks to register them with Django and Dramatiq.
+        # The worker registers the actors in tasks/__init__.py only through this
+        # import, because rundramatiq hands a tasks package's submodules to the
+        # worker processes, not the package itself.
         import stripe
         from django.conf import settings
 
-        from . import cron, signals, tasks  # noqa: F401
+        from . import signals, tasks  # noqa: F401
 
         # Pin here rather than per call: every request the library makes then
         # states the version it was written against, so upgrading the library

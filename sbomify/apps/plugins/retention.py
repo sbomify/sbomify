@@ -94,7 +94,6 @@ def prune_assessment_runs(
     keep_per_plugin: int = DEFAULT_KEEP_PER_PLUGIN,
     min_age_days: int = DEFAULT_MIN_AGE_DAYS,
     batch_size: int = 500,
-    dry_run: bool = False,
 ) -> int:
     """Delete prunable runs in batches. Returns how many were removed.
 
@@ -106,10 +105,6 @@ def prune_assessment_runs(
     from sbomify.apps.plugins.result_store import delete_result_objects
 
     doomed = prunable_run_ids(keep_per_plugin=keep_per_plugin, min_age_days=min_age_days)
-    if dry_run:
-        logger.info(f"[RETENTION] dry run: {len(doomed)} assessment runs would be pruned")
-        return len(doomed)
-
     batch_size = max(1, batch_size)
     removed = 0
     for start in range(0, len(doomed), batch_size):

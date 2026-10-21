@@ -1,5 +1,4 @@
 {% extends "core/base.html.j2" %}
-{% load widget_tweaks %}
 {% block title %}Contact Support - sbomify{% endblock %}
 {% block head %}
     {{ block.super }}
@@ -61,13 +60,13 @@
                      data-sitekey="{{ turnstile_site_key }}"
                      data-callback="turnstileCallback"
                      data-error-callback="turnstileErrorCallback"></div>
-                {% render_field form.cf_turnstile_response %}
+                {{ form.cf_turnstile_response }}
                 {% if form.cf_turnstile_response.errors %}
                     <c-forms.error>{{ form.cf_turnstile_response.errors.0 }}</c-forms.error>
                 {% endif %}
                 </c-layout.form-section>
             {% else %}
-                {% render_field form.cf_turnstile_response %}
+                {{ form.cf_turnstile_response }}
             {% endif %}
             <div class="flex flex-col gap-5">
                 <c-feedback.alert>You'll receive a confirmation email once we receive your request.</c-feedback.alert>

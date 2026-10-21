@@ -96,22 +96,8 @@ def validate_expression(expr: str) -> dict[str, Any]:
     if tree is None:
         return {"status": 400, "error": "Empty expression"}
 
-    # Get tokens from the parsed tree - these are the individual license
-    # identifiers
-    tokens = []
-    for symbol in tree.symbols:
-        if hasattr(symbol, "key"):
-            # Simple license symbol
-            tokens.append(symbol.key)
-        elif hasattr(symbol, "license_symbol") and hasattr(symbol, "exception_symbol"):
-            # License with exception symbol - extract both parts
-            tokens.append(symbol.license_symbol.key)
-            tokens.append(symbol.exception_symbol.key)
-        else:
-            tokens.append(str(symbol))
-
-    # Remove duplicates while preserving order
-    unique_tokens = list(dict.fromkeys(tokens))
+    # Unique keys in expression order, with a WITH exception split into its two keys.
+    unique_tokens = licensing.license_keys(tree)
     unknown = [t for t in unique_tokens if t not in ALL_LICENSES]
 
     return {

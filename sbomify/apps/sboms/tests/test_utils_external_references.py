@@ -141,9 +141,9 @@ def test_every_document_type_resolves_to_a_real_cyclonedx_type():
     which is what the coercion would otherwise swallow into ``other``.
     """
     from sbomify.apps.documents.models import Document
-    from sbomify.apps.sboms.utils import _get_cyclonedx_model, _get_cyclonedx_type_for_document_type
+    from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
+    from sbomify.apps.sboms.utils import _get_cyclonedx_type_for_document_type
 
-    cdx16 = _get_cyclonedx_model()
     valid = {member.value for member in cdx16.Type3}
 
     for value, _label in Document.DocumentType.choices:
@@ -160,9 +160,8 @@ def test_an_nda_is_not_emitted_as_a_certification_report():
     an accredited certification of the vendor.
     """
     from sbomify.apps.documents.models import Document
-    from sbomify.apps.sboms.utils import _get_cyclonedx_model, _get_cyclonedx_type_for_document_type
-
-    cdx16 = _get_cyclonedx_model()
+    from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
+    from sbomify.apps.sboms.utils import _get_cyclonedx_type_for_document_type
 
     assert _get_cyclonedx_type_for_document_type(Document.DocumentType.NDA) == cdx16.Type3.other
     assert Document(document_type=Document.DocumentType.NDA).spdx_reference_type == "nda"

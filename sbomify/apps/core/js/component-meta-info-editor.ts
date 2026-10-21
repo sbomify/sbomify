@@ -1,13 +1,11 @@
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
+import { showError, showSuccess } from './alerts';
 import type { ContactProfile, ComponentMetaInfo } from './types';
 import {
     ComponentEvents,
     dispatchComponentEvent,
-    type MetadataLoadedEvent,
-    type ContactsUpdatedEvent,
-    type MetadataUpdatedEvent,
-    type ShowAlertEvent
+    type MetadataLoadedEvent
 } from './events';
 
 interface LifecyclePhase {
@@ -36,6 +34,16 @@ const formatLifecyclePhase = (phase: string): string => {
     if (phase === 'pre-build') return 'Pre-Build';
     if (phase === 'post-build') return 'Post-Build';
     return phase.charAt(0).toUpperCase() + phase.slice(1);
+};
+
+// Ninja answers a validation failure with a list of issues, not a string.
+const describeError = (detail: unknown): string | null => {
+    if (typeof detail === 'string') return detail;
+    if (!Array.isArray(detail)) return null;
+    return detail.map(({ loc = [], msg = '' }: { loc?: (string | number)[]; msg?: string }) => {
+        const field = String(loc[loc.length - 1] ?? '').replace(/_/g, ' ');
+        return field ? `${field.charAt(0).toUpperCase()}${field.slice(1)}: ${msg}` : msg;
+    }).join('. ') || null;
 };
 
 export function registerComponentMetaInfoEditor() {
@@ -94,11 +102,6 @@ export function registerComponentMetaInfoEditor() {
                 profiles.push(this.selectedProfile);
             }
             return profiles;
-        },
-
-        getProfileDisplayText(profile: ContactProfile | null): string {
-            if (!profile) return '';
-            return profile.name || '';
         },
 
         getProfileOptionText(profile: ContactProfile): string {
@@ -166,10 +169,7 @@ export function registerComponentMetaInfoEditor() {
                     this.isInitializing = false;
                 }
             } catch {
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'error',
-                    message: 'Failed to load component metadata'
-                });
+                showError('Failed to load component metadata');
                 this.isInitializing = false;
             }
         },
@@ -229,11 +229,6 @@ export function registerComponentMetaInfoEditor() {
                         // Update originalMetadata during initial load so synced state is baseline
                         this.originalMetadata = JSON.stringify(this.metadata);
                     }
-                    this.$nextTick(() => {
-                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                            contacts: []
-                        });
-                    });
                 }
                 return;
             }
@@ -257,13 +252,6 @@ export function registerComponentMetaInfoEditor() {
                     // Update originalMetadata during initial load so synced state is baseline
                     this.originalMetadata = JSON.stringify(this.metadata);
                 }
-
-                // Use $nextTick to ensure component is ready to receive events
-                this.$nextTick(() => {
-                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                        contacts: this.metadata.authors
-                    });
-                });
             }
         },
 
@@ -279,11 +267,6 @@ export function registerComponentMetaInfoEditor() {
                     this.metadata.supplier.name = null;
                 }
                 this.metadata.authors = [];
-                this.$nextTick(() => {
-                    dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                        contacts: []
-                    });
-                });
             } else {
                 const profile = this.contactProfiles.find(p => p.id === nextId);
                 this.metadata.contact_profile = profile || null;
@@ -294,28 +277,8 @@ export function registerComponentMetaInfoEditor() {
                     // Authors are simple objects (name, email, phone) suitable for JSON cloning.
                     const authors = profile.authors ? JSON.parse(JSON.stringify(profile.authors)) : [];
                     this.metadata.authors = authors;
-                    this.$nextTick(() => {
-                        dispatchComponentEvent<ContactsUpdatedEvent>(ComponentEvents.CONTACTS_UPDATED, {
-                            contacts: authors
-                        });
-                    });
                 }
             }
-        },
-
-        isValidUrl(url: string): boolean {
-            try {
-                new URL(url);
-                return true;
-            } catch {
-                return false;
-            }
-        },
-
-        isValidEmail(email: string): boolean {
-            if (!email) return true;
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            return emailRegex.test(email);
         },
 
         handleCancel() {
@@ -337,12 +300,6 @@ export function registerComponentMetaInfoEditor() {
             window.dispatchEvent(new CustomEvent('close-metadata-editor'));
         },
 
-        discardChanges() {
-            // Use window event for reliable cross-scope communication
-            // This ensures the event reaches the wrapper even from nested x-data scopes
-            window.dispatchEvent(new CustomEvent('close-metadata-editor'));
-        },
-
         async updateMetaData() {
             if (!this.isFormValid || this.isSaving) return;
 
@@ -357,9 +314,9 @@ export function registerComponentMetaInfoEditor() {
                     contact_profile_id: this.metadata.contact_profile_id,
                     uses_custom_contact: this.metadata.uses_custom_contact,
                     // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
-                    release_date: this.metadata.release_date,
-                    end_of_support: this.metadata.end_of_support,
-                    end_of_life: this.metadata.end_of_life
+                    release_date: this.metadata.release_date || null,
+                    end_of_support: this.metadata.end_of_support || null,
+                    end_of_life: this.metadata.end_of_life || null
                 };
 
                 const response = await fetch(`/api/v1/components/${this.componentId}/metadata`, {
@@ -373,25 +330,15 @@ export function registerComponentMetaInfoEditor() {
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                    throw new Error(describeError(errorData.detail) || `HTTP ${response.status}`);
                 }
 
                 this.hasUnsavedChanges = false;
                 this.originalMetadata = JSON.stringify(this.metadata);
                 this.$dispatch('metadata-saved');
-
-                dispatchComponentEvent<MetadataUpdatedEvent>(ComponentEvents.METADATA_UPDATED, {
-                    componentId: this.componentId
-                });
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'success',
-                    message: 'Metadata saved successfully'
-                });
+                showSuccess('Metadata saved successfully');
             } catch (error) {
-                dispatchComponentEvent<ShowAlertEvent>(ComponentEvents.SHOW_ALERT, {
-                    type: 'error',
-                    message: error instanceof Error ? error.message : 'Failed to save metadata'
-                });
+                showError(error instanceof Error ? error.message : 'Failed to save metadata');
             } finally {
                 this.isSaving = false;
             }

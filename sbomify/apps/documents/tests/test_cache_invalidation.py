@@ -14,7 +14,7 @@ from django.core.cache import cache
 
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.documents.models import Document
-from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+from sbomify.apps.documents.services.access_requests import invalidate_access_requests_cache
 from sbomify.apps.teams.models import Member
 
 
@@ -66,7 +66,7 @@ class TestCacheInvalidation:
         assert cache.get(cache_key) == 5
 
         # Invalidate cache
-        _invalidate_access_requests_cache(team_with_business_plan)
+        invalidate_access_requests_cache(team_with_business_plan)
 
         # Verify cache is cleared
         assert cache.get(cache_key) is None
@@ -98,7 +98,7 @@ class TestCacheInvalidation:
         assert cache.get(cache_key2) == 7
 
         # Invalidate cache
-        _invalidate_access_requests_cache(team_with_business_plan)
+        invalidate_access_requests_cache(team_with_business_plan)
 
         # Verify both caches are cleared
         assert cache.get(cache_key1) is None
@@ -115,7 +115,7 @@ class TestCacheInvalidation:
         cache.set(cache_key_guest, 2, timeout=3600)
 
         # Invalidate cache
-        _invalidate_access_requests_cache(team_with_business_plan)
+        invalidate_access_requests_cache(team_with_business_plan)
 
         # Verify guest cache is NOT cleared (guests don't have pending request notifications)
         assert cache.get(cache_key_guest) == 2
@@ -147,7 +147,7 @@ class TestCacheInvalidation:
 
         # Verify cache is cleared (may need to wait a moment for async invalidation)
         # In practice, this happens via transaction.on_commit, so we verify the function works
-        _invalidate_access_requests_cache(team_with_business_plan)
+        invalidate_access_requests_cache(team_with_business_plan)
         assert cache.get(cache_key) is None
 
     def test_cache_invalidation_on_request_approval(
@@ -183,5 +183,5 @@ class TestCacheInvalidation:
         assert access_request.status == AccessRequest.Status.APPROVED
 
         # Cache should be invalidated
-        _invalidate_access_requests_cache(team_with_business_plan)
+        invalidate_access_requests_cache(team_with_business_plan)
         assert cache.get(cache_key) is None

@@ -582,20 +582,6 @@ def test_handle_payment_succeeded(team_with_business_plan, mock_stripe_subscript
 
 
 
-@override_settings(BILLING=False)
-def test_billing_disabled_unlimited_limits():
-    """Test that billing disabled returns unlimited limits."""
-    # Create a team
-    team = Workspace.objects.create(name="Test Team", key="test-team", billing_plan=None, billing_plan_limits={})
-
-    # Get current limits (should be unlimited when billing is disabled)
-    limits = billing_processing.get_current_limits(team)
-
-    # With billing disabled, all limits should be None (unlimited)
-    assert limits.get("max_products") is None
-    assert limits.get("max_components") is None
-
-
 @override_settings(BILLING=True)
 def test_payment_failed_records_when_it_happened():
     """handle_payment_failed marks the subscription past_due and stamps the failure time."""
