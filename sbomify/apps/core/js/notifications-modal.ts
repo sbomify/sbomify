@@ -137,7 +137,7 @@ document.addEventListener('notifications-open', refreshNotifications);
 // The bell otherwise polls every few minutes; a queue someone is waiting on
 // should not wait that long. The socket only says something the bell counts
 // changed, and the fetch decides what this viewer sees.
-for (const type of ['vex_submission_updated', 'access_request_updated', 'vex_drift_updated']) {
+for (const type of ['vex_submission_updated', 'access_request_updated', 'vex_drift_updated', 'resync']) {
   window.addEventListener(`ws:${type}`, () => {
     if (document.getElementById('notifications-dropdown')) void fetchNotifications();
   });

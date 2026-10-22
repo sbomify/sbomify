@@ -18,6 +18,10 @@ from sbomify.apps.teams.queries import get_member_role_by_key
 TRENDS_URL_FILTERS = ("product_id", "release_id", "days")
 
 
+# The overview's replacement root, which refreshes itself on socket messages.
+OVERVIEW_TARGET = "overview-content"
+
+
 def trends_query(request: HttpRequest) -> str:
     """The query the Trends page fetches its fragment with.
 
@@ -81,7 +85,10 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
-        result = build_dashboard_context(team.id) if team else None
+        # A live refresh comes from a socket message about a change, which the
+        # cached snapshot cannot yet reflect.
+        live_refresh = request.headers.get("HX-Target") == OVERVIEW_TARGET
+        result = build_dashboard_context(team.id, fresh=live_refresh) if team else None
         if result is not None and not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
         dashboard = result.value if result and result.value else {"is_first_visit": True}

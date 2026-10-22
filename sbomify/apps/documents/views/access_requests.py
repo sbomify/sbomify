@@ -26,7 +26,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace, get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.access_emails import (
@@ -97,13 +97,16 @@ def _broadcast_access_request_updated(team: Workspace, request_id: str, user_id:
     if not team.key:
         return
     team_key = team.key
-    transaction.on_commit(
-        lambda: broadcast_to_workspace(
-            workspace_key=team_key,
-            message_type="access_request_updated",
-            data={"access_request_id": request_id, "user_id": user_id, "status": status, "action": status},
-        )
-    )
+    data = {"access_request_id": request_id, "user_id": user_id, "status": status, "action": status}
+
+    def _send() -> None:
+        broadcast_to_workspace(workspace_key=team_key, message_type="access_request_updated", data=data)
+        # The requester is not a member, so the workspace feed never reaches
+        # them; their own channel is how their open page learns the verdict.
+        if status != "pending":
+            broadcast_to_user(user_id, "access_request_updated", data)
+
+    transaction.on_commit(_send)
 
 
 def _get_pending_access_requests(team: Workspace) -> QuerySet[AccessRequest]:

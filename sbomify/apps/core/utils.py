@@ -74,6 +74,33 @@ def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict[str
         return False
 
 
+def user_group_name(user_id: Any) -> str:
+    """The channel group a signed-in user's own socket joins, whatever workspace they are in."""
+    return f"user_{user_id}"
+
+
+def broadcast_to_user(user_id: Any, message_type: str, data: dict[str, Any] | None = None) -> bool:
+    """Send a message to one user's own sockets rather than to a workspace.
+
+    For news meant for a person who is not a member of the workspace it is
+    about, such as a trust-center visitor whose access request was decided.
+    The workspace feed would tell them everything else too, so they never get
+    it. Safe to call from synchronous code. Returns whether it was sent.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return False
+        async_to_sync(channel_layer.group_send)(
+            user_group_name(user_id),
+            {"type": "workspace_message", "data": {"type": message_type, **(data or {})}},
+        )
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to broadcast to user {user_id}: {e}")
+        return False
+
+
 def push_notification(
     workspace_key: str,
     message: str,

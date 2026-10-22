@@ -34,6 +34,7 @@ import { actionsMenu } from './components/actions-menu';
 import { tableSelection } from './components/table-selection';
 import { publicSharing } from './components/public-sharing';
 import { uploadDialog } from './components/upload-dialog';
+import { liveRegion } from './components/live-region';
 import { catalogImport } from '../../controls/js/catalog-import';
 
 // ============================================
@@ -148,6 +149,7 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('tableSelection', tableSelection);
     registerAlpineComponent('publicSharing', publicSharing);
     registerAlpineComponent('uploadDialog', uploadDialog);
+    registerAlpineComponent('liveRegion', liveRegion);
     registerAlpineComponent('catalogImport', catalogImport);
 }
 

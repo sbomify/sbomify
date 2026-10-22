@@ -34,6 +34,7 @@ from sbomify.apps.security_advisories.models import (
     Severity,
     validate_publishable,
 )
+from sbomify.apps.teams.broadcasts import broadcast_on_commit
 
 # Severity is not projected to a badge variant. c-badges.severity owns the five
 # CVSS bands, and mapping them onto the generic semantic variants here shifted
@@ -470,6 +471,15 @@ def _stamped(payload: dict[str, Any], via: dict[str, str] | None) -> dict[str, A
     return {**payload, "via": via} if via else payload
 
 
+def _announce(team: Any, advisory_id: Any, action: str) -> None:
+    """Tell the workspace an advisory changed, so open advisory tables repaint.
+
+    Every member hears this, drafts included, so it names the advisory and the
+    action and nothing from its content.
+    """
+    broadcast_on_commit(team.key, "advisory_updated", {"advisory_id": str(advisory_id), "action": action})
+
+
 @transaction.atomic
 def create_advisory(
     team: Any,
@@ -569,6 +579,7 @@ def create_advisory(
         actor=user,
         payload=_stamped({"to": opening_status}, via),
     )
+    _announce(team, advisory.id, "created")
     return ServiceResult.success(advisory.id)
 
 
@@ -725,6 +736,7 @@ def update_advisory(
             body=_field_change_body(field, old, new),
             payload=_stamped({"field": field, "old": old, "new": new}, via),
         )
+    _announce(team, advisory.id, "updated")
     return ServiceResult.success(advisory.id)
 
 
@@ -813,6 +825,7 @@ def publish_advisory(
         body=f"Published as {advisory.tracking_id} ({PUBLISHABLE_VISIBILITIES[visibility]['label'].lower()}).",
         payload=_stamped({"visibility": visibility, "tracking_id": advisory.tracking_id}, via),
     )
+    _announce(team, advisory.id, "published")
     return ServiceResult.success(advisory.id)
 
 
@@ -863,6 +876,7 @@ def withdraw_advisory(
         body=reason,
         payload=_stamped({"reason": reason}, via),
     )
+    _announce(team, advisory.id, "withdrawn")
     return ServiceResult.success(advisory.id)
 
 
@@ -902,6 +916,7 @@ def post_update(
             body=note,
             payload=_stamped({}, via),
         )
+        _announce(team, advisory.id, "updated")
         return ServiceResult.success(advisory.id)
 
     if kind not in SecurityAdvisory.RemediationStatus.values:
@@ -919,6 +934,7 @@ def post_update(
     )
     advisory.remediation_status = kind
     advisory.save(update_fields=["remediation_status", "updated_at"])
+    _announce(team, advisory.id, "updated")
     return ServiceResult.success(advisory.id)
 
 
@@ -935,7 +951,9 @@ def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:
     advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
+    deleted_id = advisory.id
     advisory.delete()
+    _announce(team, deleted_id, "deleted")
     return ServiceResult.success(advisory_id)
 
 
@@ -964,7 +982,9 @@ def delete_advisories(team: Any, advisory_ids: list[str]) -> ServiceResult[int]:
     if not advisories:
         return ServiceResult.failure("Advisories not found", status_code=404)
     for advisory in advisories:
+        deleted_id = advisory.id
         advisory.delete()
+        _announce(team, deleted_id, "deleted")
     return ServiceResult.success(len(advisories))
 
 

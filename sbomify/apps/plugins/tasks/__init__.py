@@ -637,6 +637,35 @@ def run_assessment_task(
         raise  # Re-raise for Dramatiq retry
 
 
+def announce_assessment_started(
+    sbom_id: str, plugin_name: str, *, component_id: str | None = None, workspace_key: str | None = None
+) -> None:
+    """Broadcast ``assessment_started`` for one SBOM once the current transaction commits.
+
+    Pages that show a run's state repaint on it, so a queued run reads as
+    pending without a reload. Callers that already hold the SBOM's component
+    and workspace pass them to skip the lookup. Never raises.
+    """
+    try:
+        if component_id is None or workspace_key is None:
+            from sbomify.apps.sboms.models import SBOM
+
+            row = SBOM.objects.filter(pk=sbom_id).values("component_id", "component__team__key").first()
+            if not row:
+                return
+            component_id = str(row["component_id"])
+            workspace_key = row["component__team__key"]
+        if not workspace_key:
+            return
+        key = workspace_key
+        data = {"sbom_id": str(sbom_id), "component_id": str(component_id), "plugin_name": plugin_name}
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(workspace_key=key, message_type="assessment_started", data=data)
+        )
+    except Exception:
+        logger.warning("Could not announce started assessment for SBOM %s", sbom_id, exc_info=True)
+
+
 def _create_pending_assessment_run(
     sbom_id: str,
     plugin_name: str,
@@ -686,6 +715,7 @@ def _create_pending_assessment_run(
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
         return None
 
+    announce_assessment_started(sbom_id, registered.name)
     return str(run.id)
 
 

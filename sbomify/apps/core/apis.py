@@ -2488,6 +2488,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
 
         log.debug(f"Final component to be saved: {component.__dict__}")
         component.save()
+        _broadcast_component_updated(component)
         return 204, None
     except ValidationError as ve:
         log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
@@ -4418,7 +4419,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 
     for release_id in payload.release_ids:
         try:
-            release = Release.objects.select_related("product").get(pk=release_id)
+            release = Release.objects.select_related("product__team").get(pk=release_id)
 
             # Verify release belongs to same team as the document's component
             if str(release.product.team_id) != str(document.component.team_id):
@@ -4433,8 +4434,10 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
             result = add_artifact_to_release(release, document=document, allow_replacement=True)
             if result["created"]:
                 created_artifacts.append(result["artifact"])
+                _broadcast_release_updated(release)
             elif result["replaced"]:
                 replaced_artifacts.append(result)
+                _broadcast_release_updated(release)
             else:
                 errors.append(f"Document already exists in release {release.name}")
 
@@ -4491,7 +4494,7 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -4511,6 +4514,7 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
     try:
         artifact = ReleaseArtifact.objects.get(release=release, document=document)
         artifact.delete()
+        _broadcast_release_updated(release)
         return 204, None
     except ReleaseArtifact.DoesNotExist:
         return 404, {"detail": "Document not in this release"}
@@ -4609,7 +4613,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 
     for release_id in payload.release_ids:
         try:
-            release = Release.objects.select_related("product").get(pk=release_id)
+            release = Release.objects.select_related("product__team").get(pk=release_id)
 
             # Verify release belongs to same team as the SBOM's component
             if str(release.product.team_id) != str(sbom.component.team_id):
@@ -4624,8 +4628,10 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
             result = add_artifact_to_release(release, sbom=sbom, allow_replacement=True)
             if result["created"]:
                 created_artifacts.append(result["artifact"])
+                _broadcast_release_updated(release)
             elif result["replaced"]:
                 replaced_artifacts.append(result)
+                _broadcast_release_updated(release)
             else:
                 errors.append(f"SBOM already exists in release {release.name}")
 
@@ -4680,7 +4686,7 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -4704,6 +4710,7 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
     try:
         artifact = ReleaseArtifact.objects.get(release=release, sbom=sbom)
         artifact.delete()
+        _broadcast_release_updated(release)
         return 204, None
     except ReleaseArtifact.DoesNotExist:
         return 404, {"detail": "SBOM not in this release"}
