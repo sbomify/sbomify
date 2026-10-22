@@ -939,6 +939,35 @@ def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:
     return ServiceResult.success(advisory_id)
 
 
+# The most advisories one bulk delete may name. Far past any page of the table,
+# so the cap only ever stops a crafted request, not a person.
+BULK_DELETE_LIMIT = 500
+
+
+@transaction.atomic
+def delete_advisories(team: Any, advisory_ids: list[str]) -> ServiceResult[int]:
+    """Delete several advisories at once, as the table's bulk delete asks.
+
+    Each id is matched the way delete_advisory matches one, by id or tracking
+    id, and scoped to the workspace, so an id from another workspace matches
+    nothing rather than being refused by name. Ids that match nothing are
+    skipped: a row another person deleted a moment ago is not a reason to keep
+    the rest. Only when none match is it a 404. All or nothing otherwise, in one
+    transaction, so a failure part way leaves every advisory standing.
+    """
+    ids = list(dict.fromkeys(advisory_id.strip() for advisory_id in advisory_ids if advisory_id.strip()))
+    if not ids:
+        return ServiceResult.failure("Select at least one advisory", status_code=400)
+    if len(ids) > BULK_DELETE_LIMIT:
+        return ServiceResult.failure(f"Delete at most {BULK_DELETE_LIMIT} advisories at once", status_code=400)
+    advisories = list(SecurityAdvisory.objects.filter(team=team).filter(Q(id__in=ids) | Q(tracking_id__in=ids)))
+    if not advisories:
+        return ServiceResult.failure("Advisories not found", status_code=404)
+    for advisory in advisories:
+        advisory.delete()
+    return ServiceResult.success(len(advisories))
+
+
 def advisory_counts(advisories: list[dict[str, Any]]) -> dict[str, int]:
     """Dashboard tallies, computed from the already-built list.
 
