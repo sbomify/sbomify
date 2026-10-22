@@ -726,3 +726,37 @@ def test_a_timeline_note_renders_as_markdown_on_the_trust_center(team, public_pr
     assert '<li><a href="https://example.com/notes?a=1&amp;b=2"' in content
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in content
     assert "<script>alert(1)</script>" not in content
+
+
+def test_the_description_and_vulnerability_text_render_as_markdown_on_the_trust_center(team, public_product, client):
+    """Advisories drafted from triage carry Markdown bodies; the page renders them, escaping any raw HTML."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(
+        team=team,
+        title="Markdown",
+        description="## Summary\n\nUpgrade **now**.\n\n- `pkg:pypi/uv@0.12.19`\n\n<script>alert(1)</script>",
+    )
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-30007",
+        description="### Impact\n\nA *crafted* path.",
+        recommendation="- Upgrade to `1.4.3`",
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "<h2>Summary</h2>" in content
+    assert "<p>Upgrade <strong>now</strong>.</p>" in content
+    assert "<li><code>pkg:pypi/uv@0.12.19</code></li>" in content
+    assert "<h3>Impact</h3>" in content
+    assert "<p>A <em>crafted</em> path.</p>" in content
+    assert "<li>Upgrade to <code>1.4.3</code></li>" in content
+    assert "## Summary" not in content
+    assert "<script>alert(1)</script>" not in content

@@ -68,7 +68,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                     <section class="flex flex-col gap-4">
                         <c-branded.section-header title="Description" />
                         <c-branded.surface>
-                        <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ advisory.description }}</div>
+                        <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ advisory.description|strict_markdown }}</c-branded.markdown>
                         </c-branded.surface>
                     </section>
                 {% endif %}
@@ -128,12 +128,12 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                             {% endfor %}
                         </div>
                         {% if vulnerability.description %}
-                            <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ vulnerability.description }}</div>
+                            <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ vulnerability.description|strict_markdown }}</c-branded.markdown>
                         {% endif %}
                         {% if vulnerability.recommendation %}
                             <div class="flex flex-col gap-1.5">
                                 <p class="text-sm font-semibold text-text my-0">Recommendation</p>
-                                <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ vulnerability.recommendation }}</div>
+                                <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ vulnerability.recommendation|strict_markdown }}</c-branded.markdown>
                             </div>
                         {% endif %}
                         </c-branded.surface>
