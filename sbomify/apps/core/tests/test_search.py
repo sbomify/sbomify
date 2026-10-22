@@ -219,3 +219,73 @@ class TestSearchView:
         assert data["products"] == []
         assert data["components"] == []
 
+
+    def test_search_product_by_id(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+        Product.objects.create(name="Other", team=team)
+
+        data = client.get(reverse("core:search"), {"q": product.id}).json()
+
+        assert [p["id"] for p in data["products"]] == [product.id]
+        asset_urls = [r["url"] for r in data["results"] if r["section"] == "assets"]
+        assert reverse("core:product_details", kwargs={"product_id": product.id}) in asset_urls
+
+    def test_search_component_by_id(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        component = Component.objects.create(name="api", team=team)
+
+        data = client.get(reverse("core:search"), {"q": component.id}).json()
+
+        assert [c["id"] for c in data["components"]] == [component.id]
+        asset_urls = [r["url"] for r in data["results"] if r["section"] == "assets"]
+        assert reverse("core:component_details", kwargs={"component_id": component.id}) in asset_urls
+
+    def test_search_by_uuid(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+        component = Component.objects.create(name="api", team=team)
+
+        products = client.get(reverse("core:search"), {"q": str(product.uuid)}).json()["products"]
+        components = client.get(reverse("core:search"), {"q": str(component.uuid)}).json()["components"]
+
+        assert [p["id"] for p in products] == [product.id]
+        assert [c["id"] for c in components] == [component.id]
+
+    def test_search_by_partial_id_does_not_match(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+
+        data = client.get(reverse("core:search"), {"q": product.id[:6]}).json()
+
+        assert data["products"] == []
+
+    def test_search_by_id_respects_team_scope(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.teams.models import Workspace
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        other_team = Workspace.objects.create(name="Other Team")
+        product = Product.objects.create(name="Secret", team=other_team)
+        component = Component.objects.create(name="secret", team=other_team)
+
+        for query in (product.id, str(product.uuid), component.id):
+            data = client.get(reverse("core:search"), {"q": query}).json()
+            assert data["products"] == []
+            assert data["components"] == []
+
+    def test_search_id_match_is_not_cut_by_limit(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        target = Product.objects.create(name="zzz", team=team)
+        for i in range(3):
+            Product.objects.create(name=f"aaa {target.id} {i}", team=team)
+
+        data = client.get(reverse("core:search"), {"q": target.id, "limit": 2}).json()
+
+        assert len(data["products"]) == 2
+        assert data["products"][0]["id"] == target.id
