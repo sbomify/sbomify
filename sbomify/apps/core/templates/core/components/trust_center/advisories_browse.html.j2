@@ -199,10 +199,11 @@ variants naming that id, so they keep working across a swap and need no script.
             only the line along the panel's own bottom edge, and a hovered
             advisory tints as one.
 
-            Auto layout, not fixed: the version-range cells are nowrap, and a
-            fixed grid would let a long range run under its neighbour instead of
-            widening the column. The viewport scrolls sideways when ranges
-            outgrow the page.
+            Auto layout, not fixed: each version range is nowrap, and a fixed
+            grid would let a long range run under its neighbour instead of
+            widening the column. Ranges stack one per line and a long list folds
+            behind a count, so only a single very long range can make the
+            viewport scroll sideways.
             {% endcomment %}
             <c-tables.table stack="false" variant_class="min-w-[52rem] [&_td]:align-top [&_tbody:last-child_tr:last-child_td]:border-b-0 [&_tbody:last-child_td[rowspan]]:border-b-0 [&_tbody:hover_td]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)]" aria-label="Security advisories">
             <c-tables.head>
@@ -228,8 +229,12 @@ variants naming that id, so they keep working across a swap and need no script.
                                 </c-tables.cell>
                             {% endif %}
                             <c-tables.cell compact class="whitespace-nowrap">{{ row.product }}</c-tables.cell>
-                            <c-tables.cell compact muted class="font-mono text-xs whitespace-nowrap">{{ row.affected }}</c-tables.cell>
-                            <c-tables.cell compact muted class="font-mono text-xs whitespace-nowrap">{{ row.unaffected }}</c-tables.cell>
+                            <c-tables.cell compact muted>
+                            <c-tables.value-list mono :values="row.affected_versions" />
+                            </c-tables.cell>
+                            <c-tables.cell compact muted>
+                            <c-tables.value-list mono :values="row.unaffected_versions" />
+                            </c-tables.cell>
                             {% if forloop.first %}
                                 <c-tables.cell compact date muted class="text-xs tabular-nums" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.published_display|default:"—" }}</c-tables.cell>
                                 <c-tables.cell compact date muted class="text-xs tabular-nums" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.updated_display|default:"—" }}</c-tables.cell>

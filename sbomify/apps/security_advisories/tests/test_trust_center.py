@@ -787,5 +787,25 @@ def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, 
     )
     content = response.content.decode()
     assert response.status_code == 200
-    assert "3 more" in content
+    assert "Show 3 more" in content
     assert "[c0ffee0, c0ffee0]" not in content
+
+
+def test_the_index_lists_versions_one_per_range(team, public_product):
+    """The index used to print every range on one unbreakable line; it now
+    lists them, names a pinned commit once and claims no unaffected version for it."""
+    advisory = SecurityAdvisory.objects.create(team=team, title="Pinned index")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30009")
+    status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability, advisory_product=advisory_product, status=AdvisoryProductStatus.Status.EXPLOITABLE
+    )
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="6282ec8", last_affected="6282ec8")
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="2.0.0", fixed="2.4.1")
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    row = (list_public_advisories(make_request(), team).value or {})["advisories"][0]["affected_rows"][0]
+    assert row["affected_versions"] == ["6282ec8", ">= 2.0.0, < 2.4.1"]
+    assert row["unaffected_versions"] == [">= 2.4.1"]
+    # The API reads the joined strings, which keep their old shape.
+    assert row["affected"] == ">= 6282ec8, <= 6282ec8, >= 2.0.0, < 2.4.1"

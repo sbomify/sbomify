@@ -528,25 +528,39 @@ def _range_expressions(version_range: AdvisoryVersionRange) -> tuple[str, str]:
     return (f">= {introduced}" if introduced else ""), ""
 
 
-def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
-    """The affected versions the detail table lists, one entry per stored range.
+def _version_lists(status: AdvisoryProductStatus) -> tuple[list[str], list[str]]:
+    """The ("affected", "unaffected") versions a table lists, one entry per stored range.
 
     A range pinned to a single version, which is how a triage records each
     affected commit, is that version alone: ">= 6282ec8, <= 6282ec8" says the
-    same thing twice. A suppressing status lists nothing, because no version is
-    affected.
+    same thing twice. It names no unaffected version either, because "> 6282ec8"
+    would claim every later commit is clean. A range never carries both
+    ``fixed`` and ``last_affected`` (a check constraint), so equal ``introduced``
+    and ``last_affected`` is exactly the pinned case.
     """
-    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
-        return []
-    versions: list[str] = []
+    affected: list[str] = []
+    unaffected: list[str] = []
     for version_range in status.version_ranges.all():
         if version_range.introduced and version_range.introduced == version_range.last_affected:
-            versions.append(version_range.introduced)
-        elif affected := _range_expressions(version_range)[0]:
-            versions.append(affected)
-    if not versions and status.recommended_version:
-        versions.append(f"< {status.recommended_version}")
-    return versions
+            affected.append(version_range.introduced)
+            continue
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        if range_unaffected:
+            unaffected.append(range_unaffected)
+    if not affected and status.recommended_version:
+        affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    return affected, unaffected
+
+
+def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions the detail table lists. A suppressing status lists
+    nothing, because no version is affected."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    return _version_lists(status)[0]
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
@@ -575,11 +589,17 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
             else:
                 label = product.name if product else advisory_product.product_name
             affected, unaffected = _version_expressions(status)
+            if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+                affected_versions, unaffected_versions = ["None"], ["All"]
+            else:
+                affected_versions, unaffected_versions = _version_lists(status)
             rows.append(
                 {
                     "product": label,
                     "affected": affected,
                     "unaffected": unaffected,
+                    "affected_versions": affected_versions,
+                    "unaffected_versions": unaffected_versions,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
