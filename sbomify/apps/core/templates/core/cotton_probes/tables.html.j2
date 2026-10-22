@@ -86,3 +86,32 @@ on the output; it is not routed anywhere.
 <c-tables.header-cell>Matrix column</c-tables.header-cell>
 </c-tables.head>
 </c-tables.table>
+<c-tables.shell x-data="tableSelection" data-probe="bulk-shell">
+<c-tables.bulk-bar noun="component" plural="components" data-probe="bulk-bar">
+<c-buttons.danger size="sm" @click="confirmDelete()">Delete</c-buttons.danger>
+</c-tables.bulk-bar>
+<c-tables.table sized>
+<c-tables.head>
+<c-tables.select-cell as="th" label_all="Select all components" />
+<c-tables.header-cell>Bulk name column</c-tables.header-cell>
+</c-tables.head>
+<tbody>
+    <c-tables.row>
+    <c-tables.select-cell value="cmp-1" label="acme-gateway-core" />
+    <c-tables.cell>acme-gateway-core</c-tables.cell>
+    </c-tables.row>
+    <c-tables.row>
+    <c-tables.select-cell value="cmp-2" label="acme-audit-log" disabled />
+    <c-tables.cell>acme-audit-log</c-tables.cell>
+    </c-tables.row>
+    <template x-for="item in items" :key="item.id">
+        <c-tables.row>
+        <c-tables.select-cell x_value="item.id" x_label="item.name" />
+        <c-tables.cell x-text="item.name"></c-tables.cell>
+        </c-tables.row>
+    </template>
+</tbody>
+</c-tables.table>
+<c-tables.bulk-delete id="probe-bulk-delete" action="/probe/bulk-delete" noun="component" plural="components" />
+<c-tables.bulk-delete id="probe-bulk-delete-htmx" action="/probe/bulk-delete" noun="component" plural="components" htmx hx_target="#probe-target" />
+</c-tables.shell>

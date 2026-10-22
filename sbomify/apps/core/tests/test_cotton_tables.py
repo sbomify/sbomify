@@ -401,3 +401,100 @@ def test_screen_reader_table_hides_its_wrapper_not_the_table() -> None:
     assert "sr-only" not in table_tag
     assert "<caption>Probe series</caption>" in table
     assert '<th scope="row">Oct 7</th>' in table
+
+
+def test_select_all_reads_the_shell_selection(rendered: str) -> None:
+    head = _element_holding(rendered, "th", "data-row-select-all")
+    assert "data-cell-select" in head
+    assert 'aria-label="Select all components"' in head
+    assert ':checked="allSelected"' in head
+    assert 'x-effect="$el.indeterminate = someSelected"' in head
+    assert ':disabled="rows.length === 0"' in head
+    assert '@click="toggleAll()"' in head
+    # The gutter is variant-prefixed like the default recipe it replaces, so the
+    # default never lands beside it.
+    assert "w-12 first:pl-4 first:pr-0 max-sm:px-2" in head
+    assert "last:pr-4" not in head
+
+
+def test_row_box_carries_its_id_and_name(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", 'value="cmp-1"')
+    assert "data-cell-select" in cell
+    assert 'aria-label="Select acme-gateway-core"' in cell
+    assert 'data-row-label="acme-gateway-core"' in cell
+    assert "data-row-select " in cell
+    # Clicks, not x-model, so a shift-click can select a run of rows.
+    assert "x-model" not in cell
+    assert "@click=\"toggle('cmp\\u002D1', $event)\"" in cell
+
+
+def test_a_disabled_row_box_is_disabled_on_the_input(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", 'value="cmp-2"')
+    assert "\n       disabled\n" in cell
+
+
+def test_an_x_for_row_binds_its_id_and_name(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", ':value="item.id"')
+    assert ":aria-label=\"'Select ' + (item.name)\"" in cell
+    assert ':data-row-label="item.name"' in cell
+    assert '@click="toggle(String(item.id), $event)"' in cell
+
+
+def test_a_selected_row_is_tinted_from_its_checked_box(rendered: str) -> None:
+    row = _element_holding(rendered, "tr", 'value="cmp-1"')
+    assert "has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)]" in row
+
+
+def test_a_pinned_actions_cell_restates_the_selected_tint() -> None:
+    source = (TABLES_DIR / "actions_cell.html").read_text()
+    assert (
+        "group-has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-surface))]"
+        in source
+    )
+
+
+def test_bulk_bar_shows_only_with_a_selection_and_announces_the_count(rendered: str) -> None:
+    bar = _element_holding(rendered, "div", 'data-probe="bulk-bar"')
+    assert 'x-show="count > 0"' in bar
+    assert "x-cloak" in bar
+    assert "px-4 py-3" in bar
+    assert " p-" not in bar.split('class="', 1)[1].split('"', 1)[0]
+    # The band runs to the table; its own controls and the page's actions sit inside it.
+    band = rendered.split('data-probe="bulk-bar"', 1)[1].split("<table", 1)[0]
+    assert '@click="clear()"' in band
+    assert "Clear selection" in band
+    assert '@click="confirmDelete()"' in band
+    status = rendered.split('role="status"', 1)[1].split(">", 1)[0]
+    assert "countOf('component', 'components') + ' selected'" in status
+
+
+def test_bulk_delete_confirms_before_posting(rendered: str) -> None:
+    dialog = rendered.split('id="probe-bulk-delete"', 1)[1].split('id="probe-bulk-delete-htmx"', 1)[0]
+    assert 'role="alertdialog"' in dialog
+    assert 'x-show="confirmingDelete"' in dialog
+    assert "Delete components" in dialog
+    form = _element_holding(dialog, "form", 'id="probe-bulk-delete-form"')
+    assert 'method="post"' in form
+    assert 'action="/probe/bulk-delete"' in form
+    assert "hx-post" not in form
+    assert '<input type="hidden" name="ids" :value="rowId">' in form
+    assert "selectedLabels.slice(0, 5)" in form
+    # The button that posts repeats the count, and cannot be pressed twice.
+    button = _element_holding(dialog, "button", "data-bulk-delete-confirm")
+    assert 'type="submit"' in button
+    assert 'form="probe-bulk-delete-form"' in button
+    assert ':disabled="submitting"' in button
+    assert "'Delete ' + countOf('component', 'components')" in button
+    # The form-post dialog teleports; the htmx one cannot.
+    assert "<template x-teleport" in rendered.split('id="probe-bulk-delete"', 1)[0][-300:]
+
+
+def test_htmx_bulk_delete_posts_in_place_and_stays_wired(rendered: str) -> None:
+    after = rendered.split('id="probe-bulk-delete-htmx"', 1)
+    assert "<template x-teleport" not in after[0][-300:]
+    form = _element_holding(after[1], "form", 'id="probe-bulk-delete-htmx-form"')
+    assert 'hx-post="/probe/bulk-delete"' in form
+    assert 'hx-target="#probe-target"' in form
+    assert 'hx-swap="none"' in form
+    assert '@htmx:after-request="deleteFinished($event.detail.successful)"' in form
+    assert 'method="post"' not in form

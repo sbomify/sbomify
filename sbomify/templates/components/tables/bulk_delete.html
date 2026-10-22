@@ -1,0 +1,59 @@
+{% comment %}
+The confirmation every bulk delete goes through. Nothing is deleted until a
+person reads what is about to go and presses the button that names it: the
+bulk bar's Delete only opens this dialog (confirmDelete()), and the dialog is
+the only thing that posts.
+
+It reads the tableSelection state on the shell, so it goes inside the shell
+like the bulk bar. The dialog names the count and lists the first five rows by
+name, then how many more, so a select-all that caught more than intended is
+visible before it is acted on. The delete button repeats the count
+("Delete 3 components"), because a button labelled only "Delete" confirms
+nothing.
+
+action is the URL the selection posts to, each selected id as one name field
+("ids" unless name says otherwise), with the CSRF token. Without htmx it is a
+plain form post and the page that answers decides where to go next. With htmx
+it posts in place: hx_target and hx_swap say what the response replaces, a
+success empties the selection and closes the dialog, and a failure keeps both
+so the person can try again. The button disables itself while the request is
+in flight, so a second press cannot post twice.
+
+htmx turns the teleport off, for the reason in modal.html: HTMX wires hx-* on
+the DOM it can see, and a teleported dialog is still inside its <template>
+when that happens, so the form would fall back to a native submit.
+{% endcomment %}
+<c-vars id="bulk-delete" action name="ids" noun="item" plural="items" htmx hx_target hx_swap="none" warning="This cannot be undone." />
+{# djlint:off #}
+<c-modal id="{{ id }}" show="confirmingDelete" close="cancelDelete()" role="alertdialog" size="sm" title="Delete {{ plural }}" icon="fas fa-trash" teleport="{% if htmx %}false{% else %}true{% endif %}" style="--chip-accent: var(--color-danger)">
+{# djlint:on #}
+<form id="{{ id }}-form"
+      class="flex flex-col gap-3"
+      {% if htmx %}hx-post="{{ action }}" hx-swap="{{ hx_swap }}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %} @htmx:before-request="submitting = true" @htmx:after-request="deleteFinished($event.detail.successful)"{% else %}method="post" action="{{ action }}" @submit="submitting = true"{% endif %}>
+    {% csrf_token %}
+    <template x-for="rowId in selected" :key="rowId">
+        <input type="hidden" name="{{ name }}" :value="rowId">
+    </template>
+    <p class="text-sm text-text m-0">
+        Delete <strong x-text="countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}')"></strong>?
+    </p>
+    <ul class="flex flex-col gap-0.5 mb-0 mt-0 pl-0 list-none text-sm text-text">
+        <template x-for="(rowLabel, index) in selectedLabels.slice(0, 5)" :key="index">
+            <li class="truncate font-medium" x-text="rowLabel"></li>
+        </template>
+        <li class="text-text-muted"
+            x-show="selectedLabels.length > 5"
+            x-text="'and ' + $number(selectedLabels.length - 5) + ' more'"></li>
+    </ul>
+    <p class="text-xs text-text-muted m-0">{{ warning }}</p>
+</form>
+<c-slot name="footer">
+{% with class="" %}
+    <c-buttons.secondary @click="cancelDelete()" ::disabled="submitting">Cancel</c-buttons.secondary>
+    <c-buttons.danger type="submit" form="{{ id }}-form" data-bulk-delete-confirm ::disabled="submitting">
+    <i class="fas fa-trash" aria-hidden="true"></i>
+    <span x-text="'Delete ' + countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}')">Delete</span>
+    </c-buttons.danger>
+{% endwith %}
+</c-slot>
+</c-modal>

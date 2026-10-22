@@ -7,6 +7,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
+from sbomify.apps.core.htmx import htmx_success_response
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE, badge_seal_url
 
@@ -40,6 +41,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "select-rows", "label": "Selectable rows", "group": "Containers"},
     {"id": "empty-states", "label": "Empty states", "group": "Containers"},
     {"id": "tables", "label": "Tables", "group": "Data"},
+    {"id": "bulk-actions", "label": "Bulk actions", "group": "Data"},
     {"id": "pagination", "label": "Pagination", "group": "Data"},
     {"id": "stats", "label": "Stat cards", "group": "Data"},
     {"id": "severity", "label": "Severity badges", "group": "Data"},
@@ -445,6 +447,29 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "text-muted",
                 "text-disabled",
             ],
+            "demo_bulk_rows": [
+                {
+                    "id": f"demo-bulk-{index}",
+                    "name": name,
+                    "format": fmt,
+                    "format_label": "SPDX" if fmt == "spdx" else "CycloneDX",
+                    "updated": updated,
+                    "locked": locked,
+                }
+                for index, (name, fmt, updated, locked) in enumerate(
+                    [
+                        ("acme-gateway-core", "cyclonedx", "10 Aug 2026", False),
+                        ("acme-vault-core", "spdx", "2 Aug 2026", False),
+                        ("acme-gateway-edge-proxy", "cyclonedx", "28 Jul 2026", False),
+                        ("acme-billing-service", "cyclonedx", "21 Jul 2026", False),
+                        ("acme-audit-log", "spdx", "14 Jul 2026", True),
+                        ("acme-identity-broker", "cyclonedx", "9 Jul 2026", False),
+                        ("acme-search-indexer", "spdx", "1 Jul 2026", False),
+                        ("acme-report-builder", "cyclonedx", "24 Jun 2026", False),
+                    ],
+                    start=1,
+                )
+            ],
             # The toast demo's Alpine handlers now live in the template: a cotton
             # component takes @click directly, so the attrs string this context used
             # to carry (a template tag argument could not hold its double quotes) is
@@ -635,3 +660,10 @@ class DesignSystemView(LoginRequiredMixin, View):
         if request.headers.get("HX-Target") == "ds-vulnerability-report":
             return render(request, "core/components/vulnerability_demo.html.j2", context)
         return render(request, "core/design_system.html.j2", context)
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """The bulk delete demo posts here. It deletes nothing and says what it received."""
+        if not settings.DEBUG:
+            raise Http404
+        count = len(request.POST.getlist("ids"))
+        return htmx_success_response(f"Gallery demo: {count} selected, nothing deleted.")
