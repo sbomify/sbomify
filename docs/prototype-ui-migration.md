@@ -181,4 +181,3 @@ select and pager. The mobile filter disclosure still needs no script.
 reads a `tc-*` class any more. New snapshots cover the public advisory index
 and detail pages at four widths, and a browser test opens the filter
 disclosure on a phone.
-
