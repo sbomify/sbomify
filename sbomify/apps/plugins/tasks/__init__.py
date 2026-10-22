@@ -599,10 +599,9 @@ def run_assessment_task(
                 if assessment_run.status == "failed":
                     push_notification(
                         workspace_key=workspace_key,
-                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
                         severity="warning",
                         notification_type="assessment",
-                        action_url=f"/component/{assessment_run.sbom.component.id}/",
+                        **_failed_run_notification(assessment_run),
                     )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
@@ -630,6 +629,49 @@ def run_assessment_task(
     except Exception as e:
         logger.exception(f"[TASK_run_assessment] Unexpected error: {e}")
         raise  # Re-raise for Dramatiq retry
+
+
+def _failed_run_notification(assessment_run: Any) -> dict[str, str]:
+    """Title, message and action for the notification a failed run raises.
+
+    The run stopped on an error, so it recorded no result: the artifact keeps
+    whatever an earlier run found. The message says that, and sends the reader
+    to the artifact page, which shows the error itself.
+    """
+    from django.urls import reverse
+
+    from ..models import RegisteredPlugin
+    from ..sdk.enums import AssessmentCategory
+
+    sbom = assessment_run.sbom
+    plugin_label = (
+        RegisteredPlugin.objects.filter(name=assessment_run.plugin_name).values_list("display_name", flat=True).first()
+        or assessment_run.plugin_name
+    )
+    artifact = f"{sbom.name} {sbom.version}" if sbom.version else sbom.name
+
+    if assessment_run.category == AssessmentCategory.SECURITY.value:
+        title = "Vulnerability scan failed"
+        message = (
+            f"{plugin_label} could not scan {artifact}. "
+            "Its vulnerability results were not updated, so new vulnerabilities may be missing. "
+            "Open the SBOM to see the error."
+        )
+        action_label = "View SBOM"
+    else:
+        title = "Assessment failed"
+        message = (
+            f"{plugin_label} could not check {artifact}, so no new result was recorded. "
+            "Open the artifact to see the error."
+        )
+        action_label = "View artifact"
+
+    return {
+        "title": title,
+        "message": message,
+        "action_label": action_label,
+        "action_url": reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]),
+    }
 
 
 def _create_pending_assessment_run(
