@@ -1229,6 +1229,65 @@ first-of-type rule that drops the leading hairline reads the section's position
         {% endfor %}
     </ul>
     </c-cards.card>
+    <h2 id="bulk-actions" class="text-xl font-semibold text-text">Bulk actions</h2>
+    {% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/tables/select_cell.html, bulk_bar.html and
+    bulk_delete.html) over the tableSelection state in core/js/components.
+    {% endcomment %}
+    <p class="text-sm text-text-muted">
+        A table that acts on several rows at once puts <c-code-inline>x-data="tableSelection"</c-code-inline> on the
+        shell and a <c-code-inline>select-cell</c-code-inline> first in every row, with
+        <c-code-inline>as="th"</c-code-inline> in the head for select all. Shift-click selects the run of rows since the
+        last one clicked. Only rows on screen count: a row hidden by search, the pager or a swap leaves the selection,
+        so an action never reaches a row nobody can see. Try it: select all, then search. A row the person may not act
+        on passes <c-code-inline>disabled</c-code-inline>, or <c-code-inline>x_disabled</c-code-inline> in an
+        <c-code-inline>x-for</c-code-inline>. The box stops its click, so a row that opens on click stays put.
+    </p>
+    <p class="text-sm text-text-muted">
+        Once a row is selected, the <c-code-inline>bulk-bar</c-code-inline> appears under the toolbar with the count,
+        Clear selection and the page's actions. Delete never deletes from the bar. It opens
+        <c-code-inline>bulk-delete</c-code-inline>, which names the count, lists the first five rows and only posts when
+        someone presses the button that repeats the count. Each id posts as <c-code-inline>ids</c-code-inline>. Pass
+        <c-code-inline>htmx</c-code-inline> to post in place, with <c-code-inline>hx_target</c-code-inline> for the
+        markup the response replaces: success clears the selection, failure keeps it. If the selection changes while
+        the dialog is open, the dialog closes rather than post a set it did not list. The demo below posts to the
+        gallery, which deletes nothing.
+    </p>
+    <div class="contents" x-data="{ search: '' }">
+        <c-tables.shell x-data="tableSelection">
+        <c-tables.toolbar>
+        <c-forms.search-input size="sm" id="ds-bulk-search" label="Search components" placeholder="Search components…" model="search" />
+        </c-tables.toolbar>
+        <c-tables.bulk-bar noun="component" plural="components">
+        <c-buttons.danger size="sm" @click="confirmDelete()">
+        <i class="fas fa-trash" aria-hidden="true"></i>
+        Delete
+        </c-buttons.danger>
+        </c-tables.bulk-bar>
+        <c-tables.table sized variant_class="min-w-176">
+        <c-tables.head>
+        <c-tables.select-cell as="th" label_all="Select all components" />
+        <c-tables.header-cell nowrap>Name</c-tables.header-cell>
+        <c-tables.header-cell class="w-36">Format</c-tables.header-cell>
+        <c-tables.header-cell date class="w-40">Updated</c-tables.header-cell>
+        <c-tables.actions-cell as="th" />
+        </c-tables.head>
+        <tbody>
+            {% for row in demo_bulk_rows %}
+                <c-tables.row x-show="!search || '{{ row.name|escapejs }}'.includes(search.trim().toLowerCase())">
+                <c-tables.select-cell value="{{ row.id }}" label="{{ row.name }}" :disabled="row.locked" />
+                <c-tables.cell nowrap class="font-medium">{{ row.name }}</c-tables.cell>
+                <c-tables.cell><c-badges.format format="{{ row.format }}">{{ row.format_label }}</c-badges.format></c-tables.cell>
+                <c-tables.cell date>{{ row.updated }}</c-tables.cell>
+                <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        <c-tables.bulk-delete id="ds-bulk-delete" action="{% url 'core:design_system' %}" noun="component" plural="components" htmx />
+        </c-tables.shell>
+    </div>
     <h2 id="pagination" class="text-xl font-semibold text-text">Pagination</h2>
     <c-cards.card>
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />

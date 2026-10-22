@@ -458,7 +458,7 @@ html.no-transitions * {
     display: block;
   }
 
-  table[data-stack] > thead:not(:has([data-table-sort])) {
+  table[data-stack] > thead:not(:has([data-table-sort], [data-row-select-all])) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -496,6 +496,12 @@ html.no-transitions * {
 
   table[data-stack] > thead > tr > th:has([data-table-sort]) {
     display: block;
+  }
+
+  /* Select-all stays reachable too, leading the bar. */
+  table[data-stack] > thead > tr > th:has([data-row-select-all]) {
+    display: block;
+    order: -1;
   }
 
   table[data-stack] > tbody {
@@ -541,17 +547,31 @@ html.no-transitions * {
     display: none;
   }
 
+  /* A selectable row keeps its box in the top-left corner, beside the row's
+     subject, and the cell after the box becomes the unlabelled subject. */
+  table[data-stack] > tbody > tr:has(> td[data-cell-select]) {
+    position: relative;
+    padding-left: 3.25rem;
+  }
+
+  table[data-stack] > tbody > tr > td[data-cell-select] {
+    position: absolute;
+    top: 0.875rem;
+    left: 1rem;
+    width: auto;
+  }
+
   /* The label sits in a left gutter beside its value, not above it, which
      halves a row's height. It is positioned rather than a flex or grid item so
      a value made of several nodes (a name, a version and a badge) keeps its
      own flow. The row's first cell is its subject and needs no label. */
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]) {
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td) {
     position: relative;
     padding-left: 7.5rem;
     min-height: 1.25rem;
   }
 
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end])::before {
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td)::before {
     content: attr(data-label);
     position: absolute;
     top: 0.125rem;
