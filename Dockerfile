@@ -8,7 +8,9 @@ ARG COSIGN_VERSION=v3.1.3
 # Chainguard distroless Python for production, pinned by digest for reproducibility.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3c42b518cc44bb5277a954826cdb4f9275ef95818d7eb7
+# Since 2026-10-10 :latest is Python 3.15, so this pins the last 3.14 build
+# (2026-10-10, Python 3.14.8, glibc 2.44-r8) until PYTHON_VERSION moves to 3.15.
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:3f411b4aac1ed9cd6c9dec1486f92a8898737d9d6f95488dd727ca7d6f5254ee
 # Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
 # digest so the builder image itself is reproducible. The actual .so
 # versions still come from `apk add` against the live Wolfi repo at build
