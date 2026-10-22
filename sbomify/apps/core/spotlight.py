@@ -42,6 +42,7 @@ SECTION_ORDER = (
     "findings",
     "releases",
     "documents",
+    "artifacts",
     "assets",
 )
 SECTION_LABELS = {
@@ -53,6 +54,7 @@ SECTION_LABELS = {
     "findings": "Affected components",
     "releases": "Releases",
     "documents": "Documents",
+    "artifacts": "Artifacts",
     "assets": "Products & components",
 }
 
