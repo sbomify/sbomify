@@ -535,5 +535,7 @@ def test_htmx_bulk_delete_without_a_target_swaps_nothing(rendered: str) -> None:
 def test_row_boxes_stop_the_click_at_the_box(rendered: str) -> None:
     """A row that opens on click must not also open when its box is ticked."""
     for marker in ('value="cmp-1"', ':value="item.id"'):
-        assert "@click.stop=" in _element_holding(rendered, "td", marker)
+        cell = _element_holding(rendered, "td", marker)
+        assert "@click.stop=" in cell
+        assert "@keydown.enter.stop" in cell
     assert '@click.stop="toggleAll()"' in _element_holding(rendered, "th", "data-row-select-all")

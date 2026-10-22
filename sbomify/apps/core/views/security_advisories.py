@@ -29,7 +29,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import HtmxFragmentMixin
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
@@ -38,6 +38,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     create_advisory,
     creation_options,
+    delete_advisories,
     delete_advisory,
     get_advisory,
     list_advisories,
@@ -267,6 +268,26 @@ class SecurityAdvisoriesTableView(HtmxFragmentMixin, GuestAccessBlockedMixin, Lo
 
     def get(self, request: HttpRequest) -> HttpResponse:
         return render(request, "core/security_advisories_table.html.j2", _advisories_context(request))
+
+
+class SecurityAdvisoriesBulkDeleteView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The table's bulk delete, posted in place by c-tables.bulk-delete once the person confirms.
+
+    Gated to the same roles as deleting one advisory. It answers with a toast
+    and the refresh-advisories trigger the table already listens for, so the
+    deleted rows leave the list without the page reloading.
+    """
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        team = _writable_team(request)
+        if team is None:
+            return htmx_error_response("You cannot delete advisories in this workspace.")
+        result = delete_advisories(team, request.POST.getlist("ids"))
+        if not result.ok or result.value is None:
+            return htmx_error_response(result.error or "Advisories not deleted.")
+        count = result.value
+        noun = "advisory" if count == 1 else "advisories"
+        return htmx_success_response(f"Deleted {count} {noun}.", triggers={"refresh-advisories": True})
 
 
 class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

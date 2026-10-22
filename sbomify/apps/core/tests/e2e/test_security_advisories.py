@@ -88,6 +88,42 @@ def test_empty_advisory_search_can_clear_filters(authenticated_page: Page, advis
     expect(page.get_by_role("table", name="Security advisories")).to_be_visible()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_bulk_delete_asks_first_and_removes_the_rows(authenticated_page: Page, advisories: list, width: int) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto("/security-advisories/")
+    table = page.get_by_role("table", name="Security advisories")
+    bar = page.locator("[data-bulk-bar]")
+    first = page.get_by_role("checkbox", name="Select Advisory 11 in Acme Gateway")
+    second = page.get_by_role("checkbox", name="Select Advisory 10 in Acme Gateway")
+
+    # Ticking a box selects the row; it does not open the advisory the row links to.
+    first.click()
+    expect(page).to_have_url("/security-advisories/")
+    expect(bar).to_contain_text("1 advisory selected")
+    second.focus()
+    page.keyboard.press("Enter")
+    expect(page).to_have_url("/security-advisories/")
+    second.check()
+    expect(bar).to_contain_text("2 advisories selected")
+
+    bar.get_by_role("button", name="Delete").click()
+    dialog = page.get_by_role("alertdialog")
+    expect(dialog).to_contain_text("Delete 2 advisories?")
+    expect(dialog).to_contain_text("Advisory 11 in Acme Gateway")
+    expect(dialog).to_contain_text("Advisory 10 in Acme Gateway")
+    expect(dialog).to_contain_text("Published advisories disappear from your Trust Center.")
+
+    dialog.get_by_role("button", name="Delete 2 advisories").click()
+    expect(dialog).to_be_hidden()
+    expect(table.get_by_text("Advisory 11 in Acme Gateway")).to_have_count(0)
+    expect(table.get_by_text("Advisory 10 in Acme Gateway")).to_have_count(0)
+    expect(bar).to_be_hidden()
+    assert SecurityAdvisory.objects.filter(team=advisories[0].team).count() == 10
+
+
 @pytest.fixture
 def advisory_detail(team_with_business_plan, sample_user, product_factory):  # noqa: F811
     """One advisory carrying everything the detail page renders: a severity, a

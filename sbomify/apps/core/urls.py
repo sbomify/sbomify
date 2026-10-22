@@ -120,7 +120,12 @@ urlpatterns = [
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
     ),
-    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    # Before the <advisory_id> pattern, which would otherwise swallow "new" and "delete".
+    path(
+        "security-advisories/delete/",
+        views.SecurityAdvisoriesBulkDeleteView.as_view(),
+        name="security_advisories_bulk_delete",
+    ),
     path(
         "security-advisories/new/",
         views.SecurityAdvisoryCreateView.as_view(),

@@ -14,8 +14,8 @@ x_label and x_disabled are the Alpine expressions for the same three.
 
 The boxes bind :checked and handle the click themselves rather than using
 x-model, because a shift-click selects the run of rows since the last one
-clicked, and x-model cannot see the shift key. The click stops at the box,
-so a row that opens or navigates on click is not also activated by ticking it.
+clicked, and x-model cannot see the shift key. The click and Enter stop at the
+box, so a row that opens or navigates on either is not also activated by it.
 
 The column is the box's width and no more. Its gutter is stated here, behind
 first: like the default recipe it replaces, so it outranks the cell's own
@@ -30,10 +30,10 @@ the next cell as the row's subject.
     </c-tables.header-cell>
 {% elif x_value %}
     <c-tables.cell :compact="compact" variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" class="{{ class }}" data-cell-select :attrs="attrs">
-    <c-forms.checkbox-input class="align-middle" disabled="" ::disabled="{% if x_disabled %}{{ x_disabled }}{% elif disabled %}true{% else %}false{% endif %}" ::value="{{ x_value }}" ::aria-label="'Select ' + ({{ x_label|default:x_value }})" ::data-row-label="{{ x_label|default:x_value }}" data-row-select ::checked="isSelected(String({{ x_value }}))" @click.stop="toggle(String({{ x_value }}), $event)" />
+    <c-forms.checkbox-input class="align-middle" disabled="" ::disabled="{% if x_disabled %}{{ x_disabled }}{% elif disabled %}true{% else %}false{% endif %}" ::value="{{ x_value }}" ::aria-label="'Select ' + ({{ x_label|default:x_value }})" ::data-row-label="{{ x_label|default:x_value }}" data-row-select ::checked="isSelected(String({{ x_value }}))" @click.stop="toggle(String({{ x_value }}), $event)" @keydown.enter.stop />
     </c-tables.cell>
 {% else %}
     <c-tables.cell :compact="compact" variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" class="{{ class }}" data-cell-select :attrs="attrs">
-    <c-forms.checkbox-input class="align-middle" value="{{ value }}" :disabled="disabled" aria-label="Select {{ label|default:value }}" data-row-select data-row-label="{{ label|default:value }}" ::checked="isSelected('{{ value|escapejs }}')" @click.stop="toggle('{{ value|escapejs }}', $event)" />
+    <c-forms.checkbox-input class="align-middle" value="{{ value }}" :disabled="disabled" aria-label="Select {{ label|default:value }}" data-row-select data-row-label="{{ label|default:value }}" ::checked="isSelected('{{ value|escapejs }}')" @click.stop="toggle('{{ value|escapejs }}', $event)" @keydown.enter.stop />
     </c-tables.cell>
 {% endif %}
