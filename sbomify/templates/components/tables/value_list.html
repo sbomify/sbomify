@@ -11,6 +11,12 @@ hashes.
 The summary hides its marker in both engines: list-none covers the
 list-item marker Chrome and Firefox draw, and Safari draws its own through
 ::-webkit-details-marker.
+
+Once open, the summary drops to the foot of the list, so "Show fewer" sits
+under the last value instead of between the first three and the rest. It is
+pinned there by position rather than flex order: Firefox does not lay out a
+details element as a flex container. The open padding reserves the summary's
+one text-xs line plus the list's gap.
 {% endcomment %}
 <c-vars values mono class />
 <div class="flex flex-col gap-[0.125rem]{% if class %} {{ class }}{% endif %}"
@@ -21,8 +27,8 @@ list-item marker Chrome and Firefox draw, and Safari draws its own through
         <span class="text-text-muted">—</span>
     {% endfor %}
     {% if values|length > 3 %}
-        <details class="group">
-            <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden whitespace-nowrap text-xs text-text-muted underline underline-offset-2 hover:text-text group-open:mb-[0.125rem]">
+        <details class="group relative open:pb-[1.125rem]">
+            <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden whitespace-nowrap text-xs text-text-muted underline underline-offset-2 hover:text-text group-open:absolute group-open:bottom-0 group-open:left-0">
                 <span class="group-open:hidden">Show {{ values|length|add:"-3" }} more</span>
                 <span class="hidden group-open:inline">Show fewer</span>
             </summary>
