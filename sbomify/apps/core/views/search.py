@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
@@ -27,7 +28,7 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     ``products``/``components`` are the legacy keys the older dropdown reads
     and cover assets only. ``results`` is the flat, ranked palette list and is
     a superset: it also carries navigation destinations, advisories, findings,
-    releases and documents. They are not interchangeable.
+    releases, documents and SBOMs. They are not interchangeable.
     """
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
@@ -150,19 +151,32 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         )
 
 
+# A path has a handful of segments; anything longer is not a link to a record.
+_MAX_ID_CANDIDATES = 8
+
+
 def _id_filter(query: str) -> Q:
-    """Match a pasted product or component ID, or its UUID.
+    """Match a pasted record ID or UUID, alone or inside a link.
 
     IDs are what people copy out of a URL, an API response or a CI log, and
     none of them appear in a name, so a name search answered "no results" for
     the one string that identifies the record exactly. Exact match only: a
     substring of a random token identifies nothing.
+
+    A pasted link is split into its path segments and each is tried as an ID,
+    so ``https://…/product/<id>/release/<id>/`` finds both the product and the
+    release. A segment like ``product`` is tried too and simply matches nothing.
     """
-    id_filter = Q(id=query)
-    try:
-        id_filter |= Q(uuid=uuid.UUID(query))
-    except ValueError:
-        pass
+    candidates = [segment for segment in urlsplit(query).path.split("/") if segment][:_MAX_ID_CANDIDATES]
+    uuids = []
+    for candidate in candidates:
+        try:
+            uuids.append(uuid.UUID(candidate))
+        except ValueError:
+            pass
+    id_filter = Q(id__in=candidates)
+    if uuids:
+        id_filter |= Q(uuid__in=uuids)
     return id_filter
 
 
@@ -172,7 +186,7 @@ def _id_matches_first(queryset: Any, id_filter: Q, limit: int) -> list[Any]:
     The pasted ID is the user telling us exactly which record they want, so it
     must not be cut off by ``limit`` behind a page of name matches.
     """
-    exact = list(queryset.filter(id_filter)[:1])
+    exact = list(queryset.filter(id_filter)[:limit])
     exclude = [row.pk for row in exact]
     return exact + list(queryset.exclude(pk__in=exclude).order_by("name")[: limit - len(exact)])
 
@@ -229,8 +243,21 @@ def _release_rows(query: str, team_id: Any, limit: int) -> Any:
 
     return (
         Release.objects.filter(product__team_id=team_id)
-        .filter(Q(name__icontains=query) | Q(version__icontains=query))
+        .filter(Q(name__icontains=query) | Q(version__icontains=query) | _id_filter(query))
         .select_related("product")
+        .order_by("-created_at")[:limit]
+    )
+
+
+def _component_release_rows(query: str, team_id: Any, limit: int) -> Any:
+    """By ID only. A version string is already matched on product releases,
+    and repeating every component's matching version here would bury them."""
+    from sbomify.apps.core.models import ComponentRelease
+
+    return (
+        ComponentRelease.objects.filter(component__team_id=team_id)
+        .filter(_id_filter(query))
+        .select_related("component")
         .order_by("-created_at")[:limit]
     )
 
@@ -239,7 +266,21 @@ def _document_rows(query: str, team_id: Any, limit: int) -> Any:
     from sbomify.apps.documents.models import Document
 
     return (
-        Document.objects.filter(component__team_id=team_id, name__icontains=query)
+        Document.objects.filter(component__team_id=team_id)
+        .filter(Q(name__icontains=query) | _id_filter(query))
+        .select_related("component")
+        .order_by("-created_at")[:limit]
+    )
+
+
+def _sbom_rows(query: str, team_id: Any, limit: int) -> Any:
+    """By ID only. An SBOM is named after the package it describes, which is
+    usually the component's own name, so a name match would repeat the asset."""
+    from sbomify.apps.sboms.models import SBOM
+
+    return (
+        SBOM.objects.filter(component__team_id=team_id)
+        .filter(_id_filter(query))
         .select_related("component")
         .order_by("-created_at")[:limit]
     )
@@ -277,12 +318,33 @@ ENTITY_SEARCHES: tuple[tuple[str, str, Any, Any], ...] = (
         ),
     ),
     (
+        "releases",
+        "fa-tag",
+        _component_release_rows,
+        lambda row: (
+            f"{row.version or row.id} · {row.component.name}",
+            reverse("core:component_details", kwargs={"component_id": row.component_id}),
+        ),
+    ),
+    (
         "documents",
         "fa-file-lines",
         _document_rows,
         lambda row: (
             f"{row.name} · {row.component.name}",
             reverse("core:component_details", kwargs={"component_id": row.component_id}),
+        ),
+    ),
+    (
+        "artifacts",
+        "fa-file-code",
+        _sbom_rows,
+        lambda row: (
+            f"{row.name}{f' {row.version}' if row.version else ''} · {row.component.name}",
+            reverse(
+                "core:component_item",
+                kwargs={"component_id": row.component_id, "item_type": "sboms", "item_id": row.id},
+            ),
         ),
     ),
 )

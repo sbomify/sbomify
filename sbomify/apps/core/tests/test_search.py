@@ -289,3 +289,131 @@ class TestSearchView:
 
         assert len(data["products"]) == 2
         assert data["products"][0]["id"] == target.id
+
+    @staticmethod
+    def _section_urls(data: dict, section: str) -> list[str]:
+        return [r["url"] for r in data["results"] if r["section"] == section]
+
+    def test_search_release_by_id_and_uuid(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Release
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+        release = Release.objects.create(product=product, name="v1")
+        url = reverse("core:release_details", kwargs={"product_id": product.id, "release_id": release.id})
+
+        for query in (release.id, str(release.uuid)):
+            data = client.get(reverse("core:search"), {"q": query}).json()
+            assert self._section_urls(data, "releases") == [url]
+
+    def test_search_component_release_by_id(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import ComponentRelease
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        component = Component.objects.create(name="api", team=team)
+        component_release = ComponentRelease.objects.create(component=component, version="2.0.0")
+
+        data = client.get(reverse("core:search"), {"q": component_release.id}).json()
+
+        releases = [r for r in data["results"] if r["section"] == "releases"]
+        assert [r["title"] for r in releases] == ["2.0.0 · api"]
+        assert releases[0]["url"] == reverse("core:component_details", kwargs={"component_id": component.id})
+
+    def test_search_component_release_by_version_is_not_listed(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import ComponentRelease
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        component = Component.objects.create(name="api", team=team)
+        ComponentRelease.objects.create(component=component, version="2.0.0")
+
+        data = client.get(reverse("core:search"), {"q": "2.0.0"}).json()
+
+        assert self._section_urls(data, "releases") == []
+
+    def test_search_sbom_by_id(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        component = Component.objects.create(name="api", team=team)
+        sbom = SBOM.objects.create(name="pkg", version="1.0", component=component, format="cyclonedx")
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "sboms", "item_id": sbom.id}
+        )
+
+        for query in (sbom.id, str(sbom.uuid)):
+            data = client.get(reverse("core:search"), {"q": query}).json()
+            assert self._section_urls(data, "artifacts") == [url]
+        assert self._section_urls(client.get(reverse("core:search"), {"q": "pkg"}).json(), "artifacts") == []
+
+    def test_search_document_by_id(self, client: Client, sample_team_with_owner_member):
+        from sbomify.apps.documents.models import Document
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        component = Component.objects.create(name="api", team=team)
+        document = Document.objects.create(name="Policy", component=component)
+
+        data = client.get(reverse("core:search"), {"q": document.id}).json()
+
+        assert [r["title"] for r in data["results"] if r["section"] == "documents"] == ["Policy · api"]
+
+    def test_search_by_pasted_link(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+        component = Component.objects.create(name="api", team=team)
+
+        product_link = f"https://app.sbomify.com/product/{product.id}/?tab=releases#top"
+        component_link = f"app.sbomify.com/component/{component.id}/"
+
+        assert [p["id"] for p in client.get(reverse("core:search"), {"q": product_link}).json()["products"]] == [
+            product.id
+        ]
+        assert [c["id"] for c in client.get(reverse("core:search"), {"q": component_link}).json()["components"]] == [
+            component.id
+        ]
+
+    def test_search_by_pasted_release_link_finds_product_and_release(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        from sbomify.apps.core.models import Release
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        product = Product.objects.create(name="Billing", team=team)
+        release = Release.objects.create(product=product, name="v1")
+        path = reverse("core:release_details", kwargs={"product_id": product.id, "release_id": release.id})
+
+        data = client.get(reverse("core:search"), {"q": f"https://app.sbomify.com{path}"}).json()
+
+        assert [p["id"] for p in data["products"]] == [product.id]
+        assert self._section_urls(data, "releases") == [path]
+
+    def test_search_by_id_for_other_workspace_records_returns_nothing(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        from sbomify.apps.core.models import ComponentRelease, Release
+        from sbomify.apps.documents.models import Document
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.teams.models import Workspace
+
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+        other_team = Workspace.objects.create(name="Other Team")
+        product = Product.objects.create(name="Secret", team=other_team)
+        component = Component.objects.create(name="secret", team=other_team)
+        records = [
+            Release.objects.create(product=product, name="v1"),
+            ComponentRelease.objects.create(component=component, version="1.0"),
+            SBOM.objects.create(name="pkg", component=component, format="cyclonedx"),
+            Document.objects.create(name="Policy", component=component),
+        ]
+
+        for record in records:
+            for query in (record.id, f"https://app.sbomify.com/x/{record.id}/"):
+                data = client.get(reverse("core:search"), {"q": query}).json()
+                assert [r for r in data["results"] if r["section"] in ("releases", "documents", "artifacts")] == []
