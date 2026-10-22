@@ -106,12 +106,13 @@ on the output; it is not routed anywhere.
     </c-tables.row>
     <template x-for="item in items" :key="item.id">
         <c-tables.row>
-        <c-tables.select-cell x_value="item.id" x_label="item.name" />
+        <c-tables.select-cell x_value="item.id" x_label="item.name" x_disabled="item.locked" />
         <c-tables.cell x-text="item.name"></c-tables.cell>
         </c-tables.row>
     </template>
 </tbody>
 </c-tables.table>
-<c-tables.bulk-delete id="probe-bulk-delete" action="/probe/bulk-delete" noun="component" plural="components" />
+<c-tables.bulk-delete action="/probe/bulk-delete" noun="component" plural="components" data-probe="bulk-delete" />
 <c-tables.bulk-delete id="probe-bulk-delete-htmx" action="/probe/bulk-delete" noun="component" plural="components" htmx hx_target="#probe-target" />
+<c-tables.bulk-delete action="/probe/bulk-delete" noun="component" plural="components" htmx data-probe="bulk-delete-toast" />
 </c-tables.shell>

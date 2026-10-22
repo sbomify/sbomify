@@ -14,22 +14,34 @@ nothing.
 action is the URL the selection posts to, each selected id as one name field
 ("ids" unless name says otherwise), with the CSRF token. Without htmx it is a
 plain form post and the page that answers decides where to go next. With htmx
-it posts in place: hx_target and hx_swap say what the response replaces, a
-success empties the selection and closes the dialog, and a failure keeps both
-so the person can try again. The button disables itself while the request is
-in flight, so a second press cannot post twice.
+it posts in place: hx_target says what the response replaces, outerHTML unless
+hx_swap says otherwise (with no target nothing is swapped, for an endpoint that
+answers with a toast and a refresh trigger). A success empties the selection
+and closes the dialog, and a failure keeps both so the person can try again.
+The delete button disables itself once pressed, so a second press cannot post
+twice, and an htmx request in flight holds the dialog open until it answers.
+
+The rows are read once more as the form posts, and the dialog closes by itself
+if the selection changes while it is open, so it never posts a set other than
+the one it listed.
+
+The delete button finds its form through the dialog it sits in rather than a
+form="" id, so two selectable tables on one page cannot submit each other's
+selection. id is optional and only names the dialog; without it the dialog is
+labelled by aria-label.
 
 htmx turns the teleport off, for the reason in modal.html: HTMX wires hx-* on
 the DOM it can see, and a teleported dialog is still inside its <template>
 when that happens, so the form would fall back to a native submit.
 {% endcomment %}
-<c-vars id="bulk-delete" action name="ids" noun="item" plural="items" htmx hx_target hx_swap="none" warning="This cannot be undone." />
+<c-vars id="" action name="ids" noun="item" plural="items" htmx hx_target hx_swap warning="This cannot be undone." />
 {# djlint:off #}
-<c-modal id="{{ id }}" show="confirmingDelete" close="cancelDelete()" role="alertdialog" size="sm" title="Delete {{ plural }}" icon="fas fa-trash" teleport="{% if htmx %}false{% else %}true{% endif %}" style="--chip-accent: var(--color-danger)">
+<c-modal id="{{ id }}" show="confirmingDelete" close="cancelDelete()" role="alertdialog" size="sm" title="Delete {{ plural }}" icon="fas fa-trash" teleport="{% if htmx %}false{% else %}true{% endif %}" aria-label="Delete {{ plural }}" style="--chip-accent: var(--color-danger)">
 {# djlint:on #}
-<form id="{{ id }}-form"
+<form data-bulk-delete-form
       class="flex flex-col gap-3"
-      {% if htmx %}hx-post="{{ action }}" hx-swap="{{ hx_swap }}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %} @htmx:before-request="submitting = true" @htmx:after-request="deleteFinished($event.detail.successful)"{% else %}method="post" action="{{ action }}" @submit="submitting = true"{% endif %}>
+      @pageshow.window="pageRestored($event)"
+      {% if htmx %}hx-post="{{ action }}" hx-swap="{% if hx_swap %}{{ hx_swap }}{% elif hx_target %}outerHTML{% else %}none{% endif %}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %} @htmx:before-request="if (!startDelete(true)) $event.preventDefault()" @htmx:after-request="deleteFinished($event.detail.successful)"{% else %}method="post" action="{{ action }}" @submit="if (!startDelete()) $event.preventDefault()"{% endif %}>
     {% csrf_token %}
     <template x-for="rowId in selected" :key="rowId">
         <input type="hidden" name="{{ name }}" :value="rowId">
@@ -49,8 +61,8 @@ when that happens, so the form would fall back to a native submit.
 </form>
 <c-slot name="footer">
 {% with class="" %}
-    <c-buttons.secondary @click="cancelDelete()" ::disabled="submitting">Cancel</c-buttons.secondary>
-    <c-buttons.danger type="submit" form="{{ id }}-form" data-bulk-delete-confirm ::disabled="submitting">
+    <c-buttons.secondary @click="cancelDelete()" ::disabled="inFlight">Cancel</c-buttons.secondary>
+    <c-buttons.danger data-bulk-delete-confirm ::disabled="submitting" @click="$el.closest('[role=alertdialog]').querySelector('form[data-bulk-delete-form]').requestSubmit()">
     <i class="fas fa-trash" aria-hidden="true"></i>
     <span x-text="'Delete ' + countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}')">Delete</span>
     </c-buttons.danger>

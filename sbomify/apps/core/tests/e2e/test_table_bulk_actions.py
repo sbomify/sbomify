@@ -15,7 +15,7 @@ debug_gallery = _debug_urlconf_fixture(True)
 
 def _open_demo(page: Page):
     page.goto(reverse("core:design_system"))
-    shell = page.locator("#bulk-actions ~ [x-data='tableSelection']").first
+    shell = page.locator("[x-data='tableSelection']").filter(has=page.locator("#ds-bulk-search"))
     shell.scroll_into_view_if_needed()
     return shell
 
@@ -94,3 +94,57 @@ def test_selectable_table_stacks_on_a_phone(authenticated_page: Page, tmp_path: 
     assert abs(box_top - name_box["y"]) < name_box["height"]
     assert shell.evaluate("el => el.scrollWidth <= el.clientWidth + 1")
     page.screenshot(path=str(tmp_path / "bulk-phone.png"))
+
+
+def test_rows_hidden_by_search_leave_the_selection(authenticated_page: Page) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": 1280, "height": 900})
+    shell = _open_demo(page)
+    bar = shell.locator("[data-bulk-bar]")
+    shell.get_by_role("checkbox", name="Select all components").click()
+    expect(bar).to_contain_text("7 components selected")
+
+    page.locator("#ds-bulk-search").fill("gateway")
+    expect(bar).to_contain_text("2 components selected")
+    page.locator("#ds-bulk-search").fill("")
+    # Clearing the search shows the rows again but does not reselect them.
+    expect(bar).to_contain_text("2 components selected")
+
+
+def test_rows_hidden_by_a_class_or_an_ancestor_leave_the_selection(authenticated_page: Page) -> None:
+    page = authenticated_page
+    shell = _open_demo(page)
+    bar = shell.locator("[data-bulk-bar]")
+    shell.get_by_role("checkbox", name="Select all components").click()
+    expect(bar).to_contain_text("7 components selected")
+
+    shell.locator("tr", has_text="acme-vault-core").evaluate("row => row.classList.add('hidden')")
+    expect(bar).to_contain_text("6 components selected")
+    shell.locator("tr", has_text="acme-billing-service").evaluate("row => row.setAttribute('hidden', '')")
+    expect(bar).to_contain_text("5 components selected")
+
+    # A hidden ancestor outside the observed table is caught when the dialog opens.
+    shell.locator("tbody").evaluate(
+        "body => { const wrap = body.closest('[data-table-viewport]'); wrap.style.cssText = 'display: none'; }"
+    )
+    bar.get_by_role("button", name="Delete").click()
+    expect(page.get_by_role("alertdialog")).to_be_hidden()
+    expect(bar).to_be_hidden()
+
+
+def test_the_dialog_closes_when_its_rows_disappear(authenticated_page: Page) -> None:
+    page = authenticated_page
+    shell = _open_demo(page)
+    bar = shell.locator("[data-bulk-bar]")
+    shell.get_by_role("checkbox", name="Select acme-gateway-core").click()
+    shell.get_by_role("checkbox", name="Select acme-vault-core").click()
+    bar.get_by_role("button", name="Delete").click()
+    dialog = page.get_by_role("alertdialog")
+    expect(dialog).to_contain_text("Delete 2 components?")
+
+    posts: list[str] = []
+    page.on("request", lambda request: posts.append(request.url) if request.method == "POST" else None)
+    shell.locator("tr", has_text="acme-vault-core").evaluate("row => row.remove()")
+    expect(dialog).to_be_hidden()
+    expect(bar).to_contain_text("1 component selected")
+    assert posts == []

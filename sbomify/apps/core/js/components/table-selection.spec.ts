@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test'
 import {
+    readRows,
     countLabel,
     pruneSelection,
     rowRange,
@@ -79,6 +80,15 @@ describe('tableSelection', () => {
         selection.rows = structuredClone(ROWS)
     })
 
+    test('isSelected agrees with the selection after every kind of change', () => {
+        selection.toggle('b')
+        expect(selection.isSelected('b')).toBe(true)
+        selection.toggleAll()
+        expect(ROWS.every((row) => selection.isSelected(row.id))).toBe(true)
+        selection.clear()
+        expect(selection.isSelected('b')).toBe(false)
+    })
+
     test('select-all is checked only when every row is, and indeterminate in between', () => {
         expect(selection.allSelected).toBe(false)
         expect(selection.someSelected).toBe(false)
@@ -120,18 +130,49 @@ describe('tableSelection', () => {
         expect(selection.confirmingDelete).toBe(true)
     })
 
-    test('the dialog cannot be dismissed while the request is in flight', () => {
+    test('an htmx delete in flight holds the dialog open', () => {
         selection.toggle('a')
         selection.confirmDelete()
-        selection.submitting = true
+        expect(selection.startDelete(true)).toBe(true)
         selection.cancelDelete()
         expect(selection.confirmingDelete).toBe(true)
+    })
+
+    test('a plain form post can still be dismissed if the page does not navigate', () => {
+        selection.toggle('a')
+        selection.confirmDelete()
+        expect(selection.startDelete()).toBe(true)
+        expect(selection.submitting).toBe(true)
+        selection.cancelDelete()
+        expect(selection.confirmingDelete).toBe(false)
+        expect(selection.submitting).toBe(false)
+    })
+
+    test('the delete cannot be sent twice', () => {
+        selection.toggle('a')
+        selection.confirmDelete()
+        expect(selection.startDelete(true)).toBe(true)
+        expect(selection.startDelete(true)).toBe(false)
+    })
+
+    test('nothing posts once the dialog has closed', () => {
+        selection.toggle('a')
+        expect(selection.startDelete()).toBe(false)
+    })
+
+    test('a page restored from the back/forward cache unlocks the dialog', () => {
+        selection.toggle('a')
+        selection.confirmDelete()
+        selection.startDelete(true)
+        selection.pageRestored({ persisted: true } as PageTransitionEvent)
+        expect(selection.submitting).toBe(false)
+        expect(selection.inFlight).toBe(false)
     })
 
     test('a failed delete keeps the dialog and the selection to retry', () => {
         selection.toggle('a')
         selection.confirmDelete()
-        selection.submitting = true
+        selection.startDelete(true)
         selection.deleteFinished(false)
         expect(selection.submitting).toBe(false)
         expect(selection.confirmingDelete).toBe(true)
@@ -141,9 +182,50 @@ describe('tableSelection', () => {
     test('a successful delete closes the dialog and clears the selection', () => {
         selection.toggle('a')
         selection.confirmDelete()
-        selection.submitting = true
+        selection.startDelete(true)
         selection.deleteFinished(true)
         expect(selection.confirmingDelete).toBe(false)
         expect(selection.selected).toEqual([])
+    })
+})
+
+interface FakeInput {
+    value: string
+    disabled: boolean
+    dataset: { rowLabel?: string }
+    checkVisibility(): boolean
+}
+
+function fakeRoot(inputs: FakeInput[]): ParentNode {
+    return { querySelectorAll: () => inputs } as unknown as ParentNode
+}
+
+function input(value: string, { visible = true, disabled = false } = {}): FakeInput {
+    return { value, disabled, dataset: { rowLabel: `name-${value}` }, checkVisibility: () => visible }
+}
+
+describe('readRows', () => {
+    test('leaves out disabled rows and rows the browser does not render', () => {
+        const rows = readRows(fakeRoot([input('a'), input('b', { visible: false }), input('c', { disabled: true })]))
+        expect(rows).toEqual([{ id: 'a', label: 'name-a' }])
+    })
+})
+
+describe('a selection that changes under the dialog', () => {
+    test('closes the dialog instead of posting a set it did not list', () => {
+        const visible = { a: true, b: true }
+        const inputs = [input('a'), input('b')]
+        inputs[1].checkVisibility = () => visible.b
+        const selection = tableSelection() as ReturnType<typeof tableSelection> & { $root: HTMLElement }
+        selection.$root = fakeRoot(inputs) as unknown as HTMLElement
+        selection.refresh()
+        selection.toggleAll()
+        selection.confirmDelete()
+        expect(selection.confirmingDelete).toBe(true)
+
+        visible.b = false
+        expect(selection.startDelete()).toBe(false)
+        expect(selection.confirmingDelete).toBe(false)
+        expect(selection.selected).toEqual(['a'])
     })
 })
