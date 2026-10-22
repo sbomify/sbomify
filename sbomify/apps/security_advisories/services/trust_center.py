@@ -57,6 +57,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     SEVERITY_RANK,
     display_date,
     display_id,
+    version_range_label,
     worst_cvss,
     worst_severity,
 )
@@ -703,6 +704,7 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "response": status.response,
                     "recommended_version": status.recommended_version,
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
+                    "version_labels": [version_range_label(r) for r in status.version_ranges.all()],
                 }
             )
     return rows

@@ -12,7 +12,7 @@ without them, and the browser reports its expanded state to screen readers.
 The slot, when given, is a heading above the list. `items` is a list of
 strings, `limit` how many show before the toggle (default 5), `label` the
 list's accessible name. Items wrap at spaces first and split a long token only
-when nothing else fits, so an interval reads whole and a SHA cannot overflow.
+when nothing else fits, so a phrase reads whole and a SHA cannot overflow.
 {% endcomment %}
 <c-vars items limit="5" label class />
 <div class="group/fold min-w-0{% if class %} {{ class }}{% endif %}"

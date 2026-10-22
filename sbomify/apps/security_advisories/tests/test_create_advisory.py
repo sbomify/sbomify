@@ -335,6 +335,27 @@ class TestDetailPageAffectedReleases:
         assert "Show all" not in content
 
 
+@pytest.mark.parametrize(
+    ("introduced", "fixed", "last_affected", "label"),
+    [
+        ("1.2.0", "", "1.2.0", "1.2.0"),
+        ("1.0.0", "2.0.0", "", "From 1.0.0, fixed in 2.0.0"),
+        ("1.0.0", "", "1.4.2", "1.0.0 to 1.4.2"),
+        ("", "2.0.0", "", "Before 2.0.0"),
+        ("", "", "1.4.2", "1.4.2 and earlier"),
+        ("1.0.0", "", "", "1.0.0 and later"),
+        ("", "", "", "All versions"),
+    ],
+)
+def test_a_range_reads_as_words_not_interval_notation(introduced, fixed, last_affected, label):
+    from sbomify.apps.security_advisories.models import AdvisoryVersionRange
+    from sbomify.apps.security_advisories.services.advisories import version_range_label
+
+    version_range = AdvisoryVersionRange(introduced=introduced, fixed=fixed, last_affected=last_affected)
+
+    assert version_range_label(version_range) == label
+
+
 class TestDetailPageCvss:
     """The edit modal prefills from the projection, and a missing score must
     render as an empty input rather than the string "None"."""

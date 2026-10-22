@@ -218,11 +218,32 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
 
 
 def _range_display(version_range: AdvisoryVersionRange) -> str:
-    """A range the way the detail page lists it: the bare version for a single-release
-    pin, interval notation for a real span."""
+    """A range as the API returns it: the bare version for a single-release pin,
+    interval notation for a real span."""
     if version_range.introduced and version_range.introduced == version_range.last_affected:
         return version_range.introduced
     return str(version_range)
+
+
+def version_range_label(version_range: AdvisoryVersionRange) -> str:
+    """A range in words, for a page rather than an API: the bare version for a
+    pin, and a phrase rather than interval notation for a real span."""
+    introduced = version_range.introduced
+    fixed = version_range.fixed
+    last = version_range.last_affected
+    if introduced and introduced == last:
+        return introduced
+    if introduced and fixed:
+        return f"From {introduced}, fixed in {fixed}"
+    if introduced and last:
+        return f"{introduced} to {last}"
+    if fixed:
+        return f"Before {fixed}"
+    if last:
+        return f"{last} and earlier"
+    if introduced:
+        return f"{introduced} and later"
+    return "All versions"
 
 
 def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
@@ -238,9 +259,11 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
     # Deduplicated but order-preserving: two vulnerabilities citing the same
     # affected release should not list it twice.
     affected: dict[str, None] = {}
+    labels: dict[str, None] = {}
     for status in advisory_product.statuses.all():
         for version_range in status.version_ranges.all():
             affected.setdefault(_range_display(version_range))
+            labels.setdefault(version_range_label(version_range))
     return {
         # A stable non-null key for x-for. ``id`` is null for an unlinked
         # product, and Alpine rejects that as a key, so two unlinked products
@@ -249,6 +272,7 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
         "id": product.id if product else None,
         "name": name,
         "affected_ranges": list(affected),
+        "affected_versions": list(labels),
     }
 
 

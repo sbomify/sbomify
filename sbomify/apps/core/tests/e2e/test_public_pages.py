@@ -174,6 +174,7 @@ def test_many_affected_versions_fold_in_the_public_table(
     versions = page.get_by_role("list", name=f"Affected versions of {trust_center_product.name} for CVE-2026-0002")
     items = versions.locator("li")
     expect(items).to_have_count(12)
+    expect(items.first).to_have_text("9.0.0")
     expect(items.nth(4)).to_be_visible()
     expect(items.nth(5)).to_be_hidden()
 

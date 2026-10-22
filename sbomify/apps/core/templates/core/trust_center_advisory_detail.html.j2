@@ -93,9 +93,9 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                                 <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
                                 {% if row.justification %}<div class="text-xs text-text-muted mt-1">{{ row.justification }}</div>{% endif %}
                                 </c-tables.cell>
-                                {% if row.version_ranges %}
+                                {% if row.version_labels %}
                                     <c-tables.cell>
-                                    <c-lists.folding :items="row.version_ranges" label="Affected versions of {{ row.product }} for {{ row.vulnerability }}" class="min-w-[9rem]" />
+                                    <c-lists.folding :items="row.version_labels" label="Affected versions of {{ row.product }} for {{ row.vulnerability }}" class="min-w-[9rem]" />
                                     </c-tables.cell>
                                 {% else %}
                                     <c-tables.cell class="font-mono text-xs whitespace-nowrap">—</c-tables.cell>

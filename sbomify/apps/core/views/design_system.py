@@ -548,7 +548,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "fc7f052",
                 "2b4ac46",
             ],
-            "demo_folding_items_short": ["1.2.0", "[1.3.0, 1.4.2)"],
+            "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
             "demo_breadcrumbs": [
                 {"label": "Products", "url": "#"},
                 {"label": "Acme Widget", "url": "#"},

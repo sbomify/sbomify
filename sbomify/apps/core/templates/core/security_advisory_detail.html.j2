@@ -258,7 +258,7 @@
                         </p>
                     {% endif %}
                     {% for product in advisory.products %}
-                        <c-lists.folding :items="product.affected_ranges" label="Affected versions of {{ product.name }}">
+                        <c-lists.folding :items="product.affected_versions" label="Affected versions of {{ product.name }}">
                         <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
                         {% if product.id %}
                             <a href="{% url 'core:product_details' product.id %}"
