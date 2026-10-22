@@ -258,6 +258,41 @@ class TestDashboardCreatePost:
         assert detail["products"][0]["affected_ranges"] == ["1.2.0"]
 
 
+class TestDetailPageAffectedReleases:
+    """Affected releases render one per line and fold past five, so an advisory
+    naming dozens of releases no longer runs off the sidebar as a single line."""
+
+    def _get_detail(self, client, member, advisory_id):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        setup_authenticated_client_session(client, member.team, member.user)
+        return client.get(reverse("core:security_advisory_detail", args=[advisory_id]))
+
+    def test_many_releases_render_as_a_folded_list(self, sample_team_with_owner_member, team, user, product, client):
+        releases = [Release.objects.create(product=product, name=f"v1.{n}.0", version=f"1.{n}.0") for n in range(8)]
+        result = create_advisory(team, user, title="Many", products=[product], affected_releases=releases)
+
+        content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+
+        assert f'aria-label="Affected releases of {product.name}"' in content
+        for release in releases:
+            assert f">{release.version}</li>" in content
+        assert content.count('x-show="all" x-cloak>1.') == 3
+        assert "Show all 8" in content
+        assert "8 releases" in content
+        assert "1.0.0, 1.1.0" not in content
+
+    def test_a_few_releases_render_without_a_toggle(self, sample_team_with_owner_member, team, user, product, client):
+        release = Release.objects.create(product=product, name="v1.2.0", version="1.2.0")
+        result = create_advisory(team, user, title="Few", products=[product], affected_releases=[release])
+
+        content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+
+        assert ">1.2.0</li>" in content
+        assert "1 release<" in content
+        assert "Show all" not in content
+
+
 class TestDetailPageCvss:
     """The edit modal prefills from the projection, and a missing score must
     render as an empty input rather than the string "None"."""

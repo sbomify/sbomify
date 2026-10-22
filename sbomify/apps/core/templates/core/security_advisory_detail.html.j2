@@ -246,7 +246,7 @@
             </div>
             <div class="space-y-3 border-t border-border/60 pt-6">
                 <h2 class="text-xs uppercase tracking-wide text-text-muted">Affected products</h2>
-                <div class="flex flex-wrap gap-2">
+                <div class="space-y-4">
                     {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, and the url tag would happily build /product/None/ rather than fail, so they render as plain text.{% endcomment %}
                     {% if not advisory.products %}
                         <p class="text-sm text-text-muted m-0">
@@ -258,19 +258,15 @@
                         </p>
                     {% endif %}
                     {% for product in advisory.products %}
-                        <c-chips.neutral>
+                        <c-lists.folding :items="product.affected_ranges" noun="release" label="Affected releases of {{ product.name }}">
                         <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
                         {% if product.id %}
                             <a href="{% url 'core:product_details' product.id %}"
-                               class="transition-colors hover:opacity-80">{{ product.name }}</a>
+                               class="truncate transition-colors hover:opacity-80">{{ product.name }}</a>
                         {% else %}
-                            {{ product.name }}
+                            <span class="truncate">{{ product.name }}</span>
                         {% endif %}
-                        {% if product.affected_ranges %}
-                            <span class="ml-1.5 pl-1.5 border-l border-border/60 font-normal opacity-80"
-                                  title="Affected releases">{{ product.affected_ranges|join:", " }}</span>
-                        {% endif %}
-                        </c-chips.neutral>
+                        </c-lists.folding>
                     {% endfor %}
                 </div>
             </div>

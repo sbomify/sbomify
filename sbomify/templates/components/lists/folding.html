@@ -1,0 +1,40 @@
+{% comment %}
+A heading over a bulleted list that folds past `limit` items. Built for an
+advisory's affected releases, which once ran as one comma-joined line inside a
+chip and off the side of the sidebar when an advisory named a few dozen. One
+item per line keeps long identifiers readable, and folding keeps a long list
+from pushing the rest of the column out of view.
+
+The slot is the heading. `items` is a list of strings, `limit` how many show
+before the toggle (default 5), `noun` what the count beside the heading
+counts (default "item"), `label` the list's accessible name.
+{% endcomment %}
+<c-vars items limit="5" noun="item" label class />
+<div class="min-w-0 text-sm {% if class %}{{ class }}{% endif %}"
+     x-data="{ all: false }"
+     {{ attrs }}>
+    <div class="flex items-center justify-between gap-3">
+        <span class="flex min-w-0 items-center gap-2 font-medium text-text">{{ slot }}</span>
+        {% if items %}
+            <span class="shrink-0 text-xs text-text-muted">{{ items|length }} {{ noun }}{{ items|length|pluralize }}</span>
+        {% endif %}
+    </div>
+    {% if items %}
+        <ul class="mt-2 ml-5 list-disc space-y-1 text-text-muted"
+            {% if label %}aria-label="{{ label }}"{% endif %}>
+            {% for item in items %}
+                <li class="break-all font-mono text-xs"
+                    {% if forloop.counter > limit|add:0 %}x-show="all" x-cloak{% endif %}>{{ item }}</li>
+            {% endfor %}
+        </ul>
+        {% if items|length > limit|add:0 %}
+            <button type="button"
+                    class="mt-2 ml-5 text-xs text-primary hover:underline"
+                    @click="all = !all"
+                    :aria-expanded="all.toString()">
+                <span x-show="!all">Show all {{ items|length }}</span>
+                <span x-show="all" x-cloak>Show fewer</span>
+            </button>
+        {% endif %}
+    {% endif %}
+</div>
