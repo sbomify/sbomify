@@ -1,5 +1,5 @@
 # Base Python version
-ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
+ARG PYTHON_VERSION=3.14-slim-trixie@sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.3.8
 # For releases, see: https://github.com/sigstore/cosign/releases
@@ -17,7 +17,7 @@ ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3
 # compatible across rebuilds. Bump the digest below when you want to pick
 # up newer patches.
 # To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:34977aa13765da89f60fee8fe5230e2bb1c55192df08e383c58221ee0d1277fb
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:bc76fa39ddd1482dd56a761b3331e03ba8f0e093ebb525618a56d014b480da88
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -341,7 +341,8 @@ RUN apk add --no-cache \
         fontconfig \
         freetype \
         glib \
-        font-liberation
+        font-liberation \
+        ca-certificates-bundle
 
 # Stage just the .so files WeasyPrint actually dlopen()s plus their transitive
 # deps (verified with ld-linux --list against libpango / libpangoft2 / libharfbuzz
@@ -391,6 +392,14 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
           /staged/usr/share/fonts/font-liberation/ && \
     cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
     cp -a /etc/fonts/. /staged/etc/fonts/
+
+# Stage the CA bundle from the live Wolfi repo so the prod image's system trust
+# store tracks upstream distrust decisions (e.g. the 2026 emSign removal) on
+# every rebuild, instead of being frozen at the CHAINGUARD_PYTHON_IMAGE digest.
+# OpenSSL (Python's ssl defaults) and the Go binaries (cosign, osv-scanner)
+# all read this file.
+RUN mkdir -p /staged/etc/ssl/certs && \
+    cp -L /etc/ssl/certs/ca-certificates.crt /staged/etc/ssl/certs/ca-certificates.crt
 
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
