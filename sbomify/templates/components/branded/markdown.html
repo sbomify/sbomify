@@ -1,0 +1,16 @@
+{% comment %}
+A note someone wrote in Markdown, already rendered by the strict_markdown
+filter, set as prose inside another branded component such as a timeline item.
+
+The renderer emits bare headings, paragraphs, lists, strong, em, code and links,
+and marks every link .text-primary. A public page repaints that class in the
+workspace accent with !important, and base.css styles headings, paragraphs and
+code unlayered, so each rule that has to win carries Tailwind's important
+modifier: an important declaration in a layer beats an important one outside
+every layer.
+Links take the body ink and an underline, because the brand is never a text
+colour.
+{% endcomment %}
+<c-vars class />
+<div class="flex flex-col gap-2 [overflow-wrap:anywhere] [&_p]:my-0! [&_p]:text-text-secondary! [&_:is(h1,h2,h3,h4,h5,h6)]:my-0! [&_:is(h1,h2,h3,h4,h5,h6)]:text-sm! [&_:is(h1,h2,h3,h4,h5,h6)]:font-semibold! [&_:is(h1,h2,h3,h4,h5,h6)]:text-text! [&_ul]:my-0! [&_ul]:pl-[1.25rem]! [&_ul]:list-disc! [&_strong]:text-text [&_code]:rounded-[var(--radius-sm)] [&_code]:bg-surface-hover [&_code]:px-[0.3125rem] [&_code]:font-mono [&_code]:text-[0.8125rem]! [&_a]:text-text! [&_a]:underline! [&_a]:underline-offset-2{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}</div>

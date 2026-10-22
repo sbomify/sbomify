@@ -703,3 +703,26 @@ def test_allowed_hosts_come_from_the_team_not_the_request(team):
     # With no custom domain and no TRUST_CENTER_DOMAIN configured in tests,
     # there is nowhere this workspace may redirect to at all.
     assert custom_domain_redirect(team, "/advisories/") is None
+
+
+def test_a_timeline_note_renders_as_markdown_on_the_trust_center(team, public_product, client):
+    """The note arrives as Markdown and the page renders it, escaping any raw HTML."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.UPDATE,
+        body="**Patched** in `1.4.3`.\n\n- [Notes](https://example.com/notes?a=1&b=2)\n\n<script>alert(1)</script>",
+    )
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "<strong>Patched</strong> in <code>1.4.3</code>." in content
+    assert '<li><a href="https://example.com/notes?a=1&amp;b=2"' in content
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in content
+    assert "<script>alert(1)</script>" not in content

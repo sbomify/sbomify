@@ -206,6 +206,15 @@ def test_timeline_reads_newest_and_oldest_from_the_list_not_from_props(rendered:
     assert "group-last/event:hidden" in item
 
 
+def test_a_markdown_link_reads_in_the_body_ink_over_the_legacy_repaint(rendered: str) -> None:
+    """The renderer marks links .text-primary, which a public page repaints in
+    the accent with !important, so the note's link colour has to be important
+    too, and has to be the body ink rather than the brand."""
+    markdown = _classes(rendered, "div", 'data-probe="markdown"')
+    assert {"[&_a]:text-text!", "[&_a]:underline!"} <= markdown
+    assert not any("brand" in name for name in markdown)
+
+
 # ── The legacy-collision guard ──────────────────────────────────────────────
 
 

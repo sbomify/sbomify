@@ -96,3 +96,20 @@ class TestComposerPost:
         advisory.refresh_from_db()
         assert advisory.remediation_status == "fix_in_progress"
         assert advisory.events.get().payload["to"] == "fix_in_progress"
+
+
+class TestTimelineMarkdown:
+    def test_notes_render_as_markdown_and_the_composer_says_so(self, sample_team_with_owner_member, advisory, client):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+        assert post_update(member.team, member.user, advisory.id, kind="update", note="Fix is **merged**.").ok
+
+        response = client.get(reverse("core:security_advisory_detail", args=[advisory.id]))
+
+        content = response.content.decode()
+        assert response.status_code == 200
+        assert "Fix is <strong>merged</strong>." in content
+        assert 'id="composerNoteHint"' in content
+        assert "Supports Markdown" in content
