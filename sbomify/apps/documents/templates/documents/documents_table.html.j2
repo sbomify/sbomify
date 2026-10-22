@@ -18,7 +18,8 @@
             <div class="p-0">{% include 'documents/documents_table_content.html.j2' with table_nested=True %}</div>
             </c-cards.card>
         {% else %}
-            <div>{% include 'documents/documents_table_content.html.j2' with table_nested=False %}</div>
+            {# The public page wraps this in a surface, so the shell nests there too. #}
+            <div>{% include 'documents/documents_table_content.html.j2' with table_nested=True %}</div>
         {% endif %}
         {% if has_crud_permissions %}
             {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}

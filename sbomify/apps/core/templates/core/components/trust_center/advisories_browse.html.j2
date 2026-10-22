@@ -10,13 +10,19 @@ sidebar rather than only the table.
 
 Everything is a plain GET form underneath: with JavaScript off the noscript
 submit button applies the same filters, and the URL is the same either way.
+
+The narrow-screen disclosure is driven by #tcFiltersOpen, the checkbox in the
+page shell just before this region. The selectors that read it are arbitrary
+variants naming that id, so they keep working across a swap and need no script.
 {% endcomment %}
-<div id="advisoryBrowse" class="tc-browse">
+{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key as advisories_url %}
+<div id="advisoryBrowse"
+     class="grid items-start gap-8 min-[900px]:grid-cols-[15rem_minmax(0,1fr)] max-[900px]:gap-5">
     <form method="get"
           id="advisoryFilters"
-          class="tc-filters"
+          class="flex flex-col gap-4 min-[900px]:sticky min-[900px]:top-[4.5rem]"
           role="search"
-          hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
+          hx-get="{{ advisories_url }}"
           hx-include="#advisorySort"
           hx-target="#advisoryBrowse"
           hx-swap="outerHTML"
@@ -30,17 +36,8 @@ submit button applies the same filters, and the URL is the same either way.
         hx-preserve keeps the live input node across the swap, so a search that
         fires mid-word does not steal the cursor back to the start.
         {% endcomment %}
-        <div class="tw-data-table-search tc-filter-search-slot"
-             id="advisorySearchWrap"
-             hx-preserve="true">
-            <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
-            <label for="advisorySearch" class="sr-only">Search advisories</label>
-            <input id="advisorySearch"
-                   type="search"
-                   name="search"
-                   value="{{ query.search }}"
-                   class="tw-data-table-search-input"
-                   placeholder="Search advisories...">
+        <div id="advisorySearchWrap" hx-preserve="true">
+            <c-forms.search-input id="advisorySearch" name="search" label="Search advisories" placeholder="Search advisories..." value="{{ query.search }}" />
         </div>
         {% comment %}
         Narrow screens get a disclosure instead of a wall of checkboxes: five
@@ -52,78 +49,84 @@ submit button applies the same filters, and the URL is the same either way.
         what is on screen rather than a CSS reordering of it. Hidden on desktop,
         where the panel is always open and there is nothing to toggle.
 
+        Keyboard focus lands on the hidden checkbox, not on this label, so the
+        focus ring is drawn here from the checkbox's state.
+
         The count is the only sign, while collapsed, that the list is narrowed.
         {% endcomment %}
-        <label class="tc-filters-toggle" for="tcFiltersOpen">
-            <i class="fas fa-sliders" aria-hidden="true"></i>
-            <span>Filters</span>
-            {% if query.active_count %}<span class="tc-filters-badge">{{ query.active_count|intcomma }}</span>{% endif %}
-            <i class="fas fa-chevron-down tc-filters-chevron" aria-hidden="true"></i>
+        <label class="min-[900px]:hidden flex items-center gap-2 min-h-11 px-3.5 py-2 rounded-[var(--radius-lg)] border border-solid border-border bg-surface text-sm font-semibold text-text cursor-pointer [#tcFiltersOpen:focus-visible~#advisoryBrowse_&]:ring-2 [#tcFiltersOpen:focus-visible~#advisoryBrowse_&]:ring-primary/40"
+               for="tcFiltersOpen">
+            <i class="fas fa-sliders text-xs text-text-muted" aria-hidden="true"></i>
+            <span class="flex-1">Filters</span>
+            {% if query.active_count %}<c-branded.badge brand>{{ query.active_count|intcomma }}</c-branded.badge>{% endif %}
+            <i class="fas fa-chevron-down text-xs text-text-muted transition-transform duration-200 [#tcFiltersOpen:checked~#advisoryBrowse_&]:rotate-180"
+               aria-hidden="true"></i>
         </label>
-        <div class="tc-filters-head">
-            <h2 class="tc-filters-title">Filters</h2>
-            {% if query.is_filtered %}
-                <a class="tc-filters-clear"
-                   href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
-                   hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
-                   hx-target="#advisoryBrowse"
-                   hx-swap="outerHTML"
-                   hx-push-url="true">Clear all</a>
-            {% endif %}
-        </div>
-        <div id="advisoryFilterBody" class="tc-filters-body">
-            <div class="tc-filter-group">
-                <h3 class="tc-filter-heading">Severity</h3>
-                {% for facet in facets.severity %}
-                    <label class="tc-facet {% if not facet.count and not facet.checked %}tc-facet-empty{% endif %}">
-                        <input type="checkbox"
-                               name="severity"
-                               value="{{ facet.value }}"
-                               {% if facet.checked %}checked{% endif %}>
-                        <span class="tc-facet-dot tc-severity-{{ facet.value }}" aria-hidden="true"></span>
-                        <span class="tc-facet-label">{{ facet.label }}</span>
-                        <span class="tc-facet-count">{{ facet.count|intcomma }}</span>
-                    </label>
-                {% endfor %}
+        <div id="advisoryFilterBody"
+             class="max-[900px]:hidden max-[900px]:[#tcFiltersOpen:checked~#advisoryBrowse_&]:block">
+            <c-branded.surface class="flex flex-col gap-5">
+            <div class="flex items-baseline justify-between gap-2">
+                <h2 class="text-sm font-semibold text-text my-0! leading-5">Filters</h2>
+                {% if query.is_filtered %}
+                    {% comment %}
+                A quiet link rather than a button: the filters apply the moment
+                they are ticked, so the only action left is undo, and giving
+                undo button weight would imply the filters need confirming.
+                    {% endcomment %}
+                    <a class="text-xs font-medium text-text-muted hover:text-text no-underline hover:underline underline-offset-4"
+                       data-button
+                       href="{{ advisories_url }}"
+                       hx-get="{{ advisories_url }}"
+                       hx-target="#advisoryBrowse"
+                       hx-swap="outerHTML"
+                       hx-push-url="true">Clear all</a>
+                {% endif %}
             </div>
+            <fieldset class="flex flex-col gap-0.5 border-0 my-0 mx-0 px-0 py-0 min-w-0 max-[900px]:grid max-[900px]:grid-cols-2">
+                <legend class="text-xs font-semibold text-text mb-[0.5rem] max-[900px]:col-span-2">Severity</legend>
+                {% for facet in facets.severity %}
+                    {% if not facet.count and not facet.checked %}
+                        <c-forms.facet name="severity" value="{{ facet.value }}" :checked="facet.checked" empty tone="{{ facet.value }}" count="{{ facet.count|intcomma }}">{{ facet.label }}</c-forms.facet>
+                    {% else %}
+                        <c-forms.facet name="severity" value="{{ facet.value }}" :checked="facet.checked" tone="{{ facet.value }}" count="{{ facet.count|intcomma }}">{{ facet.label }}</c-forms.facet>
+                    {% endif %}
+                {% endfor %}
+            </fieldset>
             {% if facets.product %}
-                <div class="tc-filter-group">
-                    <h3 class="tc-filter-heading">Product</h3>
+                <fieldset class="flex flex-col gap-0.5 border-0 my-0 mx-0 px-0 py-0 min-w-0">
+                    <legend class="text-xs font-semibold text-text mb-[0.5rem]">Product</legend>
                     {% for facet in facets.product %}
-                        <label class="tc-facet {% if not facet.count and not facet.checked %}tc-facet-empty{% endif %}">
-                            <input type="checkbox"
-                                   name="product"
-                                   value="{{ facet.value }}"
-                                   {% if facet.checked %}checked{% endif %}>
-                            <span class="tc-facet-label">{{ facet.label }}</span>
-                            <span class="tc-facet-count">{{ facet.count|intcomma }}</span>
-                        </label>
+                        {% if not facet.count and not facet.checked %}
+                            <c-forms.facet name="product" value="{{ facet.value }}" :checked="facet.checked" empty count="{{ facet.count|intcomma }}">{{ facet.label }}</c-forms.facet>
+                        {% else %}
+                            <c-forms.facet name="product" value="{{ facet.value }}" :checked="facet.checked" count="{{ facet.count|intcomma }}">{{ facet.label }}</c-forms.facet>
+                        {% endif %}
                     {% endfor %}
-                </div>
+                </fieldset>
             {% endif %}
-            <div class="tc-filter-group">
-                <h3 class="tc-filter-heading">Published</h3>
+            <div class="flex flex-col gap-3">
+                <p class="text-xs font-semibold text-text my-0">Published</p>
                 {% comment %}
-                    A date range is a plain control, not something the
-                    workspace's colour has any say over, so it uses the app's
-                    own picker rather than a branded one. See the note in
-                    AGENTS.md on which library a trust centre control belongs to.
+                A date range is a plain control, not something the
+                workspace's colour has any say over, so it uses the app's
+                own picker rather than a branded one. See the note in
+                AGENTS.md on which library a trust centre control belongs to.
 
-                    The picker is reached with {% include %} because it is the
-                    one component still written as a .html.j2 partial rather
-                    than a cotton tag; <c-date-picker> resolves to
-                    components/date_picker.html and does not exist.
+                The picker is reached with {% include %} because it is the
+                one component still written as a .html.j2 partial rather
+                than a cotton tag; a c-date-picker tag would resolve to
+                components/date_picker.html and does not exist.
 
-                    value_binding names an Alpine property the picker reads and
-                    writes, so the wrapper below owns that scope. The picker
-                    carries no name of its own, so the hidden inputs are what
-                    the form actually sends, and their names are the contract
-                    the view reads.
+                value_binding names an Alpine property the picker reads and
+                writes, so the wrapper below owns that scope. The picker
+                carries no name of its own, so the hidden inputs are what
+                the form actually sends, and their names are the contract
+                the view reads.
 
-                    Setting an input's value from Alpine does not emit a change
-                    event, and the form filters on hx-trigger="change", so a
-                    watcher dispatches one. $watch rather than x-effect, which
-                    also runs on init and would fire a request on every load.
+                Setting an input's value from Alpine does not emit a change
+                event, and the form filters on hx-trigger="change", so a
+                watcher dispatches one. $watch rather than x-effect, which
+                also runs on init and would fire a request on every load.
                 {% endcomment %}
                 <div class="flex flex-col gap-3"
                      x-data="{ from: '{{ query.published_from|date:'Y-m-d' }}', to: '{{ query.published_to|date:'Y-m-d' }}' }"
@@ -134,48 +137,42 @@ submit button applies the same filters, and the URL is the same either way.
                     <input type="hidden" name="to" x-ref="toField" :value="to">
                 </div>
             </div>
+            <noscript>
+                <c-buttons.secondary size="sm" type="submit">Apply filters</c-buttons.secondary>
+            </noscript>
+            </c-branded.surface>
         </div>
-        <noscript>
-            <button type="submit" class="tc-filter-apply">Apply filters</button>
-        </noscript>
     </form>
-    <div class="tc-results">
-        <div class="tc-results-bar">
-            <span class="tc-results-count">
+    {# HTMX in flight: dim the results so a slow filter reads as working, not stuck. #}
+    <div class="min-w-0 flex flex-col gap-4 transition-opacity duration-150 [.htmx-request_&]:opacity-55 [.htmx-request_&]:pointer-events-none">
+        <div class="flex items-center justify-end gap-3 [flex-wrap:wrap]">
+            <span class="mr-auto text-sm text-text-secondary tabular-nums">
                 {% if total %}
                     {{ start_index|intcomma }}–{{ end_index|intcomma }} of {{ total|intcomma }}
                 {% else %}
                     No advisories
                 {% endif %}
             </span>
-            <div class="tc-pager">
+            {% comment %}
+            Boosted, so a page link is a swap of this region like a facet is,
+            and still a plain link with scripting off.
+            {% endcomment %}
+            <nav class="flex items-center gap-1"
+                 aria-label="Advisories pagination"
+                 hx-boost="true"
+                 hx-target="#advisoryBrowse"
+                 hx-swap="outerHTML">
                 {% if has_prev %}
-                    <a class="tc-pager-btn"
-                       href="?{{ querystrings.without_page }}page={{ prev_page }}"
-                       hx-get="?{{ querystrings.without_page }}page={{ prev_page }}"
-                       hx-target="#advisoryBrowse"
-                       hx-swap="outerHTML"
-                       hx-push-url="true"
-                       aria-label="Previous page">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                    </a>
+                    <c-navigation.page-link nav label="Previous page" href="?{{ querystrings.without_page }}page={{ prev_page }}"><i class="fas fa-chevron-left" aria-hidden="true"></i></c-navigation.page-link>
                 {% else %}
-                    <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-left"></i></span>
+                    <c-navigation.page-link nav label="Previous page" href="#" disabled><i class="fas fa-chevron-left" aria-hidden="true"></i></c-navigation.page-link>
                 {% endif %}
                 {% if has_next %}
-                    <a class="tc-pager-btn"
-                       href="?{{ querystrings.without_page }}page={{ next_page }}"
-                       hx-get="?{{ querystrings.without_page }}page={{ next_page }}"
-                       hx-target="#advisoryBrowse"
-                       hx-swap="outerHTML"
-                       hx-push-url="true"
-                       aria-label="Next page">
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </a>
+                    <c-navigation.page-link nav label="Next page" href="?{{ querystrings.without_page }}page={{ next_page }}"><i class="fas fa-chevron-right" aria-hidden="true"></i></c-navigation.page-link>
                 {% else %}
-                    <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                    <c-navigation.page-link nav label="Next page" href="#" disabled><i class="fas fa-chevron-right" aria-hidden="true"></i></c-navigation.page-link>
                 {% endif %}
-            </div>
+            </nav>
             {% comment %}
             The select is only form-associated (it sits in the results column,
             not inside the form), so its change event never bubbles to the form
@@ -184,179 +181,92 @@ submit button applies the same filters, and the URL is the same either way.
             form= attribute is what makes the no-JS path work, where it is
             submitted by the noscript button.
             {% endcomment %}
-            <label for="advisorySort" class="sr-only">Sort advisories</label>
-            <select id="advisorySort"
-                    name="sort"
-                    form="advisoryFilters"
-                    class="tc-sort"
-                    hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
-                    hx-include="#advisoryFilters"
-                    hx-target="#advisoryBrowse"
-                    hx-swap="outerHTML"
-                    hx-push-url="true"
-                    hx-trigger="change">
-                {% for option in sort_options %}
-                    <option value="{{ option.value }}"
-                            {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
-                {% endfor %}
-            </select>
+            <c-forms.select size="md" id="advisorySort" name="sort" label="Sort advisories" form="advisoryFilters" hx-get="{{ advisories_url }}" hx-include="#advisoryFilters" hx-target="#advisoryBrowse" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+            {% for option in sort_options %}
+                <option value="{{ option.value }}"
+                        {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+            </c-forms.select>
         </div>
         {% if advisories %}
-            <div class="tc-table-wrap">
-                <table class="tc-adv-table">
-                    <thead>
+            <c-branded.surface flush>
+            {% comment %}
+            One <tbody> per advisory: the CVSS, summary and date cells rowspan the
+            product rows beneath them, which is what makes a multi-product
+            advisory read as one entry rather than several unrelated ones. Rows
+            are plain <tr>s rather than c-tables.row, whose last-row rule would
+            drop the line between one advisory and the next; the table drops
+            only the line along the panel's own bottom edge, and a hovered
+            advisory tints as one.
+
+            Auto layout, not fixed: the version-range cells are nowrap, and a
+            fixed grid would let a long range run under its neighbour instead of
+            widening the column. The viewport scrolls sideways when ranges
+            outgrow the page.
+            {% endcomment %}
+            <c-tables.table stack="false" variant_class="min-w-[52rem] [&_td]:align-top [&_tbody:last-child_tr:last-child_td]:border-b-0 [&_tbody:last-child_td[rowspan]]:border-b-0 [&_tbody:hover_td]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)]" aria-label="Security advisories">
+            <c-tables.head>
+            <c-tables.header-cell compact scope="col" class="w-[6%]">CVSS</c-tables.header-cell>
+            <c-tables.header-cell compact scope="col" class="w-[26%] min-w-[18rem]">Summary</c-tables.header-cell>
+            <c-tables.header-cell compact scope="col">Versions</c-tables.header-cell>
+            <c-tables.header-cell compact scope="col">Affected</c-tables.header-cell>
+            <c-tables.header-cell compact scope="col">Unaffected</c-tables.header-cell>
+            <c-tables.header-cell compact date scope="col">Published</c-tables.header-cell>
+            <c-tables.header-cell compact date scope="col">Updated</c-tables.header-cell>
+            </c-tables.head>
+            {% for advisory in advisories %}
+                {% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk as advisory_url %}
+                <tbody>
+                    {% for row in advisory.affected_rows %}
                         <tr>
-                            <th scope="col" class="tc-col-cvss">CVSS</th>
-                            <th scope="col" class="tc-col-summary">Summary</th>
-                            <th scope="col">Versions</th>
-                            <th scope="col">Affected</th>
-                            <th scope="col">Unaffected</th>
-                            <th scope="col" class="tc-col-date">Published</th>
-                            <th scope="col" class="tc-col-date">Updated</th>
+                            {% if forloop.first %}
+                                <c-tables.cell compact rowspan="{{ advisory.affected_rows|length }}">
+                                <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default:"—" }}</c-branded.badge>
+                                </c-tables.cell>
+                                <c-tables.cell compact rowspan="{{ advisory.affected_rows|length }}">
+                                {% include "core/components/trust_center/advisory_summary_cell.html.j2" %}
+                                </c-tables.cell>
+                            {% endif %}
+                            <c-tables.cell compact class="whitespace-nowrap">{{ row.product }}</c-tables.cell>
+                            <c-tables.cell compact muted class="font-mono text-xs whitespace-nowrap">{{ row.affected }}</c-tables.cell>
+                            <c-tables.cell compact muted class="font-mono text-xs whitespace-nowrap">{{ row.unaffected }}</c-tables.cell>
+                            {% if forloop.first %}
+                                <c-tables.cell compact date muted class="text-xs tabular-nums" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.published_display|default:"—" }}</c-tables.cell>
+                                <c-tables.cell compact date muted class="text-xs tabular-nums" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.updated_display|default:"—" }}</c-tables.cell>
+                            {% endif %}
                         </tr>
-                    </thead>
-                    {% comment %}
-                    One <tbody> per advisory: the CVSS, summary and date cells
-                    rowspan the product rows beneath them, which is what makes a
-                    multi-product advisory read as one entry rather than several
-                    unrelated ones.
-                    {% endcomment %}
-                    {% for advisory in advisories %}
-                        <tbody class="tc-adv-group">
-                            {% for row in advisory.affected_rows %}
-                                <tr>
-                                    {% if forloop.first %}
-                                        <td class="tc-col-cvss" rowspan="{{ advisory.affected_rows|length }}">
-                                            <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
-                                        </td>
-                                        <td class="tc-col-summary" rowspan="{{ advisory.affected_rows|length }}">
-                                            <a class="tc-adv-link"
-                                               href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
-                                                {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
-                                                {{ advisory.title }}
-                                            </a>
-                                            <div class="tc-adv-tags">
-                                                <span class="tc-adv-id">{{ advisory.id }}</span>
-                                                {% if advisory.is_gated %}
-                                                    <span class="tc-lock-chip"
-                                                          title="Restricted — shown because you have access to the affected products">
-                                                        <i class="fas fa-lock" aria-hidden="true"></i>Restricted
-                                                    </span>
-                                                {% endif %}
-                                                {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
-                                                {% comment %}
-                                                Resolved is the one status worth
-                                                seeing without reading, so it is
-                                                a badge and the rest stay muted
-                                                text. The CVSS chip beside it
-                                                still says how bad the issue
-                                                was, which is a different
-                                                question from whether it is
-                                                still open, so the two do not
-                                                compete.
-                                                {% endcomment %}
-                                                {% if advisory.status == 'resolved' %}
-                                                    <c-branded.badge tone="success">
-                                                    <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
-                                                    </c-branded.badge>
-                                                {% elif advisory.status_label %}
-                                                    <span class="tc-adv-status">
-                                                        <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
-                                                    </span>
-                                                {% endif %}
-                                            </div>
-                                            {% if advisory.withheld_product_count %}
-                                                <p class="tc-adv-withheld">
-                                                    {{ advisory.withheld_product_count|intcomma }} further product{{ advisory.withheld_product_count|pluralize }} not shown
-                                                </p>
-                                            {% endif %}
-                                        </td>
-                                    {% endif %}
-                                    <td class="tc-col-product">{{ row.product }}</td>
-                                    <td class="tc-col-versions">{{ row.affected }}</td>
-                                    <td class="tc-col-versions">{{ row.unaffected }}</td>
-                                    {% if forloop.first %}
-                                        <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.published_display|default:"—" }}</td>
-                                        <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.updated_display|default:"—" }}</td>
-                                    {% endif %}
-                                </tr>
-                            {% empty %}
-                                {% comment %}
-                                A workspace notice names no products, so it has no
-                                version rows — it still belongs in the index, as one
-                                row with the version columns empty.
-                                {% endcomment %}
-                                <tr>
-                                    <td class="tc-col-cvss">
-                                        <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
-                                    </td>
-                                    <td class="tc-col-summary">
-                                        <a class="tc-adv-link"
-                                           href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
-                                            {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
-                                            {{ advisory.title }}
-                                        </a>
-                                        <div class="tc-adv-tags">
-                                            <span class="tc-adv-id">{{ advisory.id }}</span>
-                                            {% if advisory.is_gated %}
-                                                <span class="tc-lock-chip">
-                                                    <i class="fas fa-lock" aria-hidden="true"></i>Restricted
-                                                </span>
-                                            {% endif %}
-                                            {% comment %}
-                                            Withdrawn belongs on the row for the
-                                            same reason it belongs on the row
-                                            above: a retracted advisory that
-                                            reads as current is worse than one
-                                            that is missing, and this variant is
-                                            the one an advisory naming no
-                                            product lands on.
-                                            {% endcomment %}
-                                            {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
-                                            {% comment %}
-                                            A notice naming no products carries
-                                            no status line, so resolved would be
-                                            the one state with nothing at all to
-                                            show it. The badge is added here for
-                                            that alone; the open states read the
-                                            same as before.
-                                            {% endcomment %}
-                                            {% if advisory.status == 'resolved' %}
-                                                <c-branded.badge tone="success">
-                                                <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
-                                                </c-branded.badge>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <td class="tc-col-product">—</td>
-                                    <td class="tc-col-versions">—</td>
-                                    <td class="tc-col-versions">—</td>
-                                    <td class="tc-col-date">{{ advisory.published_display|default:"—" }}</td>
-                                    <td class="tc-col-date">{{ advisory.updated_display|default:"—" }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
+                    {% empty %}
+                        {% comment %}
+                        A workspace notice names no products, so it has no
+                        version rows. It still belongs in the index, as one
+                        row with the version columns empty.
+                        {% endcomment %}
+                        <tr>
+                            <c-tables.cell compact>
+                            <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default:"—" }}</c-branded.badge>
+                            </c-tables.cell>
+                            <c-tables.cell compact>
+                            {% include "core/components/trust_center/advisory_summary_cell.html.j2" %}
+                            </c-tables.cell>
+                            <c-tables.cell compact muted>—</c-tables.cell>
+                            <c-tables.cell compact muted>—</c-tables.cell>
+                            <c-tables.cell compact muted>—</c-tables.cell>
+                            <c-tables.cell compact date muted class="text-xs tabular-nums">{{ advisory.published_display|default:"—" }}</c-tables.cell>
+                            <c-tables.cell compact date muted class="text-xs tabular-nums">{{ advisory.updated_display|default:"—" }}</c-tables.cell>
+                        </tr>
                     {% endfor %}
-                </table>
-            </div>
+                </tbody>
+            {% endfor %}
+            </c-tables.table>
+            </c-branded.surface>
         {% else %}
-            <div class="tc-empty">
-                <i class="fas fa-shield-halved tc-empty-icon" aria-hidden="true"></i>
-                <p class="tc-empty-title">
-                    {% if query.is_filtered %}
-                        No advisories match these filters
-                    {% else %}
-                        No published advisories
-                    {% endif %}
-                </p>
-                <p class="tc-empty-body">
-                    {% if query.is_filtered %}
-                        Try widening the severity or date range, or clear the filters.
-                    {% else %}
-                        New disclosures appear here as they are released.
-                    {% endif %}
-                </p>
-            </div>
+            <c-branded.surface flush>
+            {% if query.is_filtered %}
+                <c-feedback.empty-state icon="fas fa-shield-halved" icon_variant="neutral" title="No advisories match these filters" message="Try widening the severity or date range, or clear the filters." />
+            {% else %}
+                <c-feedback.empty-state icon="fas fa-shield-halved" icon_variant="neutral" title="No published advisories" message="New disclosures appear here as they are released." />
+            {% endif %}
+            </c-branded.surface>
         {% endif %}
         {% include "core/components/trust_center/restricted_notice.html.j2" %}
     </div>
