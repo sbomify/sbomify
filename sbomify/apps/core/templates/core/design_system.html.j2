@@ -1062,6 +1062,15 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-forms.checkbox id="ds-divided-compliance">Compliance assessments</c-forms.checkbox>
     </c-layout.select-row>
     </c-cards.card>
+    <c-cards.card>
+    <c-cards.header compact title="Filter facets" />
+    <div class="flex flex-col gap-0.5 max-w-60">
+        <c-forms.facet name="ds-facet-severity" value="critical" tone="critical" count="3" checked>Critical</c-forms.facet>
+        <c-forms.facet name="ds-facet-severity" value="high" tone="high" count="12">High</c-forms.facet>
+        <c-forms.facet name="ds-facet-severity" value="low" tone="low" count="0" empty>Low</c-forms.facet>
+        <c-forms.facet name="ds-facet-product" value="vault" count="7">Acme Vault</c-forms.facet>
+    </div>
+    </c-cards.card>
     <h2 id="empty-states" class="text-xl font-semibold text-text">Empty states</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <c-cards.card flush>
@@ -2073,6 +2082,43 @@ first-of-type rule that drops the leading hairline reads the section's position
             <c-buttons.secondary size="sm" href="#branded">Sign in</c-buttons.secondary>
             </c-slot>
             </c-branded.notice>
+            <c-branded.masthead class="mt-4">
+            <c-branded.back-link href="#branded">Security advisories</c-branded.back-link>
+            <c-branded.page-header title="Heap overflow in libfoo" lede="A crafted packet can crash the parser before authentication.">
+            <c-slot name="eyebrow">
+            <c-branded.badge brand>Advisory</c-branded.badge>
+            </c-slot>
+            <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
+                <c-branded.badge tone="critical">Critical</c-branded.badge>
+                <c-branded.meta-item mono>CVE-2026-21004</c-branded.meta-item>
+                <c-branded.meta-item icon="fas fa-bullhorn">Published 3 Aug 2026</c-branded.meta-item>
+            </div>
+            </c-branded.page-header>
+            </c-branded.masthead>
+            <div class="grid gap-4 mt-4 md:grid-cols-[minmax(0,1fr)_18rem] items-start">
+                <c-branded.surface>
+                <c-branded.timeline>
+                <c-branded.timeline-item icon="fas fa-check" tone="success">
+                <c-slot name="heading">Resolved</c-slot>
+                <c-slot name="when">4 Aug 2026 · 09:12</c-slot>
+                <c-slot name="meta"><span>2 days ago</span></c-slot>
+                Fixed in 2.4.1.
+                </c-branded.timeline-item>
+                <c-branded.timeline-item icon="fas fa-magnifying-glass" tone="info">
+                <c-slot name="heading">Investigating</c-slot>
+                <c-slot name="when">3 Aug 2026 · 16:40</c-slot>
+                <c-slot name="meta"><span>3 days ago</span><span>first entry</span></c-slot>
+                </c-branded.timeline-item>
+                </c-branded.timeline>
+                </c-branded.surface>
+                <c-branded.panel title="Details">
+                <c-branded.facts>
+                <c-branded.fact label="Advisory ID"><span class="font-mono text-xs">ACME-SA-2026-0001</span></c-branded.fact>
+                <c-branded.fact label="Published">3 Aug 2026</c-branded.fact>
+                <c-branded.fact label="CPE" stacked><span class="font-mono text-xs">cpe:2.3:a:acme:widget:2.4.1:*:*:*:*:*:*:*</span></c-branded.fact>
+                </c-branded.facts>
+                </c-branded.panel>
+            </div>
             </c-branded.surface>
             </c-branded.theme>
         {% endfor %}

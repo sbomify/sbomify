@@ -437,8 +437,9 @@ Two things that forgiveness does not extend to:
   (`mb-0 mt-0.5`), not the shorthand plus an exception.
 - **`!important` was doing two jobs.** Dropping a legacy class also drops its
   win over the *other* unlayered rules on the page. `static/css/base.css` styles
-  `h1..h6` and `trust-center.css` styles `.tc-fact-label`, both unlayered, so a
-  plain utility on those elements loses to them too. Where that happens, the
+  `h1..h6` and the inline block in `public_base.htmx.j2` styles every bare
+  anchor, both unlayered, so a plain utility on those elements loses to them
+  too. Where that happens, the
   replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
 
 **Scope follows `hx-get`, not just `include`.** Half a public page arrives over

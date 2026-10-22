@@ -193,11 +193,10 @@
      Two deliberate placements. They are theme-independent, because the contrast
      partner is #fff either way, so there is nothing to retune and they are not
      redeclared under :root.light. And they live in this plain :root block
-     rather than in @theme, because their only consumer is static/css/
-     trust-center.css, which Tailwind does not process: an @theme variable no
-     Tailwind-scanned source mentions is tree-shaken out of the build, and every
-     rule reading it would fall back to transparent. Verified against the
-     production build, not assumed. */
+     rather than in @theme, because their consumers read them from inline style
+     attributes (the filter facet's severity swatch), which are not utilities:
+     an @theme variable no utility uses is tree-shaken out of the build, and
+     every style reading it would fall back to transparent. */
   --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
   --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
   --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
