@@ -562,20 +562,22 @@ html.no-transitions * {
   }
 
   /* The label sits in a left gutter beside its value, not above it, which
-     halves a row's height. It is positioned rather than a flex or grid item so
-     a value made of several nodes (a name, a version and a badge) keeps its
-     own flow. The row's first cell is its subject and needs no label. */
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td) {
-    position: relative;
+     halves a row's height. It floats into the cell's padding rather than being
+     a flex or grid item, so a value made of several nodes (a name, a version
+     and a badge) keeps its own flow, and the cell is its own formatting
+     context so it grows to hold a label that wraps onto a second line under a
+     one-line value. The row's first cell is its subject and needs no label. */
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not(:empty):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td) {
+    display: flow-root;
     padding-left: 7.5rem;
     min-height: 1.25rem;
   }
 
   table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td)::before {
     content: attr(data-label);
-    position: absolute;
-    top: 0.125rem;
-    left: 0;
+    float: left;
+    margin-top: 0.125rem;
+    margin-left: -7.5rem;
     width: 6.75rem;
     font-size: 0.6875rem;
     line-height: 1.4;

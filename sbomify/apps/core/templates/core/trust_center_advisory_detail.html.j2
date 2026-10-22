@@ -68,7 +68,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                     <section class="flex flex-col gap-4">
                         <c-branded.section-header title="Description" />
                         <c-branded.surface>
-                        <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ advisory.description }}</div>
+                        <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ advisory.description|strict_markdown }}</c-branded.markdown>
                         </c-branded.surface>
                     </section>
                 {% endif %}
@@ -88,24 +88,22 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                             {% for row in advisory.statuses %}
                                 <c-tables.row class="align-top">
                                 <c-tables.cell class="font-medium">{{ row.product }}</c-tables.cell>
-                                <c-tables.cell class="font-mono text-xs whitespace-nowrap">{{ row.vulnerability }}</c-tables.cell>
+                                <c-tables.cell class="font-mono text-xs">
+                                <div class="min-w-[10rem] [overflow-wrap:anywhere]">{{ row.vulnerability }}</div>
+                                </c-tables.cell>
                                 <c-tables.cell>
                                 <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
                                 {% if row.justification %}<div class="text-xs text-text-muted mt-1">{{ row.justification }}</div>{% endif %}
                                 </c-tables.cell>
-                                <c-tables.cell class="font-mono text-xs whitespace-nowrap">
-                                {% for range in row.version_ranges %}
-                                    {{ range }}
-                                    {% if not forloop.last %}<br>{% endif %}
-                                {% empty %}
-                                    —
-                                {% endfor %}
+                                <c-tables.cell>
+                                <c-tables.value-list mono :values="row.affected_versions" />
                                 </c-tables.cell>
                                 <c-tables.cell muted>
                                 {% if row.recommended_version %}
                                     Upgrade to <span class="font-mono text-text">{{ row.recommended_version }}</span>.
                                 {% endif %}
                                 {{ row.action_statement|default:row.impact_statement }}
+                                {% if not row.recommended_version and not row.action_statement and not row.impact_statement %}—{% endif %}
                                 </c-tables.cell>
                                 </c-tables.row>
                             {% endfor %}
@@ -115,29 +113,31 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                     </section>
                 {% endif %}
                 {% for vulnerability in advisory.vulnerabilities %}
-                    <section class="flex flex-col gap-4">
-                        <c-branded.section-header title="{{ vulnerability.cve_id|default:vulnerability.title }}" />
-                        <c-branded.surface class="flex flex-col gap-4">
-                        <div class="flex items-center gap-2 [flex-wrap:wrap]">
-                            {% if vulnerability.severity %}
-                                <c-branded.badge tone="{{ vulnerability.severity|lower }}">{{ vulnerability.severity }}</c-branded.badge>
-                            {% endif %}
-                            {% for cwe in vulnerability.cwe_ids %}<c-branded.badge>{{ cwe }}</c-branded.badge>{% endfor %}
-                            {% for score in vulnerability.cvss_scores %}
-                                <c-branded.meta-item>{{ score.label }}: {{ score.base_score }}</c-branded.meta-item>
-                            {% endfor %}
-                        </div>
-                        {% if vulnerability.description %}
-                            <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ vulnerability.description }}</div>
-                        {% endif %}
-                        {% if vulnerability.recommendation %}
-                            <div class="flex flex-col gap-1.5">
-                                <p class="text-sm font-semibold text-text my-0">Recommendation</p>
-                                <div class="text-sm leading-7 text-text-secondary [white-space:pre-line]">{{ vulnerability.recommendation }}</div>
+                    {% if vulnerability.severity or vulnerability.cwe_ids or vulnerability.cvss_scores or vulnerability.description or vulnerability.recommendation %}
+                        <section class="flex flex-col gap-4">
+                            <c-branded.section-header title="{{ vulnerability.cve_id|default:vulnerability.title }}" />
+                            <c-branded.surface class="flex flex-col gap-4">
+                            <div class="flex items-center gap-2 [flex-wrap:wrap]">
+                                {% if vulnerability.severity %}
+                                    <c-branded.badge tone="{{ vulnerability.severity|lower }}">{{ vulnerability.severity }}</c-branded.badge>
+                                {% endif %}
+                                {% for cwe in vulnerability.cwe_ids %}<c-branded.badge>{{ cwe }}</c-branded.badge>{% endfor %}
+                                {% for score in vulnerability.cvss_scores %}
+                                    <c-branded.meta-item>{{ score.label }}: {{ score.base_score }}</c-branded.meta-item>
+                                {% endfor %}
                             </div>
-                        {% endif %}
-                        </c-branded.surface>
-                    </section>
+                            {% if vulnerability.description %}
+                                <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ vulnerability.description|strict_markdown }}</c-branded.markdown>
+                            {% endif %}
+                            {% if vulnerability.recommendation %}
+                                <div class="flex flex-col gap-1.5">
+                                    <p class="text-sm font-semibold text-text my-0">Recommendation</p>
+                                    <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ vulnerability.recommendation|strict_markdown }}</c-branded.markdown>
+                                </div>
+                            {% endif %}
+                            </c-branded.surface>
+                        </section>
+                    {% endif %}
                 {% endfor %}
                 {% if advisory.timeline %}
                     <section class="flex flex-col gap-4">
