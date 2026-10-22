@@ -101,6 +101,11 @@ auth:
     # discovery hands the *browser* whatever endpoints it finds here, so the
     # app pods and the browser have to agree on it.
     serverUrl: ""
+    # Optional. Keycloak base URL the *browser* uses, e.g.
+    # https://sso.example.com/. Logout redirects the browser to Keycloak
+    # directly instead of going through OIDC discovery, so set this when
+    # serverUrl is an address the browser cannot reach. Defaults to serverUrl.
+    publicUrl: ""
     realm: "sbomify"
     clientId: "sbomify"
     clientSecret: ""
