@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -83,10 +84,13 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             # palette's main job does not depend on having picked a workspace.
             return JsonResponse({"products": [], "components": [], "results": destinations})
 
-        product_search_filter = Q(name__icontains=query) | Q(description__icontains=query)
-        name_search_filter = Q(name__icontains=query)
+        id_filter = _id_filter(query)
+        product_search_filter = Q(name__icontains=query) | Q(description__icontains=query) | id_filter
+        name_search_filter = Q(name__icontains=query) | id_filter
 
-        products = Product.objects.filter(team_id=int(team_id)).filter(product_search_filter).order_by("name")[:limit]
+        products = _id_matches_first(
+            Product.objects.filter(team_id=int(team_id)).filter(product_search_filter), id_filter, limit
+        )
         products_data = [
             {
                 "id": p.id,
@@ -97,7 +101,9 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for p in products
         ]
 
-        components = Component.objects.filter(team_id=int(team_id)).filter(name_search_filter).order_by("name")[:limit]
+        components = _id_matches_first(
+            Component.objects.filter(team_id=int(team_id)).filter(name_search_filter), id_filter, limit
+        )
         components_data = [
             {
                 "id": c.id,
@@ -142,6 +148,33 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 + _asset_results(products_data, components_data),
             }
         )
+
+
+def _id_filter(query: str) -> Q:
+    """Match a pasted product or component ID, or its UUID.
+
+    IDs are what people copy out of a URL, an API response or a CI log, and
+    none of them appear in a name, so a name search answered "no results" for
+    the one string that identifies the record exactly. Exact match only: a
+    substring of a random token identifies nothing.
+    """
+    id_filter = Q(id=query)
+    try:
+        id_filter |= Q(uuid=uuid.UUID(query))
+    except ValueError:
+        pass
+    return id_filter
+
+
+def _id_matches_first(queryset: Any, id_filter: Q, limit: int) -> list[Any]:
+    """Name-ordered matches, with an exact ID match leading.
+
+    The pasted ID is the user telling us exactly which record they want, so it
+    must not be cut off by ``limit`` behind a page of name matches.
+    """
+    exact = list(queryset.filter(id_filter)[:1])
+    exclude = [row.pk for row in exact]
+    return exact + list(queryset.exclude(pk__in=exclude).order_by("name")[: limit - len(exact)])
 
 
 # ---------------------------------------------------------------------------
