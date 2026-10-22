@@ -135,6 +135,20 @@ def _broadcast_release_updated(release: Release) -> None:
     )
 
 
+def _broadcast_product_updated(product: Product) -> None:
+    """Tell the workspace a product was edited, so open inventories repaint it."""
+    if product.team.key:
+        schedule_broadcast(product.team.key, "product_updated", {"product_id": str(product.id), "name": product.name})
+
+
+def _broadcast_component_updated(component: Component) -> None:
+    """Tell the workspace a component was edited, so open inventories repaint it."""
+    if component.team.key:
+        schedule_broadcast(
+            component.team.key, "component_updated", {"component_id": str(component.id), "name": component.name}
+        )
+
+
 @dataclass(frozen=True)
 class ProductLookupResult:
     """Container for a product API payload plus the ORM instance."""
@@ -924,6 +938,7 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.end_of_life = payload.end_of_life
 
             product.save()
+            _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
 
@@ -1013,6 +1028,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
+            _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
 
@@ -1978,6 +1994,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                 return validation_error_response(ve, "component")
 
             component.save()
+            _broadcast_component_updated(component)
 
         return 200, _build_item_response(request, component, "component")
 
@@ -2125,6 +2142,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 return validation_error_response(ve, "component")
 
             component.save()
+            _broadcast_component_updated(component)
 
         return 200, _build_item_response(request, component, "component")
 

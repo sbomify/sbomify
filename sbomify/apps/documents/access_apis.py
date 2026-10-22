@@ -214,6 +214,20 @@ def create_access_request(
             # If NDA is required, notification will be sent after NDA is signed
             if not requires_nda:
                 notify_admins_of_access_request(access_request, team, requires_nda=False)
+            if not requires_nda and team.key:
+                ws_team_key, ws_request_id, ws_user_id = team.key, str(access_request.id), str(access_request.user_id)
+                transaction.on_commit(
+                    lambda: broadcast_to_workspace(
+                        workspace_key=ws_team_key,
+                        message_type="access_request_updated",
+                        data={
+                            "access_request_id": ws_request_id,
+                            "user_id": ws_user_id,
+                            "status": "pending",
+                            "action": "requested",
+                        },
+                    )
+                )
 
             # If NDA is required, return info that NDA signing is needed
             if requires_nda:

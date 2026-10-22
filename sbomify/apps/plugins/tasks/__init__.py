@@ -44,6 +44,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
+from ..announce import announce_assessment_settled
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, RunStatus, ScanMode
@@ -526,6 +527,8 @@ def run_assessment_task(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
                             exc_info=True,
                         )
+                    else:
+                        announce_assessment_settled(sbom_id, plugin_name, RunStatus.COMPLETED.value)
 
                 response = {
                     "status": "retry_exhausted",
@@ -549,7 +552,6 @@ def run_assessment_task(
         if assessment_run is None:
             if _existing_run_id:
                 from .. import models as plugin_models
-                from ..sdk.enums import RunStatus
 
                 deleted, _ = plugin_models.AssessmentRun.objects.filter(
                     id=_existing_run_id, status=RunStatus.PENDING.value
@@ -559,6 +561,7 @@ def run_assessment_task(
                         f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
                         f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
                     )
+                    announce_assessment_settled(sbom_id, plugin_name, "skipped")
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -590,6 +593,7 @@ def run_assessment_task(
                     message_type="assessment_complete",
                     data={
                         "sbom_id": sbom_id,
+                        "component_id": str(assessment_run.sbom.component_id),
                         "plugin_name": plugin_name,
                         "status": assessment_run.status,
                     },
@@ -625,6 +629,7 @@ def run_assessment_task(
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
+        announce_assessment_settled(sbom_id, plugin_name, RunStatus.FAILED.value)
         return format_task_error("run_assessment", sbom_id, str(e))
 
     except Exception as e:
