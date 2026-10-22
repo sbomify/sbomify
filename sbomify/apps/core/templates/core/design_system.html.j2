@@ -1170,6 +1170,25 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>
+    <p class="text-sm text-text-muted">
+        A cell holding a list of short values uses <c-code-inline>tables.value-list</c-code-inline>: the first three show and the rest fold behind a count.
+    </p>
+    <c-tables.table aria-label="Value list example">
+    <c-tables.head>
+    <c-tables.header-cell scope="col">Product</c-tables.header-cell>
+    <c-tables.header-cell scope="col">Affected versions</c-tables.header-cell>
+    </c-tables.head>
+    <tbody>
+        <c-tables.row class="align-top">
+        <c-tables.cell class="font-medium">Acme Gateway</c-tables.cell>
+        <c-tables.cell><c-tables.value-list mono :values="value_list_demo" /></c-tables.cell>
+        </c-tables.row>
+        <c-tables.row class="align-top">
+        <c-tables.cell class="font-medium">Acme Vault</c-tables.cell>
+        <c-tables.cell><c-tables.value-list mono :values="value_list_demo|slice:':1'" /></c-tables.cell>
+        </c-tables.row>
+    </tbody>
+    </c-tables.table>
     <c-cards.card flush>
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}

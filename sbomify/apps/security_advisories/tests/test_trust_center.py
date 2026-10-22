@@ -760,3 +760,32 @@ def test_the_description_and_vulnerability_text_render_as_markdown_on_the_trust_
     assert "<li>Upgrade to <code>1.4.3</code></li>" in content
     assert "## Summary" not in content
     assert "<script>alert(1)</script>" not in content
+
+
+def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, public_product, client):
+    """Triage records each affected commit as a range pinned to itself; the table
+    names it once, and dozens of them fold behind a count rather than run down the page."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Pinned")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30008")
+    status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability, advisory_product=advisory_product, status=AdvisoryProductStatus.Status.EXPLOITABLE
+    )
+    commits = [f"c0ffee{i}" for i in range(5)]
+    for commit in commits:
+        AdvisoryVersionRange.objects.create(product_status=status, introduced=commit, last_affected=commit)
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="2.0.0", fixed="2.4.1")
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["statuses"][0]["affected_versions"] == [*commits, ">= 2.0.0, < 2.4.1"]
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "3 more" in content
+    assert "[c0ffee0, c0ffee0]" not in content
