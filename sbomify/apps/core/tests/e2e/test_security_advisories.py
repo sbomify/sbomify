@@ -170,6 +170,54 @@ class TestSecurityAdvisoryDetailSnapshot:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_many_affected_releases_fold_inside_the_sidebar(
+    authenticated_page: Page,
+    team_with_business_plan,  # noqa: F811
+    sample_user,  # noqa: F811
+    product_factory,  # noqa: F811
+    width: int,
+) -> None:
+    """Dozens of affected versions once ran off the sidebar as one comma-joined
+    line. They now list one per line, fold past five and stay in the column."""
+    from sbomify.apps.core.models import Release
+
+    product = product_factory("Acme Gateway")
+    releases = [
+        Release.objects.create(product=product, name=f"v1.{n}.0", version=f"{n:07x}abcdef{n:02d}") for n in range(24)
+    ]
+    result = create_advisory(
+        team_with_business_plan,
+        sample_user,
+        title="Many releases",
+        products=[product],
+        affected_releases=releases,
+    )
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/security-advisories/{result.value}/")
+
+    releases_list = page.get_by_role("list", name="Affected versions of Acme Gateway")
+    items = releases_list.locator("li")
+    expect(items).to_have_count(24)
+    expect(items.nth(4)).to_be_visible()
+    expect(items.nth(5)).to_be_hidden()
+    bounds = releases_list.bounding_box()
+    assert bounds is not None
+    assert bounds["x"] + bounds["width"] <= width
+
+    # A native disclosure: it works without Alpine and the browser exposes
+    # its expanded state, so neither is wired up by hand.
+    fold = page.locator("details", has=page.get_by_text("Show all 24"))
+    fold.get_by_text("Show all 24").click()
+    expect(fold).to_have_attribute("open", "")
+    expect(items.nth(23)).to_be_visible()
+    fold.get_by_text("Show fewer").click()
+    expect(items.nth(5)).to_be_hidden()
+    expect(fold.get_by_text("Show all 24")).to_be_visible()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestSecurityAdvisoryNewSnapshot:
     """The new advisory form. The product_details fixture gives the affected

@@ -1539,6 +1539,21 @@ first-of-type rule that drops the leading hairline reads the section's position
         than an accent, and it is smaller and squarer than a tag, which is a thing you can act on.
     </p>
     </c-cards.card>
+    <h2 id="folding-list" class="text-xl font-semibold text-text">Folding list</h2>
+    <c-cards.card>
+    <div class="grid gap-6 md:grid-cols-2">
+        <c-lists.folding :items="demo_folding_items" label="Affected versions of Acme Gateway">
+        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Acme Gateway
+        </c-lists.folding>
+        <c-lists.folding :items="demo_folding_items_short" label="Affected versions of Acme Widget">
+        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Acme Widget
+        </c-lists.folding>
+    </div>
+    <p class="text-sm text-text-muted mt-2 mb-0">
+        One item per line, folding past five behind a native toggle that needs no script. For lists that can
+        run to dozens, such as the versions an advisory affects, where a comma-joined line would overflow.
+    </p>
+    </c-cards.card>
     <h2 id="tags" class="text-xl font-semibold text-text">Tags</h2>
     <c-cards.card>
     {% comment %}
