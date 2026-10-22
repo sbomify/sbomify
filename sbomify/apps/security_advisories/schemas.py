@@ -150,7 +150,11 @@ class AdvisoryUpdateSchema(Schema):
         description="'update' for a note that moves nothing, or a remediation status: "
         "identified, investigating, fix_in_progress, resolved, wont_fix."
     )
-    note: str = ""
+    note: str = Field(
+        "",
+        description="Markdown. Headings, lists, bold, italic, code spans and http(s) or mailto links are rendered; "
+        "raw HTML is shown as text.",
+    )
 
 
 class WithdrawAdvisorySchema(Schema):

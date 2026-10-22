@@ -3,6 +3,7 @@
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
+{% load markdown_tags %}
 {% block title %}{{ advisory.id }} · {{ workspace.name }}{% endblock %}
 {% block meta_description %}{{ advisory.summary|default:advisory.title }}{% endblock %}
 {% block og_title %}{{ advisory.id }}: {{ advisory.title }}{% endblock %}
@@ -165,7 +166,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                                 <span>first entry</span>
                             {% endif %}
                             </c-slot>
-                            {% if entry.note %}<p class="my-0 [white-space:pre-line]">{{ entry.note }}</p>{% endif %}
+                            {% if entry.note %}<c-branded.markdown>{{ entry.note|strict_markdown }}</c-branded.markdown>{% endif %}
                             </c-branded.timeline-item>
                         {% endfor %}
                         </c-branded.timeline>

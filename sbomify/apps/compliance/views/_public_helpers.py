@@ -164,9 +164,14 @@ def inline_markup(text: str) -> str:
     text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", _safe_image, text)
 
     # Links: [text](url) — sanitize URL scheme + escape attributes.
+    #
+    # Link text and URL are unescaped before they are escaped, so text that
+    # ``markdown_to_html`` already escaped is not escaped twice: a query
+    # string's ``&`` would otherwise reach the ``href`` as ``&amp;amp;`` and
+    # the link would point somewhere else.
     def _safe_link(m: re.Match[str]) -> str:
-        link_text = html.escape(m.group(1), quote=True)
-        url = html.escape(sanitize_url(m.group(2)), quote=True)
+        link_text = html.escape(html.unescape(m.group(1)), quote=True)
+        url = html.escape(sanitize_url(html.unescape(m.group(2))), quote=True)
         return f'<a href="{url}" class="text-primary hover:underline">{link_text}</a>'
 
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_link, text)
