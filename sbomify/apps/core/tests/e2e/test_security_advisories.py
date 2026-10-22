@@ -178,7 +178,7 @@ def test_many_affected_releases_fold_inside_the_sidebar(
     product_factory,  # noqa: F811
     width: int,
 ) -> None:
-    """Dozens of affected releases once ran off the sidebar as one comma-joined
+    """Dozens of affected versions once ran off the sidebar as one comma-joined
     line. They now list one per line, fold past five and stay in the column."""
     from sbomify.apps.core.models import Release
 
@@ -197,7 +197,7 @@ def test_many_affected_releases_fold_inside_the_sidebar(
     page.set_viewport_size({"width": width, "height": 1080})
     page.goto(f"/security-advisories/{result.value}/")
 
-    releases_list = page.get_by_role("list", name="Affected releases of Acme Gateway")
+    releases_list = page.get_by_role("list", name="Affected versions of Acme Gateway")
     items = releases_list.locator("li")
     expect(items).to_have_count(24)
     expect(items.nth(4)).to_be_visible()
@@ -206,10 +206,15 @@ def test_many_affected_releases_fold_inside_the_sidebar(
     assert bounds is not None
     assert bounds["x"] + bounds["width"] <= width
 
-    page.get_by_role("button", name="Show all 24").click()
+    # A native disclosure: it works without Alpine and the browser exposes
+    # its expanded state, so neither is wired up by hand.
+    fold = page.locator("details", has=page.get_by_text("Show all 24"))
+    fold.get_by_text("Show all 24").click()
+    expect(fold).to_have_attribute("open", "")
     expect(items.nth(23)).to_be_visible()
-    page.get_by_role("button", name="Show fewer").click()
+    fold.get_by_text("Show fewer").click()
     expect(items.nth(5)).to_be_hidden()
+    expect(fold.get_by_text("Show all 24")).to_be_visible()
 
 
 @pytest.mark.django_db

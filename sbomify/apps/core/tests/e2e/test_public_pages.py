@@ -141,6 +141,47 @@ def public_advisory(trust_center_product, sample_user):  # noqa: F811
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_many_affected_versions_fold_in_the_public_table(
+    authenticated_page: Page,
+    trust_center_product,  # noqa: F811
+    sample_user,  # noqa: F811
+    width: int,
+) -> None:
+    """The "Am I affected?" table lists each affected version on its own line
+    and folds past five, so a long list does not stretch the row."""
+    from sbomify.apps.core.models import Release
+
+    team = trust_center_product.team
+    releases = [
+        Release.objects.create(product=trust_center_product, name=f"v9.{n}.0", version=f"9.{n}.0") for n in range(12)
+    ]
+    created = create_advisory(
+        team,
+        sample_user,
+        title="Many affected versions",
+        identifier="CVE-2026-0002",
+        products=[trust_center_product],
+        affected_releases=releases,
+    )
+    assert created.ok, created.error
+    assert publish_advisory(team, sample_user, created.value, visibility="public").ok
+
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/public/workspace/{team.key}/advisories/{created.value}/")
+
+    versions = page.get_by_role("list", name=f"Affected versions of {trust_center_product.name} for CVE-2026-0002")
+    items = versions.locator("li")
+    expect(items).to_have_count(12)
+    expect(items.nth(4)).to_be_visible()
+    expect(items.nth(5)).to_be_hidden()
+
+    page.get_by_text("Show all 12").click()
+    expect(items.nth(11)).to_be_visible()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestTrustCenterAdvisoriesPublicSnapshot:
     def test_trust_center_advisories_public_snapshot(

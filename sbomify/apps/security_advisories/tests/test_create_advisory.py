@@ -8,6 +8,8 @@ later, so nothing created here needs restructuring before publish.
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 import pytest
 from django.urls import reverse
 
@@ -258,8 +260,50 @@ class TestDashboardCreatePost:
         assert detail["products"][0]["affected_ranges"] == ["1.2.0"]
 
 
+class _ListItems(HTMLParser):
+    """The items of the list carrying one accessible name, and whether each is folded."""
+
+    def __init__(self, label: str):
+        super().__init__()
+        self.label = label
+        self.depth = 0
+        self.items: list[tuple[str, bool]] = []
+        self._folded: bool | None = None
+        self.toggle = ""
+        self._in_summary = False
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "ul":
+            self.depth = self.depth + 1 if self.depth else int(attributes.get("aria-label") == self.label)
+        elif tag == "li" and self.depth:
+            self._folded = "[display:none]" in (attributes.get("class") or "").split()
+            self.items.append(("", self._folded))
+        elif tag == "summary":
+            self._in_summary = True
+
+    def handle_endtag(self, tag):
+        if tag == "ul" and self.depth:
+            self.depth -= 1
+        elif tag == "summary":
+            self._in_summary = False
+
+    def handle_data(self, data):
+        if self.depth and self.items and self._folded is not None:
+            text, folded = self.items[-1]
+            self.items[-1] = (text + data.strip(), folded)
+        elif self._in_summary:
+            self.toggle += data
+
+
+def _list_items(content: str, label: str) -> _ListItems:
+    parser = _ListItems(label)
+    parser.feed(content)
+    return parser
+
+
 class TestDetailPageAffectedReleases:
-    """Affected releases render one per line and fold past five, so an advisory
+    """Affected versions render one per line and fold past five, so an advisory
     naming dozens of releases no longer runs off the sidebar as a single line."""
 
     def _get_detail(self, client, member, advisory_id):
@@ -273,13 +317,11 @@ class TestDetailPageAffectedReleases:
         result = create_advisory(team, user, title="Many", products=[product], affected_releases=releases)
 
         content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+        listed = _list_items(content, f"Affected versions of {product.name}")
 
-        assert f'aria-label="Affected releases of {product.name}"' in content
-        for release in releases:
-            assert f">{release.version}</li>" in content
-        assert content.count('x-show="all" x-cloak>1.') == 3
-        assert "Show all 8" in content
-        assert "8 releases" in content
+        assert sorted(text for text, _ in listed.items) == sorted(release.version for release in releases)
+        assert [folded for _, folded in listed.items] == [False] * 5 + [True] * 3
+        assert "Show all 8" in listed.toggle
         assert "1.0.0, 1.1.0" not in content
 
     def test_a_few_releases_render_without_a_toggle(self, sample_team_with_owner_member, team, user, product, client):
@@ -287,9 +329,9 @@ class TestDetailPageAffectedReleases:
         result = create_advisory(team, user, title="Few", products=[product], affected_releases=[release])
 
         content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+        listed = _list_items(content, f"Affected versions of {product.name}")
 
-        assert ">1.2.0</li>" in content
-        assert "1 release<" in content
+        assert listed.items == [("1.2.0", False)]
         assert "Show all" not in content
 
 

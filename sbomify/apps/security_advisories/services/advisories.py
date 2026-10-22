@@ -218,7 +218,7 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
 
 
 def _range_display(version_range: AdvisoryVersionRange) -> str:
-    """A range the way a chip reads it: the bare version for a single-release
+    """A range the way the detail page lists it: the bare version for a single-release
     pin, interval notation for a real span."""
     if version_range.introduced and version_range.introduced == version_range.last_affected:
         return version_range.introduced
@@ -226,7 +226,7 @@ def _range_display(version_range: AdvisoryVersionRange) -> str:
 
 
 def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
-    """A product chip.
+    """One affected product and its affected versions, as the detail page lists them.
 
     ``product`` is nullable and ``product_name`` carries the name when the FK is
     absent, so an advisory can name a product this workspace does not track and
@@ -236,7 +236,7 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
     product = advisory_product.product
     name = product.name if product else advisory_product.product_name
     # Deduplicated but order-preserving: two vulnerabilities citing the same
-    # affected release should not print it twice on the chip.
+    # affected release should not list it twice.
     affected: dict[str, None] = {}
     for status in advisory_product.statuses.all():
         for version_range in status.version_ranges.all():
