@@ -32,7 +32,7 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryAddProductForm, AdvisoryCreateForm
-from sbomify.apps.security_advisories.models import AdvisoryProductStatus
+from sbomify.apps.security_advisories.models import AdvisoryProductStatus, SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import (
     PRODUCT_STATUS_FIELDS,
     PUBLISHABLE_VISIBILITIES,
@@ -46,6 +46,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     get_advisory,
     list_advisories,
     post_update,
+    product_choices,
     publish_advisory,
     update_advisory,
     update_product_status,
@@ -223,6 +224,10 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 # From REMEDIATION_META so the form, the badges and the timeline
                 # read the same vocabulary, in the same order, with the same icon
                 # and colour on each value.
+                #
+                # Not "resolved": every product opens under investigation, and
+                # a resolved advisory may not say that about any of them. It is
+                # resolved from its page once each product has a status.
                 "status_options": [
                     {
                         "value": value,
@@ -231,6 +236,7 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                         "variant": meta["variant"],
                     }
                     for value, meta in REMEDIATION_META.items()
+                    if value != SecurityAdvisory.RemediationStatus.RESOLVED
                 ],
             },
         )
@@ -301,6 +307,19 @@ class SecurityAdvisoriesBulkDeleteView(GuestAccessBlockedMixin, LoginRequiredMix
         return htmx_success_response(f"Deleted {count} {noun}.", triggers={"refresh-advisories": True})
 
 
+class SecurityAdvisoryProductReleasesView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The "Add product" dialog's release checkboxes, for the product just picked."""
+
+    def get(self, request: HttpRequest, advisory_id: str) -> HttpResponse:
+        team = _writable_team(request)
+        if team is None:
+            raise Http404("Advisory not found")
+        product_id = request.GET.get("product", "")
+        options = (creation_options(team, product_ids=[product_id]).value or []) if product_id else []
+        releases = options[0]["releases"] if options else []
+        return render(request, "core/components/advisory_add_product_releases.html.j2", {"releases": releases})
+
+
 class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """One advisory: its vulnerabilities, affected products and event timeline."""
 
@@ -325,9 +344,17 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 "advisory": advisory,
                 # A withdrawn advisory is final, so its rows are shown, not offered for editing.
                 "can_edit_statuses": can_write and advisory["publication_status"] != "withdrawn",
-                # Every product and its pinnable releases: the add dialog picks
-                # from all of them, and the edit dialog filters to the row's own.
-                "product_options": (creation_options(team).value or []) if can_write else [],
+                # The releases of the products the advisory names, for the edit
+                # dialog. The add dialog lists every product by name and fetches
+                # the chosen one's releases when it is picked, so a page load
+                # never reads the whole workspace's releases.
+                "product_options": (
+                    (creation_options(team, product_ids=[p["id"] for p in advisory["products"] if p["id"]]).value or [])
+                    if can_write
+                    else []
+                ),
+                "product_choices": (product_choices(team).value or []) if can_write else [],
+                "advisory_product_ids": [p["id"] for p in advisory["products"] if p["id"]],
                 "product_status_options": PRODUCT_STATUS_OPTIONS,
                 "justification_options": JUSTIFICATION_OPTIONS,
                 "response_options": RESPONSE_OPTIONS,

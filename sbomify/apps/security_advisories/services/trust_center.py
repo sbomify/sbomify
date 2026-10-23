@@ -30,6 +30,7 @@ to the workspace-level grant alone; there is nothing narrower to test it against
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -59,6 +60,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     STATUS_VARIANTS,
     display_date,
     display_id,
+    status_subject,
     worst_cvss,
     worst_severity,
 )
@@ -510,6 +512,18 @@ def _version_expressions(status: AdvisoryProductStatus) -> tuple[str, str]:
     return ", ".join(affected) or "—", ", ".join(unaffected) or "—"
 
 
+def _mentions_version(text: str, version: str) -> bool:
+    """Whether ``text`` names ``version`` as a whole version, not as part of a longer one.
+
+    "Upgrade to 1.2.3" does not name 1.2, and "v10" does not name v1. A full
+    stop after the version ends the sentence rather than continuing it. A bare
+    number is never taken as named: "restart within 2 hours" is not about 2.
+    """
+    if not version or version.isdigit():
+        return False
+    return re.search(rf"(?<![\w.-]){re.escape(version)}(?![\w-]|\.\w)", text) is not None
+
+
 def _range_expressions(version_range: AdvisoryVersionRange) -> tuple[str, str]:
     """One stored range as its ("affected", "unaffected") comparison strings, either possibly empty."""
     introduced = version_range.introduced
@@ -580,13 +594,9 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
             if status.advisory_component_id is not None:
                 continue
             advisory_product = status.advisory_product
-            product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                label = "All products"
-            else:
-                label = product.name if product else advisory_product.product_name
+            label = status_subject(status)
             affected, unaffected = _version_expressions(status)
             if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
                 affected_versions, unaffected_versions = ["None"], ["All"]
@@ -723,10 +733,7 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
             product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                scope_label = "All products"
-            else:
-                scope_label = product.name if product else advisory_product.product_name
+            scope_label = status_subject(status)
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {
@@ -749,6 +756,11 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "action_statement": status.action_statement,
                     "response": status.response,
                     "recommended_version": status.recommended_version,
+                    # The page says "Upgrade to X." unless the instructions
+                    # already do, which would print it twice.
+                    "action_names_recommendation": _mentions_version(
+                        status.action_statement, status.recommended_version
+                    ),
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
                     "affected_versions": _affected_versions(status),
                 }

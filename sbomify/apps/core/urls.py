@@ -137,6 +137,11 @@ urlpatterns = [
         name="security_advisory_detail",
     ),
     path(
+        "security-advisories/<str:advisory_id>/product-releases/",
+        views.SecurityAdvisoryProductReleasesView.as_view(),
+        name="security_advisory_product_releases",
+    ),
+    path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",

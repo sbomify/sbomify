@@ -201,6 +201,28 @@ def test_a_product_status_is_edited_from_its_row(authenticated_page: Page, advis
 
 
 @pytest.mark.django_db
+def test_a_missed_product_is_added_with_its_releases(authenticated_page: Page, advisory_detail) -> None:
+    """The dialog fetches the picked product's releases rather than shipping every release with the page."""
+    from sbomify.apps.core.models import Product, Release
+
+    late = Product.objects.create(name="Acme CLI", team=advisory_detail.team)
+    Release.objects.create(product=late, name="v3.1.0", version="v3.1.0")
+    page = authenticated_page
+    page.goto(f"/security-advisories/{advisory_detail.id}/")
+
+    page.get_by_role("button", name="Add product").first.click()
+    dialog = page.locator("#addAdvisoryProductModal")
+    dialog.get_by_label("Product").select_option(label="Acme CLI")
+    dialog.get_by_label("v3.1.0").check()
+    dialog.page.get_by_role("button", name="Add product").last.click()
+
+    table = page.get_by_role("table", name="Product statuses")
+    expect(table.get_by_text("Acme CLI")).to_be_visible()
+    link = advisory_detail.products.get(product=late)
+    assert link.statuses.get().version_ranges.get().last_affected == "v3.1.0"
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestSecurityAdvisoryNewSnapshot:
     """The new advisory form. The product_details fixture gives the affected

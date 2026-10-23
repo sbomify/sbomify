@@ -72,6 +72,9 @@ from sbomify.apps.core.views.security_advisories import (
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableView as SecurityAdvisoriesTableView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryCreateView as SecurityAdvisoryCreateView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoryProductReleasesView as SecurityAdvisoryProductReleasesView,
+)
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,

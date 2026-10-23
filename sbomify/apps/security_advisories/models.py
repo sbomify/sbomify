@@ -1134,7 +1134,9 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
     # would pay N+1 to validate.
     vulnerabilities = list(
         advisory.vulnerabilities.prefetch_related(
-            "product_statuses__advisory_product", "product_statuses__version_ranges"
+            "product_statuses__advisory_product",
+            "product_statuses__advisory_component",
+            "product_statuses__version_ranges",
         )
     )
     is_notice = advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
@@ -1147,19 +1149,22 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
     for vulnerability in vulnerabilities:
         statuses = list(vulnerability.product_statuses.all())
         by_product = {status.advisory_product_id for status in statuses}
+        # Portfolio-wide names no subject at all. A component-scoped row has no
+        # product either, and is not one.
+        has_portfolio = any(s.advisory_product_id is None and s.advisory_component_id is None for s in statuses)
 
         if is_notice:
-            if None not in by_product:
+            if not has_portfolio:
                 problems.append(f"{vulnerability} needs a portfolio-wide status.")
         else:
-            if None in by_product:
+            if has_portfolio:
                 problems.append(f"{vulnerability} has a portfolio status on a product advisory.")
             for product in products:
                 if product.id not in by_product:
                     problems.append(f"{vulnerability} has no status for {product.product_name}.")
 
         for status in statuses:
-            label = f"{vulnerability} / {status.advisory_product or 'all products'}"
+            label = f"{vulnerability} / {status.advisory_product or status.advisory_component or 'all products'}"
             if status.status == AdvisoryProductStatus.Status.RESOLVED and not status.names_fix:
                 problems.append(f"{label} is fixed but names no fixed version.")
             if status.status == AdvisoryProductStatus.Status.NOT_AFFECTED:

@@ -81,7 +81,7 @@
             {% if advisory.advisory_type != 'workspace_notice' or advisory.statuses %}
                 <section class="flex flex-col gap-3 mb-10"
                          aria-labelledby="productStatusesHeading"
-                         x-data="{ open: false, rows: [], products: [], row: {}, form: {}, init() { this.rows = window.parseJsonScript('advisory-statuses') || []; this.products = window.parseJsonScript('advisory-product-options') || []; }, releasesFor(productId) { const product = this.products.find(p => p.id === productId); return product ? product.releases : []; }, edit(index) { this.row = this.rows[index]; this.form = { status: this.row.status, justification: this.row.justification, response: this.row.response, fixed_version: this.row.fixed_version, fixed_release_id: this.row.fixed_release_id || '', action_statement: this.row.action_statement, impact_statement: this.row.impact_statement }; this.open = true; }, pickRelease() { const release = this.releasesFor(this.row.product_id).find(r => r.id === this.form.fixed_release_id); if (release) this.form.fixed_version = release.label; } }">
+                         x-data="{ open: false, rows: [], products: [], row: {}, form: {}, init() { this.rows = window.parseJsonScript('advisory-statuses') || []; this.products = window.parseJsonScript('advisory-product-options') || []; }, releasesFor(productId) { const product = this.products.find(p => p.id === productId); return product ? product.releases : []; }, edit(index) { this.row = this.rows[index]; this.form = { status: this.row.status, justification: this.row.justification, response: this.row.response, fixed_version: this.row.fixed_version, fixed_release_id: this.row.fixed_release_id || '', action_statement: this.row.action_statement, impact_statement: this.row.impact_statement }; this.open = true; }, pickRelease() { const release = this.releasesFor(this.row.product_id).find(r => r.id === this.form.fixed_release_id); if (release) this.form.fixed_version = release.label; }, typeVersion() { const release = this.releasesFor(this.row.product_id).find(r => r.id === this.form.fixed_release_id); if (release && release.label !== this.form.fixed_version.trim()) this.form.fixed_release_id = ''; } }">
                     {{ advisory.statuses|json_script:"advisory-statuses" }}
                     {{ product_options|json_script:"advisory-product-options" }}
                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -155,7 +155,7 @@
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <c-forms.field label="Fixed in version" for="productStatusFixedVersion">
-                                    <c-forms.input id="productStatusFixedVersion" name="fixed_version" placeholder="1.4.3" x-model="form.fixed_version" />
+                                    <c-forms.input id="productStatusFixedVersion" name="fixed_version" placeholder="1.4.3" x-model="form.fixed_version" @input="typeVersion()" />
                                     </c-forms.field>
                                     <div x-show="row.product_id">
                                         <c-forms.field label="Fixed in release" for="productStatusFixedRelease">
@@ -550,12 +550,13 @@
             </c-slot>
             </c-modal>
         </div>
-        {% comment %}Add a product the advisory missed, or more of its affected releases. Releases are filtered to the chosen product, the same pairing the New Advisory form enforces.{% endcomment %}
+        {% comment %}Add a product the advisory missed, or more of its affected releases. The chosen product's releases arrive over HTMX, so the page does not carry every release in the workspace. A product already on the advisory only gains releases here: its status belongs to its row, so the status choice is switched off for it. Not teleported, because HTMX wires the select when the page loads and a teleported copy would not be.{% endcomment %}
         {% if can_edit_statuses and advisory.advisory_type != 'workspace_notice' %}
             <div class="contents"
-                 x-data="{ open: false, productId: '', products: [], init() { this.products = window.parseJsonScript('advisory-product-options') || []; }, get releases() { const product = this.products.find(p => p.id === this.productId); return product ? product.releases : []; } }"
-                 @open-add-advisory-product-modal.window="open = true; productId = ''">
-                <c-modal id="addAdvisoryProductModal" title="Add product" icon="fas fa-cube">
+                 x-data="{ open: false, productId: '', listed: [], init() { this.listed = window.parseJsonScript('advisory-listed-products') || []; }, get isListed() { return this.listed.includes(this.productId); } }"
+                 @open-add-advisory-product-modal.window="open = true">
+                {{ advisory_product_ids|json_script:"advisory-listed-products" }}
+                <c-modal id="addAdvisoryProductModal" title="Add product" icon="fas fa-cube" teleport="false">
                 <form id="addAdvisoryProductForm"
                       method="post"
                       action="{% url 'core:security_advisory_detail' advisory.id %}">
@@ -563,22 +564,18 @@
                     <input type="hidden" name="intent" value="add_product" />
                     <div class="space-y-4">
                         <c-forms.field label="Product" for="addProduct" required>
-                        <c-forms.select id="addProduct" name="product" x-model="productId" required>
+                        <c-forms.select id="addProduct" name="product" x-model="productId" required hx-get="{% url 'core:security_advisory_product_releases' advisory.id %}" hx-trigger="change" hx-target="#addProductReleases" hx-swap="innerHTML">
                         <option value="">Choose a product</option>
-                        {% for product in product_options %}<option value="{{ product.id }}">{{ product.name }}</option>{% endfor %}
+                        {% for product in product_choices %}<option value="{{ product.id }}">{{ product.name }}</option>{% endfor %}
                         </c-forms.select>
                         </c-forms.field>
-                        <fieldset x-show="releases.length" class="space-y-2">
-                            <c-forms.label as="legend">Affected releases</c-forms.label>
-                            <template x-for="release in releases" :key="release.id">
-                                <c-forms.checkbox name="affected_releases" ::value="release.id">
-                                <span x-text="release.label"></span>
-                                </c-forms.checkbox>
-                            </template>
-                        </fieldset>
-                        <c-forms.field label="Status" for="addProductStatus" hint="A resolved advisory needs a status that is not open.">
-                        <c-forms.select id="addProductStatus" name="status" :options="product_status_options" selected="in_triage" />
-                        </c-forms.field>
+                        <div id="addProductReleases"></div>
+                        <div x-show="!isListed">
+                            <c-forms.field label="Status" for="addProductStatus" hint="A resolved advisory needs a status that is not open.">
+                            <c-forms.select id="addProductStatus" name="status" :options="product_status_options" selected="in_triage" ::disabled="isListed" />
+                            </c-forms.field>
+                        </div>
+                        <c-forms.hint x-show="isListed">Already on this advisory. This adds the releases you tick. Change its status from its row.</c-forms.hint>
                     </div>
                 </form>
                 <c-slot name="footer">

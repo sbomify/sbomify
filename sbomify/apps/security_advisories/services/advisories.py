@@ -270,7 +270,7 @@ def _status_projection(status: AdvisoryProductStatus, *, many_vulnerabilities: b
     """One product status row, as the "Product statuses" table and its edit dialog read it."""
     advisory_product = status.advisory_product
     product = advisory_product.product if advisory_product else None
-    subject = _status_subject(status)
+    subject = status_subject(status)
     vulnerability = _vulnerability_label(status.vulnerability)
     # From the prefetch: one range at most carries ``fixed``.
     fix = next((r for r in status.version_ranges.all() if r.fixed), None)
@@ -297,7 +297,9 @@ def _status_projection(status: AdvisoryProductStatus, *, many_vulnerabilities: b
         "recommended_release_id": status.recommended_release_id,
         "fixed_version": fix.fixed if fix else "",
         "fixed_release_id": fix.fixed_release_id if fix else None,
-        "affected_versions": [_range_display(r) for r in status.version_ranges.all() if r.last_affected or not r.fixed],
+        # Every range but a bare fix: one that also says where the bug came
+        # in is an affected span, which the Trust Center lists too.
+        "affected_versions": [_range_display(r) for r in status.version_ranges.all() if not r.fixed or r.introduced],
     }
 
 
@@ -499,8 +501,11 @@ def get_advisory(team: Any, advisory_id: str) -> ServiceResult[dict[str, Any]]:
     return ServiceResult.success(_advisory_projection(advisory, detail=True))
 
 
-def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
+def creation_options(team: Any, product_ids: list[str] | None = None) -> ServiceResult[list[dict[str, Any]]]:
     """Products and their pinnable releases, for the New Advisory pickers.
+
+    ``product_ids`` narrows both to those products, for a page that only
+    needs the releases of the products it already shows.
 
     ``latest`` releases are excluded: that pointer re-targets as artifacts
     arrive, so "affected: latest" would describe different code next month.
@@ -511,22 +516,29 @@ def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
     list reads as an unordered one.
     """
     releases_by_product: dict[str, list[dict[str, str]]] = {}
-    release_rows = (
-        Release.objects.filter(product__team=team, is_latest=False)
-        .order_by("-created_at")
-        .values("id", "product_id", "name", "version", "created_at")
-    )
+    releases = Release.objects.filter(product__team=team, is_latest=False)
+    products = Product.objects.filter(team=team)
+    if product_ids is not None:
+        releases = releases.filter(product_id__in=product_ids)
+        products = products.filter(id__in=product_ids)
+    release_rows = releases.order_by("-created_at").values("id", "product_id", "name", "version", "created_at")
     for row in release_rows:
         label = row["version"] or row["name"]
         releases_by_product.setdefault(row["product_id"], []).append(
             {"id": row["id"], "label": label, "created": row["created_at"].strftime("%d %b %Y")}
         )
 
-    products = [
+    options = [
         {"id": product_id, "name": name, "releases": releases_by_product.get(product_id, [])}
-        for product_id, name in Product.objects.filter(team=team).order_by("name").values_list("id", "name")
+        for product_id, name in products.order_by("name").values_list("id", "name")
     ]
-    return ServiceResult.success(products)
+    return ServiceResult.success(options)
+
+
+def product_choices(team: Any) -> ServiceResult[list[dict[str, str]]]:
+    """The workspace's products by name, without their releases: what a product picker lists."""
+    rows = Product.objects.filter(team=team).order_by("name").values_list("id", "name")
+    return ServiceResult.success([{"id": product_id, "name": name} for product_id, name in rows])
 
 
 def _stamped(payload: dict[str, Any], via: dict[str, str] | None) -> dict[str, Any]:
@@ -546,6 +558,23 @@ def _announce(team: Any, advisory_id: Any, action: str) -> None:
     action and nothing from its content.
     """
     broadcast_on_commit(team.key, "advisory_updated", {"advisory_id": str(advisory_id), "action": action})
+
+
+def _locked_advisory(team: Any, advisory_id: str) -> SecurityAdvisory | None:
+    """The advisory by id or tracking id, locked for a read-modify-write."""
+    return (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+
+
+def _messages(error: DjangoValidationError) -> str:
+    """A model's validation errors as one line a toast or an API detail can carry."""
+    if hasattr(error, "error_dict"):
+        return "; ".join(m for messages in error.message_dict.values() for m in messages)
+    return "; ".join(error.messages)
 
 
 @transaction.atomic
@@ -714,12 +743,7 @@ def update_advisory(
     edit replaces and a blank submission clears. ``cvss_score`` arrives as the
     posted string; None means the form did not carry the field at all.
     """
-    advisory = (
-        SecurityAdvisory.objects.select_for_update()
-        .filter(team=team)
-        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
-        .first()
-    )
+    advisory = _locked_advisory(team, advisory_id)
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
 
@@ -867,7 +891,13 @@ class _Refused(Exception):
         self.status_code = status_code
 
 
-def _status_subject(status: AdvisoryProductStatus) -> str:
+def status_subject(status: AdvisoryProductStatus) -> str:
+    """What a status row speaks about: its product, its component, or the whole portfolio.
+
+    The product's live name when it is still tracked, the retained name when it
+    is not. Shared with the trust center so the two pages cannot name a row
+    differently.
+    """
     if status.advisory_product is not None:
         product = status.advisory_product.product
         return product.name if product else status.advisory_product.product_name
@@ -913,7 +943,7 @@ def _open_status_labels(advisory: SecurityAdvisory) -> list[str]:
     many = advisory.vulnerabilities.count() > 1
     labels = []
     for row in rows:
-        subject = _status_subject(row)
+        subject = status_subject(row)
         if many:
             subject = f"{subject} ({_vulnerability_label(row.vulnerability)})"
         labels.append(f"{subject} is {row.get_status_display()}")
@@ -953,6 +983,7 @@ def _apply_status_changes(
 ) -> None:
     """Write ``changes`` to one row and its fixed range. Raises ``_Refused``."""
     choices = AdvisoryProductStatus
+    original = None if status._state.adding else {column: getattr(status, column) for column in _STATUS_COLUMNS}
     if "status" in changes:
         value = (changes["status"] or "").strip()
         if value not in choices.Status.values:
@@ -963,7 +994,7 @@ def _apply_status_changes(
             and value != status.status
         ):
             raise _Refused(
-                f"This advisory is resolved, so {_status_subject(status)} cannot be "
+                f"This advisory is resolved, so {status_subject(status)} cannot be "
                 f"{choices.Status(value).label}. Reopen it first.",
                 409,
             )
@@ -985,8 +1016,9 @@ def _apply_status_changes(
     if "recommended_release_id" in changes:
         recommended = _pinnable_release(team, changes["recommended_release_id"], role="recommended")
         status.recommended_release = recommended
-        version = (changes.get("recommended_version") or "").strip()
-        status.recommended_version = version or (recommended.version or recommended.name if recommended else "")
+        status.recommended_version = _pinned_version(
+            (changes.get("recommended_version") or "").strip(), recommended, role="recommended"
+        )
     elif "recommended_version" in changes:
         version = (changes["recommended_version"] or "").strip()
         pinned = status.recommended_release
@@ -1006,7 +1038,7 @@ def _apply_status_changes(
             fixed_release = fix.fixed_release if fix else None
             if fixed_release is not None and typed not in (fixed_release.version, fixed_release.name):
                 fixed_release = None
-        fixed_version = typed or (fixed_release.version or fixed_release.name if fixed_release else "")
+        fixed_version = _pinned_version(typed, fixed_release, role="fixed")
 
         # The fix is what users move to, unless the caller said otherwise or
         # the row already recommended something other than the old fix.
@@ -1019,31 +1051,56 @@ def _apply_status_changes(
             status.recommended_release = fixed_release
 
         # The row first: a new one has to exist before a range can point at it.
-        _save_status(status)
-        if not fixed_version:
-            if fix is not None:
-                fix.delete()
+        _save_status(status, original)
+        if fix is None and not fixed_version:
             return
         if fix is None:
             fix = AdvisoryVersionRange(product_status=status)
+        elif fix.fixed == fixed_version and fix.fixed_release_id == (fixed_release.pk if fixed_release else None):
+            # Unchanged: a save would still move the public CSAF revision.
+            return
+        if not fixed_version and not fix.introduced:
+            fix.delete()
+            return
+        # Clearing a fix from a range that also says where the bug came in
+        # keeps that range, now open-ended: losing the fix must not lose
+        # the version that introduced it.
         fix.fixed = fixed_version
-        fix.fixed_release = fixed_release
+        fix.fixed_release = fixed_release if fixed_version else None
         try:
             fix.save()
         except DjangoValidationError as error:
             raise _Refused(_messages(error)) from error
         return
 
-    _save_status(status)
+    _save_status(status, original)
 
 
-def _messages(error: DjangoValidationError) -> str:
-    if hasattr(error, "error_dict"):
-        return "; ".join(m for messages in error.message_dict.values() for m in messages)
-    return "; ".join(error.messages)
+def _pinned_version(typed: str, release: Release | None, *, role: str) -> str:
+    """The version a pin stands for: the release's own, or a typed one that agrees with it."""
+    if release is None:
+        return typed
+    if typed and typed not in (release.version, release.name):
+        raise _Refused(f"The {role} version {typed} is not the version of the release chosen with it.")
+    return release.version or release.name
 
 
-def _save_status(status: AdvisoryProductStatus) -> None:
+# The row's own columns an edit can move. A save that moves none is skipped,
+# because a save alone advances the public CSAF revision.
+_STATUS_COLUMNS = (
+    "status",
+    "justification",
+    "response",
+    "impact_statement",
+    "action_statement",
+    "recommended_version",
+    "recommended_release_id",
+)
+
+
+def _save_status(status: AdvisoryProductStatus, original: dict[str, Any] | None) -> None:
+    if original is not None and all(getattr(status, column) == original[column] for column in _STATUS_COLUMNS):
+        return
     try:
         status.save()
     except DjangoValidationError as error:
@@ -1061,7 +1118,7 @@ def _record_status_changes(
 ) -> bool:
     """One internal field_change per changed field. True when anything changed."""
     after = _status_snapshot(status)
-    subject = _status_subject(status)
+    subject = status_subject(status)
     if many_vulnerabilities:
         subject = f"{subject} ({_vulnerability_label(status.vulnerability)})"
     changed = False
@@ -1089,19 +1146,24 @@ def _record_status_changes(
     return changed
 
 
-def _locked_advisory(team: Any, advisory_id: str) -> SecurityAdvisory | None:
-    return (
-        SecurityAdvisory.objects.select_for_update()
-        .filter(team=team)
-        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
-        .first()
-    )
+def _publish_problems(advisory: SecurityAdvisory) -> set[str] | None:
+    """What a published advisory already fails, before an edit. None for an unpublished one."""
+    if advisory.status != SecurityAdvisory.Status.PUBLISHED:
+        return None
+    return set(validate_publishable(advisory))
 
 
-def _refuse_if_published_and_invalid(advisory: SecurityAdvisory) -> None:
-    """A published advisory keeps the shape publishing demanded of it."""
-    if advisory.status == SecurityAdvisory.Status.PUBLISHED and (problems := validate_publishable(advisory)):
-        raise _Refused(" ".join(problems))
+def _refuse_new_publish_problems(advisory: SecurityAdvisory, before: set[str] | None) -> None:
+    """A published advisory keeps the shape publishing demanded of it.
+
+    Only problems this edit introduced are refused. One that was already there,
+    on this row or another, must not block the edits that would repair the
+    advisory a row at a time.
+    """
+    if before is None:
+        return
+    if introduced := [problem for problem in validate_publishable(advisory) if problem not in before]:
+        raise _Refused(" ".join(introduced))
 
 
 def _update_statuses(
@@ -1115,6 +1177,7 @@ def _update_statuses(
     from sbomify.apps.security_advisories.signals import one_csaf_revision
 
     many = advisory.vulnerabilities.count() > 1
+    problems = _publish_problems(advisory)
     changed = False
     with one_csaf_revision():
         for row in rows:
@@ -1122,7 +1185,7 @@ def _update_statuses(
             _apply_status_changes(team, advisory, row, changes)
             changed = _record_status_changes(advisory, user, row, before, via, many_vulnerabilities=many) or changed
         if changed:
-            _refuse_if_published_and_invalid(advisory)
+            _refuse_new_publish_problems(advisory, problems)
     if changed:
         _announce(team, advisory.id, "updated")
 
@@ -1234,7 +1297,9 @@ def add_advisory_product(
     gets a row per vulnerability, under investigation unless ``changes`` says
     otherwise, which a resolved advisory requires. Each release becomes a
     single-version range, as at creation. Naming a product already on the
-    advisory adds only the releases it does not list yet.
+    advisory adds only the releases it does not list yet: its status is its
+    rows' to change, so ``changes`` for it are refused rather than dropped,
+    and so is a call that would add nothing.
     """
     advisory = _locked_advisory(team, advisory_id)
     changes = changes or {}
@@ -1253,9 +1318,13 @@ def add_advisory_product(
 
         from sbomify.apps.security_advisories.signals import one_csaf_revision
 
+        problems = _publish_problems(advisory)
+        link = advisory.products.filter(product=product).first()
+        added = link is None
+        if not added and changes:
+            raise _Refused(f"{product.name} is already on this advisory. Change its status from its row instead.")
+
         with one_csaf_revision():
-            link = advisory.products.filter(product=product).first()
-            added = link is None
             if link is None:
                 link = AdvisoryProduct.objects.create(advisory=advisory, product=product)
             rows = []
@@ -1310,13 +1379,13 @@ def add_advisory_product(
                         {"field": "product.affected_releases", "old": "", "new": ", ".join(new_versions)}, via
                     ),
                 )
-            if added or new_versions:
-                _refuse_if_published_and_invalid(advisory)
+            if not added and not new_versions:
+                raise _Refused(f"{product.name} is already on this advisory with those releases.", 409)
+            _refuse_new_publish_problems(advisory, problems)
     except _Refused as refused:
         transaction.set_rollback(True)
         return ServiceResult.failure(refused.message, status_code=refused.status_code)
-    if added or new_versions:
-        _announce(team, advisory.id, "updated")
+    _announce(team, advisory.id, "updated")
     return ServiceResult.success(advisory.id)
 
 
@@ -1366,12 +1435,7 @@ def publish_advisory(
     # settings saved since that copy was loaded must govern the new id.
     team = Workspace.objects.select_for_update().filter(pk=team.pk).first() or team
 
-    advisory = (
-        SecurityAdvisory.objects.select_for_update()
-        .filter(team=team)
-        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
-        .first()
-    )
+    advisory = _locked_advisory(team, advisory_id)
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
     if advisory.status != SecurityAdvisory.Status.DRAFT:
@@ -1395,7 +1459,7 @@ def publish_advisory(
     except DjangoValidationError as error:
         # The model holds the disclosure invariants; surfacing them beats
         # letting a 500 out of save().
-        return ServiceResult.failure("; ".join(m for messages in error.message_dict.values() for m in messages), 400)
+        return ServiceResult.failure(_messages(error), 400)
 
     advisory.save(update_fields=["status", "published_at", "visibility", "made_public_at", "tracking_id", "updated_at"])
     AdvisoryEvent.objects.create(
@@ -1425,12 +1489,7 @@ def withdraw_advisory(
     if not reason:
         return ServiceResult.failure("Withdrawing an advisory requires a reason.", status_code=400)
 
-    advisory = (
-        SecurityAdvisory.objects.select_for_update()
-        .filter(team=team)
-        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
-        .first()
-    )
+    advisory = _locked_advisory(team, advisory_id)
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
     if advisory.status == SecurityAdvisory.Status.WITHDRAWN:
@@ -1446,7 +1505,7 @@ def withdraw_advisory(
     try:
         advisory.full_clean()
     except DjangoValidationError as error:
-        return ServiceResult.failure("; ".join(m for messages in error.message_dict.values() for m in messages), 400)
+        return ServiceResult.failure(_messages(error), 400)
 
     advisory.save(update_fields=["status", "withdrawn_at", "withdrawal_reason", "updated_at"])
     AdvisoryEvent.objects.create(
@@ -1475,12 +1534,7 @@ def post_update(
     # denormalised status both come from the row as read, so two concurrent
     # posts without the lock could record the same "from" and lose a
     # transition.
-    advisory = (
-        SecurityAdvisory.objects.select_for_update()
-        .filter(team=team)
-        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
-        .first()
-    )
+    advisory = _locked_advisory(team, advisory_id)
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
 

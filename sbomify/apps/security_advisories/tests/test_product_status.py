@@ -793,3 +793,186 @@ class TestTheDetailPage:
 
         drafted.refresh_from_db()
         assert drafted.summary == "Rotate your token."
+
+
+class TestTheReviewFindings:
+    """Each guards a defect found reviewing the first cut of these write paths."""
+
+    def test_a_save_that_changes_nothing_moves_no_csaf_revision(
+        self, team, user, drafted, action, fixed, django_capture_on_commit_callbacks
+    ):
+        row = _row(drafted, action)
+        changes = {"status": "resolved", "fixed_version": "v26.10.1", "fixed_release_id": fixed.id}
+        update_product_status(team, user, drafted.id, row.id, changes={**changes, "action_statement": "Upgrade."})
+        publish(drafted, visibility=SecurityAdvisory.Visibility.PUBLIC)
+        drafted.refresh_from_db()
+        before = drafted.csaf_revision
+
+        # What the dialog posts when someone opens it and presses Save.
+        with django_capture_on_commit_callbacks(execute=True):
+            result = update_product_status(
+                team, user, drafted.id, row.id, changes={**changes, "action_statement": "Upgrade.", "response": ""}
+            )
+
+        assert result.ok, result.error
+        drafted.refresh_from_db()
+        assert drafted.csaf_revision == before
+
+    def test_a_status_for_a_product_already_listed_is_refused_not_dropped(self, team, user, drafted, action):
+        result = add_advisory_product(team, user, drafted.id, product=action, changes={"status": "resolved"})
+
+        assert not result.ok
+        assert "Change its status from its row" in (result.error or "")
+        assert _row(drafted, action).status == "in_triage"
+
+    def test_adding_nothing_new_is_refused(self, team, user, drafted, action, affected):
+        result = add_advisory_product(team, user, drafted.id, product=action, affected_releases=[affected])
+
+        assert result.status_code == 409
+
+    @pytest.mark.parametrize(
+        ("version_field", "release_field"),
+        [("fixed_version", "fixed_release_id"), ("recommended_version", "recommended_release_id")],
+    )
+    def test_a_typed_version_must_agree_with_the_release_sent_with_it(
+        self, team, user, drafted, action, fixed, version_field, release_field
+    ):
+        row = _row(drafted, action)
+
+        result = update_product_status(
+            team, user, drafted.id, row.id, changes={version_field: "v26.10.2", release_field: fixed.id}
+        )
+
+        assert not result.ok
+        assert "not the version of the release" in (result.error or "")
+
+    def test_clearing_a_fix_keeps_the_version_that_introduced_the_bug(self, team, user, drafted, action):
+        row = _row(drafted, action)
+        AdvisoryVersionRange.objects.create(product_status=row, introduced="v26.0.0", fixed="v26.10.1")
+
+        assert update_product_status(team, user, drafted.id, row.id, changes={"fixed_version": ""}).ok
+
+        span = row.version_ranges.get(introduced="v26.0.0")
+        assert (span.fixed, span.last_affected) == ("", "")
+        assert "[v26.0.0, *)" in get_advisory(team, drafted.id).value["statuses"][0]["affected_versions"]
+
+    def test_a_span_with_its_fix_is_listed_as_affected(self, team, user, drafted, action):
+        row = _row(drafted, action)
+        AdvisoryVersionRange.objects.create(product_status=row, introduced="v26.0.0", fixed="v26.10.1")
+
+        listed = next(s for s in get_advisory(team, drafted.id).value["statuses"] if s["product"] == "sbomify Action")
+
+        assert "[v26.0.0, v26.10.1)" in listed["affected_versions"]
+
+    def test_a_problem_already_on_a_published_advisory_does_not_block_other_edits(
+        self, team, user, drafted, action, app
+    ):
+        publish(drafted, visibility=SecurityAdvisory.Visibility.PUBLIC)
+        # Published, then broken behind the service's back: a not_affected row
+        # with nothing to say why, as a VEX import can leave one.
+        AdvisoryProductStatus.objects.filter(pk=_row(drafted, app).pk).update(status="not_affected")
+
+        result = update_product_status(
+            team,
+            user,
+            drafted.id,
+            _row(drafted, action).id,
+            changes={"status": "exploitable", "action_statement": "Upgrade."},
+        )
+
+        assert result.ok, result.error
+
+    def test_a_component_row_is_not_read_as_portfolio_wide(self, team, user, drafted, action):
+        from sbomify.apps.security_advisories.models import AdvisoryComponent, validate_publishable
+
+        component = Component.objects.create(name="action-core", team=team)
+        AdvisoryProductStatus.objects.create(
+            vulnerability=drafted.vulnerabilities.get(),
+            advisory_component=AdvisoryComponent.objects.create(advisory=drafted, component=component),
+        )
+
+        assert not any("portfolio" in problem for problem in validate_publishable(drafted))
+
+    @pytest.mark.parametrize(
+        ("recommended", "action_statement", "named"),
+        [
+            ("v26.10.1", "Upgrade to v26.10.1.", True),
+            ("1.2", "Upgrade to 1.2.3 or later.", False),
+            ("v1", "Move to v10.", False),
+            ("2", "Restart within 2 hours.", False),
+        ],
+    )
+    def test_the_upgrade_line_is_dropped_only_when_the_instructions_name_that_version(
+        self, recommended, action_statement, named
+    ):
+        from sbomify.apps.security_advisories.services.trust_center import _mentions_version
+
+        assert _mentions_version(action_statement, recommended) is named
+
+    def test_the_new_advisory_form_does_not_offer_resolved(self, client, sample_team_with_owner_member):
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+
+        content = client.get(reverse("core:security_advisory_new")).content.decode()
+
+        assert 'value="fix_in_progress"' in content
+        assert 'value="resolved"' not in content
+
+    def test_the_create_form_refuses_resolved_with_products(self, team, action):
+        from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
+
+        form = AdvisoryCreateForm(
+            team, {"title": "Born resolved", "remediation_status": "resolved", "products": [action.id]}
+        )
+
+        assert not form.is_valid()
+        assert "remediation_status" in form.errors
+
+    def test_the_page_carries_only_the_advisorys_own_releases(
+        self, client, sample_team_with_owner_member, team, drafted
+    ):
+        elsewhere = Product.objects.create(name="Elsewhere", team=team)
+        Release.objects.create(product=elsewhere, name="v9.9.9", version="v9.9.9")
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+
+        content = client.get(reverse("core:security_advisory_detail", args=[drafted.id])).content.decode()
+
+        assert "v9.9.9" not in content
+        # Still offered by name, so it can be added.
+        assert ">Elsewhere</option>" in content
+
+    def test_the_add_dialog_fetches_the_picked_products_releases(
+        self, client, sample_team_with_owner_member, team, drafted
+    ):
+        elsewhere = Product.objects.create(name="Elsewhere", team=team)
+        Release.objects.create(product=elsewhere, name="v9.9.9", version="v9.9.9")
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+
+        response = client.get(
+            reverse("core:security_advisory_product_releases", args=[drafted.id]),
+            {"product": elsewhere.id},
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 200
+        assert "v9.9.9" in response.content.decode()
+
+    def test_a_member_gets_no_releases(self, client, sample_team_with_owner_member, team, drafted, action):
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save()
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+
+        response = client.get(
+            reverse("core:security_advisory_product_releases", args=[drafted.id]),
+            {"product": action.id},
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response.status_code == 404

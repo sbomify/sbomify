@@ -74,6 +74,13 @@ class AdvisoryCreateForm(forms.Form):
         stray = [release for release in cleaned.get("affected_releases") or [] if release.product_id not in selected]
         if stray:
             self.add_error("affected_releases", "Affected releases must belong to a selected product.")
+        # Refused here as well as in the service, so it reads as the field's
+        # own error rather than a failed create.
+        if cleaned.get("remediation_status") == SecurityAdvisory.RemediationStatus.RESOLVED and selected:
+            self.add_error(
+                "remediation_status",
+                "An advisory with products cannot open as resolved. Resolve it once each product has a status.",
+            )
         # Guarded on the field's own errors: a score that failed to parse also
         # cleans to None, and telling the user to enter one they typed is worse
         # than the parse error already queued.
