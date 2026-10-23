@@ -115,22 +115,39 @@ def status_runs(run_ids: Any, order_by: str) -> list[Any]:
 
 
 def superseded_run_ids(runs: Any) -> set[Any]:
-    """Which of ``runs`` a newer completed run of the same pair supersedes.
+    """Which of ``runs`` a newer run of the same pair supersedes.
 
-    ``runs`` yields ``(run_id, sbom_id, plugin_name, releases, completed)``
-    newest first, ``-created_at`` then ``-id``, and must hold every completed
-    security run of each pair it mentions. ``releases`` is a frozenset of
+    ``runs`` yields ``(run_id, sbom_id, plugin_name, releases)`` for completed
+    security runs, newest first (``-created_at`` then ``-id``), and must hold
+    every such run of each pair it mentions. ``releases`` is a frozenset of
     release ids. Answered in one pass, without a query per run.
     """
     covering: dict[tuple[Any, str], list[frozenset[Any]]] = {}
     superseded: set[Any] = set()
-    for run_id, sbom_id, plugin_name, releases, completed in runs:
+    for run_id, sbom_id, plugin_name, releases in runs:
         newer = covering.setdefault((sbom_id, plugin_name), [])
         if any(releases <= other for other in newer):
             superseded.add(run_id)
-        if completed:
-            newer.append(releases)
+        newer.append(releases)
     return superseded
+
+
+def readable_runs(completed: QuerySet[Any]) -> tuple[list[Any], dict[Any, frozenset[Any]], set[Any]]:
+    """Split ``completed`` into the runs a reader can resolve to and the ones it cannot.
+
+    ``completed`` is a queryset of completed security runs covering whole
+    (SBOM, plugin) pairs, typically every such run of some SBOMs. Returns the
+    readable run ids newest first, the release set of every run, and the
+    superseded ids. Two queries, over small columns only, so no result payload
+    is read to decide.
+    """
+    identities = list(completed.order_by("-created_at", "-id").values_list("id", "sbom_id", "plugin_name"))
+    releases = release_sets([run_id for run_id, _sbom_id, _plugin in identities])
+    superseded = superseded_run_ids(
+        (run_id, sbom_id, plugin_name, releases[run_id]) for run_id, sbom_id, plugin_name in identities
+    )
+    readable = [run_id for run_id, _sbom_id, _plugin in identities if run_id not in superseded]
+    return readable, releases, superseded
 
 
 def release_sets(run_ids: Any) -> dict[Any, frozenset[Any]]:
@@ -143,6 +160,15 @@ def release_sets(run_ids: Any) -> dict[Any, frozenset[Any]]:
     ):
         sets[run_id].add(release_id)
     return {run_id: frozenset(releases) for run_id, releases in sets.items()}
+
+
+def newer_than(run: Any, prefix: str = "") -> Any:
+    """A Q for runs newer than ``run``: by ``created_at``, ties broken on id, the order every reader ranks in."""
+    from django.db.models import Q
+
+    return Q(**{f"{prefix}created_at__gt": run.created_at}) | Q(
+        **{f"{prefix}created_at": run.created_at, f"{prefix}id__gt": run.id}
+    )
 
 
 def is_superseded(run: Any, releases: frozenset[Any] | None = None) -> bool:
@@ -164,7 +190,7 @@ def is_superseded(run: Any, releases: frozenset[Any] | None = None) -> bool:
         plugin_name=run.plugin_name,
         category=AssessmentCategory.SECURITY.value,
         status=RunStatus.COMPLETED.value,
-    ).filter(Q(created_at__gt=run.created_at) | Q(created_at=run.created_at, id__gt=run.id))
+    ).filter(newer_than(run))
     if releases:
         newer = newer.annotate(
             covered=Count("releases", filter=Q(releases__in=releases), distinct=True),
