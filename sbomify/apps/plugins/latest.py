@@ -95,3 +95,78 @@ def status_runs(run_ids: Any, order_by: str) -> list[Any]:
             if value is not None
         }
     return runs
+
+
+# What a reader can still resolve to, defined once.
+#
+# Readers take the newest completed security run per (SBOM, plugin)
+# (latest_run_ids), and a release takes the newest such run that covers it
+# (release_run_ids). So a completed run stops being readable once a newer
+# completed run of the same SBOM and plugin covers every release it covers: it
+# is then neither the newest run nor the newest for any of its releases. A run
+# with no releases is superseded by any newer completed run, and a run that did
+# not complete supersedes nothing, because no reader resolves to it.
+#
+# The finding projection keeps rows only for readable runs, the backfill and
+# the legacy copy project only those, and the VEX re-apply rewrites only those.
+# The result offload deliberately keys on the exact release set instead (see
+# offload.current_run_ids): it governs the payload, which other readers rank
+# differently.
+
+
+def superseded_run_ids(runs: Any) -> set[Any]:
+    """Which of ``runs`` a newer completed run of the same pair supersedes.
+
+    ``runs`` yields ``(run_id, sbom_id, plugin_name, releases, completed)``
+    newest first, ``-created_at`` then ``-id``, and must hold every completed
+    security run of each pair it mentions. ``releases`` is a frozenset of
+    release ids. Answered in one pass, without a query per run.
+    """
+    covering: dict[tuple[Any, str], list[frozenset[Any]]] = {}
+    superseded: set[Any] = set()
+    for run_id, sbom_id, plugin_name, releases, completed in runs:
+        newer = covering.setdefault((sbom_id, plugin_name), [])
+        if any(releases <= other for other in newer):
+            superseded.add(run_id)
+        if completed:
+            newer.append(releases)
+    return superseded
+
+
+def release_sets(run_ids: Any) -> dict[Any, frozenset[Any]]:
+    """``{run id: frozenset of release ids}`` in one query; a run with no releases maps to an empty set."""
+    from sbomify.apps.plugins.models import AssessmentRunRelease
+
+    sets: dict[Any, set[Any]] = {run_id: set() for run_id in run_ids}
+    for run_id, release_id in AssessmentRunRelease.objects.filter(assessment_run_id__in=list(sets)).values_list(
+        "assessment_run_id", "release_id"
+    ):
+        sets[run_id].add(release_id)
+    return {run_id: frozenset(releases) for run_id, releases in sets.items()}
+
+
+def is_superseded(run: Any, releases: frozenset[Any] | None = None) -> bool:
+    """Whether a newer completed security run of ``run``'s pair covers every release ``run`` covers.
+
+    The single-run form of :func:`superseded_run_ids`, answered by the
+    database. ``releases`` is ``run``'s release set when the caller already has
+    it (a prefetch), which saves a query.
+    """
+    from django.db.models import Count, Q
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
+
+    if releases is None:
+        releases = release_sets([run.id])[run.id]
+    newer = AssessmentRun.objects.filter(
+        sbom_id=run.sbom_id,
+        plugin_name=run.plugin_name,
+        category=AssessmentCategory.SECURITY.value,
+        status=RunStatus.COMPLETED.value,
+    ).filter(Q(created_at__gt=run.created_at) | Q(created_at=run.created_at, id__gt=run.id))
+    if releases:
+        newer = newer.annotate(
+            covered=Count("releases", filter=Q(releases__in=releases), distinct=True),
+        ).filter(covered=len(releases))
+    return newer.exists()

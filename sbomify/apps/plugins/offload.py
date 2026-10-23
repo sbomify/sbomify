@@ -71,9 +71,10 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
     run that newest one superseded becomes the newest of the set it left. That
     is safe because of who reads what. Every reader of the payload column ranks
     per (sbom, plugin) and ignores release sets, so it lands on the newer run,
-    which is current for its own key. The one reader that ranks per release set,
-    the VEX re-apply, reads and writes through the result store. An attach a week
-    after the sweep leaves the same state, so a lock here would not prevent it.
+    which is current for its own key. The VEX re-apply skips it too, because the
+    newer run now covers every release it covers (plugins.latest), and it reads
+    and writes through the result store for the runs it does rewrite. An attach a
+    week after the sweep leaves the same state, so a lock here would not prevent it.
     """
     from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease
     from sbomify.apps.plugins.sdk.enums import RunStatus

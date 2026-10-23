@@ -404,17 +404,6 @@ class PluginOrchestrator:
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
 
-            # Project the findings into rows, for the same reason and with the
-            # same safety as the lifecycle: derived from the immutable run,
-            # rebuildable, and never the reason a good scan result is lost.
-            # After the releases above, because the projection drops the rows
-            # of older runs this one supersedes, and a run supersedes another
-            # only by covering all of its releases.
-            if assessment_run.category == AssessmentCategory.SECURITY.value:
-                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
-
-                sync_findings_safely(assessment_run, applied_vex)
-
             # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
             # scoped downstream state (e.g. DT project version tags). After
             # the M2M is populated, call sync_release_tags so the plugin can
@@ -430,6 +419,21 @@ class PluginOrchestrator:
                         assessment_run.id,
                         exc_info=True,
                     )
+
+            # Project the findings into rows, for the same reason and with the
+            # same safety as the lifecycle: derived from the immutable run,
+            # rebuildable, and never the reason a good scan result is lost.
+            #
+            # After the releases, because the projection drops the rows of
+            # older runs this one supersedes, and a run supersedes another only
+            # by covering all of its releases. And last, after the downstream
+            # tag sync's HTTP calls: the projection locks the finding records it
+            # points at until this task's transaction ends, so the shorter that
+            # stretch is, the less another scan sharing a new record waits.
+            if assessment_run.category == AssessmentCategory.SECURITY.value:
+                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+                sync_findings_safely(assessment_run, applied_vex)
 
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
@@ -704,6 +708,15 @@ class PluginOrchestrator:
             # state so settled runs surface against the correct releases —
             # same contract as a normal completion.
             self._sync_run_releases(run, str(run.sbom_id))
+
+        # A settled security run is the newest completed run now, so readers
+        # resolve to it: project it like a normal completion, which also demotes
+        # and drops the rows of the runs it supersedes. Otherwise the previous
+        # run's rows stay current while every reader has moved past them.
+        if run.category == AssessmentCategory.SECURITY.value:
+            from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+            sync_findings_safely(run)
 
         logger.info(f"[PLUGIN] finalize {kind}: marked run {run_id} as COMPLETED with {kind} finding")
 

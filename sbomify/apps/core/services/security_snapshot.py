@@ -35,8 +35,8 @@ def build_component_security_picture(
 
     from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning.findings import finding_values
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
-    from sbomify.apps.vulnerability_scanning.models import Finding
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
         extract_severity_counts,
@@ -90,41 +90,28 @@ def build_component_security_picture(
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    for finding in Finding.objects.filter(
-        Q(run_id__in=[rid for rid in run_ids if rid not in release_ids], is_current=True)
-        | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
-    ).values(
-        "run_id",
-        "sbom_id",
-        "vex_state",
-        "malicious",
-        "record__advisory_id",
-        "record__aliases",
-        "record__severity",
-        "record__cvss_score",
-        "record__package_name",
-        "record__package_version",
-        "record__ecosystem",
-        "record__purl",
+    current_ids = [rid for rid in run_ids if rid not in release_ids]
+    for finding in finding_values(
+        Q(run_id__in=current_ids, is_current=True) | Q(run_id__in=[rid for rid in run_ids if rid in release_ids]),
+        held_by="run_id",
+        wanted=run_ids,
     ):
         if finding["malicious"]:
-            malicious_ids.update(
-                alias.lower() for alias in (finding["record__advisory_id"], *finding["record__aliases"])
-            )
+            malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
-                "id": finding["record__advisory_id"],
-                "aliases": finding["record__aliases"],
+                "id": finding["advisory_id"],
+                "aliases": finding["aliases"],
                 "plugin": plugin_by_run.get(finding["run_id"], ""),
-                "severity": finding["record__severity"],
-                "cvss_score": finding["record__cvss_score"],
+                "severity": finding["severity"],
+                "cvss_score": finding["cvss_score"],
                 "analysis_state": finding["vex_state"],
                 "component": {
-                    "name": finding["record__package_name"],
-                    "version": finding["record__package_version"],
-                    "ecosystem": finding["record__ecosystem"],
+                    "name": finding["package_name"],
+                    "version": finding["package_version"],
+                    "ecosystem": finding["ecosystem"],
                     # package_scopes keeps two groupIds with one artifact name apart by it.
-                    "purl": finding["record__purl"],
+                    "purl": finding["purl"],
                 },
             }
         )

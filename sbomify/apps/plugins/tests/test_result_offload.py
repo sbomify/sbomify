@@ -262,8 +262,10 @@ class TestReleaseContextsAreBothCurrent:
     def test_a_release_attached_after_the_move_keeps_column_readers_inline(self, sbom, bucket, monkeypatch):
         """Attaching a release to the newest run makes the moved older run the
         newest of the set it left. The readers of the column rank per (sbom,
-        plugin) and stay on the inline run; the VEX re-apply reaches the moved
-        one through the result store."""
+        plugin) and stay on the inline run. The VEX re-apply leaves the moved
+        one alone: the newer run covers every release it covers, so no reader
+        resolves to it (plugins.latest), and rewriting it would only fetch its
+        payload back from storage."""
         from sbomify.apps.plugins.latest import latest_run_ids
         from sbomify.apps.plugins.models import RegisteredPlugin
         from sbomify.apps.plugins.offload import current_run_ids
@@ -311,11 +313,13 @@ class TestReleaseContextsAreBothCurrent:
         monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
 
+        bucket.objects.clear()
+
         vex.reannotate_component_runs(sbom.component_id)
 
         older.refresh_from_db()
         assert older.result is None
-        assert older.result_object_key not in ("", moved_key)
+        assert older.result_object_key == moved_key
 
 
 @pytest.mark.django_db

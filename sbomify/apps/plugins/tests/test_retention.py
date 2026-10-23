@@ -158,7 +158,7 @@ class TestCost:
         from sbomify.apps.vulnerability_scanning.models import Finding, FindingRecord
 
         record = FindingRecord.objects.create(
-            digest="d" * 64, advisory_id="CVE-2026-0001", severity="high", severity_rank=1
+            digest=b"d" * 32, advisory_id="CVE-2026-0001", severity="high"
         )
         for age in range(100, 106):
             Finding.objects.create(
@@ -184,8 +184,8 @@ class TestCost:
             retention, "prune_assessment_runs", lambda: prune_assessment_runs(keep_per_plugin=1, min_age_days=30)
         )
 
-        shared = FindingRecord.objects.create(digest="s" * 64, advisory_id="CVE-2026-0001", severity="high", severity_rank=1)
-        only_old = FindingRecord.objects.create(digest="o" * 64, advisory_id="CVE-2026-0002", severity="low", severity_rank=3)
+        shared = FindingRecord.objects.create(digest=b"s" * 32, advisory_id="CVE-2026-0001", severity="high")
+        only_old = FindingRecord.objects.create(digest=b"o" * 32, advisory_id="CVE-2026-0002", severity="low")
         for age, records in ((100, [shared, only_old]), (101, [shared]), (2, [shared])):
             run = _run(sample_sbom, "osv", days_ago=age)
             for record in records:
