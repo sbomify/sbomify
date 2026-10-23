@@ -92,9 +92,7 @@ def build_component_security_picture(
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
     current_ids = [rid for rid in run_ids if rid not in release_ids]
     for finding in finding_values(
-        Q(run_id__in=current_ids, is_current=True) | Q(run_id__in=[rid for rid in run_ids if rid in release_ids]),
-        held_by="run_id",
-        wanted=run_ids,
+        Q(run_id__in=current_ids, is_current=True) | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
