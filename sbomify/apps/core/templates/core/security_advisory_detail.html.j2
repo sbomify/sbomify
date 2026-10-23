@@ -257,20 +257,22 @@
                             {% endif %}
                         </p>
                     {% endif %}
+                    {% comment %}The affected releases sit under the chip rather than inside it: the chip never wraps, so a product carrying a dozen releases ran its list off the sidebar. The value list shows three and folds the rest, the same as the Trust Center's "Am I affected?" table.{% endcomment %}
                     {% for product in advisory.products %}
-                        <c-chips.neutral>
-                        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
-                        {% if product.id %}
-                            <a href="{% url 'core:product_details' product.id %}"
-                               class="transition-colors hover:opacity-80">{{ product.name }}</a>
-                        {% else %}
-                            {{ product.name }}
-                        {% endif %}
-                        {% if product.affected_ranges %}
-                            <span class="ml-1.5 pl-1.5 border-l border-border/60 font-normal opacity-80"
-                                  title="Affected releases">{{ product.affected_ranges|join:", " }}</span>
-                        {% endif %}
-                        </c-chips.neutral>
+                        <div class="flex flex-col items-start gap-1.5{% if product.affected_ranges %} basis-full{% endif %}">
+                            <c-chips.neutral>
+                            <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                            {% if product.id %}
+                                <a href="{% url 'core:product_details' product.id %}"
+                                   class="transition-colors hover:opacity-80">{{ product.name }}</a>
+                            {% else %}
+                                {{ product.name }}
+                            {% endif %}
+                            </c-chips.neutral>
+                            {% if product.affected_ranges %}
+                                <c-tables.value-list mono class="pl-2 text-text-muted" title="Affected releases" :values="product.affected_ranges" />
+                            {% endif %}
+                        </div>
                     {% endfor %}
                 </div>
             </div>
