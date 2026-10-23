@@ -102,3 +102,20 @@ def test_every_link_is_marked_as_user_content():
 def test_a_url_the_parser_rejects_does_not_fail_the_page():
     html = strict_markdown("[x](http://[broken)")
     assert 'href="#"' in html
+
+
+def test_already_escaped_text_is_escaped_exactly_once():
+    from django.utils.html import escape
+
+    assert strict_markdown(escape("Fix & <b>notes</b>")) == strict_markdown("Fix & <b>notes</b>")
+    assert "Fix &amp; &lt;b&gt;notes&lt;/b&gt;" in strict_markdown(escape("Fix & <b>notes</b>"))
+
+
+def test_flat_renders_headings_as_bold_paragraphs():
+    from sbomify.apps.core.templatetags.markdown_tags import strict_markdown_flat
+
+    html = strict_markdown_flat("# Title\n\n## Summary **now**\n\nBody")
+    assert "<p><strong>Title</strong></p>" in html
+    assert "<p><strong>Summary <strong>now</strong></strong></p>" in html
+    assert "<h1>" not in html and "<h2>" not in html
+    assert "<p>Body</p>" in html
