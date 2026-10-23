@@ -126,6 +126,7 @@ class TestTimelineMarkdown:
 
         content = response.content.decode()
         assert response.status_code == 200
-        assert "<h2>Summary</h2>" in content
+        assert "<p><strong>Summary</strong></p>" in content
+        assert "<h2>Summary</h2>" not in content
         assert "<strong>heap overflow</strong> &amp; more." in content
         assert "<li>Upgrade &lt;now&gt;</li>" in content

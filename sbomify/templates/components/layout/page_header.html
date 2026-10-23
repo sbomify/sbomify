@@ -19,15 +19,15 @@ as a duplicate attribute to the template linter.
 
 description is optional supporting text. Long descriptions can be expanded
 without truncating the page title. Its state is scoped to the description so
-callers can still bind their own Alpine state to the header. markdown renders
-it through strict_markdown, for text someone wrote in Markdown such as an
-advisory's description. Pass that text as a dynamic prop
-(:description="advisory.description"), so it reaches the renderer unescaped and
-is escaped exactly once there. The outer margins of the rendered blocks are
-dropped so a single paragraph sits exactly where plain text would.
+callers can still bind their own Alpine state to the header.
+description_markdown renders it as Markdown through c-typography.markdown, for
+text someone wrote in Markdown such as an advisory's description. The clamp sits
+on a wrapper, so it never changes how the rendered blocks space themselves.
+While the description is clamped its links leave the tab order: a link past the
+second line is hidden, and focus must not land on text nobody can see. Show
+more is the way in.
 {% endcomment %}
-{% load markdown_tags %}
-<c-vars title subtitle description markdown copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
+<c-vars title subtitle description description_markdown copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
 <header class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
         data-page-header
         {{ attrs }}>
@@ -65,11 +65,13 @@ dropped so a single paragraph sits exactly where plain text would.
                  x-init="$nextTick(() => measure())"
                  x-id="['page-description']"
                  @resize.window.debounce="expanded || measure()">
-                {% if markdown %}
+                {% if description_markdown %}
                     <div x-ref="description"
                          :id="$id('page-description')"
-                         class="prose prose-sm max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0 text-text-muted [overflow-wrap:anywhere] prose-headings:text-text prose-headings:text-sm prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-p:leading-relaxed prose-p:text-text-muted prose-strong:text-text prose-li:my-0 prose-li:text-text-muted prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none"
-                         :class="expanded ? '' : 'line-clamp-2'">{{ description|strict_markdown }}</div>
+                         :class="expanded ? '' : 'line-clamp-2'"
+                         x-effect="$el.querySelectorAll('a').forEach(a => expanded || !clipped ? a.removeAttribute('tabindex') : a.setAttribute('tabindex', '-1'))">
+                        <c-typography.markdown :text="description" muted />
+                    </div>
                 {% else %}
                     <p x-ref="description"
                        :id="$id('page-description')"
