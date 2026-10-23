@@ -395,13 +395,6 @@ class PluginOrchestrator:
                         exc_info=True,
                     )
 
-                # Project the findings into rows, for the same reason and with
-                # the same safety: derived from the immutable run, rebuildable,
-                # and never the reason a good scan result is lost.
-                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
-
-                sync_findings_safely(assessment_run, applied_vex)
-
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
             # SBOM at run-completion time are the releases the result covers.
@@ -410,6 +403,17 @@ class PluginOrchestrator:
             # them but still populated so the UI can show "this compliance scan
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
+
+            # Project the findings into rows, for the same reason and with the
+            # same safety as the lifecycle: derived from the immutable run,
+            # rebuildable, and never the reason a good scan result is lost.
+            # After the releases above, because the projection drops the rows
+            # of older runs this one supersedes, and a run supersedes another
+            # only by covering all of its releases.
+            if assessment_run.category == AssessmentCategory.SECURITY.value:
+                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+                sync_findings_safely(assessment_run, applied_vex)
 
             # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
             # scoped downstream state (e.g. DT project version tags). After

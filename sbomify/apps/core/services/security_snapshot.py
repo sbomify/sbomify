@@ -96,33 +96,35 @@ def build_component_security_picture(
     ).values(
         "run_id",
         "sbom_id",
-        "advisory_id",
-        "aliases",
-        "severity",
-        "cvss_score",
-        "package_name",
-        "package_version",
-        "ecosystem",
-        "purl",
         "vex_state",
         "malicious",
+        "record__advisory_id",
+        "record__aliases",
+        "record__severity",
+        "record__cvss_score",
+        "record__package_name",
+        "record__package_version",
+        "record__ecosystem",
+        "record__purl",
     ):
         if finding["malicious"]:
-            malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))
+            malicious_ids.update(
+                alias.lower() for alias in (finding["record__advisory_id"], *finding["record__aliases"])
+            )
         indexed_by_sbom.setdefault(str(finding["sbom_id"]), []).append(
             {
-                "id": finding["advisory_id"],
-                "aliases": finding["aliases"],
+                "id": finding["record__advisory_id"],
+                "aliases": finding["record__aliases"],
                 "plugin": plugin_by_run.get(finding["run_id"], ""),
-                "severity": finding["severity"],
-                "cvss_score": finding["cvss_score"],
+                "severity": finding["record__severity"],
+                "cvss_score": finding["record__cvss_score"],
                 "analysis_state": finding["vex_state"],
                 "component": {
-                    "name": finding["package_name"],
-                    "version": finding["package_version"],
-                    "ecosystem": finding["ecosystem"],
+                    "name": finding["record__package_name"],
+                    "version": finding["record__package_version"],
+                    "ecosystem": finding["record__ecosystem"],
                     # package_scopes keeps two groupIds with one artifact name apart by it.
-                    "purl": finding["purl"],
+                    "purl": finding["record__purl"],
                 },
             }
         )

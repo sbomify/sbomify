@@ -7,9 +7,11 @@ aggregates over were denormalised into ``result_summary`` and ``result_skipped``
 so readers would stop touching the blob.
 
 So this demotes the payload of runs that are no longer the current answer for
-anything, leaving the row, its summary columns and its normalised ``Finding``
-rows exactly where they are. See :mod:`sbomify.apps.plugins.result_store` for
-where the bytes go and why the keys are shaped as they are.
+anything, leaving the row and its summary columns exactly where they are. Such a
+run has no ``Finding`` rows to leave: a newer run of its key supersedes it, and
+the projection drops a superseded run's rows (``findings.sync_findings``).
+See :mod:`sbomify.apps.plugins.result_store` for where the bytes go and why
+the keys are shaped as they are.
 
 **What counts as current is (sbom, plugin, release set), not (sbom, plugin).**
 One SBOM can sit in two releases at once with different per-release triage, and

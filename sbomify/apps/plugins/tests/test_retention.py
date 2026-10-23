@@ -155,21 +155,47 @@ class TestCost:
     def test_a_pruned_runs_findings_go_with_it(self, sample_sbom):
         """Loading only the id must not cost the cascade: a run's finding rows
         point at it, and an orphaned row would keep counting in the overview."""
-        from sbomify.apps.vulnerability_scanning.models import Finding
+        from sbomify.apps.vulnerability_scanning.models import Finding, FindingRecord
 
+        record = FindingRecord.objects.create(
+            digest="d" * 64, advisory_id="CVE-2026-0001", severity="high", severity_rank=1
+        )
         for age in range(100, 106):
             Finding.objects.create(
                 run=_run(sample_sbom, "osv", days_ago=age),
                 sbom=sample_sbom,
                 component_id=sample_sbom.component_id,
-                advisory_id="CVE-2026-0001",
-                severity="high",
+                record=record,
                 severity_rank=1,
             )
 
         prune_assessment_runs(keep_per_plugin=3, min_age_days=30)
 
         assert Finding.objects.count() == 3
+
+    def test_the_daily_prune_collects_records_its_runs_left_unreferenced(self, sample_sbom, monkeypatch):
+        """A record is shared, so pruning a run cannot delete it; the sweep after the prune does."""
+        from sbomify.apps.plugins import result_store, retention
+        from sbomify.apps.plugins.tasks import prune_assessment_runs_task
+        from sbomify.apps.vulnerability_scanning.models import Finding, FindingRecord
+
+        monkeypatch.setattr(result_store, "delete_orphaned_result_objects", lambda: 0)
+        monkeypatch.setattr(
+            retention, "prune_assessment_runs", lambda: prune_assessment_runs(keep_per_plugin=1, min_age_days=30)
+        )
+
+        shared = FindingRecord.objects.create(digest="s" * 64, advisory_id="CVE-2026-0001", severity="high", severity_rank=1)
+        only_old = FindingRecord.objects.create(digest="o" * 64, advisory_id="CVE-2026-0002", severity="low", severity_rank=3)
+        for age, records in ((100, [shared, only_old]), (101, [shared]), (2, [shared])):
+            run = _run(sample_sbom, "osv", days_ago=age)
+            for record in records:
+                Finding.objects.create(
+                    run=run, sbom=sample_sbom, component_id=sample_sbom.component_id, record=record, severity_rank=1
+                )
+
+        prune_assessment_runs_task.fn()
+
+        assert set(FindingRecord.objects.values_list("advisory_id", flat=True)) == {"CVE-2026-0001"}
 
     def test_runs_sharing_a_timestamp_still_rank_by_id(self, sample_sbom):
         """Runs created in one transaction can share ``created_at``; the id

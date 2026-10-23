@@ -1783,8 +1783,15 @@ def prune_assessment_runs_task() -> None:
     staging. See plugins/retention.py for the two rules.
     """
     from sbomify.apps.plugins import result_store, retention
+    from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records
 
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
     removed = retention.prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects")
+    # After it: a pruned run's finding rows go with it, and the records they
+    # shared with no other run are left behind.
+    records = delete_orphaned_records()
+    logger.info(
+        f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
+        f"{records} unreferenced finding records"
+    )

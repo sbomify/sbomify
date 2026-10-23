@@ -679,22 +679,20 @@ class TestFindingRowsOutliveTheMove:
     offloaded run's payload is in storage, not in ``result``, and reading the
     empty column as "no findings" would delete the run's rows."""
 
-    def test_reprojecting_an_offloaded_run_keeps_its_rows(self, sbom, bucket):
+    def test_a_superseded_offloaded_run_is_not_fetched_again(self, sbom, bucket):
+        """Only a run a newer one supersedes is offloaded, and such a run keeps
+        no rows. Walking it again must neither fetch its payload nor fail."""
         from sbomify.apps.vulnerability_scanning.findings import sync_findings
         from sbomify.apps.vulnerability_scanning.models import Finding
 
         _run(sbom, days_ago=400)
         superseded = _run(sbom, days_ago=800)
-        sync_findings(superseded, [])
-        projected = set(Finding.objects.filter(run=superseded).values_list("advisory_id", flat=True))
         assert offload_assessment_results() == 1
         superseded.refresh_from_db()
+        bucket.objects.clear()
 
-        sync_findings(superseded, [])
-
-        assert (
-            projected and set(Finding.objects.filter(run=superseded).values_list("advisory_id", flat=True)) == projected
-        )
+        assert sync_findings(superseded, []) == 0
+        assert not Finding.objects.filter(run=superseded).exists()
 
     def test_an_unreadable_payload_leaves_the_rows_alone(self, sbom, bucket):
         """A missing object is not an empty result: the re-projection fails
@@ -702,17 +700,18 @@ class TestFindingRowsOutliveTheMove:
         from sbomify.apps.vulnerability_scanning.findings import sync_findings
         from sbomify.apps.vulnerability_scanning.models import Finding
 
-        _run(sbom, days_ago=400)
-        superseded = _run(sbom, days_ago=800)
-        sync_findings(superseded, [])
-        assert offload_assessment_results() == 1
-        superseded.refresh_from_db()
-        bucket.objects.clear()
+        current = _run(sbom, days_ago=800)
+        sync_findings(current, [])
+        assert Finding.objects.filter(run=current).count() == 2
+        AssessmentRun.objects.filter(pk=current.pk).update(
+            result=None, result_object_key=f"{RESULT_PREFIX}{current.id}/missing.json"
+        )
+        current.refresh_from_db()
 
         with pytest.raises(ResultObjectMissing):
-            sync_findings(superseded, [])
+            sync_findings(current, [])
 
-        assert Finding.objects.filter(run=superseded).count() == 2
+        assert Finding.objects.filter(run=current).count() == 2
 
 
 @pytest.mark.django_db
@@ -908,8 +907,8 @@ class TestVexReachesAnOffloadedRun:
         assert superseded.result_object_key not in ("", first_key)
         # Content-addressed: the earlier revision stays where it was.
         assert first_key in bucket.objects
-        assert Finding.objects.get(run=superseded, advisory_id="CVE-2026-0").vex_suppressed is True
-        assert Finding.objects.get(run=superseded, advisory_id="CVE-2026-1").vex_suppressed is False
+        assert Finding.objects.get(run=superseded, record__advisory_id="CVE-2026-0").vex_suppressed is True
+        assert Finding.objects.get(run=superseded, record__advisory_id="CVE-2026-1").vex_suppressed is False
 
     def test_an_unreadable_payload_does_not_stop_the_rest(self, sbom, bucket, monkeypatch):
         from sbomify.apps.vulnerability_scanning import vex
