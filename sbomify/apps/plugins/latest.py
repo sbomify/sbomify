@@ -108,8 +108,9 @@ def status_runs(run_ids: Any, order_by: str) -> list[Any]:
 # not complete supersedes nothing, because no reader resolves to it.
 #
 # The finding projection keeps rows only for readable runs, the backfill and
-# migration 0016's copy project only those, and the VEX re-apply rewrites only
-# those. 0016 carries a frozen copy of this rule, as migrations must.
+# migration 0017's copy project only those, and the VEX re-apply rewrites only
+# those. 0017 carries a frozen copy of this rule, as migrations must, and
+# test_findings_table checks the two still agree.
 # The result offload deliberately keys on the exact release set instead (see
 # offload.current_run_ids): it governs the payload, which other readers rank
 # differently.
@@ -172,28 +173,26 @@ def newer_than(run: Any, prefix: str = "") -> Any:
     )
 
 
-def is_superseded(run: Any, releases: frozenset[Any] | None = None) -> bool:
-    """Whether a newer completed security run of ``run``'s pair covers every release ``run`` covers.
+def pair_superseded_run_ids(run: Any) -> set[Any]:
+    """The superseded runs of ``run``'s (SBOM, plugin), by :func:`superseded_run_ids`, ``run`` itself included.
 
-    The single-run form of :func:`superseded_run_ids`, answered by the
-    database. ``releases`` is ``run``'s release set when the caller already has
-    it (a prefetch), which saves a query.
+    ``run`` is ranked among the pair's completed security runs even when it has
+    not completed itself, so a caller can ask about any run. Two queries over
+    small columns: the pair's runs and their release sets.
     """
-    from django.db.models import Count, Q
-
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
 
-    if releases is None:
-        releases = release_sets([run.id])[run.id]
-    newer = AssessmentRun.objects.filter(
+    pair = AssessmentRun.objects.filter(
         sbom_id=run.sbom_id,
         plugin_name=run.plugin_name,
         category=AssessmentCategory.SECURITY.value,
         status=RunStatus.COMPLETED.value,
-    ).filter(newer_than(run))
-    if releases:
-        newer = newer.annotate(
-            covered=Count("releases", filter=Q(releases__in=releases), distinct=True),
-        ).filter(covered=len(releases))
-    return newer.exists()
+    ) | AssessmentRun.objects.filter(pk=run.pk)
+    _readable, _releases, superseded = readable_runs(pair)
+    return superseded
+
+
+def is_superseded(run: Any) -> bool:
+    """Whether a newer completed security run of ``run``'s pair covers every release ``run`` covers."""
+    return run.id in pair_superseded_run_ids(run)
