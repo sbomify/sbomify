@@ -155,6 +155,13 @@ class AdvisoryUpdateSchema(Schema):
         description="Markdown. Headings, lists, bold, italic, code spans and http(s) or mailto links are rendered; "
         "raw HTML is shown as text.",
     )
+    fixed_version: str = Field(
+        "",
+        max_length=100,
+        description="Only with kind 'resolved': the version that fixes it. Each product still affected or under "
+        "investigation is marked fixed in this version, unless it already names its own fix. Send it with "
+        "'resolved' on an advisory that is already resolved to bring its products into line.",
+    )
 
 
 class WithdrawAdvisorySchema(Schema):

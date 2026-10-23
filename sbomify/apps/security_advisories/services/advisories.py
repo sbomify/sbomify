@@ -882,7 +882,14 @@ def withdraw_advisory(
 
 @transaction.atomic
 def post_update(
-    team: Any, user: Any, advisory_id: str, *, kind: str, note: str = "", via: dict[str, str] | None = None
+    team: Any,
+    user: Any,
+    advisory_id: str,
+    *,
+    kind: str,
+    note: str = "",
+    fixed_version: str = "",
+    via: dict[str, str] | None = None,
 ) -> ServiceResult[str]:
     """The timeline composer's write: a note, or a status move with commentary.
 
@@ -890,6 +897,14 @@ def post_update(
     remediation status. Status kinds append the ``status_change`` event and
     keep the advisory's denormalised ``remediation_status`` in step with it,
     which is the invariant that field's help text promises.
+
+    Resolving also moves the per-product statuses, because the trust center's
+    "Am I affected?" table reads those and not the advisory. Without this a
+    resolved advisory went on telling readers every product was under
+    investigation. ``fixed_version`` names the fix for the rows that do not
+    already carry one. Resolving an already resolved advisory with a
+    ``fixed_version`` is allowed, so an advisory resolved before this existed
+    can still have its rows brought into line.
     """
     # Locked for the read-modify-write below: payload["from"] and the
     # denormalised status both come from the row as read, so two concurrent
@@ -906,6 +921,13 @@ def post_update(
 
     kind = (kind or "").strip()
     note = note.strip()
+    fixed_version = (fixed_version or "").strip()
+    if fixed_version and kind != SecurityAdvisory.RemediationStatus.RESOLVED:
+        return ServiceResult.failure("A fixed version only applies when resolving.", status_code=400)
+    if len(fixed_version) > FIXED_VERSION_MAX_LENGTH:
+        return ServiceResult.failure(
+            f"A fixed version is at most {FIXED_VERSION_MAX_LENGTH} characters.", status_code=400
+        )
     if kind == "update":
         if not note:
             return ServiceResult.failure("An update needs a note.", status_code=400)
@@ -922,20 +944,78 @@ def post_update(
     if kind not in SecurityAdvisory.RemediationStatus.values:
         return ServiceResult.failure("Unknown update type.", status_code=400)
     if kind == advisory.remediation_status:
+        if kind == SecurityAdvisory.RemediationStatus.RESOLVED and fixed_version:
+            resolved = _resolve_product_statuses(advisory, fixed_version)
+            AdvisoryEvent.objects.create(
+                advisory=advisory,
+                event_type=AdvisoryEvent.EventType.UPDATE,
+                actor=user,
+                body=note or f"Fixed in {fixed_version}.",
+                payload=_stamped({"fixed_version": fixed_version, "resolved_statuses": resolved}, via),
+            )
+            _announce(team, advisory.id, "updated")
+            return ServiceResult.success(advisory.id)
         label = REMEDIATION_META.get(kind, {}).get("label", kind)
         return ServiceResult.failure(f"The advisory is already {label}.", status_code=400)
+
+    payload: dict[str, Any] = {"from": advisory.remediation_status, "to": kind}
+    if kind == SecurityAdvisory.RemediationStatus.RESOLVED:
+        resolved = _resolve_product_statuses(advisory, fixed_version)
+        if fixed_version:
+            payload["fixed_version"] = fixed_version
+        if resolved:
+            payload["resolved_statuses"] = resolved
 
     AdvisoryEvent.objects.create(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
         body=note,
-        payload=_stamped({"from": advisory.remediation_status, "to": kind}, via),
+        payload=_stamped(payload, via),
     )
     advisory.remediation_status = kind
     advisory.save(update_fields=["remediation_status", "updated_at"])
     _announce(team, advisory.id, "updated")
     return ServiceResult.success(advisory.id)
+
+
+# AdvisoryProductStatus.recommended_version's max_length.
+FIXED_VERSION_MAX_LENGTH = 100
+
+# The per-product states a fix moves on from. not_affected and false_positive
+# were never affected, so a fix says nothing new about them.
+_RESOLVABLE_STATES = (AdvisoryProductStatus.Status.IN_TRIAGE, AdvisoryProductStatus.Status.EXPLOITABLE)
+
+
+def _resolve_product_statuses(advisory: SecurityAdvisory, fixed_version: str) -> int:
+    """Mark the advisory's open product statuses fixed, and count them.
+
+    A row only moves when it can name its fix, from ``fixed_version`` or from
+    what it already carries, because ``validate_publishable`` refuses a fixed
+    row that names none. A row with no fix to name stays as it is rather than
+    making a published advisory invalid. Saved one by one so the CSAF
+    revision signals see every row.
+    """
+    statuses = AdvisoryProductStatus.objects.filter(
+        vulnerability__advisory=advisory, status__in=_RESOLVABLE_STATES
+    ).prefetch_related("version_ranges")
+    resolved = 0
+    for status in statuses:
+        if fixed_version and not (status.recommended_version or status.recommended_release_id):
+            status.recommended_version = fixed_version
+        has_fix = (
+            status.recommended_version
+            or status.recommended_release_id
+            or any(version_range.fixed for version_range in status.version_ranges.all())
+        )
+        if not has_fix:
+            continue
+        status.status = AdvisoryProductStatus.Status.RESOLVED
+        if not status.response:
+            status.response = AdvisoryProductStatus.Response.UPDATE
+        status.save()
+        resolved += 1
+    return resolved
 
 
 def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:

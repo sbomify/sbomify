@@ -10,7 +10,12 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
-from sbomify.apps.security_advisories.models import SecurityAdvisory
+from sbomify.apps.security_advisories.models import (
+    AdvisoryProductStatus,
+    AdvisoryVersionRange,
+    SecurityAdvisory,
+    validate_publishable,
+)
 from sbomify.apps.security_advisories.services.advisories import post_update
 
 pytestmark = pytest.mark.django_db
@@ -19,6 +24,122 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def user(sample_team_with_owner_member):
     return sample_team_with_owner_member.user
+
+
+@pytest.fixture
+def triaged(vulnerability, advisory_product):
+    """A product status as create_advisory leaves one: under investigation, no fix named."""
+    return AdvisoryProductStatus.objects.create(vulnerability=vulnerability, advisory_product=advisory_product)
+
+
+class TestResolvingMovesTheProducts:
+    """Resolving the advisory has to reach the per-product statuses.
+
+    The trust center's "Am I affected?" table reads those rows, not the
+    advisory, so a resolved advisory whose rows stayed in triage told readers
+    every product was still under investigation.
+    """
+
+    def test_a_fixed_version_marks_each_open_product_fixed(self, team, user, advisory, triaged):
+        result = post_update(team, user, advisory.id, kind="resolved", fixed_version=" 1.4.3 ")
+
+        assert result.ok
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
+        assert triaged.recommended_version == "1.4.3"
+        assert triaged.response == AdvisoryProductStatus.Response.UPDATE
+        event = advisory.events.get()
+        assert event.payload == {
+            "from": "identified",
+            "to": "resolved",
+            "fixed_version": "1.4.3",
+            "resolved_statuses": 1,
+        }
+        assert validate_publishable(advisory) == []
+
+    def test_affected_products_are_fixed_too(self, team, user, advisory, make_publishable):
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        status = AdvisoryProductStatus.objects.get(vulnerability__advisory=advisory)
+        assert status.status == AdvisoryProductStatus.Status.RESOLVED
+
+    def test_a_product_naming_its_own_fix_keeps_it(self, team, user, advisory, triaged):
+        triaged.recommended_version = "2.0.1"
+        triaged.save()
+
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
+        assert triaged.recommended_version == "2.0.1"
+
+    def test_a_fixed_range_is_a_fix_without_a_version(self, team, user, advisory, triaged):
+        AdvisoryVersionRange.objects.create(product_status=triaged, introduced="1.0", fixed="1.4.3")
+
+        assert post_update(team, user, advisory.id, kind="resolved").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
+        assert triaged.recommended_version == ""
+
+    def test_a_product_with_no_fix_to_name_is_left_alone(self, team, user, advisory, triaged):
+        """A fixed row with no fixed version would make the advisory unpublishable."""
+        result = post_update(team, user, advisory.id, kind="resolved")
+
+        assert result.ok
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
+        assert advisory.events.get().payload == {"from": "identified", "to": "resolved"}
+
+    def test_not_affected_products_are_not_touched(self, team, user, advisory, triaged):
+        triaged.status = AdvisoryProductStatus.Status.NOT_AFFECTED
+        triaged.impact_statement = "The parser is not shipped."
+        triaged.save()
+
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.NOT_AFFECTED
+        assert triaged.recommended_version == ""
+
+    def test_an_already_resolved_advisory_can_bring_its_products_into_line(self, team, user, advisory, triaged):
+        advisory.remediation_status = SecurityAdvisory.RemediationStatus.RESOLVED
+        advisory.save()
+
+        result = post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3")
+
+        assert result.ok
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
+        event = advisory.events.get()
+        assert event.event_type == "update"
+        assert event.body == "Fixed in 1.4.3."
+        assert event.payload == {"fixed_version": "1.4.3", "resolved_statuses": 1}
+
+    def test_resolving_again_without_a_version_is_still_refused(self, team, user, advisory, triaged):
+        advisory.remediation_status = SecurityAdvisory.RemediationStatus.RESOLVED
+        advisory.save()
+
+        result = post_update(team, user, advisory.id, kind="resolved")
+
+        assert not result.ok
+        assert "already" in (result.error or "")
+
+    def test_a_fixed_version_needs_the_resolved_kind(self, team, user, advisory, triaged):
+        result = post_update(team, user, advisory.id, kind="investigating", fixed_version="1.4.3")
+
+        assert not result.ok
+        assert result.status_code == 400
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
+        assert advisory.events.count() == 0
+
+    def test_a_fixed_version_longer_than_the_column_is_refused(self, team, user, advisory, triaged):
+        result = post_update(team, user, advisory.id, kind="resolved", fixed_version="1" * 101)
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert advisory.events.count() == 0
 
 
 class TestPostUpdate:

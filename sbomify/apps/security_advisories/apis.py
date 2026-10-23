@@ -351,7 +351,13 @@ def post_advisory_update(request: HttpRequest, advisory_id: str, payload: Adviso
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
     posted = advisory_service.post_update(
-        team, request.user, advisory_id, kind=payload.kind, note=payload.note, via=_via(request)
+        team,
+        request.user,
+        advisory_id,
+        kind=payload.kind,
+        note=payload.note,
+        fixed_version=payload.fixed_version,
+        via=_via(request),
     )
     if not posted.ok:
         return _failed(posted)

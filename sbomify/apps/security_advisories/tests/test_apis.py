@@ -1085,6 +1085,44 @@ class TestTimelineUpdates:
         assert unknown.status_code == 400
         assert empty.status_code == 400
 
+    def test_resolving_with_a_fixed_version_shows_each_product_fixed(
+        self, client_and_headers, team, public_product
+    ) -> None:
+        from sbomify.apps.security_advisories.models import AdvisoryProductStatus, AdvisoryVulnerability
+
+        client, headers = client_and_headers
+        advisory = _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
+        vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2021-44228")
+        AdvisoryProductStatus.objects.create(vulnerability=vulnerability, advisory_product=advisory.products.get())
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "resolved", "fixed_version": "1.4.3"},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200, response.content
+        public = client.get(_public(team.key, advisory.id))
+        assert public.status_code == 200, public.content
+        statuses = public.json()["statuses"]
+        assert statuses
+        assert {(row["status"], row["recommended_version"]) for row in statuses} == {("resolved", "1.4.3")}
+
+    def test_a_fixed_version_without_resolving_is_refused(self, client_and_headers, advisory) -> None:
+        client, headers = client_and_headers
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "investigating", "fixed_version": "1.4.3"},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.remediation_status == SecurityAdvisory.RemediationStatus.IDENTIFIED
+
     def test_a_member_may_not_post(self, client_and_headers, sample_team_with_owner_member, advisory) -> None:
         client, headers = client_and_headers
         sample_team_with_owner_member.role = "member"
