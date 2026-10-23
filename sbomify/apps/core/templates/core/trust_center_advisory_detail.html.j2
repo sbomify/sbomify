@@ -99,7 +99,8 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                                 <c-tables.value-list mono :values="row.affected_versions" />
                                 </c-tables.cell>
                                 <c-tables.cell muted>
-                                {% if row.recommended_version %}
+                                {% comment %}The fix sets the recommendation, and the instructions usually name it too. Saying "Upgrade to v2. Upgrade to v2." reads as a mistake.{% endcomment %}
+                                {% if row.recommended_version and row.recommended_version not in row.action_statement %}
                                     Upgrade to <span class="font-mono text-text">{{ row.recommended_version }}</span>.
                                 {% endif %}
                                 {{ row.action_statement|default:row.impact_statement }}

@@ -37,10 +37,12 @@ from sbomify.apps.core.views.workspace_public import fetch_public_team
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.apps.security_advisories.csaf import render_csaf
 from sbomify.apps.security_advisories.schemas import (
+    AddAdvisoryProductSchema,
     AdvisoryDetailSchema,
     AdvisorySchema,
     AdvisoryUpdateSchema,
     CreateAdvisorySchema,
+    ProductStatusUpdateSchema,
     PublicAdvisoryDetailSchema,
     PublicAdvisoryListSchema,
     PublishAdvisorySchema,
@@ -123,6 +125,7 @@ def _api_shape(projection: dict[str, Any]) -> dict[str, Any]:
     }
     if "vulnerabilities" in projection:
         shape["vulnerabilities"] = projection["vulnerabilities"]
+        shape["statuses"] = projection.get("statuses", [])
         shape["references"] = projection.get("references", [])
         shape["timeline"] = [
             {
@@ -294,6 +297,7 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
         title=sent.get("title") or stored["title"],
         severity=(sent["severity"] or "") if "severity" in sent else None,
         description=sent["description"] or "" if "description" in sent else stored.get("description", ""),
+        summary=(sent["summary"] or "") if "summary" in sent else None,
         cvss_score=cvss_score,
         cvss_vector=cvss_vector,
         via=_via(request),
@@ -301,6 +305,136 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     if not updated.ok:
         return _failed(updated)
 
+    return _fetched(team, advisory_id)
+
+
+_STATUS_DESCRIPTION = (
+    "Only the fields sent are written, and each change lands on the advisory's timeline. "
+    "A resolved advisory refuses moving a product back to in_triage or exploitable, a published one "
+    "refuses an edit that would fail the rules it was published under, and a withdrawn one is final."
+)
+
+
+@router.patch(
+    "/{advisory_id}/statuses/{status_id}",
+    response={
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Update one product status on an advisory",
+    description=_STATUS_DESCRIPTION,
+)
+def update_product_status(
+    request: HttpRequest, advisory_id: str, status_id: str, payload: ProductStatusUpdateSchema
+) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    updated = advisory_service.update_product_status(
+        team,
+        request.user,
+        advisory_id,
+        status_id,
+        changes=payload.model_dump(exclude_unset=True),
+        via=_via(request),
+    )
+    if not updated.ok:
+        return _failed(updated)
+    return _fetched(team, advisory_id)
+
+
+@router.patch(
+    "/{advisory_id}/products/{product_id}/status",
+    response={
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Update a product's status on an advisory",
+    description=(
+        "The same edit, applied to the product's row for every vulnerability on the advisory, or only to "
+        "vulnerability_id's. product_id is the sbomify product. " + _STATUS_DESCRIPTION
+    ),
+)
+def update_product_statuses(
+    request: HttpRequest,
+    advisory_id: str,
+    product_id: str,
+    payload: ProductStatusUpdateSchema,
+    vulnerability_id: str | None = None,
+) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    updated = advisory_service.update_product_statuses(
+        team,
+        request.user,
+        advisory_id,
+        product_id,
+        changes=payload.model_dump(exclude_unset=True),
+        vulnerability_id=vulnerability_id,
+        via=_via(request),
+    )
+    if not updated.ok:
+        return _failed(updated)
+    return _fetched(team, advisory_id)
+
+
+@router.post(
+    "/{advisory_id}/products",
+    response={
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Add a product, or affected releases, to an advisory",
+    description=(
+        "A product already on the advisory gains only the releases it does not list yet. A new product starts "
+        "under investigation unless a status is sent, which a resolved advisory requires."
+    ),
+)
+def add_advisory_product(request: HttpRequest, advisory_id: str, payload: AddAdvisoryProductSchema) -> tuple[int, Any]:
+    from sbomify.apps.core.models import Product, Release
+
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    product = Product.objects.filter(id=payload.product_id, team=team).first()
+    if product is None:
+        return _not_found("Product not found")
+    release_ids = list(dict.fromkeys(payload.affected_release_ids))
+    releases = list(Release.objects.filter(id__in=release_ids, product__team=team)) if release_ids else []
+    if len(releases) != len(release_ids):
+        return _not_found("Release not found")
+
+    changes = payload.model_dump(exclude_unset=True, exclude={"product_id", "affected_release_ids"})
+    added = advisory_service.add_advisory_product(
+        team, request.user, advisory_id, product=product, affected_releases=releases, changes=changes, via=_via(request)
+    )
+    if not added.ok:
+        return _failed(added)
     return _fetched(team, advisory_id)
 
 

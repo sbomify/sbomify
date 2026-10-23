@@ -170,6 +170,37 @@ class TestSecurityAdvisoryDetailSnapshot:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_a_product_status_is_edited_from_its_row(authenticated_page: Page, advisory_detail, width: int) -> None:
+    """The dialog is filled from the row it was opened on, its justification
+    only appears for "Not affected", and saving lands back on the table."""
+    from sbomify.apps.security_advisories.models import AdvisoryProductStatus
+
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/security-advisories/{advisory_detail.id}/")
+
+    table = page.get_by_role("table", name="Product statuses")
+    expect(table.get_by_text("Under investigation")).to_be_visible()
+    table.get_by_role("button", name="Edit status for Acme Gateway").click()
+
+    dialog = page.locator("#productStatusModal")
+    expect(dialog.get_by_label("Status")).to_have_value("in_triage")
+    dialog.get_by_label("Status").select_option("not_affected")
+    expect(dialog.get_by_label("Why it is not affected")).to_be_visible()
+    dialog.get_by_label("Status").select_option("resolved")
+    expect(dialog.get_by_label("Why it is not affected")).to_be_hidden()
+    dialog.get_by_label("Fixed in version").fill("2.4.1")
+    dialog.get_by_label("What users should do").fill("Upgrade to 2.4.1.")
+    page.get_by_role("button", name="Save status").click()
+
+    expect(table.get_by_text("Fixed", exact=True)).to_be_visible()
+    expect(table.get_by_text("Upgrade to 2.4.1.")).to_be_visible()
+    row = AdvisoryProductStatus.objects.get(vulnerability__advisory=advisory_detail)
+    assert (row.status, row.recommended_version) == ("resolved", "2.4.1")
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestSecurityAdvisoryNewSnapshot:
     """The new advisory form. The product_details fixture gives the affected

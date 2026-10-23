@@ -12,7 +12,7 @@ from typing import Any
 from django import forms
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.security_advisories.models import CVE_ID_RE, SecurityAdvisory, Severity
+from sbomify.apps.security_advisories.models import CVE_ID_RE, AdvisoryProductStatus, SecurityAdvisory, Severity
 from sbomify.apps.teams.models import Workspace
 
 
@@ -80,4 +80,30 @@ class AdvisoryCreateForm(forms.Form):
         vector_without_score = (cleaned.get("cvss_vector") or "").strip() and cleaned.get("cvss_score") is None
         if vector_without_score and "cvss_score" not in self.errors:
             self.add_error("cvss_score", "Enter the CVSS score for the vector.")
+        return cleaned
+
+
+class AdvisoryAddProductForm(forms.Form):
+    """The detail page's "Add product" dialog: a product, its affected releases and where it starts.
+
+    Scoped to one workspace like the create form, so another workspace's ids
+    fail validation rather than attaching foreign rows.
+    """
+
+    product = forms.ModelChoiceField(queryset=Product.objects.none())
+    affected_releases = forms.ModelMultipleChoiceField(queryset=Release.objects.none(), required=False)
+    status = forms.ChoiceField(choices=AdvisoryProductStatus.Status.choices, required=False)
+
+    def __init__(self, team: Workspace, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["product"].queryset = Product.objects.filter(team=team)  # type: ignore[attr-defined]
+        self.fields["affected_releases"].queryset = Release.objects.filter(  # type: ignore[attr-defined]
+            product__team=team, is_latest=False
+        )
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        product = cleaned.get("product")
+        if product is not None and any(r.product_id != product.id for r in cleaned.get("affected_releases") or []):
+            self.add_error("affected_releases", "Affected releases must belong to the product being added.")
         return cleaned

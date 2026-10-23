@@ -56,6 +56,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     PUBLICATION_VARIANTS,
     REMEDIATION_META,
     SEVERITY_RANK,
+    STATUS_VARIANTS,
     display_date,
     display_id,
     worst_cvss,
@@ -127,18 +128,6 @@ _DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
 _EPOCH = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
-
-# How a per-product VEX assertion reads on a public page. Same values as
-# ``AdvisoryProductStatus.Status``; the labels are the model's own. Keyed by the
-# plain string the column stores, not the enum, so a lookup on ``status.status``
-# (a ``str``) is the same type going in as coming out.
-STATUS_VARIANTS: dict[str, str] = {
-    AdvisoryProductStatus.Status.EXPLOITABLE: "danger",
-    AdvisoryProductStatus.Status.IN_TRIAGE: "warning",
-    AdvisoryProductStatus.Status.NOT_AFFECTED: "success",
-    AdvisoryProductStatus.Status.FALSE_POSITIVE: "secondary",
-    AdvisoryProductStatus.Status.RESOLVED: "success",
-}
 
 
 @dataclass(frozen=True)
@@ -501,13 +490,21 @@ def _version_expressions(status: AdvisoryProductStatus) -> tuple[str, str]:
         range_affected, range_unaffected = _range_expressions(version_range)
         if range_affected:
             affected.append(range_affected)
-        if range_unaffected:
+        # A single pinned version names no unaffected one, for the reason
+        # ``_version_lists`` gives: "> 6282ec8" would clear every later commit,
+        # and CSAF would list it as the fix.
+        pinned = version_range.introduced and version_range.introduced == version_range.last_affected
+        if range_unaffected and not pinned:
             unaffected.append(range_unaffected)
 
     # No ranges recorded, but a fix was named — that is enough to answer the
     # question, and it is the common shape for an advisory written in a hurry.
     if not affected and status.recommended_version:
         affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    # Affected versions were pinned and the fix only recommended: on a fixed
+    # row, the recommendation is the version that is no longer affected.
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
         unaffected.append(f">= {status.recommended_version}")
 
     return ", ".join(affected) or "—", ", ".join(unaffected) or "—"
@@ -551,6 +548,8 @@ def _version_lists(status: AdvisoryProductStatus) -> tuple[list[str], list[str]]
             unaffected.append(range_unaffected)
     if not affected and status.recommended_version:
         affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
         unaffected.append(f">= {status.recommended_version}")
     return affected, unaffected
 
