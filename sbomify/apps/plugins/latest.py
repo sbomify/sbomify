@@ -108,7 +108,8 @@ def status_runs(run_ids: Any, order_by: str) -> list[Any]:
 # not complete supersedes nothing, because no reader resolves to it.
 #
 # The finding projection keeps rows only for readable runs, the backfill and
-# the legacy copy project only those, and the VEX re-apply rewrites only those.
+# migration 0016's copy project only those, and the VEX re-apply rewrites only
+# those. 0016 carries a frozen copy of this rule, as migrations must.
 # The result offload deliberately keys on the exact release set instead (see
 # offload.current_run_ids): it governs the payload, which other readers rank
 # differently.
