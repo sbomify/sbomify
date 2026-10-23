@@ -19,9 +19,15 @@ as a duplicate attribute to the template linter.
 
 description is optional supporting text. Long descriptions can be expanded
 without truncating the page title. Its state is scoped to the description so
-callers can still bind their own Alpine state to the header.
+callers can still bind their own Alpine state to the header. markdown renders
+it through strict_markdown, for text someone wrote in Markdown such as an
+advisory's description. Pass that text as a dynamic prop
+(:description="advisory.description"), so it reaches the renderer unescaped and
+is escaped exactly once there. The outer margins of the rendered blocks are
+dropped so a single paragraph sits exactly where plain text would.
 {% endcomment %}
-<c-vars title subtitle description copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
+{% load markdown_tags %}
+<c-vars title subtitle description markdown copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
 <header class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
         data-page-header
         {{ attrs }}>
@@ -59,10 +65,17 @@ callers can still bind their own Alpine state to the header.
                  x-init="$nextTick(() => measure())"
                  x-id="['page-description']"
                  @resize.window.debounce="expanded || measure()">
-                <p x-ref="description"
-                   :id="$id('page-description')"
-                   class="text-sm leading-relaxed text-text-muted whitespace-pre-line [overflow-wrap:anywhere] m-0"
-                   :class="expanded ? '' : 'line-clamp-2'">{{ description }}</p>
+                {% if markdown %}
+                    <div x-ref="description"
+                         :id="$id('page-description')"
+                         class="prose prose-sm max-w-none [&>:first-child]:mt-0 [&>:last-child]:mb-0 text-text-muted [overflow-wrap:anywhere] prose-headings:text-text prose-headings:text-sm prose-headings:mt-3 prose-headings:mb-1 prose-p:my-1 prose-p:leading-relaxed prose-p:text-text-muted prose-strong:text-text prose-li:my-0 prose-li:text-text-muted prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none"
+                         :class="expanded ? '' : 'line-clamp-2'">{{ description|strict_markdown }}</div>
+                {% else %}
+                    <p x-ref="description"
+                       :id="$id('page-description')"
+                       class="text-sm leading-relaxed text-text-muted whitespace-pre-line [overflow-wrap:anywhere] m-0"
+                       :class="expanded ? '' : 'line-clamp-2'">{{ description }}</p>
+                {% endif %}
                 <c-buttons.ghost size="sm" x-show="clipped || expanded" x-cloak @click="expanded = !expanded" ::aria-expanded="expanded" ::aria-controls="$id('page-description')">
                 <span x-text="expanded ? 'Show less' : 'Show more'"></span>
                 </c-buttons.ghost>

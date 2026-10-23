@@ -113,3 +113,19 @@ class TestTimelineMarkdown:
         assert "Fix is <strong>merged</strong>." in content
         assert 'id="composerNoteHint"' in content
         assert "Supports Markdown" in content
+
+    def test_description_renders_as_markdown_in_the_header(self, sample_team_with_owner_member, advisory, client):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+        advisory.description = "## Summary\n\nA **heap overflow** & more.\n\n- Upgrade <now>"
+        advisory.save(update_fields=["description"])
+
+        response = client.get(reverse("core:security_advisory_detail", args=[advisory.id]))
+
+        content = response.content.decode()
+        assert response.status_code == 200
+        assert "<h2>Summary</h2>" in content
+        assert "<strong>heap overflow</strong> &amp; more." in content
+        assert "<li>Upgrade &lt;now&gt;</li>" in content

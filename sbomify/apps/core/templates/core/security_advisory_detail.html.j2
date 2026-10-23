@@ -4,7 +4,7 @@
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
     <c-layout.frame>
-    <c-layout.page-header title="{{ advisory.title }}" subtitle="{{ advisory.type_label }} advisory" description="{{ advisory.description }}">
+    <c-layout.page-header title="{{ advisory.title }}" subtitle="{{ advisory.type_label }} advisory" :description="advisory.description" markdown>
     <c-buttons.ghost size="sm" href="{% url 'core:security_advisories_dashboard' %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to advisories
     </c-buttons.ghost>
