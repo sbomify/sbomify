@@ -899,12 +899,15 @@ def post_update(
     which is the invariant that field's help text promises.
 
     Resolving also moves the per-product statuses, because the trust center's
-    "Am I affected?" table reads those and not the advisory. Without this a
-    resolved advisory went on telling readers every product was under
-    investigation. ``fixed_version`` names the fix for the rows that do not
-    already carry one. Resolving an already resolved advisory with a
+    "Am I affected?" table and the CSAF document read those and not the
+    advisory. Without this a resolved advisory went on telling readers every
+    product was under investigation. ``fixed_version`` names the fix for the
+    rows that do not already carry one, and resolving is refused while an
+    open row has no fix to name. Moving off resolved puts back the rows the
+    resolve moved. Resolving an already resolved advisory with a
     ``fixed_version`` is allowed, so an advisory resolved before this existed
-    can still have its rows brought into line.
+    can still have its rows brought into line. A withdrawn advisory's rows are
+    never touched: its document is no longer being maintained.
     """
     # Locked for the read-modify-write below: payload["from"] and the
     # denormalised status both come from the row as read, so two concurrent
@@ -922,7 +925,8 @@ def post_update(
     kind = (kind or "").strip()
     note = note.strip()
     fixed_version = (fixed_version or "").strip()
-    if fixed_version and kind != SecurityAdvisory.RemediationStatus.RESOLVED:
+    resolving = kind == SecurityAdvisory.RemediationStatus.RESOLVED
+    if fixed_version and not resolving:
         return ServiceResult.failure("A fixed version only applies when resolving.", status_code=400)
     if len(fixed_version) > FIXED_VERSION_MAX_LENGTH:
         return ServiceResult.failure(
@@ -943,28 +947,30 @@ def post_update(
 
     if kind not in SecurityAdvisory.RemediationStatus.values:
         return ServiceResult.failure("Unknown update type.", status_code=400)
+
+    withdrawn = advisory.status == SecurityAdvisory.Status.WITHDRAWN
+    if withdrawn and fixed_version:
+        return ServiceResult.failure("A withdrawn advisory's products cannot be changed.", status_code=409)
+
     if kind == advisory.remediation_status:
-        if kind == SecurityAdvisory.RemediationStatus.RESOLVED and fixed_version:
-            resolved = _resolve_product_statuses(advisory, fixed_version)
-            AdvisoryEvent.objects.create(
-                advisory=advisory,
-                event_type=AdvisoryEvent.EventType.UPDATE,
-                actor=user,
-                body=note or f"Fixed in {fixed_version}.",
-                payload=_stamped({"fixed_version": fixed_version, "resolved_statuses": resolved}, via),
-            )
-            _announce(team, advisory.id, "updated")
-            return ServiceResult.success(advisory.id)
+        if resolving and fixed_version:
+            return _repair_resolved(team, user, advisory, fixed_version, note, via)
         label = REMEDIATION_META.get(kind, {}).get("label", kind)
         return ServiceResult.failure(f"The advisory is already {label}.", status_code=400)
 
     payload: dict[str, Any] = {"from": advisory.remediation_status, "to": kind}
-    if kind == SecurityAdvisory.RemediationStatus.RESOLVED:
-        resolved = _resolve_product_statuses(advisory, fixed_version)
+    if resolving and not withdrawn:
+        plan = _plan_resolution(advisory, fixed_version)
+        if plan.unfixable:
+            return _needs_fixed_version(plan.unfixable)
         if fixed_version:
             payload["fixed_version"] = fixed_version
-        if resolved:
-            payload["resolved_statuses"] = resolved
+        if plan.rows:
+            payload["moved_statuses"] = _apply_resolution(plan, fixed_version)
+    elif advisory.remediation_status == SecurityAdvisory.RemediationStatus.RESOLVED and not withdrawn:
+        reverted = _revert_resolution(advisory)
+        if reverted:
+            payload["reverted_statuses"] = reverted
 
     AdvisoryEvent.objects.create(
         advisory=advisory,
@@ -986,36 +992,141 @@ FIXED_VERSION_MAX_LENGTH = 100
 # were never affected, so a fix says nothing new about them.
 _RESOLVABLE_STATES = (AdvisoryProductStatus.Status.IN_TRIAGE, AdvisoryProductStatus.Status.EXPLOITABLE)
 
+# Responses that agree with "fixed". Any other one (can_not_fix, will_not_fix,
+# workaround_available) would contradict the new status, so it becomes update.
+_FIXED_RESPONSES = (AdvisoryProductStatus.Response.UPDATE, AdvisoryProductStatus.Response.ROLLBACK)
 
-def _resolve_product_statuses(advisory: SecurityAdvisory, fixed_version: str) -> int:
-    """Mark the advisory's open product statuses fixed, and count them.
 
-    A row only moves when it can name its fix, from ``fixed_version`` or from
-    what it already carries, because ``validate_publishable`` refuses a fixed
-    row that names none. A row with no fix to name stays as it is rather than
-    making a published advisory invalid. Saved one by one so the CSAF
-    revision signals see every row.
+class _ResolutionPlan:
+    """The rows a resolve would move, and the ones it cannot."""
+
+    def __init__(self) -> None:
+        self.rows: list[AdvisoryProductStatus] = []
+        self.needs_version: list[str] = []
+        self.unfixable = 0
+
+
+def _plan_resolution(advisory: SecurityAdvisory, fixed_version: str) -> _ResolutionPlan:
+    """Decide which open rows a resolve moves, before anything is written.
+
+    A row can only become fixed when it names its fix, because
+    ``validate_publishable`` refuses a fixed row that names none. A row that
+    already names one keeps it; the rest take ``fixed_version``.
     """
+    plan = _ResolutionPlan()
     statuses = AdvisoryProductStatus.objects.filter(
         vulnerability__advisory=advisory, status__in=_RESOLVABLE_STATES
     ).prefetch_related("version_ranges")
-    resolved = 0
     for status in statuses:
-        if fixed_version and not (status.recommended_version or status.recommended_release_id):
-            status.recommended_version = fixed_version
-        has_fix = (
-            status.recommended_version
-            or status.recommended_release_id
-            or any(version_range.fixed for version_range in status.version_ranges.all())
+        if status.names_fix:
+            plan.rows.append(status)
+        elif fixed_version:
+            plan.rows.append(status)
+            plan.needs_version.append(status.pk)
+        else:
+            plan.unfixable += 1
+    return plan
+
+
+def _apply_resolution(plan: _ResolutionPlan, fixed_version: str) -> list[dict[str, str]]:
+    """Mark the planned rows fixed, and return what each one was before.
+
+    The prior state goes into the event payload so a reopen can put it back.
+    Queryset updates rather than a save per row: each save schedules its own
+    CSAF revision bump, so resolving thirty rows advanced the document's
+    version thirty times. The status_change event written alongside bumps it
+    once for the whole change.
+    """
+    moved = [
+        {
+            "id": status.pk,
+            "status": status.status,
+            "response": status.response,
+            "recommended_version": status.recommended_version,
+        }
+        for status in plan.rows
+    ]
+    now = timezone.now()
+    ids = [status.pk for status in plan.rows]
+    if plan.needs_version:
+        AdvisoryProductStatus.objects.filter(pk__in=plan.needs_version).update(recommended_version=fixed_version)
+    rows = AdvisoryProductStatus.objects.filter(pk__in=ids)
+    rows.exclude(response__in=_FIXED_RESPONSES).update(response=AdvisoryProductStatus.Response.UPDATE)
+    rows.update(status=AdvisoryProductStatus.Status.RESOLVED, updated_at=now)
+    return moved
+
+
+def _revert_resolution(advisory: SecurityAdvisory) -> int:
+    """Put back the rows the latest resolve moved, and count them.
+
+    Only rows a resolve recorded are touched, and only while they are still
+    fixed: a row fixed some other way, or edited since, is a statement this
+    reopen did not make. Records come from the last move into resolved and the
+    repairs after it, the newest record per row winning.
+    """
+    events = list(
+        advisory.events.filter(
+            event_type__in=(AdvisoryEvent.EventType.STATUS_CHANGE, AdvisoryEvent.EventType.UPDATE)
+        ).order_by("created_at", "id")
+    )
+    last_resolve = max(
+        (
+            index
+            for index, event in enumerate(events)
+            if event.event_type == AdvisoryEvent.EventType.STATUS_CHANGE
+            and (event.payload or {}).get("to") == SecurityAdvisory.RemediationStatus.RESOLVED
+        ),
+        default=None,
+    )
+    if last_resolve is None:
+        return 0
+    prior: dict[str, dict[str, str]] = {}
+    for event in events[last_resolve:]:
+        for row in (event.payload or {}).get("moved_statuses", []):
+            prior[row["id"]] = row
+
+    now = timezone.now()
+    reverted = 0
+    still_fixed = AdvisoryProductStatus.objects.filter(
+        pk__in=list(prior), vulnerability__advisory=advisory, status=AdvisoryProductStatus.Status.RESOLVED
+    ).values_list("pk", flat=True)
+    for pk in still_fixed:
+        row = prior[pk]
+        AdvisoryProductStatus.objects.filter(pk=pk).update(
+            status=row["status"],
+            response=row["response"],
+            recommended_version=row["recommended_version"],
+            updated_at=now,
         )
-        if not has_fix:
-            continue
-        status.status = AdvisoryProductStatus.Status.RESOLVED
-        if not status.response:
-            status.response = AdvisoryProductStatus.Response.UPDATE
-        status.save()
-        resolved += 1
-    return resolved
+        reverted += 1
+    return reverted
+
+
+def _repair_resolved(
+    team: Any, user: Any, advisory: SecurityAdvisory, fixed_version: str, note: str, via: dict[str, str] | None
+) -> ServiceResult[str]:
+    """Bring an already resolved advisory's open rows into line with it."""
+    plan = _plan_resolution(advisory, fixed_version)
+    if not plan.rows:
+        return ServiceResult.failure("Every product already says whether it is fixed.", status_code=400)
+    moved = _apply_resolution(plan, fixed_version)
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.UPDATE,
+        actor=user,
+        body=note or f"Fixed in {fixed_version}.",
+        payload=_stamped({"fixed_version": fixed_version, "moved_statuses": moved}, via),
+    )
+    _announce(team, advisory.id, "updated")
+    return ServiceResult.success(advisory.id)
+
+
+def _needs_fixed_version(count: int) -> ServiceResult[str]:
+    noun = "product names" if count == 1 else "products name"
+    return ServiceResult.failure(
+        f"Add the fixed version. {count} {noun} no fix, so resolving would leave them under investigation.",
+        status_code=400,
+    )
 
 
 def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:

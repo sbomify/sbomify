@@ -18,6 +18,8 @@ from sbomify.apps.security_advisories.models import (
 )
 from sbomify.apps.security_advisories.services.advisories import post_update
 
+from .conftest import publish
+
 pytestmark = pytest.mark.django_db
 
 
@@ -53,7 +55,7 @@ class TestResolvingMovesTheProducts:
             "from": "identified",
             "to": "resolved",
             "fixed_version": "1.4.3",
-            "resolved_statuses": 1,
+            "moved_statuses": [{"id": triaged.pk, "status": "in_triage", "response": "", "recommended_version": ""}],
         }
         assert validate_publishable(advisory) == []
 
@@ -73,34 +75,82 @@ class TestResolvingMovesTheProducts:
         assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
         assert triaged.recommended_version == "2.0.1"
 
-    def test_a_fixed_range_is_a_fix_without_a_version(self, team, user, advisory, triaged):
+    def test_a_fixed_range_is_the_products_own_fix(self, team, user, advisory, triaged):
         AdvisoryVersionRange.objects.create(product_status=triaged, introduced="1.0", fixed="1.4.3")
 
-        assert post_update(team, user, advisory.id, kind="resolved").ok
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="2.0.0").ok
 
         triaged.refresh_from_db()
         assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
         assert triaged.recommended_version == ""
 
-    def test_a_product_with_no_fix_to_name_is_left_alone(self, team, user, advisory, triaged):
+    def test_a_contradicting_response_becomes_update(self, team, user, advisory, triaged):
+        triaged.response = AdvisoryProductStatus.Response.WILL_NOT_FIX
+        triaged.save()
+
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        triaged.refresh_from_db()
+        assert triaged.response == AdvisoryProductStatus.Response.UPDATE
+
+    def test_a_rollback_response_is_kept(self, team, user, advisory, triaged):
+        triaged.response = AdvisoryProductStatus.Response.ROLLBACK
+        triaged.save()
+
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.3.9").ok
+
+        triaged.refresh_from_db()
+        assert triaged.response == AdvisoryProductStatus.Response.ROLLBACK
+
+    def test_resolving_is_refused_while_a_product_names_no_fix(self, team, user, advisory, triaged):
         """A fixed row with no fixed version would make the advisory unpublishable."""
         result = post_update(team, user, advisory.id, kind="resolved")
 
-        assert result.ok
+        assert not result.ok
+        assert result.status_code == 400
+        assert "fixed version" in (result.error or "")
         triaged.refresh_from_db()
         assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
-        assert advisory.events.get().payload == {"from": "identified", "to": "resolved"}
+        advisory.refresh_from_db()
+        assert advisory.remediation_status == "identified"
+        assert advisory.events.count() == 0
 
     def test_not_affected_products_are_not_touched(self, team, user, advisory, triaged):
         triaged.status = AdvisoryProductStatus.Status.NOT_AFFECTED
         triaged.impact_statement = "The parser is not shipped."
         triaged.save()
 
-        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+        assert post_update(team, user, advisory.id, kind="resolved").ok
 
         triaged.refresh_from_db()
         assert triaged.status == AdvisoryProductStatus.Status.NOT_AFFECTED
         assert triaged.recommended_version == ""
+
+    def test_reopening_puts_the_products_back(self, team, user, advisory, triaged):
+        triaged.response = AdvisoryProductStatus.Response.WILL_NOT_FIX
+        triaged.save()
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        assert post_update(team, user, advisory.id, kind="investigating", note="The fix is incomplete.").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
+        assert triaged.response == AdvisoryProductStatus.Response.WILL_NOT_FIX
+        assert triaged.recommended_version == ""
+        reopened = advisory.events.order_by("-created_at").first()
+        assert reopened.payload == {"from": "resolved", "to": "investigating", "reverted_statuses": 1}
+
+    def test_reopening_leaves_a_product_fixed_some_other_way(self, team, user, advisory, triaged):
+        advisory.remediation_status = SecurityAdvisory.RemediationStatus.RESOLVED
+        advisory.save()
+        triaged.status = AdvisoryProductStatus.Status.RESOLVED
+        triaged.recommended_version = "1.4.3"
+        triaged.save()
+
+        assert post_update(team, user, advisory.id, kind="investigating").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.RESOLVED
 
     def test_an_already_resolved_advisory_can_bring_its_products_into_line(self, team, user, advisory, triaged):
         advisory.remediation_status = SecurityAdvisory.RemediationStatus.RESOLVED
@@ -114,7 +164,29 @@ class TestResolvingMovesTheProducts:
         event = advisory.events.get()
         assert event.event_type == "update"
         assert event.body == "Fixed in 1.4.3."
-        assert event.payload == {"fixed_version": "1.4.3", "resolved_statuses": 1}
+        assert event.payload["fixed_version"] == "1.4.3"
+        assert [row["id"] for row in event.payload["moved_statuses"]] == [triaged.pk]
+
+    def test_a_repaired_advisory_reopens_cleanly(self, team, user, advisory, triaged):
+        """The repair records its moves, so a later reopen can find them."""
+        post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3")
+        AdvisoryProductStatus.objects.filter(pk=triaged.pk).update(status="in_triage", recommended_version="")
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.4").ok
+
+        assert post_update(team, user, advisory.id, kind="fix_in_progress").ok
+
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
+        assert triaged.recommended_version == ""
+
+    def test_a_repair_that_moves_nothing_is_refused(self, team, user, advisory, triaged):
+        assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        again = post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3")
+
+        assert not again.ok
+        assert again.status_code == 400
+        assert advisory.events.count() == 1
 
     def test_resolving_again_without_a_version_is_still_refused(self, team, user, advisory, triaged):
         advisory.remediation_status = SecurityAdvisory.RemediationStatus.RESOLVED
@@ -124,6 +196,43 @@ class TestResolvingMovesTheProducts:
 
         assert not result.ok
         assert "already" in (result.error or "")
+
+    def test_a_withdrawn_advisorys_products_are_not_touched(self, team, user, advisory, triaged):
+        from django.utils import timezone
+
+        publish(advisory)
+        advisory.status = SecurityAdvisory.Status.WITHDRAWN
+        advisory.withdrawn_at = timezone.now()
+        advisory.withdrawal_reason = "Published against the wrong product."
+        advisory.save()
+
+        with_version = post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3")
+        without = post_update(team, user, advisory.id, kind="resolved")
+
+        assert with_version.status_code == 409
+        assert without.ok
+        triaged.refresh_from_db()
+        assert triaged.status == AdvisoryProductStatus.Status.IN_TRIAGE
+
+    def test_one_resolve_moves_the_csaf_revision_once_per_write(
+        self, team, user, advisory, advisory_product, vulnerability, django_capture_on_commit_callbacks
+    ):
+        """Thirty rows used to schedule thirty revision bumps for one change."""
+        from sbomify.apps.security_advisories.models import AdvisoryVulnerability
+
+        for index in range(5):
+            extra = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id=f"CVE-2026-{1000 + index}")
+            AdvisoryProductStatus.objects.create(vulnerability=extra, advisory_product=advisory_product)
+        publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+        advisory.refresh_from_db()
+        before = advisory.csaf_revision
+
+        with django_capture_on_commit_callbacks(execute=True):
+            assert post_update(team, user, advisory.id, kind="resolved", fixed_version="1.4.3").ok
+
+        advisory.refresh_from_db()
+        assert AdvisoryProductStatus.objects.filter(vulnerability__advisory=advisory, status="resolved").count() == 5
+        assert 1 <= advisory.csaf_revision - before <= 2
 
     def test_a_fixed_version_needs_the_resolved_kind(self, team, user, advisory, triaged):
         result = post_update(team, user, advisory.id, kind="investigating", fixed_version="1.4.3")
@@ -217,6 +326,37 @@ class TestComposerPost:
         advisory.refresh_from_db()
         assert advisory.remediation_status == "fix_in_progress"
         assert advisory.events.get().payload["to"] == "fix_in_progress"
+
+    def test_the_composer_resolves_with_a_fixed_version(self, sample_team_with_owner_member, advisory, triaged, client):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+        url = reverse("core:security_advisory_detail", args=[advisory.id])
+
+        page = client.get(url)
+        response = client.post(url, {"kind": "resolved", "note": "Shipped.", "fixed_version": "1.4.3"})
+
+        assert 'name="fixed_version"' in page.content.decode()
+        assert response.status_code == 302
+        triaged.refresh_from_db()
+        assert (triaged.status, triaged.recommended_version) == ("resolved", "1.4.3")
+
+    def test_the_composer_ignores_a_fixed_version_on_other_kinds(
+        self, sample_team_with_owner_member, advisory, client
+    ):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        client.post(
+            reverse("core:security_advisory_detail", args=[advisory.id]),
+            {"kind": "investigating", "note": "Looking.", "fixed_version": "1.4.3"},
+        )
+
+        advisory.refresh_from_db()
+        assert advisory.remediation_status == "investigating"
 
 
 class TestTimelineMarkdown:

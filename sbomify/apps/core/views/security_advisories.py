@@ -386,7 +386,14 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             return redirect("core:security_advisory_detail", advisory_id=advisory_id)
 
         kind = (request.POST.get("kind") or NOTE_ONLY_KIND).strip()
-        result = post_update(team, cast(User, request.user), advisory_id, kind=kind, note=request.POST.get("note", ""))
+        result = post_update(
+            team,
+            cast(User, request.user),
+            advisory_id,
+            kind=kind,
+            note=request.POST.get("note", ""),
+            fixed_version=request.POST.get("fixed_version", "") if kind == "resolved" else "",
+        )
         if not result.ok and result.status_code == 404:
             raise Http404("Advisory not found")
         if result.ok:

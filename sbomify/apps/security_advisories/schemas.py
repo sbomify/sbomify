@@ -157,10 +157,10 @@ class AdvisoryUpdateSchema(Schema):
     )
     fixed_version: str = Field(
         "",
-        max_length=100,
-        description="Only with kind 'resolved': the version that fixes it. Each product still affected or under "
-        "investigation is marked fixed in this version, unless it already names its own fix. Send it with "
-        "'resolved' on an advisory that is already resolved to bring its products into line.",
+        description="Only with kind 'resolved', at most 100 characters: the version that fixes it. Each product "
+        "still affected or under investigation is marked fixed in this version, unless it already names its own "
+        "fix. Required when any such product names no fix. Send it with 'resolved' on an advisory that is already "
+        "resolved to bring its products into line. Moving off resolved puts those products back.",
     )
 
 

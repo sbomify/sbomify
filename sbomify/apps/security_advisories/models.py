@@ -801,6 +801,18 @@ class AdvisoryProductStatus(models.Model):
     def is_suppressing(self) -> bool:
         return self.status in self.SUPPRESSING_STATES
 
+    @property
+    def names_fix(self) -> bool:
+        """Whether this row says which version fixes it, as a fixed status must.
+
+        ``version_ranges.all()`` so a caller that prefetched them pays nothing.
+        """
+        return bool(
+            self.recommended_version
+            or self.recommended_release_id
+            or any(version_range.fixed for version_range in self.version_ranges.all())
+        )
+
     def clean(self) -> None:
         super().clean()
         errors: dict[str, str] = {}
@@ -1148,13 +1160,7 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
         for status in statuses:
             label = f"{vulnerability} / {status.advisory_product or 'all products'}"
             if status.status == AdvisoryProductStatus.Status.RESOLVED:
-                # ``.all()`` reads the prefetch cache; ``.exclude()`` would re-query.
-                has_fix = (
-                    status.recommended_version
-                    or status.recommended_release_id
-                    or any(version_range.fixed for version_range in status.version_ranges.all())
-                )
-                if not has_fix:
+                if not status.names_fix:
                     problems.append(f"{label} is fixed but names no fixed version.")
             if status.status == AdvisoryProductStatus.Status.NOT_AFFECTED:
                 if not status.justification and not status.impact_statement.strip():

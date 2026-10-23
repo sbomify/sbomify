@@ -92,7 +92,8 @@
                     </div>
                     <div class="flex-1 min-w-0 pb-8">
                         <form method="post"
-                              action="{% url 'core:security_advisory_detail' advisory.id %}">
+                              action="{% url 'core:security_advisory_detail' advisory.id %}"
+                              x-data="{ kind: 'update' }">
                             {% csrf_token %}
                             <div class="rounded-xl border border-border bg-surface overflow-hidden transition-colors focus-within:border-primary/60">
                                 <label for="composerNote" class="sr-only">Add an update</label>
@@ -104,16 +105,20 @@
                                           placeholder="Add an update…"
                                           class="w-full bg-transparent border-0 px-4 pt-3 pb-2 text-sm text-text placeholder:text-text-muted resize-none focus:outline-none focus:ring-0"></textarea>
                                 <div class="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 border-t border-border/50 bg-background/30">
-                                    <div>
+                                    <div class="flex flex-wrap items-center gap-3">
                                         <label for="composerKind" class="sr-only">Update type</label>
                                         {# The field sizes to its content here, so width is the caller's layout. #}
-                                        <c-forms.select id="composerKind" name="kind" class="!w-auto min-w-[190px]">
+                                        <c-forms.select id="composerKind" name="kind" class="!w-auto min-w-[190px]" x-model="kind">
                                         <option value="update">Note only</option>
                                         <option value="investigating">Investigating</option>
                                         <option value="fix_in_progress">Fix in progress</option>
                                         <option value="resolved">Resolved</option>
                                         <option value="wont_fix">Won't fix</option>
                                         </c-forms.select>
+                                        <div x-show="kind === 'resolved'" x-cloak>
+                                            <label for="composerFixedVersion" class="sr-only">Fixed in version</label>
+                                            <c-forms.input id="composerFixedVersion" name="fixed_version" size="sm" placeholder="Fixed in, e.g. 1.4.3" maxlength="100" ::disabled="kind !== 'resolved'" />
+                                        </div>
                                     </div>
                                     <c-buttons.primary type="submit" size="sm">
                                     <i class="fas fa-paper-plane mr-2"></i>Post update
