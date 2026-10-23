@@ -712,11 +712,13 @@ class PluginOrchestrator:
         # A settled security run is the newest completed run now, so readers
         # resolve to it: project it like a normal completion, which also demotes
         # and drops the rows of the runs it supersedes. Otherwise the previous
-        # run's rows stay current while every reader has moved past them.
+        # run's rows stay current while every reader has moved past them. No
+        # VEX to resolve: the synthesised result is an operational finding,
+        # which projects no rows whatever the statements say.
         if run.category == AssessmentCategory.SECURITY.value:
             from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
 
-            sync_findings_safely(run)
+            sync_findings_safely(run, [])
 
         logger.info(f"[PLUGIN] finalize {kind}: marked run {run_id} as COMPLETED with {kind} finding")
 
