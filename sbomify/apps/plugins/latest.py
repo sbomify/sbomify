@@ -124,13 +124,15 @@ def superseded_run_ids(runs: Any) -> set[Any]:
     every such run of each pair it mentions. ``releases`` is a frozenset of
     release ids. Answered in one pass, without a query per run.
     """
-    covering: dict[tuple[Any, str], list[frozenset[Any]]] = {}
+    # The distinct release sets seen so far per pair: runs of one pair nearly
+    # always share a set, so this stays a handful long however many runs there are.
+    covering: dict[tuple[Any, str], set[frozenset[Any]]] = {}
     superseded: set[Any] = set()
     for run_id, sbom_id, plugin_name, releases in runs:
-        newer = covering.setdefault((sbom_id, plugin_name), [])
+        newer = covering.setdefault((sbom_id, plugin_name), set())
         if any(releases <= other for other in newer):
             superseded.add(run_id)
-        newer.append(releases)
+        newer.add(releases)
     return superseded
 
 
@@ -144,7 +146,7 @@ def readable_runs(completed: QuerySet[Any]) -> tuple[list[Any], dict[Any, frozen
     is read to decide.
     """
     identities = list(completed.order_by("-created_at", "-id").values_list("id", "sbom_id", "plugin_name"))
-    releases = release_sets([run_id for run_id, _sbom_id, _plugin in identities])
+    releases = release_sets(completed.values("id"))
     superseded = superseded_run_ids(
         (run_id, sbom_id, plugin_name, releases[run_id]) for run_id, sbom_id, plugin_name in identities
     )
@@ -153,15 +155,23 @@ def readable_runs(completed: QuerySet[Any]) -> tuple[list[Any], dict[Any, frozen
 
 
 def release_sets(run_ids: Any) -> dict[Any, frozenset[Any]]:
-    """``{run id: frozenset of release ids}`` in one query; a run with no releases maps to an empty set."""
+    """``{run id: frozenset of release ids}`` in one query; a run with no releases reads as an empty set.
+
+    ``run_ids`` may be a queryset of ids, which goes to the database as a
+    subquery rather than as a list of every id.
+    """
+    from collections import defaultdict
+
     from sbomify.apps.plugins.models import AssessmentRunRelease
 
-    sets: dict[Any, set[Any]] = {run_id: set() for run_id in run_ids}
-    for run_id, release_id in AssessmentRunRelease.objects.filter(assessment_run_id__in=list(sets)).values_list(
+    sets: dict[Any, set[Any]] = defaultdict(set)
+    for run_id, release_id in AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids).values_list(
         "assessment_run_id", "release_id"
     ):
         sets[run_id].add(release_id)
-    return {run_id: frozenset(releases) for run_id, releases in sets.items()}
+    frozen: defaultdict[Any, frozenset[Any]] = defaultdict(frozenset)
+    frozen.update((run_id, frozenset(releases)) for run_id, releases in sets.items())
+    return frozen
 
 
 def newer_than(run: Any, prefix: str = "") -> Any:

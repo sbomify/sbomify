@@ -999,3 +999,15 @@ class TestVexReachesAnOffloadedRun:
         assert superseded.result_object_key not in ("", old_key)
         rewritten = load_result(superseded)
         assert next(f for f in rewritten["findings"] if f["id"] == "CVE-2026-0").get("analysis_state") == "not_affected"
+
+
+@pytest.mark.django_db
+def test_a_run_completing_between_the_release_lookup_and_the_ranking_does_not_crash(sbom, monkeypatch):
+    """The two reads are separate queries; a run can appear in the second only."""
+    from sbomify.apps.plugins import latest
+    from sbomify.apps.plugins.offload import current_run_ids
+
+    run = _run(sbom, days_ago=400)
+    monkeypatch.setattr(latest, "release_sets", lambda run_ids: {})
+
+    assert run.id in current_run_ids({sbom.id}, {"osv"})

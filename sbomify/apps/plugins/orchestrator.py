@@ -433,7 +433,7 @@ class PluginOrchestrator:
             if assessment_run.category == AssessmentCategory.SECURITY.value:
                 from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
 
-                sync_findings_safely(assessment_run, applied_vex)
+                sync_findings_safely(assessment_run, applied_vex, fresh=True)
 
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
@@ -718,7 +718,7 @@ class PluginOrchestrator:
         if run.category == AssessmentCategory.SECURITY.value:
             from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
 
-            sync_findings_safely(run, [])
+            sync_findings_safely(run, [], fresh=True)
 
         logger.info(f"[PLUGIN] finalize {kind}: marked run {run_id} as COMPLETED with {kind} finding")
 

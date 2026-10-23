@@ -109,7 +109,8 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
         .values_list("id", "sbom_id", "plugin_name", "status", "result_skipped")
         .iterator()
     ):
-        key = (sbom_id, plugin_name, releases_by_run[run_id])
+        # A run that completed after the release lookup has none recorded yet.
+        key = (sbom_id, plugin_name, releases_by_run.get(run_id, frozenset()))
         if key not in seen:
             seen.add(key)
             current.add(run_id)
