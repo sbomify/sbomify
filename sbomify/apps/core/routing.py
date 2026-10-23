@@ -9,11 +9,15 @@ from __future__ import annotations
 from django.urls import re_path
 
 from . import consumers
+from .user_consumer import UserConsumer
 
 websocket_urlpatterns = [
     # Workspace-scoped WebSocket for real-time updates
     # URL: ws://host/ws/workspace/<workspace_key>/
     re_path(r"ws/workspace/(?P<workspace_key>[\w-]+)/$", consumers.WorkspaceConsumer.as_asgi()),  # type: ignore[arg-type]
+    # The signed-in user's own messages, for people outside the workspace the
+    # news is about, such as a trust-center visitor whose request was decided.
+    re_path(r"ws/user/$", UserConsumer.as_asgi()),  # type: ignore[arg-type]
     # Anything else. Channels raises ValueError when no pattern matches, which
     # escapes as an unhandled ASGI exception and reaches the error tracker as a
     # fault of ours, though it only ever means a client asked for something we

@@ -5,7 +5,8 @@
      x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
      hx-get="{% url 'core:security_advisories_table' %}"
      hx-trigger="refresh-advisories from:body"
-     hx-swap="morph">
+     hx-swap="morph"
+     @ws:message.window="if (['advisory_updated', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-advisories')), 500); }">
     {# Serialize advisories data for Alpine.js #}
     {{ advisories|json_script:"advisories-data" }}
     {% if advisories %}

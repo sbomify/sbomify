@@ -44,6 +44,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
+from ..announce import announce_assessment_settled
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, RunStatus, ScanMode
@@ -526,6 +527,8 @@ def run_assessment_task(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
                             exc_info=True,
                         )
+                    else:
+                        announce_assessment_settled(sbom_id, plugin_name, RunStatus.COMPLETED.value)
 
                 response = {
                     "status": "retry_exhausted",
@@ -549,7 +552,6 @@ def run_assessment_task(
         if assessment_run is None:
             if _existing_run_id:
                 from .. import models as plugin_models
-                from ..sdk.enums import RunStatus
 
                 deleted, _ = plugin_models.AssessmentRun.objects.filter(
                     id=_existing_run_id, status=RunStatus.PENDING.value
@@ -559,6 +561,7 @@ def run_assessment_task(
                         f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
                         f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
                     )
+                    announce_assessment_settled(sbom_id, plugin_name, "skipped")
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -590,6 +593,7 @@ def run_assessment_task(
                     message_type="assessment_complete",
                     data={
                         "sbom_id": sbom_id,
+                        "component_id": str(assessment_run.sbom.component_id),
                         "plugin_name": plugin_name,
                         "status": assessment_run.status,
                     },
@@ -624,11 +628,41 @@ def run_assessment_task(
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
+        announce_assessment_settled(sbom_id, plugin_name, RunStatus.FAILED.value)
         return format_task_error("run_assessment", sbom_id, str(e))
 
     except Exception as e:
         logger.exception(f"[TASK_run_assessment] Unexpected error: {e}")
         raise  # Re-raise for Dramatiq retry
+
+
+def announce_assessment_started(
+    sbom_id: str, plugin_name: str, *, component_id: str | None = None, workspace_key: str | None = None
+) -> None:
+    """Broadcast ``assessment_started`` for one SBOM once the current transaction commits.
+
+    Pages that show a run's state repaint on it, so a queued run reads as
+    pending without a reload. Callers that already hold the SBOM's component
+    and workspace pass them to skip the lookup. Never raises.
+    """
+    try:
+        if component_id is None or workspace_key is None:
+            from sbomify.apps.sboms.models import SBOM
+
+            row = SBOM.objects.filter(pk=sbom_id).values("component_id", "component__team__key").first()
+            if not row:
+                return
+            component_id = str(row["component_id"])
+            workspace_key = row["component__team__key"]
+        if not workspace_key:
+            return
+        key = workspace_key
+        data = {"sbom_id": str(sbom_id), "component_id": str(component_id), "plugin_name": plugin_name}
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(workspace_key=key, message_type="assessment_started", data=data)
+        )
+    except Exception:
+        logger.warning("Could not announce started assessment for SBOM %s", sbom_id, exc_info=True)
 
 
 def _failed_run_notification(assessment_run: Any) -> dict[str, str]:
@@ -723,6 +757,7 @@ def _create_pending_assessment_run(
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
         return None
 
+    announce_assessment_started(sbom_id, registered.name)
     return str(run.id)
 
 

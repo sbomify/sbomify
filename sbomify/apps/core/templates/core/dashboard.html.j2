@@ -14,6 +14,15 @@
         <c-layout.page-header title="{{ onboarding.title|default:'Set up your first repository' }}" subtitle="Choose a coding agent or the terminal wizard. Find your lockfiles, create components and add a workflow." />
         <c-overview.onboarding :can_manage="can_manage" :can_administer="can_administer" :first_component="onboarding.first_component" :setup_config="onboarding.setup_config" />
     {% else %}
+        {% comment %}
+        The overview repaints itself when the socket says something it counts has
+        changed: a scan settled, VEX was re-applied or decided, an artifact or an
+        inventory item came or went. The view rebuilds the snapshot for that
+        request rather than serving the cached copy. The wait is longer than on
+        other pages because an upload settles several scans in a burst, and
+        the overview should repaint once after it, not once per scan.
+        {% endcomment %}
+        <c-layout.frame id="overview-content" hx-get="{{ request.get_full_path }}" hx-trigger="refresh-overview from:body" hx-select="#overview-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window="if (['assessment_complete', 'vex_reapplied', 'vex_submission_updated', 'sbom_uploaded', 'sbom_deleted', 'product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-overview')), 2000); }">
         <c-overview.header subtitle="{{ page_subtitle }}" />
         <div role="group"
              class="grid grid-cols-2 xl:grid-cols-4 gap-3"
@@ -47,6 +56,8 @@
         {% endif %}
         <c-overview.priority :dashboard="dashboard" workspace_key="{{ current_team.key }}" />
         <c-overview.products :products="dashboard.products" :product_count="dashboard.product_count" :shares_components="dashboard.shares_components" :omits_components="dashboard.omits_components" />
+        </c-layout.frame>
+        {# Outside the frame, so a refresh never closes a triage dialog that is open. #}
         {% if can_triage_vulnerabilities %}<div id="priority-triage-host" class="contents"></div>{% endif %}
     {% endif %}
 {% endblock %}
