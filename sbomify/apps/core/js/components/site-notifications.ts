@@ -11,6 +11,8 @@ interface Notification {
     type: string;
     message: string;
     action_url?: string;
+    title?: string;
+    action_label?: string;
     severity: 'info' | 'warning' | 'error';
     created_at: string;
 }
@@ -91,6 +93,8 @@ export function registerSiteNotifications() {
                     type: data.notification_type || 'info',
                     message: data.message,
                     action_url: data.action_url,
+                    title: data.title,
+                    action_label: data.action_label,
                     severity: data.severity || 'info',
                     created_at: data.created_at || new Date().toISOString(),
                 };
@@ -186,10 +190,10 @@ export function registerSiteNotifications() {
 
                 if (notification.action_url) {
                     showConfirmation({
-                        title: notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
+                        title: notification.title || notification.severity.charAt(0).toUpperCase() + notification.severity.slice(1),
                         message: notification.message,
                         type: notification.severity === 'error' ? 'danger' : notification.severity,
-                        confirmText: 'Take Action',
+                        confirmText: notification.action_label || 'Take Action',
                         cancelText: 'Dismiss',
                     }).then((confirmed: boolean) => {
                         if (confirmed && notification.action_url) {

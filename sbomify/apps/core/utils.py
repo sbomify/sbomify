@@ -108,6 +108,8 @@ def push_notification(
     notification_type: str = "system",
     action_url: str | None = None,
     notification_id: str | None = None,
+    title: str | None = None,
+    action_label: str | None = None,
 ) -> bool:
     """
     Push a notification to all connected WebSocket clients in a workspace.
@@ -122,6 +124,8 @@ def push_notification(
         notification_type: The type of notification (e.g., "system", "billing"). Default: "system".
         action_url: Optional URL for an action button. If provided, displays a modal with action.
         notification_id: Optional unique ID for the notification. Auto-generated if not provided.
+        title: Optional heading for the modal. Defaults to the severity on the frontend.
+        action_label: Optional label for the action button. Defaults to "Take Action" on the frontend.
 
     Returns:
         bool: True if the notification was sent successfully, False otherwise.
@@ -146,6 +150,10 @@ def push_notification(
 
     if action_url:
         notification_data["action_url"] = action_url
+    if title:
+        notification_data["title"] = title
+    if action_label:
+        notification_data["action_label"] = action_label
 
     return broadcast_to_workspace(
         workspace_key=workspace_key,
