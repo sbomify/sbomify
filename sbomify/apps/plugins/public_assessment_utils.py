@@ -279,7 +279,9 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     """
     from sbomify.apps.sboms.models import SBOM
 
-    sboms = SBOM.objects.filter(component=component)
+    # A VEX row is a decision about these SBOMs, never assessed itself; counting it
+    # as an SBOM that passes nothing would take every badge away.
+    sboms = SBOM.objects.filter(component=component).exclude(bom_type=SBOM.BomType.VEX)
     sbom_ids = list(sboms.values_list("id", flat=True))
 
     if not sbom_ids:
@@ -391,7 +393,7 @@ def get_latest_sbom_for_component(component: "Component") -> Any:
     """
     from sbomify.apps.sboms.models import SBOM
 
-    return SBOM.objects.filter(component=component).order_by("-created_at").first()
+    return SBOM.objects.filter(component=component).exclude(bom_type=SBOM.BomType.VEX).order_by("-created_at").first()
 
 
 def get_component_latest_sbom_assessment_status(component: "Component") -> ComponentAssessmentStatus:
@@ -541,6 +543,7 @@ def get_products_latest_sbom_assessments_batch(
     component_ids = list(component_to_products.keys())
     latest_sboms = (
         SBOM.objects.filter(component_id__in=component_ids)
+        .exclude(bom_type=SBOM.BomType.VEX)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
@@ -552,7 +555,11 @@ def get_products_latest_sbom_assessments_batch(
         # Manual deduplication for SQLite which doesn't support DISTINCT ON
         seen_components: set[str] = set()
         latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
+        for sbom in (
+            SBOM.objects.filter(component_id__in=component_ids)
+            .exclude(bom_type=SBOM.BomType.VEX)
+            .order_by("component_id", "-created_at")
+        ):
             if str(sbom.component_id) not in seen_components:
                 seen_components.add(str(sbom.component_id))
                 latest_sbom_list.append(sbom)
@@ -641,6 +648,7 @@ def get_components_latest_sbom_assessments_batch(
     # Step 1: Get latest SBOM for each component (single query)
     latest_sboms = (
         SBOM.objects.filter(component_id__in=component_ids)
+        .exclude(bom_type=SBOM.BomType.VEX)
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
@@ -652,7 +660,11 @@ def get_components_latest_sbom_assessments_batch(
         # Manual deduplication for SQLite which doesn't support DISTINCT ON
         seen_components: set[str] = set()
         latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
+        for sbom in (
+            SBOM.objects.filter(component_id__in=component_ids)
+            .exclude(bom_type=SBOM.BomType.VEX)
+            .order_by("component_id", "-created_at")
+        ):
             if str(sbom.component_id) not in seen_components:
                 seen_components.add(str(sbom.component_id))
                 latest_sbom_list.append(sbom)
