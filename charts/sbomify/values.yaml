@@ -387,7 +387,7 @@ service:
 # ---------------------------------------------------------------------------
 # Caddy is the cluster edge, not an Ingress. That is a deliberate choice, for a
 # reason specific to this application: a workspace can bring its own domain
-# (Team.custom_domain), so the set of TLS hostnames is unbounded and changes at
+# (Workspace.custom_domain), so the set of TLS hostnames is unbounded and changes at
 # runtime. Ingress and Gateway API both require hostnames to be declared ahead
 # of time, so neither can serve them. Caddy's on-demand TLS asks the
 # application whether a domain is known and issues on the fly.

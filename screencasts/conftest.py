@@ -18,7 +18,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     team_with_business_plan,  # noqa: F401
 )
 from sbomify.apps.sboms.models import SBOM, Component, Product
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 # Full HD. Marketplace listings (AWS, GitHub, Atlassian) reject or upscale
 # anything below 1080p, so this is the floor for every recording — the video
@@ -764,8 +764,8 @@ def browser_base_url(live_server) -> str:
 @pytest.fixture
 def deletable_team(
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
-) -> Team:
+    team_with_business_plan: Workspace,
+) -> Workspace:
     """Unmark the team as default so the delete button is enabled."""
     Member.objects.filter(user=sample_user, team=team_with_business_plan).update(is_default_team=False)
     return team_with_business_plan
@@ -787,7 +787,7 @@ PIED_PIPER_PRODUCT_NAME = "Pied Piper Compression Engine"
 
 
 @pytest.fixture
-def pied_piper_product(deletable_team: Team) -> dict:
+def pied_piper_product(deletable_team: Workspace) -> dict:
     """Create the Pied Piper hierarchy via ORM (4 components attached to 1 product).
 
     Returns dict with keys: product, components (dict).
@@ -832,7 +832,7 @@ def pied_piper_with_sboms(pied_piper_product: dict) -> dict:
 def setup_browser_session(
     browser_base_url: str,
     sample_user: AbstractBaseUser,
-    team: Team,
+    team: Workspace,
 ) -> dict[str, Any]:
     # A team with an active business subscription has finished plan selection.
     # The shared fixture leaves ``has_selected_billing_plan`` at its model
@@ -866,7 +866,7 @@ def recording_context(
     browser: Browser,
     browser_base_url: str,
     sample_user: AbstractBaseUser,
-    deletable_team: Team,
+    deletable_team: Workspace,
 ) -> Generator[BrowserContext, Any, None]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

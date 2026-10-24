@@ -12,7 +12,7 @@ from sbomify.apps.core.services.release_vulnerabilities import build_release_vul
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postures
 
 pytestmark = pytest.mark.django_db
@@ -76,7 +76,7 @@ def test_rollup_matches_the_product_page_and_counts_each_artifact(
 
 def test_outsider_is_refused(release: Release, django_user_model) -> None:
     outsider = Member.objects.create(
-        team=Team.objects.create(name="Elsewhere"),
+        team=Workspace.objects.create(name="Elsewhere"),
         user=django_user_model.objects.create_user(username="outsider", email="outsider@example.com"),
         role="owner",
     )
