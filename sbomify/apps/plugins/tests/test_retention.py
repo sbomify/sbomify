@@ -178,6 +178,8 @@ class TestCost:
         from sbomify.apps.vulnerability_scanning.models import Finding, FindingRecord
 
         monkeypatch.setattr(result_store, "delete_orphaned_result_objects", lambda: 0)
+
+        monkeypatch.setattr(result_store, "delete_unreferenced_findings_objects", lambda: 0)
         monkeypatch.setattr(
             retention, "prune_assessment_runs", lambda: prune_assessment_runs(keep_per_plugin=1, min_age_days=30)
         )
@@ -218,6 +220,7 @@ class TestCost:
             _run(sample_sbom, "osv", days_ago=1)
         monkeypatch.setattr(findings, "drop_legacy_findings_table", lambda: False)
         monkeypatch.setattr(result_store, "delete_orphaned_result_objects", lambda: 0)
+        monkeypatch.setattr(result_store, "delete_unreferenced_findings_objects", lambda: 0)
 
         prune_assessment_runs_task.fn()
 
