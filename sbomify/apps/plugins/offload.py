@@ -210,23 +210,19 @@ def offload_run(run: Any) -> bool:
     if not isinstance(payload, dict):
         return False
 
-    stored = put_split_result(run.id, payload)
-    run._populate_result_columns()
-    changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
-        result=None,
-        result_summary=run.result_summary,
-        result_skipped=run.result_skipped,
-        result_object_key=stored.key,
-        result_findings_key=stored.findings_key,
-    )
-    if changed:
-        # The collector may have taken the shared findings between storing them
-        # and this UPDATE; now that the row names them, put them back if so.
-        stored.confirm()
-    elif not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
-        # The shared findings object is left for the daily collector, which
-        # removes it once no row names it.
-        delete_result_object(stored.key)
+    with put_split_result(run.id, payload) as stored:
+        run._populate_result_columns()
+        changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
+            result=None,
+            result_summary=run.result_summary,
+            result_skipped=run.result_skipped,
+            result_object_key=stored.key,
+            result_findings_key=stored.findings_key,
+        )
+        if not changed and not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
+            # The shared findings object is left for the daily collector, which
+            # removes it once no row names it.
+            delete_result_object(stored.key)
     return bool(changed)
 
 

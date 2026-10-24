@@ -33,20 +33,19 @@ findings array under :data:`FINDINGS_PREFIX`, keyed by its hash. The row records
 both keys, ``result_findings_key`` for the shared one, which is how the daily
 sweep knows when no run needs a shared object any more.
 
-A shared object has many readers and no owner, so a writer naming it and the
-collector deleting it can race, and no transaction is held across the object
-store to prevent that. Each side repairs the other instead. A writer stores the
-object, commits the row that names it, then checks the object is still there and
-puts it back if not. The collector reads the object, deletes it, then checks
-again whether any row names it and puts it back if one does. Whatever the
-interleaving, the delete precedes one of those two checks, so a named object is
-never left missing.
+A writer holds a shared PostgreSQL advisory lock from storing the findings
+until its row names them. The collector takes the exclusive lock before checking
+references and deleting an object. It can therefore only delete an unreferenced
+object, even if DELETE succeeds and its response is lost. Outside a transaction
+the lock belongs to the session, so the offload sweep does not hold a transaction
+across storage calls. Inside one it lasts until commit or rollback, including an
+outer transaction around a VEX rewrite.
 
 Payloads are serialised with sorted keys and no whitespace, so the same result
 dict always produces the same bytes and therefore the same key: re-running the
 sweep over a row finds its object already stored instead of writing a second
-one. ``verify_offloaded_results`` checks that each offloaded row's object still
-exists; it does not re-hash the bytes.
+one. ``verify_offloaded_results`` checks that each offloaded row's own object
+and shared findings still exist; it does not re-hash the bytes.
 """
 
 from __future__ import annotations
@@ -54,6 +53,8 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -150,16 +151,39 @@ def findings_key_for(findings: bytes) -> str:
 
 @dataclass(frozen=True)
 class StoredResult:
-    """Where :func:`put_split_result` stored a payload, and what to repair it from."""
+    """Where :func:`put_split_result` stored a payload."""
 
     key: str
     findings_key: str = ""
-    findings: bytes = b""
 
-    def confirm(self) -> None:
-        """Put the shared findings back if the collector took them. Call once the row names them."""
-        if self.findings_key:
-            ensure_findings_object(self.findings_key, self.findings)
+
+@contextmanager
+def _findings_lock(key: str, *, shared: bool = False) -> Iterator[None]:
+    """Coordinate publication and collection without opening a transaction.
+
+    In an existing transaction the reference is not visible until it commits,
+    so use a transaction lock that outlives this context instead. Session locks
+    are released on errors too; losing the connection releases them in Postgres.
+    """
+    from django.db import connection
+
+    suffix = "_shared" if shared else ""
+    transactional = connection.in_atomic_block
+    scope = "xact_" if transactional else ""
+    lock_name = f"assessment-findings:{key}"
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT pg_advisory_{scope}lock{suffix}(hashtextextended(%s, 0))", [lock_name])
+    try:
+        yield
+    finally:
+        if not transactional:
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"SELECT pg_advisory_unlock{suffix}(hashtextextended(%s, 0))", [lock_name])
+            except BaseException:
+                # Never return a session holding a lock to the connection pool.
+                connection.close()
+                raise
 
 
 def ensure_findings_object(findings_key: str, findings: bytes) -> None:
@@ -169,17 +193,18 @@ def ensure_findings_object(findings_key: str, findings: bytes) -> None:
         client.upload_data_as_file(_bucket(), findings_key, findings)
 
 
-def put_split_result(run_id: Any, result: dict[str, Any]) -> StoredResult:
+@contextmanager
+def put_split_result(run_id: Any, result: dict[str, Any]) -> Iterator[StoredResult]:
     """Store a payload as the run's own object plus its shared findings.
 
-    The caller writes both keys to the row and then calls
-    :meth:`StoredResult.confirm`, which is the writer's half of the repair the
-    module docstring describes. A payload without a findings array is stored
-    whole, with no shared key.
+    The caller must write both keys to the row inside this context, so the
+    collector cannot delete the findings before the reference is committed.
+    A payload without a findings array is stored whole, with no shared key.
     """
     findings = result.get("findings")
     if not isinstance(findings, list):
-        return StoredResult(key=put_result(run_id, result))
+        yield StoredResult(key=put_result(run_id, result))
+        return
 
     stable: list[Any] = []
     volatile: list[dict[str, Any]] = []
@@ -193,13 +218,13 @@ def put_split_result(run_id: Any, result: dict[str, Any]) -> StoredResult:
 
     findings_bytes = json.dumps(stable, sort_keys=True, separators=(",", ":")).encode("utf-8")
     findings_key = findings_key_for(findings_bytes)
-    ensure_findings_object(findings_key, findings_bytes)
-
     remainder = {name: value for name, value in result.items() if name != "findings"}
     remainder[FINDINGS_REF] = findings_key
     if any(volatile):
         remainder[FINDINGS_VOLATILE] = volatile
-    return StoredResult(key=put_result(run_id, remainder), findings_key=findings_key, findings=findings_bytes)
+    with _findings_lock(findings_key, shared=True):
+        ensure_findings_object(findings_key, findings_bytes)
+        yield StoredResult(key=put_result(run_id, remainder), findings_key=findings_key)
 
 
 def get_findings(findings_key: str) -> list[Any]:
@@ -296,18 +321,17 @@ def save_result(run: Any, result: dict[str, Any]) -> None:
         if not current_key:
             run.save(update_fields=["result"])
             return
-        stored = put_split_result(run.id, result)
-        run._populate_result_columns()
-        model.objects.filter(pk=run.pk).update(
-            result=None,
-            result_object_key=stored.key,
-            result_findings_key=stored.findings_key,
-            result_summary=run.result_summary,
-            result_skipped=run.result_skipped,
-        )
-        run.result_object_key = stored.key
-        run.result_findings_key = stored.findings_key
-        transaction.on_commit(stored.confirm)
+        with put_split_result(run.id, result) as stored:
+            run._populate_result_columns()
+            model.objects.filter(pk=run.pk).update(
+                result=None,
+                result_object_key=stored.key,
+                result_findings_key=stored.findings_key,
+                result_summary=run.result_summary,
+                result_skipped=run.result_skipped,
+            )
+            run.result_object_key = stored.key
+            run.result_findings_key = stored.findings_key
 
 
 def delete_result_object(key: str) -> None:
@@ -365,10 +389,9 @@ def delete_orphaned_result_objects(batch_size: int = 1000) -> int:
 def delete_unreferenced_findings_objects(batch_size: int = 500) -> int:
     """Remove shared findings arrays no run names any more. Returns how many were deleted.
 
-    Each batch of listed keys is checked against the table in one query. An
-    object no row names is read, deleted, and put back if a row names it by the
-    time the delete is done: the collector's half of the repair the module
-    docstring describes, so a run being offloaded onto it at that moment keeps it.
+    The batch lookup is an optimisation only. Before deleting a candidate,
+    take its exclusive lock and recheck references: a writer may have named it
+    since the batch was read. No referenced object is deleted or needs repair.
     """
     from sbomify.apps.plugins.models import AssessmentRun
 
@@ -378,20 +401,20 @@ def delete_unreferenced_findings_objects(batch_size: int = 500) -> int:
 
     def sweep(keys: list[str]) -> int:
         named = set(
-            AssessmentRun.objects.filter(result_findings_key__in=keys).values_list("result_findings_key", flat=True)
+            AssessmentRun.objects.filter(result_findings_key__in=keys)
+            .order_by()
+            .values_list("result_findings_key", flat=True)
+            .distinct()
         )
         removed = 0
         for key in keys:
             if key in named:
                 continue
-            data = client.get_file_data(bucket, key)
-            if data is None:
-                continue
-            client.delete_object(bucket, key)
-            if AssessmentRun.objects.filter(result_findings_key=key).exists():
-                client.upload_data_as_file(bucket, key, data)
-                continue
-            removed += 1
+            with _findings_lock(key):
+                if AssessmentRun.objects.filter(result_findings_key=key).exists():
+                    continue
+                client.delete_object(bucket, key)
+                removed += 1
         return removed
 
     pending: list[str] = []
