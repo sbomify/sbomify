@@ -23,8 +23,10 @@ matter:
 
 **The findings array is shared.** Whole payloads never repeat: ``assessed_at``
 and the scanner's metrics differ on every scan. The findings array is nearly all
-of a payload's size, though, and a rescan of an unchanged SBOM reports exactly
-the same one, which is how a scanner polling every hour filled the table. So an
+of a payload's size, though, and a rescan of an unchanged SBOM reports the same
+one, which is how a scanner polling every hour filled the table. The few fields
+a scanner restamps on every poll (:data:`VOLATILE_FINDING_FIELDS`, EPSS) are
+held per run instead, so the shared array only changes when the findings do. So an
 offloaded payload is two objects: the run's own, holding everything but the
 findings and naming them in ``findings_ref``, and one shared object per distinct
 findings array under :data:`FINDINGS_PREFIX`, keyed by its hash. The row records
@@ -74,6 +76,15 @@ FINDINGS_PREFIX = f"{RESULT_PREFIX}findings/"
 
 #: The key in a run's own object that names its shared findings.
 FINDINGS_REF = "findings_ref"
+
+#: The key in a run's own object holding each finding's volatile fields, by position.
+FINDINGS_VOLATILE = "findings_volatile"
+
+#: Fields a scanner refreshes on every poll while the finding itself is unchanged.
+#: Dependency Track restamps EPSS daily, so leaving these in the shared array
+#: would make an unchanged SBOM's findings a new object every day. They stay
+#: per run, beside the findings' reference, and are put back on read.
+VOLATILE_FINDING_FIELDS = ("epss_score", "epss_percentile")
 
 
 class ResultObjectMissing(RuntimeError):
@@ -170,12 +181,24 @@ def put_split_result(run_id: Any, result: dict[str, Any]) -> StoredResult:
     if not isinstance(findings, list):
         return StoredResult(key=put_result(run_id, result))
 
-    findings_bytes = json.dumps(findings, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    stable: list[Any] = []
+    volatile: list[dict[str, Any]] = []
+    for finding in findings:
+        if isinstance(finding, dict):
+            stable.append({name: value for name, value in finding.items() if name not in VOLATILE_FINDING_FIELDS})
+            volatile.append({name: finding[name] for name in VOLATILE_FINDING_FIELDS if name in finding})
+        else:
+            stable.append(finding)
+            volatile.append({})
+
+    findings_bytes = json.dumps(stable, sort_keys=True, separators=(",", ":")).encode("utf-8")
     findings_key = findings_key_for(findings_bytes)
     ensure_findings_object(findings_key, findings_bytes)
 
     remainder = {name: value for name, value in result.items() if name != "findings"}
     remainder[FINDINGS_REF] = findings_key
+    if any(volatile):
+        remainder[FINDINGS_VOLATILE] = volatile
     return StoredResult(key=put_result(run_id, remainder), findings_key=findings_key, findings=findings_bytes)
 
 
@@ -209,8 +232,15 @@ def get_result(key: str) -> dict[str, Any]:
     if not isinstance(loaded, dict):
         raise ResultObjectMissing(f"object at {key} is not a result object")
     findings_key = loaded.pop(FINDINGS_REF, None)
+    volatile = loaded.pop(FINDINGS_VOLATILE, None)
     if isinstance(findings_key, str) and "findings" not in loaded:
-        loaded["findings"] = get_findings(findings_key)
+        findings = get_findings(findings_key)
+        if isinstance(volatile, list) and len(volatile) == len(findings):
+            findings = [
+                {**finding, **fields} if isinstance(finding, dict) and isinstance(fields, dict) else finding
+                for finding, fields in zip(findings, volatile, strict=True)
+            ]
+        loaded["findings"] = findings
     return loaded
 
 

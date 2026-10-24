@@ -1067,6 +1067,27 @@ class TestFindingsAreStoredOnce:
             run.refresh_from_db()
             assert load_result(run) == originals[run.id]
 
+    def test_a_daily_epss_restamp_does_not_make_a_new_copy(self, sbom, bucket):
+        """Dependency Track restamps EPSS on every finding each day while the
+        finding is unchanged. Those fields are kept per run, so the shared array
+        stays one object, and each run still reads back its own scores."""
+        _run(sbom, "dependency-track", days_ago=0)
+        runs = []
+        for day in range(3):
+            result = _result()
+            for finding in result["findings"]:
+                finding["epss_score"] = 0.01 * (day + 1)
+                finding["epss_percentile"] = 0.5 + 0.1 * day
+            runs.append(_run(sbom, "dependency-track", days_ago=10 + day, result=result))
+        originals = {run.id: run.result for run in runs}
+
+        assert offload_assessment_results() == 3
+
+        assert len([key for key in bucket.objects if key.startswith(FINDINGS_PREFIX)]) == 1
+        for run in runs:
+            run.refresh_from_db()
+            assert load_result(run) == originals[run.id]
+
     def test_a_missing_shared_object_is_an_error_not_an_empty_list(self, sbom, bucket):
         (run,) = self._rescans(sbom, 1)
         offload_assessment_results()
