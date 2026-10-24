@@ -222,7 +222,7 @@ variants naming that id, so they keep working across a swap and need no script.
                         <tr>
                             {% if forloop.first %}
                                 <c-tables.cell compact rowspan="{{ advisory.affected_rows|length }}">
-                                <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default:"—" }}</c-branded.badge>
+                                <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default_if_none:"—" }}</c-branded.badge>
                                 </c-tables.cell>
                                 <c-tables.cell compact rowspan="{{ advisory.affected_rows|length }}">
                                 {% include "core/components/trust_center/advisory_summary_cell.html.j2" %}
@@ -248,7 +248,7 @@ variants naming that id, so they keep working across a swap and need no script.
                         {% endcomment %}
                         <tr>
                             <c-tables.cell compact>
-                            <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default:"—" }}</c-branded.badge>
+                            <c-branded.badge tone="{{ advisory.severity|default:'none' }}" class="tabular-nums">{{ advisory.cvss_score|default_if_none:"—" }}</c-branded.badge>
                             </c-tables.cell>
                             <c-tables.cell compact>
                             {% include "core/components/trust_center/advisory_summary_cell.html.j2" %}

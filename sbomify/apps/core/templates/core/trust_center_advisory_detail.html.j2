@@ -185,7 +185,9 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                 <c-branded.fact label="Severity">
                 <c-branded.badge tone="{{ advisory.severity|default:'none' }}">{{ advisory.severity_label }}</c-branded.badge>
                 </c-branded.fact>
-                {% if advisory.cvss_score %}<c-branded.fact label="CVSS">{{ advisory.cvss_score }}</c-branded.fact>{% endif %}
+                {% if advisory.cvss_score is not None %}
+                    <c-branded.fact label="CVSS">{{ advisory.cvss_score }}</c-branded.fact>
+                {% endif %}
                 <c-branded.fact label="Published">{{ advisory.published_display|default:"—" }}</c-branded.fact>
                 <c-branded.fact label="Last updated">{{ advisory.updated_display|default:"—" }}</c-branded.fact>
                 {% if advisory.cve_ids %}
