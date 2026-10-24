@@ -1,0 +1,23 @@
+# Narration for the plugin_enablement_fda-medical-device-2025 clip.
+#
+# Every plugin clip defines the same three beat keys; only the copy differs.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      If you ship software inside a medical device, the FDA expects an SBOM as
+      part of your premarket submission.
+
+  what_it_does:
+    text: >-
+      This plugin checks your SBOMs against those expectations, including the
+      support and end of life information the agency wants to see alongside the
+      component list. [pause] That last part is where most submissions come up
+      short.
+
+  outro:
+    text: >-
+      It won't file the submission for you, but it does mean the SBOM half of
+      it stops being a surprise.
