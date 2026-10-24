@@ -1797,15 +1797,18 @@ def prune_assessment_runs_task() -> None:
     from sbomify.apps.plugins import result_store, retention
     from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records, drop_legacy_findings_table
 
+    # A deferred legacy drop can leave foreign keys that block run deletion.
+    # Finish it before pruning, or leave retention for the next daily attempt.
+    if not drop_legacy_findings_table():
+        logger.warning("[TASK_prune_assessment_runs] Skipping retention while the legacy finding table is locked")
+        return
+
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
     removed = retention.prune_assessment_runs()
     # After it: a pruned run's finding rows go with it, and the records they
     # shared with no other run are left behind.
     records = delete_orphaned_records()
-    # Migration 0017 leaves the old finding table in place if scans kept its
-    # locks busy for the whole deploy; this finishes the drop. A no-op after.
-    drop_legacy_findings_table()
     logger.info(
         f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
         f"{records} unreferenced finding records"

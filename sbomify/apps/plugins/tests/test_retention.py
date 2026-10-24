@@ -207,3 +207,18 @@ class TestCost:
 
         assert len(doomed) == 2
         assert not set(doomed) & set(newest_three)
+
+    def test_daily_prune_waits_for_a_locked_legacy_table(self, sample_sbom, monkeypatch):
+        from sbomify.apps.plugins import result_store
+        from sbomify.apps.plugins.tasks import prune_assessment_runs_task
+        from sbomify.apps.vulnerability_scanning import findings
+
+        old = _run(sample_sbom, "osv", days_ago=60)
+        for _ in range(10):
+            _run(sample_sbom, "osv", days_ago=1)
+        monkeypatch.setattr(findings, "drop_legacy_findings_table", lambda: False)
+        monkeypatch.setattr(result_store, "delete_orphaned_result_objects", lambda: 0)
+
+        prune_assessment_runs_task.fn()
+
+        assert AssessmentRun.objects.filter(pk=old.pk).exists()
