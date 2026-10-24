@@ -147,8 +147,11 @@ gh release view "v${VERSION}" --json body -q '.body' > /tmp/${VERSION}-raw.md
 gh release edit "v${VERSION}" --notes-file /tmp/${VERSION}-notes.md
 ```
 
+Before drafting, read `docs/upgrade-notes.md`. Every entry naming a PR that is in this release goes into the notes, near the top under **Upgrade notes**, with its steps intact. These are steps an operator has to take, so they are never summarised into a highlight or dropped. If an entry names several PRs, include it when any of them is in this release.
+
 Suggested structure when drafting:
 
+- **Upgrade notes**: the entries from `docs/upgrade-notes.md` for this release, steps verbatim. Omit the section when there are none.
 - **Highlights**: user-visible features and design changes, one bullet per theme, PR numbers in parens.
 - **Fixes and performance**: bug fixes, perf work, back-end correctness.
 - **API and security**: API surface changes, security posture, dependency security bumps.
