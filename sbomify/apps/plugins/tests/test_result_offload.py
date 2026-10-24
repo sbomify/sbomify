@@ -1366,3 +1366,63 @@ class TestSplitResultVerification:
         del bucket.objects[key]
         with pytest.raises(CommandError, match="1 offloaded results, 1 missing"):
             call_command("verify_offloaded_results")
+
+
+@pytest.mark.django_db
+class TestOffloadProgress:
+    def test_progress_is_reported_after_every_page(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        seen: list[tuple[int, int, int, int]] = []
+
+        moved = offload_assessment_results(
+            batch_size=2, on_progress=lambda p: seen.append((p.pages, p.scanned, p.demotable, p.moved))
+        )
+
+        assert moved == 3
+        # Oldest first: the three superseded runs, then the current one, which is kept.
+        assert seen == [(1, 2, 2, 2), (2, 4, 3, 3)]
+
+    def test_a_dry_run_reports_progress_without_moving(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=500)
+        seen: list[tuple[int, int, int]] = []
+
+        offload_assessment_results(dry_run=True, on_progress=lambda p: seen.append((p.scanned, p.demotable, p.moved)))
+
+        assert seen == [(2, 1, 0)]
+
+    def test_the_command_prints_a_total_and_progress_lines(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        out = StringIO()
+
+        call_command("offload_assessment_results", batch_size=2, progress_interval=0, stdout=out)
+
+        output = out.getvalue()
+        assert "4 candidates to scan in batches of 2" in output
+        assert "batch 1: scanned 2/4 (50.0%), 2 moved, 0 kept" in output
+        assert "batch 2: scanned 4/4 (100.0%), 3 moved, 1 kept" in output
+        assert "done: 3 results offloaded (1 current kept, 0 changed underneath)" in output
+
+    def test_the_command_throttles_but_always_prints_the_last_batch(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        out = StringIO()
+
+        call_command("offload_assessment_results", batch_size=1, progress_interval=3600, stdout=out)
+
+        lines = [line for line in out.getvalue().splitlines() if line.startswith("batch ")]
+        assert len(lines) == 1
+        assert lines[0].startswith("batch 4: scanned 4/4")

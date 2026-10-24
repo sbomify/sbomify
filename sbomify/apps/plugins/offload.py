@@ -29,7 +29,8 @@ as a one-shot data migration.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -52,6 +53,22 @@ logger = getLogger(__name__)
 # that year. The drill-down now reads offloaded findings too, once per distinct
 # findings array, so the floor no longer has to cover what anybody reads.
 DEFAULT_OFFLOAD_AFTER_DAYS = 1
+
+
+@dataclass
+class OffloadProgress:
+    """Where a sweep has got to, reported after each page of candidates.
+
+    ``scanned`` counts every candidate looked at, including the current runs
+    that are kept; ``demotable`` is the subset that was not current. A
+    demotable row that ``offload_run`` left alone (a concurrent rewrite, a
+    prune) is in ``demotable`` but not ``moved``.
+    """
+
+    pages: int = 0
+    scanned: int = 0
+    demotable: int = 0
+    moved: int = 0
 
 
 def _no_payload_filter() -> dict[str, Any]:
@@ -134,6 +151,29 @@ def demotable_run_ids(*, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, limi
     return [run_id for batch in demotable_batches(older_than_days=older_than_days, limit=limit) for run_id in batch]
 
 
+def _candidates(older_than_days: int) -> Any:
+    """Inline payloads past the age floor, current or not, oldest first."""
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    cutoff = timezone.now() - timedelta(days=max(0, older_than_days))
+    return (
+        AssessmentRun.objects.filter(result_object_key="", created_at__lt=cutoff)
+        .exclude(result__isnull=True)
+        # Oldest first: the coldest rows are the least likely to be contended and
+        # the most likely to still be here on the next pass if this one stops.
+        .order_by("created_at", "id")
+    )
+
+
+def count_candidates(*, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS) -> int:
+    """How many rows a full pass will look at: the denominator for progress.
+
+    An upper bound on what moves, since the current runs among them are kept.
+    """
+    count: int = _candidates(older_than_days).count()
+    return count
+
+
 def demotable_batches(
     *, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, batch_size: int = 100, limit: int | None = None
 ) -> Iterator[list[Any]]:
@@ -145,18 +185,15 @@ def demotable_batches(
     a protected run stays a candidate, so an offset would skip rows once the
     pages before it had been demoted.
     """
+    for _, demotable in _demotable_pages(older_than_days=older_than_days, batch_size=batch_size, limit=limit):
+        yield demotable
+
+
+def _demotable_pages(*, older_than_days: int, batch_size: int, limit: int | None) -> Iterator[tuple[int, list[Any]]]:
+    """:func:`demotable_batches`, with how many candidates each page scanned."""
     from django.db.models import Q
 
-    from sbomify.apps.plugins.models import AssessmentRun
-
-    cutoff = timezone.now() - timedelta(days=max(0, older_than_days))
-    candidates = (
-        AssessmentRun.objects.filter(result_object_key="", created_at__lt=cutoff)
-        .exclude(result__isnull=True)
-        # Oldest first: the coldest rows are the least likely to be contended and
-        # the most likely to still be here on the next pass if this one stops.
-        .order_by("created_at", "id")
-    )
+    candidates = _candidates(older_than_days)
     page_size = max(1, batch_size)
     remaining = limit
     after = Q()
@@ -171,7 +208,7 @@ def demotable_batches(
         # The leading >= is what the index can start from; the OR alone is a filter.
         after = Q(created_at__gte=last_created) & (Q(created_at__gt=last_created) | Q(id__gt=last_id))
         protected = current_run_ids({sbom_id for _, sbom_id, _, _ in page}, {plugin for _, _, plugin, _ in page})
-        yield [run_id for run_id, _, _, _ in page if run_id not in protected]
+        yield len(page), [run_id for run_id, _, _, _ in page if run_id not in protected]
 
 
 def offload_run(run: Any) -> bool:
@@ -233,6 +270,7 @@ def offload_assessment_results(
     limit: int | None = None,
     dry_run: bool = False,
     max_seconds: float | None = None,
+    on_progress: Callable[[OffloadProgress], None] | None = None,
 ) -> int:
     """Demote payloads in batches. Returns how many rows were changed.
 
@@ -243,20 +281,33 @@ def offload_assessment_results(
     ``max_seconds`` stops between rows once the budget is spent, so the
     scheduled task ends cleanly inside its time limit rather than being killed
     mid-store; the next pass carries on from the oldest row left.
+
+    ``on_progress`` is called after each page with the running totals, so a
+    long first pass over the backlog can be watched rather than waited on.
     """
     import time
 
     deadline = time.monotonic() + max_seconds if max_seconds is not None else None
-    batches = demotable_batches(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
+    pages = _demotable_pages(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
+    progress = OffloadProgress()
+
+    def page_done(scanned: int, demotable: int) -> None:
+        progress.pages += 1
+        progress.scanned += scanned
+        progress.demotable += demotable
+        if on_progress is not None:
+            on_progress(progress)
+
     if dry_run:
-        count = sum(len(batch) for batch in batches)
-        logger.info(f"[OFFLOAD] dry run: {count} assessment results would be offloaded")
-        return count
+        for scanned, batch in pages:
+            page_done(scanned, len(batch))
+        logger.info(f"[OFFLOAD] dry run: {progress.demotable} assessment results would be offloaded")
+        return progress.demotable
 
     from sbomify.apps.plugins.models import AssessmentRun
 
     moved = 0
-    for batch in batches:
+    for scanned, batch in pages:
         # Deferring nothing on purpose: the payload is what is being read.
         for run in AssessmentRun.objects.filter(id__in=batch, result_object_key="").iterator():
             if deadline is not None and time.monotonic() >= deadline:
@@ -264,6 +315,8 @@ def offload_assessment_results(
                 return moved
             if offload_run(run):
                 moved += 1
+                progress.moved = moved
+        page_done(scanned, len(batch))
     if moved:
         logger.info(f"[OFFLOAD] offloaded {moved} assessment results")
     return moved
