@@ -269,6 +269,32 @@ class TestS3ObjectStoreClient:
         result = store.get_object("my-bucket", "missing/key")
         assert result is None
 
+    def test_get_object_prefix_asks_for_a_byte_range(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_body = Mock()
+        mock_body.read.return_value = b"hel"
+        mock_s3.Bucket.return_value.Object.return_value.get.return_value = {"Body": mock_body}
+        assert store.get_object_prefix("my-bucket", "path/to/key", 3) == b"hel"
+        mock_s3.Bucket.return_value.Object.return_value.get.assert_called_once_with(Range="bytes=0-2")
+
+    @pytest.mark.parametrize(
+        ("code", "expected"), [("NoSuchKey", None), ("404", None), ("InvalidRange", b""), ("416", b"")]
+    )
+    def test_get_object_prefix_maps_a_missing_key_and_an_empty_object(self, s3_store, code, expected):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(
+            error_response={"Error": {"Code": code}}, operation_name="GetObject"
+        )
+        assert store.get_object_prefix("my-bucket", "path/to/key", 10) == expected
+
+    def test_get_object_prefix_raises_on_other_errors(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(
+            error_response={"Error": {"Code": "AccessDenied"}}, operation_name="GetObject"
+        )
+        with pytest.raises(ClientError):
+            store.get_object_prefix("my-bucket", "path/to/key", 10)
+
     def test_get_object_raises_on_other_errors(self, s3_store):
         store, mock_s3 = s3_store
         mock_s3.Bucket.return_value.Object.return_value.get.side_effect = ClientError(
