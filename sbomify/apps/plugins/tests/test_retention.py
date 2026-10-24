@@ -157,9 +157,7 @@ class TestCost:
         point at it, and an orphaned row would keep counting in the overview."""
         from sbomify.apps.vulnerability_scanning.models import Finding, FindingRecord
 
-        record = FindingRecord.objects.create(
-            digest=b"d" * 32, advisory_id="CVE-2026-0001", severity="high"
-        )
+        record = FindingRecord.objects.create(digest=b"d" * 32, advisory_id="CVE-2026-0001", severity="high")
         for age in range(100, 106):
             Finding.objects.create(
                 run=_run(sample_sbom, "osv", days_ago=age),
