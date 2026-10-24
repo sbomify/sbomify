@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any
 
 from ninja import Schema
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from sbomify.apps.core.schemas import PaginationMeta
 
@@ -75,6 +75,27 @@ class AdvisoryEventSchema(Schema):
     created_at: datetime
 
 
+class AdvisoryStatusSchema(Schema):
+    """What one vulnerability means for one product: the row the trust center and CSAF read."""
+
+    id: str
+    label: str = Field(description="The product, and the vulnerability when the advisory has several.")
+    product: str
+    product_id: str | None = Field(None, description="The sbomify product, when the row names one.")
+    vulnerability: str
+    vulnerability_id: str
+    status: str = Field(description="exploitable, not_affected, false_positive, in_triage or resolved.")
+    justification: str = ""
+    response: str = ""
+    impact_statement: str = ""
+    action_statement: str = ""
+    recommended_version: str = ""
+    recommended_release_id: str | None = None
+    fixed_version: str = Field("", description="The first version carrying the fix.")
+    fixed_release_id: str | None = None
+    affected_versions: list[str] = Field(default_factory=list)
+
+
 class AdvisorySchema(Schema):
     id: str
     tracking_id: str = Field(
@@ -103,6 +124,7 @@ class AdvisorySchema(Schema):
 
 class AdvisoryDetailSchema(AdvisorySchema):
     vulnerabilities: list[AdvisoryVulnerabilitySchema] = Field(default_factory=list)
+    statuses: list[AdvisoryStatusSchema] = Field(default_factory=list)
     references: list[AdvisoryReferenceSchema] = Field(default_factory=list)
     timeline: list[AdvisoryEventSchema] = Field(default_factory=list)
 
@@ -126,14 +148,55 @@ class UpdateAdvisorySchema(Schema):
     """A partial update: a field left out keeps its stored value.
 
     ``cvss_score`` and ``cvss_vector`` are one entry: sending ``cvss_score``
-    as null clears both, and a vector without a score is refused.
+    as null clears both, and a vector without a score is refused. A field this
+    endpoint does not write is a 422, not a 200 that stored nothing.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(None, min_length=1, max_length=255)
     severity: str | None = None
     description: str | None = None
+    summary: str | None = Field(None, description="The one-paragraph summary the trust center leads with.")
     cvss_score: float | None = None
     cvss_vector: str | None = None
+
+
+class ProductStatusUpdateSchema(Schema):
+    """A partial update of a product status: only the fields sent are written.
+
+    ``fixed_version`` or ``fixed_release_id`` records the first version carrying
+    the fix, which is what the trust center and CSAF list as fixed. Unless a
+    recommendation is sent too, it also becomes what users are told to upgrade
+    to. Send an empty string or null to clear one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str | None = Field(None, description="exploitable, not_affected, false_positive, in_triage or resolved.")
+    justification: str | None = Field(None, description="Why a not_affected product is not affected.")
+    response: str | None = Field(
+        None, description="can_not_fix, will_not_fix, update, rollback or workaround_available."
+    )
+    impact_statement: str | None = None
+    action_statement: str | None = Field(None, description="What users should do. Shown to readers.")
+    recommended_version: str | None = None
+    recommended_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
+    fixed_version: str | None = None
+    fixed_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
+
+
+class AddAdvisoryProductSchema(ProductStatusUpdateSchema):
+    """Name another product on an advisory, or more of its affected releases.
+
+    The status fields apply to the new product's rows. Without them it starts
+    under investigation, which a resolved advisory refuses.
+    """
+
+    product_id: str
+    affected_release_ids: list[str] = Field(
+        default_factory=list, description="Releases of this product that carry the vulnerability."
+    )
 
 
 class PublishAdvisorySchema(Schema):

@@ -31,10 +31,13 @@ from django.views import View
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
-from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
+from sbomify.apps.security_advisories.forms import AdvisoryAddProductForm, AdvisoryCreateForm
+from sbomify.apps.security_advisories.models import AdvisoryProductStatus, SecurityAdvisory
 from sbomify.apps.security_advisories.services.advisories import (
+    PRODUCT_STATUS_FIELDS,
     PUBLISHABLE_VISIBILITIES,
     REMEDIATION_META,
+    add_advisory_product,
     advisory_counts,
     create_advisory,
     creation_options,
@@ -43,8 +46,10 @@ from sbomify.apps.security_advisories.services.advisories import (
     get_advisory,
     list_advisories,
     post_update,
+    product_choices,
     publish_advisory,
     update_advisory,
+    update_product_status,
 )
 from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -64,6 +69,13 @@ UPDATE_KINDS[NOTE_ONLY_KIND] = {
     "icon": "fas fa-comment",
     "sets_status": False,
 }
+
+
+# The product status dialog's choices, from the model so the page and the
+# stored vocabulary cannot drift apart.
+PRODUCT_STATUS_OPTIONS = [{"value": v, "label": label} for v, label in AdvisoryProductStatus.Status.choices]
+JUSTIFICATION_OPTIONS = [{"value": v, "label": label} for v, label in AdvisoryProductStatus.Justification.choices]
+RESPONSE_OPTIONS = [{"value": v, "label": label} for v, label in AdvisoryProductStatus.Response.choices]
 
 
 def _current_team(request: HttpRequest) -> Workspace | None:
@@ -212,6 +224,10 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 # From REMEDIATION_META so the form, the badges and the timeline
                 # read the same vocabulary, in the same order, with the same icon
                 # and colour on each value.
+                #
+                # Not "resolved": every product opens under investigation, and
+                # a resolved advisory may not say that about any of them. It is
+                # resolved from its page once each product has a status.
                 "status_options": [
                     {
                         "value": value,
@@ -220,6 +236,7 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                         "variant": meta["variant"],
                     }
                     for value, meta in REMEDIATION_META.items()
+                    if value != SecurityAdvisory.RemediationStatus.RESOLVED
                 ],
             },
         )
@@ -290,6 +307,19 @@ class SecurityAdvisoriesBulkDeleteView(GuestAccessBlockedMixin, LoginRequiredMix
         return htmx_success_response(f"Deleted {count} {noun}.", triggers={"refresh-advisories": True})
 
 
+class SecurityAdvisoryProductReleasesView(HtmxFragmentMixin, GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The "Add product" dialog's release checkboxes, for the product just picked."""
+
+    def get(self, request: HttpRequest, advisory_id: str) -> HttpResponse:
+        team = _writable_team(request)
+        if team is None:
+            raise Http404("Advisory not found")
+        product_id = request.GET.get("product", "")
+        options = (creation_options(team, product_ids=[product_id]).value or []) if product_id else []
+        releases = options[0]["releases"] if options else []
+        return render(request, "core/components/advisory_add_product_releases.html.j2", {"releases": releases})
+
+
 class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """One advisory: its vulnerabilities, affected products and event timeline."""
 
@@ -304,13 +334,30 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
 
         advisory = result.value
         current_team = request.session.get("current_workspace") or {}
+        can_write = _can_write_advisories(request)
         return render(
             request,
             "core/security_advisory_detail.html.j2",
             {
                 "current_team": current_team,
-                "has_crud_permissions": _can_write_advisories(request),
+                "has_crud_permissions": can_write,
                 "advisory": advisory,
+                # A withdrawn advisory is final, so its rows are shown, not offered for editing.
+                "can_edit_statuses": can_write and advisory["publication_status"] != "withdrawn",
+                # The releases of the products the advisory names, for the edit
+                # dialog. The add dialog lists every product by name and fetches
+                # the chosen one's releases when it is picked, so a page load
+                # never reads the whole workspace's releases.
+                "product_options": (
+                    (creation_options(team, product_ids=[p["id"] for p in advisory["products"] if p["id"]]).value or [])
+                    if can_write
+                    else []
+                ),
+                "product_choices": (product_choices(team).value or []) if can_write else [],
+                "advisory_product_ids": [p["id"] for p in advisory["products"] if p["id"]],
+                "product_status_options": PRODUCT_STATUS_OPTIONS,
+                "justification_options": JUSTIFICATION_OPTIONS,
+                "response_options": RESPONSE_OPTIONS,
                 "timeline": advisory["timeline"],
                 "update_kinds": UPDATE_KINDS,
                 "publish_visibilities": PUBLISHABLE_VISIBILITIES,
@@ -352,6 +399,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 # The same rule guards the CVSS pair.
                 severity=request.POST.get("severity"),
                 description=request.POST.get("description", ""),
+                summary=request.POST.get("summary"),
                 cvss_score=request.POST.get("cvss_score"),
                 cvss_vector=request.POST.get("cvss_vector"),
             )
@@ -361,6 +409,44 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 raise Http404("Advisory not found")
             else:
                 messages.error(request, result.error or "Advisory not updated.")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "product_status":
+            # Only the fields the dialog posted, so a caller that posts one
+            # field changes one field.
+            changes = {field: request.POST.get(field, "") for field in PRODUCT_STATUS_FIELDS if field in request.POST}
+            result = update_product_status(
+                team, cast(User, request.user), advisory_id, request.POST.get("status_id", ""), changes=changes
+            )
+            if result.ok:
+                messages.success(request, "Product status saved.")
+            elif result.status_code == 404 and not get_advisory(team, advisory_id).ok:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, f"Product status not saved: {result.error or 'unknown error'}")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "add_product":
+            form = AdvisoryAddProductForm(team, request.POST)
+            if not form.is_valid():
+                first_error = next(iter(form.errors.values()))[0]
+                messages.error(request, f"Product not added: {first_error}")
+                return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+            status = form.cleaned_data.get("status")
+            result = add_advisory_product(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                product=form.cleaned_data["product"],
+                affected_releases=list(form.cleaned_data.get("affected_releases") or []),
+                changes={"status": status} if status else {},
+            )
+            if result.ok:
+                messages.success(request, f'Added "{form.cleaned_data["product"].name}".')
+            elif result.status_code == 404:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, f"Product not added: {result.error or 'unknown error'}")
             return redirect("core:security_advisory_detail", advisory_id=advisory_id)
 
         if intent == "delete":
