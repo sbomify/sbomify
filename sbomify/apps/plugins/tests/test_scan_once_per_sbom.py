@@ -523,7 +523,7 @@ class TestDependencyTrackPluginScanOnce:
         captured_uploads: list[dict] = []
         captured_tag_sets: list[dict] = []
 
-        def fake_upload(*, project_name, project_version, sbom_data, auto_create):
+        def fake_upload(*, project_name, project_version, sbom_data, auto_create, **_tree):
             captured_uploads.append({"project_name": project_name, "project_version": project_version})
 
         def fake_find_project(name, version):
@@ -593,7 +593,7 @@ class TestDependencyTrackPluginScanOnce:
 
         captured_uploads: list[dict] = []
 
-        def fake_upload(*, project_name, project_version, sbom_data, auto_create):
+        def fake_upload(*, project_name, project_version, sbom_data, auto_create, **_tree):
             captured_uploads.append({"project_name": project_name, "project_version": project_version})
 
         mock_client = MagicMock()
