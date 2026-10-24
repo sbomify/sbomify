@@ -7,9 +7,11 @@ aggregates over were denormalised into ``result_summary`` and ``result_skipped``
 so readers would stop touching the blob.
 
 So this demotes the payload of runs that are no longer the current answer for
-anything, leaving the row, its summary columns and its normalised ``Finding``
-rows exactly where they are. See :mod:`sbomify.apps.plugins.result_store` for
-where the bytes go and why the keys are shaped as they are.
+anything, leaving the row and its summary columns exactly where they are. Such a
+run has no ``Finding`` rows to leave: a newer run of its key supersedes it, and
+the projection drops a superseded run's rows (``findings.sync_findings``).
+See :mod:`sbomify.apps.plugins.result_store` for where the bytes go and why
+the keys are shaped as they are.
 
 **What counts as current is (sbom, plugin, release set), not (sbom, plugin).**
 One SBOM can sit in two releases at once with different per-release triage, and
@@ -69,11 +71,13 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
     run that newest one superseded becomes the newest of the set it left. That
     is safe because of who reads what. Every reader of the payload column ranks
     per (sbom, plugin) and ignores release sets, so it lands on the newer run,
-    which is current for its own key. The one reader that ranks per release set,
-    the VEX re-apply, reads and writes through the result store. An attach a week
-    after the sweep leaves the same state, so a lock here would not prevent it.
+    which is current for its own key. The VEX re-apply skips it too, because the
+    newer run now covers every release it covers (plugins.latest), and it reads
+    and writes through the result store for the runs it does rewrite. An attach a
+    week after the sweep leaves the same state, so a lock here would not prevent it.
     """
-    from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease
+    from sbomify.apps.plugins.latest import release_sets
+    from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.sdk.enums import RunStatus
 
     if not sbom_ids or not plugin_names:
@@ -85,11 +89,7 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
 
     # One query for every association rather than one per run. The release set
     # cannot be grouped on in SQL, which is why the ranking happens here.
-    releases_by_run: dict[Any, set[Any]] = {}
-    for run_id, release_id in AssessmentRunRelease.objects.filter(
-        assessment_run__in=candidates.values("id")
-    ).values_list("assessment_run_id", "release_id"):
-        releases_by_run.setdefault(run_id, set()).add(release_id)
+    releases_by_run = release_sets(candidates.values_list("id", flat=True))
 
     # Newest first, ``-id`` breaking ties: runs written in one transaction share
     # a timestamp, and an unstable order there would protect the wrong row.
@@ -109,7 +109,8 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
         .values_list("id", "sbom_id", "plugin_name", "status", "result_skipped")
         .iterator()
     ):
-        key = (sbom_id, plugin_name, frozenset(releases_by_run.get(run_id, ())))
+        # A run that completed after the release lookup has none recorded yet.
+        key = (sbom_id, plugin_name, releases_by_run.get(run_id, frozenset()))
         if key not in seen:
             seen.add(key)
             current.add(run_id)

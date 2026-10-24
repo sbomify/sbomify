@@ -908,6 +908,16 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+def _reconcile_findings(sbom_id: str) -> None:
+    """Re-align the SBOM's finding rows after a release change; a failure here never fails the task."""
+    from sbomify.apps.vulnerability_scanning.findings import reconcile_sbom_findings
+
+    try:
+        reconcile_sbom_findings(sbom_id)
+    except Exception:
+        logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -1014,6 +1024,7 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     ]
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    _reconcile_findings(sbom_id)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -1100,6 +1111,7 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
             assessment_run__sbom_id=sbom_id,
             release_id=release_id,
         ).delete()
+    _reconcile_findings(sbom_id)
 
     if detached_count == 0:
         logger.debug(
@@ -1783,8 +1795,21 @@ def prune_assessment_runs_task() -> None:
     staging. See plugins/retention.py for the two rules.
     """
     from sbomify.apps.plugins import result_store, retention
+    from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records, drop_legacy_findings_table
+
+    # A deferred legacy drop can leave foreign keys that block run deletion.
+    # Finish it before pruning, or leave retention for the next daily attempt.
+    if not drop_legacy_findings_table():
+        logger.warning("[TASK_prune_assessment_runs] Skipping retention while the legacy finding table is locked")
+        return
 
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
     removed = retention.prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects")
+    # After it: a pruned run's finding rows go with it, and the records they
+    # shared with no other run are left behind.
+    records = delete_orphaned_records()
+    logger.info(
+        f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
+        f"{records} unreferenced finding records"
+    )
