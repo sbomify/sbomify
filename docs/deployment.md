@@ -181,9 +181,6 @@ BILLING=False
 
 ### Update Version
 
-Read [upgrade-notes.md](upgrade-notes.md) first: some releases need a step after
-the new image is running.
-
 ```bash
 DOCKER_TAG=v1.3.0 ./deploy.sh
 ```
