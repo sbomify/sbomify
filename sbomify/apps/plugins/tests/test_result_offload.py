@@ -32,8 +32,12 @@ from sbomify.apps.plugins.offload import (
     offload_run,
 )
 from sbomify.apps.plugins.result_store import (
+    FINDINGS_PREFIX,
+    FINDINGS_REF,
     RESULT_PREFIX,
     ResultObjectMissing,
+    delete_unreferenced_findings_objects,
+    findings_key_for,
     load_result,
     object_key_for,
     serialise_result,
@@ -156,12 +160,13 @@ class TestWhatIsSafeToDemote:
         assert current.id not in doomed
 
     def test_the_age_floor_holds_recent_runs_back(self, sbom):
-        _run(sbom, days_ago=1)
-        recent_superseded = _run(sbom, days_ago=5)
+        _run(sbom, days_ago=0)
+        recent_superseded = _run(sbom, days_ago=0)
+        AssessmentRun.objects.filter(pk=recent_superseded.pk).update(created_at=timezone.now() - timedelta(hours=12))
 
         assert demotable_run_ids() == []
         # …and is a parameter, not a law.
-        assert demotable_run_ids(older_than_days=2) == [recent_superseded.id]
+        assert demotable_run_ids(older_than_days=0) == [recent_superseded.id]
 
     def test_each_provider_keeps_its_own_current_run(self, sbom):
         osv_current = _run(sbom, "osv", days_ago=400)
@@ -216,11 +221,15 @@ class TestWhatIsSafeToDemote:
 
         assert pending.id not in demotable_run_ids()
 
-    def test_the_default_floor_is_past_the_furthest_reader(self, sbom):
-        """The drill-down accepts a 365-day window and renders findings from the
-        payload, so the default floor has to clear it. A test rather than a
-        comment, because lowering it silently is the way this breaks."""
-        assert DEFAULT_OFFLOAD_AFTER_DAYS > 365
+    def test_a_run_superseded_days_ago_is_moved_by_default(self, sbom):
+        """The floor was a year, held there by the drill-down reading payloads
+        from the column, and with hourly rescans that kept nearly the whole table
+        inline. The drill-down reads offloaded findings now, so it is a margin."""
+        _run(sbom, days_ago=0)
+        superseded = _run(sbom, days_ago=2)
+
+        assert DEFAULT_OFFLOAD_AFTER_DAYS == 1
+        assert demotable_run_ids() == [superseded.id]
 
 
 @pytest.mark.django_db
@@ -333,9 +342,15 @@ class TestTheMove:
 
         superseded.refresh_from_db()
         assert superseded.result is None
-        assert superseded.result_object_key == object_key_for(superseded.id, serialise_result(payload))
+        # The run's own object holds everything but the findings, which it names.
+        findings_key = findings_key_for(serialise_result(payload["findings"]))
+        remainder = {**{k: v for k, v in payload.items() if k != "findings"}, FINDINGS_REF: findings_key}
+        assert superseded.result_object_key == object_key_for(superseded.id, serialise_result(remainder))
         assert superseded.result_object_key.startswith(f"{RESULT_PREFIX}{superseded.id}/")
-        assert json.loads(bucket.objects[superseded.result_object_key]) == payload
+        assert json.loads(bucket.objects[superseded.result_object_key]) == remainder
+        # The findings are one shared object, keyed by their content.
+        assert superseded.result_findings_key == findings_key
+        assert json.loads(bucket.objects[findings_key]) == payload["findings"]
 
     def test_it_reads_back_byte_identical(self, sbom, bucket):
         _run(sbom, days_ago=400)
@@ -509,7 +524,9 @@ class TestTheSweepHoldsNoLockAcrossStorage:
         bucket.object_exists = recording  # type: ignore[method-assign]
 
         assert offload_assessment_results() == 1
-        assert seen == [depth]
+        # The shared findings, the run's own object, then the writer's check that
+        # the shared object survived: every one outside a transaction.
+        assert seen == [depth, depth, depth]
 
     def test_a_rewrite_landing_mid_offload_is_kept(self, sbom, bucket):
         from sbomify.apps.plugins.result_store import save_result
@@ -825,13 +842,14 @@ class TestRetentionReclaimsTheStoredPayload:
         from sbomify.apps.plugins.tasks import prune_assessment_runs_task
 
         calls = mocker.Mock()
-        calls.orphans.return_value = calls.prune.return_value = 0
+        calls.orphans.return_value = calls.shared.return_value = calls.prune.return_value = 0
         mocker.patch("sbomify.apps.plugins.result_store.delete_orphaned_result_objects", calls.orphans)
+        mocker.patch("sbomify.apps.plugins.result_store.delete_unreferenced_findings_objects", calls.shared)
         mocker.patch("sbomify.apps.plugins.retention.prune_assessment_runs", calls.prune)
 
         prune_assessment_runs_task.fn()
 
-        assert [name for name, *_ in calls.mock_calls] == ["orphans", "prune"]
+        assert [name for name, *_ in calls.mock_calls] == ["orphans", "shared", "prune"]
 
 
 @pytest.mark.django_db
@@ -1011,3 +1029,129 @@ def test_a_run_completing_between_the_release_lookup_and_the_ranking_does_not_cr
     monkeypatch.setattr(latest, "release_sets", lambda run_ids: {})
 
     assert run.id in current_run_ids({sbom.id}, {"osv"})
+
+
+@pytest.mark.django_db
+class TestFindingsAreStoredOnce:
+    """A rescan of an unchanged SBOM reports the same findings array and nothing
+    else repeats: ``assessed_at`` and the scanner's metrics differ every time.
+    So the array is one shared object per distinct content, and every run that
+    reported it points there."""
+
+    def _rescans(self, sbom: SBOM, count: int) -> list[AssessmentRun]:
+        _run(sbom, days_ago=0)
+        runs = []
+        for index in range(count):
+            result = {**_result(), "assessed_at": f"2026-01-0{index + 1}T00:00:00+00:00", "metadata": {"poll": index}}
+            runs.append(_run(sbom, days_ago=10 + index, result=result))
+        return runs
+
+    def test_identical_findings_share_one_object(self, sbom, bucket):
+        runs = self._rescans(sbom, 3)
+
+        assert offload_assessment_results() == 3
+
+        shared = [key for key in bucket.objects if key.startswith(FINDINGS_PREFIX)]
+        assert len(shared) == 1
+        for run in runs:
+            run.refresh_from_db()
+            assert run.result_findings_key == shared[0]
+
+    def test_each_run_reads_back_its_own_payload(self, sbom, bucket):
+        runs = self._rescans(sbom, 2)
+        originals = {run.id: run.result for run in runs}
+
+        offload_assessment_results()
+
+        for run in runs:
+            run.refresh_from_db()
+            assert load_result(run) == originals[run.id]
+
+    def test_a_missing_shared_object_is_an_error_not_an_empty_list(self, sbom, bucket):
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        del bucket.objects[run.result_findings_key]
+
+        with pytest.raises(ResultObjectMissing):
+            load_result(run)
+
+    def test_the_collector_keeps_named_objects_and_takes_the_rest(self, sbom, bucket):
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        stray = findings_key_for(b"[]")
+        bucket.objects[stray] = b"[]"
+
+        assert delete_unreferenced_findings_objects() == 1
+
+        assert run.result_findings_key in bucket.objects
+        assert stray not in bucket.objects
+
+    def test_the_collector_puts_back_an_object_a_run_named_while_it_deleted(self, sbom, bucket):
+        """A run offloaded onto the object between the collector's check and its
+        delete must not be left pointing at nothing."""
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        key = run.result_findings_key
+        AssessmentRun.objects.filter(pk=run.pk).update(result_findings_key="")
+        delete = bucket.delete_object
+
+        def deleted_while_named(bucket_name: str, object_key: str) -> None:
+            delete(bucket_name, object_key)
+            AssessmentRun.objects.filter(pk=run.pk).update(result_findings_key=key)
+
+        bucket.delete_object = deleted_while_named  # type: ignore[method-assign]
+
+        assert delete_unreferenced_findings_objects() == 0
+        assert key in bucket.objects
+
+    def test_the_offload_puts_back_an_object_collected_before_its_update(self, sbom, bucket):
+        """The writer's half: the collector can take the shared object after it
+        was stored and before the row names it."""
+        (run,) = self._rescans(sbom, 1)
+        upload = bucket.upload_data_as_file
+
+        def collected_after_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            if not key.startswith(FINDINGS_PREFIX):
+                for shared in [k for k in bucket.objects if k.startswith(FINDINGS_PREFIX)]:
+                    del bucket.objects[shared]
+
+        bucket.upload_data_as_file = collected_after_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 1
+        run.refresh_from_db()
+        assert run.result_findings_key in bucket.objects
+
+    def test_a_rewrite_of_an_offloaded_run_is_split_too(self, sbom, bucket, django_capture_on_commit_callbacks):
+        from sbomify.apps.plugins.result_store import save_result
+
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        rewrite = _result(total=1)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            save_result(run, rewrite)
+
+        run.refresh_from_db()
+        assert run.result is None
+        assert run.result_findings_key == findings_key_for(serialise_result(rewrite["findings"]))
+        assert load_result(run) == rewrite
+
+    def test_the_sweep_stops_when_its_time_is_spent(self, sbom, bucket):
+        self._rescans(sbom, 3)
+
+        assert offload_assessment_results(max_seconds=0) == 0
+        assert offload_assessment_results() == 3
+
+    def test_the_daily_task_runs_the_sweep_inside_its_time_limit(self, mocker):
+        from sbomify.apps.plugins.tasks import offload_assessment_results_task
+
+        sweep = mocker.patch("sbomify.apps.plugins.offload.offload_assessment_results", return_value=0)
+
+        offload_assessment_results_task.fn()
+
+        assert sweep.call_args.kwargs["max_seconds"] < 4 * 3600

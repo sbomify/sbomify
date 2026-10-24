@@ -1785,6 +1785,23 @@ def sweep_stranded_runs_task() -> None:
     logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
+@cron("45 3 * * *")  # type: ignore[untyped-decorator]  # Daily, after the retention prune
+@dramatiq.actor(queue_name="assessment_retention", max_retries=0, time_limit=4 * 3600 * 1000)
+def offload_assessment_results_task() -> None:
+    """Move superseded result payloads out of Postgres, findings stored once.
+
+    Nothing ran the sweep before: it was a management command, and with its
+    floor at a year it could not have reached the hourly rescans that fill the
+    table anyway. It is resumable at any row, so it stops inside its time limit
+    and the next night carries on from the oldest row left; a large backlog can
+    be cleared faster with ``manage.py offload_assessment_results``.
+    """
+    from sbomify.apps.plugins.offload import offload_assessment_results
+
+    moved = offload_assessment_results(max_seconds=3.5 * 3600)
+    logger.info(f"[TASK_offload_assessment_results] offloaded {moved} results")
+
+
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
 def prune_assessment_runs_task() -> None:
@@ -1805,11 +1822,12 @@ def prune_assessment_runs_task() -> None:
 
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
+    shared = result_store.delete_unreferenced_findings_objects()
     removed = retention.prune_assessment_runs()
     # After it: a pruned run's finding rows go with it, and the records they
     # shared with no other run are left behind.
     records = delete_orphaned_records()
     logger.info(
         f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
-        f"{records} unreferenced finding records"
+        f"{shared} unreferenced shared findings objects, {records} unreferenced finding records"
     )

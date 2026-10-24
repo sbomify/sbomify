@@ -41,17 +41,17 @@ logger = getLogger(__name__)
 
 # How old a superseded run must be before its payload is demoted.
 #
-# Deliberately longer than the furthest back any reader can currently ask. The
-# dashboard drill-down accepts ``days`` up to 365 and renders findings for every
-# run in that window from the stored payload, so a shorter floor would make it
-# read an empty findings list for runs whose payload had moved. Its fields
-# (title, reference URL) are not carried by the normalised ``Finding`` rows, so
-# it cannot simply be pointed at those; until it is, this floor is what keeps the
-# sweep from changing what anybody sees.
+# A day, so a run superseded minutes ago is not moved while a VEX re-annotation
+# or a release attach may still be settling on it; neither needs it inline (both
+# read and write through the result store), so this is a margin, not a guarantee
+# anything depends on.
 #
-# Lowering it is where the space actually is, and it is a one-line change once
-# the drill-down no longer reads payloads. Do not lower it before then.
-DEFAULT_OFFLOAD_AFTER_DAYS = 366
+# It was 366 while the dashboard drill-down read every payload in its window
+# straight from the column, which made this sweep unusable: with a scanner
+# polling every hour, nearly every byte in the table is a superseded run inside
+# that year. The drill-down now reads offloaded findings too, once per distinct
+# findings array, so the floor no longer has to cover what anybody reads.
+DEFAULT_OFFLOAD_AFTER_DAYS = 1
 
 
 def _no_payload_filter() -> dict[str, Any]:
@@ -204,22 +204,29 @@ def offload_run(run: Any) -> bool:
     so it would otherwise stay until the run did.
     """
     from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.plugins.result_store import delete_result_object, put_result
+    from sbomify.apps.plugins.result_store import delete_result_object, put_split_result
 
     payload = run.result
     if not isinstance(payload, dict):
         return False
 
-    key = put_result(run.id, payload)
+    stored = put_split_result(run.id, payload)
     run._populate_result_columns()
     changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
         result=None,
         result_summary=run.result_summary,
         result_skipped=run.result_skipped,
-        result_object_key=key,
+        result_object_key=stored.key,
+        result_findings_key=stored.findings_key,
     )
-    if not changed and not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
-        delete_result_object(key)
+    if changed:
+        # The collector may have taken the shared findings between storing them
+        # and this UPDATE; now that the row names them, put them back if so.
+        stored.confirm()
+    elif not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
+        # The shared findings object is left for the daily collector, which
+        # removes it once no row names it.
+        delete_result_object(stored.key)
     return bool(changed)
 
 
@@ -229,13 +236,21 @@ def offload_assessment_results(
     batch_size: int = 100,
     limit: int | None = None,
     dry_run: bool = False,
+    max_seconds: float | None = None,
 ) -> int:
     """Demote payloads in batches. Returns how many rows were changed.
 
     Batched so an interruption costs at most one batch. No transaction is held
     across a batch: each row's store is an object storage round trip, and each
     write is one guarded UPDATE (see :func:`offload_run`).
+
+    ``max_seconds`` stops between rows once the budget is spent, so the
+    scheduled task ends cleanly inside its time limit rather than being killed
+    mid-store; the next pass carries on from the oldest row left.
     """
+    import time
+
+    deadline = time.monotonic() + max_seconds if max_seconds is not None else None
     batches = demotable_batches(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
     if dry_run:
         count = sum(len(batch) for batch in batches)
@@ -248,6 +263,9 @@ def offload_assessment_results(
     for batch in batches:
         # Deferring nothing on purpose: the payload is what is being read.
         for run in AssessmentRun.objects.filter(id__in=batch, result_object_key="").iterator():
+            if deadline is not None and time.monotonic() >= deadline:
+                logger.info(f"[OFFLOAD] time budget spent after {moved} assessment results")
+                return moved
             if offload_run(run):
                 moved += 1
     if moved:

@@ -19,11 +19,26 @@ matter:
   as a new object. Nothing is ever overwritten, so the bytes an object holds
   always match the hash it is named for, and an old revision stays readable and
   verifiable.
-* Objects never span runs, so reclaiming one is deleting a prefix. Sharing
-  identical payloads between runs would have been the other option, and it does
-  not pay here: ``AssessmentResult.assessed_at`` is a per-run timestamp inside
-  the payload, so two otherwise identical scans an hour apart differ in their
-  bytes and would not share an object anyway.
+* A run's own object never spans runs, so reclaiming it is deleting a prefix.
+
+**The findings array is shared.** Whole payloads never repeat: ``assessed_at``
+and the scanner's metrics differ on every scan. The findings array is nearly all
+of a payload's size, though, and a rescan of an unchanged SBOM reports exactly
+the same one, which is how a scanner polling every hour filled the table. So an
+offloaded payload is two objects: the run's own, holding everything but the
+findings and naming them in ``findings_ref``, and one shared object per distinct
+findings array under :data:`FINDINGS_PREFIX`, keyed by its hash. The row records
+both keys, ``result_findings_key`` for the shared one, which is how the daily
+sweep knows when no run needs a shared object any more.
+
+A shared object has many readers and no owner, so a writer naming it and the
+collector deleting it can race, and no transaction is held across the object
+store to prevent that. Each side repairs the other instead. A writer stores the
+object, commits the row that names it, then checks the object is still there and
+puts it back if not. The collector reads the object, deletes it, then checks
+again whether any row names it and puts it back if one does. Whatever the
+interleaving, the delete precedes one of those two checks, so a named object is
+never left missing.
 
 Payloads are serialised with sorted keys and no whitespace, so the same result
 dict always produces the same bytes and therefore the same key: re-running the
@@ -37,6 +52,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from django.conf import settings
@@ -50,6 +66,14 @@ logger = getLogger(__name__)
 #: same lifecycle, same credentials, no new deployment configuration to land
 #: before the sweep can run anywhere.
 RESULT_PREFIX = "assessment-results/"
+
+#: Shared findings arrays, one object per distinct array. Under the result prefix
+#: so the bucket layout stays one tree, and named so no run id can collide with it:
+#: the per-run orphan sweep skips this segment, which is not a UUID.
+FINDINGS_PREFIX = f"{RESULT_PREFIX}findings/"
+
+#: The key in a run's own object that names its shared findings.
+FINDINGS_REF = "findings_ref"
 
 
 class ResultObjectMissing(RuntimeError):
@@ -108,10 +132,71 @@ def put_result(run_id: Any, result: dict[str, Any]) -> str:
     return key
 
 
-def get_result(key: str) -> dict[str, Any]:
-    """Read an offloaded payload back.
+def findings_key_for(findings: bytes) -> str:
+    """The shared key a serialised findings array belongs at."""
+    return f"{FINDINGS_PREFIX}{hashlib.sha256(findings).hexdigest()}.json"
 
-    Raises :class:`ResultObjectMissing` when the object is absent or unusable,
+
+@dataclass(frozen=True)
+class StoredResult:
+    """Where :func:`put_split_result` stored a payload, and what to repair it from."""
+
+    key: str
+    findings_key: str = ""
+    findings: bytes = b""
+
+    def confirm(self) -> None:
+        """Put the shared findings back if the collector took them. Call once the row names them."""
+        if self.findings_key:
+            ensure_findings_object(self.findings_key, self.findings)
+
+
+def ensure_findings_object(findings_key: str, findings: bytes) -> None:
+    """Store a shared findings array unless it is already there. Idempotent: the key is its hash."""
+    client = _client()
+    if not client.object_exists(_bucket(), findings_key):
+        client.upload_data_as_file(_bucket(), findings_key, findings)
+
+
+def put_split_result(run_id: Any, result: dict[str, Any]) -> StoredResult:
+    """Store a payload as the run's own object plus its shared findings.
+
+    The caller writes both keys to the row and then calls
+    :meth:`StoredResult.confirm`, which is the writer's half of the repair the
+    module docstring describes. A payload without a findings array is stored
+    whole, with no shared key.
+    """
+    findings = result.get("findings")
+    if not isinstance(findings, list):
+        return StoredResult(key=put_result(run_id, result))
+
+    findings_bytes = json.dumps(findings, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    findings_key = findings_key_for(findings_bytes)
+    ensure_findings_object(findings_key, findings_bytes)
+
+    remainder = {name: value for name, value in result.items() if name != "findings"}
+    remainder[FINDINGS_REF] = findings_key
+    return StoredResult(key=put_result(run_id, remainder), findings_key=findings_key, findings=findings_bytes)
+
+
+def get_findings(findings_key: str) -> list[Any]:
+    """Read a shared findings array. Raises :class:`ResultObjectMissing` if it is gone."""
+    raw = _client().get_file_data(_bucket(), findings_key)
+    if raw is None:
+        raise ResultObjectMissing(f"no object at {findings_key}")
+    try:
+        loaded = json.loads(raw)
+    except ValueError as exc:
+        raise ResultObjectMissing(f"object at {findings_key} is not JSON") from exc
+    if not isinstance(loaded, list):
+        raise ResultObjectMissing(f"object at {findings_key} is not a findings array")
+    return loaded
+
+
+def get_result(key: str) -> dict[str, Any]:
+    """Read an offloaded payload back, with its shared findings put back in place.
+
+    Raises :class:`ResultObjectMissing` when either object is absent or unusable,
     never returning an empty result for it.
     """
     raw = _client().get_file_data(_bucket(), key)
@@ -123,6 +208,9 @@ def get_result(key: str) -> dict[str, Any]:
         raise ResultObjectMissing(f"object at {key} is not JSON") from exc
     if not isinstance(loaded, dict):
         raise ResultObjectMissing(f"object at {key} is not a result object")
+    findings_key = loaded.pop(FINDINGS_REF, None)
+    if isinstance(findings_key, str) and "findings" not in loaded:
+        loaded["findings"] = get_findings(findings_key)
     return loaded
 
 
@@ -178,15 +266,18 @@ def save_result(run: Any, result: dict[str, Any]) -> None:
         if not current_key:
             run.save(update_fields=["result"])
             return
-        key = put_result(run.id, result)
+        stored = put_split_result(run.id, result)
         run._populate_result_columns()
         model.objects.filter(pk=run.pk).update(
             result=None,
-            result_object_key=key,
+            result_object_key=stored.key,
+            result_findings_key=stored.findings_key,
             result_summary=run.result_summary,
             result_skipped=run.result_skipped,
         )
-        run.result_object_key = key
+        run.result_object_key = stored.key
+        run.result_findings_key = stored.findings_key
+        transaction.on_commit(stored.confirm)
 
 
 def delete_result_object(key: str) -> None:
@@ -238,6 +329,51 @@ def delete_orphaned_result_objects(batch_size: int = 1000) -> int:
     deleted += _delete_orphans(client, bucket, pending)
     if deleted:
         logger.info(f"[RESULT_STORE] deleted {deleted} orphaned result objects")
+    return deleted
+
+
+def delete_unreferenced_findings_objects(batch_size: int = 500) -> int:
+    """Remove shared findings arrays no run names any more. Returns how many were deleted.
+
+    Each batch of listed keys is checked against the table in one query. An
+    object no row names is read, deleted, and put back if a row names it by the
+    time the delete is done: the collector's half of the repair the module
+    docstring describes, so a run being offloaded onto it at that moment keeps it.
+    """
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    client = _client()
+    bucket = _bucket()
+    deleted = 0
+
+    def sweep(keys: list[str]) -> int:
+        named = set(
+            AssessmentRun.objects.filter(result_findings_key__in=keys).values_list("result_findings_key", flat=True)
+        )
+        removed = 0
+        for key in keys:
+            if key in named:
+                continue
+            data = client.get_file_data(bucket, key)
+            if data is None:
+                continue
+            client.delete_object(bucket, key)
+            if AssessmentRun.objects.filter(result_findings_key=key).exists():
+                client.upload_data_as_file(bucket, key, data)
+                continue
+            removed += 1
+        return removed
+
+    pending: list[str] = []
+    for key in client.iter_cached_aggregates(FINDINGS_PREFIX):
+        pending.append(key)
+        if len(pending) >= batch_size:
+            deleted += sweep(pending)
+            pending = []
+    if pending:
+        deleted += sweep(pending)
+    if deleted:
+        logger.info(f"[RESULT_STORE] deleted {deleted} unreferenced shared findings objects")
     return deleted
 
 

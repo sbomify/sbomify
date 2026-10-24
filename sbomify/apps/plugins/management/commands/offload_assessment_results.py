@@ -22,9 +22,8 @@ class Command(BaseCommand):
             type=int,
             default=DEFAULT_OFFLOAD_AFTER_DAYS,
             help=(
-                f"Only demote runs older than this (default: {DEFAULT_OFFLOAD_AFTER_DAYS}). "
-                "The default is deliberately past the furthest back any reader asks; read the "
-                "module docstring before lowering it."
+                f"Only demote superseded runs older than this (default: {DEFAULT_OFFLOAD_AFTER_DAYS}). "
+                "The daily task runs the same sweep; this is for clearing a backlog in one go."
             ),
         )
         parser.add_argument("--batch-size", type=int, default=100, help="Rows per transaction (default: 100).")
