@@ -527,11 +527,11 @@ flowchart LR
 
 ## Amendment 1 (2026-10-24): result storage, retention and current results
 
-### Context
+### Why it was amended
 
 Three parts of this ADR no longer describe the system. Scheduled security scans, Dependency Track above all, rescan every SBOM many times a day, and every run stored its full findings list again even when nothing had changed. Storing every result inline, forever, made `plugins_assessment_runs` the bulk of the database. The changes that followed (#1120 retention, the result offload, #1893, #1901) each moved the code away from this ADR without amending it.
 
-### Decision
+### Amended decisions
 
 **1. Retention.** Runs are pruned daily. A run is deleted only when it is outside the newest 10 for its `(sbom, plugin_name)` **and** older than 30 days (`plugins/retention.py`). The newest run of each pair is never deleted. Decision 6, "kept forever", no longer holds.
 
@@ -546,7 +546,7 @@ Three parts of this ADR no longer describe the system. Scheduled security scans,
 
 **4. Reading results.** Code reads a run's payload through `result_store.load_result` (or `get_result` / `get_findings` for one stored object), never by assuming it is in the `result` column. Reading the column directly is correct only for a run known to be current, and new code should not rely on that.
 
-### Consequences
+### What follows from it
 
 - History is kept for every run inside the retention window, and it costs one stored copy per distinct findings list rather than one per scan.
 - Postgres holds the current answer for each SBOM. Superseded payloads are in object storage, which the deployment already requires.
