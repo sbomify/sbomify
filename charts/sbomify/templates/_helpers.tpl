@@ -281,6 +281,16 @@ here would quietly beat the workload's own identity.
     secretKeyRef:
       name: {{ $secretName }}
       key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "KEYCLOAK_CLIENT_SECRET") }}
+{{/*
+Optional, so a Secret without the key (the default, or an existingSecret that
+never set one) starts the pod with the variable unset rather than failing it.
+*/}}
+- name: GITHUB_API_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName }}
+      key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "GITHUB_API_TOKEN") }}
+      optional: true
 {{- with $ctx.Values.app.extraEnv }}
 {{ toYaml . }}
 {{- end }}

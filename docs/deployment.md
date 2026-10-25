@@ -175,7 +175,23 @@ REDIS_URL=redis://redis.example.com:6379
 
 # Features
 BILLING=False
+
+# GitHub token for SBOM attestation lookups (see below)
+# GITHUB_API_TOKEN=github_pat_your_token
 ```
+
+### GitHub token for attestation checks
+
+The SBOM Verification plugin fetches each SBOM's attestation from the GitHub
+API. Without a token, every lookup shares GitHub's unauthenticated limit of 60
+requests an hour for your server's IP. A release that uploads several SBOMs can
+use that up, and the checks then wait and retry until the limit resets.
+
+Set `GITHUB_API_TOKEN` to raise the limit to 5,000 requests an hour. Create a
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
+with **Public repositories (read-only)** access and no permissions. The
+attestations it reads belong to public repositories, so it needs nothing more.
+The worker is the service that uses it.
 
 ## Common Tasks
 
