@@ -230,6 +230,25 @@ def _status_values(row: AdvisoryProductStatus) -> dict[str, str]:
     return snapshot
 
 
+def _status_baseline(rows: list[AdvisoryProductStatus], changes: dict[str, Any]) -> dict[str, Any]:
+    """Keep every affected vulnerability's values, including the target row ids."""
+    snapshots: list[dict[str, Any]] = []
+    for row in rows:
+        values = _status_values(row)
+        snapshots.append(
+            {
+                "id": row.id,
+                "vulnerability": str(row.vulnerability),
+                "values": {key: values.get(key, "") for key in changes},
+            }
+        )
+    return {
+        "rows": len(rows),
+        **snapshots[0]["values"],
+        "status_rows": snapshots,
+    }
+
+
 def _prepared(team: Any, advisory: SecurityAdvisory, kind: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """Check a proposal before it is queued, returning its target and baseline.
 
@@ -283,13 +302,12 @@ def _prepared(team: Any, advisory: SecurityAdvisory, kind: str, payload: dict[st
         if unknown := sorted(set(changes) - PRODUCT_STATUS_FIELDS):
             raise _Invalid(f"Unknown field: {', '.join(unknown)}.")
         rows, subject = _status_link(advisory, payload)
-        values = _status_values(rows[0])
         target = (
             f"status:{payload['status_id']}"
             if payload.get("status_id")
             else (f"product:{payload.get('product_id')}:{payload.get('vulnerability_id') or ''}")
         )
-        return target, {"subject": subject, "rows": len(rows), **{key: values.get(key, "") for key in changes}}
+        return target, {"subject": subject, **_status_baseline(rows, changes)}
 
     if kind == Kind.ADD_PRODUCT:
         product = Product.objects.filter(id=payload.get("product_id", ""), team=team).first()
@@ -561,6 +579,19 @@ def _changes(proposal: AdvisoryProposal, baseline: dict[str, Any]) -> list[dict[
                 else:
                     rows.append(_change(label, baseline.get(key), after))
         return rows
+    if proposal.kind == Kind.PRODUCT_STATUS and (status_rows := baseline.get("status_rows")):
+        changes = payload.get("changes") or {}
+        return [
+            _change(
+                f"{row['vulnerability']}: {STATUS_FIELD_LABELS.get(key, key)}"
+                if len(status_rows) > 1
+                else STATUS_FIELD_LABELS.get(key, key),
+                row["values"].get(key, ""),
+                _status_value_label(key, value),
+            )
+            for row in status_rows
+            for key, value in changes.items()
+        ]
     if proposal.kind in (Kind.PRODUCT_STATUS, Kind.ADD_PRODUCT):
         changes = payload.get("changes") or {}
         return [
@@ -594,8 +625,7 @@ def _current(proposal: AdvisoryProposal, advisory: SecurityAdvisory, team: Any) 
             rows, _subject = _status_link(advisory, payload)
         except _Invalid:
             return {}
-        values = _status_values(rows[0])
-        return {**baseline, **{key: values.get(key, "") for key in payload.get("changes") or {}}}
+        return {**baseline, **_status_baseline(rows, payload.get("changes") or {})}
     return None
 
 

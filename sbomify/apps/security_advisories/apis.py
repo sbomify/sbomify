@@ -24,6 +24,7 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
+from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
 from ninja import Router
@@ -203,7 +204,9 @@ def _proposed(
     and a draft is its to shape. Past publication every write it makes is
     queued instead, and the 202 carries the proposal so it can check on it.
     """
-    advisory = proposal_service.find_advisory(team, advisory_id)
+    # The caller holds this lock through either the direct write or proposal
+    # submission, so publication cannot slip between the decision and the write.
+    advisory = advisory_service._locked_advisory(team, advisory_id)
     if advisory is None or not proposal_service.needs_approval(advisory, credential_channel(request)):
         return None
     result = proposal_service.submit_proposal(
@@ -347,6 +350,7 @@ def get_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
     },
     auth=AUTH,
     summary="Update an advisory's own fields",
@@ -355,6 +359,7 @@ def get_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
         + _PROPOSAL_NOTE
     ),
 )
+@decorate_view(transaction.atomic)
 def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvisorySchema) -> tuple[int, Any]:
     team, error = _workspace(request)
     if error:
@@ -432,6 +437,7 @@ _STATUS_DESCRIPTION = (
     summary="Update one product status on an advisory",
     description=_STATUS_DESCRIPTION,
 )
+@decorate_view(transaction.atomic)
 def update_product_status(
     request: HttpRequest, advisory_id: str, status_id: str, payload: ProductStatusUpdateSchema
 ) -> tuple[int, Any]:
@@ -483,6 +489,7 @@ def update_product_status(
         "vulnerability_id's. product_id is the sbomify product. " + _STATUS_DESCRIPTION
     ),
 )
+@decorate_view(transaction.atomic)
 def update_product_statuses(
     request: HttpRequest,
     advisory_id: str,
@@ -539,6 +546,7 @@ def update_product_statuses(
         "under investigation unless a status is sent, which a resolved advisory requires."
     ),
 )
+@decorate_view(transaction.atomic)
 def add_advisory_product(request: HttpRequest, advisory_id: str, payload: AddAdvisoryProductSchema) -> tuple[int, Any]:
     from sbomify.apps.core.models import Product, Release
 
@@ -615,6 +623,7 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
     },
     auth=AUTH,
     summary="Post a timeline update or move the remediation status",
@@ -622,6 +631,7 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
         "kind is 'update' for a note, or a remediation status to move to, with the note as commentary." + _PROPOSAL_NOTE
     ),
 )
+@decorate_view(transaction.atomic)
 def post_advisory_update(request: HttpRequest, advisory_id: str, payload: AdvisoryUpdateSchema) -> tuple[int, Any]:
     team, error = _workspace(request)
     if error:
@@ -666,6 +676,7 @@ def post_advisory_update(request: HttpRequest, advisory_id: str, payload: Adviso
         "text stays on record and every reader, the trust center included, shows the new one." + _PROPOSAL_NOTE
     ),
 )
+@decorate_view(transaction.atomic)
 def edit_advisory_update(
     request: HttpRequest, advisory_id: str, event_id: str, payload: EditAdvisoryUpdateSchema
 ) -> tuple[int, Any]:
