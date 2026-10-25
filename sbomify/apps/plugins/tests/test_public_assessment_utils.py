@@ -1048,3 +1048,67 @@ class TestBatchVisibilityIncludesGated:
         assert "ntia-minimum-elements-2021" in plugin_names, (
             f"GATED component should produce passing badge in batch result; got {plugin_names}"
         )
+
+
+@pytest.mark.django_db
+class TestTriageVexDoesNotHideBadges:
+    """A triage decision is stored as a VEX row beside the component's SBOMs.
+
+    No plugin assesses a VEX document, so a public path that takes the VEX as
+    the component's latest artifact, or counts it as one of its SBOMs, shows no
+    passing assessment from the moment someone records a decision.
+    """
+
+    @pytest.fixture
+    def component(self, team, ntia_plugin):
+        component = Component.objects.create(
+            name="Triaged", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
+        )
+        sbom = SBOM.objects.create(name="app", component=component, format="cyclonedx", format_version="1.6")
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="vex",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
+        )
+        vex = SBOM.objects.create(
+            name="app",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            bom_type=SBOM.BomType.VEX,
+            source="sbomify-triage",
+        )
+        SBOM.objects.filter(pk=vex.pk).update(created_at=sbom.created_at + timedelta(minutes=5))
+        component.sbom_id = sbom.id
+        return component
+
+    def test_the_latest_sbom_is_not_the_vex(self, component):
+        assert get_latest_sbom_for_component(component).id == component.sbom_id
+
+    def test_the_latest_sbom_status_keeps_its_badge(self, component):
+        status = get_component_latest_sbom_assessment_status(component)
+        assert [a.plugin_name for a in status.passing_assessments] == ["ntia-minimum-elements-2021"]
+
+    def test_the_component_status_keeps_its_badge(self, component):
+        status = get_component_assessment_status(component)
+        assert status.all_pass
+        assert [a.plugin_name for a in status.passing_assessments] == ["ntia-minimum-elements-2021"]
+
+    def test_the_batches_keep_their_badges(self, component, team):
+        from sbomify.apps.plugins.public_assessment_utils import (
+            get_components_latest_sbom_assessments_batch,
+            get_products_latest_sbom_assessments_batch,
+        )
+
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        product.components.add(component)
+
+        components = get_components_latest_sbom_assessments_batch([component])
+        products = get_products_latest_sbom_assessments_batch([product])
+        assert [a.plugin_name for a in components[str(component.id)]] == ["ntia-minimum-elements-2021"]
+        assert [a.plugin_name for a in products[str(product.id)]] == ["ntia-minimum-elements-2021"]
