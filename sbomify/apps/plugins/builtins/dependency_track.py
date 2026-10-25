@@ -844,8 +844,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Exports the project's CycloneDX VEX from Dependency Track and, when it
         carries at least one audit decision, saves it as a new bom_type=vex
-        artifact on the component (as received, per ADR-004). Content is
-        deduplicated against the component's newest VEX ignoring the volatile
+        artifact on the component (as received, per ADR-004), under the version
+        of the SBOM the DT project holds. Content is deduplicated against the
+        newest Dependency-Track VEX for that version, ignoring the volatile
         export fields (serialNumber, doc version, metadata.timestamp), so the
         hourly scan cron doesn't mint identical VEX rows. A new VEX enqueues
         the same re-apply used by manual VEX uploads, which re-annotates the
@@ -879,11 +880,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
         from sbomify.apps.sboms.services.sboms import schedule_vex_reapply, upload_sbom_file
 
         component = version_row.sbom.component
+        # The DT project version holds this one SBOM, so its triage is about
+        # that version and is stored under it: a VEX applies only to the SBOMs
+        # of the version it was written for.
+        sbom_version = version_row.sbom.version or ""
         normalized = self._normalized_vex(doc)
         s3 = StorageClient("SBOMS")
 
         newest = (
-            SBOMModel.objects.filter(component=component, bom_type=SBOMModel.BomType.VEX.value)
+            SBOMModel.objects.filter(
+                component=component,
+                bom_type=SBOMModel.BomType.VEX.value,
+                source="dependency-track",
+                version=sbom_version,
+            )
             .order_by("-created_at")
             .first()
         )
@@ -904,7 +914,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 component=component,
                 bom_type=SBOMModel.BomType.VEX.value,
                 name=metadata_component.get("name") or f"{component.name}-vex",
-                version=dj_timezone.now().strftime("dt-triage-%Y%m%d%H%M%S"),
+                version=sbom_version,
                 format="cyclonedx",
                 format_version=str(doc.get("specVersion") or ""),
                 sbom_filename=filename,
