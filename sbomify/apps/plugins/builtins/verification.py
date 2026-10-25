@@ -31,11 +31,13 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -86,7 +88,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     that drives ``_is_passing`` for upstream consumers (BSI, FDA, etc.).
     """
 
-    VERSION = "2.0.0"
+    VERSION = "2.0.1"
 
     DEFAULT_TIMEOUT = 60
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
@@ -628,6 +630,26 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             return True
         return "rate limit" in response.text.lower()
 
+    @staticmethod
+    def _rate_limit_retry_after_seconds(response: requests.Response) -> int:
+        """Honor GitHub's wait headers, with an hour fallback for an unknown reset."""
+        delays = []
+        if retry_after := response.headers.get("Retry-After"):
+            try:
+                seconds = int(retry_after)
+                if seconds >= 0:
+                    delays.append(max(1, seconds))
+            except ValueError:
+                pass
+        if response.headers.get("X-RateLimit-Remaining") == "0":
+            try:
+                reset = int(response.headers.get("X-RateLimit-Reset", ""))
+                # Retry after the reset second rather than racing its boundary.
+                delays.append(max(1, math.ceil(reset - time.time()) + 1))
+            except ValueError:
+                delays.append(3600)
+        return max(delays, default=3600)
+
     def _download_github_bundle(self, org: str, repo: str, digest: str, repo_provenance: str = "") -> dict[str, Any]:
         """Fetch the attestation bundle from GitHub's public Attestations API.
 
@@ -678,6 +700,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 f"because sbomify reached GitHub's API rate limit. This says nothing about the SBOM or its "
                 f"attestation. sbomify asked for sha256:{digest}. Run the assessment again later.",
                 title="GitHub rate limit reached",
+                retry_after_seconds=self._rate_limit_retry_after_seconds(response),
             )
         if response.status_code != 200:
             return {

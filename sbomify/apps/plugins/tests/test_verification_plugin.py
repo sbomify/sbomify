@@ -53,7 +53,7 @@ class TestMetadata:
         meta = plugin.get_metadata()
 
         assert meta.name == "sbom-verification"
-        assert meta.version == "2.0.0"
+        assert meta.version == "2.0.1"
         # The unified plugin lives in the ``attestation`` category so a
         # single ``requires_one_of`` clause in BSI/FDA/etc. matches it
         # without needing to enumerate plugins by name.
