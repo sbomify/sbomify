@@ -126,6 +126,13 @@
                     <template x-if="advisory.publication_status !== 'published'">
                         <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.publication_variant" x-text="advisory.publication_label" />
                     </template>
+                    {# Changes AI agents proposed that nobody has decided: the advisory is waiting on a person. #}
+                    <template x-if="advisory.pending_review">
+                        <c-badges.violet class="whitespace-nowrap gap-1">
+                        <i class="fas fa-robot text-[10px]" aria-hidden="true"></i>
+                        <span x-text="advisory.pending_review + ' to review'"></span>
+                        </c-badges.violet>
+                    </template>
                 </div>
                 </c-tables.cell>
                 <c-tables.cell date class="hidden sm:table-cell">

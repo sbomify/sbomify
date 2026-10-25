@@ -94,6 +94,86 @@ def _fix_prompt_demo() -> dict[str, object]:
     return fix
 
 
+def _advisory_proposal_demos() -> list[dict[str, object]]:
+    """Changes an AI agent proposed to a published advisory, as its review list renders them."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    base: dict[str, object] = {
+        "status": "pending",
+        "status_label": "Awaiting review",
+        "status_variant": "warning",
+        "is_pending": True,
+        "from_agent": True,
+        "submitted_by": "Jane Doe",
+        "submitted_via": "Advisory agent",
+        "submitted_at": timezone.now() - timedelta(minutes=8),
+        "note": "",
+        "moves_to": None,
+        "changes": [],
+        "releases": [],
+        "is_text": False,
+        "is_stale": False,
+        "context": "",
+        "decided_by": "",
+        "revised": False,
+        "previous_rejection": None,
+        "rejection_label": "",
+    }
+    return [
+        {
+            **base,
+            "id": "demo-update",
+            "kind": "post_update",
+            "kind_label": "New update",
+            "icon": "fas fa-comment-dots",
+            "headline": "Move the status to Fix in progress",
+            "is_text": True,
+            "moves_to": {"label": "Fix in progress", "variant": "violet", "icon": "fas fa-wrench"},
+            "note": "A fix is in review in **example/gateway#42**. We expect to ship it in 1.4.3.",
+            "context": "The pull request that closes the CVE was opened an hour ago.",
+        },
+        {
+            **base,
+            "id": "demo-fields",
+            "kind": "edit_advisory",
+            "kind_label": "Edit to the advisory",
+            "icon": "fas fa-file-pen",
+            "headline": "Change the severity and CVSS",
+            "is_stale": True,
+            "changes": [
+                {"label": "Severity", "before": "High", "after": "Critical", "long": False},
+                {
+                    "label": "CVSS",
+                    "before": "7.5",
+                    "after": "9.8 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H)",
+                    "long": False,
+                },
+            ],
+        },
+        {
+            **base,
+            "id": "demo-rejected",
+            "kind": "post_update",
+            "kind_label": "New update",
+            "icon": "fas fa-comment-dots",
+            "headline": "Move the status to Resolved",
+            "is_text": True,
+            "is_pending": False,
+            "status": "rejected",
+            "status_label": "Rejected",
+            "status_variant": "danger",
+            "note": "Fixed in 1.4.3.",
+            "decided_by": "Jane Doe",
+            "decided_display": "25 Oct 2026",
+            "rejection_label": "Too early",
+            "decision_note": "1.4.3 is tagged but not released. Post this once it is on the downloads page.",
+            "next_step": "Wait until what the note describes has happened, then send it again.",
+        },
+    ]
+
+
 def _vex_submission_demos() -> list[dict[str, object]]:
     """One submission from an AI agent and one upload sent for approval, as the review tab renders them."""
     from datetime import timedelta
@@ -259,6 +339,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
             "fix_prompt_demo": _fix_prompt_demo(),
             "vex_submission_demos": _vex_submission_demos(),
+            "advisory_proposal_demos": _advisory_proposal_demos(),
             "plan_card_demos": [
                 {
                     "key": "community",

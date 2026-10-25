@@ -26,6 +26,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
+    AdvisoryProposal,
     AdvisoryReference,
     AdvisoryVersionRange,
     AdvisoryVulnerability,
@@ -102,6 +103,7 @@ EVENT_META: dict[str, dict[str, str]] = {
     "cra_notification": {"label": "CRA notification", "variant": "warning", "icon": "fas fa-flag"},
     "cra_final_report": {"label": "CRA final report", "variant": "warning", "icon": "fas fa-flag-checkered"},
     "users_notified": {"label": "Users notified", "variant": "info", "icon": "fas fa-envelope"},
+    "message_edited": {"label": "Edited", "variant": "secondary", "icon": "fas fa-pen"},
 }
 _UNKNOWN_EVENT = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle"}
 
@@ -314,7 +316,26 @@ def _reference_projection(reference: AdvisoryReference) -> dict[str, Any]:
     }
 
 
-def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
+def latest_edits(events: list[AdvisoryEvent]) -> dict[str, AdvisoryEvent]:
+    """The newest ``message_edited`` event for each message that has one.
+
+    ``events`` must be oldest first, as every prefetch here orders them, so a
+    later edit overwrites an earlier one.
+    """
+    edits: dict[str, AdvisoryEvent] = {}
+    for event in events:
+        if event.event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+            payload = event.payload if isinstance(event.payload, dict) else {}
+            if target := payload.get("event_id"):
+                edits[str(target)] = event
+    return edits
+
+
+def _actor_name(user: Any) -> str:
+    return (user.get_full_name() or user.username) if user else ""
+
+
+def _event_projection(event: AdvisoryEvent, edit: AdvisoryEvent | None = None) -> dict[str, Any]:
     meta = EVENT_META.get(event.event_type, _UNKNOWN_EVENT)
     payload = event.payload if isinstance(event.payload, dict) else {}
     actor = event.actor
@@ -341,21 +362,29 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
         "from_label": REMEDIATION_META.get(payload.get("from", ""), {}).get("label", ""),
         # "note" and "date_display" are what the timeline template binds to;
         # "body" and "created_at" are the model's own names, kept for callers
-        # that want the raw values.
-        "note": event.body,
+        # that want the raw values. Both carry the newest edit, if any.
+        "note": edit.body if edit else event.body,
         "date_display": display_date(event.created_at),
-        "body": event.body,
+        "body": edit.body if edit else event.body,
+        "is_editable": event.event_type in AdvisoryEvent.EDITABLE_EVENT_TYPES,
+        "edited_at": edit.created_at if edit else None,
+        "edited_display": display_date(edit.created_at) if edit else "",
+        "edited_by": _actor_name(edit.actor) if edit else "",
         "payload": payload,
         # Only status_change moves the advisory's remediation status; the rest
         # are narrative. The template greys the others accordingly.
         "sets_status": event.event_type == AdvisoryEvent.EventType.STATUS_CHANGE,
         "to_status": payload.get("to"),
         "from_status": payload.get("from"),
-        "actor": actor.get_full_name() or actor.username if actor else "",
+        "actor": _actor_name(actor),
         # How the change was sent: "agent", "api" or "ci" through the API, blank
         # for the app and for anything recorded before this was kept.
         "channel": via.get("channel", ""),
         "token_id": via.get("token_id", ""),
+        # Set when a person approved a change an AI agent proposed.
+        "approved_by": via.get("approved_by", ""),
+        "edit_channel": ((edit.payload or {}).get("via") or {}).get("channel", "") if edit else "",
+        "edit_approved_by": ((edit.payload or {}).get("via") or {}).get("approved_by", "") if edit else "",
         "is_internal": event.event_type == AdvisoryEvent.EventType.COMMENT,
         "created_at": event.created_at,
     }
@@ -365,11 +394,15 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
     severity = worst_severity(advisory)
     best_cvss = worst_cvss(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, _UNKNOWN_EVENT)
-    events = list(advisory.events.all())
+    all_events = list(advisory.events.all())
+    # An edit is shown in place of the message it edits, not as an entry of
+    # its own, but it still counts as the advisory being updated.
+    edits = latest_edits(all_events)
+    events = [e for e in all_events if e.event_type != AdvisoryEvent.EventType.MESSAGE_EDITED]
     vulnerabilities = list(advisory.vulnerabilities.all())
     references = list(advisory.references.all())
     advisory_type = _advisory_type(vulnerabilities, references)
-    updated_at = max((e.created_at for e in events), default=advisory.updated_at)
+    updated_at = max((e.created_at for e in all_events), default=advisory.updated_at)
 
     projection: dict[str, Any] = {
         # str() because the table's client-side search lowercases this. Both
@@ -434,7 +467,10 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         projection["references"] = [_reference_projection(r) for r in references]
         # Newest first: the current state is the thing being looked for.
         newest_first = sorted(events, key=lambda e: e.created_at, reverse=True)
-        projection["timeline"] = [_event_projection(e) for e in newest_first]
+        projection["timeline"] = [_event_projection(e, edits.get(e.id)) for e in newest_first]
+        # The first event is the creation, so its channel says who drafted it.
+        first_via = (events[0].payload or {}).get("via") if events else None
+        projection["drafted_by_agent"] = isinstance(first_via, dict) and first_via.get("channel") == "agent"
     return projection
 
 
@@ -1508,6 +1544,10 @@ def withdraw_advisory(
         return ServiceResult.failure(_messages(error), 400)
 
     advisory.save(update_fields=["status", "withdrawn_at", "withdrawal_reason", "updated_at"])
+    # A withdrawn advisory is final, so nothing still waiting for review can apply.
+    advisory.proposals.filter(status=AdvisoryProposal.Status.PENDING).update(
+        status=AdvisoryProposal.Status.SUPERSEDED, decided_at=timezone.now()
+    )
     AdvisoryEvent.objects.create(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.WITHDRAWN,
@@ -1576,6 +1616,53 @@ def post_update(
     )
     advisory.remediation_status = kind
     advisory.save(update_fields=["remediation_status", "updated_at"])
+    _announce(team, advisory.id, "updated")
+    return ServiceResult.success(advisory.id)
+
+
+def current_message(advisory: SecurityAdvisory, event_id: str) -> tuple[AdvisoryEvent | None, str]:
+    """A timeline message that may be edited, and the text it reads as now."""
+    event = advisory.events.filter(pk=event_id, event_type__in=AdvisoryEvent.EDITABLE_EVENT_TYPES).first()
+    if event is None:
+        return None, ""
+    edit = (
+        advisory.events.filter(event_type=AdvisoryEvent.EventType.MESSAGE_EDITED, payload__event_id=event.id)
+        .order_by("-created_at")
+        .first()
+    )
+    return event, edit.body if edit else event.body
+
+
+@transaction.atomic
+def edit_message(
+    team: Any, user: Any, advisory_id: str, event_id: str, *, note: str, via: dict[str, str] | None = None
+) -> ServiceResult[str]:
+    """Correct the words of an update already on the timeline.
+
+    The timeline is append-only, so the correction is a ``message_edited``
+    event naming the message and keeping the text it replaced. Every reader,
+    the Trust Center included, shows the newest text in the original's place,
+    and the history of what it said stays on record.
+    """
+    advisory = _locked_advisory(team, advisory_id)
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+    event, current = current_message(advisory, event_id)
+    if event is None:
+        return ServiceResult.failure("Update not found", status_code=404)
+    note = (note or "").strip()
+    if not note:
+        return ServiceResult.failure("An update needs a note.", status_code=400)
+    if note == current:
+        return ServiceResult.success(advisory.id)
+
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.MESSAGE_EDITED,
+        actor=user,
+        body=note,
+        payload=_stamped({"event_id": event.id, "event_type": event.event_type, "old": current}, via),
+    )
     _announce(team, advisory.id, "updated")
     return ServiceResult.success(advisory.id)
 

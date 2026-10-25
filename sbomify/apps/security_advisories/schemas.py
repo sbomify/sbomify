@@ -23,6 +23,11 @@ from pydantic import ConfigDict, Field
 
 from sbomify.apps.core.schemas import PaginationMeta
 
+_CONTEXT_HELP = (
+    "What you changed and why, for the person approving it. Only read when the change waits for approval: "
+    "an AI agent token's write to a published advisory does, and answers 202 with the proposed change."
+)
+
 
 class AdvisoryProductSchema(Schema):
     """A product an advisory names.
@@ -73,6 +78,7 @@ class AdvisoryEventSchema(Schema):
     from_status: str | None = None
     to_status: str | None = None
     created_at: datetime
+    edited_at: datetime | None = Field(None, description="When the body was last edited, if it was.")
 
 
 class AdvisoryStatusSchema(Schema):
@@ -160,6 +166,10 @@ class UpdateAdvisorySchema(Schema):
     summary: str | None = Field(None, description="The one-paragraph summary the trust center leads with.")
     cvss_score: float | None = None
     cvss_vector: str | None = None
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
 
 
 class ProductStatusUpdateSchema(Schema):
@@ -184,6 +194,10 @@ class ProductStatusUpdateSchema(Schema):
     recommended_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
     fixed_version: str | None = None
     fixed_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
 
 
 class AddAdvisoryProductSchema(ProductStatusUpdateSchema):
@@ -217,6 +231,74 @@ class AdvisoryUpdateSchema(Schema):
         "",
         description="Markdown. Headings, lists, bold, italic, code spans and http(s) or mailto links are rendered; "
         "raw HTML is shown as text.",
+    )
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class EditAdvisoryUpdateSchema(Schema):
+    """A new body for an update already on the timeline.
+
+    The original text stays on record: the timeline is append-only, so the
+    edit is recorded alongside it and every reader shows the newest text.
+    """
+
+    note: str = Field(min_length=1, description="The update's new text, in Markdown.")
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class AdvisoryProposalChangeSchema(Schema):
+    label: str
+    before: str = ""
+    after: str = ""
+
+
+class AdvisoryProposalSchema(Schema):
+    """A change to a published advisory that waits for a person to approve it."""
+
+    id: str
+    kind: str = Field(
+        description="post_update, edit_update, edit_advisory, product_status or add_product: the write it holds."
+    )
+    status: str = Field(description="pending, approved, rejected or superseded.")
+    summary: str = Field(description="The change in one line.")
+    note: str = Field("", description="The text of a new or edited update, as it was applied when approved.")
+    changes: list[AdvisoryProposalChangeSchema] = Field(
+        default_factory=list, description="Each value it changes, as it stood when sent and as proposed."
+    )
+    context: str = ""
+    is_stale: bool = Field(False, description="Something it changes has been changed by someone else since.")
+    revised: bool = Field(False, description="The reviewer reworded the text before approving it.")
+    submitted_at: datetime
+    decided_at: datetime | None = None
+    decision_note: str = Field("", description="What the reviewer said when deciding: on a rejection, the specifics.")
+    rejection_reason: str = Field(
+        "",
+        description="Set on a rejection: inaccurate, premature, wording, duplicate or other. Branch on this.",
+    )
+    next_step: str = Field("", description="Set on a rejection: what to do about it, in a sentence.")
+
+
+class SentAdvisoryProposalSchema(AdvisoryProposalSchema):
+    advisory_id: str
+
+
+class ProposalDecisionSchema(Schema):
+    note: str | None = Field(
+        None, description="Approving only: the text to post instead of the proposed one, for an update."
+    )
+    reason: str = Field(
+        "",
+        description="Rejecting only, and required: inaccurate, premature, wording, duplicate or other. "
+        "The sender reads it back with a next step.",
+    )
+    decision_note: str = Field(
+        "", description="Why, for whoever sent the change. Required when rejecting: say what was wrong."
     )
 
 
