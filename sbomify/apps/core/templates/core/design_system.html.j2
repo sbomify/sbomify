@@ -1251,6 +1251,39 @@ first-of-type rule that drops the leading hairline reads the section's position
         {% endfor %}
     </ul>
     </c-cards.card>
+    <h3 id="advisory-proposal" class="text-lg font-semibold text-text">Advisory proposal</h3>
+    <p class="text-sm text-text-muted m-0">
+        A change an AI agent proposed to a published advisory, as a row of the advisory's review list: what it changes,
+        who sent it and why, then the change as a diff. A warning sits above the diff when someone changed the same
+        thing since. Shown read-only here; with can_decide the row carries Reject and Approve, plus "Edit, then
+        approve" for a new or edited update.
+    </p>
+    <c-cards.card flush>
+    <ul class="m-0 list-none p-0">
+        {% for item in advisory_proposal_demos %}<c-advisories.proposal :item="item" />{% endfor %}
+    </ul>
+    </c-cards.card>
+    <p class="text-sm text-text-muted m-0">
+        One changed value on its own: short values inline, long text stacked as Now and Proposed.
+    </p>
+    <c-cards.card>
+    <div class="flex flex-col gap-3">
+        <c-advisories.change label="Severity" before="High" after="Critical" />
+        <c-advisories.change label="Summary" before="" after="A crafted lookup string lets a remote attacker run code on the gateway. Upgrade to 1.4.3." long />
+    </div>
+    </c-cards.card>
+    <p class="text-sm text-text-muted m-0">
+        A proposed update on the timeline, where it would land once approved, and the pointer an update carries while
+        an edit to it waits.
+    </p>
+    <c-cards.card>
+    <div class="flex flex-col gap-3">
+        <c-advisories.proposed-entry :item="advisory_proposal_demos.0" />
+        <c-advisories.pending-link href="#advisory-proposal">
+        An AI agent proposed new wording. Review it
+        </c-advisories.pending-link>
+    </div>
+    </c-cards.card>
     <h2 id="bulk-actions" class="text-xl font-semibold text-text">Bulk actions</h2>
     {% comment %}
     This section renders through the cotton component library

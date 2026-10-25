@@ -166,6 +166,8 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                             {% else %}
                                 <span>first entry</span>
                             {% endif %}
+                            {# A corrected update says so: a reader who quoted the old text can tell it changed. #}
+                            {% if entry.edited_display %}<span>edited {{ entry.edited_display }}</span>{% endif %}
                             </c-slot>
                             {% if entry.note %}<c-branded.markdown>{{ entry.note|strict_markdown }}</c-branded.markdown>{% endif %}
                             </c-branded.timeline-item>

@@ -1,0 +1,115 @@
+{% comment %}
+The review list on a published advisory's page: every change an AI agent has
+proposed and nobody has decided yet, then what was decided lately. It is the
+one place a decision is made. The timeline and the product table point here
+rather than carrying their own buttons, so a change is never approved from two
+places with two different views of it.
+
+review is security_advisories/services/proposals.advisory_proposals. Pending
+changes are listed oldest first, which is the order they were sent and the
+order they apply cleanly in. Decided ones fold behind a disclosure, because a
+reviewer is here for what is waiting.
+
+One dialog for each decision that needs words. Reject asks for an optional
+reason the agent reads back through the API. "Edit, then approve" carries the
+proposed text into a textarea, so the reviewer posts their wording and the
+change is recorded as reworded. Both are driven by events the rows dispatch.
+{% endcomment %}
+{% load humanize %}
+<c-vars review decide_url can_decide />
+<section id="review"
+         class="flex scroll-mt-20 flex-col gap-3"
+         aria-labelledby="reviewHeading"
+         x-data="{ reject: null, revise: null }"
+         @proposal-reject="reject = $event.detail"
+         @proposal-revise="revise = $event.detail">
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h2 id="reviewHeading" class="m-0 text-lg font-semibold text-text">
+                Waiting for review
+                {% if review.pending_count %}
+                    <span class="ml-1 align-middle text-sm font-normal tabular-nums text-text-muted">{{ review.pending_count|intcomma }}</span>
+                {% endif %}
+            </h2>
+            <p class="m-0 text-sm text-text-muted">
+                Changes AI agents proposed to this advisory. None of them reach your Trust Center until someone approves them.
+            </p>
+        </div>
+    </div>
+    {% if review.pending %}
+        <c-cards.card flush>
+        <ul class="m-0 list-none p-0">
+            {% for item in review.pending %}
+                <c-advisories.proposal :item="item" decide_url="{{ decide_url }}" :can_decide="can_decide" />
+            {% endfor %}
+        </ul>
+        </c-cards.card>
+    {% else %}
+        <c-cards.card>
+        <c-feedback.empty-state compact icon="fas fa-check" title="Nothing waiting" message="Every change an agent proposed has been decided." />
+        </c-cards.card>
+    {% endif %}
+    {% if review.decided %}
+        <details class="group">
+            <summary class="flex cursor-pointer list-none items-center gap-2 text-sm text-text-muted hover:text-text [&::-webkit-details-marker]:hidden">
+                <i class="fas fa-chevron-right text-[10px] transition-transform group-open:rotate-90"
+                   aria-hidden="true"></i>
+                Recently decided
+                <span class="tabular-nums">{{ review.decided_total|intcomma }}</span>
+            </summary>
+            <div class="mt-3">
+                <c-cards.card flush>
+                <ul class="m-0 list-none p-0">
+                    {% for item in review.decided %}
+                        <c-advisories.proposal :item="item" />
+                    {% endfor %}
+                </ul>
+                </c-cards.card>
+            </div>
+        </details>
+    {% endif %}
+    {% if can_decide %}
+        <c-modal show="reject" close="reject = null" title="Reject this change" icon="fas fa-xmark" role="alertdialog">
+        <form id="rejectProposalForm"
+              method="post"
+              action="{{ decide_url }}"
+              class="flex flex-col gap-4">
+            {% csrf_token %}
+            <input type="hidden" name="intent" value="reject_proposal">
+            <input type="hidden" name="proposal_id" :value="reject ? reject.id : ''">
+            <c-typography.description>
+            <span class="text-text" x-text="reject ? reject.headline : ''"></span>. Nothing on the advisory changes. The agent can read your reason.
+            </c-typography.description>
+            <c-forms.field label="Reason (optional)" for="rejectProposalNote" hint="Supports Markdown.">
+            <c-forms.textarea id="rejectProposalNote" name="decision_note" rows="3" placeholder="The fix has not shipped yet." />
+            </c-forms.field>
+        </form>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="reject = null">Cancel</c-buttons.ghost>
+        <c-buttons.danger type="submit" form="rejectProposalForm">Reject</c-buttons.danger>
+        </c-slot>
+        </c-modal>
+        <c-modal show="revise" close="revise = null" title="Edit, then approve" icon="fas fa-pen" size="lg">
+        <form id="reviseProposalForm"
+              method="post"
+              action="{{ decide_url }}"
+              class="flex flex-col gap-4">
+            {% csrf_token %}
+            <input type="hidden" name="intent" value="approve_proposal">
+            <input type="hidden" name="proposal_id" :value="revise ? revise.id : ''">
+            <c-typography.description>
+            Your wording is posted in place of the agent's, and the change is recorded as reworded.
+            </c-typography.description>
+            <c-forms.field label="Update" for="reviseProposalNote" hint="Supports Markdown: **bold**, *italic*, `code`, lists, headings and [links](https://example.com).">
+            <c-forms.textarea id="reviseProposalNote" name="note" rows="8" required x-effect="if (revise) $el.value = revise.note" />
+            </c-forms.field>
+        </form>
+        <c-slot name="footer">
+        <c-buttons.ghost @click="revise = null">Cancel</c-buttons.ghost>
+        <c-buttons.primary type="submit" form="reviseProposalForm">
+        <i class="fas fa-check text-xs" aria-hidden="true"></i>Approve and post
+        </c-buttons.primary>
+        </c-slot>
+        </c-modal>
+    {% endif %}
+</section>

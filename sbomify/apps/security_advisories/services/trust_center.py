@@ -60,6 +60,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     STATUS_VARIANTS,
     display_date,
     display_id,
+    latest_edits,
     status_subject,
     worst_cvss,
     worst_severity,
@@ -126,6 +127,13 @@ EVENT_META: dict[str, dict[str, str]] = {
     },
 }
 _DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle-info"}
+
+# What the readable queryset loads of the timeline: the public kinds, and the
+# edits made to them. An edit to an internal comment never leaves the workspace.
+_PUBLIC_EVENTS = Q(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES) | Q(
+    event_type=AdvisoryEvent.EventType.MESSAGE_EDITED,
+    payload__event_type__in=sorted(AdvisoryEvent.PUBLIC_EVENT_TYPES),
+)
 
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
@@ -306,9 +314,7 @@ def _readable_queryset(team: Any) -> Any:
             "vulnerabilities__product_statuses__version_ranges",
             Prefetch(
                 "events",
-                queryset=AdvisoryEvent.objects.filter(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES).order_by(
-                    "created_at"
-                ),
+                queryset=AdvisoryEvent.objects.filter(_PUBLIC_EVENTS).order_by("created_at"),
                 to_attr="public_events",
             ),
         )
@@ -435,7 +441,9 @@ def _gap_phrase(earlier: Any, later: Any) -> str:
     return f"{humanised} later" if (humanised := _humanise(earlier, later)) else "moments later"
 
 
-def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None) -> dict[str, Any]:
+def _public_event(
+    event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None, edit: AdvisoryEvent | None = None
+) -> dict[str, Any]:
     """One timeline entry: what happened, when, and how long after the last one.
 
     The workspace timeline renders an actor and a raw payload. Neither belongs on
@@ -461,7 +469,8 @@ def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None
         "label": meta.get("label") or fallback["label"],
         "variant": meta.get("variant") or fallback["variant"],
         "icon": meta.get("icon") or fallback["icon"],
-        "note": event.body,
+        "note": edit.body if edit else event.body,
+        "edited_display": display_date(edit.created_at) if edit else "",
         # Three complementary readings of the same instant: the date to cite,
         # the time for same-day ordering, and the relative age to feel.
         "date_display": display_date(event.created_at),
@@ -628,6 +637,13 @@ def _cvss_score(advisory: SecurityAdvisory) -> float | None:
     return float(entry["base_score"]) if entry else None
 
 
+def _is_public_event(event: AdvisoryEvent) -> bool:
+    if event.event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        return payload.get("event_type") in AdvisoryEvent.PUBLIC_EVENT_TYPES
+    return event.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES
+
+
 def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail: bool = False) -> dict[str, Any]:
     severity = worst_severity(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, {})
@@ -635,11 +651,15 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
     # ``public_events`` is the to_attr from _readable_queryset; falling back to
     # the relation keeps the function usable on an advisory fetched some other
     # way, filtering by hand so the fallback cannot be the leaky path.
-    events = getattr(advisory, "public_events", None)
-    if events is None:
-        events = [e for e in advisory.events.all() if e.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES]
+    readable = getattr(advisory, "public_events", None)
+    if readable is None:
+        readable = [e for e in advisory.events.all() if _is_public_event(e)]
+    # An edit to a public update shows as that update's text, never as an entry
+    # of its own; the text it replaced stays in the workspace.
+    edits = latest_edits(readable)
+    events = [e for e in readable if e.event_type != AdvisoryEvent.EventType.MESSAGE_EDITED]
     products, withheld = _visible_products(advisory, scope)
-    updated_at = max((e.created_at for e in events), default=advisory.published_at or advisory.updated_at)
+    updated_at = max((e.created_at for e in readable), default=advisory.published_at or advisory.updated_at)
 
     projection: dict[str, Any] = {
         "id": str(display_id(advisory)),
@@ -701,7 +721,11 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         # the pairing walks the reversed list one step behind.
         newest_first = sorted(events, key=lambda e: e.created_at, reverse=True)
         projection["timeline"] = [
-            _public_event(event, previous=newest_first[index + 1] if index + 1 < len(newest_first) else None)
+            _public_event(
+                event,
+                previous=newest_first[index + 1] if index + 1 < len(newest_first) else None,
+                edit=edits.get(event.id),
+            )
             for index, event in enumerate(newest_first)
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []

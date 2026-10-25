@@ -151,8 +151,13 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
         return False
     # The timeline is filtered to the public event types, so an internal comment
     # or a field-change row changes nothing a reader can fetch.
-    if isinstance(instance, AdvisoryEvent) and instance.event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
-        return False
+    if isinstance(instance, AdvisoryEvent):
+        # An edit renders as the message it edits, so it is public when that is.
+        event_type = instance.event_type
+        if event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+            event_type = (instance.payload or {}).get("event_type", "")
+        if event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
+            return False
     from sbomify.apps.security_advisories.services.trust_center import (
         anonymous_viewer_scope,
         product_link_is_readable,

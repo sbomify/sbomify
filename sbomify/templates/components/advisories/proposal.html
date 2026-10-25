@@ -1,0 +1,121 @@
+{% comment %}
+One change an AI agent proposed to a published advisory, as a row of the
+advisory's review list. It reads top to bottom the way a reviewer decides:
+what it changes (one line), who sent it and why, then the change itself as a
+diff against the advisory as it stands. A warning sits above the diff when
+someone has changed the same thing since it was sent, because approving then
+overwrites newer work, not only adds the agent's.
+
+item is a row from security_advisories/services/proposals.proposal_row.
+decide_url is where the decision posts. can_decide renders the actions;
+without it the row is read-only, which is how the design system shows it.
+
+Approve posts straight away. Reject dispatches proposal-reject, and a text
+change (a new update, or an edit to one) also offers "Edit, then approve",
+which dispatches proposal-revise with the proposed text: a reviewer can fix a
+sentence instead of rejecting the change and writing it again. The page's one
+dialog for each asks for the rest.
+
+A list item: put it in a ul. Rows carry their own divider and drop it on the
+first, so the parent list needs no styling of its own. The id is the anchor
+the timeline's "Review" links jump to.
+{% endcomment %}
+{% load humanize %}
+<c-vars item decide_url can_decide />
+<li id="proposal-{{ item.id }}"
+    class="flex scroll-mt-24 flex-col gap-3 border-t border-solid border-border px-5 py-4 first:border-t-0">
+    <div class="flex flex-wrap items-start gap-3 sm:flex-nowrap">
+        <c-chips.icon-chip size="sm" circle accent="{% if item.is_stale %}warning{% endif %}">
+        <i class="{{ item.icon }} text-xs" aria-hidden="true"></i>
+        </c-chips.icon-chip>
+        <div class="min-w-0 basis-[calc(100%-3rem)] sm:basis-auto sm:flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="font-semibold text-text">{{ item.headline }}</span>
+                {% if item.from_agent %}
+                    <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
+                {% endif %}
+                {% if not item.is_pending %}
+                    <c-badges.dynamic variant="{{ item.status_variant }}" size="sm">{{ item.status_label }}</c-badges.dynamic>
+                {% endif %}
+            </div>
+            <p class="m-0 mt-0.5 text-xs text-text-muted">
+                {% if item.submitted_via %}"{{ item.submitted_via }}" for {{ item.submitted_by }}{% else %}{{ item.submitted_by }}{% endif %}
+                · {{ item.kind_label }} ·
+                <time datetime="{{ item.submitted_at|date:'c' }}">{{ item.submitted_at|naturaltime }}</time>
+            </p>
+        </div>
+        {% if can_decide and item.is_pending %}
+            <div class="flex shrink-0 flex-wrap items-center gap-2 pl-[2.75rem] sm:pl-0">
+                <c-buttons.ghost size="sm" @click="$dispatch('proposal-reject', { id: '{{ item.id|escapejs }}', headline: '{{ item.headline|escapejs }}' })">
+                Reject
+                </c-buttons.ghost>
+                {% if item.is_text %}
+                    <c-buttons.secondary size="sm" @click="$dispatch('proposal-revise', { id: '{{ item.id|escapejs }}', headline: '{{ item.headline|escapejs }}', note: '{{ item.note|escapejs }}' })">
+                    <i class="fas fa-pen text-xs" aria-hidden="true"></i>Edit, then approve
+                    </c-buttons.secondary>
+                {% endif %}
+                <form method="post" action="{{ decide_url }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="intent" value="approve_proposal">
+                    <input type="hidden" name="proposal_id" value="{{ item.id }}">
+                    <c-buttons.primary size="sm" type="submit">
+                    <i class="fas fa-check text-xs" aria-hidden="true"></i>Approve
+                    </c-buttons.primary>
+                </form>
+            </div>
+        {% endif %}
+    </div>
+    <div class="flex min-w-0 flex-col gap-3 pl-[2.75rem] max-sm:pl-0">
+        {% if item.is_stale %}
+            <c-feedback.alert variant="warning" icon="fas fa-code-merge">
+            Changed by someone else since this was proposed. Approving replaces their change.
+            </c-feedback.alert>
+        {% endif %}
+        {% if item.context %}
+            <figure class="m-0 flex flex-col gap-1">
+                <figcaption class="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Why, in the agent's words</figcaption>
+                <blockquote class="m-0 border-l-2 border-solid border-border pl-3">
+                    <c-typography.markdown :text="item.context" muted />
+                </blockquote>
+            </figure>
+        {% endif %}
+        {% if item.kind == 'post_update' %}
+            {% if item.moves_to %}
+                <div class="flex flex-wrap items-center gap-2 text-xs text-text-muted">
+                    <span>Status</span>
+                    <c-badges.dynamic variant="{{ item.moves_to.variant }}" size="sm" class="gap-1">
+                    <i class="{{ item.moves_to.icon }} text-[10px]" aria-hidden="true"></i>{{ item.moves_to.label }}
+                    </c-badges.dynamic>
+                    {% if item.is_pending %}<span>once approved</span>{% endif %}
+                </div>
+            {% endif %}
+            {% if item.note %}
+                <div class="rounded-[var(--radius-md)] border-l-2 border-solid border-[color-mix(in_oklab,var(--color-success)_55%,transparent)] bg-[color-mix(in_oklab,var(--color-success)_7%,transparent)] px-3 py-2">
+                    <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-success-ink">
+                        {% if item.is_pending %}
+                            Will be posted
+                        {% elif item.status == 'approved' %}
+                            Posted
+                        {% else %}
+                            Proposed
+                        {% endif %}
+                    </span>
+                    <c-typography.markdown :text="item.note" />
+                </div>
+            {% endif %}
+        {% endif %}
+        {% for change in item.changes %}
+            <c-advisories.change :label="change.label" :before="change.before" :after="change.after" :long="change.long" />
+        {% endfor %}
+        {% if item.releases %}
+            <c-tables.value-list mono class="text-text-muted" title="Affected releases" :values="item.releases" />
+        {% endif %}
+        {% if not item.is_pending and item.decided_by %}
+            <p class="m-0 text-xs text-text-muted">
+                {{ item.status_label }} by {{ item.decided_by }} · {{ item.decided_display }}
+                {% if item.revised %}· reworded before posting{% endif %}
+            </p>
+            {% if item.decision_note %}<c-typography.markdown :text="item.decision_note" muted />{% endif %}
+        {% endif %}
+    </div>
+</li>
