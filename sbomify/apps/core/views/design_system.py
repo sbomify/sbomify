@@ -632,6 +632,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "visibility": "public",
             "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
         }
+        context["value_list_demo"] = ["6282ec8", "50c2c31", "2e9f06e", "c833c95", "52836e5", ">= 2.0.0, < 2.4.1"]
         context["inventory_demo"] = {
             "base_url": inventory_url,
             "content_id": "example-inventory",

@@ -30,82 +30,94 @@
         {% endfor %}
         </c-cards.card>
     {% endif %}
-    <c-cards.card flush>
-    <c-cards.header compact title="Workspace members" hint="{{ team.members|length|intcomma }} member{{ team.members|length|pluralize }}" />
-    <c-tables.table>
-    <c-tables.head>
-    <c-tables.header-cell compact>Member</c-tables.header-cell>
-    <c-tables.header-cell compact>Role</c-tables.header-cell>
-    <c-tables.actions-cell as="th" />
-    </c-tables.head>
-    <tbody>
-        {% for member in team.members %}
-            <c-tables.row>
-            <c-tables.cell compact>
-            <div class="flex items-center gap-3">
-                <c-avatar size="sm" initials="{{ member.user|user_initials }}" />
-                <div class="min-w-0">
-                    <c-overview.record title="{{ member.user.first_name }} {{ member.user.last_name }}" detail="{{ member.user.email }}" />
-                </div>
-            </div>
-            </c-tables.cell>
-            <c-tables.cell compact>
-            <c-badges.role role="{{ member.role }}">{{ member.role|title }}</c-badges.role>
-            </c-tables.cell>
-            <c-tables.actions-cell>
-            {% if can_administer and member.role != 'owner' %}
-                <c-actions-menu label="Member actions">
-                <c-dropdowns.item-danger icon="fas fa-user-minus" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name|escapejs }} {{ member.user.last_name|escapejs }}', formData: { member_id: '{{ member.id }}' } })">Remove member</c-dropdowns.item-danger>
-                </c-actions-menu>
-            {% endif %}
-            </c-tables.actions-cell>
-            </c-tables.row>
-        {% endfor %}
-    </tbody>
-    </c-tables.table>
-    <c-navigation.accordion-item native label="What can each role do?" id="role-legend">
-    <div class="space-y-3">
-        {% for role_key, role_label, role_description in role_descriptions %}
-            <div class="flex items-start gap-3">
-                <div class="shrink-0">
-                    <c-badges.role role="{{ role_key }}">{{ role_label }}</c-badges.role>
-                </div>
-                <c-forms.hint>{{ role_description }}</c-forms.hint>
-            </div>
-        {% endfor %}
-    </div>
-    </c-navigation.accordion-item>
-    </c-cards.card>
-    {% if can_administer %}
+    <div id="members-panel"
+         class="flex flex-col gap-5"
+         x-data
+         hx-get="{% url 'workspaces:team_settings_tab' workspace_key=team.key tab='members' %}"
+         hx-trigger="refresh-members from:body"
+         hx-target="this"
+         hx-select="#members-panel"
+         hx-swap="outerHTML"
+         @ws:message.window="if (['member_updated', 'invitation_updated', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-members')), 500); }">
         <c-cards.card flush>
-        <c-cards.header compact title="Pending invitations" hint="{{ team.invitations|length|intcomma }} pending" />
-        {% if team.invitations %}
-            <c-tables.table>
-            <c-tables.head>
-            <c-tables.header-cell compact>Email</c-tables.header-cell>
-            <c-tables.header-cell compact>Role</c-tables.header-cell>
-            <c-tables.header-cell compact>Expires</c-tables.header-cell>
-            <c-tables.actions-cell as="th" />
-            </c-tables.head>
-            <tbody>
-                {% for invitation in team.invitations %}
-                    <c-tables.row>
-                    <c-tables.cell compact>{{ invitation.email }}</c-tables.cell>
-                    <c-tables.cell compact>
-                    <c-badges.role role="{{ invitation.role }}">{{ invitation.role|title }}</c-badges.role>
-                    </c-tables.cell>
-                    <c-tables.cell compact date muted>{{ invitation.expires_at|date:"j M Y" }}</c-tables.cell>
-                    <c-tables.actions-cell>
-                    <c-buttons.icon-quiet size="sm" label="Revoke invitation for {{ invitation.email }}" @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email|escapejs }}', formData: { invitation_id: '{{ invitation.id }}' } })"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon-quiet>
-                    </c-tables.actions-cell>
-                    </c-tables.row>
-                {% endfor %}
-            </tbody>
-            </c-tables.table>
-        {% else %}
-            <c-feedback.empty-state compact icon="fas fa-envelope" title="No pending invitations" message="Invite a member to give them access to this workspace." />
-        {% endif %}
+        <c-cards.header compact title="Workspace members" hint="{{ team.members|length|intcomma }} member{{ team.members|length|pluralize }}" />
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell compact>Member</c-tables.header-cell>
+        <c-tables.header-cell compact>Role</c-tables.header-cell>
+        <c-tables.actions-cell as="th" />
+        </c-tables.head>
+        <tbody>
+            {% for member in team.members %}
+                <c-tables.row>
+                <c-tables.cell compact>
+                <div class="flex items-center gap-3">
+                    <c-avatar size="sm" initials="{{ member.user|user_initials }}" />
+                    <div class="min-w-0">
+                        <c-overview.record title="{{ member.user.first_name }} {{ member.user.last_name }}" detail="{{ member.user.email }}" />
+                    </div>
+                </div>
+                </c-tables.cell>
+                <c-tables.cell compact>
+                <c-badges.role role="{{ member.role }}">{{ member.role|title }}</c-badges.role>
+                </c-tables.cell>
+                <c-tables.actions-cell>
+                {% if can_administer and member.role != 'owner' %}
+                    <c-actions-menu label="Member actions">
+                    <c-dropdowns.item-danger icon="fas fa-user-minus" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name|escapejs }} {{ member.user.last_name|escapejs }}', formData: { member_id: '{{ member.id }}' } })">Remove member</c-dropdowns.item-danger>
+                    </c-actions-menu>
+                {% endif %}
+                </c-tables.actions-cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        <c-navigation.accordion-item native label="What can each role do?" id="role-legend">
+        <div class="space-y-3">
+            {% for role_key, role_label, role_description in role_descriptions %}
+                <div class="flex items-start gap-3">
+                    <div class="shrink-0">
+                        <c-badges.role role="{{ role_key }}">{{ role_label }}</c-badges.role>
+                    </div>
+                    <c-forms.hint>{{ role_description }}</c-forms.hint>
+                </div>
+            {% endfor %}
+        </div>
+        </c-navigation.accordion-item>
         </c-cards.card>
+        {% if can_administer %}
+            <c-cards.card flush>
+            <c-cards.header compact title="Pending invitations" hint="{{ team.invitations|length|intcomma }} pending" />
+            {% if team.invitations %}
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell compact>Email</c-tables.header-cell>
+                <c-tables.header-cell compact>Role</c-tables.header-cell>
+                <c-tables.header-cell compact>Expires</c-tables.header-cell>
+                <c-tables.actions-cell as="th" />
+                </c-tables.head>
+                <tbody>
+                    {% for invitation in team.invitations %}
+                        <c-tables.row>
+                        <c-tables.cell compact>{{ invitation.email }}</c-tables.cell>
+                        <c-tables.cell compact>
+                        <c-badges.role role="{{ invitation.role }}">{{ invitation.role|title }}</c-badges.role>
+                        </c-tables.cell>
+                        <c-tables.cell compact date muted>{{ invitation.expires_at|date:"j M Y" }}</c-tables.cell>
+                        <c-tables.actions-cell>
+                        <c-buttons.icon-quiet size="sm" label="Revoke invitation for {{ invitation.email }}" @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email|escapejs }}', formData: { invitation_id: '{{ invitation.id }}' } })"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon-quiet>
+                        </c-tables.actions-cell>
+                        </c-tables.row>
+                    {% endfor %}
+                </tbody>
+                </c-tables.table>
+            {% else %}
+                <c-feedback.empty-state compact icon="fas fa-envelope" title="No pending invitations" message="Invite a member to give them access to this workspace." />
+            {% endif %}
+            </c-cards.card>
+        {% endif %}
+    </div>
+    {% if can_administer %}
         {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove member" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
         {% include "components/modals/delete_modal.html.j2" with modal_id="delete-invitation-modal" modal_title="Revoke invitation" message_text="Are you sure you want to revoke the invitation for" warning_text="This action will immediately revoke the invitation. The user will no longer be able to join the workspace with it." form_action=request.path form=delete_invitation_form submit_text="Revoke invitation" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
     {% endif %}

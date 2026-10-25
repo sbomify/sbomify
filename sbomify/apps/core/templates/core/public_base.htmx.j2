@@ -487,9 +487,9 @@
         {% vite_hmr_client %}
     </head>
     <body class="public-page" data-theme="public">
-        {# WebSocket connection for authenticated users (enables real-time access request status updates) #}
+        {# The visitor's own channel: the workspace socket refuses anyone outside it, and an access request's verdict is addressed to the requester. #}
         {% if request.user.is_authenticated and team and team.key %}
-            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
+            <div x-data x-init="$store.ws.connectUser()" class="tw:hidden"></div>
         {% endif %}
         {# Public Page Layout #}
         {% include "core/components/messages.html.j2" %}

@@ -30,6 +30,7 @@ to the workspace-level grant alone; there is nothing narrower to test it against
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -48,6 +49,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryProduct,
     AdvisoryProductStatus,
     AdvisoryReference,
+    AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
 )
@@ -55,8 +57,10 @@ from sbomify.apps.security_advisories.services.advisories import (
     PUBLICATION_VARIANTS,
     REMEDIATION_META,
     SEVERITY_RANK,
+    STATUS_VARIANTS,
     display_date,
     display_id,
+    status_subject,
     version_range_label,
     worst_cvss,
     worst_severity,
@@ -127,18 +131,6 @@ _DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
 _EPOCH = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
-
-# How a per-product VEX assertion reads on a public page. Same values as
-# ``AdvisoryProductStatus.Status``; the labels are the model's own. Keyed by the
-# plain string the column stores, not the enum, so a lookup on ``status.status``
-# (a ``str``) is the same type going in as coming out.
-STATUS_VARIANTS: dict[str, str] = {
-    AdvisoryProductStatus.Status.EXPLOITABLE: "danger",
-    AdvisoryProductStatus.Status.IN_TRIAGE: "warning",
-    AdvisoryProductStatus.Status.NOT_AFFECTED: "success",
-    AdvisoryProductStatus.Status.FALSE_POSITIVE: "secondary",
-    AdvisoryProductStatus.Status.RESOLVED: "success",
-}
 
 
 @dataclass(frozen=True)
@@ -498,28 +490,99 @@ def _version_expressions(status: AdvisoryProductStatus) -> tuple[str, str]:
     affected: list[str] = []
     unaffected: list[str] = []
     for version_range in status.version_ranges.all():
-        introduced = version_range.introduced
-        fixed = version_range.fixed
-        last = version_range.last_affected
-
-        if fixed:
-            affected.append(f">= {introduced}, < {fixed}" if introduced else f"< {fixed}")
-            unaffected.append(f">= {fixed}")
-        elif last:
-            affected.append(f">= {introduced}, <= {last}" if introduced else f"<= {last}")
-            unaffected.append(f"> {last}")
-        elif introduced:
-            # Open-ended: everything from here up is affected, so there is no
-            # unaffected version to name yet.
-            affected.append(f">= {introduced}")
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        # A single pinned version names no unaffected one, for the reason
+        # ``_version_lists`` gives: "> 6282ec8" would clear every later commit,
+        # and CSAF would list it as the fix.
+        pinned = version_range.introduced and version_range.introduced == version_range.last_affected
+        if range_unaffected and not pinned:
+            unaffected.append(range_unaffected)
 
     # No ranges recorded, but a fix was named — that is enough to answer the
     # question, and it is the common shape for an advisory written in a hurry.
     if not affected and status.recommended_version:
         affected.append(f"< {status.recommended_version}")
         unaffected.append(f">= {status.recommended_version}")
+    # Affected versions were pinned and the fix only recommended: on a fixed
+    # row, the recommendation is the version that is no longer affected.
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
 
     return ", ".join(affected) or "—", ", ".join(unaffected) or "—"
+
+
+def _mentions_version(text: str, version: str) -> bool:
+    """Whether ``text`` names ``version`` as a whole version, not as part of a longer one.
+
+    "Upgrade to 1.2.3" does not name 1.2, and "v10" does not name v1. A full
+    stop after the version ends the sentence rather than continuing it. A bare
+    number is never taken as named: "restart within 2 hours" is not about 2.
+    """
+    if not version or version.isdigit():
+        return False
+    return re.search(rf"(?<![\w.-]){re.escape(version)}(?![\w-]|\.\w)", text) is not None
+
+
+def _range_expressions(version_range: AdvisoryVersionRange) -> tuple[str, str]:
+    """One stored range as its ("affected", "unaffected") comparison strings, either possibly empty."""
+    introduced = version_range.introduced
+    fixed = version_range.fixed
+    last = version_range.last_affected
+
+    if fixed:
+        return (f">= {introduced}, < {fixed}" if introduced else f"< {fixed}"), f">= {fixed}"
+    if last:
+        return (f">= {introduced}, <= {last}" if introduced else f"<= {last}"), f"> {last}"
+    # Open-ended: everything from here up is affected, so there is no
+    # unaffected version to name yet.
+    return (f">= {introduced}" if introduced else ""), ""
+
+
+def _version_lists(status: AdvisoryProductStatus) -> tuple[list[str], list[str]]:
+    """The ("affected", "unaffected") versions a table lists, one entry per stored range.
+
+    A range pinned to a single version, which is how a triage records each
+    affected commit, is that version alone: ">= 6282ec8, <= 6282ec8" says the
+    same thing twice. It names no unaffected version either, because "> 6282ec8"
+    would claim every later commit is clean. A range never carries both
+    ``fixed`` and ``last_affected`` (a check constraint), so equal ``introduced``
+    and ``last_affected`` is exactly the pinned case.
+    """
+    affected: list[str] = []
+    unaffected: list[str] = []
+    for version_range in status.version_ranges.all():
+        if version_range.introduced and version_range.introduced == version_range.last_affected:
+            affected.append(version_range.introduced)
+            continue
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        if range_unaffected:
+            unaffected.append(range_unaffected)
+    if not affected and status.recommended_version:
+        affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
+    return affected, unaffected
+
+
+def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions the detail table lists. A suppressing status lists
+    nothing, because no version is affected."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    return _version_lists(status)[0]
+
+
+def _version_labels(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions in words, as the detail table lists them. A
+    suppressing status lists nothing, because no version is affected."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    return [version_range_label(r) for r in status.version_ranges.all()]
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
@@ -540,19 +603,21 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
             if status.advisory_component_id is not None:
                 continue
             advisory_product = status.advisory_product
-            product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                label = "All products"
-            else:
-                label = product.name if product else advisory_product.product_name
+            label = status_subject(status)
             affected, unaffected = _version_expressions(status)
+            if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+                affected_versions, unaffected_versions = ["None"], ["All"]
+            else:
+                affected_versions, unaffected_versions = _version_lists(status)
             rows.append(
                 {
                     "product": label,
                     "affected": affected,
                     "unaffected": unaffected,
+                    "affected_versions": affected_versions,
+                    "unaffected_versions": unaffected_versions,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
@@ -677,10 +742,7 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
             product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                scope_label = "All products"
-            else:
-                scope_label = product.name if product else advisory_product.product_name
+            scope_label = status_subject(status)
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {
@@ -703,8 +765,14 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "action_statement": status.action_statement,
                     "response": status.response,
                     "recommended_version": status.recommended_version,
+                    # The page says "Upgrade to X." unless the instructions
+                    # already do, which would print it twice.
+                    "action_names_recommendation": _mentions_version(
+                        status.action_statement, status.recommended_version
+                    ),
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
-                    "version_labels": [version_range_label(r) for r in status.version_ranges.all()],
+                    "affected_versions": _affected_versions(status),
+                    "version_labels": _version_labels(status),
                 }
             )
     return rows

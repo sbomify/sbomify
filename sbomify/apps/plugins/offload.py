@@ -7,9 +7,11 @@ aggregates over were denormalised into ``result_summary`` and ``result_skipped``
 so readers would stop touching the blob.
 
 So this demotes the payload of runs that are no longer the current answer for
-anything, leaving the row, its summary columns and its normalised ``Finding``
-rows exactly where they are. See :mod:`sbomify.apps.plugins.result_store` for
-where the bytes go and why the keys are shaped as they are.
+anything, leaving the row and its summary columns exactly where they are. Such a
+run has no ``Finding`` rows to leave: a newer run of its key supersedes it, and
+the projection drops a superseded run's rows (``findings.sync_findings``).
+See :mod:`sbomify.apps.plugins.result_store` for where the bytes go and why
+the keys are shaped as they are.
 
 **What counts as current is (sbom, plugin, release set), not (sbom, plugin).**
 One SBOM can sit in two releases at once with different per-release triage, and
@@ -27,7 +29,8 @@ as a one-shot data migration.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -39,17 +42,33 @@ logger = getLogger(__name__)
 
 # How old a superseded run must be before its payload is demoted.
 #
-# Deliberately longer than the furthest back any reader can currently ask. The
-# dashboard drill-down accepts ``days`` up to 365 and renders findings for every
-# run in that window from the stored payload, so a shorter floor would make it
-# read an empty findings list for runs whose payload had moved. Its fields
-# (title, reference URL) are not carried by the normalised ``Finding`` rows, so
-# it cannot simply be pointed at those; until it is, this floor is what keeps the
-# sweep from changing what anybody sees.
+# A day, so a run superseded minutes ago is not moved while a VEX re-annotation
+# or a release attach may still be settling on it; neither needs it inline (both
+# read and write through the result store), so this is a margin, not a guarantee
+# anything depends on.
 #
-# Lowering it is where the space actually is, and it is a one-line change once
-# the drill-down no longer reads payloads. Do not lower it before then.
-DEFAULT_OFFLOAD_AFTER_DAYS = 366
+# It was 366 while the dashboard drill-down read every payload in its window
+# straight from the column, which made this sweep unusable: with a scanner
+# polling every hour, nearly every byte in the table is a superseded run inside
+# that year. The drill-down now reads offloaded findings too, once per distinct
+# findings array, so the floor no longer has to cover what anybody reads.
+DEFAULT_OFFLOAD_AFTER_DAYS = 1
+
+
+@dataclass
+class OffloadProgress:
+    """Where a sweep has got to, reported after each page of candidates.
+
+    ``scanned`` counts every candidate looked at, including the current runs
+    that are kept; ``demotable`` is the subset that was not current. A
+    demotable row that ``offload_run`` left alone (a concurrent rewrite, a
+    prune) is in ``demotable`` but not ``moved``.
+    """
+
+    pages: int = 0
+    scanned: int = 0
+    demotable: int = 0
+    moved: int = 0
 
 
 def _no_payload_filter() -> dict[str, Any]:
@@ -69,11 +88,13 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
     run that newest one superseded becomes the newest of the set it left. That
     is safe because of who reads what. Every reader of the payload column ranks
     per (sbom, plugin) and ignores release sets, so it lands on the newer run,
-    which is current for its own key. The one reader that ranks per release set,
-    the VEX re-apply, reads and writes through the result store. An attach a week
-    after the sweep leaves the same state, so a lock here would not prevent it.
+    which is current for its own key. The VEX re-apply skips it too, because the
+    newer run now covers every release it covers (plugins.latest), and it reads
+    and writes through the result store for the runs it does rewrite. An attach a
+    week after the sweep leaves the same state, so a lock here would not prevent it.
     """
-    from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease
+    from sbomify.apps.plugins.latest import release_sets
+    from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.plugins.sdk.enums import RunStatus
 
     if not sbom_ids or not plugin_names:
@@ -85,11 +106,7 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
 
     # One query for every association rather than one per run. The release set
     # cannot be grouped on in SQL, which is why the ranking happens here.
-    releases_by_run: dict[Any, set[Any]] = {}
-    for run_id, release_id in AssessmentRunRelease.objects.filter(
-        assessment_run__in=candidates.values("id")
-    ).values_list("assessment_run_id", "release_id"):
-        releases_by_run.setdefault(run_id, set()).add(release_id)
+    releases_by_run = release_sets(candidates.values_list("id", flat=True))
 
     # Newest first, ``-id`` breaking ties: runs written in one transaction share
     # a timestamp, and an unstable order there would protect the wrong row.
@@ -109,7 +126,8 @@ def current_run_ids(sbom_ids: set[Any], plugin_names: set[str]) -> set[Any]:
         .values_list("id", "sbom_id", "plugin_name", "status", "result_skipped")
         .iterator()
     ):
-        key = (sbom_id, plugin_name, frozenset(releases_by_run.get(run_id, ())))
+        # A run that completed after the release lookup has none recorded yet.
+        key = (sbom_id, plugin_name, releases_by_run.get(run_id, frozenset()))
         if key not in seen:
             seen.add(key)
             current.add(run_id)
@@ -133,6 +151,29 @@ def demotable_run_ids(*, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, limi
     return [run_id for batch in demotable_batches(older_than_days=older_than_days, limit=limit) for run_id in batch]
 
 
+def _candidates(older_than_days: int) -> Any:
+    """Inline payloads past the age floor, current or not, oldest first."""
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    cutoff = timezone.now() - timedelta(days=max(0, older_than_days))
+    return (
+        AssessmentRun.objects.filter(result_object_key="", created_at__lt=cutoff)
+        .exclude(result__isnull=True)
+        # Oldest first: the coldest rows are the least likely to be contended and
+        # the most likely to still be here on the next pass if this one stops.
+        .order_by("created_at", "id")
+    )
+
+
+def count_candidates(*, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS) -> int:
+    """How many rows a full pass will look at: the denominator for progress.
+
+    An upper bound on what moves, since the current runs among them are kept.
+    """
+    count: int = _candidates(older_than_days).count()
+    return count
+
+
 def demotable_batches(
     *, older_than_days: int = DEFAULT_OFFLOAD_AFTER_DAYS, batch_size: int = 100, limit: int | None = None
 ) -> Iterator[list[Any]]:
@@ -144,18 +185,15 @@ def demotable_batches(
     a protected run stays a candidate, so an offset would skip rows once the
     pages before it had been demoted.
     """
+    for _, demotable in _demotable_pages(older_than_days=older_than_days, batch_size=batch_size, limit=limit):
+        yield demotable
+
+
+def _demotable_pages(*, older_than_days: int, batch_size: int, limit: int | None) -> Iterator[tuple[int, list[Any]]]:
+    """:func:`demotable_batches`, with how many candidates each page scanned."""
     from django.db.models import Q
 
-    from sbomify.apps.plugins.models import AssessmentRun
-
-    cutoff = timezone.now() - timedelta(days=max(0, older_than_days))
-    candidates = (
-        AssessmentRun.objects.filter(result_object_key="", created_at__lt=cutoff)
-        .exclude(result__isnull=True)
-        # Oldest first: the coldest rows are the least likely to be contended and
-        # the most likely to still be here on the next pass if this one stops.
-        .order_by("created_at", "id")
-    )
+    candidates = _candidates(older_than_days)
     page_size = max(1, batch_size)
     remaining = limit
     after = Q()
@@ -170,7 +208,7 @@ def demotable_batches(
         # The leading >= is what the index can start from; the OR alone is a filter.
         after = Q(created_at__gte=last_created) & (Q(created_at__gt=last_created) | Q(id__gt=last_id))
         protected = current_run_ids({sbom_id for _, sbom_id, _, _ in page}, {plugin for _, _, plugin, _ in page})
-        yield [run_id for run_id, _, _, _ in page if run_id not in protected]
+        yield len(page), [run_id for run_id, _, _, _ in page if run_id not in protected]
 
 
 def offload_run(run: Any) -> bool:
@@ -203,22 +241,25 @@ def offload_run(run: Any) -> bool:
     so it would otherwise stay until the run did.
     """
     from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.plugins.result_store import delete_result_object, put_result
+    from sbomify.apps.plugins.result_store import delete_result_object, put_split_result
 
     payload = run.result
     if not isinstance(payload, dict):
         return False
 
-    key = put_result(run.id, payload)
-    run._populate_result_columns()
-    changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
-        result=None,
-        result_summary=run.result_summary,
-        result_skipped=run.result_skipped,
-        result_object_key=key,
-    )
-    if not changed and not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
-        delete_result_object(key)
+    with put_split_result(run.id, payload) as stored:
+        run._populate_result_columns()
+        changed = AssessmentRun.objects.filter(pk=run.pk, result_object_key="", result=payload).update(
+            result=None,
+            result_summary=run.result_summary,
+            result_skipped=run.result_skipped,
+            result_object_key=stored.key,
+            result_findings_key=stored.findings_key,
+        )
+        if not changed and not AssessmentRun.objects.filter(pk=run.pk).exclude(result_object_key="").exists():
+            # The shared findings object is left for the daily collector, which
+            # removes it once no row names it.
+            delete_result_object(stored.key)
     return bool(changed)
 
 
@@ -228,27 +269,54 @@ def offload_assessment_results(
     batch_size: int = 100,
     limit: int | None = None,
     dry_run: bool = False,
+    max_seconds: float | None = None,
+    on_progress: Callable[[OffloadProgress], None] | None = None,
 ) -> int:
     """Demote payloads in batches. Returns how many rows were changed.
 
     Batched so an interruption costs at most one batch. No transaction is held
     across a batch: each row's store is an object storage round trip, and each
     write is one guarded UPDATE (see :func:`offload_run`).
+
+    ``max_seconds`` stops between rows once the budget is spent, so the
+    scheduled task ends cleanly inside its time limit rather than being killed
+    mid-store; the next pass carries on from the oldest row left.
+
+    ``on_progress`` is called after each page with the running totals, so a
+    long first pass over the backlog can be watched rather than waited on.
     """
-    batches = demotable_batches(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
+    import time
+
+    deadline = time.monotonic() + max_seconds if max_seconds is not None else None
+    pages = _demotable_pages(older_than_days=older_than_days, batch_size=batch_size, limit=limit)
+    progress = OffloadProgress()
+
+    def page_done(scanned: int, demotable: int) -> None:
+        progress.pages += 1
+        progress.scanned += scanned
+        progress.demotable += demotable
+        if on_progress is not None:
+            on_progress(progress)
+
     if dry_run:
-        count = sum(len(batch) for batch in batches)
-        logger.info(f"[OFFLOAD] dry run: {count} assessment results would be offloaded")
-        return count
+        for scanned, batch in pages:
+            page_done(scanned, len(batch))
+        logger.info(f"[OFFLOAD] dry run: {progress.demotable} assessment results would be offloaded")
+        return progress.demotable
 
     from sbomify.apps.plugins.models import AssessmentRun
 
     moved = 0
-    for batch in batches:
+    for scanned, batch in pages:
         # Deferring nothing on purpose: the payload is what is being read.
         for run in AssessmentRun.objects.filter(id__in=batch, result_object_key="").iterator():
+            if deadline is not None and time.monotonic() >= deadline:
+                logger.info(f"[OFFLOAD] time budget spent after {moved} assessment results")
+                return moved
             if offload_run(run):
                 moved += 1
+                progress.moved = moved
+        page_done(scanned, len(batch))
     if moved:
         logger.info(f"[OFFLOAD] offloaded {moved} assessment results")
     return moved

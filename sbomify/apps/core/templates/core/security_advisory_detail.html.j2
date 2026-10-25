@@ -1,10 +1,10 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load humanize %}
-{% load static public_url_tags markdown_tags %}
+{% load static public_url_tags %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
     <c-layout.frame>
-    <c-layout.page-header title="{{ advisory.title }}" subtitle="{{ advisory.type_label }} advisory" description="{{ advisory.description }}">
+    <c-layout.page-header title="{{ advisory.title }}" subtitle="{{ advisory.type_label }} advisory" :description="advisory.description" description_markdown>
     <c-buttons.ghost size="sm" href="{% url 'core:security_advisories_dashboard' %}">
     <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to advisories
     </c-buttons.ghost>
@@ -75,8 +75,125 @@
     {% endif %}
     {# Timeline + info sidebar #}
     <div class="flex flex-col lg:flex-row gap-8 lg:gap-10">
-        {# Main: timeline #}
+        {# Main: product statuses, then the timeline #}
         <div class="flex-1 min-w-0">
+            {% comment %}The rows are the record: the Trust Center's "Am I affected?" table and the CSAF export read them, not the advisory's own status. So they sit above the timeline, where a resolve that they contradict is noticed before it is posted.{% endcomment %}
+            {% if advisory.advisory_type != 'workspace_notice' or advisory.statuses %}
+                <section class="flex flex-col gap-3 mb-10"
+                         aria-labelledby="productStatusesHeading"
+                         x-data="{ open: false, rows: [], products: [], row: {}, form: {}, init() { this.rows = window.parseJsonScript('advisory-statuses') || []; this.products = window.parseJsonScript('advisory-product-options') || []; }, releasesFor(productId) { const product = this.products.find(p => p.id === productId); return product ? product.releases : []; }, edit(index) { this.row = this.rows[index]; this.form = { status: this.row.status, justification: this.row.justification, response: this.row.response, fixed_version: this.row.fixed_version, fixed_release_id: this.row.fixed_release_id || '', action_statement: this.row.action_statement, impact_statement: this.row.impact_statement }; this.open = true; }, pickRelease() { const release = this.releasesFor(this.row.product_id).find(r => r.id === this.form.fixed_release_id); if (release) this.form.fixed_version = release.label; }, typeVersion() { const release = this.releasesFor(this.row.product_id).find(r => r.id === this.form.fixed_release_id); if (release && release.label !== this.form.fixed_version.trim()) this.form.fixed_release_id = ''; } }">
+                    {{ advisory.statuses|json_script:"advisory-statuses" }}
+                    {{ product_options|json_script:"advisory-product-options" }}
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 id="productStatusesHeading" class="text-lg font-semibold text-text">Product statuses</h2>
+                            <p class="text-sm text-text-muted m-0">What your Trust Center and CSAF say about each product.</p>
+                        </div>
+                        {% if can_edit_statuses and advisory.advisory_type != 'workspace_notice' %}
+                            <c-buttons.secondary size="sm" @click="$dispatch('open-add-advisory-product-modal')">
+                            <i class="fas fa-plus" aria-hidden="true"></i>Add product
+                            </c-buttons.secondary>
+                        {% endif %}
+                    </div>
+                    {% if advisory.statuses %}
+                        <c-tables.shell>
+                        <c-tables.table aria-label="Product statuses">
+                        <c-tables.head>
+                        <c-tables.header-cell scope="col">Product</c-tables.header-cell>
+                        <c-tables.header-cell scope="col">Status</c-tables.header-cell>
+                        <c-tables.header-cell scope="col">Fixed in</c-tables.header-cell>
+                        <c-tables.header-cell scope="col">What users should do</c-tables.header-cell>
+                        {% if can_edit_statuses %}<c-tables.actions-cell as="th" label="Edit" />{% endif %}
+                        </c-tables.head>
+                        <tbody>
+                            {% for row in advisory.statuses %}
+                                <c-tables.row class="align-top">
+                                <c-tables.cell class="font-medium">{{ row.label }}</c-tables.cell>
+                                <c-tables.cell>
+                                <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
+                                {% if row.justification_label %}
+                                    <div class="text-xs text-text-muted mt-1">{{ row.justification_label }}</div>
+                                {% endif %}
+                                </c-tables.cell>
+                                <c-tables.cell><span class="font-mono text-xs">{{ row.fixed_version|default:row.recommended_version|default:"—" }}</span></c-tables.cell>
+                                <c-tables.cell muted>{{ row.action_statement|default:"—" }}</c-tables.cell>
+                                {% if can_edit_statuses %}
+                                    <c-tables.actions-cell>
+                                    <c-buttons.ghost size="sm" @click="edit({{ forloop.counter0 }})" aria-label="Edit status for {{ row.label }}">
+                                    <i class="fas fa-pen" aria-hidden="true"></i>
+                                    </c-buttons.ghost>
+                                    </c-tables.actions-cell>
+                                {% endif %}
+                                </c-tables.row>
+                            {% endfor %}
+                        </tbody>
+                        </c-tables.table>
+                        </c-tables.shell>
+                    {% else %}
+                        <p class="text-sm text-text-muted m-0">No products yet. Add the products this advisory covers.</p>
+                    {% endif %}
+                    {% if can_edit_statuses %}
+                        <c-modal id="productStatusModal" title="Edit product status" icon="fas fa-cube">
+                        <form id="productStatusForm"
+                              method="post"
+                              action="{% url 'core:security_advisory_detail' advisory.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="intent" value="product_status" />
+                            <input type="hidden" name="status_id" :value="row.id" />
+                            <div class="space-y-4">
+                                <p class="text-sm font-medium text-text m-0" x-text="row.label"></p>
+                                <c-forms.field label="Status" for="productStatusValue">
+                                <c-forms.select id="productStatusValue" name="status" :options="product_status_options" x-model="form.status" />
+                                </c-forms.field>
+                                <div x-show="form.status === 'not_affected'">
+                                    <c-forms.field label="Why it is not affected" for="productStatusJustification">
+                                    <c-forms.select id="productStatusJustification" name="justification" x-model="form.justification" ::disabled="form.status !== 'not_affected'">
+                                    <option value="">Not set</option>
+                                    {% for option in justification_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
+                                    </c-forms.select>
+                                    </c-forms.field>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <c-forms.field label="Fixed in version" for="productStatusFixedVersion">
+                                    <c-forms.input id="productStatusFixedVersion" name="fixed_version" placeholder="1.4.3" x-model="form.fixed_version" @input="typeVersion()" />
+                                    </c-forms.field>
+                                    <div x-show="row.product_id">
+                                        <c-forms.field label="Fixed in release" for="productStatusFixedRelease">
+                                        <c-forms.select id="productStatusFixedRelease" name="fixed_release_id" x-model="form.fixed_release_id" @change="pickRelease()" ::disabled="!row.product_id">
+                                        <option value="">No release</option>
+                                        <template x-for="release in releasesFor(row.product_id)" :key="release.id">
+                                            <option :value="release.id"
+                                                    :selected="release.id === form.fixed_release_id"
+                                                    x-text="release.label"></option>
+                                        </template>
+                                        </c-forms.select>
+                                        </c-forms.field>
+                                    </div>
+                                </div>
+                                <c-forms.field label="Response" for="productStatusResponse">
+                                <c-forms.select id="productStatusResponse" name="response" x-model="form.response">
+                                <option value="">Not set</option>
+                                {% for option in response_options %}<option value="{{ option.value }}">{{ option.label }}</option>{% endfor %}
+                                </c-forms.select>
+                                </c-forms.field>
+                                <c-forms.field label="What users should do" for="productStatusAction" hint="Shown on your Trust Center.">
+                                <c-forms.textarea id="productStatusAction" name="action_statement" rows="2" placeholder="Upgrade to 1.4.3." x-model="form.action_statement" />
+                                </c-forms.field>
+                                <c-forms.field label="Impact" for="productStatusImpact">
+                                <c-forms.textarea id="productStatusImpact" name="impact_statement" rows="2" x-model="form.impact_statement" />
+                                </c-forms.field>
+                            </div>
+                        </form>
+                        <c-slot name="footer">
+                        <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+                        <c-buttons.primary type="submit" form="productStatusForm">
+                        <i class="fas fa-check mr-2"></i>Save status
+                        </c-buttons.primary>
+                        </c-slot>
+                        </c-modal>
+                    {% endif %}
+                </section>
+            {% endif %}
             <div class="flex items-center justify-between mb-6">
                 <h2 class="text-lg font-semibold text-text">Timeline</h2>
                 <span class="text-xs text-text-muted">{{ advisory.updates_count|intcomma }} update{{ advisory.updates_count|pluralize }}</span>
@@ -165,8 +282,7 @@
                                 {% endif %}
                             </div>
                         </div>
-                        <div class="prose prose-sm max-w-3xl mt-2 text-text prose-headings:text-text prose-headings:text-base prose-p:text-text prose-strong:text-text prose-li:text-text prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none"
-                             x-show="!editing">{{ u.note|strict_markdown }}</div>
+                        <c-typography.markdown :text="u.note" class="max-w-3xl mt-2" x-show="!editing" />
                         {% if has_crud_permissions %}
                             <form x-show="editing"
                                   x-cloak
@@ -207,7 +323,7 @@
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-text-muted">CVSS</dt>
-                        {% if advisory.cvss_score %}
+                        {% if advisory.cvss_score is not None %}
                             <dd class="text-text"
                                 {% if advisory.cvss_vector %}title="{{ advisory.cvss_vector }}"{% endif %}>
                                 {{ advisory.cvss_score }}
@@ -382,7 +498,7 @@
                     <div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3">
                         <div>
                             <c-forms.label for="editCvssScore">CVSS score</c-forms.label>
-                            <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" value="{{ advisory.cvss_score|default_if_none:'' }}" />
+                            <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="0 to 10" value="{{ advisory.cvss_score|default_if_none:'' }}" />
                         </div>
                         <div>
                             <c-forms.label for="editCvssVector">CVSS vector</c-forms.label>
@@ -411,6 +527,10 @@
                         </div>
                     </div>
                     <div>
+                        <c-forms.label for="editSummary">Summary</c-forms.label>
+                        <c-forms.textarea id="editSummary" name="summary" rows="2" value="{{ advisory.summary }}" placeholder="One paragraph your Trust Center leads with." />
+                    </div>
+                    <div>
                         <c-forms.label for="editDescription">Description</c-forms.label>
                         <c-forms.textarea id="editDescription" name="description" rows="3" value="{{ advisory.description }}" placeholder="Describe the vulnerability..." />
                     </div>
@@ -424,6 +544,43 @@
             </c-slot>
             </c-modal>
         </div>
+        {% comment %}Add a product the advisory missed, or more of its affected releases. The chosen product's releases arrive over HTMX, so the page does not carry every release in the workspace. A product already on the advisory only gains releases here: its status belongs to its row, so the status choice is switched off for it. Not teleported, because HTMX wires the select when the page loads and a teleported copy would not be.{% endcomment %}
+        {% if can_edit_statuses and advisory.advisory_type != 'workspace_notice' %}
+            <div class="contents"
+                 x-data="{ open: false, productId: '', listed: [], init() { this.listed = window.parseJsonScript('advisory-listed-products') || []; }, get isListed() { return this.listed.includes(this.productId); } }"
+                 @open-add-advisory-product-modal.window="open = true">
+                {{ advisory_product_ids|json_script:"advisory-listed-products" }}
+                <c-modal id="addAdvisoryProductModal" title="Add product" icon="fas fa-cube" teleport="false">
+                <form id="addAdvisoryProductForm"
+                      method="post"
+                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="intent" value="add_product" />
+                    <div class="space-y-4">
+                        <c-forms.field label="Product" for="addProduct" required>
+                        <c-forms.select id="addProduct" name="product" x-model="productId" required hx-get="{% url 'core:security_advisory_product_releases' advisory.id %}" hx-trigger="change" hx-target="#addProductReleases" hx-swap="innerHTML">
+                        <option value="">Choose a product</option>
+                        {% for product in product_choices %}<option value="{{ product.id }}">{{ product.name }}</option>{% endfor %}
+                        </c-forms.select>
+                        </c-forms.field>
+                        <div id="addProductReleases"></div>
+                        <div x-show="!isListed">
+                            <c-forms.field label="Status" for="addProductStatus" hint="A resolved advisory needs a status that is not open.">
+                            <c-forms.select id="addProductStatus" name="status" :options="product_status_options" selected="in_triage" ::disabled="isListed" />
+                            </c-forms.field>
+                        </div>
+                        <c-forms.hint x-show="isListed">Already on this advisory. This adds the releases you tick. Change its status from its row.</c-forms.hint>
+                    </div>
+                </form>
+                <c-slot name="footer">
+                <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+                <c-buttons.primary type="submit" form="addAdvisoryProductForm">
+                <i class="fas fa-plus mr-2"></i>Add product
+                </c-buttons.primary>
+                </c-slot>
+                </c-modal>
+            </div>
+        {% endif %}
         {# Link a VEX Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
         <div class="contents"
              x-data="{ open: false, sel: [], search: '', candidates: [], init() { this.candidates = window.parseJsonScript('vex-candidates') || []; if (window.location.hash === '#link-vex') this.open = true; }, get filtered() { if (!this.search) return this.candidates; const s = this.search.toLowerCase(); return this.candidates.filter(v => (v.product + ' ' + v.coverage + ' ' + v.format).toLowerCase().includes(s)); } }"

@@ -33,7 +33,7 @@
     <c-layout.page-header title="Settings controls" subtitle="Shared fields and compact controls, with one responsive row layout." />
     <c-navigation.tabs links aria-label="Example settings sections">
     <c-navigation.tab href="#settings-controls" active>General</c-navigation.tab>
-    <c-navigation.tab href="#settings-controls">Members</c-navigation.tab>
+    <c-navigation.tab href="#settings-controls" badge="3" badge_event="access_request_updated" badge_field="pending">Members</c-navigation.tab>
     <c-navigation.tab href="#settings-controls">API tokens</c-navigation.tab>
     <c-navigation.tab href="#settings-controls">Parties</c-navigation.tab>
     <c-navigation.tab href="#settings-controls">Trust Center</c-navigation.tab>
@@ -380,8 +380,11 @@
         title and the subtitle to Alpine expressions, for a heading that changes in place. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
+        Set <code class="tw-code-inline">description_markdown</code> when the description was written in Markdown.
     </p>
     <c-layout.page-header title="An advisory with supporting detail" subtitle="Security advisory" :breadcrumbs="demo_breadcrumbs" description="Supporting descriptions use the same header. Longer text can be expanded without clipping the page title. This keeps the complete title readable while leaving the page's actions available at every screen size." />
+    <c-layout.page-header title="An advisory written in Markdown" subtitle="Security advisory" description_markdown description="A **heap overflow** in `libexample` before 2.4.1. See the [upstream notice](https://example.com/notice)." />
+    <c-typography.markdown text="Timeline notes use the same component on their own: **bold**, `code`, [links](https://example.com) and lists." class="max-w-3xl" />
     <hr class="border-border">
     <div class="flex flex-col gap-4">
         <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
@@ -1170,6 +1173,25 @@ first-of-type rule that drops the leading hairline reads the section's position
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>
+    <p class="text-sm text-text-muted">
+        A cell holding a list of short values uses <c-code-inline>tables.value-list</c-code-inline>: the first three show and the rest fold behind a count.
+    </p>
+    <c-tables.table aria-label="Value list example">
+    <c-tables.head>
+    <c-tables.header-cell scope="col">Product</c-tables.header-cell>
+    <c-tables.header-cell scope="col">Affected versions</c-tables.header-cell>
+    </c-tables.head>
+    <tbody>
+        <c-tables.row class="align-top">
+        <c-tables.cell class="font-medium">Acme Gateway</c-tables.cell>
+        <c-tables.cell><c-tables.value-list mono :values="value_list_demo" /></c-tables.cell>
+        </c-tables.row>
+        <c-tables.row class="align-top">
+        <c-tables.cell class="font-medium">Acme Vault</c-tables.cell>
+        <c-tables.cell><c-tables.value-list mono :values="value_list_demo|slice:':1'" /></c-tables.cell>
+        </c-tables.row>
+    </tbody>
+    </c-tables.table>
     <c-cards.card flush>
     <c-cards.header title="Vulnerability reports" />
     {% include "core/components/vulnerability_demo.html.j2" %}

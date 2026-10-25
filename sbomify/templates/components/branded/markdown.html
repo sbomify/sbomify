@@ -2,7 +2,8 @@
 A note someone wrote in Markdown, already rendered by the strict_markdown
 filter, set as prose inside another branded component such as a timeline item.
 
-The renderer emits bare headings, paragraphs, lists, strong, em, code and links,
+The renderer emits bare headings, paragraphs, bulleted, numbered and nested
+lists, quotes, code blocks, strong, em, code and links,
 and marks every link .text-primary. A public page repaints that class in the
 workspace accent with !important, and base.css styles headings, paragraphs and
 code unlayered, so each rule that has to win carries Tailwind's important
@@ -12,5 +13,5 @@ Links take the body ink and an underline, because the brand is never a text
 colour.
 {% endcomment %}
 <c-vars class />
-<div class="flex flex-col gap-2 [overflow-wrap:anywhere] [&_p]:my-0! [&_p]:text-text-secondary! [&_:is(h1,h2,h3,h4,h5,h6)]:my-0! [&_:is(h1,h2,h3,h4,h5,h6)]:text-sm! [&_:is(h1,h2,h3,h4,h5,h6)]:font-semibold! [&_:is(h1,h2,h3,h4,h5,h6)]:text-text! [&_ul]:my-0! [&_ul]:pl-[1.25rem]! [&_ul]:list-disc! [&_strong]:text-text [&_code]:rounded-[var(--radius-sm)] [&_code]:bg-surface-hover [&_code]:px-[0.3125rem] [&_code]:font-mono [&_code]:text-[0.8125rem]! [&_a]:text-text! [&_a]:underline! [&_a]:underline-offset-2{% if class %} {{ class }}{% endif %}"
+<div class="flex flex-col gap-2 [overflow-wrap:anywhere] [&_p]:my-0! [&_p]:text-text-secondary! [&_:is(h1,h2,h3,h4,h5,h6)]:my-0! [&_:is(h1,h2,h3,h4,h5,h6)]:text-sm! [&_:is(h1,h2,h3,h4,h5,h6)]:font-semibold! [&_:is(h1,h2,h3,h4,h5,h6)]:text-text! [&_ul]:my-0! [&_ul]:pl-[1.25rem]! [&_ul]:list-disc! [&_strong]:text-text [&_code]:rounded-[var(--radius-sm)] [&_code]:bg-surface-hover [&_code]:px-[0.3125rem] [&_code]:font-mono [&_code]:text-[0.8125rem]! [&_a]:text-text! [&_a]:underline! [&_a]:underline-offset-2 [&_ol]:my-0! [&_ol]:pl-[1.5rem]! [&_ol]:list-decimal! [&_li_ul]:list-[circle]! [&_pre]:my-0! [&_pre]:overflow-x-auto [&_pre]:rounded-[var(--radius-md)] [&_pre]:bg-surface-hover [&_pre]:px-[0.75rem] [&_pre]:py-[0.625rem] [&_pre]:leading-[1.6] [&_pre_code]:bg-transparent! [&_pre_code]:px-0! [&_pre_code]:py-0! [&_blockquote]:mx-0! [&_blockquote]:my-0! [&_blockquote]:border-l-2 [&_blockquote]:border-solid [&_blockquote]:border-border [&_blockquote]:pl-[0.75rem]{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>{{ slot }}</div>

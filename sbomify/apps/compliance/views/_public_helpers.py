@@ -33,8 +33,15 @@ _SAFE_IMAGE_DATA_URL_PREFIX = "data:image/png;base64,"
 
 
 def sanitize_url(url: str) -> str:
-    """Only allow safe URL schemes to prevent javascript:/data: XSS."""
-    parsed = urlparse(url)
+    """Only allow safe URL schemes to prevent javascript:/data: XSS.
+
+    A URL ``urlparse`` cannot read, such as an unbalanced IPv6 bracket,
+    is unsafe too: raising here would fail the whole page.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "#"
     if parsed.scheme not in _SAFE_URL_SCHEMES:
         return "#"
     return url
@@ -49,97 +56,203 @@ def _safe_image_url(url: str) -> str | None:
     """
     if url.startswith(_SAFE_IMAGE_DATA_URL_PREFIX):
         return url
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
     if parsed.scheme in ("http", "https"):
         return url
     return None
 
 
-def markdown_to_html(text: str) -> str:
-    """Convert simple Markdown to HTML.
+_LIST_ITEM_RE = re.compile(r"^( *)([-*+]|\d{1,9}[.)])\s+(.*)$")
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+_LINK_REL = "nofollow ugc noopener noreferrer"
 
-    Handles headings, bold, italic, links, lists, thematic breaks,
-    paragraphs, and inline code spans. Intentionally minimal — the
-    wizard preview uses ``marked.js`` for the full CommonMark surface;
-    the public reader only needs the subset our generated documents
-    actually emit.
+
+def markdown_to_html(text: str) -> str:
+    """Convert Markdown to HTML.
+
+    Handles headings, paragraphs, bold, italic, links, bare URLs, inline
+    code, fenced code blocks, thematic breaks, and bulleted and numbered
+    lists, nested by indentation. Intentionally a subset: the wizard
+    preview uses ``marked.js`` for the full CommonMark surface, and the
+    public pages only need what generated documents and advisory text
+    actually use. Consecutive lines join into one paragraph, as in
+    CommonMark, so hard-wrapped text reads as prose rather than a stack
+    of one-line paragraphs.
     """
     escaped = html.escape(text)
-    lines = escaped.split("\n")
     result: list[str] = []
-    in_list = False
+    paragraph: list[str] = []
+    # Whether the open paragraph is quoted (``> ...`` lines).
+    quoted = False
+    # Open lists, innermost last, as (indent, tag). An item's ``<li>`` stays
+    # open until the next item at its level, so a nested list lands inside it.
+    lists: list[tuple[int, str]] = []
+    fence: str | None = None
+    fence_lines: list[str] = []
+    previous_blank = False
 
-    for line in lines:
+    def flush_paragraph() -> None:
+        if paragraph:
+            body = f"<p>{inline_markup(' '.join(paragraph))}</p>"
+            result.append(f"<blockquote>{body}</blockquote>" if quoted else body)
+            paragraph.clear()
+
+    def close_list() -> None:
+        _, tag = lists.pop()
+        result[-1] += "</li>"
+        result.append(f"</{tag}>")
+
+    def close_lists() -> None:
+        while lists:
+            close_list()
+
+    for raw_line in escaped.split("\n"):
+        line = raw_line.replace("\t", "    ").rstrip()
         stripped = line.strip()
+
+        if fence is not None:
+            if stripped.startswith(fence):
+                result.append(f"<pre><code>{chr(10).join(fence_lines)}</code></pre>")
+                fence, fence_lines = None, []
+                previous_blank = False
+            else:
+                fence_lines.append(line)
+            continue
+
+        if m := _FENCE_RE.match(line):
+            flush_paragraph()
+            close_lists()
+            fence = m.group(1)
+            continue
+
+        if not stripped:
+            flush_paragraph()
+            previous_blank = True
+            continue
 
         # Thematic break. CommonMark accepts ``---``, ``***`` and ``___``;
         # the DoC template uses ``***`` for the closing rule because
         # ``---`` would be ambiguous with a setext heading underline
-        # when it follows a paragraph.
+        # when it follows a paragraph. Checked before list items, which
+        # ``***`` would otherwise also match.
         if re.fullmatch(r"-{3,}|\*{3,}|_{3,}", stripped):
-            if in_list:
-                result.append("</ul>")
-                in_list = False
+            flush_paragraph()
+            close_lists()
             result.append("<hr>")
+            previous_blank = False
             continue
 
-        # Headings
-        m = re.match(r"^(#{1,6})\s+(.+)$", stripped)
-        if m:
-            if in_list:
-                result.append("</ul>")
-                in_list = False
+        if m := re.match(r"^(#{1,6})\s+(.+)$", stripped):
+            flush_paragraph()
+            close_lists()
             level = len(m.group(1))
             result.append(f"<h{level}>{inline_markup(m.group(2))}</h{level}>")
+            previous_blank = False
             continue
 
-        # List items
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            if not in_list:
-                result.append("<ul>")
-                in_list = True
-            result.append(f"<li>{inline_markup(stripped[2:])}</li>")
+        if m := _LIST_ITEM_RE.match(line):
+            flush_paragraph()
+            indent = len(m.group(1))
+            marker = m.group(2)
+            tag = "ul" if marker in "-*+" else "ol"
+            while lists and lists[-1][0] > indent:
+                close_list()
+            if lists and lists[-1][0] == indent:
+                if lists[-1][1] == tag:
+                    result[-1] += "</li>"
+                else:
+                    close_list()
+            if not lists or lists[-1][0] < indent:
+                start = int(marker[:-1]) if tag == "ol" else 1
+                result.append(f'<{tag} start="{start}">' if start != 1 else f"<{tag}>")
+                lists.append((indent, tag))
+            result.append(f"<li>{inline_markup(m.group(3))}")
+            previous_blank = False
             continue
 
-        # Empty line
-        if not stripped:
-            if in_list:
-                result.append("</ul>")
-                in_list = False
+        # Text under an open list item continues it: straight after the item,
+        # or after a blank line when indented under it. Anything else ends
+        # the lists and starts a paragraph.
+        if lists and (not previous_blank or len(line) - len(line.lstrip()) > lists[-1][0]):
+            result[-1] += f" {inline_markup(stripped)}"
+            previous_blank = False
             continue
 
-        # Paragraph
-        if in_list:
-            result.append("</ul>")
-            in_list = False
-        result.append(f"<p>{inline_markup(stripped)}</p>")
+        close_lists()
+        # ``html.escape`` has already turned the quote marker into ``&gt;``.
+        is_quote = stripped.startswith("&gt;")
+        if is_quote != quoted:
+            flush_paragraph()
+            quoted = is_quote
+        paragraph.append(stripped.removeprefix("&gt;").strip() if is_quote else stripped)
+        previous_blank = False
 
-    if in_list:
-        result.append("</ul>")
+    if fence is not None:
+        result.append(f"<pre><code>{chr(10).join(fence_lines)}</code></pre>")
+    flush_paragraph()
+    close_lists()
 
     return "\n".join(result)
 
 
+def _trim_autolink(url: str) -> str:
+    """Drop trailing punctuation a sentence put after a bare URL.
+
+    A closing parenthesis stays when the URL opened one itself, as
+    Wikipedia-style links do.
+    """
+    while url:
+        last = url[-1]
+        if last in ".,;:!?'" or (last == ")" and url.count(")") > url.count("(")):
+            url = url[:-1]
+        elif url.endswith(("&quot;", "&#x27;")):
+            url = url[: url.rindex("&")]
+        else:
+            break
+    return url
+
+
 def inline_markup(text: str) -> str:
-    """Convert inline Markdown: bold, italic, links, code spans.
+    """Convert inline Markdown: bold, italic, links, bare URLs, code spans.
 
     URLs are sanitized to only allow http, https, and mailto schemes.
+    Every link carries ``rel="nofollow ugc noopener noreferrer"``: the
+    text is written by users and shown on public, indexed pages.
 
-    Code spans are stashed with NUL-byte sentinels *before* any other
-    inline pass runs, so markdown metacharacters inside backticks —
-    glob ``*``, link syntax, asterisks meant as literal text — survive
-    the bold/italic/link regexes and end up inside the ``<code>``
-    block verbatim. This matches Markdown's "code spans win over
-    other inline constructs" precedence.
+    Code spans and bare URLs are stashed with NUL-byte sentinels *before*
+    the other inline passes run, so markdown metacharacters inside
+    backticks or a URL — glob ``*``, link syntax, asterisks meant as
+    literal text — survive the bold/italic/link regexes verbatim. This
+    matches Markdown's "code spans win over other inline constructs"
+    precedence.
     """
-    code_spans: list[str] = []
+    stash: list[str] = []
+    # Bare URLs by stash slot, so a link whose text holds one shows it as text
+    # rather than nesting one anchor inside another.
+    autolinks: dict[str, str] = {}
 
-    def _stash(m: re.Match[str]) -> str:
-        code_spans.append(m.group(1))
-        return f"\x00CODE{len(code_spans) - 1}\x00"
+    def _put(value: str) -> str:
+        stash.append(value)
+        return f"\x00{len(stash) - 1}\x00"
 
     # Stash code spans first so their contents are not re-parsed.
-    text = re.sub(r"`([^`]+)`", _stash, text)
+    text = re.sub(r"`([^`]+)`", lambda m: _put(f"<code>{m.group(1)}</code>"), text)
+
+    # Bare URLs. One that is a link or image target ``](url)``, opens link
+    # text ``[url``, or sits inside a word or path is left for the passes
+    # below.
+    def _autolink(m: re.Match[str]) -> str:
+        url = _trim_autolink(m.group(0))
+        trailing = m.group(0)[len(url) :]
+        href = html.escape(sanitize_url(html.unescape(url)), quote=True)
+        slot = _put(f'<a href="{href}" rel="{_LINK_REL}" class="text-primary hover:underline">{url}</a>')
+        autolinks[slot] = url
+        return slot + trailing
+
+    text = re.sub(r"(?<![\w/\[=\"])(?<!\]\()https?://[^\s<>\[\]\x00]+", _autolink, text)
 
     # Images: ![alt](url) — must run BEFORE links because both share
     # the ``[...](...)`` shape. The DoC uses this to embed the
@@ -170,9 +283,12 @@ def inline_markup(text: str) -> str:
     # string's ``&`` would otherwise reach the ``href`` as ``&amp;amp;`` and
     # the link would point somewhere else.
     def _safe_link(m: re.Match[str]) -> str:
-        link_text = html.escape(html.unescape(m.group(1)), quote=True)
+        label = m.group(1)
+        for slot, url in autolinks.items():
+            label = label.replace(slot, url)
+        link_text = html.escape(html.unescape(label), quote=True)
         url = html.escape(sanitize_url(html.unescape(m.group(2))), quote=True)
-        return f'<a href="{url}" class="text-primary hover:underline">{link_text}</a>'
+        return f'<a href="{url}" rel="{_LINK_REL}" class="text-primary hover:underline">{link_text}</a>'
 
     text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_link, text)
     # Bold: **text**
@@ -180,9 +296,10 @@ def inline_markup(text: str) -> str:
     # Italic: *text*
     text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
 
-    # Restore code spans now that the other inline passes have run.
-    for i, span in enumerate(code_spans):
-        text = text.replace(f"\x00CODE{i}\x00", f"<code>{span}</code>")
+    # Restore the stash now that the other inline passes have run. Newest
+    # first, so a code span inside link text is restored after its link.
+    for i in reversed(range(len(stash))):
+        text = text.replace(f"\x00{i}\x00", stash[i])
     return text
 
 
