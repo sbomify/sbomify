@@ -258,8 +258,9 @@ class TestLookup:
         advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0100", published_at=timezone.now())
         AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0100", severity="high")
 
-        # One for the advisory, then one per prefetched relation.
-        with django_assert_num_queries(5):
+        # One for the advisory, then one per prefetched relation, the product
+        # status rows included.
+        with django_assert_num_queries(6):
             get_advisory(sample_team, "ACME-SA-2026-0100")
 
 

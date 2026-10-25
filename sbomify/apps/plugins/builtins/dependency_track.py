@@ -874,6 +874,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return
 
         from sbomify.apps.core.object_store import StorageClient
+        from sbomify.apps.core.utils import broadcast_to_workspace
         from sbomify.apps.sboms.models import SBOM as SBOMModel
         from sbomify.apps.sboms.services.sboms import schedule_vex_reapply, upload_sbom_file
 
@@ -916,6 +917,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
             len(decided),
         )
         schedule_vex_reapply(str(component.id))
+        workspace_key = component.team.key
+        if workspace_key:
+            data = {"sbom_id": str(vex.id), "component_id": str(component.id), "name": vex.name}
+            transaction.on_commit(
+                lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="sbom_uploaded", data=data)
+            )
 
     @staticmethod
     def _normalized_vex(doc: dict[str, Any]) -> str:

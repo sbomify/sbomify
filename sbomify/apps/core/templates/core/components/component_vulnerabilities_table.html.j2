@@ -23,7 +23,7 @@ was rendered with.{% endcomment %}
 <div id="component-vulnerabilities-table"
      class="flex flex-col"
      x-data="{ refreshTimer: null }"
-     @ws:message.window=" const watch = document.getElementById('component-vulnerabilities-version-slot').dataset; if (($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'sbom_uploaded' && $event.detail.component_id === '{{ component_id }}' && 'rolling' in watch) || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === watch.sbom)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+     @ws:message.window=" const watch = document.getElementById('component-vulnerabilities-version-slot').dataset; if ($event.detail.type === 'resync' || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}') || ($event.detail.type === 'sbom_uploaded' && $event.detail.component_id === '{{ component_id }}' && 'rolling' in watch) || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === watch.sbom)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     <div hidden
          hx-get="{{ vuln_data.refresh_url }}"
          hx-trigger="refresh-assessments from:body"

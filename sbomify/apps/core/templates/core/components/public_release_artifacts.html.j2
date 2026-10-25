@@ -2,9 +2,9 @@
 {% if release.artifacts %}
     {{ release.artifacts|json_script:"public-artifacts-data" }}
     <div x-data="{ artifacts: [], search: '', typeFilter: '', sortColumn: 'name', sortDirection: 'asc', init() { this.artifacts = JSON.parse(document.getElementById('public-artifacts-data').textContent); }, effType(a) { if (a.artifact_type === 'sbom') { return a.bom_type || 'sbom'; } return a.artifact_type || 'unknown'; }, typeBadgeClass(a) { const t = this.effType(a); if (t === 'sbom') return 'bg-primary/10 text-primary border border-primary/30'; if (t === 'vex') return 'bg-info/10 text-info border border-info/30'; if (t === 'cbom') return 'bg-success/10 text-success border border-success/30'; if (t === 'document') return 'bg-warning/10 text-warning border border-warning/30'; return 'bg-border/30 text-text-muted border border-border'; }, get filteredArtifacts() { let items = this.artifacts; if (this.typeFilter) { items = items.filter(a => this.effType(a) === this.typeFilter); } if (this.search) { const q = this.search.toLowerCase(); items = items.filter(a => (a.artifact_name || '').toLowerCase().includes(q) || (a.component_name || '').toLowerCase().includes(q) || (a.sbom_format || '').toLowerCase().includes(q) || (a.document_type || '').toLowerCase().includes(q) ); } return this.sortItems(items); }, sortItems(items) { const col = this.sortColumn; const dir = this.sortDirection === 'asc' ? 1 : -1; return [...items].sort((a, b) => { let valA, valB; switch (col) { case 'type': valA = this.effType(a); valB = this.effType(b); break; case 'name': valA = (a.artifact_name || '').toLowerCase(); valB = (b.artifact_name || '').toLowerCase(); break; case 'component': valA = (a.component_name || '').toLowerCase(); valB = (b.component_name || '').toLowerCase(); break; case 'format': valA = (a.sbom_format || a.document_type || '').toLowerCase(); valB = (b.sbom_format || b.document_type || '').toLowerCase(); break; case 'version': valA = (a.sbom_version || a.document_version || '').toLowerCase(); valB = (b.sbom_version || b.document_version || '').toLowerCase(); break; case 'created': valA = a.created_at || ''; valB = b.created_at || ''; break; default: valA = ''; valB = ''; } if (valA < valB) return -1 * dir; if (valA > valB) return 1 * dir; return 0; }); }, sort(col) { if (this.sortColumn === col) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = col; this.sortDirection = 'asc'; } }, formatDate(dateStr) { return window.sbomifyFormatDate(dateStr, { fallback: '—' }); }, getFormatDisplay(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { const fmt = artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'CYCLONEDX' : 'SPDX'; return fmt + (artifact.sbom_format_version ? ' ' + artifact.sbom_format_version : ''); } if (artifact.artifact_type === 'document' && artifact.document_type) { return artifact.document_type.toUpperCase(); } return '—'; }, getFormatClass(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { return artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format tw-sbom-format-cyclonedx' : 'tw-sbom-format tw-sbom-format-spdx'; } return ''; }, isDocument(artifact) { return artifact.artifact_type === 'document'; }, getVersion(artifact) { return artifact.sbom_version || artifact.document_version || ''; } }">
-        <div class="tc-panel tc-panel-flush">
-            <h2 class="tc-panel-title">Artifacts in this release</h2>
-            {# The shell draws the frame itself, so the table needs no card around it. #}
+        <section class="flex flex-col gap-4">
+            <c-branded.section-header title="Artifacts in this release" subtitle="Every SBOM, VEX, CBOM and document this release ships with." />
+            {# The shell draws the frame itself, so the table needs no surface around it. #}
             <c-tables.shell>
             <c-tables.toolbar>
             <c-forms.search-input size="sm" id="release-artifacts-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" />
@@ -88,11 +88,10 @@
                 </template>
                 <template x-if="filteredArtifacts.length === 0 && search">
                     <tr>
-                        <td colspan="6" class="text-center">
-                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                            <p class="m-0">
-                                No results found for "<span x-text="search"></span>"
-                            </p>
+                        <td colspan="6">
+                            <c-feedback.empty-state size="sm" icon="fas fa-magnifying-glass" icon_variant="neutral" title="No artifacts match">
+                            No artifact name, component or format contains "<span x-text="search"></span>".
+                            </c-feedback.empty-state>
                         </td>
                     </tr>
                 </template>
@@ -105,12 +104,13 @@
             </c-tables.info>
             </c-tables.footer>
             </c-tables.shell>
-        </div>
+        </section>
     </div>
 {% else %}
-    <div class="tc-empty">
-        <i class="fas fa-puzzle-piece tc-empty-icon" aria-hidden="true"></i>
-        <p class="tc-empty-title">No artifacts in this release</p>
-        <p class="tc-empty-body">This release doesn't contain any artifacts yet.</p>
-    </div>
+    <section class="flex flex-col gap-4">
+        <c-branded.section-header title="Artifacts in this release" />
+        <c-branded.surface flush>
+        <c-feedback.empty-state icon="fas fa-puzzle-piece" icon_variant="neutral" title="No artifacts in this release" message="This release doesn't contain any artifacts yet." />
+        </c-branded.surface>
+    </section>
 {% endif %}

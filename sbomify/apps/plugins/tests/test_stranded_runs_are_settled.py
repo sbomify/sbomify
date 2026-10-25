@@ -147,3 +147,32 @@ class TestWhatTheArtifactPageSeesAfterwards:
         assert finding["title"] == "Assessment Never Completed"
         assert run.result["metadata"] == {"stranded": True}
         assert "Retry budget" not in (run.error_message or "")
+
+
+class TestOpenPagesHearAboutIt:
+    def test_settling_a_run_announces_it_so_the_spinner_stops(self, sample_team_with_owner_member, mocker) -> None:
+        team = sample_team_with_owner_member.team
+        run = _run(team, status=RunStatus.PENDING.value, age=timedelta(hours=3))
+        broadcast = mocker.patch("sbomify.apps.plugins.announce.broadcast_to_workspace")
+
+        sweep_stranded_runs()
+
+        run.refresh_from_db()
+        broadcast.assert_called_once_with(
+            workspace_key=team.key,
+            message_type="assessment_complete",
+            data={
+                "sbom_id": str(run.sbom_id),
+                "component_id": str(run.sbom.component_id),
+                "plugin_name": run.plugin_name,
+                "status": run.status,
+            },
+        )
+
+    def test_a_run_left_alone_is_not_announced(self, sample_team_with_owner_member, mocker) -> None:
+        _run(sample_team_with_owner_member.team, status=RunStatus.PENDING.value, age=timedelta(minutes=10))
+        broadcast = mocker.patch("sbomify.apps.plugins.announce.broadcast_to_workspace")
+
+        sweep_stranded_runs()
+
+        broadcast.assert_not_called()

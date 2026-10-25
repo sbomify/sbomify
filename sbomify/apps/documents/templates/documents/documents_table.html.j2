@@ -4,7 +4,7 @@
      hx-get="{% url 'documents:documents_table' component_id %}"
      hx-trigger="refresh-documents from:body"
      hx-swap="morph"
-     @ws:message.window="if (['document_uploaded', 'document_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-documents')), 500); }">
+     @ws:message.window="if ($event.detail.type === 'resync' || (['document_uploaded', 'document_updated', 'document_deleted'].includes($event.detail.type) && $event.detail.component_id === '{{ component_id }}')) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-documents')), 500); }">
     {{ documents|json_script:"documents-data" }}
     <div x-cloak x-data="documentsTable('{{ component_id }}')">
         {% if not is_public_view %}
@@ -18,7 +18,8 @@
             <div class="p-0">{% include 'documents/documents_table_content.html.j2' with table_nested=True %}</div>
             </c-cards.card>
         {% else %}
-            <div>{% include 'documents/documents_table_content.html.j2' with table_nested=False %}</div>
+            {# The public page wraps this in a surface, so the shell nests there too. #}
+            <div>{% include 'documents/documents_table_content.html.j2' with table_nested=True %}</div>
         {% endif %}
         {% if has_crud_permissions %}
             {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}

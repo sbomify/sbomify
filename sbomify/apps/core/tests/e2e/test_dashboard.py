@@ -86,8 +86,9 @@ def test_overview_priority_table_and_mobile_drawer(
     expect(priority.get_by_role("link", name="CVE-2026-10001", exact=True)).to_be_visible()
     exposure = page.get_by_role("table", name="Product exposure")
     expect(exposure).to_be_visible()
-    # Hidden dialog mounts must not add empty rows between canvas sections.
-    gaps = page.locator("#main-content > div").evaluate("""frame => {
+    # Hidden dialog mounts must not add empty rows between canvas sections. The
+    # sections sit in the overview's own frame, the region it refreshes live.
+    gaps = page.locator("#overview-content").evaluate("""frame => {
         const rows = Array.from(frame.children)
             .map(child => child.getBoundingClientRect()).filter(rect => rect.height > 0);
         return rows.slice(1).map((row, index) => row.top - rows[index].bottom);
