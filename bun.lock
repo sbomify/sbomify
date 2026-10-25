@@ -32,6 +32,7 @@
         "js-cookie": "^3.0.8",
         "jsbarcode": "^3.12.3",
         "license-expressions": "^0.8.0",
+        "lightningcss": "^1.33.0",
         "marked": "^18.1.1",
         "postcss": "^8.5.31",
         "signature_pad": "^5.1.4",

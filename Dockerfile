@@ -99,6 +99,11 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 # Build main frontend assets (Keycloak is built separately in Stage 0)
 RUN bun run copy-deps && bun x vite build
 
+# Vite only minifies what it bundles; the hand-written sheets in static/css
+# are minified here, on this stage's copy, before collectstatic picks them up.
+COPY bin/minify-static-css.ts ./bin/
+RUN bun bin/minify-static-css.ts sbomify/static/css
+
 ### Stage 2: Frontend Development Server
 FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS frontend-dev-server
 
