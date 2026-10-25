@@ -31,17 +31,20 @@ import base64
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
+from django.conf import settings
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
@@ -67,6 +70,16 @@ class AttestationNotYetAvailableError(RetryLaterError):
     """
 
 
+class GitHubRateLimitedError(RetryLaterError):
+    """Raised when GitHub refuses the lookup because its API rate limit was hit.
+
+    The limit resets within the hour, so the attestation is still there to be
+    found. Treating the refusal as final failed SBOMs whose attestations were
+    fine, simply because their release uploaded more SBOMs than the remaining
+    quota allowed.
+    """
+
+
 class SBOMVerificationPlugin(AssessmentPlugin):
     """Unified SBOM signature, provenance, and attestation verification plugin.
 
@@ -75,7 +88,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     that drives ``_is_passing`` for upstream consumers (BSI, FDA, etc.).
     """
 
-    VERSION = "2.0.0"
+    VERSION = "2.0.1"
 
     DEFAULT_TIMEOUT = 60
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
@@ -593,25 +606,63 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata=metadata,
         )
 
+    @staticmethod
+    def _is_rate_limited(response: requests.Response) -> bool:
+        """GitHub signals a rate limit as a 429, or as a 403 with no quota left.
+
+        A 403 is also how GitHub refuses access outright, so the remaining-quota
+        header or the message is what tells the two apart.
+        """
+        if response.status_code == 429:
+            return True
+        if response.status_code != 403:
+            return False
+        if response.headers.get("X-RateLimit-Remaining") == "0":
+            return True
+        return "rate limit" in response.text.lower()
+
+    @staticmethod
+    def _rate_limit_retry_after_seconds(response: requests.Response) -> int:
+        """Honor GitHub's wait headers, with an hour fallback for an unknown reset."""
+        delays = []
+        if retry_after := response.headers.get("Retry-After"):
+            try:
+                seconds = int(retry_after)
+                if seconds >= 0:
+                    delays.append(max(1, seconds))
+            except ValueError:
+                pass
+        if response.headers.get("X-RateLimit-Remaining") == "0":
+            try:
+                reset = int(response.headers.get("X-RateLimit-Reset", ""))
+                # Retry after the reset second rather than racing its boundary.
+                delays.append(max(1, math.ceil(reset - time.time()) + 1))
+            except ValueError:
+                delays.append(3600)
+        return max(delays, default=3600)
+
     def _download_github_bundle(self, org: str, repo: str, digest: str, repo_provenance: str = "") -> dict[str, Any]:
         """Fetch the attestation bundle from GitHub's public Attestations API.
 
-        Raises ``AttestationNotYetAvailableError`` on ``404`` so the task
-        layer can schedule a retry.
+        Raises ``AttestationNotYetAvailableError`` on ``404`` and
+        ``GitHubRateLimitedError`` on a rate limit so the task layer can
+        schedule a retry.
         """
         api_url = f"https://api.github.com/repos/{org}/{repo}/attestations/sha256:{digest}"
         logger.info("Fetching attestation from %s", api_url)
 
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        # Unauthenticated calls share 60 requests an hour per egress IP across
+        # every workspace; a token raises that to 5,000.
+        if token := settings.GITHUB_API_TOKEN:
+            headers["Authorization"] = f"Bearer {token}"
+
         try:
             session = get_http_session()
-            response = session.get(
-                api_url,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
-                timeout=self.timeout,
-            )
+            response = session.get(api_url, headers=headers, timeout=self.timeout)
         except requests.Timeout:
             return {"success": False, "error": "Attestation bundle download timed out"}
         except requests.RequestException as exc:
@@ -630,9 +681,17 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 f"sbomify asked for the SHA-256 of the SBOM as sbomify stored it: sha256:{digest}. "
                 f"If the workflow has no attest step, add actions/attest-build-provenance for the "
                 f"file you upload. If it already attests, it attested a different file, such as a "
-                f"container image or the SBOM before a later step changed it. sbomify looks this up "
-                f"without signing in to GitHub, so a private repository also returns nothing.",
+                f"container image or the SBOM before a later step changed it. sbomify cannot see "
+                f"private repositories, so a private repository also returns nothing.",
                 title="No attestation found",
+            )
+        if self._is_rate_limited(response):
+            raise GitHubRateLimitedError(
+                f"GitHub refused the attestation lookup for this SBOM from {org}/{repo}{repo_provenance} "
+                f"because sbomify reached GitHub's API rate limit. This says nothing about the SBOM or its "
+                f"attestation. sbomify asked for sha256:{digest}. Run the assessment again later.",
+                title="GitHub rate limit reached",
+                retry_after_seconds=self._rate_limit_retry_after_seconds(response),
             )
         if response.status_code != 200:
             return {

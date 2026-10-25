@@ -13,6 +13,7 @@ import pytest
 
 from sbomify.apps.plugins.builtins.verification import (
     AttestationNotYetAvailableError,
+    GitHubRateLimitedError,
     SBOMVerificationPlugin,
 )
 from sbomify.apps.plugins.sdk.base import SBOMContext
@@ -53,7 +54,7 @@ class TestMetadata:
         meta = plugin.get_metadata()
 
         assert meta.name == "sbom-verification"
-        assert meta.version == "2.0.0"
+        assert meta.version == "2.0.1"
         # The unified plugin lives in the ``attestation`` category so a
         # single ``requires_one_of`` clause in BSI/FDA/etc. matches it
         # without needing to enumerate plugins by name.
@@ -477,6 +478,96 @@ class TestGitHubAttestation:
             pytest.raises(AttestationNotYetAvailableError),
         ):
             plugin.assess("sbom-1", sbom_file, context=context)
+
+    @pytest.mark.parametrize(
+        ("status", "headers", "body"),
+        [
+            (403, {"X-RateLimit-Remaining": "0"}, {"message": "API rate limit exceeded for 192.0.2.1."}),
+            (403, {}, {"message": "You have exceeded a secondary rate limit."}),
+            (429, {}, {"message": "Too Many Requests"}),
+        ],
+    )
+    @patch("sbomify.apps.plugins.builtins.verification.get_http_session")
+    def test_github_rate_limit_raises_retry(
+        self,
+        mock_get_session: MagicMock,
+        status: int,
+        headers: dict[str, str],
+        body: dict,
+        tmp_path: Path,
+    ) -> None:
+        """A rate limit is transient, so the run must be retried, not settled as a fail."""
+        sbom_file, sha256 = _cyclonedx_with_vcs(tmp_path)
+        context = SBOMContext(sha256_hash=sha256)
+        plugin = SBOMVerificationPlugin()
+
+        response = self._make_response(status, body)
+        response.headers = headers
+        session = MagicMock()
+        session.get.return_value = response
+        mock_get_session.return_value = session
+
+        with (
+            patch.object(plugin, "_fetch_blob", return_value=None),
+            pytest.raises(GitHubRateLimitedError) as excinfo,
+        ):
+            plugin.assess("sbom-1", sbom_file, context=context)
+
+        assert excinfo.value.title == "GitHub rate limit reached"
+        assert f"sha256:{sha256}" in str(excinfo.value)
+
+    @patch("sbomify.apps.plugins.builtins.verification.get_http_session")
+    def test_github_403_without_rate_limit_is_not_retried(
+        self,
+        mock_get_session: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A 403 that is a refusal, not a rate limit, still ends as a warning."""
+        sbom_file, sha256 = _cyclonedx_with_vcs(tmp_path)
+        context = SBOMContext(sha256_hash=sha256)
+        plugin = SBOMVerificationPlugin()
+
+        response = self._make_response(403, {"message": "Resource not accessible by integration"})
+        response.headers = {"X-RateLimit-Remaining": "4999"}
+        session = MagicMock()
+        session.get.return_value = response
+        mock_get_session.return_value = session
+
+        with patch.object(plugin, "_fetch_blob", return_value=None):
+            result = plugin.assess("sbom-1", sbom_file, context=context)
+
+        gh = next(f for f in result.findings if f.id == "verification:github-attestation")
+        assert gh.status == "warning"
+
+    @pytest.mark.parametrize("token", ["", "github_pat_example"])
+    @patch("sbomify.apps.plugins.builtins.verification.get_http_session")
+    def test_github_token_is_sent_when_configured(
+        self,
+        mock_get_session: MagicMock,
+        token: str,
+        tmp_path: Path,
+        settings: Any,
+    ) -> None:
+        settings.GITHUB_API_TOKEN = token
+        sbom_file, sha256 = _cyclonedx_with_vcs(tmp_path)
+        context = SBOMContext(sha256_hash=sha256)
+        plugin = SBOMVerificationPlugin()
+
+        session = MagicMock()
+        session.get.return_value = self._make_response(404, {"message": "Not Found"})
+        mock_get_session.return_value = session
+
+        with (
+            patch.object(plugin, "_fetch_blob", return_value=None),
+            pytest.raises(AttestationNotYetAvailableError),
+        ):
+            plugin.assess("sbom-1", sbom_file, context=context)
+
+        sent = session.get.call_args.kwargs["headers"]
+        if token:
+            assert sent["Authorization"] == f"Bearer {token}"
+        else:
+            assert "Authorization" not in sent
 
     @patch("sbomify.apps.plugins.builtins.verification.shutil.which", return_value=None)
     @patch("sbomify.apps.plugins.builtins.verification.get_http_session")

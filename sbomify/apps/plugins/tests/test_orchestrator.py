@@ -657,7 +657,7 @@ class TestFinalizeRetryExhausted:
             assert word not in text.lower()
         assert "\u2014" not in text and "\u2013" not in text
         assert finding["description"].startswith("Dependency Track still processing SBOM. ")
-        assert "32 minutes" in finding["description"]
+        assert "checked again several times before stopping" in finding["description"]
 
 
 @pytest.mark.django_db

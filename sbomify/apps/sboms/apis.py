@@ -151,9 +151,14 @@ def _store_external_vex(
     else:
         # CycloneDX delivered as XML: stored verbatim like the other external
         # formats — the partial XML-to-dict conversion cannot round-trip the
-        # JSON schema validation the JSON path applies.
+        # JSON schema validation the JSON path applies. The version is the
+        # product version the VEX speaks for, as on the JSON path, not the
+        # document revision: it decides which of the component's SBOMs the
+        # VEX applies to.
         format_version = str(document.get("specVersion") or "")
-        raw_version = document.get("version")
+        raw_metadata = document.get("metadata")
+        raw_component = raw_metadata.get("component") if isinstance(raw_metadata, dict) else None
+        raw_version = raw_component.get("version") if isinstance(raw_component, dict) else None
     # Explicit None-check: a falsy-but-present version (e.g. 0) is still a version.
     version = "" if raw_version is None else str(raw_version)
 

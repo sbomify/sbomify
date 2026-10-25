@@ -521,9 +521,6 @@ class PluginOrchestrator:
         # The finding renders on the compliance page, so it says what the user
         # is left with rather than how the retries were scheduled. The plugin's
         # message carries the substance; ``title`` lets it name the outcome.
-        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS
-
-        minutes = sum(RETRY_LATER_DELAYS_MS) // 60_000
         message = error_message.strip()
         if message and not message.endswith((".", "!", "?")):
             message += "."
@@ -531,7 +528,7 @@ class PluginOrchestrator:
             run_id,
             kind="retry-exhausted",
             title=title or "Check did not finish",
-            description=f"{message} sbomify checked again for {minutes} minutes before stopping.".lstrip(),
+            description=f"{message} sbomify checked again several times before stopping.".lstrip(),
             error_message=f"Retry budget exhausted: {error_message}",
             last_error=error_message,
         )

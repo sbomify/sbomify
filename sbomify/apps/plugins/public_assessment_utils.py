@@ -17,7 +17,22 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
     from sbomify.apps.core.models import Component, Product
+    from sbomify.apps.sboms.models import SBOM
+
+
+def _assessed_artifacts(queryset: "QuerySet[SBOM]") -> "QuerySet[SBOM]":
+    """Drop the BOM types that are never assessed.
+
+    A VEX is a statement about another SBOM, and no plugin assesses one. Left in,
+    a triage VEX uploaded after a release becomes the component's latest artifact,
+    carries no runs, and takes every badge the release earned off the page.
+    """
+    from sbomify.apps.sboms.models import SBOM
+
+    return queryset.exclude(bom_type=SBOM.BomType.VEX)
 
 
 @dataclass
@@ -263,7 +278,7 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     """
     from sbomify.apps.sboms.models import SBOM
 
-    sboms = SBOM.objects.filter(component=component)
+    sboms = _assessed_artifacts(SBOM.objects.filter(component=component))
     sbom_ids = list(sboms.values_list("id", flat=True))
 
     if not sbom_ids:
@@ -454,7 +469,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 2: Get latest SBOM for each component (single query with window function simulation)
     component_ids = list(component_to_products.keys())
     latest_sbom_list = list(
-        SBOM.objects.filter(component_id__in=component_ids)
+        _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids))
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
@@ -542,7 +557,7 @@ def get_components_latest_sbom_assessments_batch(
 
     # Step 1: Get latest SBOM for each component (single query)
     latest_sbom_list = list(
-        SBOM.objects.filter(component_id__in=component_ids)
+        _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids))
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )

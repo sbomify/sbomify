@@ -352,6 +352,11 @@ class AssessmentRun(models.Model):
         blank=True,
         help_text="When the assessment started",
     )
+    retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the next deferred assessment attempt is due",
+    )
     completed_at = models.DateTimeField(
         null=True,
         blank=True,

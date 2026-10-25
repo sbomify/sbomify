@@ -360,7 +360,7 @@ def run_assessment_task(
 
     If a plugin raises RetryLaterError (e.g., attestation not yet available,
     external service still processing), the task will retry with increasing
-    delays: 2 min, 5 min, 10 min, 15 min.
+    delays: 2 min, 5 min, 10 min, 15 min, or longer when the service asks us to wait.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -434,6 +434,8 @@ def run_assessment_task(
 
             if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
                 delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
+                if retry_error.retry_after_seconds is not None:
+                    delay_ms = max(delay_ms, retry_error.retry_after_seconds * 1000)
                 logger.info(
                     f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
                     f"(run: {run_id or 'unknown'}): {retry_error}. "
@@ -452,6 +454,15 @@ def run_assessment_task(
                 }
                 if run_id is not None:
                     retry_kwargs["_existing_run_id"] = run_id
+
+                # The stranded-run sweep must allow this wait, even when the
+                # external service's reset is hours after the first attempt.
+                if run_id is not None:
+                    from ..models import AssessmentRun
+
+                    AssessmentRun.objects.filter(id=run_id, status=RunStatus.PENDING.value).update(
+                        retry_at=timezone.now() + timedelta(milliseconds=delay_ms)
+                    )
 
                 # Re-enqueue the task with incremented retry count
                 run_assessment_task.send_with_options(
