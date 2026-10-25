@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("plugins", "0026_remove_assessmentrun_triggered_by_token"),
+        ("plugins", "0027_remove_assessmentrun_triggered_by_token"),
     ]
 
     operations = [

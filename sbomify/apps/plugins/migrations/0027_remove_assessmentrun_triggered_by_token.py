@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("plugins", "0025_assessmentrun_plugins_ar_findings_key_idx"),
+        ("plugins", "0026_assessmentrun_retry_at"),
     ]
 
     operations = [
