@@ -91,15 +91,20 @@ class ReleaseDetailsPublicView(View):
         }
         add_custom_domain_to_context(request, context, team)
 
-        # A release answers to its slug and its ID on a custom domain; both
-        # pages name the slug URL as canonical so they are not duplicates.
+        # Use slugs only where they resolve to the same product and release.
+        # Products whose slug is empty or resolves elsewhere retain their ID.
         if getattr(request, "is_custom_domain", False):
+            product_slug = product_obj.slug
+            slug_owner = (
+                resolve_product_identifier(request, product_slug, require_public=True) if product_slug else None
+            )
+            product_identifier = product_slug if slug_owner and slug_owner.id == product_obj.id else product_obj.id
             canonical_path = get_public_path(
                 "release",
                 resolved_release_id,
                 is_custom_domain=True,
                 product_id=product_obj.id,
-                product_slug=product_obj.slug,
+                product_slug=product_identifier,
                 release_slug=get_release_public_slugs(product_obj).get(resolved_release_id, resolved_release_id),
             )
             context["canonical_url"] = request.build_absolute_uri(canonical_path)
