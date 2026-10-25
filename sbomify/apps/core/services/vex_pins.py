@@ -36,7 +36,7 @@ def _shipped_version_keys(release: Any, component: Any) -> set[str]:
 def _wanted_vex_ids(component: Any, version_keys: set[str]) -> set[Any]:
     """The newest imported VEX per (version, source) among the versions the release ships."""
     from sbomify.apps.sboms.models import SBOM
-    from sbomify.apps.vulnerability_scanning.vex import TRIAGE_SOURCE, vex_version_key
+    from sbomify.apps.vulnerability_scanning.vex import TRIAGE_SOURCE, imported_vex_version_key
 
     if not version_keys:
         return set()
@@ -44,11 +44,11 @@ def _wanted_vex_ids(component: Any, version_keys: set[str]) -> set[Any]:
         SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX.value)
         .exclude(source=TRIAGE_SOURCE)
         .order_by("-created_at")
-        .values_list("id", "version", "source")
+        .values_list("id", "version", "source", "format")
     )
     newest: dict[tuple[str, str], Any] = {}
-    for vex_id, version, source in rows.iterator():
-        key = vex_version_key(version)
+    for vex_id, version, source, artifact_format in rows.iterator():
+        key = imported_vex_version_key(version, artifact_format)
         if key in version_keys:
             newest.setdefault((key, source or ""), vex_id)
     return set(newest.values())
