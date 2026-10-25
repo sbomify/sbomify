@@ -333,7 +333,7 @@ def get_component_latest_sbom_assessment_status(component: "Component") -> Compo
     """
     from sbomify.apps.sboms.models import SBOM
 
-    latest_sbom = SBOM.objects.filter(component=component).order_by("-created_at").first()
+    latest_sbom = _assessed_artifacts(SBOM.objects.filter(component=component)).order_by("-created_at").first()
 
     if not latest_sbom:
         return ComponentAssessmentStatus(
