@@ -578,21 +578,6 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
 
 
 @login_required
-def get_component_metadata(request: HttpRequest, component_id: str) -> HttpResponse:
-    try:
-        component: Component = Component.objects.get(pk=component_id)
-    except Component.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Component not found"))
-
-    if not can(request, "component:read_internal", component):
-        return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    metadata = component.metadata or {}
-    metadata.setdefault("supplier", None)
-    return JsonResponse(metadata)
-
-
-@login_required
 def support_contact(request: HttpRequest) -> HttpResponse:
     """Display support contact form and handle submissions."""
     from django.core.mail import EmailMessage

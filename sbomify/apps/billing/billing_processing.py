@@ -25,7 +25,6 @@ from .billing_helpers import (
     notify_billing_managers,
     parse_cancel_at,
 )
-from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .services.plan_selection import usage_over
 from .stripe_cache import invalidate_subscription_cache
@@ -965,36 +964,6 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
     except Exception as e:
         _raise_classified_webhook_error(e)
-
-
-def get_current_limits(team: Workspace) -> dict[str, Any]:
-    """
-    Get current billing limits for a team.
-
-    Args:
-        team: Team object
-
-    Returns:
-        Dictionary with current limits (max_products, max_components)
-    """
-    if not is_billing_enabled():
-        return get_unlimited_plan_limits()
-
-    if not team.billing_plan:
-        return get_unlimited_plan_limits()
-
-    try:
-        plan = BillingPlan.objects.get(key=team.billing_plan)
-        return {
-            "max_products": plan.max_products,
-            "max_components": plan.max_components,
-            "max_users": plan.max_users,
-            "subscription_status": team.billing_plan_limits.get("subscription_status", "active")
-            if team.billing_plan_limits
-            else "active",
-        }
-    except BillingPlan.DoesNotExist:
-        return get_unlimited_plan_limits()
 
 
 @handle_stripe_errors

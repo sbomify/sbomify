@@ -2,11 +2,9 @@
 
 import re
 from datetime import timedelta
-from functools import partial
 
 import pytest
 from django.db import connection
-from django.db.backends.base.operations import BaseDatabaseOperations
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -176,20 +174,6 @@ class TestComponentStatusMatchesPerSbomReads:
         ]
         assert get_sbom_passing_assessments(str(sbom.id)) == expected
         assert len(expected) == 2
-
-    def test_backend_without_distinct_on_gives_the_same_status(self, component, mocker):
-        first, second = _add_sboms(component, 2)
-        _run(second, "cisa-minimum-elements-2025", FAILING, minutes_ago=1)
-        _run(first, "osv", DIRTY_SCAN, minutes_ago=1)
-        expected = get_component_assessment_status(component)
-
-        # The base backend's DISTINCT ON refusal, as SQLite raises it.
-        mocker.patch.object(
-            connection.ops, "distinct_sql", partial(BaseDatabaseOperations.distinct_sql, connection.ops)
-        )
-
-        assert get_component_assessment_status(component) == expected
-        assert [p.plugin_name for p in expected.passing_assessments] == ["ntia-minimum-elements-2021"]
 
 
 def _count_queries(component: Component) -> tuple[int, list[str]]:

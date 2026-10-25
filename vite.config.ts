@@ -1,27 +1,14 @@
-import path from 'path'
 import { resolve } from 'path'
-import fs from 'fs'
 import { defineConfig } from 'vite'
-import { config } from 'dotenv'
-import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
-
-const envFilePath = path.join(__dirname, '.env')
-
-if(fs.existsSync(envFilePath)) {
-  config({ path: path.join(__dirname, '.env') })
-}
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: '/dist/',  // Keep leading slash for Vite, Django will prepend STATIC_URL automatically
+  // Copied verbatim into outDir, so templates keep linking static/dist/manifest.webmanifest.
+  publicDir: resolve('./sbomify/assets/public'),
   css: {
     devSourcemap: true,
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, '.'),
-    }
   },
   optimizeDeps: {
     include: ['license-expressions'],
@@ -29,57 +16,8 @@ export default defineConfig({
       target: 'esnext'
     }
   },
-  ssr: {
-    noExternal: ['license-expressions']
-  },
   plugins: [
     tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      manifest: {
-        name: 'sbomify',
-        short_name: 'sbomify',
-        description: 'Software Bill of Materials management platform',
-        theme_color: '#25293f',
-        background_color: '#ffffff',
-        display: 'standalone',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: '../img/favicons/favicon-16x16.png',
-            sizes: '16x16',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/favicon-32x32.png',
-            sizes: '32x32',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/apple-touch-icon.png',
-            sizes: '180x180',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/android-chrome-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/android-chrome-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: '../img/favicons/favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml'
-          }
-        ]
-      },
-      includeAssets: ['manifest.webmanifest']
-    })
   ],
   build: {
     target: 'esnext',
@@ -90,15 +28,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         core: resolve('./sbomify/apps/core/js/main.ts'),
-        sboms: resolve('./sbomify/apps/sboms/js/main.ts'),
         teams: resolve('./sbomify/apps/teams/js/main.ts'),
-        billing: resolve('./sbomify/apps/billing/js/main.ts'),
         documents: resolve('./sbomify/apps/documents/js/main.ts'),
-        vulnerability_scanning: resolve('./sbomify/apps/vulnerability_scanning/js/main.ts'),
         plugins: resolve('./sbomify/apps/plugins/js/main.ts'),
         ops: resolve('./sbomify/apps/ops/js/main.ts'),
-        alerts: resolve('./sbomify/apps/core/js/alerts-global.ts'),
-        djangoMessages: resolve('./sbomify/apps/core/js/django-messages.ts'),
         htmxBundle: resolve('./sbomify/apps/core/js/htmx-bundle.ts'),
         // Tailwind CSS entry (source outside static to avoid collectstatic processing)
         tailwind: resolve('./sbomify/assets/css/tailwind.src.css'),

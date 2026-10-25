@@ -129,7 +129,7 @@ class TestRegisteredPlugin:
         plugin = RegisteredPlugin.objects.create(
             name="disabled-plugin",
             display_name="Disabled Plugin",
-            category=AssessmentCategory.LICENSE.value,
+            category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
             plugin_class_path="test.path.Plugin",
             is_enabled=False,
@@ -293,34 +293,6 @@ class TestAssessmentRun:
         )
 
         assert run.duration_seconds == pytest.approx(5.5, rel=0.1)
-
-    def test_is_successful_completed(self, sample_sbom) -> None:
-        """Test is_successful property for completed run."""
-        run = AssessmentRun.objects.create(
-            sbom=sample_sbom,
-            plugin_name="test",
-            plugin_version="1.0.0",
-            plugin_config_hash="x" * 64,
-            category=AssessmentCategory.COMPLIANCE.value,
-            run_reason=RunReason.ON_UPLOAD.value,
-            status=RunStatus.COMPLETED.value,
-        )
-
-        assert run.is_successful is True
-
-    def test_is_successful_failed(self, sample_sbom) -> None:
-        """Test is_successful property for failed run."""
-        run = AssessmentRun.objects.create(
-            sbom=sample_sbom,
-            plugin_name="test",
-            plugin_version="1.0.0",
-            plugin_config_hash="x" * 64,
-            category=AssessmentCategory.COMPLIANCE.value,
-            run_reason=RunReason.ON_UPLOAD.value,
-            status=RunStatus.FAILED.value,
-        )
-
-        assert run.is_successful is False
 
 
 @pytest.mark.django_db

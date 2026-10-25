@@ -24,28 +24,8 @@ def is_test_environment() -> bool:
         [
             not getattr(settings, "STRIPE_SECRET_KEY", None),
             getattr(settings, "STRIPE_SECRET_KEY", "") == "sk_test_dummy_key_for_ci",
-            getattr(settings, "DJANGO_TEST", False),
             getattr(settings, "TESTING", False),
             "test" in settings.DATABASES.get("default", {}).get("NAME", ""),
             "pytest" in sys.modules,
         ]
     )
-
-
-def is_test_price_id(price_id: str) -> bool:
-    """
-    Check if a price ID looks like a test/dummy price ID.
-
-    This checks for:
-    1. Explicit test placeholder IDs (price_test_*, prod_test_*)
-    2. Missing or empty price IDs
-
-    Note: Real Stripe test-mode price IDs (price_1Abc...) are valid and should
-    NOT be blocked - they work correctly with test Stripe keys.
-    """
-    if not price_id:
-        return False
-
-    # Check for our explicit test placeholder IDs
-    test_prefixes = ("price_test_", "prod_test_")
-    return any(price_id.startswith(prefix) for prefix in test_prefixes)

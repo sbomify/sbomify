@@ -53,7 +53,7 @@ def test_messages_after_htmx_navigation_are_single_dismissible_and_fit(authentic
         tab.click()
         expect(tab).to_have_attribute("aria-current", "page")
     page.evaluate("""() => document.body.dispatchEvent(new CustomEvent('messages', {
-        detail: {value: [{type: 'alert-danger', message: 'Unable to save: ' + 'identifier'.repeat(60)}]}
+        detail: {value: [{type: 'error', message: 'Unable to save: ' + 'identifier'.repeat(60)}]}
     }))""")
     toast = page.locator("#toast-container [data-toast]")
     expect(toast).to_have_count(1)

@@ -43,8 +43,6 @@ import { catalogImport } from '../../controls/js/catalog-import';
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerSbomsTable } from '../../sboms/js/sboms-table';
 import { registerLicensesEditor } from '../../sboms/js/licenses-editor';
-import { registerContactsEditor } from '../../sboms/js/contacts-editor';
-import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
 
 // ============================================
 // COMPONENT IMPORTS - Other Modules
@@ -65,37 +63,15 @@ import { registerCraStep4 } from '../../compliance/js/cra-step-4';
 import { registerCraStep5 } from '../../compliance/js/cra-step-5';
 import { registerCiCdToken } from '../../sboms/js/ci-cd-token';
 
-// Track registered components to prevent double-registration
-const registeredComponents = new Set<string>();
-
 /**
- * Safely register an Alpine.data component.
- * Prevents duplicate registration.
+ * Register an Alpine.data component.
  */
 export function registerAlpineComponent(
     name: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     component: (...args: any[]) => object
 ): void {
-    if (registeredComponents.has(name)) {
-        return;
-    }
     Alpine.data(name, component);
-    registeredComponents.add(name);
-}
-
-/**
- * Check if a component is already registered
- */
-export function isComponentRegistered(name: string): boolean {
-    return registeredComponents.has(name);
-}
-
-/**
- * Get list of all registered component names
- */
-export function getRegisteredComponents(): string[] {
-    return Array.from(registeredComponents);
 }
 
 // ============================================
@@ -109,25 +85,7 @@ export function getRegisteredComponents(): string[] {
 export function dangerZone() {
     return {
         showDeleteModal: false,
-        isExpanded: false,
-        confirmText: '',
-
-        get canConfirm(): boolean {
-            return this.confirmText.toLowerCase() === 'delete';
-        },
-
-        toggle(): void {
-            this.isExpanded = !this.isExpanded;
-        },
-
-        openDelete(): void {
-            this.showDeleteModal = true;
-        },
-
-        closeDelete(): void {
-            this.showDeleteModal = false;
-            this.confirmText = '';
-        }
+        isExpanded: false
     };
 }
 
@@ -187,8 +145,6 @@ export function registerAllComponents(): void {
     registerSbomUpload();
     registerSbomsTable();
     registerLicensesEditor();
-    registerContactsEditor();
-    registerSupplierEditor();
 
     // Other modules
     registerDocumentUpload();
@@ -203,13 +159,3 @@ export function registerAllComponents(): void {
     registerCraStep5();
     registerCraDocSignature();
 }
-
-export default {
-    registerAlpineComponent,
-    isComponentRegistered,
-    getRegisteredComponents,
-    registerCommonComponents,
-    registerAllComponents,
-    // Common components
-    dangerZone
-};

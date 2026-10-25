@@ -3,7 +3,6 @@
 {% load django_htmx %}
 {% load cache %}
 {% load schema_tags %}
-{% load breadcrumb_tags %}
 {% load brand_tags %}
 {% load public_url_tags %}
 <!DOCTYPE html>
@@ -582,7 +581,6 @@
                 {% endcomment %}
                 {% block page_header %}{% endblock %}
                 <div class="mx-auto w-full max-w-[1200px] px-4 py-10 max-sm:py-6">
-                    {% block breadcrumb %}{% endblock %}
                     {% block content %}{% endblock %}
                 </div>
             </main>

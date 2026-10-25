@@ -1,6 +1,5 @@
 {% extends "core/component_details_private_base.html.j2" %}
 {% load static %}
-{% load django_vite %}
 {% block content_after_header %}
     {# Artifacts & security — the SBOM versions list leads the page, with vulnerabilities shown per version (design review p9: "one wholistic view at the top"). #}
     <div id="sboms-table-region"
@@ -33,7 +32,4 @@
 {% block table_section %}
     {# Component metadata modal — opened from the header ⋮ menu; available to every member (editing is gated inside). #}
     {% include "core/components/component_meta_info.html.j2" %}
-{% endblock %}
-{% block scripts_additional %}
-    {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
 {% endblock %}

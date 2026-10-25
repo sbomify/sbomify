@@ -18,21 +18,7 @@ from sbomify.apps.core.schemas import ProductLinkCreateSchema, ProductLinkUpdate
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import ProductLink
 
-# Link types mapping
-LINK_TYPES = {
-    "website": "Website",
-    "support": "Support",
-    "documentation": "Documentation",
-    "repository": "Repository",
-    "changelog": "Changelog",
-    "release_notes": "Release Notes",
-    "security": "Security",
-    "issue_tracker": "Issue Tracker",
-    "download": "Download",
-    "chat": "Chat/Community",
-    "social": "Social Media",
-    "other": "Other",
-}
+LINK_TYPES = dict(ProductLink.LinkType.choices)
 
 
 def build_links_context(request: HttpRequest, product_id: str) -> ServiceResult[dict[str, Any]]:

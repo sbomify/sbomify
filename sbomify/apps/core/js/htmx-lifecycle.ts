@@ -35,9 +35,6 @@ export function initHtmxLifecycle(): void {
     document.body.addEventListener('htmx:beforeRequest', ((event: CustomEvent) => {
         const target = event.detail.elt as HTMLElement;
 
-        // Add loading class to target element
-        target.classList.add('htmx-loading');
-
         // Disable submit buttons in the target
         const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
         pendingButtons.set(event.detail.xhr, buttons.map(element => ({ element, disabled: element.disabled })));
@@ -48,11 +45,6 @@ export function initHtmxLifecycle(): void {
      * After HTMX request completes (success or failure)
      */
     document.body.addEventListener('htmx:afterRequest', ((event: CustomEvent) => {
-        const target = event.detail.elt as HTMLElement;
-
-        // Remove loading class
-        target.classList.remove('htmx-loading');
-
         // Restore button states
         // Restore only the controls this request disabled. A swap may have
         // replaced them with new controls whose state already belongs to Alpine.
@@ -96,16 +88,6 @@ export function initHtmxLifecycle(): void {
 
     }) as EventListener);
 
-    /**
-     * Before HTMX swap - cleanup event listeners and state
-     */
-    document.body.addEventListener('htmx:beforeSwap', ((event: CustomEvent) => {
-        const target = event.detail.target as HTMLElement;
-
-        // Dispatch cleanup event for custom cleanup handlers
-        target.dispatchEvent(new CustomEvent('alpine:beforeSwap', { bubbles: true }));
-    }) as EventListener);
-
     // ============================================
     // FOCUS MANAGEMENT
     // ============================================
@@ -121,13 +103,6 @@ export function initHtmxLifecycle(): void {
         const autofocusEl = target.querySelector<HTMLElement>('[autofocus]');
         if (autofocusEl) {
             autofocusEl.focus();
-            return;
-        }
-
-        // Look for data-focus-after-swap attribute
-        const focusTarget = target.querySelector<HTMLElement>('[data-focus-after-swap]');
-        if (focusTarget) {
-            focusTarget.focus();
             return;
         }
 
@@ -175,18 +150,12 @@ export function initHtmxLifecycle(): void {
                 message: `Error ${xhr.status}: ${xhr.statusText || 'An error occurred'}`
             });
         }
-
-        // Add error class to target
-        target.classList.add('htmx-error');
-        setTimeout(() => target.classList.remove('htmx-error'), 3000);
     }) as EventListener);
 
     /**
      * Handle HTMX send errors (network failures)
      */
     document.body.addEventListener('htmx:sendError', ((event: CustomEvent) => {
-        const target = event.detail.elt as HTMLElement;
-
         // Log network error only in development to avoid polluting production logs
         // TODO: Integrate with error tracking service (e.g., Sentry) for production
         if (import.meta.env.DEV) {
@@ -201,45 +170,5 @@ export function initHtmxLifecycle(): void {
                 message: 'Failed to connect to server. Please check your connection.'
             });
         }
-
-        target.classList.add('htmx-error');
-        setTimeout(() => target.classList.remove('htmx-error'), 3000);
     }) as EventListener);
-
-    // ============================================
-    // MODAL INTEGRATION
-    // ============================================
-
-    /**
-     * Close Bootstrap modals on HTMX trigger
-     */
-    document.body.addEventListener('closeModal', () => {
-        // Bootstrap modals have been migrated to Alpine.js
-        // This event listener is kept for backward compatibility but is no longer needed
-        if (import.meta.env.DEV) {
-            console.warn('closeModal event is deprecated - Bootstrap modals have been migrated to Alpine.js');
-        }
-    });
-
-    /**
-     * Handle modal backdrop cleanup on HTMX swap
-     */
-    document.body.addEventListener('htmx:beforeSwap', () => {
-        // Remove any orphaned modal backdrops
-        document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
-            backdrop.remove();
-        });
-
-        // Reset body scroll if modal was open
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-    });
 }
-
-// ============================================
-// EXPORTS
-// ============================================
-
-export { initHtmxLifecycle as registerHtmxLifecycle };
-export default initHtmxLifecycle;

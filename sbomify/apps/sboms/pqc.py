@@ -173,7 +173,12 @@ def _oid_words(oid: str | None) -> str:
     return ""
 
 
-def _haystack(asset: CryptoAsset) -> str:
+def asset_identity_haystack(asset: CryptoAsset) -> str:
+    """Lowercased identity words for an asset (name, family, curve, params, OID).
+
+    Shared with other classifiers so OID resolution and field precedence stay
+    in one place.
+    """
     parts = [
         asset.name,
         asset.algorithm_family,
@@ -187,22 +192,9 @@ def _haystack(asset: CryptoAsset) -> str:
     return " ".join(p for p in parts if isinstance(p, str) and p).lower()
 
 
-def _tokens(haystack: str) -> set[str]:
-    return set(re.split(r"[^a-z0-9]+", haystack))
-
-
-def asset_identity_haystack(asset: CryptoAsset) -> str:
-    """Lowercased identity words for an asset (name, family, curve, params, OID).
-
-    Shared with other classifiers so OID resolution and field precedence stay
-    in one place.
-    """
-    return _haystack(asset)
-
-
 def identity_tokens(haystack: str) -> set[str]:
     """Whole tokens of an identity haystack, for short names like "des" or "dh"."""
-    return _tokens(haystack)
+    return set(re.split(r"[^a-z0-9]+", haystack))
 
 
 def _classify_symmetric_or_hash(hay: str) -> tuple[PqcStatus, str, str] | None:
@@ -261,8 +253,8 @@ def classify_crypto_asset(asset: CryptoAsset) -> PqcAssessment:
     promotes an otherwise-unrecognized asset to ``review`` (never ``safe``) and
     raises a data-quality flag when it conflicts with the identity verdict.
     """
-    hay = _haystack(asset)
-    tokens = _tokens(hay)
+    hay = asset_identity_haystack(asset)
+    tokens = identity_tokens(hay)
     status, family, reason, is_pqc_safe = _classify_identity(hay, tokens, asset.normalized_curve is not None)
 
     level = asset.nist_quantum_security_level
@@ -297,8 +289,8 @@ def replacement_for(asset: CryptoAsset, status: PqcStatus) -> str | None:
     """
     if status is not PqcStatus.VULNERABLE:
         return None
-    hay = _haystack(asset)
-    tokens = _tokens(hay)
+    hay = asset_identity_haystack(asset)
+    tokens = identity_tokens(hay)
     if any(h in hay for h in _SIGNATURE_HINTS):
         return "ML-DSA (FIPS 204) or SLH-DSA (FIPS 205)"
     if any(h in hay for h in _KEY_ESTABLISHMENT_HINTS) or (tokens & {"dh", "dhe"}):

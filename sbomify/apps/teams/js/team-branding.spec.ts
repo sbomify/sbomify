@@ -14,7 +14,11 @@ const mockShowError = mock<(message: string) => void>()
 
 mock.module('../../core/js/alerts', () => ({
     showSuccess: mockShowSuccess,
-    showError: mockShowError
+    showError: mockShowError,
+    showWarning: mock(),
+    showInfo: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 describe('Team Branding', () => {
@@ -132,17 +136,6 @@ describe('Team Branding', () => {
 
             expect(DEFAULT_BRAND_COLOR).toBe('#25293F')
             expect(DEFAULT_ACCENT_COLOR).toBe('#4263EB')
-        })
-    })
-
-    describe('Color Display', () => {
-        test('should display color correctly', () => {
-            const displayColor = (color: string): string => {
-                return color || '#ffffff'
-            }
-
-            expect(displayColor('#007bff')).toBe('#007bff')
-            expect(displayColor('')).toBe('#ffffff')
         })
     })
 

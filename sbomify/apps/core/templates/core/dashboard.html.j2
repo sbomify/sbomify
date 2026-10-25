@@ -1,6 +1,5 @@
 {% extends 'core/dashboard_base.htmx.j2' %}
 {% load humanize %}
-{% load django_vite %}
 {% block title %}
     {% if show_repository_setup %}
         Repository setup
@@ -59,11 +58,5 @@
         </c-layout.frame>
         {# Outside the frame, so a refresh never closes a triage dialog that is open. #}
         {% if can_triage_vulnerabilities %}<div id="priority-triage-host" class="contents"></div>{% endif %}
-    {% endif %}
-{% endblock %}
-{% block scripts %}
-    {{ block.super }}
-    {% if show_repository_setup and can_manage and onboarding.first_component %}
-        {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
     {% endif %}
 {% endblock %}

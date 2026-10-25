@@ -30,11 +30,6 @@ def _create_component(request: HttpRequest) -> HttpResponse:
 class ComponentsDashboardView(InventoryView):
     inventory_kind = "components"
 
-    def post(self, request: HttpRequest) -> HttpResponse:
-        # Kept so anything still posting the create form at the list URL keeps
-        # working; the form itself now lives at component_new.
-        return _create_component(request)
-
 
 # Component type as the New Component form offers it, shaped for
 # c-layout.choice-group: the tile wears the icon the type wears elsewhere.
