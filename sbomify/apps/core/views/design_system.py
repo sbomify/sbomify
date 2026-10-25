@@ -623,6 +623,17 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"value": "document", "label": "Document"},
                 {"value": "release", "label": "Release"},
             ],
+            "demo_folding_items": [
+                "6282ec8",
+                "50c2c31",
+                "2e9f06e",
+                "c833c95",
+                "52836e5",
+                "ebb0cfb",
+                "fc7f052",
+                "2b4ac46",
+            ],
+            "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
             "demo_breadcrumbs": [
                 {"label": "Products", "url": "#"},
                 {"label": "Acme Widget", "url": "#"},

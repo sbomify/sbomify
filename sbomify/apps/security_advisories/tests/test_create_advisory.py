@@ -8,6 +8,8 @@ later, so nothing created here needs restructuring before publish.
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
+
 import pytest
 from django.urls import reverse
 
@@ -258,6 +260,102 @@ class TestDashboardCreatePost:
         assert detail["products"][0]["affected_ranges"] == ["1.2.0"]
 
 
+class _ListItems(HTMLParser):
+    """The items of the list carrying one accessible name, and whether each is folded."""
+
+    def __init__(self, label: str):
+        super().__init__()
+        self.label = label
+        self.depth = 0
+        self.items: list[tuple[str, bool]] = []
+        self._folded: bool | None = None
+        self.toggle = ""
+        self._in_summary = False
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if tag == "ul":
+            self.depth = self.depth + 1 if self.depth else int(attributes.get("aria-label") == self.label)
+        elif tag == "li" and self.depth:
+            self._folded = "[display:none]" in (attributes.get("class") or "").split()
+            self.items.append(("", self._folded))
+        elif tag == "summary":
+            self._in_summary = True
+
+    def handle_endtag(self, tag):
+        if tag == "ul" and self.depth:
+            self.depth -= 1
+        elif tag == "summary":
+            self._in_summary = False
+
+    def handle_data(self, data):
+        if self.depth and self.items and self._folded is not None:
+            text, folded = self.items[-1]
+            self.items[-1] = (text + data.strip(), folded)
+        elif self._in_summary:
+            self.toggle += data
+
+
+def _list_items(content: str, label: str) -> _ListItems:
+    parser = _ListItems(label)
+    parser.feed(content)
+    return parser
+
+
+class TestDetailPageAffectedReleases:
+    """Affected versions render one per line and fold past five, so an advisory
+    naming dozens of releases no longer runs off the sidebar as a single line."""
+
+    def _get_detail(self, client, member, advisory_id):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        setup_authenticated_client_session(client, member.team, member.user)
+        return client.get(reverse("core:security_advisory_detail", args=[advisory_id]))
+
+    def test_many_releases_render_as_a_folded_list(self, sample_team_with_owner_member, team, user, product, client):
+        releases = [Release.objects.create(product=product, name=f"v1.{n}.0", version=f"1.{n}.0") for n in range(8)]
+        result = create_advisory(team, user, title="Many", products=[product], affected_releases=releases)
+
+        content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+        listed = _list_items(content, f"Affected versions of {product.name}")
+
+        assert sorted(text for text, _ in listed.items) == sorted(release.version for release in releases)
+        assert [folded for _, folded in listed.items] == [False] * 5 + [True] * 3
+        assert "Show all 8" in listed.toggle
+        assert "1.0.0, 1.1.0" not in content
+
+    def test_a_few_releases_render_without_a_toggle(self, sample_team_with_owner_member, team, user, product, client):
+        release = Release.objects.create(product=product, name="v1.2.0", version="1.2.0")
+        result = create_advisory(team, user, title="Few", products=[product], affected_releases=[release])
+
+        content = self._get_detail(client, sample_team_with_owner_member, result.value).content.decode()
+        listed = _list_items(content, f"Affected versions of {product.name}")
+
+        assert listed.items == [("1.2.0", False)]
+        assert "Show all" not in content
+
+
+@pytest.mark.parametrize(
+    ("introduced", "fixed", "last_affected", "label"),
+    [
+        ("1.2.0", "", "1.2.0", "1.2.0"),
+        ("1.0.0", "2.0.0", "", "From 1.0.0, fixed in 2.0.0"),
+        ("1.0.0", "", "1.4.2", "1.0.0 to 1.4.2"),
+        ("", "2.0.0", "", "Before 2.0.0"),
+        ("", "", "1.4.2", "1.4.2 and earlier"),
+        ("1.0.0", "", "", "1.0.0 and later"),
+        ("", "", "", "All versions"),
+    ],
+)
+def test_a_range_reads_as_words_not_interval_notation(introduced, fixed, last_affected, label):
+    from sbomify.apps.security_advisories.models import AdvisoryVersionRange
+    from sbomify.apps.security_advisories.services.advisories import version_range_label
+
+    version_range = AdvisoryVersionRange(introduced=introduced, fixed=fixed, last_affected=last_affected)
+
+    assert version_range_label(version_range) == label
+
+
 class TestDetailPageCvss:
     """The edit modal prefills from the projection, and a missing score must
     render as an empty input rather than the string "None"."""
@@ -286,25 +384,3 @@ class TestDetailPageCvss:
         content = response.content.decode()
         assert "Not set" in content
         assert 'value="None"' not in content
-
-
-class TestDetailPageAffectedReleases:
-    """A product's affected releases list under its chip, three at a time,
-    so a long list folds instead of running off the sidebar."""
-
-    def test_a_long_release_list_folds_after_three(self, sample_team_with_owner_member, team, user, product, client):
-        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-
-        releases = [
-            Release.objects.create(product=product, name=f"v26.{minor}.0", version=f"26.{minor}.0")
-            for minor in range(1, 10)
-        ]
-        result = create_advisory(team, user, title="Many releases", products=[product], affected_releases=releases)
-
-        member = sample_team_with_owner_member
-        setup_authenticated_client_session(client, member.team, member.user)
-        content = client.get(reverse("core:security_advisory_detail", args=[result.value])).content.decode()
-
-        assert "Show 6 more" in content
-        assert "26.9.0" in content
-        assert ", ".join(release.version for release in releases) not in content

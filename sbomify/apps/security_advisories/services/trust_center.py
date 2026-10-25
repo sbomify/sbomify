@@ -62,6 +62,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     display_id,
     latest_edits,
     status_subject,
+    version_range_label,
     worst_cvss,
     worst_severity,
 )
@@ -585,6 +586,19 @@ def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
     return _version_lists(status)[0]
 
 
+def _version_labels(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions in words, as the detail table lists them. A
+    suppressing status lists nothing, because no version is affected. With no
+    ranges, a recommended version still says what is affected, the same
+    fallback ``_version_lists`` takes."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    labels = [version_range_label(r) for r in status.version_ranges.all()]
+    if not labels and status.recommended_version:
+        labels.append(f"Before {status.recommended_version}")
+    return labels
+
+
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
     """One table sub-row per product the advisory speaks about.
 
@@ -787,6 +801,7 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     ),
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
                     "affected_versions": _affected_versions(status),
+                    "version_labels": _version_labels(status),
                 }
             )
     return rows
