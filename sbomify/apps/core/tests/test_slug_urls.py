@@ -220,6 +220,15 @@ class TestProductReleasesSlug:
         assert response.status_code == 200
 
 
+class TestTrustCenterCrawlHints:
+    """What a public page offers a crawler: no foreign structured data, no followed sign-in link."""
+
+    def test_public_page_carries_no_sbomify_product_json_ld(self, client, product_with_slug):
+        response = client.get(f"/product/{product_with_slug.slug}/", HTTP_HOST="trust.example.com")
+        assert response.status_code == 200
+        assert "application/ld+json" not in response.content.decode()
+
+
 class TestSlugResolution:
     """Test the slug resolution utility functions."""
 
