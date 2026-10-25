@@ -276,14 +276,30 @@ class AdvisoryProposalSchema(Schema):
     revised: bool = Field(False, description="The reviewer reworded the text before approving it.")
     submitted_at: datetime
     decided_at: datetime | None = None
-    decision_note: str = Field("", description="What the reviewer said when deciding.")
+    decision_note: str = Field("", description="What the reviewer said when deciding: on a rejection, the specifics.")
+    rejection_reason: str = Field(
+        "",
+        description="Set on a rejection: inaccurate, premature, wording, duplicate or other. Branch on this.",
+    )
+    next_step: str = Field("", description="Set on a rejection: what to do about it, in a sentence.")
+
+
+class SentAdvisoryProposalSchema(AdvisoryProposalSchema):
+    advisory_id: str
 
 
 class ProposalDecisionSchema(Schema):
     note: str | None = Field(
         None, description="Approving only: the text to post instead of the proposed one, for an update."
     )
-    decision_note: str = Field("", description="Why, for whoever sent the change.")
+    reason: str = Field(
+        "",
+        description="Rejecting only, and required: inaccurate, premature, wording, duplicate or other. "
+        "The sender reads it back with a next step.",
+    )
+    decision_note: str = Field(
+        "", description="Why, for whoever sent the change. Required when rejecting: say what was wrong."
+    )
 
 
 class WithdrawAdvisorySchema(Schema):

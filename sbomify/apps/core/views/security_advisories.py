@@ -513,6 +513,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                     cast(User, request.user),
                     advisory_id,
                     proposal_id,
+                    reason=request.POST.get("reason", ""),
                     decision_note=request.POST.get("decision_note", ""),
                 )
                 done, failed = "Change rejected.", "Change not rejected"

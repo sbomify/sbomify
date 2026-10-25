@@ -20,6 +20,7 @@ document for scanners and aggregators.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
@@ -50,6 +51,7 @@ from sbomify.apps.security_advisories.schemas import (
     PublicAdvisoryDetailSchema,
     PublicAdvisoryListSchema,
     PublishAdvisorySchema,
+    SentAdvisoryProposalSchema,
     UpdateAdvisorySchema,
     WithdrawAdvisorySchema,
 )
@@ -187,6 +189,8 @@ def _proposal_shape(row: dict[str, Any]) -> dict[str, Any]:
         "submitted_at": row["submitted_at"],
         "decided_at": row["decided_at"],
         "decision_note": row["decision_note"],
+        "rejection_reason": row["rejection_reason"],
+        "next_step": row["next_step"],
     }
 
 
@@ -289,6 +293,33 @@ def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tupl
 
     status, body = _fetched(team, created.value or "")
     return (201, body) if status == 200 else (status, body)
+
+
+@router.get(
+    "/proposals",
+    response={200: list[SentAdvisoryProposalSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="List the changes you proposed, and what was decided",
+    description=(
+        "Every change the calling token proposed, across the workspace's advisories, newest decision first. "
+        "Called with a session, the signed-in person's own. This is the feedback channel: a rejection carries "
+        "rejection_reason, decision_note and next_step. status narrows to pending, approved, rejected or "
+        "superseded; since (ISO 8601) to what was decided, or sent, after it."
+    ),
+)
+def list_sent_proposals(request: HttpRequest, status: str = "", since: datetime | None = None) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:read", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+    if status and status not in AdvisoryProposal.Status.values:
+        return 400, ErrorResponse(detail="Unknown status.", error_code=ErrorCode.BAD_REQUEST)
+
+    token = getattr(request, "access_token_record", None)
+    rows = proposal_service.sent_proposals(team, token=token, user=request.user, status=status, since=since)
+    return 200, [{**_proposal_shape(row), "advisory_id": row["advisory_id"]} for row in rows]
 
 
 @router.get(
@@ -753,9 +784,19 @@ def approve_advisory_proposal(
 
 @router.post(
     "/{advisory_id}/proposals/{proposal_id}/reject",
-    response={200: AdvisoryProposalSchema, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+    response={
+        200: AdvisoryProposalSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
     auth=AUTH,
     summary="Reject a proposed change",
+    description=(
+        "reason and decision_note are both required: the sender reads them back, with a next step for the "
+        "reason, so an agent learns what to do differently instead of sending the same change again."
+    ),
 )
 def reject_advisory_proposal(
     request: HttpRequest, advisory_id: str, proposal_id: str, payload: ProposalDecisionSchema
@@ -764,7 +805,7 @@ def reject_advisory_proposal(
     if error:
         return error
     result = proposal_service.reject_proposal(
-        team, request.user, advisory_id, proposal_id, decision_note=payload.decision_note
+        team, request.user, advisory_id, proposal_id, reason=payload.reason, decision_note=payload.decision_note
     )
     if not result.ok or result.value is None:
         return _failed(result)

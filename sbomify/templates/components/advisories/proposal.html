@@ -10,6 +10,11 @@ item is a row from security_advisories/services/proposals.proposal_row.
 decide_url is where the decision posts. can_decide renders the actions;
 without it the row is read-only, which is how the design system shows it.
 
+A rejected row shows the feedback the agent got: the reason, the note and
+the next step the reason gave it. A pending row that resends something a
+person rejected before carries that earlier reason, so the reviewer can check
+the agent took it on board.
+
 Approve posts straight away. Reject dispatches proposal-reject, and a text
 change (a new update, or an edit to one) also offers "Edit, then approve",
 which dispatches proposal-revise with the proposed text: a reviewer can fix a
@@ -46,7 +51,7 @@ the timeline's "Review" links jump to.
         </div>
         {% if can_decide and item.is_pending %}
             <div class="flex shrink-0 flex-wrap items-center gap-2 pl-[2.75rem] sm:pl-0">
-                <c-buttons.ghost size="sm" @click="$dispatch('proposal-reject', { id: '{{ item.id|escapejs }}', headline: '{{ item.headline|escapejs }}' })">
+                <c-buttons.ghost size="sm" @click="$dispatch('proposal-reject', { id: '{{ item.id|escapejs }}', headline: '{{ item.headline|escapejs }}', note: '{{ item.note|escapejs }}', isText: {{ item.is_text|yesno:'true,false' }} })">
                 Reject
                 </c-buttons.ghost>
                 {% if item.is_text %}
@@ -69,6 +74,13 @@ the timeline's "Review" links jump to.
         {% if item.is_stale %}
             <c-feedback.alert variant="warning" icon="fas fa-code-merge">
             Changed by someone else since this was proposed. Approving replaces their change.
+            </c-feedback.alert>
+        {% endif %}
+        {% if item.previous_rejection %}
+            <c-feedback.alert icon="fas fa-rotate-left" title="Sent again after a rejection: {{ item.previous_rejection.label }}">
+            <c-slot name="body">
+            <c-typography.markdown :text="item.previous_rejection.note" />
+            </c-slot>
             </c-feedback.alert>
         {% endif %}
         {% if item.context %}
@@ -115,7 +127,18 @@ the timeline's "Review" links jump to.
                 {{ item.status_label }} by {{ item.decided_by }} · {{ item.decided_display }}
                 {% if item.revised %}· reworded before posting{% endif %}
             </p>
-            {% if item.decision_note %}<c-typography.markdown :text="item.decision_note" muted />{% endif %}
+            {% if item.rejection_label %}
+                <figure class="m-0 flex flex-col gap-1.5 border-l-2 border-solid border-[color-mix(in_oklab,var(--color-danger)_55%,transparent)] py-1 pl-3">
+                    <figcaption class="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-danger-ink">
+                        Feedback to the agent
+                        <c-badges.danger size="sm">{{ item.rejection_label }}</c-badges.danger>
+                    </figcaption>
+                    {% if item.decision_note %}<c-typography.markdown :text="item.decision_note" />{% endif %}
+                    <span class="text-xs text-text-muted">Next step it was given: {{ item.next_step }}</span>
+                </figure>
+            {% elif item.decision_note %}
+                <c-typography.markdown :text="item.decision_note" muted />
+            {% endif %}
         {% endif %}
     </div>
 </li>

@@ -118,6 +118,8 @@ def _advisory_proposal_demos() -> list[dict[str, object]]:
         "context": "",
         "decided_by": "",
         "revised": False,
+        "previous_rejection": None,
+        "rejection_label": "",
     }
     return [
         {
@@ -149,6 +151,25 @@ def _advisory_proposal_demos() -> list[dict[str, object]]:
                     "long": False,
                 },
             ],
+        },
+        {
+            **base,
+            "id": "demo-rejected",
+            "kind": "post_update",
+            "kind_label": "New update",
+            "icon": "fas fa-comment-dots",
+            "headline": "Move the status to Resolved",
+            "is_text": True,
+            "is_pending": False,
+            "status": "rejected",
+            "status_label": "Rejected",
+            "status_variant": "danger",
+            "note": "Fixed in 1.4.3.",
+            "decided_by": "Jane Doe",
+            "decided_display": "25 Oct 2026",
+            "rejection_label": "Too early",
+            "decision_note": "1.4.3 is tagged but not released. Post this once it is on the downloads page.",
+            "next_step": "Wait until what the note describes has happened, then send it again.",
         },
     ]
 

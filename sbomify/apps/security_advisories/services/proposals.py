@@ -84,6 +84,39 @@ OUTCOME_VARIANTS: dict[str, str] = {
     AdvisoryProposal.Status.SUPERSEDED: "secondary",
 }
 
+Reason = AdvisoryProposal.RejectionReason
+
+# Each rejection reason, with what an agent should do about it. The reviewer
+# picks the reason from these hints; the agent reads the same words back as
+# next_step, so the two sides cannot drift apart.
+REJECTION_REASONS: dict[str, dict[str, str]] = {
+    Reason.INACCURATE: {
+        "label": "Not accurate",
+        "hint": "It gets a fact wrong.",
+        "next_step": "Check the facts named in the note, then send a corrected change.",
+    },
+    Reason.PREMATURE: {
+        "label": "Too early",
+        "hint": "Right, but not yet.",
+        "next_step": "Wait until what the note describes has happened, then send it again.",
+    },
+    Reason.WORDING: {
+        "label": "Needs rewording",
+        "hint": "The substance is right, the words are not.",
+        "next_step": "Keep the substance, reword it as the note asks, then send it again.",
+    },
+    Reason.DUPLICATE: {
+        "label": "Already covered",
+        "hint": "The advisory already says this.",
+        "next_step": "Do not send this change again.",
+    },
+    Reason.OTHER: {
+        "label": "Something else",
+        "hint": "The note explains.",
+        "next_step": "Read the note before sending anything similar.",
+    },
+}
+
 # Past this, decided proposals fold into the history count.
 RECENT_DECIDED = 10
 
@@ -459,9 +492,21 @@ def approve_proposal(
 
 @transaction.atomic
 def reject_proposal(
-    team: Any, user: Any, advisory_id: str, proposal_id: str, *, decision_note: str = ""
+    team: Any, user: Any, advisory_id: str, proposal_id: str, *, reason: str = "", decision_note: str = ""
 ) -> ServiceResult[AdvisoryProposal]:
-    """Turn a proposed change down. Nothing on the advisory changes."""
+    """Turn a proposed change down. Nothing on the advisory changes.
+
+    A rejection is feedback for the agent, so it needs both halves: the
+    reason, which says what to do next and is a value an agent can branch on,
+    and a note with the specifics. A bare "no" teaches an agent on a schedule
+    nothing, and it sends the same change again on its next run.
+    """
+    reason = (reason or "").strip()
+    note = (decision_note or "").strip()
+    if reason not in AdvisoryProposal.RejectionReason.values:
+        return ServiceResult.failure("Choose why you are rejecting it.", status_code=400)
+    if not note:
+        return ServiceResult.failure("Tell the agent what was wrong, so it can do better next time.", status_code=400)
     found = _locked_pending(team, advisory_id, proposal_id)
     if isinstance(found, ServiceResult):
         return found
@@ -469,8 +514,9 @@ def reject_proposal(
     proposal.status = AdvisoryProposal.Status.REJECTED
     proposal.decided_by = user
     proposal.decided_at = timezone.now()
-    proposal.decision_note = (decision_note or "").strip()
-    proposal.save(update_fields=["status", "decided_by", "decided_at", "decision_note"])
+    proposal.decision_note = note
+    proposal.rejection_reason = reason
+    proposal.save(update_fields=["status", "decided_by", "decided_at", "decision_note", "rejection_reason"])
     advisory_service._announce(team, proposal.advisory_id, "proposal_decided")
     return ServiceResult.success(proposal)
 
@@ -565,6 +611,41 @@ def _is_stale(proposal: AdvisoryProposal, current: dict[str, Any] | None) -> boo
     return any(baseline.get(key) != value for key, value in current.items()) or not current
 
 
+def _previous_rejection(proposal: AdvisoryProposal) -> dict[str, str] | None:
+    """The last time a person turned down the same change from the same sender.
+
+    An agent that was told "no, because" and sends again should be read with
+    that in mind, so the reviewer sees the earlier reason on the new card and
+    can check whether the agent took it.
+    """
+    if not proposal.target:
+        return None
+    sender = (
+        Q(submitted_token_id=proposal.submitted_token_id)
+        if proposal.submitted_token_id
+        else Q(submitted_by_id=proposal.submitted_by_id)
+    )
+    earlier = (
+        AdvisoryProposal.objects.filter(
+            sender,
+            advisory_id=proposal.advisory_id,
+            kind=proposal.kind,
+            target=proposal.target,
+            status=AdvisoryProposal.Status.REJECTED,
+            submitted_at__lt=proposal.submitted_at,
+        )
+        .order_by("-decided_at")
+        .first()
+    )
+    if earlier is None:
+        return None
+    return {
+        "label": REJECTION_REASONS.get(earlier.rejection_reason, {}).get("label", "Rejected"),
+        "note": earlier.decision_note,
+        "decided_display": display_date(earlier.decided_at) if earlier.decided_at else "",
+    }
+
+
 def proposal_row(
     proposal: AdvisoryProposal, advisory: SecurityAdvisory | None = None, team: Any = None
 ) -> dict[str, Any]:
@@ -574,6 +655,7 @@ def proposal_row(
     meta = KIND_META.get(proposal.kind, {"label": proposal.get_kind_display(), "icon": "fas fa-pen"})
     pending = proposal.status == AdvisoryProposal.Status.PENDING
     current = _current(proposal, advisory, team) if pending and advisory is not None else None
+    reason_meta = REJECTION_REASONS.get(proposal.rejection_reason, {}) if proposal.rejection_reason else {}
 
     update_kind = payload.get("kind", "") if proposal.kind == Kind.POST_UPDATE else ""
     moves_to = REMEDIATION_META.get(update_kind) if update_kind and update_kind != "update" else None
@@ -629,7 +711,11 @@ def proposal_row(
         "decided_at": proposal.decided_at,
         "decided_display": display_date(proposal.decided_at) if proposal.decided_at else "",
         "decision_note": proposal.decision_note,
+        "rejection_reason": proposal.rejection_reason,
+        "rejection_label": reason_meta.get("label", ""),
+        "next_step": reason_meta.get("next_step", ""),
         "revised": proposal.revised,
+        "previous_rejection": _previous_rejection(proposal) if pending else None,
     }
 
 
@@ -656,6 +742,7 @@ def advisory_proposals(team: Any, advisory_id: str) -> ServiceResult[dict[str, A
             "decided": decided,
             "decided_total": decided_total,
             "stale_count": sum(1 for p in pending if p["is_stale"]),
+            "rejection_reasons": [{"value": value, **meta} for value, meta in REJECTION_REASONS.items()],
         }
     )
 
@@ -670,6 +757,25 @@ def get_proposal(team: Any, advisory_id: str, proposal_id: str) -> ServiceResult
     if proposal is None:
         return ServiceResult.failure("Proposed change not found", status_code=404)
     return ServiceResult.success(proposal_row(proposal, advisory, team))
+
+
+def sent_proposals(
+    team: Any, *, token: Any = None, user: Any = None, status: str = "", since: Any = None, limit: int = 100
+) -> list[dict[str, Any]]:
+    """What one sender proposed across the workspace, newest decision first.
+
+    The feedback channel for an agent on a schedule: one call returns every
+    decision on its changes, rejections with their reason and next step
+    included, without knowing in advance which advisories it touched.
+    """
+    rows = AdvisoryProposal.objects.filter(team=team).select_related("submitted_by", "decided_by", "advisory")
+    rows = rows.filter(submitted_token=token) if token is not None else rows.filter(submitted_by=user)
+    if status:
+        rows = rows.filter(status=status)
+    if since is not None:
+        rows = rows.filter(Q(decided_at__gte=since) | Q(decided_at__isnull=True, submitted_at__gte=since))
+    rows = rows.order_by("-decided_at", "-submitted_at")[:limit]
+    return [{**proposal_row(p), "advisory_id": p.advisory_id} for p in rows]
 
 
 def pending_counts(team: Any) -> dict[str, int]:

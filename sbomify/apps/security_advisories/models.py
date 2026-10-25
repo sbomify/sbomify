@@ -1167,6 +1167,15 @@ class AdvisoryProposal(models.Model):
         # A product, or more releases, named on the advisory.
         ADD_PRODUCT = "add_product", "Product added"
 
+    class RejectionReason(models.TextChoices):
+        # Why a person turned a change down, in words an agent can branch on.
+        # The note says the specifics; the reason says what to do next.
+        INACCURATE = "inaccurate", "Not accurate"
+        PREMATURE = "premature", "Too early"
+        WORDING = "wording", "Needs rewording"
+        DUPLICATE = "duplicate", "Already covered"
+        OTHER = "other", "Something else"
+
     class Meta:
         db_table = "security_advisories_proposals"
         ordering = ["-submitted_at"]
@@ -1209,6 +1218,7 @@ class AdvisoryProposal(models.Model):
     )
     decided_at = models.DateTimeField(null=True, blank=True)
     decision_note = models.TextField(blank=True, default="")
+    rejection_reason = models.CharField(max_length=20, choices=RejectionReason.choices, blank=True, default="")
     # True when the reviewer changed the text before approving it.
     revised = models.BooleanField(default=False)
 
