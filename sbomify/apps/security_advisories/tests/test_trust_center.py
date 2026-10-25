@@ -809,3 +809,24 @@ def test_the_index_lists_versions_one_per_range(team, public_product):
     assert row["unaffected_versions"] == [">= 2.4.1"]
     # The API reads the joined strings, which keep their old shape.
     assert row["affected"] == ">= 6282ec8, <= 6282ec8, >= 2.0.0, < 2.4.1"
+
+
+def test_a_zero_cvss_score_renders_rather_than_reading_as_unscored(team, public_product, client):
+    """0.0 is a real score. A truthiness check would print it as the dash an
+    unscored advisory gets, and drop the CVSS fact from the detail page."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Informational")
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory, cve_id="CVE-2026-30007", cvss_scores=[{"version": "3.1", "base_score": 0.0}]
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    index = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+    detail = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    assert re.search(r"tabular-nums[^>]*>\s*0\.0\s*<", index.content.decode())
+    assert re.search(r"CVSS.{0,400}?>\s*0\.0\s*<", detail.content.decode(), re.S)

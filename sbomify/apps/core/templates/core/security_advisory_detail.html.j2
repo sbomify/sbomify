@@ -323,7 +323,7 @@
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-text-muted">CVSS</dt>
-                        {% if advisory.cvss_score %}
+                        {% if advisory.cvss_score is not None %}
                             <dd class="text-text"
                                 {% if advisory.cvss_vector %}title="{{ advisory.cvss_vector }}"{% endif %}>
                                 {{ advisory.cvss_score }}
@@ -503,7 +503,7 @@
                     <div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3">
                         <div>
                             <c-forms.label for="editCvssScore">CVSS score</c-forms.label>
-                            <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" value="{{ advisory.cvss_score|default_if_none:'' }}" />
+                            <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="0 to 10" value="{{ advisory.cvss_score|default_if_none:'' }}" />
                         </div>
                         <div>
                             <c-forms.label for="editCvssVector">CVSS vector</c-forms.label>
