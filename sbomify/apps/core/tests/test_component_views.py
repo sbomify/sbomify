@@ -399,7 +399,7 @@ class TestComponentVulnFilterContext:
     findings so it reconciles with the Trust Center posture, and the panel lists
     the same open vulnerabilities the header counts, KEV flags included."""
 
-    def _component_with_vex(self, team):
+    def _component_with_vex(self, team, vex_version="2.0"):
 
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.sboms.models import SBOM
@@ -443,9 +443,11 @@ class TestComponentVulnFilterContext:
                 }
             ],
         }
+        # A VEX applies only to the SBOMs of the version it was written for,
+        # so by default it speaks for the scanned SBOM's version.
         SBOM.objects.create(
             name="app-vex",
-            version="1",
+            version=vex_version,
             component=component,
             format="cyclonedx",
             format_version="1.6",
@@ -455,7 +457,7 @@ class TestComponentVulnFilterContext:
         )
         return component, vex_doc, run
 
-    def test_summary_excludes_suppressed_and_the_panel_agrees(self, sample_team_with_owner_member, sample_user, mocker):
+    def _component_page_context(self, member, user, mocker, **vex_kwargs):
         import json
 
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -465,20 +467,22 @@ class TestComponentVulnFilterContext:
             "sbomify.apps.vulnerability_scanning.kev.kev_ids_for_serialization",
             return_value=frozenset({"cve-2026-1"}),
         )
-        member = sample_team_with_owner_member
-        component, vex_doc, run = self._component_with_vex(member.team)
+        component, vex_doc, run = self._component_with_vex(member.team, **vex_kwargs)
         mocker.patch(
             "sbomify.apps.core.object_store.StorageClient"
         ).return_value.get_sbom_data.return_value = json.dumps(vex_doc).encode()
         # The panel reads the projected findings, annotated with the VEX, as the workspace list does.
         sync_findings(run)
         client = Client()
-        setup_authenticated_client_session(client, member.team, sample_user)
+        setup_authenticated_client_session(client, member.team, user)
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
 
         assert response.status_code == 200
-        context = response.context
+        return response.context
+
+    def test_summary_excludes_suppressed_and_the_panel_agrees(self, sample_team_with_owner_member, sample_user, mocker):
+        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker)
         assert context["vuln_summary"] == {
             "total": 1,
             "critical": 1,
@@ -496,6 +500,26 @@ class TestComponentVulnFilterContext:
         assert vuln_data["summary"]["vulnerabilities"] == context["vuln_summary"]["total"] == 1
         assert vuln_data["summary"]["critical"] == 1
         assert vuln_data["summary"]["exploited"] == 1
+
+    def test_a_vex_for_another_version_suppresses_nothing_in_either(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        """A VEX written for version 1 does not speak for the 2.0 scan: the
+        header and the panel both still count its finding as open."""
+        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker, vex_version="1")
+
+        assert context["vuln_summary"] == {
+            "total": 2,
+            "critical": 1,
+            "high": 1,
+            "medium": 0,
+            "low": 0,
+            "suppressed": 0,
+        }
+        vuln_data = context["vuln_data"]
+        assert sorted(row["id"] for row in vuln_data["rows"]) == ["CVE-2026-1", "CVE-2026-2"]
+        assert vuln_data["summary"]["vulnerabilities"] == context["vuln_summary"]["total"] == 2
+        assert vuln_data["summary"]["high"] == 1
 
 
 @pytest.mark.django_db
