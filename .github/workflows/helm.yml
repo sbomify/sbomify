@@ -69,7 +69,9 @@ jobs:
 
       - name: Caddyfile is valid Caddy configuration
         run: |
-          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          # apt packages are signature-verified, so this doesn't depend on the
+          # runner pip's trust store (see the 2026 emSign CA distrust).
+          python3 -c 'import yaml' 2>/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq python3-yaml; }
           # Written to a file rather than passed with -c: the surrounding YAML
           # indentation would become Python indentation and fail to parse.
           cat > /tmp/extract_caddyfile.py <<'PY'

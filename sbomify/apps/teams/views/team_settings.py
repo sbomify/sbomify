@@ -282,11 +282,15 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         context.update(panel.value or {})
         if active_tab.key == "contact-profiles":
             context.update(profiles_context(profiles))
-        template = (
-            "teams/team_settings_content.html.j2"
-            if request.headers.get("HX-Target") == "settings-content"
-            else "teams/team_settings.html.j2"
-        )
+        # A live region inside a tab (``<tab>-panel``) refreshes itself from the
+        # tab alone; it selects its own element out of the response.
+        hx_target = request.headers.get("HX-Target")
+        if hx_target == "settings-content":
+            template = "teams/team_settings_content.html.j2"
+        elif hx_target == f"{active_tab.key}-panel":
+            template = active_tab.template_path
+        else:
+            template = "teams/team_settings.html.j2"
         return render(request, template, context)
 
     def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:

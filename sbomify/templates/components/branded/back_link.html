@@ -1,0 +1,21 @@
+{% comment %}
+The way up from a detail page: "← Security advisories" over an advisory,
+"← Product" over a release.
+
+It names the page it goes to rather than saying "Back", because a reader who
+arrived from a search result or a customer's email has no back to go to, and
+the parent's name tells them where they are as well as how to leave.
+
+Muted text, not the brand. It is read before it is acted on, and a pale brand
+as link text is the unreadable case this library exists to avoid. data-button
+keeps the legacy public sheet from repainting it as a body link.
+{% endcomment %}
+<c-vars href class />
+<a href="{{ href }}"
+   data-button
+   class="group inline-flex items-center gap-2 self-start text-sm font-medium text-text-muted hover:text-text no-underline transition-colors duration-150{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>
+    <i class="fas fa-arrow-left text-xs transition-transform duration-150 group-hover:-translate-x-0.5"
+       aria-hidden="true"></i>
+    {{ slot }}
+</a>

@@ -14,11 +14,11 @@ the search box focused while typing. browser_target and results_target are the
 two HTMX roots the view answers.
 {% endcomment %}
 <c-vars data browser_target="vulnerabilities-browser" results_target="vulnerabilities-results" />
-{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied or a scan finishes (assessment_complete), debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals, the version options and the results, never the rest of the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
+{% comment %}A triage decision changes the totals as well as the rows, so both refresh: once when the dialog saves, which dispatches refresh-assessments, and again when the background re-apply broadcasts vex_reapplied, a scan finishes (assessment_complete) or the VEX approval queue changes (vex_submission_updated), and when an SBOM, component or product is deleted, debounced because one change can broadcast more than once. The refresh asks for the whole browser but swaps in only the totals, the version options and the results, never the rest of the toolbar, so text typed while it is in flight stays in the search box. The search, sort and pager replace only the results and push the URL, so hx-get still holds the state the browser was rendered with; the refresh reads the address bar instead. It shares the form's request queue: a search or filter in flight runs first and the refresh follows it, reading the address bar that request left, and a new search cancels a refresh still in flight.{% endcomment %}
 <div id="{{ browser_target }}"
      class="flex flex-col gap-4"
      x-data="{ refreshTimer: null }"
-     @ws:message.window="if ($event.detail.type === 'vex_reapplied' || $event.detail.type === 'assessment_complete') { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); }">
+     @ws:message.window="if (['vex_reapplied', 'assessment_complete', 'vex_submission_updated', 'sbom_deleted', 'component_deleted', 'product_deleted', 'resync'].includes($event.detail.type)) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); }">
     <div hidden
          hx-get="{{ data.refresh_url }}"
          hx-trigger="refresh-assessments from:body"
@@ -28,7 +28,7 @@ two HTMX roots the view answers.
          hx-select-oob="#{{ browser_target }}-summary,#{{ browser_target }}-version,#{{ results_target }}"
          hx-on::config-request="event.detail.path = window.location.pathname + window.location.search"></div>
     <div id="{{ browser_target }}-summary" class="flex flex-col gap-4">
-        <div class="grid grid-cols-1 min-[480px]:grid-cols-2 2xl:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 min-[480px]:grid-cols-2 {% if data.vex_review %}2xl:grid-cols-5{% else %}2xl:grid-cols-4{% endif %} gap-4">
             {% if data.scoped_components and data.unassessed_components == data.scoped_components %}
                 <c-layout.stat-card icon="fas fa-bug" label="Open vulnerabilities" unmeasured unmeasured_label="No scans yet" />
             {% elif data.failed_components and data.failed_components|add:data.unassessed_components == data.scoped_components %}
@@ -39,6 +39,9 @@ two HTMX roots the view answers.
             <c-layout.stat-card icon="fas fa-triangle-exclamation" accent="danger" :value="data.summary.critical_high" label="Critical or high" />
             <c-layout.stat-card icon="fas fa-fire" accent="danger" :value="data.summary.exploited" label="Known exploited" />
             <c-layout.stat-card icon="fas fa-clock" accent="warning" :value="data.summary.overdue" label="Past fix deadline" />
+            {% if data.vex_review %}
+                <c-layout.stat-card :value="data.vex_review.pending" label="VEX submissions awaiting review" icon="fas fa-clipboard-check" accent="warning" href="{{ data.vex_review.url }}" class="min-[480px]:max-2xl:col-span-2" />
+            {% endif %}
         </div>
         <c-typography.description size="sm">
         {% if data.summary.vulnerabilities %}

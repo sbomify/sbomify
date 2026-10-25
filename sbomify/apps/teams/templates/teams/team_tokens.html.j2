@@ -83,6 +83,7 @@
         {% endwith %}
         <c-feedback.alert variant="info" icon="fas fa-robot" title="For an AI agent" x-show="scopeChoice === 'agent'" x-cloak>
         This token can read fix prompts and send VEX rulings for approval. Nothing it sends changes your vulnerabilities until someone approves it, and its rulings are marked as coming from an AI agent.
+        It can also create and edit security advisories. It cannot publish, withdraw or delete them, so nothing it writes reaches your Trust Center until a person publishes it. Advisory changes need a token made by an owner or admin.
         </c-feedback.alert>
         {% with field=create_access_token_form.expires_in_hours %}
             <c-forms.field label="Expiration" for="{{ field.id_for_label }}" error="{{ field.errors|join:', ' }}">

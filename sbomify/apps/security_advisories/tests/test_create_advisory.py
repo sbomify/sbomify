@@ -286,3 +286,25 @@ class TestDetailPageCvss:
         content = response.content.decode()
         assert "Not set" in content
         assert 'value="None"' not in content
+
+
+class TestDetailPageAffectedReleases:
+    """A product's affected releases list under its chip, three at a time,
+    so a long list folds instead of running off the sidebar."""
+
+    def test_a_long_release_list_folds_after_three(self, sample_team_with_owner_member, team, user, product, client):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        releases = [
+            Release.objects.create(product=product, name=f"v26.{minor}.0", version=f"26.{minor}.0")
+            for minor in range(1, 10)
+        ]
+        result = create_advisory(team, user, title="Many releases", products=[product], affected_releases=releases)
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+        content = client.get(reverse("core:security_advisory_detail", args=[result.value])).content.decode()
+
+        assert "Show 6 more" in content
+        assert "26.9.0" in content
+        assert ", ".join(release.version for release in releases) not in content

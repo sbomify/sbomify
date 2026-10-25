@@ -1,0 +1,18 @@
+{% comment %}
+One fact in a row of them under a page title: "Released 3 days ago",
+"12 components", a version string.
+
+A quiet line of text with an optional icon, so a row of these reads as one
+sentence of context rather than a set of buttons. Anything that is a status the
+reader should spot without reading is a c-branded.badge instead, and sits in
+the same row.
+
+mono is for identifiers (versions, CVE ids) that a reader copies, where the
+fixed-width face says "this is a value" and keeps digits from shifting.
+{% endcomment %}
+<c-vars icon mono class />
+<span class="inline-flex items-center gap-1.5 text-sm text-text-muted{% if mono %} font-mono text-xs{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>
+    {% if icon %}<i class="{{ icon }} text-xs" aria-hidden="true"></i>{% endif %}
+    {{ slot }}
+</span>
