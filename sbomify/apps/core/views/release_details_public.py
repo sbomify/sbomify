@@ -11,6 +11,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     custom_domain_redirect,
     get_public_path,
+    get_release_public_slugs,
     get_workspace_public_url,
     resolve_product_identifier,
     resolve_release_identifier,
@@ -89,5 +90,18 @@ class ReleaseDetailsPublicView(View):
             "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
+
+        # A release answers to its slug and its ID on a custom domain; both
+        # pages name the slug URL as canonical so they are not duplicates.
+        if getattr(request, "is_custom_domain", False):
+            canonical_path = get_public_path(
+                "release",
+                resolved_release_id,
+                is_custom_domain=True,
+                product_id=product_obj.id,
+                product_slug=product_obj.slug,
+                release_slug=get_release_public_slugs(product_obj).get(resolved_release_id, resolved_release_id),
+            )
+            context["canonical_url"] = request.build_absolute_uri(canonical_path)
 
         return render(request, "core/release_details_public.html.j2", context)

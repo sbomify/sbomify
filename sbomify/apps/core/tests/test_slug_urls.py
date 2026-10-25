@@ -5,6 +5,7 @@ These tests verify that slug-based URLs work correctly on custom domains
 while ID-based URLs continue to work on the main app domain.
 """
 
+import re
 from urllib.parse import urlparse
 
 import pytest
@@ -218,6 +219,37 @@ class TestProductReleasesSlug:
             HTTP_HOST="trust.example.com"
         )
         assert response.status_code == 200
+
+    def test_releases_list_links_to_slug_urls(self, client, product_with_slug, release_with_slug):
+        """The list links each release by slug, so a release page has one URL."""
+        response = client.get(f"/product/{product_with_slug.slug}/releases/", HTTP_HOST="trust.example.com")
+        content = response.content.decode()
+        assert f'href="/product/{product_with_slug.slug}/release/{release_with_slug.slug}/"' in content
+        assert f"/release/{release_with_slug.id}/" not in content
+
+    def test_a_shared_slug_stays_with_the_release_it_resolves_to(self, rf, product_with_slug, release_with_slug):
+        """Two releases whose names slugify alike share one slug URL; the other keeps its ID."""
+        from sbomify.apps.core.url_utils import get_release_public_slugs, resolve_release_identifier
+
+        twin = Release.objects.create(name="V1.0.0", product=product_with_slug)
+        request = rf.get("/")
+        request.is_custom_domain = True
+        owner = resolve_release_identifier(request, product_with_slug, "v100")
+        other = twin if owner == release_with_slug else release_with_slug
+
+        public_slugs = get_release_public_slugs(product_with_slug)
+        assert public_slugs[owner.id] == "v100"
+        assert public_slugs[other.id] == other.id
+
+    @pytest.mark.parametrize("by", ["slug", "id"])
+    def test_release_canonical_is_the_slug_url(self, client, product_with_slug, release_with_slug, by):
+        """The slug and ID pages of one release name the same canonical URL."""
+        identifier = release_with_slug.slug if by == "slug" else release_with_slug.id
+        response = client.get(f"/product/{product_with_slug.slug}/release/{identifier}/", HTTP_HOST="trust.example.com")
+        assert response.status_code == 200
+        expected = f"http://trust.example.com/product/{product_with_slug.slug}/release/{release_with_slug.slug}/"
+        canonical = re.search(r'<link rel="canonical"\s+href="([^"]*)">', response.content.decode())
+        assert canonical and canonical.group(1) == expected
 
 
 class TestTrustCenterCrawlHints:

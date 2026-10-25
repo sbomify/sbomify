@@ -47,7 +47,8 @@
             <meta name="robots"
                   content="{% block meta_robots %}index, follow{% endblock %}">
             {# Canonical URL #}
-            <link rel="canonical" href="{{ request.build_absolute_uri }}">
+            <link rel="canonical"
+                  href="{% block canonical_url %}{{ request.build_absolute_uri }}{% endblock %}">
             {# Favicon #}
             <link rel="apple-touch-icon"
                   sizes="180x180"
