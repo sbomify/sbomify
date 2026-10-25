@@ -31,7 +31,7 @@ from .schemas import (
 )
 from .sdk.enums import RunReason, RunStatus
 from .services.access import plugin_plan_requirement, plugins_outside_plan, team_has_plugin_access
-from .tasks import run_assessment_task
+from .tasks import announce_assessment_started, run_assessment_task
 
 logger = getLogger(__name__)
 
@@ -932,6 +932,9 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
         plugin_name=plugin_name,
         run_reason=RunReason.MANUAL.value,
         triggered_by_user_id=user.id if user is not None and user.is_authenticated else None,
+    )
+    announce_assessment_started(
+        sbom.id, plugin_name, component_id=str(sbom.component_id), workspace_key=sbom.component.team.key or ""
     )
 
     logger.info(f"[RERUN] Queued {plugin_name} for SBOM {sbom.id}")

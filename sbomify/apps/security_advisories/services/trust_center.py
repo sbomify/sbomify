@@ -30,6 +30,7 @@ to the workspace-level grant alone; there is nothing narrower to test it against
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -48,6 +49,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryProduct,
     AdvisoryProductStatus,
     AdvisoryReference,
+    AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
 )
@@ -55,8 +57,11 @@ from sbomify.apps.security_advisories.services.advisories import (
     PUBLICATION_VARIANTS,
     REMEDIATION_META,
     SEVERITY_RANK,
+    STATUS_VARIANTS,
     display_date,
     display_id,
+    latest_edits,
+    status_subject,
     worst_cvss,
     worst_severity,
 )
@@ -123,21 +128,16 @@ EVENT_META: dict[str, dict[str, str]] = {
 }
 _DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle-info"}
 
+# What the readable queryset loads of the timeline: the public kinds, and the
+# edits made to them. An edit to an internal comment never leaves the workspace.
+_PUBLIC_EVENTS = Q(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES) | Q(
+    event_type=AdvisoryEvent.EventType.MESSAGE_EDITED,
+    payload__event_type__in=sorted(AdvisoryEvent.PUBLIC_EVENT_TYPES),
+)
+
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
 _EPOCH = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
-
-# How a per-product VEX assertion reads on a public page. Same values as
-# ``AdvisoryProductStatus.Status``; the labels are the model's own. Keyed by the
-# plain string the column stores, not the enum, so a lookup on ``status.status``
-# (a ``str``) is the same type going in as coming out.
-STATUS_VARIANTS: dict[str, str] = {
-    AdvisoryProductStatus.Status.EXPLOITABLE: "danger",
-    AdvisoryProductStatus.Status.IN_TRIAGE: "warning",
-    AdvisoryProductStatus.Status.NOT_AFFECTED: "success",
-    AdvisoryProductStatus.Status.FALSE_POSITIVE: "secondary",
-    AdvisoryProductStatus.Status.RESOLVED: "success",
-}
 
 
 @dataclass(frozen=True)
@@ -314,9 +314,7 @@ def _readable_queryset(team: Any) -> Any:
             "vulnerabilities__product_statuses__version_ranges",
             Prefetch(
                 "events",
-                queryset=AdvisoryEvent.objects.filter(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES).order_by(
-                    "created_at"
-                ),
+                queryset=AdvisoryEvent.objects.filter(_PUBLIC_EVENTS).order_by("created_at"),
                 to_attr="public_events",
             ),
         )
@@ -443,7 +441,9 @@ def _gap_phrase(earlier: Any, later: Any) -> str:
     return f"{humanised} later" if (humanised := _humanise(earlier, later)) else "moments later"
 
 
-def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None) -> dict[str, Any]:
+def _public_event(
+    event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None, edit: AdvisoryEvent | None = None
+) -> dict[str, Any]:
     """One timeline entry: what happened, when, and how long after the last one.
 
     The workspace timeline renders an actor and a raw payload. Neither belongs on
@@ -469,7 +469,8 @@ def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None
         "label": meta.get("label") or fallback["label"],
         "variant": meta.get("variant") or fallback["variant"],
         "icon": meta.get("icon") or fallback["icon"],
-        "note": event.body,
+        "note": edit.body if edit else event.body,
+        "edited_display": display_date(edit.created_at) if edit else "",
         # Three complementary readings of the same instant: the date to cite,
         # the time for same-day ordering, and the relative age to feel.
         "date_display": display_date(event.created_at),
@@ -497,28 +498,91 @@ def _version_expressions(status: AdvisoryProductStatus) -> tuple[str, str]:
     affected: list[str] = []
     unaffected: list[str] = []
     for version_range in status.version_ranges.all():
-        introduced = version_range.introduced
-        fixed = version_range.fixed
-        last = version_range.last_affected
-
-        if fixed:
-            affected.append(f">= {introduced}, < {fixed}" if introduced else f"< {fixed}")
-            unaffected.append(f">= {fixed}")
-        elif last:
-            affected.append(f">= {introduced}, <= {last}" if introduced else f"<= {last}")
-            unaffected.append(f"> {last}")
-        elif introduced:
-            # Open-ended: everything from here up is affected, so there is no
-            # unaffected version to name yet.
-            affected.append(f">= {introduced}")
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        # A single pinned version names no unaffected one, for the reason
+        # ``_version_lists`` gives: "> 6282ec8" would clear every later commit,
+        # and CSAF would list it as the fix.
+        pinned = version_range.introduced and version_range.introduced == version_range.last_affected
+        if range_unaffected and not pinned:
+            unaffected.append(range_unaffected)
 
     # No ranges recorded, but a fix was named — that is enough to answer the
     # question, and it is the common shape for an advisory written in a hurry.
     if not affected and status.recommended_version:
         affected.append(f"< {status.recommended_version}")
         unaffected.append(f">= {status.recommended_version}")
+    # Affected versions were pinned and the fix only recommended: on a fixed
+    # row, the recommendation is the version that is no longer affected.
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
 
     return ", ".join(affected) or "—", ", ".join(unaffected) or "—"
+
+
+def _mentions_version(text: str, version: str) -> bool:
+    """Whether ``text`` names ``version`` as a whole version, not as part of a longer one.
+
+    "Upgrade to 1.2.3" does not name 1.2, and "v10" does not name v1. A full
+    stop after the version ends the sentence rather than continuing it. A bare
+    number is never taken as named: "restart within 2 hours" is not about 2.
+    """
+    if not version or version.isdigit():
+        return False
+    return re.search(rf"(?<![\w.-]){re.escape(version)}(?![\w-]|\.\w)", text) is not None
+
+
+def _range_expressions(version_range: AdvisoryVersionRange) -> tuple[str, str]:
+    """One stored range as its ("affected", "unaffected") comparison strings, either possibly empty."""
+    introduced = version_range.introduced
+    fixed = version_range.fixed
+    last = version_range.last_affected
+
+    if fixed:
+        return (f">= {introduced}, < {fixed}" if introduced else f"< {fixed}"), f">= {fixed}"
+    if last:
+        return (f">= {introduced}, <= {last}" if introduced else f"<= {last}"), f"> {last}"
+    # Open-ended: everything from here up is affected, so there is no
+    # unaffected version to name yet.
+    return (f">= {introduced}" if introduced else ""), ""
+
+
+def _version_lists(status: AdvisoryProductStatus) -> tuple[list[str], list[str]]:
+    """The ("affected", "unaffected") versions a table lists, one entry per stored range.
+
+    A range pinned to a single version, which is how a triage records each
+    affected commit, is that version alone: ">= 6282ec8, <= 6282ec8" says the
+    same thing twice. It names no unaffected version either, because "> 6282ec8"
+    would claim every later commit is clean. A range never carries both
+    ``fixed`` and ``last_affected`` (a check constraint), so equal ``introduced``
+    and ``last_affected`` is exactly the pinned case.
+    """
+    affected: list[str] = []
+    unaffected: list[str] = []
+    for version_range in status.version_ranges.all():
+        if version_range.introduced and version_range.introduced == version_range.last_affected:
+            affected.append(version_range.introduced)
+            continue
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        if range_unaffected:
+            unaffected.append(range_unaffected)
+    if not affected and status.recommended_version:
+        affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
+    return affected, unaffected
+
+
+def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions the detail table lists. A suppressing status lists
+    nothing, because no version is affected."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    return _version_lists(status)[0]
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
@@ -539,19 +603,21 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
             if status.advisory_component_id is not None:
                 continue
             advisory_product = status.advisory_product
-            product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                label = "All products"
-            else:
-                label = product.name if product else advisory_product.product_name
+            label = status_subject(status)
             affected, unaffected = _version_expressions(status)
+            if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+                affected_versions, unaffected_versions = ["None"], ["All"]
+            else:
+                affected_versions, unaffected_versions = _version_lists(status)
             rows.append(
                 {
                     "product": label,
                     "affected": affected,
                     "unaffected": unaffected,
+                    "affected_versions": affected_versions,
+                    "unaffected_versions": unaffected_versions,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
@@ -571,6 +637,13 @@ def _cvss_score(advisory: SecurityAdvisory) -> float | None:
     return float(entry["base_score"]) if entry else None
 
 
+def _is_public_event(event: AdvisoryEvent) -> bool:
+    if event.event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        return payload.get("event_type") in AdvisoryEvent.PUBLIC_EVENT_TYPES
+    return event.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES
+
+
 def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail: bool = False) -> dict[str, Any]:
     severity = worst_severity(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, {})
@@ -578,11 +651,15 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
     # ``public_events`` is the to_attr from _readable_queryset; falling back to
     # the relation keeps the function usable on an advisory fetched some other
     # way, filtering by hand so the fallback cannot be the leaky path.
-    events = getattr(advisory, "public_events", None)
-    if events is None:
-        events = [e for e in advisory.events.all() if e.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES]
+    readable = getattr(advisory, "public_events", None)
+    if readable is None:
+        readable = [e for e in advisory.events.all() if _is_public_event(e)]
+    # An edit to a public update shows as that update's text, never as an entry
+    # of its own; the text it replaced stays in the workspace.
+    edits = latest_edits(readable)
+    events = [e for e in readable if e.event_type != AdvisoryEvent.EventType.MESSAGE_EDITED]
     products, withheld = _visible_products(advisory, scope)
-    updated_at = max((e.created_at for e in events), default=advisory.published_at or advisory.updated_at)
+    updated_at = max((e.created_at for e in readable), default=advisory.published_at or advisory.updated_at)
 
     projection: dict[str, Any] = {
         "id": str(display_id(advisory)),
@@ -644,7 +721,11 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         # the pairing walks the reversed list one step behind.
         newest_first = sorted(events, key=lambda e: e.created_at, reverse=True)
         projection["timeline"] = [
-            _public_event(event, previous=newest_first[index + 1] if index + 1 < len(newest_first) else None)
+            _public_event(
+                event,
+                previous=newest_first[index + 1] if index + 1 < len(newest_first) else None,
+                edit=edits.get(event.id),
+            )
             for index, event in enumerate(newest_first)
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []
@@ -676,10 +757,7 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
             product = advisory_product.product if advisory_product else None
             if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                scope_label = "All products"
-            else:
-                scope_label = product.name if product else advisory_product.product_name
+            scope_label = status_subject(status)
             affected, unaffected = _version_expressions(status)
             rows.append(
                 {
@@ -702,7 +780,13 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "action_statement": status.action_statement,
                     "response": status.response,
                     "recommended_version": status.recommended_version,
+                    # The page says "Upgrade to X." unless the instructions
+                    # already do, which would print it twice.
+                    "action_names_recommendation": _mentions_version(
+                        status.action_statement, status.recommended_version
+                    ),
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
+                    "affected_versions": _affected_versions(status),
                 }
             )
     return rows

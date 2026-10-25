@@ -161,9 +161,9 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
         team = sample_team_with_owner_member.team
         _component_with(team, {"osv": [_finding("GHSA-x", "high", aliases=["CVE-2026-9999"])]})
 
-        stored = Finding.objects.get(advisory_id="GHSA-x")
+        stored = Finding.objects.get(record__advisory_id="GHSA-x")
 
-        assert stored.aliases == ["CVE-2026-9999"]
+        assert stored.record.aliases == ["CVE-2026-9999"]
 
     def test_title_only_malware_keeps_its_projected_priority(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team

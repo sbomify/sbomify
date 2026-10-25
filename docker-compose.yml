@@ -114,6 +114,7 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
     # No ports exposed - all traffic goes through Caddy
     expose:
       - 8000

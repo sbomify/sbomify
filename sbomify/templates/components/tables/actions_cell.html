@@ -16,7 +16,8 @@ only route to an action, and a thin scrollbar under the last row is not an
 affordance anyone reads. A pinned cell has to paint its own background, since
 the row's tint is transparent and the scrolling cells would otherwise show
 through it, so the resting and hover fills are stated here as opaque colours
-and the row marks itself group for the hover to reach. No z-index: a positioned
+and the row marks itself group for the hover to reach. A selected row's tint is
+restated the same way. No z-index: a positioned
 cell already paints over the static cells beside it, and the header cell states
 its own, which a second one here would fight by stylesheet order.
 {% endcomment %}
@@ -28,7 +29,7 @@ its own, which a second one here would fight by stylesheet order.
 {% else %}
     <c-tables.cell end date :compact="compact" variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2
     {% if pinned %}
-        sticky right-0 bg-surface group-hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,var(--color-surface))]
+        sticky right-0 bg-surface group-hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,var(--color-surface))] group-has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-surface))]
     {% endif %}
     " class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
 {% endif %}

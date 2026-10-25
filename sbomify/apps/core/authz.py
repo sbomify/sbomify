@@ -315,7 +315,9 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
     # to the approval queue and check on it. It cannot apply a ruling itself, so
     # nothing it sends takes effect until a person approves it. It may also draft
     # and edit security advisories, but publishing, withdrawing and deleting stay
-    # with a person, so nothing it writes reaches the trust center on its own.
+    # with a person, and once an advisory is published every change it sends is
+    # held for approval (security_advisories/services/proposals.py), so nothing
+    # it writes reaches the trust center on its own.
     "agent": [
         "workspace:read",
         "vex_submission:create",

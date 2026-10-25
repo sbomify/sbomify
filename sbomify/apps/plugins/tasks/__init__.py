@@ -44,6 +44,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
+from ..announce import announce_assessment_settled
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, RunStatus, ScanMode
@@ -526,6 +527,8 @@ def run_assessment_task(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
                             exc_info=True,
                         )
+                    else:
+                        announce_assessment_settled(sbom_id, plugin_name, RunStatus.COMPLETED.value)
 
                 response = {
                     "status": "retry_exhausted",
@@ -549,7 +552,6 @@ def run_assessment_task(
         if assessment_run is None:
             if _existing_run_id:
                 from .. import models as plugin_models
-                from ..sdk.enums import RunStatus
 
                 deleted, _ = plugin_models.AssessmentRun.objects.filter(
                     id=_existing_run_id, status=RunStatus.PENDING.value
@@ -559,6 +561,7 @@ def run_assessment_task(
                         f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
                         f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
                     )
+                    announce_assessment_settled(sbom_id, plugin_name, "skipped")
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -590,6 +593,7 @@ def run_assessment_task(
                     message_type="assessment_complete",
                     data={
                         "sbom_id": sbom_id,
+                        "component_id": str(assessment_run.sbom.component_id),
                         "plugin_name": plugin_name,
                         "status": assessment_run.status,
                     },
@@ -599,10 +603,9 @@ def run_assessment_task(
                 if assessment_run.status == "failed":
                     push_notification(
                         workspace_key=workspace_key,
-                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
                         severity="warning",
                         notification_type="assessment",
-                        action_url=f"/component/{assessment_run.sbom.component.id}/",
+                        **_failed_run_notification(assessment_run),
                     )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
@@ -625,11 +628,84 @@ def run_assessment_task(
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
+        announce_assessment_settled(sbom_id, plugin_name, RunStatus.FAILED.value)
         return format_task_error("run_assessment", sbom_id, str(e))
 
     except Exception as e:
         logger.exception(f"[TASK_run_assessment] Unexpected error: {e}")
         raise  # Re-raise for Dramatiq retry
+
+
+def announce_assessment_started(
+    sbom_id: str, plugin_name: str, *, component_id: str | None = None, workspace_key: str | None = None
+) -> None:
+    """Broadcast ``assessment_started`` for one SBOM once the current transaction commits.
+
+    Pages that show a run's state repaint on it, so a queued run reads as
+    pending without a reload. Callers that already hold the SBOM's component
+    and workspace pass them to skip the lookup. Never raises.
+    """
+    try:
+        if component_id is None or workspace_key is None:
+            from sbomify.apps.sboms.models import SBOM
+
+            row = SBOM.objects.filter(pk=sbom_id).values("component_id", "component__team__key").first()
+            if not row:
+                return
+            component_id = str(row["component_id"])
+            workspace_key = row["component__team__key"]
+        if not workspace_key:
+            return
+        key = workspace_key
+        data = {"sbom_id": str(sbom_id), "component_id": str(component_id), "plugin_name": plugin_name}
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(workspace_key=key, message_type="assessment_started", data=data)
+        )
+    except Exception:
+        logger.warning("Could not announce started assessment for SBOM %s", sbom_id, exc_info=True)
+
+
+def _failed_run_notification(assessment_run: Any) -> dict[str, str]:
+    """Title, message and action for the notification a failed run raises.
+
+    The run stopped on an error, so it recorded no result: the artifact keeps
+    whatever an earlier run found. The message says that, and sends the reader
+    to the artifact page, which shows the error itself.
+    """
+    from django.urls import reverse
+
+    from ..models import RegisteredPlugin
+    from ..sdk.enums import AssessmentCategory
+
+    sbom = assessment_run.sbom
+    plugin_label = (
+        RegisteredPlugin.objects.filter(name=assessment_run.plugin_name).values_list("display_name", flat=True).first()
+        or assessment_run.plugin_name
+    )
+    artifact = f"{sbom.name} {sbom.version}" if sbom.version else sbom.name
+
+    if assessment_run.category == AssessmentCategory.SECURITY.value:
+        title = "Vulnerability scan failed"
+        message = (
+            f"{plugin_label} could not scan {artifact}. "
+            "Its vulnerability results were not updated, so new vulnerabilities may be missing. "
+            "Open the SBOM to see the error."
+        )
+        action_label = "View SBOM"
+    else:
+        title = "Assessment failed"
+        message = (
+            f"{plugin_label} could not check {artifact}, so no new result was recorded. "
+            "Open the artifact to see the error."
+        )
+        action_label = "View artifact"
+
+    return {
+        "title": title,
+        "message": message,
+        "action_label": action_label,
+        "action_url": reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]),
+    }
 
 
 def _create_pending_assessment_run(
@@ -681,6 +757,7 @@ def _create_pending_assessment_run(
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
         return None
 
+    announce_assessment_started(sbom_id, registered.name)
     return str(run.id)
 
 
@@ -831,6 +908,16 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+def _reconcile_findings(sbom_id: str) -> None:
+    """Re-align the SBOM's finding rows after a release change; a failure here never fails the task."""
+    from sbomify.apps.vulnerability_scanning.findings import reconcile_sbom_findings
+
+    try:
+        reconcile_sbom_findings(sbom_id)
+    except Exception:
+        logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -937,6 +1024,7 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     ]
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    _reconcile_findings(sbom_id)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -1023,6 +1111,7 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
             assessment_run__sbom_id=sbom_id,
             release_id=release_id,
         ).delete()
+    _reconcile_findings(sbom_id)
 
     if detached_count == 0:
         logger.debug(
@@ -1696,6 +1785,23 @@ def sweep_stranded_runs_task() -> None:
     logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
+@cron("45 3 * * *")  # type: ignore[untyped-decorator]  # Daily, after the retention prune
+@dramatiq.actor(queue_name="assessment_retention", max_retries=0, time_limit=4 * 3600 * 1000)
+def offload_assessment_results_task() -> None:
+    """Move superseded result payloads out of Postgres, findings stored once.
+
+    Nothing ran the sweep before: it was a management command, and with its
+    floor at a year it could not have reached the hourly rescans that fill the
+    table anyway. It is resumable at any row, so it stops inside its time limit
+    and the next night carries on from the oldest row left; a large backlog can
+    be cleared faster with ``manage.py offload_assessment_results``.
+    """
+    from sbomify.apps.plugins.offload import offload_assessment_results
+
+    moved = offload_assessment_results(max_seconds=3.5 * 3600)
+    logger.info(f"[TASK_offload_assessment_results] offloaded {moved} results")
+
+
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
 def prune_assessment_runs_task() -> None:
@@ -1706,8 +1812,22 @@ def prune_assessment_runs_task() -> None:
     staging. See plugins/retention.py for the two rules.
     """
     from sbomify.apps.plugins import result_store, retention
+    from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records, drop_legacy_findings_table
+
+    # A deferred legacy drop can leave foreign keys that block run deletion.
+    # Finish it before pruning, or leave retention for the next daily attempt.
+    if not drop_legacy_findings_table():
+        logger.warning("[TASK_prune_assessment_runs] Skipping retention while the legacy finding table is locked")
+        return
 
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
+    shared = result_store.delete_unreferenced_findings_objects()
     removed = retention.prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects")
+    # After it: a pruned run's finding rows go with it, and the records they
+    # shared with no other run are left behind.
+    records = delete_orphaned_records()
+    logger.info(
+        f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
+        f"{shared} unreferenced shared findings objects, {records} unreferenced finding records"
+    )

@@ -149,6 +149,72 @@ def test_current_nav_item_is_marked_for_a_reader_and_a_screen_reader(rendered: s
     assert "border-transparent" in other
 
 
+# ── Page furniture ─────────────────────────────────────────────────────────
+
+
+def test_masthead_shares_the_track_the_nav_and_content_use(rendered: str) -> None:
+    """One width and gutter, so the header, nav and page read as one column."""
+    track = _classes(rendered, "div", 'data-probe="masthead"')
+    assert "border-border" in track
+    assert not any("var(--brand)" in utility for utility in track)
+    inner = rendered.split('data-probe="masthead"', 1)[1]
+    assert "max-w-[1200px]" in inner[: inner.index(">", inner.index("<div")) + 1]
+
+
+def test_back_link_is_muted_text_the_legacy_sheet_leaves_alone(rendered: str) -> None:
+    """Read before it is acted on, so never brand-coloured; data-button keeps the
+    public sheet's bare-anchor rule from repainting it in the accent."""
+    link = _open_tag(rendered, "a", 'data-probe="back-link"')
+    assert "data-button" in link
+    assert 'href="/advisories/"' in link
+    classes = _classes(rendered, "a", 'data-probe="back-link"')
+    assert "text-text-muted" in classes
+    assert not any("--brand" in utility for utility in classes)
+
+
+def test_fact_is_a_definition_pair_on_one_line_unless_stacked(rendered: str) -> None:
+    inline = _classes(rendered, "div", 'data-probe="fact"')
+    stacked = _classes(rendered, "div", 'data-probe="fact-stacked"')
+    assert "justify-between" in inline and "flex-col" not in inline
+    assert "flex-col" in stacked and "justify-between" not in stacked
+    pair = rendered.split('data-probe="fact"', 1)[1]
+    assert pair.index("<dt") < pair.index("Published") < pair.index("<dd") < pair.index("3 Aug 2026")
+
+
+def test_panel_is_a_surface_with_its_title_inside(rendered: str) -> None:
+    panel = _classes(rendered, "div", 'data-probe="panel"')
+    assert {"bg-surface", "border-border"} <= panel
+    assert "<h2" in rendered.split('data-probe="panel"', 1)[1].split("</h2>", 1)[0]
+
+
+def test_timeline_dot_takes_the_status_ramp_never_the_brand(rendered: str) -> None:
+    """A timeline colour means something, so it is a platform token, and a
+    status the model gains later is quiet instead of unstyled."""
+    latest = _open_tag(rendered, "li", 'data-probe="timeline-latest"')
+    assert "--tone: var(--color-success)" in latest
+    assert "--brand" not in latest
+    unknown = _open_tag(rendered, "li", 'data-probe="timeline-last"')
+    assert "--tone: var(--color-text-muted)" in unknown
+
+
+def test_timeline_reads_newest_and_oldest_from_the_list_not_from_props(rendered: str) -> None:
+    """A conditional prop renders empty, and cotton reads an empty attribute as
+    a set boolean, so position comes from the list: the first item is ringed
+    and the last drops its rail."""
+    item = rendered.split('data-probe="timeline-latest"', 1)[1].split("</li>", 1)[0]
+    assert "group-first/event:shadow-" in item
+    assert "group-last/event:hidden" in item
+
+
+def test_a_markdown_link_reads_in_the_body_ink_over_the_legacy_repaint(rendered: str) -> None:
+    """The renderer marks links .text-primary, which a public page repaints in
+    the accent with !important, so the note's link colour has to be important
+    too, and has to be the body ink rather than the brand."""
+    markdown = _classes(rendered, "div", 'data-probe="markdown"')
+    assert {"[&_a]:text-text!", "[&_a]:underline!"} <= markdown
+    assert not any("brand" in name for name in markdown)
+
+
 # ── The legacy-collision guard ──────────────────────────────────────────────
 
 
