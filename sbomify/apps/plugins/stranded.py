@@ -25,6 +25,7 @@ from datetime import timedelta
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from sbomify.apps.plugins.announce import announce_assessment_settled
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk.enums import RunStatus
 from sbomify.logging import getLogger
@@ -77,6 +78,7 @@ def sweep_stranded_runs() -> int:
             # the query above and the update, so count only this sweep's marker.
             if run is not None and ((run.result or {}).get("metadata") or {}).get("stranded"):
                 settled += 1
+                announce_assessment_settled(str(run.sbom_id), run.plugin_name, run.status)
                 logger.info(
                     "[PLUGIN] settled stranded run %s (%s) for SBOM %s",
                     run_id,

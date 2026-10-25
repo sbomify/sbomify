@@ -16,7 +16,7 @@ the note is offered where it matters instead of on every row.
 A list item: put it in a ul. Rows carry their own divider and drop it on the
 first, so the parent list needs no styling of its own.
 {% endcomment %}
-{% load humanize %}
+{% load humanize markdown_tags %}
 <c-vars item decide_url can_decide open />
 <li class="border-t border-solid border-border first:border-t-0"
     x-data="{ open: {{ open|yesno:'true,false' }} }">
@@ -63,7 +63,11 @@ first, so the parent list needs no styling of its own.
          x-show="open"
          {% if not open %}x-cloak{% endif %}
          class="flex flex-col gap-3 pb-5 pl-[3.25rem] pr-5 max-sm:pl-5">
-        {% if item.context %}<p class="m-0 whitespace-pre-line break-words text-sm leading-relaxed text-text">{{ item.context }}</p>{% endif %}
+        {% if item.context %}
+            <div class="prose prose-sm max-w-none break-words text-text prose-headings:text-text prose-headings:text-base prose-p:text-text prose-strong:text-text prose-li:text-text prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
+                {{ item.context|strict_markdown }}
+            </div>
+        {% endif %}
         {% if item.rulings %}
             <ul class="m-0 list-none p-0">
                 {% for ruling in item.rulings %}

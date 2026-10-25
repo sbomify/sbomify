@@ -119,12 +119,18 @@
              hx-get="{% url 'documents:access_request_queue' team.key %}?partial=true"
              hx-trigger="load, refreshAccessRequests from:body"
              hx-swap="innerHTML settle:0"
-             @ws:message.window="if ($event.detail.type === 'access_request_updated') $dispatch('refreshAccessRequests')">
+             @ws:message.window="if (['access_request_updated', 'resync'].includes($event.detail.type)) $dispatch('refreshAccessRequests')">
             <c-feedback.loading-table message="Loading access requests..." />
         </div>
+        {% comment %}
+            The domain message names no record, so the region keys on the
+            message type itself. liveRegion holds the refresh while the domain
+            field has focus, and also matches resync.
+        {% endcomment %}
         <div id="team-custom-domain-wrapper"
+             x-data="liveRegion({ refresh: ['custom_domain_updated'], key: 'type', id: 'custom_domain_updated' })"
              hx-get="{% url 'workspaces:team_custom_domain' team.key %}"
-             hx-trigger="load, refreshTeamCustomDomain from:body"
+             hx-trigger="load, refreshTeamCustomDomain from:body, live-refresh"
              hx-swap="innerHTML settle:0">
             <c-cards.card flush><c-feedback.loading message="Loading custom domain settings..." /></c-cards.card>
         </div>

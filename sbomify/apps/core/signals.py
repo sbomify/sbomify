@@ -12,6 +12,24 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _schedule_latest_release_updated(release: Any, product: Any) -> None:
+    """Send ``release_updated`` for a latest release once the change commits.
+
+    ``product`` must carry its workspace (``select_related("team")``) so this
+    costs no query. Pages debounce the message, so the few one upload can send
+    repaint once.
+    """
+    from sbomify.apps.core.utils import broadcast_to_workspace
+
+    workspace_key = product.team.key
+    if not workspace_key:
+        return
+    data = {"release_id": str(release.id), "product_id": str(product.id), "name": release.name}
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="release_updated", data=data)
+    )
+
+
 @receiver(post_save, sender="sboms.SBOM")
 def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Update the latest release when a new SBOM artifact is created."""
@@ -65,7 +83,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
         # Get all products that contain this SBOM's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=sbom_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -73,6 +91,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
 
             # Add the SBOM to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(sbom_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added SBOM %s to latest release %s for product %s",
@@ -116,7 +135,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         # Get all products that contain this document's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=document_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -124,6 +143,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
 
             # Add the document to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(document_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added Document %s to latest release %s for product %s",
@@ -200,7 +220,7 @@ def update_latest_release_on_product_components_changed(
 
     # Single query for all affected products instead of one .get() per id —
     # bulk add/remove can pass dozens of PKs in pk_set.
-    products_by_id = Product.objects.in_bulk(product_ids)
+    products_by_id = Product.objects.select_related("team").in_bulk(product_ids)
     for prod_id in product_ids:
         product = products_by_id.get(prod_id)
         if product is None:
@@ -208,6 +228,7 @@ def update_latest_release_on_product_components_changed(
         try:
             latest_release = Release.get_or_create_latest_release(product)
             latest_release.refresh_latest_artifacts()
+            _schedule_latest_release_updated(latest_release, product)
             logger.info(
                 "Refreshed latest release %s for product %s after component changes",
                 latest_release.id,
