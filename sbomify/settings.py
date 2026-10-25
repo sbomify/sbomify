@@ -1445,3 +1445,12 @@ VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
 VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Slack is written to, not read from: the workspace installs the sbomify app
+# and picks a channel for each kind of message. Bot tokens do not expire, so
+# there is no refresh and nothing to sync.
+SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
+SLACK_OAUTH_AUTHORIZE_URL = os.environ.get("SLACK_OAUTH_AUTHORIZE_URL", "https://slack.com/oauth/v2/authorize")
+SLACK_OAUTH_TOKEN_URL = os.environ.get("SLACK_OAUTH_TOKEN_URL", "https://slack.com/api/oauth.v2.access")
+SLACK_API_BASE_URL = os.environ.get("SLACK_API_BASE_URL", "https://slack.com/api")

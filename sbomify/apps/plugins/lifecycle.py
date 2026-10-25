@@ -115,7 +115,7 @@ def record_run(run: Any) -> dict[str, int]:
     # them queue here is the semantics, not a cost.
     from sbomify.apps.core.models import Component
 
-    Component.objects.select_for_update().filter(pk=component_id).first()
+    component = Component.objects.select_for_update().filter(pk=component_id).first()
 
     now = timezone.now()
     present = _advisories(run.result)
@@ -125,7 +125,8 @@ def record_run(run: Any) -> dict[str, int]:
         for row in VulnerabilityLifecycle.objects.select_for_update().filter(component_id=component_id)
     }
 
-    opened = seen = 0
+    opened_ids: list[str] = []
+    seen = 0
     for advisory_id, severity in present.items():
         row = existing.get(advisory_id)
         if row is None:
@@ -136,7 +137,7 @@ def record_run(run: Any) -> dict[str, int]:
                 first_seen_at=now,
                 last_seen_at=now,
             )
-            opened += 1
+            opened_ids.append(advisory_id)
             continue
         row.last_seen_at = now
         row.severity = severity or row.severity
@@ -159,10 +160,22 @@ def record_run(run: Any) -> dict[str, int]:
         row.resolved_at = now
         row.save(update_fields=["resolved_at"])
 
+    opened = len(opened_ids)
     logger.info(
         f"[LIFECYCLE] component {component_id} via {run.plugin_name}: "
         f"{opened} opened, {seen} still present, {len(stale)} resolved"
     )
+
+    # The one place that knows a vulnerability is new to a component, as
+    # opposed to new to this scan: a rescan, a second scanner or a fresh SBOM
+    # of the same component reports it again and opens nothing. Reopening a
+    # resolved one is not news either. Queued once the scan commits.
+    if opened_ids:
+        from sbomify.apps.integrations.events import vulnerabilities_opened
+
+        if component is not None:
+            vulnerabilities_opened(str(component_id), component.team_id, opened_ids)
+
     return {"opened": opened, "seen": seen, "resolved": len(stale)}
 
 

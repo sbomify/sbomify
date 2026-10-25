@@ -1,0 +1,93 @@
+{% comment %}
+The body of a connected notification provider: which channel each kind of
+message goes to. One row per event, laid out like the framework rows above it
+on the Vanta card.
+
+Each select posts on change and swaps the whole panel, the same contract as the
+publish toggles, so a row never shows a channel the server did not save.
+{% endcomment %}
+{% if not card.provider.is_configured %}
+    <c-feedback.alert variant="warning" title="{{ card.provider.name }} credentials are missing">
+    This deployment can no longer reach {{ card.provider.name }}, so nothing is being posted.
+    </c-feedback.alert>
+{% endif %}
+{% if card.needs_reconnect %}
+    <c-feedback.alert variant="warning" title="Reconnect {{ card.provider.name }}">
+    {{ card.integration.last_sync_error|default:"The connection was refused." }} Reconnect to start posting again.
+    </c-feedback.alert>
+{% endif %}
+<div class="flex flex-wrap gap-3">
+    {% if card.integration.account_name %}
+        <c-chips.metric-chip>
+        <i class="fas fa-building text-text-muted" aria-hidden="true"></i>
+        <c-chips.metric.label>Slack workspace</c-chips.metric.label>
+        <c-chips.metric.value>{{ card.integration.account_name }}</c-chips.metric.value>
+        </c-chips.metric-chip>
+    {% endif %}
+    {% if card.integration.connected_by %}
+        <c-chips.metric-chip>
+        <i class="fas fa-user text-text-muted" aria-hidden="true"></i>
+        <c-chips.metric.label>Connected by</c-chips.metric.label>
+        <c-chips.metric.value>{{ card.integration.connected_by.get_full_name|default:card.integration.connected_by.username }}</c-chips.metric.value>
+        </c-chips.metric-chip>
+    {% endif %}
+</div>
+<h4 class="text-sm font-semibold text-text mt-6 m-0">Messages</h4>
+<p class="text-sm text-text-muted mt-1 m-0">
+    Pick a channel for each message. To use a private channel, invite the sbomify app to it first.
+</p>
+{% if card.notifications.channels_error %}
+    <c-feedback.alert variant="warning" title="Could not list your channels" class="mt-4">
+    {{ card.notifications.channels_error }}
+    </c-feedback.alert>
+{% endif %}
+<div class="mt-4 space-y-2">
+    {% for event in card.notifications.events %}
+        <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-background/30 rounded-lg">
+            <div class="min-w-0">
+                <div class="text-sm font-medium text-text">{{ event.label }}</div>
+                <div class="text-xs text-text-muted mt-0.5">{{ event.description }}</div>
+                {% if event.route.last_error %}
+                    <div class="text-xs text-danger mt-1">
+                        <i class="fas fa-triangle-exclamation mr-1" aria-hidden="true"></i>{{ event.route.last_error }}
+                    </div>
+                {% elif event.route.last_delivered_at %}
+                    <div class="text-xs text-text-muted mt-1">
+                        Last posted
+                        {% include 'core/components/relative_time.html.j2' with timestamp=event.route.last_delivered_at %}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <form method="post"
+                      class="flex flex-wrap items-center gap-2"
+                      hx-post="{% url 'integrations:panel' team.key %}"
+                      hx-target="#integrations-wrapper"
+                      hx-trigger="change"
+                      hx-swap="innerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="route">
+                    <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                    <input type="hidden" name="event" value="{{ event.key }}">
+                    <c-forms.select size="sm" name="channel_id" id="route-{{ event.key }}" label="Channel for {{ event.label }}" :options="event.channel_options" selected="{{ event.route.channel_id|default:'' }}" :disabled="event.select_disabled" />
+                    {% if event.has_severity and event.route %}
+                        <c-forms.select size="sm" name="min_severity" id="severity-{{ event.key }}" label="Which {{ event.label|lower }} to post" :options="event.severity_options" selected="{{ event.route.min_severity }}" />
+                    {% endif %}
+                </form>
+                {% if event.route and not card.needs_reconnect %}
+                    <form method="post"
+                          hx-post="{% url 'integrations:panel' team.key %}"
+                          hx-target="#integrations-wrapper"
+                          hx-disabled-elt="find button[type='submit']"
+                          hx-swap="innerHTML">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="test">
+                        <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                        <input type="hidden" name="event" value="{{ event.key }}">
+                        <c-buttons.secondary size="sm" type="submit">Send test</c-buttons.secondary>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>

@@ -324,7 +324,7 @@ class TestPublishing:
         synced_catalog.save()
         deactivate_catalog(synced_catalog.id, connected_vanta.team)
 
-        [card] = connections.provider_cards(connected_vanta.team)
+        card = connections.provider_cards(connected_vanta.team)[0]
         assert card["catalogs"][0]["is_published"] is False
 
         assert connections.set_catalog_published(connected_vanta.team, synced_catalog.id, True).ok
@@ -361,7 +361,7 @@ class TestProviderCards:
     def test_lists_every_provider_even_when_nothing_is_connected(self, sample_team_with_owner_member) -> None:  # noqa: F811
         cards = connections.provider_cards(sample_team_with_owner_member.team)
 
-        assert [card["provider"]["key"] for card in cards] == ["vanta"]
+        assert [card["provider"]["key"] for card in cards] == ["vanta", "slack"]
         assert cards[0]["is_connected"] is False
         assert cards[0]["catalogs"] == []
 
@@ -449,6 +449,7 @@ class TestNoCredentialReachesATemplate:
             "last_sync_status",
             "last_sync_error",
             "connected_by",
+            "account_name",
         }
         assert "vat_live" not in str(card)
         assert "vrt_live" not in str(card)
@@ -557,7 +558,18 @@ class TestNoProviderCredentialReachesATemplate:
         card = connections.provider_cards(sample_team_with_owner_member.team)[0]
 
         assert not isinstance(card["provider"], type(VANTA))
-        assert set(card["provider"]) == {"key", "name", "tagline", "icon", "docs_url", "reads", "is_configured"}
+        assert set(card["provider"]) == {
+            "key",
+            "name",
+            "tagline",
+            "icon",
+            "docs_url",
+            "kind",
+            "syncs",
+            "reads_intro",
+            "reads",
+            "is_configured",
+        }
         assert "vcs_test" not in str(card)
         assert "vci_test" not in str(card)
 

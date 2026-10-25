@@ -12,7 +12,7 @@ with each other after an action.
         <div>
             <h2 class="text-lg font-semibold text-text m-0">Integrations</h2>
             <p class="text-sm text-text-muted mt-1 m-0">
-                Connect a tool that already tracks your compliance, and choose what it shows on your Trust Center.
+                Connect the tools your team already uses. Show your compliance on your Trust Center, and send vulnerability news to Slack.
             </p>
         </div>
     </div>
@@ -21,7 +21,7 @@ with each other after an action.
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div class="flex items-start gap-3">
                     <c-chips.icon-chip>
-                    <i class="fas {{ card.provider.icon }}" aria-hidden="true"></i>
+                    <i class="{{ card.provider.icon }}" aria-hidden="true"></i>
                     </c-chips.icon-chip>
                     <div>
                         <h3 class="text-sm font-semibold text-text m-0 flex items-center gap-2">
@@ -53,7 +53,7 @@ with each other after an action.
                                 {% csrf_token %}
                                 <c-buttons.primary size="sm" type="submit">Reconnect</c-buttons.primary>
                             </form>
-                        {% elif card.provider.is_configured %}
+                        {% elif card.provider.is_configured and card.provider.syncs %}
                             <form method="post"
                                   hx-post="{% url 'integrations:panel' team.key %}"
                                   hx-target="#integrations-wrapper"
@@ -70,7 +70,7 @@ with each other after an action.
                         <form method="post"
                               hx-post="{% url 'integrations:panel' team.key %}"
                               hx-target="#integrations-wrapper"
-                              hx-confirm="Disconnect {{ card.provider.name }}? Its frameworks come off your Trust Center straight away."
+                              hx-confirm="{% if card.provider.kind == 'notifications' %}Disconnect {{ card.provider.name }}? sbomify stops posting to every channel.{% else %}Disconnect {{ card.provider.name }}? Its frameworks come off your Trust Center straight away.{% endif %}"
                               hx-swap="innerHTML">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="disconnect">
@@ -110,7 +110,7 @@ with each other after an action.
                    class="font-medium">{{ card.provider.name }} docs</a>
                 </c-feedback.alert>
             {% elif not card.is_connected %}
-                <p class="text-sm text-text-muted m-0">sbomify reads, and never writes:</p>
+                <p class="text-sm text-text-muted m-0">{{ card.provider.reads_intro }}</p>
                 <ul class="mt-2 space-y-1">
                     {% for item in card.provider.reads %}
                         <li class="flex items-start gap-2 text-sm text-text-muted">
@@ -119,6 +119,8 @@ with each other after an action.
                         </li>
                     {% endfor %}
                 </ul>
+            {% elif card.provider.kind == 'notifications' %}
+                {% include "integrations/notification_routes.html.j2" %}
             {% else %}
                 {% if not card.provider.is_configured %}
                     <c-feedback.alert variant="warning" title="{{ card.provider.name }} credentials are missing">
