@@ -49,7 +49,7 @@ def test_a_broker_failure_never_escapes(sbom, mocker) -> None:
 
 def test_an_orchestrator_failure_is_announced(sbom, mocker) -> None:
     mocker.patch(
-        "sbomify.apps.plugins.tasks.PluginOrchestrator.run_assessment_by_name",
+        "sbomify.apps.plugins.tasks.PluginOrchestrator.run_assessment",
         side_effect=PluginOrchestratorError("nope"),
     )
     announce = mocker.patch("sbomify.apps.plugins.tasks.announce_assessment_settled")

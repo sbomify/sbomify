@@ -108,7 +108,8 @@ def test_the_task_pushes_the_explained_notification(sample_team, monkeypatch) ->
 
     _register("dependency-track", "Dependency Track", AssessmentCategory.SECURITY)
     run = _failed_run(sample_team, "dependency-track", AssessmentCategory.SECURITY)
-    monkeypatch.setattr(PluginOrchestrator, "run_assessment_by_name", lambda *args, **kwargs: run)
+    monkeypatch.setattr(PluginOrchestrator, "run_assessment", lambda *args, **kwargs: run)
+    monkeypatch.setattr(PluginOrchestrator, "get_plugin_instance", lambda *args, **kwargs: None)
 
     with (
         patch.object(tasks, "broadcast_to_workspace"),
