@@ -1,0 +1,18 @@
+{% comment %}
+The band at the top of every trust centre page: a full-width rule-bottomed
+strip whose content lines up with the nav above it and the page below it.
+
+It holds a c-branded.page-header and, on a detail page, the c-branded.back-link
+over it. The band and the track are one recipe rather than layout each page
+restates, because the track's width and gutter are what make the header, the
+nav and the content read as one column. A page that drifted a few pixels from
+the others would show it on every visit.
+
+The band is the platform's page ground, not the brand: a header coloured by a
+pale brand washes out the title, and a dark one fights the logo above it.
+{% endcomment %}
+<c-vars class />
+<div class="border-b border-solid border-border{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="mx-auto max-w-[1200px] px-4 py-10 flex flex-col gap-5">{{ slot }}</div>
+</div>

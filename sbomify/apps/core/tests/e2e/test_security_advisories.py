@@ -88,6 +88,42 @@ def test_empty_advisory_search_can_clear_filters(authenticated_page: Page, advis
     expect(page.get_by_role("table", name="Security advisories")).to_be_visible()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_bulk_delete_asks_first_and_removes_the_rows(authenticated_page: Page, advisories: list, width: int) -> None:
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto("/security-advisories/")
+    table = page.get_by_role("table", name="Security advisories")
+    bar = page.locator("[data-bulk-bar]")
+    first = page.get_by_role("checkbox", name="Select Advisory 11 in Acme Gateway")
+    second = page.get_by_role("checkbox", name="Select Advisory 10 in Acme Gateway")
+
+    # Ticking a box selects the row; it does not open the advisory the row links to.
+    first.click()
+    expect(page).to_have_url("/security-advisories/")
+    expect(bar).to_contain_text("1 advisory selected")
+    second.focus()
+    page.keyboard.press("Enter")
+    expect(page).to_have_url("/security-advisories/")
+    second.check()
+    expect(bar).to_contain_text("2 advisories selected")
+
+    bar.get_by_role("button", name="Delete").click()
+    dialog = page.get_by_role("alertdialog")
+    expect(dialog).to_contain_text("Delete 2 advisories?")
+    expect(dialog).to_contain_text("Advisory 11 in Acme Gateway")
+    expect(dialog).to_contain_text("Advisory 10 in Acme Gateway")
+    expect(dialog).to_contain_text("Published advisories disappear from your Trust Center.")
+
+    dialog.get_by_role("button", name="Delete 2 advisories").click()
+    expect(dialog).to_be_hidden()
+    expect(table.get_by_text("Advisory 11 in Acme Gateway")).to_have_count(0)
+    expect(table.get_by_text("Advisory 10 in Acme Gateway")).to_have_count(0)
+    expect(bar).to_be_hidden()
+    assert SecurityAdvisory.objects.filter(team=advisories[0].team).count() == 10
+
+
 @pytest.fixture
 def advisory_detail(team_with_business_plan, sample_user, product_factory):  # noqa: F811
     """One advisory carrying everything the detail page renders: a severity, a
@@ -131,6 +167,59 @@ class TestSecurityAdvisoryDetailSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_a_product_status_is_edited_from_its_row(authenticated_page: Page, advisory_detail, width: int) -> None:
+    """The dialog is filled from the row it was opened on, its justification
+    only appears for "Not affected", and saving lands back on the table."""
+    from sbomify.apps.security_advisories.models import AdvisoryProductStatus
+
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/security-advisories/{advisory_detail.id}/")
+
+    table = page.get_by_role("table", name="Product statuses")
+    expect(table.get_by_text("Under investigation")).to_be_visible()
+    table.get_by_role("button", name="Edit status for Acme Gateway").click()
+
+    dialog = page.locator("#productStatusModal")
+    expect(dialog.get_by_label("Status")).to_have_value("in_triage")
+    dialog.get_by_label("Status").select_option("not_affected")
+    expect(dialog.get_by_label("Why it is not affected")).to_be_visible()
+    dialog.get_by_label("Status").select_option("resolved")
+    expect(dialog.get_by_label("Why it is not affected")).to_be_hidden()
+    dialog.get_by_label("Fixed in version").fill("2.4.1")
+    dialog.get_by_label("What users should do").fill("Upgrade to 2.4.1.")
+    page.get_by_role("button", name="Save status").click()
+
+    expect(table.get_by_text("Fixed", exact=True)).to_be_visible()
+    expect(table.get_by_text("Upgrade to 2.4.1.")).to_be_visible()
+    row = AdvisoryProductStatus.objects.get(vulnerability__advisory=advisory_detail)
+    assert (row.status, row.recommended_version) == ("resolved", "2.4.1")
+
+
+@pytest.mark.django_db
+def test_a_missed_product_is_added_with_its_releases(authenticated_page: Page, advisory_detail) -> None:
+    """The dialog fetches the picked product's releases rather than shipping every release with the page."""
+    from sbomify.apps.core.models import Product, Release
+
+    late = Product.objects.create(name="Acme CLI", team=advisory_detail.team)
+    Release.objects.create(product=late, name="v3.1.0", version="v3.1.0")
+    page = authenticated_page
+    page.goto(f"/security-advisories/{advisory_detail.id}/")
+
+    page.get_by_role("button", name="Add product").first.click()
+    dialog = page.locator("#addAdvisoryProductModal")
+    dialog.get_by_label("Product").select_option(label="Acme CLI")
+    dialog.get_by_label("v3.1.0").check()
+    dialog.page.get_by_role("button", name="Add product").last.click()
+
+    table = page.get_by_role("table", name="Product statuses")
+    expect(table.get_by_text("Acme CLI")).to_be_visible()
+    link = advisory_detail.products.get(product=late)
+    assert link.statuses.get().version_ranges.get().last_affected == "v3.1.0"
 
 
 @pytest.mark.django_db

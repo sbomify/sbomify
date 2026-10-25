@@ -51,6 +51,29 @@ This artifact is shared with named recipients.
 <c-slot name="side"><c-branded.badge tone="low">Low</c-branded.badge></c-slot>
 </c-branded.list-row>
 </c-branded.surface>
+<c-branded.masthead data-probe="masthead">
+<c-branded.back-link href="/advisories/" data-probe="back-link">Security advisories</c-branded.back-link>
+</c-branded.masthead>
+<c-branded.panel title="Details" data-probe="panel">
+<c-branded.facts>
+<c-branded.fact label="Published" data-probe="fact">3 Aug 2026</c-branded.fact>
+<c-branded.fact label="CPE" stacked data-probe="fact-stacked">cpe:2.3:a:acme:widget</c-branded.fact>
+</c-branded.facts>
+</c-branded.panel>
+<c-branded.meta-item icon="fas fa-tag" mono data-probe="meta-item">2.4.1</c-branded.meta-item>
+<c-branded.timeline>
+<c-branded.timeline-item icon="fas fa-check" tone="success" data-probe="timeline-latest">
+<c-slot name="heading">Resolved</c-slot>
+<c-branded.markdown data-probe="markdown">
+<p>
+    See the <a href="/notes" class="text-primary">notes</a>.
+</p>
+</c-branded.markdown>
+</c-branded.timeline-item>
+<c-branded.timeline-item tone="unheard-of" data-probe="timeline-last">
+<c-slot name="heading">Reported</c-slot>
+</c-branded.timeline-item>
+</c-branded.timeline>
 </c-branded.theme>
 <c-branded.theme brand="#FDE68A" data-probe="theme-light">
 <c-buttons.primary>Pale brand</c-buttons.primary>

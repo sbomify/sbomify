@@ -249,9 +249,10 @@ def _vulnerability(vulnerability: dict[str, Any], rows: list[dict[str, Any]], tr
             f"Update to {row['recommended_version']}." if row.get("recommended_version") else ""
         )
         if details:
-            category = _REMEDIATION.get(
-                row.get("response", ""), "vendor_fix" if row.get("recommended_version") else "mitigation"
-            )
+            # A fixed product's instructions are the vendor's fix whether or
+            # not the row also recorded a response.
+            names_fix = row.get("recommended_version") or row["status"] == AdvisoryProductStatus.Status.RESOLVED
+            category = _REMEDIATION.get(row.get("response", ""), "vendor_fix" if names_fix else "mitigation")
             remediations.append({"category": category, "details": details, "product_ids": [affected_id]})
 
     if exploit := _EXPLOIT_STATUS.get(vulnerability.get("exploitation_status", "")):

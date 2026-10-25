@@ -62,13 +62,18 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Workspac
     return ServiceResult.success(workspace)
 
 
-def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
-    """One workspace snapshot for the overview, without per-product scan reads."""
+def build_dashboard_context(team_id: int, *, fresh: bool = False) -> ServiceResult[dict[str, Any]]:
+    """One workspace snapshot for the overview, without per-product scan reads.
+
+    fresh skips the cached snapshot and stores the rebuilt one. The overview
+    asks for it when a socket message says something it shows has changed,
+    since the cached copy predates that change by definition.
+    """
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
     cache_key = dashboard_cache_key(team_id)
-    cached = django_cache.get(cache_key)
+    cached = None if fresh else django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
 

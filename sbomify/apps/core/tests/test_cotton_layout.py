@@ -31,6 +31,7 @@ SELECT_ROW = "flex items-start gap-4 p-4 cursor-pointer"
 # options loop, the breadcrumb trail and the copyable identifiers as a page
 # would hand them over.
 PROBE_CONTEXT = {
+    "probe_markdown": "## Summary\n\nFix & notes <script>.",
     "probe_breadcrumbs": [{"label": "Products", "url": "/products"}, {"label": "Acme Vault"}],
     "probe_copy_values": [{"value": "DLyQjCBkNJkB", "title": "Product ID"}],
     "probe_choices": [
@@ -99,7 +100,7 @@ def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
 
 def test_page_headers_share_one_unadorned_heading(rendered: str) -> None:
     headers = rendered[: rendered.index("Generate a new token")]
-    assert headers.count("data-page-header") == 5
+    assert headers.count("data-page-header") == 7
     assert "--avatar-accent" not in headers
     assert "fas fa-box" not in headers
     assert "fas fa-cube" not in headers
@@ -111,6 +112,26 @@ def test_description_disclosure_is_scoped_and_accessible(rendered: str) -> None:
     assert ':aria-expanded="expanded"' in header
     assert ":aria-controls=\"$id('page-description')\"" in header
     assert "Show more" in header
+
+
+def test_plain_description_stays_plain_text(rendered: str) -> None:
+    header = rendered[rendered.index('data-probe="header-description"') :].split("</header>")[0]
+    assert '<p x-ref="description"' in header
+    assert "whitespace-pre-line" in header
+
+
+@pytest.mark.parametrize("probe", ["header-markdown", "header-markdown-quoted"])
+def test_markdown_description_renders_once_and_keeps_the_disclosure(rendered: str, probe: str) -> None:
+    header = rendered[rendered.index(f'data-probe="{probe}"') :].split("</header>")[0]
+    assert '<div x-ref="description"' in header
+    assert ":aria-controls=\"$id('page-description')\"" in header
+    assert "line-clamp-2" in header
+    assert "a.setAttribute('tabindex', '-1')" in header
+    assert "<p><strong>Summary</strong></p>" in header
+    assert "<h2>" not in header
+    assert "Fix &amp; notes" in header
+    assert "&amp;amp;" not in header
+    assert "&lt;script&gt;" in header
 
 
 def test_meta_slot_sits_on_the_title_line(rendered: str) -> None:

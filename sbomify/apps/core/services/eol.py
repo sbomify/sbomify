@@ -189,6 +189,7 @@ def build_eol_advisory(product: Any, user: Any, *, migration_path: str = "") -> 
     with security advisories, and the Trust Center already surfaces it.
     """
     from sbomify.apps.security_advisories.models import AdvisoryEvent, AdvisoryProduct, SecurityAdvisory
+    from sbomify.apps.teams.broadcasts import broadcast_on_commit
 
     readiness = eol_readiness(product)
     when = product.end_of_life or product.end_of_support
@@ -230,6 +231,8 @@ def build_eol_advisory(product: Any, user: Any, *, migration_path: str = "") -> 
         body="End-of-life notice drafted.",
         payload={"to": SecurityAdvisory.RemediationStatus.WONT_FIX.value, "kind": "eol"},
     )
+    # Open advisory tables repaint, as they do for an advisory written by hand.
+    broadcast_on_commit(product.team.key, "advisory_updated", {"advisory_id": str(advisory.id), "action": "created"})
     return advisory
 
 

@@ -1067,6 +1067,11 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+# Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
+# directly (logout) rather than via OIDC discovery. Only needs setting when the
+# app reaches Keycloak at an address the browser cannot, e.g. an in-cluster
+# Service name. Empty counts as unset so a blank Helm/Compose value falls back.
+KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
 KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")

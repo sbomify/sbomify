@@ -238,8 +238,8 @@ def test_a_scan_is_seen_completed_only_with_its_rows_and_releases(sbom, scan_sbo
     project = findings.sync_findings_safely
     seen_completed_elsewhere: list[bool] = []
 
-    def project_then_look(run, statements=None):
-        project(run, statements)
+    def project_then_look(run, statements=None, **kwargs):
+        project(run, statements, **kwargs)
 
         def look() -> None:
             try:

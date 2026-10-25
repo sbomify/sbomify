@@ -52,7 +52,7 @@ dependencies = [
     # The plugin has a ``try/except ImportError`` fallback, but installing
     # the library lets it actually perform signature verification instead
     # of always reporting "library not available".
-    "sigstore>=4.2.0",
+    "sigstore>=4.5.1",
     # Renders the CRA bundle's markdown documents (Declaration of
     # Conformity, VDP, risk assessment, etc.) to PDF so the export ZIP
     # ships both ``.md`` (machine-friendly) and ``.pdf`` (human/auditor

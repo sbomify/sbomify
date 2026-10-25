@@ -458,8 +458,9 @@ Two things that forgiveness does not extend to:
   (`mb-0 mt-0.5`), not the shorthand plus an exception.
 - **`!important` was doing two jobs.** Dropping a legacy class also drops its
   win over the *other* unlayered rules on the page. `static/css/base.css` styles
-  `h1..h6` and `trust-center.css` styles `.tc-fact-label`, both unlayered, so a
-  plain utility on those elements loses to them too. Where that happens, the
+  `h1..h6` and the inline block in `public_base.htmx.j2` styles every bare
+  anchor, both unlayered, so a plain utility on those elements loses to them
+  too. Where that happens, the
   replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
 
 **Scope follows `hx-get`, not just `include`.** Half a public page arrives over
@@ -549,6 +550,23 @@ Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a to
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
+
+- **Every change something on screen shows is broadcast**, after commit
+  (`transaction.on_commit`, or `schedule_broadcast` in `core/apis.py`), from
+  every path that makes it: the API endpoint and the HTMX view are two paths.
+  Payloads carry ids, names and statuses only, since every member receives them.
+- **Every list or count that shows it listens.** A listener that never hears
+  its message is the same bug as a message nobody listens for, so add both
+  sides in one change and grep the other side's spelling.
+- **Every listener also matches `resync`.** The store sends it when the socket
+  reopens, because whatever was broadcast while it was down never arrived.
+- **A region with inline edits uses `liveRegion`**
+  (`core/js/components/live-region.ts`): it refreshes only its own element,
+  waits while a field inside has focus, and leaves the page when its subject is
+  deleted.
+- **News for someone outside the workspace goes to `broadcast_to_user()`.** The
+  workspace socket only admits `workspace:read`; public pages connect to the
+  user channel (`ws/user/`) with `$store.ws.connectUser()`.
 
 ### Background Tasks
 
