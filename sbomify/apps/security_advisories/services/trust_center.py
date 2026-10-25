@@ -579,10 +579,15 @@ def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
 
 def _version_labels(status: AdvisoryProductStatus) -> list[str]:
     """The affected versions in words, as the detail table lists them. A
-    suppressing status lists nothing, because no version is affected."""
+    suppressing status lists nothing, because no version is affected. With no
+    ranges, a recommended version still says what is affected, the same
+    fallback ``_version_lists`` takes."""
     if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
         return []
-    return [version_range_label(r) for r in status.version_ranges.all()]
+    labels = [version_range_label(r) for r in status.version_ranges.all()]
+    if not labels and status.recommended_version:
+        labels.append(f"Before {status.recommended_version}")
+    return labels
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:

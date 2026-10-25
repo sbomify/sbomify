@@ -791,6 +791,31 @@ def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, 
     assert "[c0ffee0, c0ffee0]" not in content
 
 
+def test_a_recommended_version_without_ranges_still_names_the_affected_versions(team, public_product, client):
+    """With no ranges, the recommendation is all that says what is affected.
+    The table reads it as "Before 2.0.0" rather than showing nothing."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Recommended only")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30010")
+    AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability,
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.EXPLOITABLE,
+        recommended_version="2.0.0",
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["statuses"][0]["version_labels"] == ["Before 2.0.0"]
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+    assert "Before 2.0.0" in response.content.decode()
+
+
 def test_the_index_lists_versions_one_per_range(team, public_product):
     """The index used to print every range on one unbreakable line; it now
     lists them, names a pinned commit once and claims no unaffected version for it."""
