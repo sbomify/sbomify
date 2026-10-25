@@ -228,6 +228,12 @@ class TestTrustCenterCrawlHints:
         assert response.status_code == 200
         assert "application/ld+json" not in response.content.decode()
 
+    def test_sign_in_link_is_nofollow(self, client, product_with_slug):
+        response = client.get(f"/product/{product_with_slug.slug}/", HTTP_HOST="trust.example.com")
+        content = response.content.decode()
+        sign_in = content[content.index('href="/login/?next=') :]
+        assert 'rel="nofollow"' in sign_in[: sign_in.index(">")]
+
 
 class TestSlugResolution:
     """Test the slug resolution utility functions."""

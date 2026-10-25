@@ -567,7 +567,7 @@
                                 </div>
                             {% endif %}
                         {% else %}
-                            <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}">
+                            <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}" rel="nofollow">
                             <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
                             <span>Sign in</span>
                             </c-buttons.secondary>
