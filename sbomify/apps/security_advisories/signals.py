@@ -49,6 +49,7 @@ explicitly uses ``track_component_changes``; M2M manager operations use
 
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator
 
@@ -123,10 +124,20 @@ def _bump(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
         )
 
 
+# Set while a ``one_csaf_revision`` block runs: receivers add to it instead of
+# scheduling a bump each.
+_collecting = threading.local()
+
+
 def _schedule(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
     teams = list(team_ids)
     advisories = list(advisory_ids)
     if not teams and not advisories:
+        return
+    collector = getattr(_collecting, "pending", None)
+    if collector is not None:
+        collector[0].update(teams)
+        collector[1].update(advisories)
         return
     # After commit, so the workspace row is never taken while an advisory row is
     # held: that ordering is what would deadlock against publish_advisory.
@@ -140,8 +151,13 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
         return False
     # The timeline is filtered to the public event types, so an internal comment
     # or a field-change row changes nothing a reader can fetch.
-    if isinstance(instance, AdvisoryEvent) and instance.event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
-        return False
+    if isinstance(instance, AdvisoryEvent):
+        # An edit renders as the message it edits, so it is public when that is.
+        event_type = instance.event_type
+        if event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+            event_type = (instance.payload or {}).get("event_type", "")
+        if event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
+            return False
     from sbomify.apps.security_advisories.services.trust_center import (
         anonymous_viewer_scope,
         product_link_is_readable,
@@ -288,6 +304,28 @@ def _component_products(component_ids: Iterable[Any]) -> QuerySet[Any, Any]:
     from sbomify.apps.sboms.models import ProductComponent
 
     return ProductComponent.objects.filter(component_id__in=component_ids).values_list("product_id", flat=True)
+
+
+@contextmanager
+def one_csaf_revision() -> Iterator[None]:
+    """Count every row written inside the block as one change to each document.
+
+    One edit to a product status can save the status and its fix range, and a
+    bump per save would advance the document's revision once per row. The
+    collected bump is scheduled when the block exits cleanly; an exception
+    discards it along with the transaction it belonged to.
+    """
+    outer = getattr(_collecting, "pending", None)
+    if outer is not None:
+        yield
+        return
+    _collecting.pending = (set(), set())
+    try:
+        yield
+        teams, advisories = _collecting.pending
+    finally:
+        _collecting.pending = None
+    _schedule(teams, advisories)
 
 
 @contextmanager

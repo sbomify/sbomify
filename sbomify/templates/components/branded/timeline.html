@@ -1,0 +1,10 @@
+{% comment %}
+An ordered history, newest first: an advisory's status changes and notes.
+
+Each event is a c-branded.timeline-item, which draws its own stretch of the
+rail, so this owns nothing but the list semantics and the reset.
+{% endcomment %}
+<c-vars class />
+<ol class="flex flex-col list-none my-0 pl-[0]{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>{{ slot }}
+</ol>

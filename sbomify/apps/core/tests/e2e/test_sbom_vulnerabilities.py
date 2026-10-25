@@ -364,6 +364,7 @@ def test_component_upload_previews_and_applies_vex(authenticated_page, sbom_with
     assert preview.value.status == 200
     assert preview.value.json()["would_suppress"] == 1
     expect(dialog.get_by_text("Preview: nothing stored yet")).to_be_visible()
+    expect(dialog.get_by_text("Counted on the newest version of each format", exact=False)).to_be_visible()
     assert not SBOM.objects.filter(component_id=sbom.component_id, bom_type="vex").exists()
     upload.assert_not_called()
     with page.expect_response(lambda response: "/upload-file/" in response.url) as applied:

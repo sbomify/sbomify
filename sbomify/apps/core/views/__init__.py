@@ -64,11 +64,17 @@ from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicV
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
 from sbomify.apps.core.views.search import SearchView as SearchView
 from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoriesBulkDeleteView as SecurityAdvisoriesBulkDeleteView,
+)
+from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoriesDashboardView as SecurityAdvisoriesDashboardView,
 )
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableView as SecurityAdvisoriesTableView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryCreateView as SecurityAdvisoryCreateView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoryProductReleasesView as SecurityAdvisoryProductReleasesView,
+)
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,
@@ -404,7 +410,8 @@ def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.
     # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
+    # The browser follows this redirect, so it must be the browser-facing URL.
+    base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
     realm = settings.KEYCLOAK_REALM
     client_id = settings.KEYCLOAK_CLIENT_ID
 

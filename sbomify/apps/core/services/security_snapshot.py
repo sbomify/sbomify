@@ -35,8 +35,8 @@ def build_component_security_picture(
 
     from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning.findings import finding_values
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
-    from sbomify.apps.vulnerability_scanning.models import Finding
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
         extract_severity_counts,
@@ -90,22 +90,9 @@ def build_component_security_picture(
     indexed_by_sbom: dict[str, list[dict[str, Any]]] = {}
     malicious_ids: set[str] = set()
     plugin_by_run = {run["id"]: run["plugin_name"] for run in runs}
-    for finding in Finding.objects.filter(
-        Q(run_id__in=[rid for rid in run_ids if rid not in release_ids], is_current=True)
-        | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
-    ).values(
-        "run_id",
-        "sbom_id",
-        "advisory_id",
-        "aliases",
-        "severity",
-        "cvss_score",
-        "package_name",
-        "package_version",
-        "ecosystem",
-        "purl",
-        "vex_state",
-        "malicious",
+    current_ids = [rid for rid in run_ids if rid not in release_ids]
+    for finding in finding_values(
+        Q(run_id__in=current_ids, is_current=True) | Q(run_id__in=[rid for rid in run_ids if rid in release_ids])
     ):
         if finding["malicious"]:
             malicious_ids.update(alias.lower() for alias in (finding["advisory_id"], *finding["aliases"]))

@@ -20,8 +20,14 @@ as a duplicate attribute to the template linter.
 description is optional supporting text. Long descriptions can be expanded
 without truncating the page title. Its state is scoped to the description so
 callers can still bind their own Alpine state to the header.
+description_markdown renders it as Markdown through c-typography.markdown, for
+text someone wrote in Markdown such as an advisory's description. The clamp sits
+on a wrapper, so it never changes how the rendered blocks space themselves.
+While the description is clamped its links leave the tab order: a link past the
+second line is hidden, and focus must not land on text nobody can see. Show
+more is the way in.
 {% endcomment %}
-<c-vars title subtitle description copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
+<c-vars title subtitle description description_markdown copy_values breadcrumbs editable_item_type editable_item_id x_heading x_caption class />
 <header class="flex flex-wrap items-start justify-between gap-4{% if class %} {{ class }}{% endif %}"
         data-page-header
         {{ attrs }}>
@@ -59,10 +65,19 @@ callers can still bind their own Alpine state to the header.
                  x-init="$nextTick(() => measure())"
                  x-id="['page-description']"
                  @resize.window.debounce="expanded || measure()">
-                <p x-ref="description"
-                   :id="$id('page-description')"
-                   class="text-sm leading-relaxed text-text-muted whitespace-pre-line [overflow-wrap:anywhere] m-0"
-                   :class="expanded ? '' : 'line-clamp-2'">{{ description }}</p>
+                {% if description_markdown %}
+                    <div x-ref="description"
+                         :id="$id('page-description')"
+                         :class="expanded ? '' : 'line-clamp-2'"
+                         x-effect="$el.querySelectorAll('a').forEach(a => expanded || !clipped ? a.removeAttribute('tabindex') : a.setAttribute('tabindex', '-1'))">
+                        <c-typography.markdown :text="description" muted />
+                    </div>
+                {% else %}
+                    <p x-ref="description"
+                       :id="$id('page-description')"
+                       class="text-sm leading-relaxed text-text-muted whitespace-pre-line [overflow-wrap:anywhere] m-0"
+                       :class="expanded ? '' : 'line-clamp-2'">{{ description }}</p>
+                {% endif %}
                 <c-buttons.ghost size="sm" x-show="clipped || expanded" x-cloak @click="expanded = !expanded" ::aria-expanded="expanded" ::aria-controls="$id('page-description')">
                 <span x-text="expanded ? 'Show less' : 'Show more'"></span>
                 </c-buttons.ghost>

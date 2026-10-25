@@ -515,9 +515,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         for version_row in version_rows:
             try:
                 client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
-                client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
-                logger.info(
-                    "[DT] sync_release_tags: set tags=%s on version %s for SBOM %s",
+                written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                (logger.info if written else logger.debug)(
+                    "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
+                    "set" if written else "already in sync,",
                     canonical_names,
                     version_row.dt_project_version_uuid,
                     sbom_id,
@@ -873,6 +874,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return
 
         from sbomify.apps.core.object_store import StorageClient
+        from sbomify.apps.core.utils import broadcast_to_workspace
         from sbomify.apps.sboms.models import SBOM as SBOMModel
         from sbomify.apps.sboms.services.sboms import schedule_vex_reapply, upload_sbom_file
 
@@ -915,6 +917,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
             len(decided),
         )
         schedule_vex_reapply(str(component.id))
+        workspace_key = component.team.key
+        if workspace_key:
+            data = {"sbom_id": str(vex.id), "component_id": str(component.id), "name": vex.name}
+            transaction.on_commit(
+                lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="sbom_uploaded", data=data)
+            )
 
     @staticmethod
     def _normalized_vex(doc: dict[str, Any]) -> str:

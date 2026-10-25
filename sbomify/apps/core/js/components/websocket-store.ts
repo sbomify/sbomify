@@ -9,6 +9,10 @@
  * - Initialize in template: x-init="$store.ws.connect('workspace-key')"
  * - Listen to events: @ws:message.window="handleMessage($event.detail)"
  * - Check connection: x-show="$store.ws.connected"
+ *
+ * Messages sent while the socket was down are gone, so a reconnect after the
+ * first open dispatches a synthetic { type: 'resync' } message. Listeners
+ * treat it as a match whatever they filter on, and refetch what they show.
  */
 import Alpine from 'alpinejs';
 
@@ -51,7 +55,13 @@ interface WebSocketStoreState {
     reconnectAttempts: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
     stableTimer: ReturnType<typeof setTimeout> | null;
+    hasOpened: boolean;
+    userChannel: boolean;
 }
+
+// The key a user-channel socket is filed under, so the retry logic, which
+// needs a key to reconnect to, treats it like any other socket.
+const USER_CHANNEL_KEY = 'user';
 
 /**
  * Register the WebSocket store with Alpine.js
@@ -65,6 +75,8 @@ export function registerWebSocketStore(): void {
         reconnectAttempts: 0,
         reconnectTimer: null,
         stableTimer: null,
+        hasOpened: false,
+        userChannel: false,
 
         /**
          * Connect to the WebSocket server for a specific workspace.
@@ -73,14 +85,38 @@ export function registerWebSocketStore(): void {
             const state = this as unknown as WebSocketStoreState;
 
             // Don't reconnect if already connected to the same workspace
-            if (state.socket && state.workspaceKey === workspaceKey && state.connected) {
+            if (state.socket && !state.userChannel && state.workspaceKey === workspaceKey && state.connected) {
                 return;
             }
 
             // Disconnect from any existing connection
             this.disconnect();
 
+            // A deliberate connect comes with a freshly rendered page, so
+            // there is nothing to catch up on when this socket opens.
+            state.hasOpened = false;
+            state.userChannel = false;
             this.openSocket(workspaceKey);
+        },
+
+        /**
+         * Connect to the signed-in user's own channel instead of a workspace.
+         *
+         * For pages seen by people outside the workspace, such as a trust
+         * center visitor waiting on an access request: the workspace socket
+         * refuses them, and only news addressed to them arrives here.
+         */
+        connectUser(): void {
+            const state = this as unknown as WebSocketStoreState;
+
+            if (state.socket && state.userChannel && state.connected) {
+                return;
+            }
+
+            this.disconnect();
+            state.hasOpened = false;
+            state.userChannel = true;
+            this.openSocket(USER_CHANNEL_KEY);
         },
 
         /**
@@ -98,7 +134,8 @@ export function registerWebSocketStore(): void {
             state.connecting = true;
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws/workspace/${workspaceKey}/`;
+            const path = state.userChannel ? 'user' : `workspace/${workspaceKey}`;
+            const wsUrl = `${protocol}//${window.location.host}/ws/${path}/`;
 
             try {
                 state.socket = new WebSocket(wsUrl);
@@ -123,6 +160,15 @@ export function registerWebSocketStore(): void {
                     window.dispatchEvent(new CustomEvent('ws:connected', {
                         detail: { workspaceKey }
                     }));
+
+                    // A reopen, not the first open: whatever was broadcast
+                    // while the socket was down never arrived.
+                    if (state.hasOpened) {
+                        const detail = { type: 'resync' };
+                        window.dispatchEvent(new CustomEvent('ws:message', { detail }));
+                        window.dispatchEvent(new CustomEvent('ws:resync', { detail }));
+                    }
+                    state.hasOpened = true;
                 };
 
                 state.socket.onmessage = (event: MessageEvent) => {
@@ -261,6 +307,7 @@ export function registerWebSocketStore(): void {
         }
     } as WebSocketStoreState & {
         connect: (workspaceKey: string) => void;
+        connectUser: () => void;
         openSocket: (workspaceKey: string) => void;
         disconnect: () => void;
         scheduleReconnect: () => void;

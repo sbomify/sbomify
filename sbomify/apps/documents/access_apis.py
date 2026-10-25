@@ -15,7 +15,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace
 from sbomify.apps.teams.models import Member, Workspace
 
 from .access_models import AccessRequest, NDASignature
@@ -47,6 +47,23 @@ from .services.access_requests import (
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
+
+
+def _announce_decision(access_request: AccessRequest, status: str) -> None:
+    """Tell the workspace's admins, and the requester on their own channel, how a request was decided.
+
+    The requester is not a workspace member, so the workspace feed never
+    reaches them; their own channel is how their open public page learns.
+    """
+    data = {
+        "access_request_id": str(access_request.id),
+        "user_id": str(access_request.user_id),
+        "status": status,
+        "action": status,
+    }
+    if access_request.team.key:
+        broadcast_to_workspace(workspace_key=access_request.team.key, message_type="access_request_updated", data=data)
+    broadcast_to_user(access_request.user_id, "access_request_updated", data)
 
 
 @router.post(
@@ -147,6 +164,20 @@ def create_access_request(
             # If NDA is required, notification will be sent after NDA is signed
             if not requires_nda:
                 notify_admins_of_access_request(access_request, team, requires_nda=False)
+            if not requires_nda and team.key:
+                ws_team_key, ws_request_id, ws_user_id = team.key, str(access_request.id), str(access_request.user_id)
+                transaction.on_commit(
+                    lambda: broadcast_to_workspace(
+                        workspace_key=ws_team_key,
+                        message_type="access_request_updated",
+                        data={
+                            "access_request_id": ws_request_id,
+                            "user_id": ws_user_id,
+                            "status": "pending",
+                            "action": "requested",
+                        },
+                    )
+                )
 
             return 201, AccessRequestCreatedResponse(
                 id=access_request.id,
@@ -455,20 +486,8 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
     # Dismiss notification if no more pending requests
     dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
-    # Broadcast to workspace for real-time UI updates
-    # This notifies both:
-    # 1. The requester's browser to update their access status on public pages
-    # 2. Admins' browsers to update the access request queue
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "approved",
-            "action": "approved",
-        },
-    )
+    # Admins' queues and the requester's open public page both follow it.
+    _announce_decision(access_request, "approved")
 
     assert access_request.decided_at is not None and access_request.decided_by is not None
     return 200, AccessRequestResponse(
@@ -520,16 +539,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "rejected",
-            "action": "rejected",
-        },
-    )
+    _announce_decision(access_request, "rejected")
 
     assert access_request.decided_at is not None and access_request.decided_by is not None
     return 200, AccessRequestResponse(
@@ -583,16 +593,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     notify_access_revoked(access_request)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "revoked",
-            "action": "revoked",
-        },
-    )
+    _announce_decision(access_request, "revoked")
 
     assert access_request.revoked_at is not None and access_request.revoked_by is not None
     return 200, AccessRequestResponse(

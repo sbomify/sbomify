@@ -225,3 +225,14 @@ class TestFinalReleaseOrdering:
         Release.objects.filter(pk=older.pk).update(released_at=now)
 
         assert _final_release(product).pk == older.pk
+
+
+def test_drafting_an_eol_notice_tells_open_advisory_tables(eol_product, sample_user, mocker) -> None:
+    product, _ = eol_product
+    broadcast = mocker.patch("sbomify.apps.teams.broadcasts.broadcast_on_commit")
+
+    advisory = build_eol_advisory(product, sample_user)
+
+    broadcast.assert_called_once_with(
+        product.team.key, "advisory_updated", {"advisory_id": str(advisory.id), "action": "created"}
+    )

@@ -5,12 +5,18 @@
      x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
      hx-get="{% url 'core:security_advisories_table' %}"
      hx-trigger="refresh-advisories from:body"
-     hx-swap="morph">
+     hx-swap="morph"
+     @ws:message.window="if (['advisory_updated', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-advisories')), 500); }">
     {# Serialize advisories data for Alpine.js #}
     {{ advisories|json_script:"advisories-data" }}
     {% if advisories %}
-        {# The shell draws the frame itself, so the table needs no card around it. #}
-        <c-tables.shell>
+        {% comment %}
+            The shell draws the frame itself, so the table needs no card around
+            it. It also keeps the row selection for the bulk delete, which only
+            people who may delete advisories see. Selection follows the rows on
+            screen, so changing page, search or filter drops what scrolled away.
+        {% endcomment %}
+        <c-tables.shell x-data="tableSelection">
         <c-tables.toolbar>
         <c-forms.search-input size="sm" id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
         {# Status filter #}
@@ -31,8 +37,19 @@
         </c-tables.page-size>
         </c-slot>
         </c-tables.toolbar>
+        {% if has_crud_permissions %}
+            <c-tables.bulk-bar noun="advisory" plural="advisories">
+            <c-buttons.danger size="sm" @click="confirmDelete()">
+            <i class="fas fa-trash" aria-hidden="true"></i>
+            Delete
+            </c-buttons.danger>
+            </c-tables.bulk-bar>
+        {% endif %}
         <c-tables.table x-show="filteredData.length > 0" sized variant_class="min-w-144 sm:min-w-192 md:min-w-256" aria-label="Security advisories">
         <c-tables.head>
+        {% if has_crud_permissions %}
+            <c-tables.select-cell as="th" label_all="Select all advisories on this page" />
+        {% endif %}
         <c-tables.header-cell sort="severity" class="w-32">Severity</c-tables.header-cell>
         <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
         <c-tables.header-cell class="hidden md:table-cell w-48">Products</c-tables.header-cell>
@@ -49,6 +66,9 @@
                     component. Severity is not a variant: it binds data-level and
                     c-badges.severity owns the five CVSS recipes.
                 {% endcomment %}
+                {% if has_crud_permissions %}
+                    <c-tables.select-cell x_value="advisory.id" x_label="advisory.title" />
+                {% endif %}
                 <c-tables.cell nowrap>
                 <c-badges.severity ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
@@ -105,6 +125,13 @@
                     <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.status_variant" x-text="advisory.status_label" />
                     <template x-if="advisory.publication_status !== 'published'">
                         <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.publication_variant" x-text="advisory.publication_label" />
+                    </template>
+                    {# Changes AI agents proposed that nobody has decided: the advisory is waiting on a person. #}
+                    <template x-if="advisory.pending_review">
+                        <c-badges.violet class="whitespace-nowrap gap-1">
+                        <i class="fas fa-robot text-[10px]" aria-hidden="true"></i>
+                        <span x-text="advisory.pending_review + ' to review'"></span>
+                        </c-badges.violet>
                     </template>
                 </div>
                 </c-tables.cell>
@@ -172,6 +199,9 @@
             </c-navigation.page-button>
         </nav>
         </c-tables.footer>
+        {% if has_crud_permissions %}
+            <c-tables.bulk-delete action="{% url 'core:security_advisories_bulk_delete' %}" noun="advisory" plural="advisories" htmx warning="This deletes each advisory and its whole timeline. Published advisories disappear from your Trust Center." />
+        {% endif %}
         </c-tables.shell>
     {% else %}
         <c-tables.shell>

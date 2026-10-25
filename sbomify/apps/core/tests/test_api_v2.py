@@ -265,6 +265,17 @@ class TestTheTwoDirections:
         assert "team_key" not in properties
 
 
+class TestOperationIdsAreUnique:
+    """OpenAPI requires operationIds to be unique, and a generated client names
+    its methods after them, so a duplicate collapses two endpoints into one.
+    Ninja only warns at startup, which nobody reads."""
+
+    @pytest.mark.parametrize("schema_name", ["v1_schema", "v2_schema"])
+    def test_no_operation_id_is_used_twice(self, request, schema_name):
+        ids = [op["operationId"] for op in _operations(request.getfixturevalue(schema_name))]
+        assert sorted({i for i in ids if ids.count(i) > 1}) == []
+
+
 class TestOpenapiExtraSurvivesTheClone:
     def test_v2_csv_export_documents_its_body(self):
         from sbomify.apis import api_v2

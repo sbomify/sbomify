@@ -466,6 +466,10 @@ consequence: `helm uninstall` leaves that one Completed Pod behind.
 - Keycloak's issuer URL has to resolve identically for the browser and for the
   app pods. `bin/kind-up.sh` handles that locally with a CoreDNS rewrite; in a
   real cluster it is simply a public DNS name.
+- If the app pods reach Keycloak at an address the browser cannot (an
+  in-cluster Service name, say), set `auth.keycloak.publicUrl` to the public
+  Keycloak URL. Logout redirects the browser there; without it, logout uses
+  `auth.keycloak.serverUrl`.
 
 ## CI
 

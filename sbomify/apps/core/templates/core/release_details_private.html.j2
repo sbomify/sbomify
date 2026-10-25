@@ -4,7 +4,9 @@
 {% load django_vite %}
 {% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block content %}
-    <c-layout.page-header title="{{ release.name }}" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
+    {% url 'core:product_details' release.product.id as release_product_url %}
+    {# The header follows edits made elsewhere, and leaves for the product once the release is deleted. #}
+    <c-layout.page-header title="{{ release.name }}" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" x-data="liveRegion({ refresh: ['release_updated'], remove: ['release_deleted'], key: 'release_id', id: '{{ release.id|escapejs }}', leaveTo: '{{ release_product_url|escapejs }}' })" hx-get="{{ request.get_full_path }}" hx-select="#release-header" hx-trigger="live-refresh" hx-swap="morph" hx-disinherit="*" id="release-header">
     {# The latest flag qualifies the title, so it sits in the meta slot, not among the metrics. #}
     {% if release.is_latest %}
         <c-slot name="meta">

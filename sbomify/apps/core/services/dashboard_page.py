@@ -62,13 +62,18 @@ def get_dashboard_workspace(workspace_key: str | None) -> ServiceResult[Workspac
     return ServiceResult.success(workspace)
 
 
-def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
-    """One workspace snapshot for the overview, without per-product scan reads."""
+def build_dashboard_context(team_id: int, *, fresh: bool = False) -> ServiceResult[dict[str, Any]]:
+    """One workspace snapshot for the overview, without per-product scan reads.
+
+    fresh skips the cached snapshot and stores the rebuilt one. The overview
+    asks for it when a socket message says something it shows has changed,
+    since the cached copy predates that change by definition.
+    """
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.freshness import freshness_state
 
     cache_key = dashboard_cache_key(team_id)
-    cached = django_cache.get(cache_key)
+    cached = None if fresh else django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cast("dict[str, Any]", cached))
 
@@ -178,7 +183,6 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             - len(picture["findings"])
             + sum(finding["sla"]["label"] == "Awaiting history" for finding in picture["findings"]),
             "known_exploited": known_exploited,
-            "stale": len(stale_components),
             # The same zero the product page cannot stand behind, on the surface
             # a reader lands on first. All three counts read the newest SBOM per
             # component, so a component whose newest SBOM has not finished
@@ -187,9 +191,7 @@ def build_dashboard_context(team_id: int) -> ServiceResult[dict[str, Any]]:
             #
             # Only a zero, and only while something is unassessed. A non-zero
             # count is real information even when partial, and the alert under
-            # the cards already says what is still missing. "Components with
-            # stale SBOMs" is measured from upload timestamps rather than scan
-            # results, so its zero is always honest and stays a number.
+            # the cards already says what is still missing.
             "unmeasured_open": open_findings == 0 and unassessed > 0,
             "unmeasured_past_sla": past_sla == 0 and unassessed > 0,
             "unmeasured_known_exploited": known_exploited == 0 and unassessed > 0,

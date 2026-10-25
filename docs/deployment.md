@@ -47,6 +47,9 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=your-secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+# Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
+# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -131,6 +134,9 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+# Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
+# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3
 AWS_ENDPOINT_URL_S3=https://s3.example.com

@@ -285,6 +285,14 @@ class AssessmentRun(models.Model):
                 condition=models.Q(result_object_key="", result__isnull=False),
                 name="plugins_ar_offload_idx",
             ),
+            # The shared findings objects are collected once no run names them,
+            # and that question is asked per object; partial, so the rows still
+            # holding their payload inline cost the index nothing.
+            models.Index(
+                fields=["result_findings_key"],
+                condition=~models.Q(result_findings_key=""),
+                name="plugins_ar_findings_key_idx",
+            ),
         ]
         ordering = ["-created_at"]
 
@@ -425,6 +433,20 @@ class AssessmentRun(models.Model):
         default="",
         editable=False,
         help_text="Object-storage key holding the offloaded result payload. Empty when result is inline.",
+    )
+
+    # The shared object holding the offloaded payload's findings array, which is
+    # nearly all of its size and is the same from one scan of an unchanged SBOM
+    # to the next. Every run with that array points at one object, keyed by its
+    # content; ``result_object_key`` holds the rest of the payload, which is per
+    # run (timestamps, scanner metrics). Empty while the payload is inline, and
+    # for a run offloaded before findings were shared, whose object holds them.
+    result_findings_key = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        editable=False,
+        help_text="Object-storage key of the shared findings array of an offloaded result. Empty when inline.",
     )
 
     # Timestamps

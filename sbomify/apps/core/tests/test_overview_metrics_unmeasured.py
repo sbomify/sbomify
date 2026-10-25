@@ -6,12 +6,14 @@ completed scan contributes nothing. Scanning is asynchronous, so the cards drop
 to 0 the moment an SBOM is uploaded and stay there until the scan finishes.
 
 This is the same defect fixed on product details, on the page a reader lands on
-first. "Components with stale SBOMs" is deliberately excluded: it is measured
-from upload timestamps rather than scan results, so its zero is always honest.
+first. The VEX review card is deliberately excluded: it counts submissions
+waiting in the approval queue, which scanning does not affect, so its zero is
+always honest.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -110,13 +112,30 @@ def test_a_fully_scanned_workspace_reports_its_real_zero(workspace) -> None:
     assert "Not scanned yet" not in html
 
 
-def test_the_stale_card_keeps_its_number_while_scans_are_pending(workspace) -> None:
-    """Freshness is measured from upload timestamps, not scan results, so it has
-    an honest zero to report even when nothing has been scanned."""
-    client, _team, component = workspace
+def test_the_vex_review_card_counts_pending_submissions_and_links_to_the_queue(workspace) -> None:
+    from sbomify.apps.vulnerability_scanning.models import VexSubmission
+
+    client, team, component = workspace
     _sbom(component, "2.0", "new.json")
+    for status in (VexSubmission.Status.PENDING, VexSubmission.Status.PENDING, VexSubmission.Status.APPROVED):
+        VexSubmission.objects.create(
+            team=team,
+            component=component,
+            status=status,
+            kind=VexSubmission.Kind.DECISIONS,
+            channel=VexSubmission.Channel.AGENT,
+            document=b"{}",
+            document_format="decisions",
+        )
 
     html = _page(client)
 
-    stale_card = html.split("Components with stale SBOMs")[0].rsplit("<dl", 1)[-1]
-    assert "Not scanned yet" not in stale_card
+    assert "Components with stale SBOMs" not in html
+    label = html.index("VEX submissions awaiting review")
+    card = html[html.rindex("<dl", 0, label) : html.index("</dl>", label)]
+    # One approved submission is history, not work: only the two pending count.
+    value = re.search(r"<dd[^>]*>\s*([\d,]+)", card)
+    assert value is not None and value.group(1) == "2"
+    assert "Not scanned yet" not in card
+    review_url = reverse("vulnerability_scanning:vulnerability_scans", args=[team.key]) + "?view=review"
+    assert f'href="{review_url}"' in card

@@ -44,8 +44,8 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/alpinejs": "^3.17.0",
-    "@typescript-eslint/eslint-plugin": "^8.71.2",
-    "@typescript-eslint/parser": "^8.71.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.0",
+    "@typescript-eslint/parser": "^8.72.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "markdownlint-cli": "0.49.1"

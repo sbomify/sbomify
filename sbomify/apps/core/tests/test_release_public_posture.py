@@ -1,8 +1,8 @@
 """What the public (Trust Center) release page says about vulnerabilities.
 
 The posture card is published only where the workspace has asked for it, and
-even then it counts public components alone. A workspace member managing the
-release is not the public and keeps seeing all of it.
+even then it counts public components alone. That holds for a signed-in member
+too: the page shows what the public sees.
 """
 
 from __future__ import annotations
@@ -147,19 +147,33 @@ def test_a_gated_component_is_never_counted_publicly(sample_team_with_owner_memb
 
 
 @pytest.mark.django_db
-def test_a_member_managing_the_release_still_sees_everything(sample_team_with_owner_member):
-    """The opt-in is about the public, not about the workspace's own view."""
+def test_a_member_sees_nothing_when_the_workspace_has_not_opted_in(sample_team_with_owner_member):
+    """A member viewing their own Trust Center sees what the public sees."""
     team = sample_team_with_owner_member.team
     product, release = _public_release_with_scan(team, publish_posture=False)
+
+    client = Client()
+    setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+    resp = client.get(_url(product, release))
+
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert 'id="vuln-posture-data"' not in html
+    assert "Vulnerability posture" not in html
+
+
+@pytest.mark.django_db
+def test_a_member_sees_only_the_public_posture_once_opted_in(sample_team_with_owner_member):
+    team = sample_team_with_owner_member.team
+    product, release = _public_release_with_scan(team)
     _scanned_sbom(team, release, name="secret", visibility=Component.Visibility.PRIVATE, finding_id="CVE-2026-PRIVATE")
 
     client = Client()
     setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
-    html = client.get(_url(product, release)).content.decode()
+    posture = _posture_of(client.get(_url(product, release)).content.decode())
 
-    posture = _posture_of(html)
-    assert posture["counts"]["total"] == 2
-    assert "CVE-2026-PRIVATE" in {f["id"] for f in posture["findings"]}
+    assert posture["counts"]["total"] == 1
+    assert "CVE-2026-PRIVATE" not in {f["id"] for f in posture["findings"]}
 
 
 @pytest.mark.django_db

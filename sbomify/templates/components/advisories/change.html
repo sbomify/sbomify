@@ -1,0 +1,60 @@
+{% comment %}
+One value a proposed change replaces, as it stands and as proposed. The field
+name sits in its own column so a list of these reads as a two-column diff.
+
+A short value reads inline: the current one struck through on a danger tint,
+the proposed one on a success tint, each marked with a sign as well as a
+colour. Long text (long is true) would be unreadable struck through, so it
+stacks as two labelled blocks with the line breaks kept, and markdown renders
+the proposed one as it would appear. A blank side reads "Not set", which is
+different from the text being removed.
+
+The visually hidden "Now" and "Proposed" are what a screen reader announces in
+place of the colours.
+{% endcomment %}
+<c-vars label before after long />
+<div class="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-[9rem_minmax(0,1fr)]">
+    <span class="pt-1.5 text-xs font-medium text-text-muted">{{ label }}</span>
+    {% if long %}
+        <div class="flex min-w-0 flex-col gap-2">
+            <div class="rounded-[var(--radius-md)] border-l-2 border-solid border-[color-mix(in_oklab,var(--color-danger)_45%,transparent)] bg-[color-mix(in_oklab,var(--color-danger)_6%,transparent)] px-3 py-2">
+                <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-danger-ink">Now</span>
+                {% if before %}
+                    <c-typography.markdown :text="before" muted />
+                {% else %}
+                    <span class="text-sm italic text-text-muted">Not set</span>
+                {% endif %}
+            </div>
+            <div class="rounded-[var(--radius-md)] border-l-2 border-solid border-[color-mix(in_oklab,var(--color-success)_55%,transparent)] bg-[color-mix(in_oklab,var(--color-success)_7%,transparent)] px-3 py-2">
+                <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-success-ink">Proposed</span>
+                {% if after %}
+                    <c-typography.markdown :text="after" />
+                {% else %}
+                    <span class="text-sm italic text-text-muted">Not set</span>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+            <span class="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-[var(--radius-sm)] bg-[color-mix(in_oklab,var(--color-danger)_9%,transparent)] px-2 py-1 text-text-muted">
+                <span class="font-mono text-xs text-danger-ink" aria-hidden="true">−</span>
+                <span class="sr-only">Now:</span>
+                {% if before %}
+                    <span class="min-w-0 [overflow-wrap:anywhere] line-through decoration-[color-mix(in_oklab,var(--color-danger)_60%,transparent)]">{{ before }}</span>
+                {% else %}
+                    <span class="italic">Not set</span>
+                {% endif %}
+            </span>
+            <i class="fas fa-arrow-right text-[10px] text-text-muted" aria-hidden="true"></i>
+            <span class="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-[var(--radius-sm)] bg-[color-mix(in_oklab,var(--color-success)_11%,transparent)] px-2 py-1 font-medium text-text">
+                <span class="font-mono text-xs text-success-ink" aria-hidden="true">+</span>
+                <span class="sr-only">Proposed:</span>
+                {% if after %}
+                    <span class="min-w-0 [overflow-wrap:anywhere]">{{ after }}</span>
+                {% else %}
+                    <span class="italic text-text-muted">Not set</span>
+                {% endif %}
+            </span>
+        </div>
+    {% endif %}
+</div>

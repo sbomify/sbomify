@@ -1,0 +1,42 @@
+{% comment %}
+A column of short values in one cell, such as the versions a status covers.
+The first three show; the rest fold behind a disclosure that says how many,
+so one row carrying dozens of pinned commits cannot stretch the table down the
+page. An empty list prints a dash in the cell's own type, the same mark a
+text cell shows for nothing to say.
+
+values is the list. mono sets the values in the code face, for versions and
+hashes.
+
+The summary hides its marker in both engines: list-none covers the
+list-item marker Chrome and Firefox draw, and Safari draws its own through
+::-webkit-details-marker.
+
+Once open, the summary drops to the foot of the list, so "Show fewer" sits
+under the last value instead of between the first three and the rest. It is
+pinned there by position rather than flex order: Firefox does not lay out a
+details element as a flex container. The open padding reserves the summary's
+one text-xs line plus the list's gap.
+{% endcomment %}
+<c-vars values mono class />
+<div class="flex flex-col gap-[0.125rem]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% for value in values|slice:":3" %}
+        <span class="whitespace-nowrap{% if mono %} font-mono text-xs{% endif %}">{{ value }}</span>
+    {% empty %}
+        <span class="text-text-muted">—</span>
+    {% endfor %}
+    {% if values|length > 3 %}
+        <details class="group relative open:pb-[1.125rem]">
+            <summary class="cursor-pointer list-none [&::-webkit-details-marker]:hidden whitespace-nowrap text-xs text-text-muted underline underline-offset-2 hover:text-text group-open:absolute group-open:bottom-0 group-open:left-0">
+                <span class="group-open:hidden">Show {{ values|length|add:"-3" }} more</span>
+                <span class="hidden group-open:inline">Show fewer</span>
+            </summary>
+            <div class="flex flex-col gap-[0.125rem]">
+                {% for value in values|slice:"3:" %}
+                    <span class="whitespace-nowrap{% if mono %} font-mono text-xs{% endif %}">{{ value }}</span>
+                {% endfor %}
+            </div>
+        </details>
+    {% endif %}
+</div>
