@@ -6,7 +6,8 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_release
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Product
+from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.services.release_links import release_link_rows
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     custom_domain_redirect,
@@ -78,9 +79,23 @@ class ReleaseDetailsPublicView(View):
         else:
             vuln_posture = {"has_data": False}
 
+        is_custom_domain = bool(getattr(request, "is_custom_domain", False))
+
+        def public_url(linked: Release) -> str:
+            return get_public_path(
+                "release",
+                linked.id,
+                is_custom_domain=is_custom_domain,
+                product_id=linked.product_id,
+                product_slug=linked.product.slug or linked.product_id,
+                release_slug=get_release_public_slugs(linked.product).get(linked.id, linked.id),
+            )
+
         context = {
             "brand": brand,
             "release": release,
+            # The public page shows what the public sees, to members too.
+            "linked_releases": release_link_rows(release_obj, include_private=False, url_for=public_url),
             "vuln_posture": vuln_posture,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the

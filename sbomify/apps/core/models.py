@@ -815,3 +815,33 @@ class ReleaseArtifact(models.Model):
         elif self.document:
             return self.document.component
         return None
+
+
+class ReleaseLink(models.Model):
+    """A release that includes another product's release.
+
+    A product built on another product, such as an application and the toolchain
+    it downloads at run time, cannot list that product's components as its own:
+    a release only holds artifacts. A link records the dependency at the release
+    level instead, so the release shows what it ships with and its aggregate SBOM
+    carries the linked release's SBOMs.
+    """
+
+    class Meta:
+        db_table = "core_release_links"
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["release", "linked_release"], name="unique_release_link"),
+            models.CheckConstraint(
+                condition=~models.Q(release=models.F("linked_release")),
+                name="release_link_not_self",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="links")
+    linked_release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="linked_from")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.release_id} -> {self.linked_release_id}"
