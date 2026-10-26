@@ -75,9 +75,10 @@ class TestDependencyTrackVexSync:
             component=component,
             bom_type=SBOM.BomType.VEX.value,
             name="demo-app",
-            version="dt-triage-0",
+            version=sbom.version,
             format="cyclonedx",
             sbom_filename="existing-vex.json",
+            source="dependency-track",
         )
 
         mock_broadcast = self._sync(sbom, TRIAGED_VEX, django_capture_on_commit_callbacks)

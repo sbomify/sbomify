@@ -756,6 +756,28 @@ def resolve_component_identifier(
             return None
 
 
+def get_release_public_slugs(product: "Product") -> dict[str, str]:
+    """Map each release ID of a product to the identifier its custom-domain URL should use.
+
+    A release is reachable by slug and by ID. The slug is used only where
+    ``resolve_release_identifier`` would map it back to the same release: two
+    releases whose names slugify alike share one slug URL, which serves the
+    first, so the others keep their ID.
+    """
+    from sbomify.apps.core.models import Release
+
+    slugs = {
+        release.id: slugify(release.name, allow_unicode=True)
+        for release in Release.objects.filter(product=product).only("id", "name")
+    }
+    owners: dict[str, str] = {}
+    for release_id, slug in slugs.items():
+        owners.setdefault(slug, release_id)
+    return {
+        release_id: slug if slug and owners[slug] == release_id else release_id for release_id, slug in slugs.items()
+    }
+
+
 def resolve_release_identifier(
     request: HttpRequest,
     product: "Product",

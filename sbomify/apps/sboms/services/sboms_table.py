@@ -72,7 +72,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     for run in latest_runs:
         results_by_sbom.setdefault(str(run["sbom_id"]), []).append(run["result"])
 
-    vex_statements = load_vex_suppressions(component_id) if results_by_sbom else []
+    vex_cache: dict[Any, list[dict[str, Any]]] = {}
     for item in sbom_items:
         provider_results = results_by_sbom.get(str(item.get("sbom", {}).get("id", "")))
         if not provider_results:
@@ -82,6 +82,8 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         # scanned the same artifact still leaves a real verdict, and marking
         # that "Nothing scanned" would hide the scan that worked.
         scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
+        # The VEX written for this artifact's version, never one written for another.
+        vex_statements = load_vex_suppressions(component_id, item["sbom"].get("version"), cache=vex_cache)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
             item["vuln"] = severity_counts_from_rows(rows)

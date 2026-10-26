@@ -456,10 +456,18 @@ class Release(models.Model):
         Args:
             component: The component to add artifacts from
         """
-        # Add latest SBOMs by format
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
+        # Add latest SBOMs by format. VEX is not taken by recency: the newest VEX
+        # may be for another version than the newest SBOM, so it is pinned below
+        # only when written for a version this release ships.
         latest_sboms = component.get_latest_sboms_by_format()
         for format_name, sbom in latest_sboms.items():
+            if sbom.bom_type == SBOM.BomType.VEX.value:
+                continue
             ReleaseArtifact.objects.create(release=self, sbom=sbom, auto_pinned=True)
+        sync_vex_pins(self, component, bump=False)
 
         # Add latest Documents by type
         latest_documents = component.get_latest_documents_by_type()
@@ -478,13 +486,20 @@ class Release(models.Model):
         if not self.is_latest:
             raise ValueError("add_artifact_to_latest_release() can only be called on latest releases")
 
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
         # Suppress collection signals during delete+create to avoid a double bump
         # (ARTIFACT_REMOVED + ARTIFACT_ADDED). Bump once at the end if an artifact was replaced.
         token = _suppress_collection_signals.set(True)
         replaced = False
         try:
             # Determine if this is an SBOM or Document
-            if hasattr(artifact, "format"):  # SBOM
+            if hasattr(artifact, "format") and artifact.bom_type == SBOM.BomType.VEX.value:
+                # A VEX lands here only when written for a version this release
+                # ships; otherwise it would speak for a build it never saw.
+                replaced = sync_vex_pins(self, artifact.component, bump=False)
+            elif hasattr(artifact, "format"):  # SBOM
                 # Remove any existing artifact of the same format AND bom_type from the same
                 # component. Keying on bom_type keeps a CBOM/VEX (same cyclonedx format) from
                 # evicting the component's real SBOM: each bom_type replaces only its own slot.
@@ -500,6 +515,8 @@ class Release(models.Model):
                 # refresh_vex_pins free to re-point it (there are no true
                 # manual pins on latest releases; the API rejects them).
                 ReleaseArtifact.objects.create(release=self, sbom=artifact, auto_pinned=True)
+                # A new version of the component's SBOM changes which VEX applies.
+                replaced = sync_vex_pins(self, artifact.component, bump=False) or replaced
 
             elif hasattr(artifact, "document_type"):  # Document
                 # Remove any existing Document of the same type from the same component
@@ -744,10 +761,10 @@ class ReleaseArtifact(models.Model):
     auto_pinned = models.BooleanField(
         default=False,
         help_text=(
-            "Pinned automatically by sbomify (latest-release maintenance, or "
-            "newest-VEX tracking on other releases). Only auto-pinned VEX pins "
-            "are ever re-pointed when a newer VEX appears; a manually pinned "
-            "artifact is never replaced automatically."
+            "Pinned automatically by sbomify (latest-release maintenance, or the "
+            "VEX written for the version a release ships). Only auto-pinned VEX "
+            "pins are ever re-pointed when a newer VEX for that version appears; "
+            "a manually pinned artifact is never replaced automatically."
         ),
     )
 

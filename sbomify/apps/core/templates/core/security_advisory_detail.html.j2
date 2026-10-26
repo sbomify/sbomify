@@ -61,8 +61,24 @@
     </c-layout.page-header>
     {% comment %}A draft is invisible outside the workspace, which is not obvious from the page itself, so it is said once at the top. The action opens the same publish modal the actions menu opens, so there is one publish flow and one confirmation, and it is gated on has_crud_permissions because that is what renders that modal.{% endcomment %}
     {% if advisory.publication_status == 'draft' %}
-        <c-feedback.alert icon="fas fa-file-pen" title="This advisory is a draft">
-        Only your workspace can see it. Publish it to put it on your Trust Center.
+        <c-feedback.alert icon="
+        {% if advisory.drafted_by_agent %}
+            fas fa-robot
+        {% else %}
+            fas fa-file-pen
+        {% endif %}
+        " title="
+        {% if advisory.drafted_by_agent %}
+            An AI agent drafted this advisory
+        {% else %}
+            This advisory is a draft
+        {% endif %}
+        ">
+        {% if advisory.drafted_by_agent %}
+            Only your workspace can see it. Read it through, then publish it to put it on your Trust Center. After that, every change an agent makes waits for your approval.
+        {% else %}
+            Only your workspace can see it. Publish it to put it on your Trust Center.
+        {% endif %}
         {% if has_crud_permissions %}
             <c-slot name="action">
             <c-buttons.primary size="sm" class="shrink-0" @click="$dispatch('open-publish-advisory-modal')">
@@ -77,6 +93,12 @@
     <div class="flex flex-col lg:flex-row gap-8 lg:gap-10">
         {# Main: product statuses, then the timeline #}
         <div class="flex-1 min-w-0">
+            {% comment %}Changes AI agents proposed come first: until someone decides them the rest of the page is not the whole story, and they are the one thing here waiting on a person. The section stays while anything was decided, so the history of what agents asked for is one click away.{% endcomment %}
+            {% if review.pending or review.decided %}
+                <div class="mb-10">
+                    <c-advisories.review :review="review" decide_url="{% url 'core:security_advisory_detail' advisory.id %}" :can_decide="has_crud_permissions" />
+                </div>
+            {% endif %}
             {% comment %}The rows are the record: the Trust Center's "Am I affected?" table and the CSAF export read them, not the advisory's own status. So they sit above the timeline, where a resolve that they contradict is noticed before it is posted.{% endcomment %}
             {% if advisory.advisory_type != 'workspace_notice' or advisory.statuses %}
                 <section class="flex flex-col gap-3 mb-10"
@@ -242,6 +264,8 @@
                     </div>
                 </div>
             {% endif %}
+            {# Updates an agent proposed, where they would land once approved. #}
+            {% for item in review.pending_updates %}<c-advisories.proposed-entry :item="item" />{% endfor %}
             {# Update entries #}
             {% for u in timeline %}
                 <div class="flex gap-4 group" x-data="{ editing: false }">
@@ -252,7 +276,7 @@
                         {% if not forloop.last %}<span class="w-px flex-1 bg-border/70 my-1"></span>{% endif %}
                     </div>
                     <div class="flex-1 min-w-0 {% if not forloop.last %}pb-8{% endif %}"
-                         {% if has_crud_permissions %}@click="if (!editing && !$event.target.closest('a')) editing = true" :class="{ 'cursor-pointer': !editing }"{% endif %}>
+                         {% if has_crud_permissions and u.is_editable %}@click="if (!editing && !$event.target.closest('a, button, form')) editing = true" :class="{ 'cursor-pointer': !editing }"{% endif %}>
                         <div class="flex items-center justify-between gap-3">
                             <span class="flex items-center gap-2 min-w-0">
                                 {% if u.from_label %}
@@ -268,10 +292,13 @@
                                     <c-badges.secondary size="sm">{{ u.channel|upper }}</c-badges.secondary>
                                 {% endif %}
                                 {% if u.actor %}<span class="text-xs text-text-muted truncate">{{ u.actor }}</span>{% endif %}
+                                {% if u.approved_by %}
+                                    <span class="text-xs text-text-muted truncate"><i class="fas fa-check text-[10px]" aria-hidden="true"></i> Approved by {{ u.approved_by }}</span>
+                                {% endif %}
                             </span>
                             <div class="flex items-center gap-3 shrink-0">
                                 <span class="text-xs text-text-muted">{{ u.date_display }}</span>
-                                {% if has_crud_permissions %}
+                                {% if has_crud_permissions and u.is_editable %}
                                     <button type="button"
                                             x-show="!editing"
                                             @click="editing = true"
@@ -283,7 +310,20 @@
                             </div>
                         </div>
                         <c-typography.markdown :text="u.note" class="max-w-3xl mt-2" x-show="!editing" />
-                        {% if has_crud_permissions %}
+                        {% if u.edited_display %}
+                            <p class="m-0 mt-1 text-xs text-text-muted" x-show="!editing">
+                                Edited {{ u.edited_display }}
+                                {% if u.edited_by %}by {{ u.edited_by }}{% endif %}
+                                {% if u.edit_channel == "agent" %}· via an AI agent{% endif %}
+                                {% if u.edit_approved_by %}· approved by {{ u.edit_approved_by }}{% endif %}
+                            </p>
+                        {% endif %}
+                        {% if u.pending_edit %}
+                            <c-advisories.pending-link href="#proposal-{{ u.pending_edit.id }}" class="mt-2" x-show="!editing">
+                            An AI agent proposed new wording. Review it
+                            </c-advisories.pending-link>
+                        {% endif %}
+                        {% if has_crud_permissions and u.is_editable %}
                             <form x-show="editing"
                                   x-cloak
                                   method="post"
@@ -291,7 +331,7 @@
                                   class="mt-2 max-w-3xl">
                                 {% csrf_token %}
                                 <input type="hidden" name="intent" value="edit_update" />
-                                <input type="hidden" name="update_id" value="{{ forloop.counter }}" />
+                                <input type="hidden" name="update_id" value="{{ u.id }}" />
                                 <label class="sr-only" for="editUpdate{{ forloop.counter }}">Edit update note</label>
                                 <c-forms.textarea id="editUpdate{{ forloop.counter }}" name="note" rows="2" value="{{ u.note }}" required aria-describedby="composerNoteHint" />
                                 <div class="flex items-center gap-2 mt-2">
@@ -362,7 +402,7 @@
             </div>
             <div class="space-y-3 border-t border-border/60 pt-6">
                 <h2 class="text-xs uppercase tracking-wide text-text-muted">Affected products</h2>
-                <div class="flex flex-wrap gap-2">
+                <div class="space-y-4">
                     {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, and the url tag would happily build /product/None/ rather than fail, so they render as plain text.{% endcomment %}
                     {% if not advisory.products %}
                         <p class="text-sm text-text-muted m-0">
@@ -373,22 +413,17 @@
                             {% endif %}
                         </p>
                     {% endif %}
-                    {% comment %}The affected releases sit under the chip rather than inside it: the chip never wraps, so a product carrying a dozen releases ran its list off the sidebar. The value list shows three and folds the rest, the same as the Trust Center's "Am I affected?" table.{% endcomment %}
                     {% for product in advisory.products %}
-                        <div class="flex flex-col items-start gap-1.5{% if product.affected_ranges %} basis-full{% endif %}">
-                            <c-chips.neutral>
-                            <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
-                            {% if product.id %}
-                                <a href="{% url 'core:product_details' product.id %}"
-                                   class="transition-colors hover:opacity-80">{{ product.name }}</a>
-                            {% else %}
-                                {{ product.name }}
-                            {% endif %}
-                            </c-chips.neutral>
-                            {% if product.affected_ranges %}
-                                <c-tables.value-list mono class="pl-2 text-text-muted" title="Affected releases" :values="product.affected_ranges" />
-                            {% endif %}
-                        </div>
+                        <c-lists.folding :items="product.affected_versions" label="Affected versions of {{ product.name }}">
+                        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                        {% if product.id %}
+                            <a href="{% url 'core:product_details' product.id %}"
+                               title="{{ product.name }}"
+                               class="truncate transition-colors hover:opacity-80">{{ product.name }}</a>
+                        {% else %}
+                            <span class="truncate" title="{{ product.name }}">{{ product.name }}</span>
+                        {% endif %}
+                        </c-lists.folding>
                     {% endfor %}
                 </div>
             </div>

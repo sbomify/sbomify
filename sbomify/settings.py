@@ -1095,7 +1095,7 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -1454,3 +1454,10 @@ SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
 SLACK_OAUTH_AUTHORIZE_URL = os.environ.get("SLACK_OAUTH_AUTHORIZE_URL", "https://slack.com/oauth/v2/authorize")
 SLACK_OAUTH_TOKEN_URL = os.environ.get("SLACK_OAUTH_TOKEN_URL", "https://slack.com/api/oauth.v2.access")
 SLACK_API_BASE_URL = os.environ.get("SLACK_API_BASE_URL", "https://slack.com/api")
+
+# Token for the GitHub API calls the SBOM Verification plugin makes to fetch
+# attestations. Optional: without it every lookup shares GitHub's unauthenticated
+# limit of 60 requests an hour, which one release uploading several SBOMs can
+# use up. A fine-grained token with no repository access is enough, because the
+# attestations it reads belong to public repositories.
+GITHUB_API_TOKEN = os.environ.get("GITHUB_API_TOKEN", "")

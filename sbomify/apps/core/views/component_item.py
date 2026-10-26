@@ -279,7 +279,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             from sbomify.apps.sboms.models import SBOM
             from sbomify.apps.vulnerability_scanning.vex import vex_suppression_rows
 
-            sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename").first()
+            sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename", "version").first()
             actual_bom_type = sbom_row.bom_type if sbom_row else None
             # Keep the URL canonical: a VEX opens under /vex/, a CBOM under /cbom/,
             # everything else under /sboms/. Redirect a mismatched path.
@@ -393,7 +393,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     if not result_scanned_nothing(result)
                 ]
                 merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
-                rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
+                rows = extract_finding_rows(
+                    merged, load_vex_suppressions(component_id_from_item, sbom_row.version if sbom_row else None)
+                )
                 if rows:
                     counts = severity_counts_from_rows(rows)
                 else:

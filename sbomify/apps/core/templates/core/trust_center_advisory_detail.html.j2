@@ -95,9 +95,13 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                                 <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
                                 {% if row.justification %}<div class="text-xs text-text-muted mt-1">{{ row.justification }}</div>{% endif %}
                                 </c-tables.cell>
-                                <c-tables.cell>
-                                <c-tables.value-list mono :values="row.affected_versions" />
-                                </c-tables.cell>
+                                {% if row.version_labels %}
+                                    <c-tables.cell>
+                                    <c-lists.folding :items="row.version_labels" label="Affected versions of {{ row.product }} for {{ row.vulnerability }}" class="min-w-[9rem]" />
+                                    </c-tables.cell>
+                                {% else %}
+                                    <c-tables.cell class="font-mono text-xs whitespace-nowrap">—</c-tables.cell>
+                                {% endif %}
                                 <c-tables.cell muted>
                                 {% comment %}The fix sets the recommendation, and the instructions usually name it too. Saying "Upgrade to v2. Upgrade to v2." reads as a mistake.{% endcomment %}
                                 {% if row.recommended_version and not row.action_names_recommendation %}
@@ -166,6 +170,8 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                             {% else %}
                                 <span>first entry</span>
                             {% endif %}
+                            {# A corrected update says so: a reader who quoted the old text can tell it changed. #}
+                            {% if entry.edited_display %}<span>edited {{ entry.edited_display }}</span>{% endif %}
                             </c-slot>
                             {% if entry.note %}<c-branded.markdown>{{ entry.note|strict_markdown }}</c-branded.markdown>{% endif %}
                             </c-branded.timeline-item>

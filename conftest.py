@@ -42,6 +42,19 @@ pytest_plugins = [
 ]
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _load_urlconf():
+    """Import every view and API module before any test patches what they import.
+
+    The URLconf is otherwise loaded by a worker's first request. When that test
+    has patched a class such as ``object_store.StorageClient``, every module
+    that imports it by name keeps the mock for the rest of the worker's run.
+    """
+    from django.urls import get_resolver
+
+    get_resolver().url_patterns
+
+
 @pytest.fixture(autouse=True)
 def _clear_cache():
     """Clear the in-memory cache between every test.
