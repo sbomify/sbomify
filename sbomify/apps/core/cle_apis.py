@@ -14,6 +14,8 @@ from sbomify.apps.core.cle_schemas import (
     CLEEventResponseSchema,
     CLESupportDefinitionCreateSchema,
     CLESupportDefinitionResponseSchema,
+    ReleaseCLEEventCreateSchema,
+    ReleaseCLEEventResponseSchema,
 )
 from sbomify.apps.core.models import Component, ComponentRelease, Product, Release
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -401,7 +403,7 @@ def create_component_cle_support_definition_endpoint(
 
 @router.get(
     "/releases/{release_id}/cle/events",
-    response={200: list[CLEEventResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[ReleaseCLEEventResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
 )
 def list_release_cle_events(
     request: HttpRequest,
@@ -421,9 +423,11 @@ def list_release_cle_events(
 
 @router.post(
     "/releases/{release_id}/cle/events",
-    response={201: CLEEventResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: ReleaseCLEEventResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
-def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, payload: CLEEventCreateSchema) -> Any:
+def create_release_cle_event_endpoint(
+    request: HttpRequest, release_id: str, payload: ReleaseCLEEventCreateSchema
+) -> Any:
     """Create a new CLE lifecycle event for a release."""
     result = _get_release_or_404(request, release_id)
     if not isinstance(result, Release):
@@ -443,6 +447,8 @@ def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, pay
         reason=payload.reason,
         description=payload.description,
         references=payload.references,
+        drop_in=payload.drop_in,
+        actor_id=request.user.pk,
     )
 
     if not svc_result.ok:
@@ -455,7 +461,7 @@ def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, pay
 
 @router.get(
     "/releases/{release_id}/cle/events/{event_id}",
-    response={200: CLEEventResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: ReleaseCLEEventResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
 )
 def get_release_cle_event(request: HttpRequest, release_id: str, event_id: int) -> Any:
     """Get a single CLE event for a release by event_id."""

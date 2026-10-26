@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 from ninja import Query, Router
 from ninja.decorators import decorate_view
@@ -32,6 +33,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.release_lifecycle import surviving_supersessions
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
@@ -3580,6 +3582,18 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
                 f"Cannot delete release '{release.name}'. It carries {lifecycle_records} lifecycle "
                 f"record(s) that sbomify publishes, and deleting the release would destroy them. "
                 f"Delete the product if you mean to remove its history as well."
+            ),
+            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+        }
+
+    # Deleting a successor would quietly turn each edge into one to a release
+    # outside sbomify, which still retires its predecessor.
+    superseded = surviving_supersessions().filter(superseded_by_release=release).values("release_id").distinct().count()
+    if superseded:
+        return 400, {
+            "detail": (
+                f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
+                "Withdraw those supersessions first."
             ),
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }

@@ -296,8 +296,69 @@ class Release(models.Model):
         default=CollectionUpdateReason.INITIAL_RELEASE,
     )
 
+    class WithdrawnReason(models.TextChoices):
+        DEFECTIVE = "defective", "Defective"
+        COMPROMISED = "compromised", "Compromised"
+        PUBLISHED_IN_ERROR = "published_in_error", "Published in error"
+
+    class LifecycleState(models.TextChoices):
+        ACTIVE = "active", "Active"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        END_OF_LIFE = "end_of_life", "End of life"
+        END_OF_SUPPORT = "end_of_support", "End of support"
+        SUPERSEDED = "superseded", "Superseded"
+        ARCHIVED = "archived", "Archived"
+
+    # Derived from the release's CLE events by recompute_release_lifecycle; never written directly.
+    superseded_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the earliest drop-in successor took over, derived from CLE events"
+    )
+    end_of_support = models.DateField(
+        null=True, blank=True, help_text="Final end of support across support policies, derived from CLE events"
+    )
+    end_of_life = models.DateField(null=True, blank=True, help_text="End of life, derived from CLE events")
+    # Set by a person. CLE has no event for a yanked or archived release.
+    withdrawn_at = models.DateTimeField(null=True, blank=True, help_text="When the release was withdrawn")
+    withdrawn_reason = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        choices=WithdrawnReason.choices,
+        help_text="Why the release was withdrawn",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True, help_text="When the release was archived")
+
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
+
+    @property
+    def lifecycle_state(self) -> str:
+        """Where the release stands, by the rules of ``release_lifecycle.tracked_releases()``.
+
+        First match wins: withdrawn, end of life, end of support, superseded,
+        archived, active. ``latest`` is always active.
+        """
+        if self.is_latest:
+            return self.LifecycleState.ACTIVE
+        now = timezone.now()
+        today = now.date()
+        end_of_life = self.end_of_life or self.product.end_of_life
+        end_of_support = self.end_of_support or self.product.end_of_support
+        if self.withdrawn_at is not None:
+            return self.LifecycleState.WITHDRAWN
+        if end_of_life is not None and end_of_life < today:
+            return self.LifecycleState.END_OF_LIFE
+        if end_of_support is not None and end_of_support < today:
+            return self.LifecycleState.END_OF_SUPPORT
+        if self.superseded_at is not None and self.superseded_at <= now:
+            return self.LifecycleState.SUPERSEDED
+        if self.archived_at is not None:
+            return self.LifecycleState.ARCHIVED
+        return self.LifecycleState.ACTIVE
+
+    @property
+    def is_tracked(self) -> bool:
+        return self.lifecycle_state == self.LifecycleState.ACTIVE
 
     @property
     def slug(self) -> str:
