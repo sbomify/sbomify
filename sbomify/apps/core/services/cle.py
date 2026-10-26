@@ -26,6 +26,12 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
+from sbomify.apps.core.services.release_lifecycle import (
+    audit,
+    identical_supersession,
+    recompute_release_lifecycle,
+    resolve_successor,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import (
     BaseCLEEvent,
@@ -34,6 +40,7 @@ from sbomify.apps.sboms.models import (
     ComponentCLESupportDefinition,
     ComponentReleaseCLEEvent,
     ComponentReleaseCLESupportDefinition,
+    Product,
     ProductCLEEvent,
     ProductCLESupportDefinition,
     ReleaseCLEEvent,
@@ -44,7 +51,6 @@ if TYPE_CHECKING:
     from django.db import models as django_models
 
     from sbomify.apps.core.models import Component, ComponentRelease, Release
-    from sbomify.apps.sboms.models import Product
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +141,7 @@ def create_cle_event_generic(
     reason: str = "",
     description: str = "",
     references: list[str] | None = None,
+    extra_fields: dict[str, Any] | None = None,
 ) -> ServiceResult[Any]:
     """Create a CLE lifecycle event for any entity level.
 
@@ -145,6 +152,7 @@ def create_cle_event_generic(
     ``entity_label`` is used in human-readable error messages (e.g. "product",
     "component").  ``recompute_fn``, when provided, is called with the locked
     entity after the event is created (used for product lifecycle date caching).
+    ``extra_fields`` sets columns a concrete event model adds to the spec's.
     """
     versions = versions or []
     identifiers = identifiers or []
@@ -203,6 +211,7 @@ def create_cle_event_generic(
             "reason": reason,
             "description": description,
             "references": references,
+            **(extra_fields or {}),
         }
         event = event_model.objects.create(**create_kwargs)  # type: ignore[attr-defined]
 
@@ -434,27 +443,67 @@ def create_release_cle_event(
     reason: str = "",
     description: str = "",
     references: list[str] | None = None,
+    drop_in: bool = False,
+    actor_id: Any = None,
 ) -> ServiceResult[ReleaseCLEEvent]:
-    """Create a new CLE lifecycle event for a release."""
-    return create_cle_event_generic(
-        entity=release,
-        entity_fk_field="release",
-        event_model=ReleaseCLEEvent,
-        support_def_model=ReleaseCLESupportDefinition,
-        event_type=event_type,
-        effective=effective,
-        entity_label="release",
-        version=version,
-        versions=versions,
-        support_id=support_id,
-        license=license,
-        superseded_by_version=superseded_by_version,
-        identifiers=identifiers,
-        withdrawn_event_id=withdrawn_event_id,
-        reason=reason,
-        description=description,
-        references=references,
-    )
+    """Create a new CLE lifecycle event for a release, and rederive where the product's releases stand.
+
+    A ``supersededBy`` event is a supersession edge. It must resolve to a
+    sibling release or to none (a successor outside sbomify), and it may not
+    make a cycle or exceed the successor cap. Repeating a surviving edge returns
+    it instead of adding another. ``drop_in`` marks a successor that replaces
+    this release, which stops it being monitored.
+    """
+    is_supersession = event_type == CLEEventType.SUPERSEDED_BY
+    if drop_in and not is_supersession:
+        return ServiceResult.failure("drop_in applies to supersededBy events only", status_code=400)
+
+    with transaction.atomic():
+        product = Product.objects.select_for_update().filter(pk=release.product_id).first()
+        if product is None:
+            return ServiceResult.failure("Release no longer exists", status_code=404)
+
+        extra_fields: dict[str, Any] = {}
+        if is_supersession and superseded_by_version:
+            existing = identical_supersession(release, superseded_by_version, drop_in)
+            if existing is not None:
+                return ServiceResult.success(existing)
+            successor = resolve_successor(release, superseded_by_version)
+            if not successor.ok:
+                return ServiceResult.failure(successor.error or "Invalid supersession", status_code=400)
+            extra_fields = {"superseded_by_release": successor.value, "drop_in": drop_in}
+
+        result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
+            entity=release,
+            entity_fk_field="release",
+            event_model=ReleaseCLEEvent,
+            support_def_model=ReleaseCLESupportDefinition,
+            event_type=event_type,
+            effective=effective,
+            entity_label="release",
+            recompute_fn=lambda _release: recompute_release_lifecycle(product),
+            version=version,
+            versions=versions,
+            support_id=support_id,
+            license=license,
+            superseded_by_version=superseded_by_version,
+            identifiers=identifiers,
+            withdrawn_event_id=withdrawn_event_id,
+            reason=reason,
+            description=description,
+            references=references,
+            extra_fields=extra_fields,
+        )
+        if result.ok and extra_fields:
+            audit(
+                "supersede",
+                release,
+                actor_id,
+                event_id=result.value.event_id if result.value else None,
+                superseded_by_version=superseded_by_version,
+                drop_in=drop_in,
+            )
+    return result
 
 
 def create_release_support_definition(

@@ -252,6 +252,22 @@ class ReleaseCLEEvent(BaseCLEEvent):
 
     release = models.ForeignKey("core.Release", on_delete=models.CASCADE, related_name="cle_events")
 
+    # A supersededBy event is the supersession edge itself. These two columns are
+    # sbomify's reading of it and stay out of the CLE export, which maps fields
+    # one by one.
+    superseded_by_release = models.ForeignKey(
+        "core.Release",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supersedes_events",
+        help_text="The release in the same product that superseded_by_version resolved to, if any",
+    )
+    drop_in = models.BooleanField(
+        default=False,
+        help_text="Whether the successor replaces this release, so this release stops being monitored",
+    )
+
     def __str__(self) -> str:
         return f"Event {self.event_id}: {self.get_event_type_display()} ({self.release.name})"
 
