@@ -2,7 +2,6 @@
 {% load django_vite %}
 {% load django_htmx %}
 {% load cache %}
-{% load schema_tags %}
 {% load breadcrumb_tags %}
 {% load brand_tags %}
 {% load public_url_tags %}
@@ -48,7 +47,8 @@
             <meta name="robots"
                   content="{% block meta_robots %}index, follow{% endblock %}">
             {# Canonical URL #}
-            <link rel="canonical" href="{{ request.build_absolute_uri }}">
+            <link rel="canonical"
+                  href="{% block canonical_url %}{{ request.build_absolute_uri }}{% endblock %}">
             {# Favicon #}
             <link rel="apple-touch-icon"
                   sizes="180x180"
@@ -65,8 +65,12 @@
                   type="image/svg+xml"
                   href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/favicon.svg' %}{% endif %}">
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
-            {# Schema.org metadata #}
-            {% schema_org_metadata %}
+            {% comment %}
+            No sbomify SoftwareApplication JSON-LD here. A public page belongs to
+            the workspace, not to sbomify, and that markup is sbomify's product
+            and pricing, which also lacks the rating every SoftwareApplication
+            needs to validate.
+            {% endcomment %}
             {# Social media image: always use absolute URL for social crawlers #}
             {# Build the absolute fallback URL for the default social image #}
             {% static 'img/sbomify-social.png' as default_social_image %}
@@ -564,7 +568,7 @@
                                 </div>
                             {% endif %}
                         {% else %}
-                            <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}">
+                            <c-buttons.secondary size="sm" href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}" rel="nofollow">
                             <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
                             <span>Sign in</span>
                             </c-buttons.secondary>

@@ -34,11 +34,9 @@ logger = getLogger(__name__)
 
 #: How long a run may sit in a non-terminal state before the sweep settles it.
 #:
-#: It has to clear the longest honest wait. A run that never started waits out
-#: the 120 second delay on the verification enqueue. One that did has the 2, 5,
-#: 10 and 15 minute RetryLaterError ladder and a five minute final attempt ahead
-#: of it, about 37 minutes from its first start. An hour leaves room for a slow
-#: external service without settling a run that is still legitimately waiting.
+#: Runs without a scheduled retry get an hour from their first attempt (or
+#: creation). Deferred runs get the same grace after their scheduled attempt,
+#: since rate limits can legitimately ask the worker to wait longer than an hour.
 STRANDED_AFTER = timedelta(hours=1)
 
 _STRANDED_MESSAGE = (
@@ -59,10 +57,10 @@ def sweep_stranded_runs() -> int:
     cutoff = timezone.now() - STRANDED_AFTER
     stale = (
         AssessmentRun.objects.filter(status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value))
-        # Timed from the first attempt when there was one. A backed-up queue can
-        # hold a row long before a worker picks it up, and the retry ladder
-        # counts from that pickup, not from when the row was written.
-        .annotate(since=Coalesce("started_at", "created_at"))
+        # A scheduled attempt has priority over the first start: its wait may
+        # be longer than the normal retry ladder. Lost retry messages still
+        # expire an hour after they were due.
+        .annotate(since=Coalesce("retry_at", "started_at", "created_at"))
         .filter(since__lt=cutoff)
         # The sweep takes rows in any order; the model's default would sort them.
         .order_by()
