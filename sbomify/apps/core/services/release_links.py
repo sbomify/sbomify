@@ -14,6 +14,7 @@ from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.teams.models import Workspace
 
 
 def find_release(
@@ -49,10 +50,14 @@ def link_release(release: Release, linked_release: Release) -> ServiceResult[Rel
         return ServiceResult.failure("Link a release of another product", status_code=400)
     if release.is_latest:
         return ServiceResult.failure("Cannot link releases to the 'latest' release", status_code=400)
-    if _reaches(linked_release, release):
-        return ServiceResult.failure("That release already links back to this one", status_code=400)
     try:
         with transaction.atomic():
+            # Lock the whole graph, including paths through other releases.
+            # Locking only the endpoints misses concurrent disjoint links
+            # that complete a longer cycle.
+            Workspace.objects.select_for_update().get(pk=release.product.team_id)
+            if _reaches(linked_release, release):
+                return ServiceResult.failure("That release already links back to this one", status_code=400)
             link = ReleaseLink.objects.create(release=release, linked_release=linked_release)
     except IntegrityError:
         return ServiceResult.failure("This release is already linked", status_code=409)

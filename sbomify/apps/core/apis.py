@@ -3693,19 +3693,6 @@ def download_release(
         if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    # Get all SBOM artifacts in the release
-    from sbomify.apps.sboms.models import SBOM
-
-    sbom_artifacts = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).select_related(
-        "sbom"
-    )
-
-    if not sbom_artifacts.exists():
-        # An empty release is the caller's situation, not a server fault. This
-        # answered a hand-rolled 500 with no error_code, built outside ninja's
-        # pipeline, for what is simply "nothing here to download".
-        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
-
     # Normalize format early
     format_lower = output_format.lower()
 
@@ -3718,6 +3705,17 @@ def download_release(
     # Linked releases reach that full view only on products this reader may read in
     # full: an OIDC bot gets the rest of them as the public does.
     readable_product_ids = _readable_linked_product_ids(request, release) if include_non_public else None
+
+    from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
+    from sbomify.apps.sboms.models import SBOM
+
+    # Preserve downloads for releases with their own SBOMs. A release
+    # without any can still download the linked members its reader sees.
+    has_own_sboms = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).exists()
+    if not has_own_sboms and not aggregate_sbom_artifacts(
+        release, include_non_public=include_non_public, readable_product_ids=readable_product_ids
+    ):
+        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
 
     try:
         # Use the SBOM package generator with user for signed URLs
