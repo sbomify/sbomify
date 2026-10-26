@@ -167,10 +167,19 @@ class ReleaseCreateForm(forms.Form):
     is_prerelease = forms.BooleanField(required=False)
     created_at = forms.DateTimeField(required=False)
     released_at = forms.DateTimeField(required=False)
+    replaces = forms.ChoiceField(required=False)
+    replaces_line = forms.ChoiceField(choices=[("same", "Same line"), ("new", "New line")], required=False)
 
-    def __init__(self, *args: Any, products: list[tuple[str, str]], **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        products: list[tuple[str, str]],
+        candidates: list[tuple[str, str]] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         cast(forms.ChoiceField, self.fields["product_id"]).choices = [("", "Choose a product"), *products]
+        cast(forms.ChoiceField, self.fields["replaces"]).choices = [("", "None"), *(candidates or [])]
 
 
 class SupportContactForm(forms.Form):

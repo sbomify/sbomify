@@ -25,6 +25,7 @@
     <c-branded.badge brand>Release</c-branded.badge>
     {% if release.is_latest %}<c-branded.badge tone="success">Latest</c-branded.badge>{% endif %}
     {% if release.is_prerelease %}<c-branded.badge tone="medium">Pre-release</c-branded.badge>{% endif %}
+    <c-branded.release-state state="{{ release.lifecycle_state }}" />
     </c-slot>
     <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
         <c-branded.meta-item icon="far fa-calendar">

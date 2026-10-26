@@ -239,6 +239,7 @@ def build_inventory_snapshot(
                     else "Prerelease"
                     if release.is_prerelease
                     else "Release",
+                    "lifecycle_state": release.lifecycle_state,
                     "url": reverse("core:release_details", args=[release.product_id, release.id]),
                 }
             )

@@ -3,14 +3,19 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
+from pydantic import ValidationError
 
-from sbomify.apps.core.apis import get_release
+from sbomify.apps.core.apis import get_release, set_release_lifecycle
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import Release
+from sbomify.apps.core.schemas import ReleaseLifecycleSchema
+from sbomify.apps.core.services.release_lifecycle import supersession_links
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -54,6 +59,17 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             {"label": release["name"]},
         ]
         vulnerabilities = build_release_vulnerabilities(request, release_id)
+        lifecycle = {
+            **supersession_links(release["id"]),
+            # A release without dates of its own takes the product's, as tracked_releases() does.
+            "end_of_support": release["end_of_support"] or product.end_of_support,
+            "end_of_life": release["end_of_life"] or product.end_of_life,
+            "withdrawn_reason": Release.WithdrawnReason(release["withdrawn_reason"]).label
+            if release["withdrawn_reason"]
+            else "",
+            "withdrawn_reasons": Release.WithdrawnReason.choices,
+            "can_manage": can_edit_release,
+        }
 
         return render(
             request,
@@ -67,5 +83,32 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,
                 "vulnerabilities": vulnerabilities.value if vulnerabilities.ok else None,
+                "lifecycle": lifecycle,
             },
         )
+
+
+class ReleaseLifecycleView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """Withdraw, archive or reactivate a release from its page, through the API's rules."""
+
+    DONE = {
+        "withdraw": "Release withdrawn. sbomify no longer monitors it.",
+        "archive": "Release archived. sbomify no longer monitors it.",
+        "reactivate": "Release reactivated.",
+    }
+
+    def post(self, request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
+        action = request.POST.get("action", "")
+        try:
+            payload = ReleaseLifecycleSchema.model_validate(
+                {"action": action, "reason": request.POST.get("reason", "") if action == "withdraw" else ""}
+            )
+        except ValidationError:
+            messages.error(request, "Choose to withdraw, archive or reactivate the release.")
+        else:
+            status_code, result = set_release_lifecycle(request, release_id, payload)
+            if status_code == 200:
+                messages.success(request, self.DONE[payload.action])
+            else:
+                messages.error(request, result.get("detail") or "The release could not be changed.")
+        return redirect("core:release_details", product_id=product_id, release_id=release_id)

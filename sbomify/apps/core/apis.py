@@ -33,7 +33,11 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
-from sbomify.apps.core.services.release_lifecycle import surviving_supersessions
+from sbomify.apps.core.services.release_lifecycle import (
+    declare_supersedes,
+    set_release_state,
+    surviving_supersessions,
+)
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
@@ -83,6 +87,7 @@ from .schemas import (
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
     ReleaseCreateSchema,
+    ReleaseLifecycleSchema,
     ReleasePatchSchema,
     ReleaseResponseSchema,
     ReleaseUpdateSchema,
@@ -2607,6 +2612,7 @@ def list_component_releases(
                         "id": str(release.product.id),
                         "name": release.product.name,
                     },
+                    **_release_lifecycle_fields(release),
                 }
             )
 
@@ -2999,6 +3005,7 @@ def list_all_releases(
                             "id": str(release.product.id),
                             "name": release.product.name,
                         },
+                        **_release_lifecycle_fields(release),
                     }
                 )
             except Exception as e:
@@ -3010,6 +3017,21 @@ def list_all_releases(
     except Exception:
         log.exception("Error listing all releases")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+def _release_lifecycle_fields(release: Release) -> dict[str, Any]:
+    """Where the release stands, for every response that describes one."""
+    state = release.lifecycle_state
+    return {
+        "lifecycle_state": state,
+        "is_tracked": state == Release.LifecycleState.ACTIVE,
+        "superseded_at": release.superseded_at,
+        "end_of_support": release.end_of_support,
+        "end_of_life": release.end_of_life,
+        "withdrawn_at": release.withdrawn_at,
+        "withdrawn_reason": release.withdrawn_reason,
+        "archived_at": release.archived_at,
+    }
 
 
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
@@ -3067,6 +3089,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
             "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
+        **_release_lifecycle_fields(release),
     }
 
     if include_artifacts:
@@ -3277,6 +3300,10 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 created_at=created_at,
                 released_at=released_at,
             )
+            declared = declare_supersedes(release, payload.supersedes, actor_id=request.user.pk)
+            if not declared.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": declared.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if product.team.key:
@@ -3332,6 +3359,13 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
         existing = Release.objects.filter(product=product, name=payload.name).first()
         if existing is not None:
+            # A retry declares the same edges, which add nothing; a caller that
+            # created the release first and names its predecessors now gets them.
+            with transaction.atomic():
+                declared = declare_supersedes(existing, payload.supersedes, actor_id=request.user.pk)
+                if not declared.ok:
+                    transaction.set_rollback(True)
+                    return 400, {"detail": declared.error, "error_code": ErrorCode.VALIDATION_ERROR}
             return 200, _build_release_response(request, existing, include_artifacts=True)
         return 400, {
             "detail": "A release with this name already exists for this product",
@@ -3345,6 +3379,33 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     except Exception:
         log.exception("Error creating release")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.post(
+    "/releases/{release_id}/lifecycle",
+    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
+)
+def set_release_lifecycle(request: HttpRequest, release_id: str, payload: ReleaseLifecycleSchema) -> Any:
+    """Withdraw, archive or reactivate a release.
+
+    A withdrawn or archived release stops being monitored, and reactivate clears
+    both. To undo a supersession or a support date, withdraw its CLE event.
+    """
+    release = Release.objects.select_related("product__team").filter(pk=release_id).first()
+    if release is None:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+    if not can(request, "release:manage", release.product):
+        return 403, {"detail": "You do not have permission to change this release", "error_code": ErrorCode.FORBIDDEN}
+
+    result = set_release_state(release, payload.action, reason=payload.reason, actor_id=request.user.pk)
+    if not result.ok or result.value is None:
+        status = result.status_code or 400
+        code = ErrorCode.RELEASE_NOT_FOUND if status == 404 else ErrorCode.VALIDATION_ERROR
+        return status, {"detail": result.error, "error_code": code}
+
+    _broadcast_release_updated(release)
+    return 200, _build_release_response(request, result.value)
 
 
 @router.get(

@@ -1,0 +1,13 @@
+{% comment %}
+Where a release stands, on a page a workspace shows its customers. An active
+release renders nothing.
+
+Same states and words as c-badges.release-state, on the Trust Center's tone
+badge: superseded and archived neutral, end of support medium, end of life and
+withdrawn high. A severity tone and not the brand, because a pale brand colour
+must never be what tells a customer a release is withdrawn.
+{% endcomment %}
+<c-vars state />
+{% if state == 'superseded' or state == 'archived' or state == 'end_of_support' or state == 'end_of_life' or state == 'withdrawn' %}
+    <c-branded.badge tone="{% if state == 'end_of_support' %}medium{% elif state == 'end_of_life' or state == 'withdrawn' %}high{% endif %}">{% if state == 'superseded' %}Superseded{% elif state == 'archived' %}Archived{% elif state == 'end_of_support' %}End of support{% elif state == 'end_of_life' %}End of life{% else %}Withdrawn{% endif %}</c-branded.badge>
+{% endif %}

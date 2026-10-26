@@ -1508,6 +1508,36 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-badges.role role="something-new">Unknown role</c-badges.role>
     </div>
     </c-cards.card>
+    <h2 id="release-state-badges" class="text-xl font-semibold text-text">Release state badges</h2>
+    <c-cards.card>
+    <p class="text-sm text-text-muted mb-4">
+        Where a release stands once it is no longer monitored as usual. An active release renders nothing, so the
+        badge sits beside a release name without a guard. The second row is the Trust Center counterpart, on the
+        severity tones rather than the brand.
+    </p>
+    {% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/badges/release_state.html and branded/release_state.html).
+    {% endcomment %}
+    <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+            <c-badges.release-state state="superseded" />
+            <c-badges.release-state state="archived" />
+            <c-badges.release-state state="end_of_support" />
+            <c-badges.release-state state="end_of_life" />
+            <c-badges.release-state state="withdrawn" />
+            <c-badges.release-state state="active" />
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <c-branded.release-state state="superseded" />
+            <c-branded.release-state state="archived" />
+            <c-branded.release-state state="end_of_support" />
+            <c-branded.release-state state="end_of_life" />
+            <c-branded.release-state state="withdrawn" />
+            <c-branded.release-state state="active" />
+        </div>
+    </div>
+    </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text">Progress</h2>
     <c-cards.card>
     {% comment %}

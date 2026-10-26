@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import date, datetime
 from typing import Any
 
@@ -64,6 +65,68 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
         )
         .filter(Q(is_latest=True) | live)
     )
+
+
+def replacement_candidates(product_id: str) -> list[Release]:
+    """The releases a new release of the product can supersede: named, still monitored, newest first."""
+    return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
+
+
+def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:
+    """Record that ``successor`` supersedes each release ``items`` names.
+
+    Each item has ``release_id`` or ``version`` (then name, within the successor's
+    product) and ``drop_in``. The edge goes on the predecessor's CLE stream through
+    the same validation as the CLE endpoint. Run it inside the transaction that
+    owns the successor: a failure leaves earlier edges for the caller to roll back.
+    """
+    # cle.py imports this module for the edge rules.
+    from sbomify.apps.core.services.cle import create_release_cle_event
+
+    siblings = Release.objects.filter(product_id=successor.product_id)
+    successor_version = successor.version or successor.name
+    for item in items:
+        if item.release_id:
+            predecessor = Release.objects.select_related("product").filter(pk=item.release_id).first()
+            if predecessor is None or predecessor.product.team_id != successor.product.team_id:
+                return ServiceResult.failure(f"Release {item.release_id} not found.", status_code=400)
+            if predecessor.product_id != successor.product_id:
+                return ServiceResult.failure(
+                    f"Release {predecessor.name} belongs to another product. "
+                    "A release can only supersede releases of its own product.",
+                    status_code=400,
+                )
+        else:
+            predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
+            if predecessor is None:
+                return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
+
+        result = create_release_cle_event(
+            predecessor,
+            CLEEventType.SUPERSEDED_BY,
+            successor.released_at or successor.created_at,
+            version=predecessor.version,
+            superseded_by_version=successor_version,
+            drop_in=item.drop_in,
+            actor_id=actor_id,
+        )
+        if not result.ok or result.value is None:
+            return ServiceResult.failure(result.error or "Invalid supersession", status_code=400)
+        if result.value.superseded_by_release_id != successor.pk:
+            return ServiceResult.failure(
+                f"{successor_version} names more than one release of this product. Give this release a version.",
+                status_code=400,
+            )
+    return ServiceResult.success(None)
+
+
+def supersession_links(release_id: str) -> dict[str, list[ReleaseCLEEvent]]:
+    """The surviving edges into and out of a release: what it replaces, and what replaced it."""
+    edges = surviving_supersessions().select_related("release", "superseded_by_release").order_by("event_id")
+    return {
+        "replaces": list(edges.filter(superseded_by_release_id=release_id)),
+        "replaced_by": list(edges.filter(release_id=release_id)),
+    }
 
 
 def surviving_supersessions() -> QuerySet[ReleaseCLEEvent]:
