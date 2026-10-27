@@ -33,7 +33,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
-from sbomify.apps.core.services.release_lifecycle import surviving_supersessions
+from sbomify.apps.core.services.release_lifecycle import link_pending_supersessions, surviving_supersessions
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
@@ -3279,6 +3279,10 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 created_at=created_at,
                 released_at=released_at,
             )
+            linked = link_pending_supersessions(release)
+            if not linked.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if product.team.key:
@@ -3428,6 +3432,10 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
             if payload.released_at is not None:
                 release.released_at = payload.released_at
             release.save()
+            linked = link_pending_supersessions(release)
+            if not linked.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
@@ -3514,6 +3522,11 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             # Only save if something actually changed
             if changed:
                 release.save()
+            if {"name", "version"} & update_data.keys():
+                linked = link_pending_supersessions(release)
+                if not linked.ok:
+                    transaction.set_rollback(True)
+                    return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
@@ -3588,25 +3601,34 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
-    # Deleting a successor would quietly turn each edge into one to a release
-    # outside sbomify, which still retires its predecessor.
-    superseded = surviving_supersessions().filter(superseded_by_release=release).values("release_id").distinct().count()
-    if superseded:
-        return 400, {
-            "detail": (
-                f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
-                "Withdraw those supersessions first."
-            ),
-            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
-        }
-
     # Capture data for broadcast before deleting
     workspace_key = release.product.team.key
     product_id = str(release.product.id)
     release_name = release.name
 
     try:
-        release.delete()
+        with transaction.atomic():
+            # Deleting a successor would quietly turn each drop-in edge into one
+            # to a release outside sbomify, which still retires its predecessor.
+            # The product lock keeps a new edge from landing between the check
+            # and the delete.
+            Product.objects.select_for_update().filter(pk=release.product_id).first()
+            superseded = (
+                surviving_supersessions()
+                .filter(superseded_by_release=release, drop_in=True)
+                .values("release_id")
+                .distinct()
+                .count()
+            )
+            if superseded:
+                return 400, {
+                    "detail": (
+                        f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
+                        "Withdraw those supersessions first."
+                    ),
+                    "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+                }
+            release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
