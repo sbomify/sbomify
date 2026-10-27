@@ -24,7 +24,7 @@ from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from sbomify.apps.core.models import Release
+from sbomify.apps.core.models import Release, ReleaseLink
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import CLEEventType, Product, ReleaseCLEEvent
 
@@ -65,6 +65,30 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
         )
         .filter(Q(is_latest=True) | live)
     )
+
+
+def releases_linked_from(release_ids: Any) -> set[str]:
+    """Every release reachable through links from these releases, not counting them. Links cannot form a cycle."""
+    reached: set[str] = set()
+    frontier = set(ReleaseLink.objects.filter(release_id__in=release_ids).values_list("linked_release_id", flat=True))
+    while frontier:
+        reached |= frontier
+        frontier = (
+            set(ReleaseLink.objects.filter(release_id__in=frontier).values_list("linked_release_id", flat=True))
+            - reached
+        )
+    return reached
+
+
+def shipping_releases(now: datetime | None = None) -> QuerySet[Release]:
+    """The releases whose SBOMs sbomify tracks: the tracked releases and every release they link to.
+
+    A linked release's SBOMs are part of the linking release's aggregate SBOM,
+    so a live release keeps them tracked even when the linked release is itself
+    retired. A retired release's links keep nothing alive.
+    """
+    tracked = tracked_releases(now=now).values("pk")
+    return Release.objects.filter(Q(pk__in=tracked) | Q(pk__in=releases_linked_from(tracked)))
 
 
 def replacement_candidates(product_id: str) -> list[Release]:

@@ -5,6 +5,7 @@ import importlib.metadata
 import json
 import logging
 import re
+from collections.abc import Collection
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeGuard
@@ -1817,8 +1818,8 @@ def compute_release_aggregate_fingerprint(release: Any) -> str:
     Computed from the DB only (no S3 reads). A change to any of these busts the
     cache key so the next download rebuilds:
 
-    * its PUBLIC member SBOMs (id + ``sbom_filename``, which is the sha256 of the
-      bytes). Only PUBLIC members are fingerprinted — exactly the set a public
+    * its PUBLIC member SBOMs, linked releases' included (id + ``sbom_filename``,
+      which is the sha256 of the bytes). Only PUBLIC members are fingerprinted — exactly the set a public
       aggregate contains — so a member flipping PUBLIC <-> PRIVATE busts the key
       while private/gated member churn does not needlessly rebuild; and
     * the release/product METADATA the builder embeds: the product + release
@@ -1843,17 +1844,13 @@ def compute_release_aggregate_fingerprint(release: Any) -> str:
             digest.update(f"{len(b)}:".encode())
             digest.update(b)
 
-    members = (
-        release.artifacts.filter(
-            sbom__isnull=False,
-            sbom__bom_type=SBOM.BomType.SBOM,
-            sbom__component__visibility=Component.Visibility.PUBLIC,
-        )
-        .order_by("sbom__id")
-        .values_list("sbom__id", "sbom__sbom_filename")
-    )
-    for sid, fname in members.iterator():
-        feed("m", sid, fname)
+    # Linked releases' public members are in the aggregate, so they are in the key:
+    # linking or unlinking a release, or a member changing underneath it, rebuilds.
+    from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
+
+    for artifact in aggregate_sbom_artifacts(release, include_non_public=False):
+        if artifact.sbom is not None:
+            feed("m", artifact.sbom.id, artifact.sbom.sbom_filename)
 
     # Mutable metadata embedded in the aggregate's top-level component.
     product = release.product
@@ -1892,6 +1889,7 @@ def get_release_sbom_package(
     output_format: str = "cyclonedx",
     version: str | None = None,
     include_non_public: bool = False,
+    readable_product_ids: Collection[str] | None = None,
 ) -> Path:
     """
     Generates the aggregated release SBOM file.
@@ -1986,6 +1984,7 @@ def get_release_sbom_package(
         entity=release,
         user=user,
         include_non_public=include_non_public,
+        readable_product_ids=readable_product_ids,
     )
     sbom = builder(target_folder)
     # CycloneDX + SPDX 2.3 builders return a pydantic model; SPDX 3.0 builders

@@ -1610,7 +1610,7 @@ def _run_scheduled_security_scans(
         from django.db.models import Exists, OuterRef
 
         from sbomify.apps.core.models import ReleaseArtifact
-        from sbomify.apps.core.services.release_lifecycle import tracked_releases
+        from sbomify.apps.core.services.release_lifecycle import shipping_releases
 
         sbom_qs = (
             SBOM.objects.filter(
@@ -1626,9 +1626,10 @@ def _run_scheduled_security_scans(
                         sbom_id=OuterRef("pk"),
                         # Defense-in-depth: only count same-team release artifacts
                         release__product__team_id=OuterRef("component__team_id"),
-                        # Only releases sbomify still monitors: not withdrawn,
-                        # archived, superseded by a drop-in or past support.
-                        release__in=tracked_releases(),
+                        # Only releases sbomify still monitors (not withdrawn,
+                        # archived, superseded by a drop-in or past support) and
+                        # the releases they link to.
+                        release__in=shipping_releases(),
                     )
                 )
             )

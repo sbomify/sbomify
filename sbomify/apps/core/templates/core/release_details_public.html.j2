@@ -159,6 +159,7 @@
                 </c-branded.surface>
             </section>
         {% endif %}
+        {% include 'core/components/release_links.html.j2' with public=True %}
         {# Release Artifacts #}
         {% include 'core/components/public_release_artifacts.html.j2' %}
     </div>
