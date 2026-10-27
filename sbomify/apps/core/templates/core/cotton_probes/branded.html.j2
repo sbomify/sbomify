@@ -11,6 +11,10 @@ lives in core/design_system.html.j2 and is for looking at.
 <c-branded.badge tone="critical" data-probe="badge-critical">Critical</c-branded.badge>
 <c-branded.badge brand data-probe="badge-brand">Verified</c-branded.badge>
 <c-branded.badge data-probe="badge-neutral">Draft</c-branded.badge>
+<c-branded.badge dashed data-probe="badge-dashed">Withdrawn</c-branded.badge>
+{% with ids="CVE-2026-0001 CVE-2026-0002" %}
+    <c-branded.meta-item mono label="CVE IDs" :values="ids.split" data-probe="meta-labelled" />
+{% endwith %}
 <c-branded.nav>
 <c-branded.nav-item href="/a" icon="fas fa-house" current data-probe="nav-current">Overview</c-branded.nav-item>
 <c-branded.nav-item href="/b" icon="fas fa-shield-halved" data-probe="nav-other">Advisories</c-branded.nav-item>
@@ -75,6 +79,17 @@ This artifact is shared with named recipients.
 </c-branded.timeline-item>
 </c-branded.timeline>
 </c-branded.theme>
+<c-branded.version-check checks="probe-checks" data-probe="version-check">
+<c-branded.version-row key="row" heading="Acme Gateway" status_label="Fixed" status_variant="success" :versions="['1.0.0', '1.1.0', 'From 2.0.0, fixed in 2.4.1']" label="Affected versions of Acme Gateway" limit="2" data-probe="version-row">
+Upgrade to 2.4.1.
+</c-branded.version-row>
+<c-branded.version-row key="quiet" heading="Acme Console" data-probe="version-row-quiet">
+{% if False %}<c-slot name="eyebrow">CVE-2026-0001</c-slot>{% endif %}
+</c-branded.version-row>
+</c-branded.version-check>
+<c-branded.expandable data-probe="expandable">
+<p>Long text</p>
+</c-branded.expandable>
 <c-branded.theme brand="#FDE68A" data-probe="theme-light">
 <c-buttons.primary>Pale brand</c-buttons.primary>
 </c-branded.theme>

@@ -637,6 +637,52 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "2b4ac46",
             ],
             "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
+            # The version check: one product with a span and a pin, one with
+            # pinned commits that fold, and one that is not affected at all.
+            "demo_version_checks": {
+                "gateway": {
+                    "suppressed": False,
+                    "ranges": [
+                        {
+                            "label": "From 2.0.0, fixed in 2.4.1",
+                            "introduced": "2.0.0",
+                            "fixed": "2.4.1",
+                            "last_affected": "",
+                        },
+                        {"label": "1.9.3", "introduced": "1.9.3", "fixed": "", "last_affected": "1.9.3"},
+                    ],
+                },
+                "agent": {
+                    "suppressed": False,
+                    "ranges": [
+                        {"label": sha, "introduced": sha, "fixed": "", "last_affected": sha}
+                        for sha in (
+                            "6282ec8",
+                            "50c2c31",
+                            "2e9f06e",
+                            "c833c95",
+                            "52836e5",
+                            "ebb0cfb",
+                            "fc7f052",
+                            "2b4ac46",
+                            "9d1e0aa",
+                        )
+                    ],
+                },
+                "console": {"suppressed": True, "ranges": []},
+            },
+            "demo_version_labels_gateway": ["From 2.0.0, fixed in 2.4.1", "1.9.3"],
+            "demo_version_labels_agent": [
+                "6282ec8",
+                "50c2c31",
+                "2e9f06e",
+                "c833c95",
+                "52836e5",
+                "ebb0cfb",
+                "fc7f052",
+                "2b4ac46",
+                "9d1e0aa",
+            ],
             "demo_breadcrumbs": [
                 {"label": "Products", "url": "#"},
                 {"label": "Acme Widget", "url": "#"},

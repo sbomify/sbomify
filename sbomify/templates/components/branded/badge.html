@@ -16,9 +16,14 @@ its own tint is invisible.
 
 An unknown tone falls through to neutral rather than rendering an unstyled
 badge, so a status the model gains later is quiet instead of broken.
+
+dashed is for a state that no longer stands, such as a withdrawn advisory: an
+outline with no fill, so it cannot be mistaken for a tone on the ramp. A tinted
+yellow Withdrawn sat beside a tinted yellow Medium and read as a second
+severity.
 {% endcomment %}
-<c-vars tone brand class />
-<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap border border-solid {% if brand %}bg-[var(--brand)] text-[var(--brand-ink)] border-[var(--brand)]{% else %}bg-[color-mix(in_oklab,var(--tone)_14%,transparent)] text-[var(--tone)] border-[color-mix(in_oklab,var(--tone)_32%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+<c-vars tone brand dashed class />
+<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap border {% if dashed %}border-dashed{% else %}border-solid{% endif %} {% if brand %}bg-[var(--brand)] text-[var(--brand-ink)] border-[var(--brand)]{% elif dashed %}bg-[transparent] text-[var(--tone)] border-[color-mix(in_oklab,var(--tone)_60%,transparent)]{% else %}bg-[color-mix(in_oklab,var(--tone)_14%,transparent)] text-[var(--tone)] border-[color-mix(in_oklab,var(--tone)_32%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
       {% if not brand %}style="--tone: {% if tone == 'critical' %}var(--color-severity-critical){% elif tone == 'high' %}var(--color-severity-high){% elif tone == 'medium' %}var(--color-severity-medium){% elif tone == 'low' %}var(--color-severity-low){% elif tone == 'success' %}var(--color-success){% else %}var(--color-text-muted){% endif %}"{% endif %}
       {{ attrs }}>{{ slot }}
 </span>
