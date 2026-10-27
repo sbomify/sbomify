@@ -27,6 +27,8 @@ WITHDRAWN = datetime(2025, 3, 3, 12, tzinfo=dt_timezone.utc)
 def _scan(release: Release, name: str, completed_at: datetime, findings: list[dict[str, Any]]) -> SBOM:
     component = Component.objects.create(team=release.product.team, name=name, visibility=Component.Visibility.PUBLIC)
     sbom = SBOM.objects.create(name=name, component=component, version="1.0", format="cyclonedx")
+    # A newer upload, so the release's SBOM is history: a component's newest SBOM is always scanned.
+    SBOM.objects.create(name=name, component=component, version="2.0", format="cyclonedx")
     ReleaseArtifact.objects.create(release=release, sbom=sbom)
     AssessmentRun.objects.create(
         sbom=sbom,
@@ -80,7 +82,7 @@ class TestUntrackedNotice:
     @pytest.mark.parametrize(
         ("fields", "since", "reason"),
         [
-            ({"withdrawn_at": WITHDRAWN}, WITHDRAWN, "It was withdrawn."),
+            ({"withdrawn_at": WITHDRAWN}, WITHDRAWN.date(), "It was withdrawn."),
             ({"end_of_life": date(2025, 3, 2)}, date(2025, 3, 3), "It reached end of life."),
             ({"end_of_support": date(2025, 3, 2)}, date(2025, 3, 3), "Its support ended."),
             (
@@ -88,8 +90,8 @@ class TestUntrackedNotice:
                 date(2025, 3, 3),
                 "Its support ended.",
             ),
-            ({"superseded_at": WITHDRAWN}, WITHDRAWN, "A newer release replaced it."),
-            ({"archived_at": WITHDRAWN}, WITHDRAWN, "It was archived."),
+            ({"superseded_at": WITHDRAWN}, WITHDRAWN.date(), "A newer release replaced it."),
+            ({"archived_at": WITHDRAWN}, WITHDRAWN.date(), "It was archived."),
         ],
     )
     def test_says_since_when_and_why(
@@ -111,6 +113,32 @@ class TestUntrackedNotice:
         linking = Release.objects.create(product=_product(team_with_business_plan, name="Console"), name="2.0.0")
         ReleaseLink.objects.create(release=linking, linked_release=linked)
         assert untracked_notice(linked) is None
+
+
+    def test_names_the_first_thing_that_stopped_the_scans(self, team_with_business_plan: Workspace) -> None:
+        # Replaced in June 2025; the product's support ended later, in January 2026.
+        release = self._release(
+            team_with_business_plan,
+            superseded_at=datetime(2025, 6, 1, tzinfo=dt_timezone.utc),
+            product_fields={"end_of_support": date(2026, 1, 1)},
+        )
+        assert untracked_notice(release) == {"since": date(2025, 6, 1), "reason": "A newer release replaced it."}
+
+    def test_a_retired_release_whose_sboms_a_live_release_ships_is_still_monitored(
+        self, team_with_business_plan: Workspace
+    ) -> None:
+        product = _product(team_with_business_plan)
+        retired = Release.objects.create(product=product, name="1.0.0")
+        shared = _scan(retired, "lib", OLDEST, [])
+        _withdraw(retired)
+        live = Release.objects.create(product=product, name="1.1.0")
+        ReleaseArtifact.objects.create(release=live, sbom=shared)
+        retired = Release.objects.select_related("product").get(pk=retired.pk)
+        assert untracked_notice(retired) is None
+
+        # One SBOM it alone ships is enough for its counts to go stale.
+        _scan(retired, "tool", OLDEST, [])
+        assert untracked_notice(retired) == {"since": WITHDRAWN.date(), "reason": "It was withdrawn."}
 
 
 class TestReleasePage:
@@ -140,6 +168,20 @@ class TestReleasePage:
         page = self._page(authenticated_web_client, release)
         assert "No vulnerabilities at last scan" in page
         assert "No vulnerabilities found" not in page
+
+    def test_a_retired_release_never_scanned_does_not_promise_results(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        release = Release.objects.create(product=_product(team_with_business_plan), name="1.0.0")
+        component = Component.objects.create(team=release.product.team, name="lib")
+        sbom = SBOM.objects.create(name="lib", component=component, version="1.0", format="cyclonedx")
+        SBOM.objects.create(name="lib", component=component, version="2.0", format="cyclonedx")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        _withdraw(release)
+
+        page = self._page(authenticated_web_client, release)
+        assert "Scan results appear here once" not in page
+        assert "sbomify stopped monitoring this release before its SBOMs were scanned" in page
 
     def test_a_monitored_release_is_unchanged(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

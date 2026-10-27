@@ -13,7 +13,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Component, Product, Release
-from sbomify.apps.core.services.release_lifecycle import shipping_releases
+from sbomify.apps.core.services.release_lifecycle import still_scanned_release_ids
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.freshness import freshness_state
@@ -210,11 +210,9 @@ def build_inventory_snapshot(
             .order_by("name", "id")
         )
         postures = build_release_vuln_postures(releases)
-        # A retired release a live release links to is still scanned through that link.
+        # A retired release is still scanned while a live release ships its SBOMs or links to it.
         retired = [release.id for release in releases if release.lifecycle_state != "active"]
-        still_shipped = (
-            set(shipping_releases().filter(pk__in=retired).values_list("pk", flat=True)) if retired else set()
-        )
+        still_shipped = still_scanned_release_ids(retired, workspace.id)
         for release in releases:
             posture = postures[release.id]
             counts = _counts(posture.get("counts"))

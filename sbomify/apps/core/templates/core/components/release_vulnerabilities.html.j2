@@ -80,6 +80,8 @@ old as its last scan. The notice says since when and why, and a zero reads as
     {% else %}
         <c-feedback.empty-state size="sm" icon="fas fa-check" title="No vulnerabilities found" message="The latest scans found no known vulnerabilities in this release." />
     {% endif %}
+{% elif vulnerabilities.untracked %}
+    <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="Never scanned" message="sbomify stopped monitoring this release before its SBOMs were scanned, so it has no results." />
 {% else %}
     <c-feedback.empty-state size="sm" icon="fas fa-hourglass-half" icon_variant="neutral" title="Not scanned yet" message="Scan results appear here once this release's SBOMs have been scanned." />
 {% endif %}

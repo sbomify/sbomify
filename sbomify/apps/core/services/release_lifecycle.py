@@ -20,13 +20,13 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, F, OuterRef, Q, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from sbomify.apps.core.models import Release, ReleaseLink
+from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import CLEEventType, Product, ReleaseCLEEvent
+from sbomify.apps.sboms.models import SBOM, CLEEventType, Product, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -107,27 +107,83 @@ _UNTRACKED_REASONS = {
 }
 
 
-def untracked_notice(release: Release) -> dict[str, Any] | None:
-    """Since when and why sbomify stopped monitoring a release, or ``None`` while it still does.
+def still_scanned_release_ids(release_ids: Iterable[str], team_id: Any) -> set[str]:
+    """Of these releases, those sbomify still scans in full, whatever their own state.
 
-    Its scans stopped then, so its vulnerability counts are as old as its last
-    scan. A support date is the last supported day: the release left the day after.
+    A live release that ships or links to one keeps it scanned, and so does a
+    release every SBOM of which is tracked anyway: shipped by a live release,
+    or its component's newest. One SBOM it alone ships is enough to leave it
+    out, since that SBOM's counts stop moving.
     """
-    state = Release.LifecycleState(release.lifecycle_state)
-    if state == Release.LifecycleState.ACTIVE:
+    release_ids = list(release_ids)
+    if not release_ids:
+        return set()
+    shipping = shipping_releases(team_id=team_id)
+    still = set(shipping.filter(pk__in=release_ids).values_list("pk", flat=True))
+
+    shipped: dict[str, set[str]] = defaultdict(set)
+    for release_id, sbom_id in ReleaseArtifact.objects.filter(
+        release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM
+    ).values_list("release_id", "sbom_id"):
+        shipped[release_id].add(sbom_id)
+    candidates = set().union(*shipped.values())
+    if candidates:
+        newest = SBOM.objects.filter(
+            component_id=OuterRef("component_id"), format=OuterRef("format"), bom_type=SBOM.BomType.SBOM
+        ).order_by("-created_at", "-id")
+        tracked = set(
+            SBOM.objects.filter(pk__in=candidates)
+            .annotate(newest=Subquery(newest.values("id")[:1]))
+            .filter(pk=F("newest"))
+            .values_list("pk", flat=True)
+        ) | set(
+            ReleaseArtifact.objects.filter(sbom_id__in=candidates, release__in=shipping).values_list(
+                "sbom_id", flat=True
+            )
+        )
+        still |= {release_id for release_id, sboms in shipped.items() if sboms <= tracked}
+    return still
+
+
+def untracked_notice(release: Release) -> dict[str, Any] | None:
+    """Since when and why sbomify stopped scanning a release, or ``None`` while it still does.
+
+    Its counts are as old as its last scan. Several things can retire a release,
+    so this names the first that happened: a release replaced in June whose
+    support then ended in January stopped in June. A support date is the last
+    supported day, so the release left the day after.
+    """
+    if release.lifecycle_state == Release.LifecycleState.ACTIVE:
         return None
-    # A live release that links to it still ships its SBOMs, so they are still scanned.
-    if shipping_releases().filter(pk=release.pk).exists():
+    if release.pk in still_scanned_release_ids([release.pk], release.product.team_id):
         return None
+
+    now = timezone.now()
+    today = timezone.localdate(now)
     end_of_life = release.end_of_life or release.product.end_of_life
     end_of_support = release.end_of_support or release.product.end_of_support
-    since = {
-        Release.LifecycleState.WITHDRAWN: release.withdrawn_at,
-        Release.LifecycleState.END_OF_LIFE: end_of_life and end_of_life + timedelta(days=1),
-        Release.LifecycleState.END_OF_SUPPORT: end_of_support and end_of_support + timedelta(days=1),
-        Release.LifecycleState.SUPERSEDED: release.superseded_at,
-        Release.LifecycleState.ARCHIVED: release.archived_at,
-    }[state]
+
+    def day(moment: datetime | None) -> date | None:
+        return timezone.localdate(moment) if moment and moment <= now else None
+
+    # Ties go to the first, the order lifecycle_state ranks them in.
+    stopped = [
+        (day(release.withdrawn_at), Release.LifecycleState.WITHDRAWN),
+        (
+            end_of_life + timedelta(days=1) if end_of_life and end_of_life < today else None,
+            Release.LifecycleState.END_OF_LIFE,
+        ),
+        (
+            end_of_support + timedelta(days=1) if end_of_support and end_of_support < today else None,
+            Release.LifecycleState.END_OF_SUPPORT,
+        ),
+        (day(release.superseded_at), Release.LifecycleState.SUPERSEDED),
+        (day(release.archived_at), Release.LifecycleState.ARCHIVED),
+    ]
+    passed = [(since, state) for since, state in stopped if since is not None]
+    if not passed:
+        return None
+    since, state = min(passed, key=lambda item: item[0])
     return {"since": since, "reason": _UNTRACKED_REASONS[state]}
 
 
