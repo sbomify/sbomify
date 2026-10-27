@@ -139,13 +139,21 @@ def surviving_supersessions() -> QuerySet[ReleaseCLEEvent]:
     return ReleaseCLEEvent.objects.filter(event_type=CLEEventType.SUPERSEDED_BY).exclude(Exists(voided))
 
 
-def identical_supersession(predecessor: Release, superseded_by_version: str, drop_in: bool) -> ReleaseCLEEvent | None:
+def identical_supersession(
+    predecessor: Release, superseded_by_version: str, drop_in: bool, effective: datetime
+) -> ReleaseCLEEvent | None:
     """The surviving edge a retry of the same declaration would duplicate, if any."""
     return (
         surviving_supersessions()
-        .filter(release=predecessor, superseded_by_version=superseded_by_version, drop_in=drop_in)
+        .filter(release=predecessor, superseded_by_version=superseded_by_version, drop_in=drop_in, effective=effective)
         .first()
     )
+
+
+def _sibling_named(product_id: str, value: str) -> Release | None:
+    """The release in ``product_id`` an edge naming ``value`` points at: version first, then name."""
+    siblings = Release.objects.filter(product_id=product_id)
+    return siblings.filter(version=value).first() or siblings.filter(name=value).first()
 
 
 def resolve_successor(predecessor: Release, superseded_by_version: str) -> ServiceResult[Release | None]:
@@ -157,10 +165,7 @@ def resolve_successor(predecessor: Release, superseded_by_version: str) -> Servi
     if predecessor.is_latest:
         return ServiceResult.failure("The latest release is never superseded.", status_code=400)
 
-    siblings = Release.objects.filter(product_id=predecessor.product_id)
-    successor = (
-        siblings.filter(version=superseded_by_version).first() or siblings.filter(name=superseded_by_version).first()
-    )
+    successor = _sibling_named(predecessor.product_id, superseded_by_version)
     if successor is not None:
         if successor.pk == predecessor.pk:
             return ServiceResult.failure("A release cannot supersede itself.", status_code=400)
@@ -179,6 +184,51 @@ def resolve_successor(predecessor: Release, superseded_by_version: str) -> Servi
             status_code=400,
         )
     return ServiceResult.success(successor)
+
+
+def link_pending_supersessions(release: Release) -> ServiceResult[int]:
+    """Point the edges declared before ``release`` existed, or before it carried its name, at it.
+
+    Such an edge is stored with no successor, so the cycle check cannot see it
+    until it is linked. Call inside the transaction that creates or renames
+    ``release``; it takes the product lock. Refuses a link that would close a
+    cycle, so the caller rolls the rename back. Linked edges stay linked when
+    a release is renamed again: the edge resolved to that release.
+    """
+    if release.is_latest:
+        return ServiceResult.success(0)
+    product = Product.objects.select_for_update().filter(pk=release.product_id).first()
+    if product is None:
+        return ServiceResult.success(0)
+
+    names = {name for name in (release.version, release.name) if name}
+    pending = (
+        surviving_supersessions()
+        .filter(
+            release__product_id=release.product_id,
+            release__is_latest=False,
+            superseded_by_release__isnull=True,
+            superseded_by_version__in=names,
+        )
+        .exclude(release_id=release.pk)
+        .select_related("release")
+    )
+    linked = 0
+    for edge in pending:
+        target = _sibling_named(release.product_id, edge.superseded_by_version)
+        if target is None or target.pk != release.pk:
+            continue
+        if _leads_back(release, edge.release):
+            return ServiceResult.failure(
+                f"Release {edge.release.name} names {edge.superseded_by_version} as its successor, and "
+                f"{release.name} already leads back to {edge.release.name}, so this would make a cycle.",
+                status_code=400,
+            )
+        ReleaseCLEEvent.objects.filter(pk=edge.pk).update(superseded_by_release=release)
+        linked += 1
+    if linked:
+        recompute_release_lifecycle(product)
+    return ServiceResult.success(linked)
 
 
 def _leads_back(successor: Release, predecessor: Release) -> bool:
