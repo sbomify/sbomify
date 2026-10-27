@@ -4,7 +4,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0033_release_lifecycle"),
+        ("core", "0034_release_lifecycle"),
         ("sboms", "0068_rename_sboms_compo_team_id_fe2066_idx_sboms_compo_workspa_3edbe9_idx_and_more"),
     ]
 

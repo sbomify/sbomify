@@ -22,6 +22,8 @@ from sbomify.apps.plugins.public_assessment_utils import (
     _is_run_passing,
     _passing_assessment_from_run,
     get_component_assessment_status,
+    get_component_latest_sbom_assessment_status,
+    get_components_latest_sbom_assessments_batch,
     get_sbom_passing_assessments,
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
@@ -33,6 +35,7 @@ PLUGINS = {
     "cisa-minimum-elements-2025": AssessmentCategory.COMPLIANCE.value,
     "osv": AssessmentCategory.SECURITY.value,
 }
+PUBLIC_PLUGINS = {name for name, category in PLUGINS.items() if category != AssessmentCategory.SECURITY.value}
 
 PASSING = {
     "summary": {"total_findings": 7, "pass_count": 6, "warning_count": 1, "fail_count": 0, "error_count": 0},
@@ -62,7 +65,11 @@ def _reference_component_status(component: Component) -> ComponentAssessmentStat
     details_by_plugin: dict[str, PassingAssessment] = {}
     for sbom_id in sbom_ids:
         runs = _get_latest_assessment_runs_for_sbom(str(sbom_id))
-        passing = [_passing_assessment_from_run(run, plugin_info) for run in runs if _is_run_passing(run)]
+        passing = [
+            _passing_assessment_from_run(run, plugin_info)
+            for run in runs
+            if _is_run_passing(run) and run.category != AssessmentCategory.SECURITY.value
+        ]
         sbom_passing[str(sbom_id)] = {p.plugin_name for p in passing}
         _collect_details(details_by_plugin, passing)
     common = set.intersection(*sbom_passing.values())
@@ -155,14 +162,30 @@ class TestComponentStatusMatchesPerSbomReads:
         assert [p.plugin_name for p in actual.passing_assessments] == ["ntia-minimum-elements-2021"]
         assert actual.passing_assessments[0].standard_name == "Minimum elements"
 
-    def test_all_passing_keeps_every_plugin_and_the_oldest_time(self, component):
+    def test_all_passing_keeps_every_public_plugin_and_the_oldest_time(self, component):
         _add_sboms(component, 4)
 
         expected = _reference_component_status(component)
         actual = get_component_assessment_status(component)
 
         assert actual == expected
-        assert {p.plugin_name for p in actual.passing_assessments} == set(PLUGINS)
+        assert {p.plugin_name for p in actual.passing_assessments} == PUBLIC_PLUGINS
+
+    @pytest.mark.parametrize("scan", [CLEAN_SCAN, DIRTY_SCAN])
+    def test_a_security_scan_never_changes_what_is_public(self, component, scan):
+        """A badge shown only for a clean scan discloses, by its absence, open vulnerabilities."""
+        (sbom,) = _add_sboms(component, 1)
+        _run(sbom, "osv", scan, minutes_ago=1)
+        # An SBOM only a scanner has looked at must not empty the aggregate either.
+        scanned_only = _sbom(component)
+        _run(scanned_only, "osv", scan, minutes_ago=1)
+
+        assert get_sbom_passing_assessments(str(scanned_only.id)) == []
+        latest = get_component_latest_sbom_assessment_status(component)
+        assert latest.passing_assessments == []
+        assert not latest.has_assessments
+        assert get_components_latest_sbom_assessments_batch([component]) == {str(component.id): []}
+        assert {p.plugin_name for p in get_sbom_passing_assessments(str(sbom.id))} == PUBLIC_PLUGINS
 
     def test_single_sbom_list_matches(self, component):
         (sbom,) = _add_sboms(component, 1)
