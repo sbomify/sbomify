@@ -35,14 +35,19 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         verb = "would queue" if options["dry_run"] else "queued"
+        failed: list[str] = []
         for plugin, label, sweep in SWEEPS:
             if options["plugin"] not in (None, plugin):
                 continue
             stats = sweep(team_key=options["workspace"], dry_run=options["dry_run"])
             if stats["status"] != "completed":
-                raise CommandError(f"{label}: {stats.get('error', 'failed')}")
+                # One scanner down must not keep the others from running.
+                failed.append(f"{label}: {stats.get('error', 'failed')}")
+                continue
             found = stats["sboms_found"]
             self.stdout.write(
                 f"{label}: {found} tracked SBOM{'' if found == 1 else 's'}, {verb} {stats['assessments_enqueued']}, "
                 f"skipped {stats['skipped_recent']} scanned recently and {stats['skipped_failure_backoff']} failing."
             )
+        if failed:
+            raise CommandError("; ".join(failed))

@@ -16,7 +16,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -156,6 +156,33 @@ def supersession_links(release_id: str) -> dict[str, list[ReleaseCLEEvent]]:
         "replaces": list(edges.filter(superseded_by_release_id=release_id)),
         "replaced_by": list(edges.filter(release_id=release_id)),
     }
+
+
+def recently_retired_releases(days: int, now: datetime | None = None) -> QuerySet[Release]:
+    """Named releases a date retired within the last ``days`` days.
+
+    A support date, an end of life or a supersession dated ahead retires a
+    release with no write to hang a reconcile on, so the daily sweep reads
+    these. A withdrawal, an archive or a new edge reconciles as it is written.
+    Dates follow ``tracked_releases``: a release's own wins over its
+    product's, and a date is the last supported day.
+    """
+    now = now or timezone.now()
+    today = now.date()
+    since = today - timedelta(days=days)
+    passed = (
+        Q(lifecycle_eos__gte=since, lifecycle_eos__lt=today)
+        | Q(lifecycle_eol__gte=since, lifecycle_eol__lt=today)
+        | Q(superseded_at__gte=now - timedelta(days=days), superseded_at__lte=now)
+    )
+    return (
+        Release.objects.filter(is_latest=False)
+        .alias(
+            lifecycle_eos=Coalesce("end_of_support", "product__end_of_support"),
+            lifecycle_eol=Coalesce("end_of_life", "product__end_of_life"),
+        )
+        .filter(passed)
+    )
 
 
 def surviving_supersessions() -> QuerySet[ReleaseCLEEvent]:
