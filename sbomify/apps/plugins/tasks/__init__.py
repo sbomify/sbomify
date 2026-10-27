@@ -1508,6 +1508,8 @@ def _run_scheduled_security_scans(
     skip_hours: int,
     task_name: str,
     only_cyclonedx: bool = False,
+    team_key: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
@@ -1522,6 +1524,8 @@ def _run_scheduled_security_scans(
         skip_hours: Skip SBOMs scanned within this many hours.
         task_name: Short label used in log messages.
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
+        team_key: Only this workspace.
+        dry_run: Count what would be enqueued; enqueue nothing.
 
     Returns:
         Dictionary with scan statistics.
@@ -1552,7 +1556,10 @@ def _run_scheduled_security_scans(
     try:
         # Find teams with this plugin enabled, filtered by billing plan.
         team_configs: dict[int, dict[str, Any]] = {}
-        for settings_obj in TeamPluginSettings.objects.select_related("team"):
+        team_settings = TeamPluginSettings.objects.select_related("team")
+        if team_key:
+            team_settings = team_settings.filter(team__key=team_key)
+        for settings_obj in team_settings:
             if not settings_obj.is_plugin_enabled(plugin_name):
                 continue
             if not plan_filter(settings_obj.team):
@@ -1661,6 +1668,10 @@ def _run_scheduled_security_scans(
                     stats["skipped_failure_backoff"] += 1
                     continue
 
+                if dry_run:
+                    stats["assessments_enqueued"] += 1
+                    continue
+
                 team_id = sbom_row["component__team_id"]
                 plugin_config = team_configs.get(team_id) or None
 
@@ -1673,9 +1684,10 @@ def _run_scheduled_security_scans(
                 stats["assessments_enqueued"] += 1
 
         logger.info(
-            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, "
+            "[TASK_%s] Completed%s: %d %s assessments enqueued across %d teams, "
             "%d skipped (recent), %d skipped (failing)",
             task_name,
+            " (dry run, none actually enqueued)" if dry_run else "",
             stats["assessments_enqueued"],
             plugin_name,
             stats["teams_scanned"],
@@ -1702,7 +1714,7 @@ def _run_scheduled_security_scans(
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def weekly_osv_scan_task() -> dict[str, Any]:
+def weekly_osv_scan_task(team_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
     Scans eligible SBOMs (with at least one release association) for Community-plan
@@ -1716,6 +1728,8 @@ def weekly_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_community_team,
         skip_hours=168,  # 7 days
         task_name="weekly_osv_scan",
+        team_key=team_key,
+        dry_run=dry_run,
     )
 
 
@@ -1732,7 +1746,7 @@ def weekly_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def daily_osv_scan_task() -> dict[str, Any]:
+def daily_osv_scan_task(team_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
     Scans eligible SBOMs (with at least one release association) for paid teams.
@@ -1746,6 +1760,8 @@ def daily_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_paid_team,
         skip_hours=24,
         task_name="daily_osv_scan",
+        team_key=team_key,
+        dry_run=dry_run,
     )
 
 
@@ -1765,7 +1781,7 @@ def daily_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def hourly_dt_scan_task() -> dict[str, Any]:
+def hourly_dt_scan_task(team_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
     Scans eligible CycloneDX SBOMs (with at least one release association) for paid
@@ -1780,6 +1796,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         skip_hours=1,
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
+        team_key=team_key,
+        dry_run=dry_run,
     )
 
 
