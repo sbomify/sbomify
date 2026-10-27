@@ -28,7 +28,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         parser.add_argument("--plugin", choices=["dependency-track", "osv"], help="Only this scanner.")
-        parser.add_argument("--workspace", help="Only this workspace (its key).")
+        parser.add_argument(
+            "--workspace", help="Only this workspace. Write --workspace=KEY: a key can start with a dash."
+        )
         parser.add_argument("--dry-run", action="store_true", help="Count what would be queued; queue nothing.")
 
     def handle(self, *args: Any, **options: Any) -> None:
