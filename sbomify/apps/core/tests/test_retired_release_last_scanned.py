@@ -10,7 +10,7 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact, ReleaseLink
 from sbomify.apps.core.services.release_lifecycle import untracked_notice
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
@@ -25,9 +25,7 @@ WITHDRAWN = datetime(2025, 3, 3, 12, tzinfo=dt_timezone.utc)
 
 
 def _scan(release: Release, name: str, completed_at: datetime, findings: list[dict[str, Any]]) -> SBOM:
-    component = Component.objects.create(
-        team=release.product.team, name=name, visibility=Component.Visibility.PUBLIC
-    )
+    component = Component.objects.create(team=release.product.team, name=name, visibility=Component.Visibility.PUBLIC)
     sbom = SBOM.objects.create(name=name, component=component, version="1.0", format="cyclonedx")
     ReleaseArtifact.objects.create(release=release, sbom=sbom)
     AssessmentRun.objects.create(
@@ -105,6 +103,14 @@ class TestUntrackedNotice:
             team_with_business_plan, is_latest=True, end_of_life=date(2025, 3, 2), product_fields={"name": "Console"}
         )
         assert untracked_notice(latest) is None
+
+    def test_a_retired_release_a_live_release_links_to_is_still_monitored(
+        self, team_with_business_plan: Workspace
+    ) -> None:
+        linked = self._release(team_with_business_plan, withdrawn_at=WITHDRAWN)
+        linking = Release.objects.create(product=_product(team_with_business_plan, name="Console"), name="2.0.0")
+        ReleaseLink.objects.create(release=linking, linked_release=linked)
+        assert untracked_notice(linked) is None
 
 
 class TestReleasePage:
@@ -202,3 +208,19 @@ class TestReleasesList:
         assert page.count("None at last scan") == 1
         assert page.count("Last scanned 2 Mar 2025") == 1
         assert "Last scanned 9 Mar 2025" not in page
+
+    def test_a_retired_release_a_live_release_links_to_is_not_frozen(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = _product(team_with_business_plan)
+        linked = Release.objects.create(product=product, name="1.0.0")
+        _scan(linked, "old", OLDEST, [])
+        _withdraw(linked)
+        linking = Release.objects.create(product=_product(team_with_business_plan, name="Console"), name="2.0.0")
+        ReleaseLink.objects.create(release=linking, linked_release=linked)
+
+        page = " ".join(
+            authenticated_web_client.get(reverse("core:product_releases", args=[product.id])).content.decode().split()
+        )
+        assert "Last scanned" not in page
+        assert "at last scan" not in page

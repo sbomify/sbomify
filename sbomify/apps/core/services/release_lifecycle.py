@@ -114,6 +114,9 @@ def untracked_notice(release: Release) -> dict[str, Any] | None:
     state = Release.LifecycleState(release.lifecycle_state)
     if state == Release.LifecycleState.ACTIVE:
         return None
+    # A live release that links to it still ships its SBOMs, so they are still scanned.
+    if shipping_releases().filter(pk=release.pk).exists():
+        return None
     end_of_life = release.end_of_life or release.product.end_of_life
     end_of_support = release.end_of_support or release.product.end_of_support
     since = {
