@@ -37,6 +37,8 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
         if request.method == "GET" and product_id and product_id not in dict(products):
             return HttpResponse("Product not found", status=404)
         candidates = replacement_candidates(product_id) if product_id in dict(products) else []
+        # The product select sends the prerelease box along, so a reload keeps the rule below.
+        is_prerelease = bool(request.GET.get("is_prerelease")) if request.method == "GET" else False
         form = ReleaseCreateForm(
             request.POST if request.method == "POST" else None,
             products=products,
@@ -44,7 +46,9 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
             initial={
                 "product_id": product_id,
                 # The release a new one most often replaces. A prerelease is offered, never chosen for you.
-                "replaces": next((release.pk for release in candidates if not release.is_prerelease), ""),
+                "replaces": ""
+                if is_prerelease
+                else next((release.pk for release in candidates if not release.is_prerelease), ""),
                 "replaces_line": "same",
             },
         )

@@ -3279,6 +3279,18 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             "error_code": ErrorCode.FORBIDDEN,
         }
 
+    # A drop-in edge stops sbomify monitoring the release it names, so every
+    # supersession write needs release:manage. Publishing alone does not cover it,
+    # on create or on the retry that returns an existing release.
+    if payload.supersedes and not can(request, "release:manage", product):
+        return 403, {
+            "detail": (
+                "Naming the releases this one replaces needs permission to manage releases. "
+                "Create the release without supersedes, or use a token that can manage releases."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
         return 400, {
