@@ -206,6 +206,45 @@ def test_timeline_reads_newest_and_oldest_from_the_list_not_from_props(rendered:
     assert "group-last/event:hidden" in item
 
 
+def test_version_check_keeps_its_title_inside_and_announces_one_result(rendered: str) -> None:
+    """The title sits in the panel so its top edge lines up with the side
+    column, and a typed version is announced once, not by every row."""
+    check = rendered.split('data-probe="version-check"', 1)[1]
+    assert "versionCheck('probe-checks')" in _open_tag(rendered, "div", 'data-probe="version-check"')
+    assert "<h2" in check.split('data-probe="version-row"', 1)[0]
+    assert 'aria-live="polite"' in check
+
+
+def test_version_row_folds_its_chips_without_scripts_and_unfolds_a_match(rendered: str) -> None:
+    """Chips past the limit fold behind a native details, and a chip whose range
+    holds the typed version shows even while folded."""
+    row = rendered.split('data-probe="version-row"', 1)[1].split('data-probe="version-row-quiet"', 1)[0]
+    assert 'aria-label="Affected versions of Acme Gateway"' in row
+    assert row.count("<li") == 3
+    assert "Show all 3" in row
+    folded = _classes(row, "li", "From 2.0.0")
+    assert {"[display:none]", "group-has-[details[open]]/fold:[display:list-item]"} <= folded
+    assert "data-[match=in]:[display:list-item]" in folded
+    assert ":data-match=\"match('row', 2)\"" in row
+
+
+def test_version_row_renders_nothing_for_a_slot_left_empty(rendered: str) -> None:
+    """A slot a page leaves out, or sets inside a false condition, must not
+    leave an empty paragraph holding a gap open in the row."""
+    row = rendered.split('data-probe="version-row-quiet"', 1)[1].split("</c-branded", 1)[0]
+    row = row.split('data-probe="expandable"', 1)[0]
+    assert "font-mono text-xs text-text-muted" not in row
+    assert "text-sm leading-6" not in row
+
+
+def test_expandable_clamps_only_once_scripts_run(rendered: str) -> None:
+    """Without scripts the whole text shows: the clamp is bound by Alpine,
+    never written into the markup."""
+    body = _open_tag(rendered.split('data-probe="expandable"', 1)[1], "div", 'x-ref="body"')
+    assert ":data-clamped=" in body
+    assert " data-clamped" not in body.replace(":data-clamped", "")
+
+
 def test_a_markdown_link_reads_in_the_body_ink_over_the_legacy_repaint(rendered: str) -> None:
     """The renderer marks links .text-primary, which a public page repaints in
     the accent with !important, so the note's link colour has to be important
@@ -531,6 +570,25 @@ def test_badge_drives_every_tone_from_one_recipe(rendered: str) -> None:
     critical = _open_tag(rendered, "span", 'data-probe="badge-critical"')
     assert "--tone: var(--color-severity-critical)" in critical
     assert "bg-[color-mix(in_oklab,var(--tone)_14%,transparent)]" in critical
+
+
+def test_a_dashed_badge_is_an_outline_that_cannot_pass_for_a_tone(rendered: str) -> None:
+    """Withdrawn once borrowed the medium tint and read as a second severity."""
+    dashed = _classes(rendered, "span", 'data-probe="badge-dashed"')
+    assert {"border-dashed", "bg-[transparent]"} <= dashed
+    assert "border-solid" not in dashed
+    assert not any("_14%" in utility for utility in dashed)
+
+
+def test_a_labelled_meta_item_sets_only_its_value_in_mono(rendered: str) -> None:
+    """The label is a word, the value an identifier; several of them wrap apart."""
+    item = _classes(rendered, "span", 'data-probe="meta-labelled"')
+    assert "font-mono" not in item
+    assert "[flex-wrap:wrap]" in item
+    tag = _open_tag(rendered, "span", 'data-probe="meta-labelled"')
+    after = rendered[rendered.index(tag) + len(tag) :]
+    value = r"<span class=\"\[display:contents\] text-text-secondary font-mono text-xs\">"
+    assert re.search(r"<span>\s*CVE IDs\s*</span>\s*" + value, after)
 
 
 def test_badge_covers_the_whole_severity_ramp(rendered: str) -> None:

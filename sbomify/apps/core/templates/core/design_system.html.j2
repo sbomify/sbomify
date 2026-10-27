@@ -2248,9 +2248,18 @@ first-of-type rule that drops the leading hairline reads the section's position
             <c-branded.badge brand>Advisory</c-branded.badge>
             </c-slot>
             <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
-                <c-branded.badge tone="critical">Critical</c-branded.badge>
-                <c-branded.meta-item mono>CVE-2026-21004</c-branded.meta-item>
-                <c-branded.meta-item icon="fas fa-bullhorn">Published 3 Aug 2026</c-branded.meta-item>
+                <div class="flex items-center gap-2">
+                    <c-branded.badge tone="critical">Critical</c-branded.badge>
+                    <c-branded.badge><i class="fas fa-wrench" aria-hidden="true"></i>Fix in progress</c-branded.badge>
+                </div>
+                <c-branded.meta-item label="CVSS">9.8</c-branded.meta-item>
+                <c-branded.meta-item mono label="CVE ID">CVE-2026-21004</c-branded.meta-item>
+                <c-branded.meta-item label="Published">3 Aug 2026</c-branded.meta-item>
+            </div>
+            <div class="flex items-center gap-2">
+                <c-branded.badge tone="success"><i class="fas fa-circle-check" aria-hidden="true"></i>Resolved</c-branded.badge>
+                <c-branded.badge dashed><i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn</c-branded.badge>
+                <c-branded.badge><i class="fas fa-lock" aria-hidden="true"></i>Restricted</c-branded.badge>
             </div>
             </c-branded.page-header>
             </c-branded.masthead>
@@ -2288,6 +2297,46 @@ first-of-type rule that drops the leading hairline reads the section's position
                 </c-branded.facts>
                 </c-branded.panel>
             </div>
+            {% with n=forloop.counter|stringformat:"s" %}
+                {% with checks_id="demo-version-checks-"|add:n %}
+                    {{ demo_version_checks|json_script:checks_id }}
+                    <c-branded.version-check checks="{{ checks_id }}" field_id="demo-version-check-{{ forloop.counter }}" class="mt-4">
+                    <c-branded.version-row key="gateway" heading="Acme Gateway" status_label="Fixed" status_variant="success" :versions="demo_version_labels_gateway" label="Affected versions of Acme Gateway">
+                    Upgrade to <span class="font-mono text-text">2.4.1</span>.
+                    </c-branded.version-row>
+                    <c-branded.version-row key="agent" heading="Acme Agent" status_label="Affected" status_variant="danger" :versions="demo_version_labels_agent" label="Affected versions of Acme Agent">
+                    <c-slot name="eyebrow">CVE-2026-21004</c-slot>
+                    No fix yet. Turn off remote provisioning until one ships.
+                    </c-branded.version-row>
+                    <c-branded.version-row key="console" heading="Acme Console" status_label="Not affected" status_variant="success">
+                    <c-slot name="meta">Code not present</c-slot>
+                    The console never loads the parser.
+                    </c-branded.version-row>
+                    </c-branded.version-check>
+                {% endwith %}
+            {% endwith %}
+            <c-branded.surface class="mt-4">
+            <c-branded.expandable more="Read the full description" less="Show less">
+            <c-branded.markdown class="text-sm leading-7 text-text-secondary">
+            <h3>Summary</h3>
+            <p>
+                A crafted packet can crash the parser before authentication. Any gateway that accepts traffic from
+                an untrusted network is exposed.
+            </p>
+            <h3>Impact</h3>
+            <p>
+                An attacker who can reach the management port can stop the gateway. Repeated packets keep it down.
+                We have no evidence this was used.
+            </p>
+            <h3>Remediation</h3>
+            <ol>
+                <li>Upgrade to 2.4.1 or later.</li>
+                <li>Restrict the management port to trusted networks.</li>
+                <li>Restart the gateway after upgrading.</li>
+            </ol>
+            </c-branded.markdown>
+            </c-branded.expandable>
+            </c-branded.surface>
             </c-branded.surface>
             </c-branded.theme>
         {% endfor %}
