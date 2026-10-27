@@ -3,7 +3,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0032_drop_document_revision_vex_pins"),
+        ("core", "0033_release_links"),
     ]
 
     operations = [

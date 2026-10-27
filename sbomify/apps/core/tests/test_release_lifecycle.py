@@ -29,7 +29,7 @@ from sbomify.apps.core.services.release_lifecycle import (
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.models import Product, ReleaseCLEEvent
 
-backfill = importlib.import_module("sbomify.apps.core.migrations.0034_backfill_release_lifecycle")
+backfill = importlib.import_module("sbomify.apps.core.migrations.0035_backfill_release_lifecycle")
 
 PAST = datetime(2025, 1, 1, tzinfo=dt_timezone.utc)
 

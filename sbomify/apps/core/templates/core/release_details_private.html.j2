@@ -164,6 +164,15 @@
     {% if vulnerabilities.assessed or vulnerabilities.unassessed %}
         {% include 'core/components/release_vulnerabilities.html.j2' %}
     {% endif %}
+    {# Its own live region: a link added or removed through the API repaints it. #}
+    <div id="release-links"
+         x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
+         hx-get="{{ request.get_full_path }}"
+         hx-select="#release-links"
+         hx-trigger="live-refresh"
+         hx-swap="morph"
+         hx-disinherit="*"
+         {% if not linked_releases %}hidden{% endif %}>{% include 'core/components/release_links.html.j2' %}</div>
     {# Release Artifacts #}
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
