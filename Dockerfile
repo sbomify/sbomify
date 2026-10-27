@@ -30,7 +30,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 0: Keycloak Theme Build (Fully Independent)
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS keycloak-build
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS keycloak-build
 
 WORKDIR /keycloak-build
 
@@ -44,7 +44,7 @@ COPY keycloak/themes/ ./themes/
 RUN bun install --frozen-lockfile && bun run build
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS js-build-prod
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS js-build-prod
 
 WORKDIR /js-build
 
@@ -105,7 +105,7 @@ COPY bin/minify-static-css.ts ./bin/
 RUN bun bin/minify-static-css.ts sbomify/static/css
 
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS frontend-dev-server
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS frontend-dev-server
 
 WORKDIR /app-frontend
 
