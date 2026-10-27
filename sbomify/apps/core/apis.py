@@ -83,6 +83,8 @@ from .schemas import (
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
     ReleaseCreateSchema,
+    ReleaseLinkCreateSchema,
+    ReleaseLinkSchema,
     ReleasePatchSchema,
     ReleaseResponseSchema,
     ReleaseUpdateSchema,
@@ -3638,6 +3640,21 @@ def _can_read_release(request: HttpRequest, product: Product) -> bool:
     return can(request, "release:read", product).allowed and is_authorised_for_product(request, product)
 
 
+def _readable_linked_product_ids(request: HttpRequest, release: Release) -> set[str] | None:
+    """The linked releases' products this reader may read in full, or None for all of them.
+
+    Only an OIDC bot is confined to some products; anyone else holding read on
+    the release holds it across the workspace the links stay inside.
+    """
+    from sbomify.apps.core.services.release_links import linked_release_ids
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    if not request_is_oidc_authed(request):
+        return None
+    products = Product.objects.filter(releases__id__in=linked_release_ids(release)).distinct()
+    return {str(product.id) for product in products if _can_read_release(request, product)}
+
+
 def _download_filename(product_name: str, release_name: str, extension: str) -> str:
     """Build a safe download filename from user-controlled product/release names.
 
@@ -3690,19 +3707,6 @@ def download_release(
         if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    # Get all SBOM artifacts in the release
-    from sbomify.apps.sboms.models import SBOM
-
-    sbom_artifacts = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).select_related(
-        "sbom"
-    )
-
-    if not sbom_artifacts.exists():
-        # An empty release is the caller's situation, not a server fault. This
-        # answered a hand-rolled 500 with no error_code, built outside ninja's
-        # pipeline, for what is simply "nothing here to download".
-        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
-
     # Normalize format early
     format_lower = output_format.lower()
 
@@ -3712,6 +3716,20 @@ def download_release(
     include_non_public = bool(
         getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
+    # Linked releases reach that full view only on products this reader may read in
+    # full: an OIDC bot gets the rest of them as the public does.
+    readable_product_ids = _readable_linked_product_ids(request, release) if include_non_public else None
+
+    from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
+    from sbomify.apps.sboms.models import SBOM
+
+    # Preserve downloads for releases with their own SBOMs. A release
+    # without any can still download the linked members its reader sees.
+    has_own_sboms = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).exists()
+    if not has_own_sboms and not aggregate_sbom_artifacts(
+        release, include_non_public=include_non_public, readable_product_ids=readable_product_ids
+    ):
+        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
 
     try:
         # Use the SBOM package generator with user for signed URLs
@@ -3724,6 +3742,7 @@ def download_release(
                 output_format=format_lower,
                 version=version,
                 include_non_public=include_non_public,
+                readable_product_ids=readable_product_ids,
             )
 
             # Read the generated SBOM file
@@ -4327,6 +4346,148 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         }
 
     artifact.delete()
+    _broadcast_release_updated(release)
+    return 204, None
+
+
+# =============================================================================
+# LINKED RELEASES - A RELEASE THAT SHIPS WITH ANOTHER PRODUCT'S RELEASE
+# =============================================================================
+
+
+def _release_link_response(link: Any) -> dict[str, Any]:
+    linked = link.linked_release
+    return {
+        "id": str(linked.id),
+        "name": linked.name,
+        "version": linked.version,
+        "product_id": str(linked.product_id),
+        "product_name": linked.product.name,
+        "is_prerelease": linked.is_prerelease,
+        "linked_at": link.created_at,
+    }
+
+
+_LINK_ERROR_CODES = {
+    400: ErrorCode.BAD_REQUEST,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+}
+
+
+@router.get(
+    "/releases/{release_id}/links",
+    response={200: list[ReleaseLinkSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def list_release_links(request: HttpRequest, release_id: str) -> Any:
+    """List the releases of other products this release links to."""
+    from sbomify.apps.core.services.release_links import release_links
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    signed_in = bool(getattr(request, "user", None) and request.user.is_authenticated)
+    if not release.product.is_public and not (signed_in and _can_read_release(request, release.product)):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # A reader from outside the workspace, on a public product, sees links to public products only.
+    include_private = signed_in and _can_read_release(request, release.product)
+    return 200, [_release_link_response(link) for link in release_links(release, include_private=include_private)]
+
+
+@router.post(
+    "/releases/{release_id}/links",
+    response={
+        201: ReleaseLinkSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def link_release_to_release(request: HttpRequest, release_id: str, payload: ReleaseLinkCreateSchema) -> Any:
+    """Link a release of another product, by its id or by product and version.
+
+    The linked release is listed with this one, and its SBOMs are included in this
+    release's aggregate SBOM. Linking does not move or copy any artifact.
+    """
+    from sbomify.apps.core.services.release_links import find_release, link_release
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    if not can(request, "release:tag", release.product):
+        return 403, {
+            "detail": "You do not have permission to link releases to this release",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # An OIDC bot may link from the releases it may tag, the products holding its
+    # component. The linked product does not have to hold it: that is the point.
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    if not is_authorised_for_product(request, release.product):
+        return 403, {
+            "detail": "This OIDC token cannot change releases of a product its component is not part of",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    linked = find_release(
+        release.product.team_id,
+        release_id=payload.release_id,
+        product_id=payload.product_id,
+        version=payload.version,
+    )
+    if linked is None:
+        return 404, {"detail": "Release to link not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    result = link_release(release, linked)
+    if not result.ok:
+        status = result.status_code or 400
+        return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
+
+    _broadcast_release_updated(release)
+    return 201, _release_link_response(result.value)
+
+
+@router.delete(
+    "/releases/{release_id}/links/{linked_release_id}",
+    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def unlink_release_from_release(request: HttpRequest, release_id: str, linked_release_id: str) -> Any:
+    """Remove a linked release."""
+    from sbomify.apps.core.services.release_links import unlink_release
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    if not can(request, "release:manage", release.product):
+        return 403, {
+            "detail": "You don't have permission to manage this release's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    result = unlink_release(release, linked_release_id)
+    if not result.ok:
+        status = result.status_code or 400
+        return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
+
     _broadcast_release_updated(release)
     return 204, None
 

@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import Client
 
-from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact, ReleaseLink
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import SBOM
@@ -164,3 +164,68 @@ def test_bot_still_lists_releases_to_check_one_exists(bot_token, own_release):
 
     assert response.status_code == 200
     assert str(own_release.id) in {item["id"] for item in response.json()["items"]}
+
+
+# ---------------------------------------------------------------------------
+# Linked releases. A publish workflow links its release to the toolchain it
+# ships with, a product its bound component is not part of. That must not widen
+# what the bot reads: through a link, a product it does not publish to reads as
+# the public sees it.
+# ---------------------------------------------------------------------------
+
+
+def _link(token: str, release: Release, target: Release):
+    return Client().post(
+        f"/api/v1/releases/{release.id}/links",
+        data=json.dumps({"release_id": target.id}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+
+def test_bot_links_its_release_to_a_product_it_does_not_publish_to(bot_token, own_release, other_release):
+    response = _link(bot_token, own_release, other_release)
+    assert response.status_code == 201, response.content
+    assert ReleaseLink.objects.filter(release=own_release, linked_release=other_release).exists()
+
+
+def test_bot_cannot_link_from_a_product_it_does_not_publish_to(bot_token, own_release, other_release):
+    assert _link(bot_token, other_release, own_release).status_code == 403
+
+
+def test_bot_download_reads_the_linked_product_as_the_public_does(bot_token, own_release, other_release, builders):
+    ReleaseLink.objects.create(release=own_release, linked_release=other_release)
+
+    response = Client().get(f"/api/v1/releases/{own_release.id}/download", HTTP_AUTHORIZATION=f"Bearer {bot_token}")
+
+    assert response.status_code == 200
+    kwargs = builders["sbom"].call_args.kwargs
+    assert kwargs["include_non_public"] is True
+    assert kwargs["readable_product_ids"] == set()
+
+
+def test_bot_download_reads_a_linked_product_it_publishes_to_in_full(
+    bot_token, own_release, other_release, bound_component, builders
+):
+    other_release.product.components.add(bound_component)
+    ReleaseLink.objects.create(release=own_release, linked_release=other_release)
+
+    Client().get(f"/api/v1/releases/{own_release.id}/download", HTTP_AUTHORIZATION=f"Bearer {bot_token}")
+
+    assert builders["sbom"].call_args.kwargs["readable_product_ids"] == {other_release.product_id}
+
+
+def test_a_member_download_is_not_confined(authenticated_api_client, team_with_business_plan, builders):
+    from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+    product = Product.objects.create(name="App", team=team_with_business_plan)
+    release = Release.objects.create(product=product, name="v1")
+    component = Component.objects.create(name="c", team=team_with_business_plan)
+    ReleaseArtifact.objects.create(
+        release=release, sbom=SBOM.objects.create(name="s", component=component, format="cyclonedx")
+    )
+    client, token = authenticated_api_client
+
+    client.get(f"/api/v1/releases/{release.id}/download", **get_api_headers(token))
+
+    assert builders["sbom"].call_args.kwargs["readable_product_ids"] is None
