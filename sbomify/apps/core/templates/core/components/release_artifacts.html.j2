@@ -96,21 +96,18 @@
                     <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
                 </div>
                 </c-tables.cell>
-                <c-tables.cell>
-                {% comment %}
-                    Not the cell's nowrap: its wrapper clips the row as one box,
-                    so a long name pushed the type badge out of view. The name
-                    ellipsises on its own and the badge always keeps its width.
-                {% endcomment %}
-                <div class="flex items-center gap-2 min-w-0">
-                    <a :href="getArtifactUrl(artifact)"
-                       class="text-primary font-medium hover:underline truncate min-w-0"
-                       :title="getArtifactName(artifact)"
-                       x-text="getArtifactName(artifact)"></a>
-                    <span class="shrink-0 whitespace-nowrap px-2 py-0.5 text-xs font-medium rounded-full"
-                          :class="getArtifactBadgeClass(artifact)"
-                          x-text="getArtifactType(artifact).toUpperCase()"></span>
-                </div>
+                <c-tables.cell nowrap>
+                <c-tables.name>
+                <a :href="getArtifactUrl(artifact)"
+                   class="text-primary font-medium hover:underline"
+                   :title="getArtifactName(artifact)"
+                   x-text="getArtifactName(artifact)"></a>
+                <c-slot name="trail">
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="getArtifactBadgeClass(artifact)"
+                      x-text="getArtifactType(artifact).toUpperCase()"></span>
+                </c-slot>
+                </c-tables.name>
                 </c-tables.cell>
                 <c-tables.cell>
                 <a :href="getComponentUrl(artifact)"

@@ -191,7 +191,10 @@ def test_release_artifact_name_ellipsises_without_clipping_its_type_badge(
     cell = table.locator("tbody tr").first.locator("td").nth(1)
     link = cell.get_by_role("link", name=name, exact=True)
     expect(link).to_have_attribute("title", name)
-    assert link.evaluate("el => el.scrollWidth > el.clientWidth"), "The long name should ellipsise"
+    # The name line's own box carries the ellipsis, so measure it rather than the link.
+    name_box = link.locator("xpath=..")
+    expect(name_box).to_have_css("text-overflow", "ellipsis")
+    assert name_box.evaluate("el => el.scrollWidth > el.clientWidth"), "The long name should ellipsise"
     badge = cell.get_by_text("SBOM", exact=True)
     expect(badge).to_be_visible()
     # The badge sits wholly inside its cell rather than past the clipped edge.
