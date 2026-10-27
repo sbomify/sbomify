@@ -423,12 +423,22 @@ def list_release_cle_events(
 
 @router.post(
     "/releases/{release_id}/cle/events",
-    response={201: ReleaseCLEEventResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ReleaseCLEEventResponseSchema,
+        201: ReleaseCLEEventResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
 )
 def create_release_cle_event_endpoint(
     request: HttpRequest, release_id: str, payload: ReleaseCLEEventCreateSchema
 ) -> Any:
-    """Create a new CLE lifecycle event for a release."""
+    """Create a new CLE lifecycle event for a release.
+
+    Repeating a supersession with the same version, ``drop_in`` and date
+    returns the existing event with 200, since nothing was written.
+    """
     result = _get_release_or_404(request, release_id)
     if not isinstance(result, Release):
         return result
@@ -456,7 +466,7 @@ def create_release_cle_event_endpoint(
         error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
         return status, {"detail": svc_result.error, "error_code": error_code}
 
-    return 201, svc_result.value
+    return svc_result.status_code or 201, svc_result.value
 
 
 @router.get(

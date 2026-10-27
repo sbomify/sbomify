@@ -36,6 +36,7 @@ from sbomify.apps.core.queries import (
 from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     declare_supersedes,
+    link_pending_supersessions,
     set_release_state,
     surviving_supersessions,
 )
@@ -3285,6 +3286,18 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             "error_code": ErrorCode.FORBIDDEN,
         }
 
+    # A drop-in edge stops sbomify monitoring the release it names, so every
+    # supersession write needs release:manage. Publishing alone does not cover it,
+    # on create or on the retry that returns an existing release.
+    if payload.supersedes and not can(request, "release:manage", product):
+        return 403, {
+            "detail": (
+                "Naming the releases this one replaces needs permission to manage releases. "
+                "Create the release without supersedes, or use a token that can manage releases."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
         return 400, {
@@ -3309,6 +3322,10 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 created_at=created_at,
                 released_at=released_at,
             )
+            linked = link_pending_supersessions(release)
+            if not linked.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
             declared = declare_supersedes(release, payload.supersedes, actor_id=request.user.pk)
             if not declared.ok:
                 transaction.set_rollback(True)
@@ -3496,6 +3513,10 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
             if payload.released_at is not None:
                 release.released_at = payload.released_at
             release.save()
+            linked = link_pending_supersessions(release)
+            if not linked.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
@@ -3582,6 +3603,11 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             # Only save if something actually changed
             if changed:
                 release.save()
+            if {"name", "version"} & update_data.keys():
+                linked = link_pending_supersessions(release)
+                if not linked.ok:
+                    transaction.set_rollback(True)
+                    return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
@@ -3656,25 +3682,34 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
-    # Deleting a successor would quietly turn each edge into one to a release
-    # outside sbomify, which still retires its predecessor.
-    superseded = surviving_supersessions().filter(superseded_by_release=release).values("release_id").distinct().count()
-    if superseded:
-        return 400, {
-            "detail": (
-                f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
-                "Withdraw those supersessions first."
-            ),
-            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
-        }
-
     # Capture data for broadcast before deleting
     workspace_key = release.product.team.key
     product_id = str(release.product.id)
     release_name = release.name
 
     try:
-        release.delete()
+        with transaction.atomic():
+            # Deleting a successor would quietly turn each drop-in edge into one
+            # to a release outside sbomify, which still retires its predecessor.
+            # The product lock keeps a new edge from landing between the check
+            # and the delete.
+            Product.objects.select_for_update().filter(pk=release.product_id).first()
+            superseded = (
+                surviving_supersessions()
+                .filter(superseded_by_release=release, drop_in=True)
+                .values("release_id")
+                .distinct()
+                .count()
+            )
+            if superseded:
+                return 400, {
+                    "detail": (
+                        f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
+                        "Withdraw those supersessions first."
+                    ),
+                    "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+                }
+            release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
