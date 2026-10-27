@@ -24,6 +24,16 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
     page of this site rather than as a card dropped onto it. Identity first
     (the id a reader quotes), then the title, then the one-line summary, then
     the facts they check before reading further.
+
+    Two answers are badges: how bad it is and where it is now. Every status is
+    a badge with its icon, and only Resolved takes a colour, so the one a
+    reader hopes for stands out without the others reading as metadata. A
+    withdrawn advisory has no live status, so Withdrawn takes its place.
+    Restricted explains why a colleague cannot see the page; it is not a
+    status, so it stays neutral beside the id.
+
+    Everything else is a labelled value, and appears only here: the side column
+    used to repeat the id, severity, dates and CVEs.
     {% endcomment %}
     <c-branded.masthead>
     <c-branded.back-link href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">Security advisories</c-branded.back-link>
@@ -31,24 +41,38 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
     <c-slot name="eyebrow">
     <span class="font-mono text-text-muted">{{ advisory.id }}</span>
     {% if advisory.is_gated %}
-        <c-branded.badge brand title="Visible to you because you have access to the affected products">
+        <c-branded.badge title="Visible to you because you have access to the affected products">
         <i class="fas fa-lock" aria-hidden="true"></i>Restricted
         </c-branded.badge>
     {% endif %}
-    {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
     </c-slot>
     <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
-        <c-branded.badge tone="{{ advisory.severity|default:'none' }}">{{ advisory.severity_label }}</c-branded.badge>
-        {% if advisory.status == 'resolved' %}
-            <c-branded.badge tone="success">
-            <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
-            </c-branded.badge>
-        {% elif advisory.status_label %}
-            <c-branded.meta-item icon="{{ advisory.status_icon }}">{{ advisory.status_label }}</c-branded.meta-item>
+        <div class="flex items-center gap-2">
+            <c-branded.badge tone="{{ advisory.severity|default:'none' }}">{{ advisory.severity_label }}</c-branded.badge>
+            {% if advisory.is_withdrawn %}
+                <c-branded.badge dashed>
+                <i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn
+                </c-branded.badge>
+            {% elif advisory.status_label %}
+                <c-branded.badge tone="{% if advisory.status == 'resolved' %}success{% endif %}">
+                <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                </c-branded.badge>
+            {% endif %}
+        </div>
+        {% if advisory.cvss_score is not None %}
+            <c-branded.meta-item label="CVSS">{{ advisory.cvss_score }}</c-branded.meta-item>
         {% endif %}
-        {% if advisory.cve_ids %}<c-branded.meta-item mono>{{ advisory.cve_ids|join:", " }}</c-branded.meta-item>{% endif %}
-        <c-branded.meta-item icon="fas fa-bullhorn">Published {{ advisory.published_display|default:"—" }}</c-branded.meta-item>
-        <c-branded.meta-item icon="fas fa-clock-rotate-left">Updated {{ advisory.updated_age }}</c-branded.meta-item>
+        {% if advisory.cve_ids %}
+            <c-branded.meta-item mono label="CVE ID{{ advisory.cve_ids|pluralize }}">
+            {% for cve in advisory.cve_ids %}
+                <span class="whitespace-nowrap">{{ cve }}{% if not forloop.last %},{% endif %}</span>
+            {% endfor %}
+            </c-branded.meta-item>
+        {% endif %}
+        <c-branded.meta-item label="Published">{{ advisory.published_display|default:"Not yet" }}</c-branded.meta-item>
+        <c-branded.meta-item label="Updated">
+        <time datetime="{{ advisory.updated_at|date:'c' }}" title="{{ advisory.updated_display }}">{{ advisory.updated_age }}</time>
+        </c-branded.meta-item>
     </div>
     </c-branded.page-header>
     </c-branded.masthead>
@@ -64,56 +88,38 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
         <div class="grid items-start gap-8 min-[900px]:grid-cols-[minmax(0,1fr)_20rem]">
             {# ---- Main column --------------------------------------------------- #}
             <div class="min-w-0 flex flex-col gap-10">
+                {% comment %}
+                The answer comes before the explanation. A reader arrives asking
+                whether they are affected and what to do, so the per-product
+                status leads, with a field that checks the version they run,
+                and the description follows, folded to its opening.
+
+                The vulnerability only shows when there is more than one,
+                because otherwise it repeats the title on every row.
+                {% endcomment %}
+                {% if advisory.statuses %}
+                    {{ advisory.version_checks|json_script:"advisory-version-checks" }}
+                    <c-branded.version-check checks="advisory-version-checks">
+                    {% for row in advisory.statuses %}
+                        <c-branded.version-row key="{{ row.id }}" heading="{{ row.product }}" status_label="{{ row.status_label }}" status_variant="{{ row.status_variant }}" :versions="row.version_labels" label="Affected versions of {{ row.product }} for {{ row.vulnerability }}">
+                        {% if advisory.vulnerability_count > 1 %}<c-slot name="eyebrow">{{ row.vulnerability }}</c-slot>{% endif %}
+                        {% if row.justification %}<c-slot name="meta">{{ row.justification }}</c-slot>{% endif %}
+                        {% comment %}The fix sets the recommendation, and the instructions usually name it too. Saying "Upgrade to v2. Upgrade to v2." reads as a mistake.{% endcomment %}
+                        {% if row.recommended_version and not row.action_names_recommendation %}
+                            Upgrade to <span class="font-mono text-text">{{ row.recommended_version }}</span>.
+                        {% endif %}
+                        {{ row.action_statement|default:row.impact_statement }}
+                        </c-branded.version-row>
+                    {% endfor %}
+                    </c-branded.version-check>
+                {% endif %}
                 {% if advisory.description %}
                     <section class="flex flex-col gap-4">
                         <c-branded.section-header title="Description" />
                         <c-branded.surface>
+                        <c-branded.expandable more="Read the full description" less="Show less">
                         <c-branded.markdown class="text-sm leading-7 text-text-secondary">{{ advisory.description|strict_markdown }}</c-branded.markdown>
-                        </c-branded.surface>
-                    </section>
-                {% endif %}
-                {% if advisory.statuses %}
-                    <section class="flex flex-col gap-4">
-                        <c-branded.section-header title="Am I affected?" subtitle="Each affected product, its status, and what to do about it." />
-                        <c-branded.surface flush>
-                        <c-tables.table variant_class="min-w-[34rem]" aria-label="Affected products">
-                        <c-tables.head>
-                        <c-tables.header-cell scope="col">Product</c-tables.header-cell>
-                        <c-tables.header-cell scope="col">Vulnerability</c-tables.header-cell>
-                        <c-tables.header-cell scope="col">Status</c-tables.header-cell>
-                        <c-tables.header-cell scope="col">Affected versions</c-tables.header-cell>
-                        <c-tables.header-cell scope="col">What to do</c-tables.header-cell>
-                        </c-tables.head>
-                        <tbody>
-                            {% for row in advisory.statuses %}
-                                <c-tables.row class="align-top">
-                                <c-tables.cell class="font-medium">{{ row.product }}</c-tables.cell>
-                                <c-tables.cell class="font-mono text-xs">
-                                <div class="min-w-[10rem] [overflow-wrap:anywhere]">{{ row.vulnerability }}</div>
-                                </c-tables.cell>
-                                <c-tables.cell>
-                                <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
-                                {% if row.justification %}<div class="text-xs text-text-muted mt-1">{{ row.justification }}</div>{% endif %}
-                                </c-tables.cell>
-                                {% if row.version_labels %}
-                                    <c-tables.cell>
-                                    <c-lists.folding :items="row.version_labels" label="Affected versions of {{ row.product }} for {{ row.vulnerability }}" class="min-w-[9rem]" />
-                                    </c-tables.cell>
-                                {% else %}
-                                    <c-tables.cell class="font-mono text-xs whitespace-nowrap">—</c-tables.cell>
-                                {% endif %}
-                                <c-tables.cell muted>
-                                {% comment %}The fix sets the recommendation, and the instructions usually name it too. Saying "Upgrade to v2. Upgrade to v2." reads as a mistake.{% endcomment %}
-                                {% if row.recommended_version and not row.action_names_recommendation %}
-                                    Upgrade to <span class="font-mono text-text">{{ row.recommended_version }}</span>.
-                                {% endif %}
-                                {{ row.action_statement|default:row.impact_statement }}
-                                {% if not row.recommended_version and not row.action_statement and not row.impact_statement %}—{% endif %}
-                                </c-tables.cell>
-                                </c-tables.row>
-                            {% endfor %}
-                        </tbody>
-                        </c-tables.table>
+                        </c-branded.expandable>
                         </c-branded.surface>
                     </section>
                 {% endif %}
@@ -182,27 +188,12 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                 {% endif %}
             </div>
             {# ---- Sidebar ------------------------------------------------------- #}
-            <aside class="flex flex-col gap-4">
-                <c-branded.panel title="Details">
-                <c-branded.facts>
-                <c-branded.fact label="Advisory ID">
-                <span class="font-mono text-xs">{{ advisory.id }}</span>
-                </c-branded.fact>
-                <c-branded.fact label="Severity">
-                <c-branded.badge tone="{{ advisory.severity|default:'none' }}">{{ advisory.severity_label }}</c-branded.badge>
-                </c-branded.fact>
-                {% if advisory.cvss_score is not None %}
-                    <c-branded.fact label="CVSS">{{ advisory.cvss_score }}</c-branded.fact>
-                {% endif %}
-                <c-branded.fact label="Published">{{ advisory.published_display|default:"—" }}</c-branded.fact>
-                <c-branded.fact label="Last updated">{{ advisory.updated_display|default:"—" }}</c-branded.fact>
-                {% if advisory.cve_ids %}
-                    <c-branded.fact label="Identifiers">
-                    <span class="font-mono text-xs">{{ advisory.cve_ids|join:", " }}</span>
-                    </c-branded.fact>
-                {% endif %}
-                </c-branded.facts>
-                </c-branded.panel>
+            {% comment %}
+            Sticky on a wide screen, the same as the advisory list's filters: a
+            long description otherwise scrolls the facts away and leaves an empty
+            column beside the text.
+            {% endcomment %}
+            <aside class="flex flex-col gap-4 min-[900px]:sticky min-[900px]:top-[4.5rem]">
                 {% if advisory.products or advisory.withheld_product_count %}
                     <c-branded.panel title="Affected products">
                     <div class="flex items-center gap-2 [flex-wrap:wrap]">
