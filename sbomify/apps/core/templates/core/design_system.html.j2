@@ -108,7 +108,7 @@
     <tbody>
         <c-tables.row>
         <c-tables.cell><c-overview.record href="{% url 'core:products_dashboard' %}" title="Example product" detail="3 components" /></c-tables.cell>
-        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" /></c-tables.cell>
+        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" noun="component" /></c-tables.cell>
         </c-tables.row>
     </tbody>
     </c-overview.table>
@@ -1671,7 +1671,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-feedback.alert variant="success" title="Saved">Your changes have been saved.</c-feedback.alert>
         <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
         <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
-        <c-feedback.alert variant="info">10 components still need a completed security assessment.</c-feedback.alert>
+        <c-feedback.alert variant="info">10 components have not been scanned yet. The counts above leave them out.</c-feedback.alert>
         <c-feedback.alert variant="success" title="security.txt">
         Served at <c-code-inline>/.well-known/security.txt</c-code-inline>. Fill the named action slot with the
         control that resolves the notice and it sits at the end of the row.
