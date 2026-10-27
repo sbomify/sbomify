@@ -17,7 +17,7 @@ def backfill_release_lifecycle(apps, schema_editor):
     Release = apps.get_model("core", "Release")
     ReleaseCLEEvent = apps.get_model("sboms", "ReleaseCLEEvent")
 
-    product_ids = set(ReleaseCLEEvent.objects.order_by().values_list("release__product_id", flat=True))
+    product_ids = ReleaseCLEEvent.objects.order_by().values_list("release__product_id", flat=True).distinct()
     for product_id in product_ids:
         releases = {release.pk: release for release in Release.objects.filter(product_id=product_id)}
         by_version = {release.version: release for release in releases.values() if release.version}
@@ -36,7 +36,13 @@ def backfill_release_lifecycle(apps, schema_editor):
             if event.event_type == "supersededBy" and event.superseded_by_release_id is None:
                 version = event.superseded_by_version
                 successor = by_version.get(version) or by_name.get(version)
-                if successor is not None and successor.pk != event.release_id and not successor.is_latest:
+                predecessor = releases[event.release_id]
+                if (
+                    successor is not None
+                    and successor.pk != event.release_id
+                    and not successor.is_latest
+                    and not predecessor.is_latest
+                ):
                     event.superseded_by_release_id = successor.pk
                     resolved.append(event)
             if (event.release_id, event.event_id) in voided:
