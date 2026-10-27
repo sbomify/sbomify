@@ -127,6 +127,8 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
     authenticated_page: Page, dashboard: dict[str, Any], kind: str
 ) -> None:
     page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(f"/{kind}/")
     table = page.get_by_role("table", name=kind.title(), exact=True)
     search = page.get_by_role("searchbox", name=f"Search {kind}", exact=True)
@@ -156,6 +158,9 @@ def test_inventory_result_swaps_keep_sort_refresh_and_history(
     expect(search).to_have_value("Test")
     expect(table.locator("th").first).to_have_attribute("aria-sort", order)
     expect(page.locator("#sidebar")).to_have_count(1)
+    # A restored page must not bring back what Alpine rendered, such as the
+    # teleported confirm dialog, without the component that rendered it.
+    assert errors == []
 
 
 @pytest.mark.django_db
