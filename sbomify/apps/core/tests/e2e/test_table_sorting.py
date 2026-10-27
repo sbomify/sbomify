@@ -175,6 +175,34 @@ def test_advisory_sorting_preserves_columns_and_position(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 1280])
+def test_release_artifact_name_ellipsises_without_clipping_its_type_badge(
+    authenticated_page: Page, product_details: Product, width: int
+) -> None:
+    page = authenticated_page
+    release = product_details.releases.get(name="v1.0.0")
+    name = "sbom-tools - " + " ".join(["a much longer artifact name"] * 3)
+    sbom = SBOM.objects.get(component__in=product_details.components.all())
+    SBOM.objects.filter(pk=sbom.pk).update(name=name)
+    ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(f"/product/{product_details.id}/release/{release.id}/")
+    table = page.get_by_role("table", name="Release artifacts", exact=True)
+    cell = table.locator("tbody tr").first.locator("td").nth(1)
+    link = cell.get_by_role("link", name=name, exact=True)
+    expect(link).to_have_attribute("title", name)
+    assert link.evaluate("el => el.scrollWidth > el.clientWidth"), "The long name should ellipsise"
+    badge = cell.get_by_text("SBOM", exact=True)
+    expect(badge).to_be_visible()
+    # The badge sits wholly inside its cell rather than past the clipped edge.
+    assert badge.evaluate("""el => {
+        const badge = el.getBoundingClientRect();
+        const cell = el.closest('td').getBoundingClientRect();
+        return badge.left >= cell.left && badge.right <= cell.right && el.scrollWidth <= el.clientWidth;
+    }""")
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
 def test_release_picker_sorts_independently_of_the_release_table(
     authenticated_page: Page, product_details: Product, sbom_factory: Callable[..., SBOM], width: int
