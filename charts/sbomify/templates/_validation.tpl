@@ -73,13 +73,13 @@ identity.
 {{- end }}
 
 {{/*
-The health path is not ours to choose. Django registers it in urls.py and
-exempts that exact prefix in SECURE_REDIRECT_EXEMPT, so a different value here
-points the kubelet probes and the edge at a 404 while the chart still renders.
-It stays a value because three templates need it, not because it is tunable.
+The health path reaches the app as HEALTH_CHECK_PATH, and the Caddyfile, the
+probes and the edge test use it verbatim. The app refuses anything that is not
+one plain path segment between slashes, so refuse it here too rather than ship
+pods that crash at startup.
 */}}
-{{- if ne .Values.caddy.healthPath "/UuPha8mu/" }}
-{{- fail "sbomify: caddy.healthPath must stay /UuPha8mu/. The application hardcodes that path in urls.py and SECURE_REDIRECT_EXEMPT, so changing it here only breaks the probes and the edge health route." }}
+{{- if not (regexMatch "^/[A-Za-z0-9_-]+/$" .Values.caddy.healthPath) }}
+{{- fail (printf "sbomify: caddy.healthPath must look like /some-segment/ (letters, digits, '-' or '_'), got %q" .Values.caddy.healthPath) }}
 {{- end }}
 
 {{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}

@@ -58,6 +58,9 @@ x-common-env: &common-env
   POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
   POSTHOG_HOST: ${POSTHOG_HOST:-https://us.i.posthog.com}
   GITHUB_API_TOKEN: ${GITHUB_API_TOKEN:-}
+  # Path of the app health check, routed by Caddy and probed by the backend
+  # healthcheck. Must look like /some-segment/.
+  HEALTH_CHECK_PATH: ${HEALTH_CHECK_PATH:-/UuPha8mu/}
 
 services:
   sbomify-db:
@@ -128,7 +131,7 @@ services:
         condition: service_completed_successfully
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/UuPha8mu/', timeout=4).close()"]
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:8000' + os.environ['HEALTH_CHECK_PATH'], timeout=4).close()"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -149,6 +152,7 @@ services:
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
       ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
       ACME_CA: ${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
+      HEALTH_CHECK_PATH: ${HEALTH_CHECK_PATH:-/UuPha8mu/}
     depends_on:
       - sbomify-backend
     healthcheck:

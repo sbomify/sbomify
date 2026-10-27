@@ -34,6 +34,7 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
+from sbomify.health_check_path import resolve_health_check_path
 from sbomify.logging_filters import (
     is_benign_shielded_future_error,
     is_on_demand_tls_ask_denial,
@@ -123,6 +124,10 @@ def _env_positive_float(value: str | None, default: float) -> float:
 # Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
 REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
 PENDING_INVITATIONS_CACHE_TTL = int(os.environ.get("PENDING_INVITATIONS_CACHE_TTL", "60"))
+
+# Path of the django-health-check endpoint, e.g. "/UuPha8mu/". Caddy, the compose
+# healthcheck and the Helm chart read the same variable, so set it once for all of them.
+HEALTH_CHECK_PATH = resolve_health_check_path(os.environ.get("HEALTH_CHECK_PATH"))
 
 # ALLOWED_HOSTS set to wildcard - actual host validation done in middleware
 # Django 4.0+ requires ALLOWED_HOSTS to be a plain list/tuple
@@ -1360,7 +1365,7 @@ else:
     # endpoint Caddy hits to decide whether to issue a certificate for a custom/trust
     # center domain. A 301 here makes Caddy refuse the redirect and deny the cert.
     SECURE_SSL_REDIRECT = True
-    SECURE_REDIRECT_EXEMPT = [r"^UuPha8mu/", r"^api/v1/internal/"]
+    SECURE_REDIRECT_EXEMPT = [f"^{HEALTH_CHECK_PATH.lstrip('/')}", r"^api/v1/internal/"]
 
     # HSTS (Caddy sets it at the edge too; harmless to assert at the app for direct hits).
     SECURE_HSTS_SECONDS = 31536000  # 1 year
