@@ -212,6 +212,7 @@ def build_inventory_snapshot(
         for release in releases:
             posture = postures[release.id]
             counts = _counts(posture.get("counts"))
+            lifecycle_state = release.lifecycle_state
             rows.append(
                 {
                     "id": release.id,
@@ -239,7 +240,10 @@ def build_inventory_snapshot(
                     else "Prerelease"
                     if release.is_prerelease
                     else "Release",
-                    "lifecycle_state": release.lifecycle_state,
+                    "lifecycle_state": lifecycle_state,
+                    # A release sbomify no longer monitors is not scanned again:
+                    # its counts are as old as its last scan, and the row says so.
+                    "frozen_at": None if lifecycle_state == "active" else posture.get("last_scanned_at"),
                     "url": reverse("core:release_details", args=[release.product_id, release.id]),
                 }
             )

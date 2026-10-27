@@ -4,6 +4,10 @@ The release's vulnerabilities, deduplicated across its SBOMs and with VEX
 applied: the same rollup the product page prints for this release. The first
 ten rows show by default; the rest wait behind a toggle so a release carrying
 hundreds does not push its artifacts off the page.
+
+A release sbomify no longer monitors is not scanned again, so its counts are as
+old as its last scan. The notice says since when and why, and a zero reads as
+"at last scan", never as clean today.
 {% endcomment %}
 <c-tables.shell id="release-vulnerabilities" x-data="{ expanded: false }">
 <c-tables.toolbar>
@@ -17,6 +21,16 @@ hundreds does not push its artifacts off the page.
     </c-slot>
 {% endif %}
 </c-tables.toolbar>
+{% if vulnerabilities.untracked %}
+    <div class="px-4 pt-4">
+        <c-feedback.alert icon="fas fa-clock-rotate-left" title="Not monitored since {{ vulnerabilities.untracked.since|date:'j M Y' }}">
+        {{ vulnerabilities.untracked.reason }}
+        {% if vulnerabilities.last_scanned_at %}
+            These counts are from its last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
+        {% endif %}
+        </c-feedback.alert>
+    </div>
+{% endif %}
 {% if vulnerabilities.assessed %}
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 px-4 py-4">
         <c-layout.stat-card compact value="{{ vulnerabilities.counts.total }}" label="Open" />
@@ -61,6 +75,8 @@ hundreds does not push its artifacts off the page.
             </c-buttons.secondary>
         {% endif %}
         </c-tables.footer>
+    {% elif vulnerabilities.untracked %}
+        <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No vulnerabilities at last scan" message="sbomify no longer scans this release. A vulnerability published since then would not show here." />
     {% else %}
         <c-feedback.empty-state size="sm" icon="fas fa-check" title="No vulnerabilities found" message="The latest scans found no known vulnerabilities in this release." />
     {% endif %}

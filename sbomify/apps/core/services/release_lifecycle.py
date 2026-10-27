@@ -16,7 +16,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -70,6 +70,36 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
 def replacement_candidates(product_id: str) -> list[Release]:
     """The releases a new release of the product can supersede: named, still monitored, newest first."""
     return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
+
+
+_UNTRACKED_REASONS = {
+    Release.LifecycleState.WITHDRAWN: "It was withdrawn.",
+    Release.LifecycleState.END_OF_LIFE: "It reached end of life.",
+    Release.LifecycleState.END_OF_SUPPORT: "Its support ended.",
+    Release.LifecycleState.SUPERSEDED: "A newer release replaced it.",
+    Release.LifecycleState.ARCHIVED: "It was archived.",
+}
+
+
+def untracked_notice(release: Release) -> dict[str, Any] | None:
+    """Since when and why sbomify stopped monitoring a release, or ``None`` while it still does.
+
+    Its scans stopped then, so its vulnerability counts are as old as its last
+    scan. A support date is the last supported day: the release left the day after.
+    """
+    state = Release.LifecycleState(release.lifecycle_state)
+    if state == Release.LifecycleState.ACTIVE:
+        return None
+    end_of_life = release.end_of_life or release.product.end_of_life
+    end_of_support = release.end_of_support or release.product.end_of_support
+    since = {
+        Release.LifecycleState.WITHDRAWN: release.withdrawn_at,
+        Release.LifecycleState.END_OF_LIFE: end_of_life and end_of_life + timedelta(days=1),
+        Release.LifecycleState.END_OF_SUPPORT: end_of_support and end_of_support + timedelta(days=1),
+        Release.LifecycleState.SUPERSEDED: release.superseded_at,
+        Release.LifecycleState.ARCHIVED: release.archived_at,
+    }[state]
+    return {"since": since, "reason": _UNTRACKED_REASONS[state]}
 
 
 def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:

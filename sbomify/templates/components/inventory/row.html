@@ -61,7 +61,9 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
     </c-tables.cell>
 {% endif %}
 <c-tables.cell compact>
-{% if row.security_applicable %}
+{% if row.security_applicable and kind == 'releases' %}
+    <c-overview.exposure compact :counts="row.counts" :unassessed="row.unassessed" :last_scanned="row.frozen_at" />
+{% elif row.security_applicable %}
     <c-overview.exposure compact :counts="row.counts" :unassessed="row.unassessed" />
 {% else %}
     <span class="text-xs text-text-muted">Not applicable</span>

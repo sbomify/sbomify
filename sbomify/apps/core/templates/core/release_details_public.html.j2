@@ -96,6 +96,12 @@
                      x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); } }"
                      x-init="init()">
                 <c-branded.section-header title="Vulnerability posture" subtitle="Known vulnerabilities across this release, with our VEX statements applied." />
+                {% if untracked %}
+                    <c-branded.notice icon="fas fa-clock-rotate-left" title="Not monitored since {{ untracked.since|date:'j M Y' }}">
+                    {{ untracked.reason }}
+                    These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                    </c-branded.notice>
+                {% endif %}
                 <c-branded.surface class="flex flex-col gap-5">
                 {# Severity breakdown (VEX applied) #}
                 <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
@@ -143,7 +149,13 @@
                 </div>
                 <p class="text-sm text-text-muted m-0"
                    x-show="!data.findings.length"
-                   x-cloak>No vulnerabilities found in this release.</p>
+                   x-cloak>
+                    {% if untracked %}
+                        No known vulnerabilities at its last scan.
+                    {% else %}
+                        No vulnerabilities found in this release.
+                    {% endif %}
+                </p>
                 </c-branded.surface>
             </section>
         {% endif %}

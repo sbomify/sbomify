@@ -71,6 +71,7 @@ class ReleaseDetailsPublicView(View):
         # the link, so which vulnerabilities a workspace is carrying stays the
         # workspace's own to disclose. This page shows what the public sees, to
         # members too: they read the full posture inside the app.
+        from sbomify.apps.core.services.release_lifecycle import untracked_notice
         from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_posture
 
         if team and team.publish_vulnerability_posture:
@@ -82,6 +83,9 @@ class ReleaseDetailsPublicView(View):
             "brand": brand,
             "release": release,
             "vuln_posture": vuln_posture,
+            # A release sbomify no longer monitors keeps the posture of its last
+            # scan, and the page says how old that is.
+            "untracked": untracked_notice(release_obj) if vuln_posture.get("has_data") else None,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the
             # releases list and component pages. The current release isn't

@@ -4,8 +4,12 @@ The shared exposure summary always opens a severity breakdown. compact only
 changes the bar dimensions. The panel uses the existing floating dropdown and
 positioning controller so a scrolling table never clips it. No scan never reads
 as clean.
+
+last_scanned dates the counts of a release sbomify no longer monitors. Its scans
+stopped, so the summary says how old they are and a zero reads as "at last scan",
+never as clean today.
 {% endcomment %}
-<c-vars counts unassessed compact />
+<c-vars counts unassessed compact last_scanned />
 {% if counts.total %}
     <div class="inline-flex"
          x-data="actionsMenu({ focusPanel: true })"
@@ -16,7 +20,7 @@ as clean.
                 @click.stop="toggle()"
                 :aria-expanded="open"
                 aria-haspopup="dialog"
-                aria-label="Vulnerability breakdown: {{ counts.total|intcomma }} open"
+                aria-label="Vulnerability breakdown: {{ counts.total|intcomma }} open{% if last_scanned %} at last scan{% endif %}"
                 class="inline-flex items-center gap-2 rounded-md cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <c-overview.severity-bar :counts="counts" :compact="compact" />
             <i class="fas fa-chevron-down text-[0.5rem] text-text-muted"
@@ -25,7 +29,10 @@ as clean.
         <template x-teleport="body">
             <c-dropdowns.dropdown floating role="dialog" aria-label="Vulnerability breakdown" x-ref="menu" tabindex="-1" x-show="open" x-cloak ::style="style" @click.outside="close()">
             <div class="px-3 py-2">
-                <p class="mb-3 text-sm font-semibold text-text">{{ counts.total|intcomma }} open vulnerabilities</p>
+                <p class="mb-3 text-sm font-semibold text-text">
+                    {{ counts.total|intcomma }} open vulnerabilities
+                    {% if last_scanned %}at last scan{% endif %}
+                </p>
                 <dl class="grid grid-cols-2 gap-x-8 gap-y-2 text-xs text-text-muted">
                     <dt>Critical</dt>
                     <dd class="m-0 text-right tabular-nums text-text">
@@ -55,6 +62,7 @@ as clean.
         </template>
     </div>
 {% elif not unassessed %}
-    <span class="text-xs text-text-muted">No open vulnerabilities</span>
+    <span class="text-xs text-text-muted">No open vulnerabilities{% if last_scanned %} at last scan{% endif %}</span>
 {% endif %}
 {% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ unassessed }} unassessed</p>{% endif %}
+{% if last_scanned %}<p class="mt-1 mb-0 text-xs text-text-muted">Last scanned {{ last_scanned|date:"j M Y" }}</p>{% endif %}

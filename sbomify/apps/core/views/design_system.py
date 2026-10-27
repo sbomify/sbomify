@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
@@ -385,6 +387,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 },
             ],
             "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+            "overview_demo_last_scanned": date(2026, 3, 2),
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
             "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
