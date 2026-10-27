@@ -229,3 +229,24 @@ def test_a_member_download_is_not_confined(authenticated_api_client, team_with_b
     client.get(f"/api/v1/releases/{release.id}/download", **get_api_headers(token))
 
     assert builders["sbom"].call_args.kwargs["readable_product_ids"] is None
+
+
+# ---------------------------------------------------------------------------
+# Supersession. A drop-in edge stops sbomify monitoring the release it names,
+# so naming predecessors needs release:manage, which the bot does not hold.
+# ---------------------------------------------------------------------------
+
+
+def test_bot_creates_a_release_but_cannot_name_what_it_replaces(bot_token, own_release):
+    def create(**body):
+        return Client().post(
+            "/api/v1/releases",
+            data=json.dumps({"product_id": own_release.product_id, "name": "v2", "version": "v2", **body}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {bot_token}",
+        )
+
+    refused = create(supersedes=[{"release_id": own_release.id}])
+    assert refused.status_code == 403, refused.content
+    assert "manage releases" in refused.json()["detail"]
+    assert create().status_code == 201

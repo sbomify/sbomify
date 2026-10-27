@@ -12,6 +12,8 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.models import Release
 from sbomify.apps.core.services.cle import create_release_cle_event
 from sbomify.apps.core.services.release_lifecycle import set_release_state
@@ -158,6 +160,54 @@ class TestCreateWithSupersedes:
         assert len(_edges(old)) == 1
 
 
+    def test_an_edge_declared_before_the_release_existed_is_linked_not_refused(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.2.3")
+        # CI named the successor before it existed, so the edge was stored unlinked.
+        early = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4")
+        assert early.ok and early.value is not None and early.value.superseded_by_release_id is None
+
+        response = self._create(
+            authenticated_api_client, sample_product, name="1.2.4", version="1.2.4", supersedes=[{"version": "1.2.3"}]
+        )
+
+        assert response.status_code == 201, response.content
+        new = response.json()["id"]
+        assert {edge.superseded_by_release_id for edge in _edges(old)} == {new}
+        assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_a_publish_scoped_token_cannot_retire_releases(self, sample_product: Product, sample_user: Any) -> None:
+        old = _release(sample_product, "1.0.0")
+        encoded = create_personal_access_token(sample_user)
+        AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=encoded,
+            description="publish",
+            team_id=sample_product.team_id,
+            scopes=SCOPE_PRESETS["publish"],
+        )
+        Member.objects.get_or_create(team_id=sample_product.team_id, user=sample_user, defaults={"role": "owner"})
+        client = Client(HTTP_AUTHORIZATION=f"Bearer {encoded}")
+
+        def create(**body: Any) -> Any:
+            return client.post(
+                "/api/v1/releases",
+                data={"product_id": sample_product.pk, "name": "1.0.1", "version": "1.0.1", **body},
+                content_type="application/json",
+            )
+
+        refused = create(supersedes=[{"version": "1.0.0"}])
+        assert refused.status_code == 403, refused.content
+        assert "manage releases" in refused.json()["detail"]
+        assert not Release.objects.filter(product=sample_product, name="1.0.1").exists()
+
+        assert create().status_code == 201
+        # The same caller cannot add edges by retrying against the release it just made.
+        assert create(supersedes=[{"version": "1.0.0"}]).status_code == 403
+        assert _edges(old) == []
+
+
 class TestLifecycleEndpoint:
     def _act(self, api: tuple[Client, AccessToken], release: Release, **body: Any) -> Any:
         client, token = api
@@ -281,6 +331,21 @@ class TestNewReleasePage:
         assert response.status_code == 200
         assert 'id="release-replaces"' in response.content.decode()
         assert release.pk in [value for value, _label in response.context["form"].fields["replaces"].choices]
+
+    def test_a_prerelease_gets_no_default_when_the_product_changes(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        stable = _release(product, "3.4.0")
+        response = authenticated_web_client.get(
+            reverse("core:release_new"), {"product_id": product.id, "is_prerelease": "on"}, headers={"HX-Request": "true"}
+        )
+        assert response.status_code == 200
+        form = response.context["form"]
+        assert stable.pk in [value for value, _label in form.fields["replaces"].choices]
+        assert not form["replaces"].value()
+        # The product select sends the checkbox along, so the reload knows.
+        assert 'hx-include="#release-prerelease"' in response.content.decode()
 
     @pytest.mark.parametrize(("line", "drop_in"), [("same", True), ("new", False)])
     def test_creating_a_release_that_replaces_another(

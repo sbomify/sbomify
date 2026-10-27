@@ -476,9 +476,10 @@ def create_release_cle_event(
 
         extra_fields: dict[str, Any] = {}
         if is_supersession and superseded_by_version:
-            existing = identical_supersession(release, superseded_by_version, drop_in)
+            existing = identical_supersession(release, superseded_by_version, drop_in, effective)
             if existing is not None:
-                return ServiceResult.success(existing)
+                # 200, not 201: nothing was written.
+                return ServiceResult(value=existing, status_code=200)
             successor = resolve_successor(release, superseded_by_version)
             if not successor.ok:
                 return ServiceResult.failure(successor.error or "Invalid supersession", status_code=400)
