@@ -43,6 +43,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     creation_options,
     delete_advisories,
     delete_advisory,
+    edit_message,
     get_advisory,
     list_advisories,
     post_update,
@@ -50,6 +51,12 @@ from sbomify.apps.security_advisories.services.advisories import (
     publish_advisory,
     update_advisory,
     update_product_status,
+)
+from sbomify.apps.security_advisories.services.proposals import (
+    advisory_proposals,
+    approve_proposal,
+    pending_counts,
+    reject_proposal,
 )
 from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -157,6 +164,11 @@ def _advisories_context(request: HttpRequest) -> dict[str, Any]:
     team = _current_team(request)
     search = request.GET.get("search", "")
     advisories = (list_advisories(team, search).value or []) if team else []
+    # Changes AI agents proposed and nobody has decided, per advisory, so the
+    # list says which advisories need someone before the page is opened.
+    waiting = pending_counts(team) if team else {}
+    for advisory in advisories:
+        advisory["pending_review"] = waiting.get(advisory["pk"], 0)
     counts = advisory_counts(advisories)
     return {
         "current_team": current_team,
@@ -335,6 +347,12 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         advisory = result.value
         current_team = request.session.get("current_workspace") or {}
         can_write = _can_write_advisories(request)
+        review = advisory_proposals(team, advisory["pk"]).value or {}
+        # A pending edit is pointed at from the update it would change, so the
+        # reader of that update knows its wording may be about to move.
+        pending_edits = review.get("pending_edits", {})
+        for entry in advisory["timeline"]:
+            entry["pending_edit"] = pending_edits.get(entry["id"])
         return render(
             request,
             "core/security_advisory_detail.html.j2",
@@ -359,6 +377,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 "justification_options": JUSTIFICATION_OPTIONS,
                 "response_options": RESPONSE_OPTIONS,
                 "timeline": advisory["timeline"],
+                "review": review,
                 "update_kinds": UPDATE_KINDS,
                 "publish_visibilities": PUBLISHABLE_VISIBILITIES,
                 # Real VEX candidates need the linking pass; an empty list renders
@@ -459,16 +478,57 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             messages.success(request, "Advisory deleted.")
             return redirect("core:security_advisories_dashboard")
 
-        if intent in ("edit_update", "link_vex"):
-            # Only the stubs pay for the full projection lookup; the real
-            # composer path below lets post_update do the one scoped lookup.
+        if intent == "edit_update":
+            result = edit_message(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                request.POST.get("update_id", ""),
+                note=request.POST.get("note", ""),
+            )
+            if result.ok:
+                messages.success(request, "Update edited.")
+            elif result.status_code == 404 and not get_advisory(team, advisory_id).ok:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, f"Update not edited: {result.error or 'unknown error'}")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent in ("approve_proposal", "reject_proposal"):
+            proposal_id = request.POST.get("proposal_id", "")
+            if intent == "approve_proposal":
+                decided = approve_proposal(
+                    team,
+                    cast(User, request.user),
+                    advisory_id,
+                    proposal_id,
+                    # Present only when the reviewer reworded the update first.
+                    note=request.POST.get("note"),
+                    decision_note=request.POST.get("decision_note", ""),
+                )
+                done, failed = "Change approved.", "Change not approved"
+            else:
+                decided = reject_proposal(
+                    team,
+                    cast(User, request.user),
+                    advisory_id,
+                    proposal_id,
+                    reason=request.POST.get("reason", ""),
+                    decision_note=request.POST.get("decision_note", ""),
+                )
+                done, failed = "Change rejected.", "Change not rejected"
+            if decided.ok:
+                messages.success(request, done)
+            elif decided.status_code == 404 and not get_advisory(team, advisory_id).ok:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, f"{failed}: {decided.error or 'unknown error'}")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "link_vex":
             if not get_advisory(team, advisory_id).ok:
                 raise Http404("Advisory not found")
-            note = {
-                "edit_update": "Editing a timeline entry is the next pass on this UI.",
-                "link_vex": "Linking VEX documents is the pass after the CRUD one.",
-            }[intent]
-            messages.info(request, f"Not saved yet. {note}")
+            messages.info(request, "Not saved yet. Linking VEX documents is the pass after the CRUD one.")
             return redirect("core:security_advisory_detail", advisory_id=advisory_id)
 
         kind = (request.POST.get("kind") or NOTE_ONLY_KIND).strip()

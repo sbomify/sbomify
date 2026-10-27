@@ -148,6 +148,9 @@ rotation stays entirely in your system's hands.
 `AWS_SBOMS_SECRET_ACCESS_KEY` unless `objectStorage.useWorkloadIdentity` is
 set, in which case the chart neither reads nor injects them.
 
+`GITHUB_API_TOKEN` is optional. Supply it to give the SBOM Verification plugin
+an authenticated GitHub rate limit; leave it out and the pods start without it.
+
 External stores rarely let you pick key names freely, so you do not have to
 match these. Remap only what differs:
 
@@ -437,6 +440,7 @@ See [`values.yaml`](values.yaml). Every key is commented. The most important:
 | `networkPolicy.enabled` | `false` | Needs a CNI that enforces policies |
 | `database.*` / `redis.*` | required | Backing services you provide |
 | `objectStorage.*` / `auth.keycloak.*` | required | Backing services you provide |
+| `secrets.githubApiToken` | `""` | GitHub token for attestation lookups; raises the rate limit from 60 to 5,000 requests an hour |
 
 ## Verifying a release
 

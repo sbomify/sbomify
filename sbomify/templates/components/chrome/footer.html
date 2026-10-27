@@ -5,6 +5,6 @@
             <span>© {% now 'Y' %} sbomify</span>
             {% if app_version %}<span title="{{ git_commit|default:'' }}">v{{ app_version }}</span>{% endif %}
         </div>
-        <c-buttons.ghost size="sm" href="{% url 'core:support_contact' %}">Contact support</c-buttons.ghost>
+        <c-buttons.ghost size="sm" href="{% url 'core:support_contact' %}" rel="nofollow">Contact support</c-buttons.ghost>
     </div>
 </footer>

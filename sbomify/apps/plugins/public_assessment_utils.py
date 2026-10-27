@@ -4,6 +4,9 @@ This module provides functions to aggregate assessment results for public displa
 showing only passing assessments at component and product levels.
 
 Key principle: Only show assessments that PASS. Never show failures on public pages.
+
+Security scans are never shown. A badge that appears only when a scan is clean
+discloses, by its absence, that open vulnerabilities exist.
 """
 
 from dataclasses import dataclass
@@ -17,7 +20,22 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
+
     from sbomify.apps.core.models import Component, Product
+    from sbomify.apps.sboms.models import SBOM
+
+
+def _assessed_artifacts(queryset: "QuerySet[SBOM]") -> "QuerySet[SBOM]":
+    """Drop the BOM types that are never assessed.
+
+    A VEX is a statement about another SBOM, and no plugin assesses one. Left in,
+    a triage VEX uploaded after a release becomes the component's latest artifact,
+    carries no runs, and takes every badge the release earned off the page.
+    """
+    from sbomify.apps.sboms.models import SBOM
+
+    return queryset.exclude(bom_type=SBOM.BomType.VEX)
 
 
 @dataclass
@@ -74,6 +92,16 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
     """Get a mapping of plugin names to (display_name, category)."""
     plugins = RegisteredPlugin.objects.filter(is_enabled=True)
     return {p.name: (p.display_name, p.category) for p in plugins}
+
+
+def _public_runs(runs: list[AssessmentRun]) -> list[AssessmentRun]:
+    """Drop the security scans, which public pages never reflect in any way.
+
+    Dropped before aggregation, not after: a component whose scan found
+    vulnerabilities would otherwise still empty the product-level intersection
+    and take its compliance badges with it, which leaks the same fact.
+    """
+    return [run for run in runs if run.category != AssessmentCategory.SECURITY.value]
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
@@ -255,7 +283,7 @@ def _get_passing_assessments_by_sbom(
     SBOM versions would otherwise pull every one of them into memory.
     """
 
-    runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name")
+    runs = _public_runs(status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name"))
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     for run in runs:
         if _is_run_passing(run):
@@ -279,7 +307,7 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     """
     from sbomify.apps.sboms.models import SBOM
 
-    sboms = SBOM.objects.filter(component=component)
+    sboms = _assessed_artifacts(SBOM.objects.filter(component=component))
     sbom_ids = list(sboms.values_list("id", flat=True))
 
     if not sbom_ids:
@@ -391,7 +419,7 @@ def get_latest_sbom_for_component(component: "Component") -> Any:
     """
     from sbomify.apps.sboms.models import SBOM
 
-    return SBOM.objects.filter(component=component).order_by("-created_at").first()
+    return _assessed_artifacts(SBOM.objects.filter(component=component)).order_by("-created_at").first()
 
 
 def get_component_latest_sbom_assessment_status(component: "Component") -> ComponentAssessmentStatus:
@@ -412,7 +440,7 @@ def get_component_latest_sbom_assessment_status(component: "Component") -> Compo
         )
 
     # Check if any assessments were run (even failing ones)
-    latest_runs = _get_latest_assessment_runs_for_sbom(str(latest_sbom.id))
+    latest_runs = _public_runs(_get_latest_assessment_runs_for_sbom(str(latest_sbom.id)))
     has_assessments = len(latest_runs) > 0
 
     # Get only passing assessments for display
@@ -540,7 +568,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 2: Get latest SBOM for each component (single query with window function simulation)
     component_ids = list(component_to_products.keys())
     latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids)
+        _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids))
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
@@ -552,7 +580,9 @@ def get_products_latest_sbom_assessments_batch(
         # Manual deduplication for SQLite which doesn't support DISTINCT ON
         seen_components: set[str] = set()
         latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
+        for sbom in _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids)).order_by(
+            "component_id", "-created_at"
+        ):
             if str(sbom.component_id) not in seen_components:
                 seen_components.add(str(sbom.component_id))
                 latest_sbom_list.append(sbom)
@@ -566,7 +596,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 3: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = status_runs(latest_ids, "-created_at")
+    all_runs = _public_runs(status_runs(latest_ids, "-created_at"))
 
     # Step 4: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()
@@ -640,7 +670,7 @@ def get_components_latest_sbom_assessments_batch(
 
     # Step 1: Get latest SBOM for each component (single query)
     latest_sboms = (
-        SBOM.objects.filter(component_id__in=component_ids)
+        _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids))
         .order_by("component_id", "-created_at")
         .distinct("component_id")
     )
@@ -652,7 +682,9 @@ def get_components_latest_sbom_assessments_batch(
         # Manual deduplication for SQLite which doesn't support DISTINCT ON
         seen_components: set[str] = set()
         latest_sbom_list = []
-        for sbom in SBOM.objects.filter(component_id__in=component_ids).order_by("component_id", "-created_at"):
+        for sbom in _assessed_artifacts(SBOM.objects.filter(component_id__in=component_ids)).order_by(
+            "component_id", "-created_at"
+        ):
             if str(sbom.component_id) not in seen_components:
                 seen_components.add(str(sbom.component_id))
                 latest_sbom_list.append(sbom)
@@ -666,7 +698,7 @@ def get_components_latest_sbom_assessments_batch(
     # Step 2: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = status_runs(latest_ids, "-created_at")
+    all_runs = _public_runs(status_runs(latest_ids, "-created_at"))
 
     # Step 3: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()

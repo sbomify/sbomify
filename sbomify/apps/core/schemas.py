@@ -696,6 +696,33 @@ class ReleaseArtifactCreateSchema(BaseModel):
             raise ValueError("Cannot provide both sbom_id and document_id")
 
 
+class ReleaseLinkCreateSchema(BaseModel):
+    """The release to link: by ``release_id``, or by ``product_id`` and ``version``."""
+
+    release_id: str | None = None
+    product_id: str | None = None
+    version: str | None = None
+
+    @model_validator(mode="after")
+    def one_way_to_name_it(self) -> ReleaseLinkCreateSchema:
+        by_pair = bool(self.product_id and self.version)
+        if bool(self.release_id) == by_pair:
+            raise ValueError("Provide either release_id, or product_id and version")
+        return self
+
+
+class ReleaseLinkSchema(BaseModel):
+    """A release linked from another release."""
+
+    id: str
+    name: str
+    version: str
+    product_id: str
+    product_name: str
+    is_prerelease: bool
+    linked_at: datetime
+
+
 class ReleaseArtifactsUpdateSchema(BaseModel):
     """Schema for bulk updating artifacts in a release."""
 

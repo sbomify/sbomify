@@ -11,6 +11,7 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     custom_domain_redirect,
     get_public_path,
+    get_release_public_slugs,
     get_workspace_public_url,
     resolve_product_identifier,
     should_redirect_to_clean_url,
@@ -61,7 +62,14 @@ class ProductReleasesPublicView(View):
         # Hide the synthetic auto-`latest` release from the public list.
         # It serves as a stable download URL but is surfaced via the
         # "Download Latest Release" CTA on the product page, not here.
-        items = [r for r in (releases.get("items") or []) if r.get("name") != LATEST_RELEASE_NAME]
+        # The list API carries no slug, so without one every link here fell
+        # back to the release ID: a second URL for each release page.
+        public_slugs = get_release_public_slugs(product_obj)
+        items = [
+            {**r, "slug": public_slugs.get(r["id"], r["id"])}
+            for r in (releases.get("items") or [])
+            if r.get("name") != LATEST_RELEASE_NAME
+        ]
 
         context = {
             "product": product,
