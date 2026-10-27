@@ -199,6 +199,6 @@ class TestReleasesList:
         page = " ".join(
             authenticated_web_client.get(reverse("core:product_releases", args=[product.id])).content.decode().split()
         )
-        assert page.count("No open vulnerabilities at last scan") == 1
+        assert page.count("None at last scan") == 1
         assert page.count("Last scanned 2 Mar 2025") == 1
         assert "Last scanned 9 Mar 2025" not in page

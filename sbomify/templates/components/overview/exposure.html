@@ -62,7 +62,7 @@ never as clean today.
         </template>
     </div>
 {% elif not unassessed %}
-    <span class="text-xs text-text-muted">No open vulnerabilities{% if last_scanned %} at last scan{% endif %}</span>
+    <span class="text-xs text-text-muted">{% if last_scanned %}None at last scan{% else %}No open vulnerabilities{% endif %}</span>
 {% endif %}
 {% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ unassessed }} unassessed</p>{% endif %}
 {% if last_scanned %}<p class="mt-1 mb-0 text-xs text-text-muted">Last scanned {{ last_scanned|date:"j M Y" }}</p>{% endif %}
