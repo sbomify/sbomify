@@ -116,3 +116,23 @@ def test_product_tables_assignments_and_release_editor(
     expect(page.locator("#product-releases-content")).to_have_count(1)
     assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")
     assert not errors
+
+
+@pytest.mark.django_db
+def test_release_delete_confirmation_deletes(authenticated_page: Page, product_details: Product) -> None:
+    product = product_details
+    doomed = product.releases.create(name="Doomed release")
+    page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"/product/{product.id}/releases/")
+    releases = page.get_by_role("table", name="Releases", exact=True)
+    row = releases.locator("tbody tr").filter(has_text="Doomed release")
+    row.get_by_role("button", name="Actions for Doomed release", exact=True).click()
+    page.get_by_role("menuitem", name="Delete release", exact=True).click()
+    deletion = page.get_by_role("alertdialog", name="Delete release", exact=True)
+    deletion.get_by_role("button", name="Delete release", exact=True).click()
+    expect(deletion).to_be_hidden()
+    expect(row).to_have_count(0)
+    assert not product.releases.filter(id=doomed.id).exists()
+    assert not errors
