@@ -109,6 +109,7 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
             superseded_by_version=successor_version,
             drop_in=item.drop_in,
             actor_id=actor_id,
+            queue_reconcile=False,
         )
         if not result.ok or result.value is None:
             return ServiceResult.failure(result.error or "Invalid supersession", status_code=400)
@@ -117,6 +118,8 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
                 f"{successor_version} names more than one release of this product. Give this release a version.",
                 status_code=400,
             )
+    if items:
+        after_lifecycle_change(successor.product_id)
     return ServiceResult.success(None)
 
 
@@ -288,9 +291,17 @@ def set_release_state(
         Release.objects.filter(pk=locked.pk).update(**updates)
         recompute_release_lifecycle(product)
         audit(action, locked, actor_id, reason=reason)
+        after_lifecycle_change(product.pk)
 
     locked.refresh_from_db()
     return ServiceResult.success(locked)
+
+
+def after_lifecycle_change(product_id: Any) -> None:
+    """Once the write commits, bring Dependency-Track in line with where the product's releases now stand."""
+    from sbomify.apps.vulnerability_scanning.tasks import reconcile_product_dt_scope
+
+    transaction.on_commit(lambda: reconcile_product_dt_scope.send(str(product_id)))
 
 
 def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:
