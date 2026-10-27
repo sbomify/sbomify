@@ -33,7 +33,7 @@ to the workspace total, and telling that reader otherwise is simply wrong.
             <c-tables.cell><c-overview.record href="{% url 'core:product_details' product.id %}" title="{{ product.name }}" detail="{{ product.component_count|intcomma }} component{{ product.component_count|pluralize }}" /></c-tables.cell>
             <c-tables.cell>
             {% if product.security_component_count %}
-                <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" />
+                <c-overview.exposure :counts="product.counts" :unassessed="product.unassessed" noun="component" />
             {% else %}
                 <c-feedback.status>Not applicable</c-feedback.status>
             {% endif %}

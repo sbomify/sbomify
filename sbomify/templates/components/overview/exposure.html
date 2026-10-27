@@ -3,9 +3,10 @@
 The shared exposure summary always opens a severity breakdown. compact only
 changes the bar dimensions. The panel uses the existing floating dropdown and
 positioning controller so a scrolling table never clips it. No scan never reads
-as clean.
+as clean. noun names what unassessed counts (component, SBOM); without it the
+row is the one thing not scanned.
 {% endcomment %}
-<c-vars counts unassessed compact />
+<c-vars counts unassessed compact noun />
 {% if counts.total %}
     <div class="inline-flex"
          x-data="actionsMenu({ focusPanel: true })"
@@ -57,4 +58,4 @@ as clean.
 {% elif not unassessed %}
     <span class="text-xs text-text-muted">No open vulnerabilities</span>
 {% endif %}
-{% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ unassessed }} unassessed</p>{% endif %}
+{% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{% if noun %}{{ unassessed|intcomma }} {{ noun }}{{ unassessed|pluralize }} not scanned yet{% else %}Not scanned yet{% endif %}</p>{% endif %}
