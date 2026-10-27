@@ -12,7 +12,9 @@ lives in core/design_system.html.j2 and is for looking at.
 <c-branded.badge brand data-probe="badge-brand">Verified</c-branded.badge>
 <c-branded.badge data-probe="badge-neutral">Draft</c-branded.badge>
 <c-branded.badge dashed data-probe="badge-dashed">Withdrawn</c-branded.badge>
-<c-branded.meta-item mono label="CVE IDs" data-probe="meta-labelled"><span class="whitespace-nowrap">CVE-2026-0001,</span> <span class="whitespace-nowrap">CVE-2026-0002</span></c-branded.meta-item>
+{% with ids="CVE-2026-0001 CVE-2026-0002" %}
+    <c-branded.meta-item mono label="CVE IDs" :values="ids.split" data-probe="meta-labelled" />
+{% endwith %}
 <c-branded.nav>
 <c-branded.nav-item href="/a" icon="fas fa-house" current data-probe="nav-current">Overview</c-branded.nav-item>
 <c-branded.nav-item href="/b" icon="fas fa-shield-halved" data-probe="nav-other">Advisories</c-branded.nav-item>

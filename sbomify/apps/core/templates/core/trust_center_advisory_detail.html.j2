@@ -54,7 +54,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                 <i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn
                 </c-branded.badge>
             {% elif advisory.status_label %}
-                <c-branded.badge tone="{% if advisory.status == 'resolved' %}success{% endif %}">
+                <c-branded.badge tone="{{ advisory.status_tone }}">
                 <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
                 </c-branded.badge>
             {% endif %}
@@ -63,15 +63,12 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
             <c-branded.meta-item label="CVSS">{{ advisory.cvss_score }}</c-branded.meta-item>
         {% endif %}
         {% if advisory.cve_ids %}
-            <c-branded.meta-item mono label="CVE ID{{ advisory.cve_ids|pluralize }}">
-            {% for cve in advisory.cve_ids %}
-                <span class="whitespace-nowrap">{{ cve }}{% if not forloop.last %},{% endif %}</span>
-            {% endfor %}
-            </c-branded.meta-item>
+            <c-branded.meta-item mono label="CVE ID{{ advisory.cve_ids|pluralize }}" :values="advisory.cve_ids" />
         {% endif %}
         <c-branded.meta-item label="Published">{{ advisory.published_display|default:"Not yet" }}</c-branded.meta-item>
         <c-branded.meta-item label="Updated">
-        <time datetime="{{ advisory.updated_at|date:'c' }}" title="{{ advisory.updated_display }}">{{ advisory.updated_age }}</time>
+        <time datetime="{{ advisory.updated_at|date:'c' }}"
+              title="{{ advisory.updated_display }}">{{ advisory.updated_age }}</time>
         </c-branded.meta-item>
     </div>
     </c-branded.page-header>

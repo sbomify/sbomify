@@ -712,6 +712,8 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         "status_label": remediation.get("label", ""),
         "status_variant": remediation.get("variant", "secondary"),
         "status_icon": remediation.get("icon", "fas fa-circle"),
+        # The header's status badge: Resolved is the one status in colour.
+        "status_tone": "success" if advisory.remediation_status == SecurityAdvisory.RemediationStatus.RESOLVED else "",
         "is_open": advisory.remediation_status not in SecurityAdvisory.CLOSED_REMEDIATION_STATUSES,
         "publication_status": advisory.status,
         "publication_label": advisory.get_status_display(),
