@@ -80,14 +80,16 @@ def releases_linked_from(release_ids: Any) -> set[str]:
     return reached
 
 
-def shipping_releases(now: datetime | None = None) -> QuerySet[Release]:
+def shipping_releases(now: datetime | None = None, team_id: Any = None) -> QuerySet[Release]:
     """The releases whose SBOMs sbomify tracks: the tracked releases and every release they link to.
 
     A linked release's SBOMs are part of the linking release's aggregate SBOM,
     so a live release keeps them tracked even when the linked release is itself
-    retired. A retired release's links keep nothing alive.
+    retired. A retired release's links keep nothing alive. Links never cross
+    workspaces, so ``team_id`` limits the walk to one without changing the answer.
     """
-    tracked = tracked_releases(now=now).values("pk")
+    releases = Release.objects.all() if team_id is None else Release.objects.filter(product__team_id=team_id)
+    tracked = tracked_releases(releases, now=now).values("pk")
     return Release.objects.filter(Q(pk__in=tracked) | Q(pk__in=releases_linked_from(tracked)))
 
 
