@@ -1,0 +1,26 @@
+{% comment %}
+The releases of other products this release ships with. Both release pages
+render it: public frames it as a Trust Center section, the app page as a table
+like the artifacts below it. Each row's url is the linked release's page the
+reader can open.
+{% endcomment %}
+{% if linked_releases %}
+    {% if public %}
+        <section class="flex flex-col gap-4">
+            <c-branded.section-header title="Ships with" subtitle="Releases of other products included in this release." />
+            <c-branded.surface flush>
+            {% include 'core/components/release_links_table.html.j2' %}
+            </c-branded.surface>
+        </section>
+    {% else %}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-link text-primary" aria-hidden="true"></i>
+            Ships with
+        </h4>
+        </c-tables.toolbar>
+        {% include 'core/components/release_links_table.html.j2' %}
+        </c-tables.shell>
+    {% endif %}
+{% endif %}

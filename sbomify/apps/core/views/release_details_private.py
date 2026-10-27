@@ -11,6 +11,8 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_release
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import Release
+from sbomify.apps.core.services.release_links import release_link_rows
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -54,6 +56,11 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             {"label": release["name"]},
         ]
         vulnerabilities = build_release_vulnerabilities(request, release_id)
+        linked_releases = release_link_rows(
+            Release.objects.select_related("product").get(pk=release["id"]),
+            include_private=True,
+            url_for=lambda linked: reverse("core:release_details", args=[linked.product_id, linked.id]),
+        )
 
         return render(
             request,
@@ -67,5 +74,6 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "header_copy_values": header_copy_values,
                 "breadcrumb_items": breadcrumb_items,
                 "vulnerabilities": vulnerabilities.value if vulnerabilities.ok else None,
+                "linked_releases": linked_releases,
             },
         )
