@@ -59,7 +59,7 @@ def backfill_release_lifecycle(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0033_release_lifecycle"),
+        ("core", "0034_release_lifecycle"),
         ("sboms", "0069_release_cle_event_supersession"),
     ]
 
