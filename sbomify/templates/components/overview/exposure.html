@@ -3,13 +3,14 @@
 The shared exposure summary always opens a severity breakdown. compact only
 changes the bar dimensions. The panel uses the existing floating dropdown and
 positioning controller so a scrolling table never clips it. No scan never reads
-as clean.
+as clean. noun names what unassessed counts (component, SBOM); without it the
+row is the one thing not scanned.
 
 last_scanned dates the counts of a release sbomify no longer monitors. Its scans
 stopped, so the summary says how old they are and a zero reads as "at last scan",
 never as clean today.
 {% endcomment %}
-<c-vars counts unassessed compact last_scanned />
+<c-vars counts unassessed compact noun last_scanned />
 {% if counts.total %}
     <div class="inline-flex"
          x-data="actionsMenu({ focusPanel: true })"
@@ -64,5 +65,5 @@ never as clean today.
 {% elif not unassessed %}
     <span class="text-xs text-text-muted">{% if last_scanned %}None at last scan{% else %}No open vulnerabilities{% endif %}</span>
 {% endif %}
-{% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ unassessed }} unassessed</p>{% endif %}
+{% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{% if noun %}{{ unassessed|intcomma }} {{ noun }}{{ unassessed|pluralize }} not scanned yet{% else %}Not scanned yet{% endif %}</p>{% endif %}
 {% if last_scanned %}<p class="mt-1 mb-0 text-xs text-text-muted">Last scanned {{ last_scanned|date:"j M Y" }}</p>{% endif %}
