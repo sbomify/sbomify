@@ -21,7 +21,7 @@
             <c-layout.form-section step="1" title="Product and release" description="Choose a product and give its release a name.">
             <div class="flex flex-col gap-5">
                 <c-forms.field label="Product" for="release-product" required error="{{ form.product_id.errors|join:' ' }}">
-                <c-forms.select id="release-product" name="product_id" required state="{{ form.product_id.errors|yesno:'error,' }}" aria-invalid="{{ form.product_id.errors|yesno:'true,false' }}" hx-get="{% url 'core:release_new' %}" hx-trigger="change" hx-target="#release-replaces" hx-select="#release-replaces" hx-swap="outerHTML" hx-disabled-elt="this">
+                <c-forms.select id="release-product" name="product_id" required state="{{ form.product_id.errors|yesno:'error,' }}" aria-invalid="{{ form.product_id.errors|yesno:'true,false' }}" hx-get="{% url 'core:release_new' %}" hx-include="#release-prerelease" hx-trigger="change" hx-target="#release-replaces" hx-select="#release-replaces" hx-swap="outerHTML" hx-disabled-elt="this">
                 {% for value, label in form.fields.product_id.choices %}
                     <option value="{{ value }}"
                             {% if value == form.product_id.value %}selected{% endif %}>{{ label }}</option>
@@ -36,7 +36,7 @@
                     <c-forms.input id="release-version" name="version" value="{{ form.version.value|default:'' }}" placeholder="e.g. v1.0.0" maxlength="255" state="{{ form.version.errors|yesno:'error,' }}" aria-invalid="{{ form.version.errors|yesno:'true,false' }}" />
                     </c-forms.field>
                 </div>
-                <c-forms.checkbox name="is_prerelease" :checked="form.is_prerelease.value" @change="if ($event.target.checked && $refs.replaces) $refs.replaces.value = ''">Mark as prerelease</c-forms.checkbox>
+                <c-forms.checkbox id="release-prerelease" name="is_prerelease" :checked="form.is_prerelease.value" @change="if ($event.target.checked && $refs.replaces) $refs.replaces.value = ''">Mark as prerelease</c-forms.checkbox>
             </div>
             </c-layout.form-section>
             <c-layout.form-section step="2" accent="neutral" title="Details" description="Optional. Add context and dates.">
