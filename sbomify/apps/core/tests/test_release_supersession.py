@@ -221,10 +221,56 @@ class TestCreateWithSupersedes:
             authenticated_api_client, sample_product, name="1.2.4", version="1.2.4", supersedes=[{"version": "1.2.3"}]
         )
 
-        assert response.status_code == 400, response.content
+        assert response.status_code == 409, response.content
+        assert response.json()["error_code"] == "CONFLICT"
         assert "Withdraw that supersession first" in response.json()["detail"]
         assert not Release.objects.filter(product=sample_product, name="1.2.4").exists()
         assert [edge.drop_in for edge in _edges(old)] == [False]
+
+    def test_a_conflict_is_a_409_through_create_and_through_cle(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.2.3")
+        new = _release(sample_product, "1.2.4", **_on(PAST))
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True).ok
+
+        through_cle = client.post(
+            f"/api/v1/releases/{old.pk}/cle/events",
+            data={"event_type": "supersededBy", "effective": PAST.isoformat(), "superseded_by_version": "1.2.4"},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        # The retry path: the release exists, so create returns it and declares the edge.
+        through_create = self._create(
+            authenticated_api_client,
+            sample_product,
+            name=new.name,
+            version=new.version,
+            supersedes=[{"version": "1.2.3", "drop_in": False}],
+        )
+
+        assert through_cle.status_code == 409, through_cle.content
+        assert through_create.status_code == 409, through_create.content
+        assert through_create.json()["error_code"] == "CONFLICT"
+        assert [edge.drop_in for edge in _edges(old)] == [True]
+
+    def test_an_edge_declared_early_with_another_date_is_the_same_edge(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.2.3")
+        # CI named the successor before it existed, on a date the release does not carry.
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True).ok
+
+        response = self._create(
+            authenticated_api_client, sample_product, name="1.2.4", version="1.2.4", supersedes=[{"version": "1.2.3"}]
+        )
+
+        assert response.status_code == 201, response.content
+        assert [edge.to_release_id for edge in _edges(old)] == [response.json()["id"]]
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
+        assert old.cle_events.filter(event_type="supersededBy").count() == 1
+        assert _state(old) == Release.LifecycleState.SUPERSEDED
 
     def test_a_publish_scoped_token_cannot_retire_releases(self, sample_product: Product, sample_user: Any) -> None:
         old = _release(sample_product, "1.0.0")
