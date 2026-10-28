@@ -1,6 +1,6 @@
 # Narration for the long cut of the marketplace walkthrough.
 #
-# The chapter copy is NOT restated here — it is included from the four chapter
+# The chapter copy is NOT restated here — it is included from the five chapter
 # scripts, for the same reason marketplace_walkthrough.py imports the chapter
 # step functions rather than copying them: the long cut and the short cuts must
 # not drift apart. Edit chapter copy in its own file.
@@ -35,8 +35,8 @@ include:
   - walkthrough_chapters_supply_chain
   - walkthrough_chapters_inventory
   - walkthrough_chapters_vulnerabilities
+  - walkthrough_chapters_compliance
   - walkthrough_chapters_trust_center
-  - walkthrough_chapters_advisories
 
 beats:
   # The tour answers one question, asked by one person, at one moment. Before
@@ -81,14 +81,15 @@ beats:
     text: >-
       Now the actual question. Is that library in here, and does it matter?
 
+  chapter_compliance:
+    text: >-
+      And under the Cyber Resilience Act, the answer has to hold up to a
+      regulator, not just a customer.
+
   chapter_trust_center:
     text: >-
-      An answer nobody outside the company can see is not an answer.
-
-  chapter_advisories:
-    text: >-
-      And the hardest version of it. When the vulnerability is yours to
-      disclose.
+      An answer nobody outside the company can see is not an answer. And when
+      the vulnerability is yours to disclose, say so first.
 
   # Write the domain out as words. A replace key may not contain punctuation
   # (the API rejects it), and "sbomify.com" left bare is read as a URL —

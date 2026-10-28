@@ -1,0 +1,49 @@
+# Narration for screencasts/artifact_upload.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to upload an SBOM to a component by hand, from anywhere in
+      sbomify.
+
+  open_search_control:
+    text: >-
+      Open search with Control K and type upload.
+
+  upload_page_lists:
+    text: >-
+      The upload page lists your components, with the products each one belongs
+      to.
+
+  filter_name_pick:
+    text: >-
+      Filter by name, then pick the component the SBOM is for.
+
+  component_page_opens:
+    text: >-
+      The component page opens with the upload dialog ready, and SBOM already
+      chosen as the artifact type.
+
+  sbomify_takes_cyclonedx:
+    text: >-
+      sbomify takes CycloneDX and SPDX. For regular uploads, the dialog recommends
+      your CI pipeline instead.
+
+  drop_file_click:
+    text: >-
+      Drop the file in, or click to browse.
+
+  upload_succeeded:
+    text: >-
+      The upload succeeded.
+
+  sbom_stored_exactly:
+    text: >-
+      The SBOM is stored exactly as uploaded, and version 3.2.0 is now listed on
+      the component.
+
+  vulnerabilities_show_up:
+    text: >-
+      Its vulnerabilities show up below once the new version has been scanned.

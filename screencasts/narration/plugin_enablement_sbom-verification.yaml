@@ -1,23 +1,31 @@
-# Narration for the plugin_enablement_sbom-verification clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      An SBOM is only as trustworthy as your confidence that it came from who
-      it claims to.
+      Here is how to turn on SBOM Verification in sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      This plugin verifies signatures and attestations, covering both
-      signatures stored in sbomify and Sigstore attestations published straight
-      from GitHub. [pause] It confirms the artifact in front of you is the one
-      that was actually signed.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      That's the difference between a file somebody emailed you and something
-      you can put in front of an auditor.
+      It confirms an SBOM has not been tampered with. It checks the file digest,
+      Sigstore signatures, and attestations published on GitHub.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      SBOM Verification is on. New uploads are now checked for valid signatures
+      and attestations.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

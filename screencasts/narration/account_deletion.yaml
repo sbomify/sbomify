@@ -1,39 +1,39 @@
 # Narration for screencasts/account_deletion.py
-#
-# Thesis: deleting your user account is separate from deleting a workspace,
-# and the distinction is the thing viewers most often get wrong.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      Deleting your account is not the same as deleting a workspace. This
-      removes you, the person, rather than the data your team relies on.
+      Here is how to delete your sbomify account.
 
-  account_tab:
+  open_settings_account:
     text: >-
-      It sits under the Account tab in settings, which is about you rather
-      than the workspace you happen to be looking at.
+      Open Settings, then the Account tab. It shows your sign-in details and
+      preferences.
 
-  danger_zone:
+  account_deletion_sits:
     text: >-
-      Same collapsed danger zone as everywhere else, and the same reason for
-      it. Nothing destructive is one stray click away.
+      Account deletion sits in the danger zone at the bottom.
 
-  consequences:
+  dialog_lists_what:
     text: >-
-      Read what it tells you here. [pause] If you're the last owner of a
-      workspace, that workspace goes with you, so hand ownership over first if
-      anyone else still needs it.
+      The dialog lists what happens. Your account is deactivated right away, and
+      your access tokens are revoked.
 
-  confirm:
+  workspaces_where_only:
     text: >-
-      Type delete to confirm. This is the point of no return, and support
-      cannot reverse it afterwards.
+      Workspaces where you are the only member are deleted too.
 
-  outro:
+  have_14_days:
     text: >-
-      Confirm, and you're signed out for good. [pause] Your artifacts stay with
-      any workspace that still has another owner, because they belong to the
-      workspace and not to you.
+      You have 14 days to change your mind. After that, the account is deleted for
+      good.
+
+  confirm_type_delete:
+    text: >-
+      To confirm, type delete.
+
+  account_deleted_signed:
+    text: >-
+      Your account is deleted, and you are signed out.

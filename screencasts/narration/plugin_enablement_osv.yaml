@@ -1,23 +1,30 @@
-# Narration for the plugin_enablement_osv clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      OSV is the open source vulnerability database, and it's the one to start
-      with, because it costs nothing on any plan.
+      Here is how to turn on the OSV Vulnerability Scanner in sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      Switching it on tells sbomify to match every SBOM you've uploaded against
-      OSV's data. [pause] It runs against what is already stored, so nothing
-      needs re-uploading, and it keeps running as new SBOMs arrive.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      Findings land against the component that introduced them, so you're told
-      which repository to go and fix, rather than handed a flat list of package
-      names with no owner.
+      OSV checks each SBOM against the Open Source Vulnerabilities database. It
+      works with CycloneDX and SPDX.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      OSV is on. Every new SBOM upload is now scanned for known vulnerabilities.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

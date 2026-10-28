@@ -1,43 +1,42 @@
 # Narration for screencasts/document_upload.py
-#
-# Thesis: compliance paperwork is an artifact like any other. Storing it beside
-# the SBOMs means one place to point a customer at, and one place to keep
-# current.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      Your customers rarely ask only for an SBOM. They ask for the audit report
-      too, and usually by email, months after they needed it.
+      Here is how to upload a compliance document, such as a SOC 2 report, to
+      sbomify.
 
-  component:
+  documents_live_component:
     text: >-
-      So documents live in sbomify as well, in a component of their own. A
-      global one, because a SOC 2 report covers the company rather than any
-      single product.
+      Documents live in a component, just like SBOMs. Start by creating one.
 
-  version:
+  pick_document_type:
     text: >-
-      Version it by the period it covers. Next year's report becomes a new
-      version rather than quietly overwriting this one.
+      Pick Document as the type.
 
-  classify:
+  make_workspace_wide:
     text: >-
-      Then classify it. Type and subcategory are what let the trust center show
-      the right document to the right person, instead of a folder of PDFs.
+      Make it workspace-wide. It is not tied to one product, and it can earn a
+      badge on your Trust Center.
 
-  describe:
+  component_ready_upload:
     text: >-
-      The description is what a reviewer reads before deciding whether to open
-      it, so say what it actually covers.
+      The component is ready. Now upload the report.
 
-  upload:
+  give_version_choose:
     text: >-
-      Attach the file itself, and save.
+      Give it a version, then choose Compliance and the SOC 2 Type II subcategory.
 
-  outro:
+  drop_file_pdf:
     text: >-
-      Now it sits alongside the SBOMs, versioned, classified, and ready to
-      share. [pause] One link answers the question instead of an email thread.
+      Drop in the file. PDF, Word, text and markdown all work.
+
+  report_stored_component:
+    text: >-
+      The report is stored on the component, with its type and version.
+
+  show_trust_center:
+    text: >-
+      To show it on your Trust Center, set the component to public or gated.

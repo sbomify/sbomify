@@ -1,23 +1,31 @@
-# Narration for the plugin_enablement_bsi-tr03183-v2.1-compliance clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      BSI TR-03183 is the German technical guideline for SBOM quality, and it
-      asks for rather more than the NTIA baseline does.
+      Here is how to turn on the BSI TR-03183-2 check in sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      It's the standard the Cyber Resilience Act leans on in practice, so if
-      you sell into the European market, this is the bar your SBOMs will
-      eventually be measured against. [pause] The plugin checks conformance and
-      tells you which requirements a file misses.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      Turning it on early is a great deal cheaper than discovering the gap
-      halfway through a procurement review.
+      It checks SBOMs against the German BSI guideline behind the EU Cyber
+      Resilience Act SBOM rules. It needs CycloneDX 1.6 or SPDX 3.0.1, or newer.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      The BSI check is on. Every new SBOM upload now gets a Cyber Resilience Act
+      compliance result.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

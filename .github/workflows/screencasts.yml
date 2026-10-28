@@ -20,10 +20,6 @@ jobs:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
       DJANGO_TEST: 'true'
-      # Narration synthesis. Only used for lines absent from the committed
-      # cache in screencasts/narration/audio/ — an unchanged run makes no
-      # API calls, so this being empty is not fatal.
-      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

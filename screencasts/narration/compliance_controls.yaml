@@ -1,0 +1,46 @@
+# Narration for screencasts/compliance_controls.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to track compliance controls in sbomify, for the workspace and
+      for each product.
+
+  controls_tab_lists:
+    text: >-
+      The Controls tab lists the frameworks you can work to, such as SOC 2, ISO
+      27001 and NIST.
+
+  activate_soc_2:
+    text: >-
+      Activate SOC 2 Type II.
+
+  controls_grouped_category:
+    text: >-
+      Its controls are grouped by category. Every product inherits these statuses
+      as its defaults.
+
+  set_whole_category:
+    text: >-
+      Set a whole category at once.
+
+  set_single_control:
+    text: >-
+      Or set a single control. This one is only partly in place.
+
+  each_product_has:
+    text: >-
+      Each product has a Compliance tab with the same checklist, starting from the
+      workspace defaults.
+
+  override_control_where:
+    text: >-
+      Override a control where this product differs, and it is marked as a product
+      override.
+
+  active_frameworks_also:
+    text: >-
+      Active frameworks also show on your Trust Center, with how much of each is
+      in place.

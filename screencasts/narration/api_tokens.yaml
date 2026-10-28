@@ -1,0 +1,61 @@
+# Narration for screencasts/api_tokens.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to create an API token, use it in CI, and revoke it when you are
+      done.
+
+  api_tokens_live:
+    text: >-
+      API tokens live in Settings. They are personal, so other members cannot see
+      or manage yours.
+
+  give_token_name:
+    text: >-
+      Give the token a name that says where it is used.
+
+  pick_narrowest_scope:
+    text: >-
+      Pick the narrowest scope that does the job. Publish only is made for CI
+      uploads.
+
+  give_short_life:
+    text: >-
+      And give it a short life. This one expires in 30 days.
+
+  sbomify_shows_token:
+    text: >-
+      sbomify shows the token only once, so copy it now.
+
+  clipboard_store_secret:
+    text: >-
+      It is on your clipboard. Store it as a secret in your CI, never in your
+      code.
+
+  see_where_goes:
+    text: >-
+      To see where it goes, open a component's CI/CD integration.
+
+  sbomify_action_reads:
+    text: >-
+      The sbomify action reads the token from SBOMIFY_TOKEN. Run this wizard in
+      your repository, and it writes the pipeline that uploads your SBOMs.
+
+  back_settings_token:
+    text: >-
+      Back in Settings, the token is listed under Your tokens.
+
+  shows_when_token:
+    text: >-
+      It shows when the token was last used, and when it expires.
+
+  when_no_longer:
+    text: >-
+      When you no longer need it, delete it. It stops working right away.
+
+  token_gone_anything:
+    text: >-
+      The token is gone, and anything still using it is locked out.

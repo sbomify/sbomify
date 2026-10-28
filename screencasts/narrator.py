@@ -38,8 +38,11 @@ AUDIO_DIR = NARRATION_DIR / "audio"
 INDEX_PATH = NARRATION_DIR / "index.json"
 PRONUNCIATIONS_PATH = NARRATION_DIR / "pronunciations.yaml"
 
-TTS_URL = "https://api.x.ai/v1/tts"
-STT_URL = "https://api.x.ai/v1/stt"
+# XAI_BASE_URL points synthesis at a proxy that holds the key, in which case
+# XAI_API_KEY carries whatever that proxy accepts instead.
+XAI_BASE_URL = os.environ.get("XAI_BASE_URL", "https://api.x.ai").rstrip("/")
+TTS_URL = f"{XAI_BASE_URL}/v1/tts"
+STT_URL = f"{XAI_BASE_URL}/v1/stt"
 API_KEY_ENV = "XAI_API_KEY"
 
 DEFAULT_VOICE = "ara"

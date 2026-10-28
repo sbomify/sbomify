@@ -1,123 +1,126 @@
 # Narration for screencasts/cra_compliance.py
-#
-# Thesis: the Cyber Resilience Act asks a manufacturer to demonstrate scope,
-# SBOM quality, vulnerability handling and user information, and to keep a
-# technical file proving it. The wizard turns that into a sequence of questions
-# whose answers sbomify already mostly holds.
-#
-# Long recording with slow, deliberate scrolling — the lines are generous.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      The Cyber Resilience Act applies to almost anything with digital elements
-      sold into the European Union, and it arrives with real deadlines.
+      Here is how to take a product through the EU Cyber Resilience Act in
+      sbomify, from scope screening to a published Declaration of Conformity.
 
-  what_it_asks:
+  compliance_lists_every:
     text: >-
-      What it actually asks for is evidence. That you knew what was in your
-      product, that you handled vulnerabilities, and that you told your users
-      what they needed to know.
+      Compliance lists every CRA assessment. Start one and choose a product.
 
-  product:
+  first_scope_screening:
     text: >-
-      Compliance is assessed per product, which is why the wizard starts here
-      rather than at the workspace.
+      First, scope screening. Five questions from Articles 2 and 3 decide whether
+      the CRA applies.
 
-  card:
+  pied_piper_has:
     text: >-
-      The first question is the one people skip, and it's whether the
-      regulation applies to you at all.
+      Pied Piper has a data connection and no exclusion, so the CRA applies.
 
-  start_screening:
+  answers_saved_audit:
     text: >-
-      So it begins with scope screening rather than paperwork.
+      The answers are saved as audit evidence, and the five step wizard opens.
+      Step one pulls the manufacturer from your workspace Parties.
 
-  scope_questions:
+  pick_product_category:
     text: >-
-      Five questions drawn from Articles 2 and 3. [pause] They establish
-      whether this is a product with digital elements, whether you place it on
-      the European market, and whether you're the manufacturer rather than a
-      distributor.
+      Pick the product category. It decides which conformity procedure you can
+      use.
 
-  data_connection:
+  choose_eu_markets:
     text: >-
-      The data connection question is the one that catches people out. If it
-      connects to anything, directly or indirectly, it's almost certainly in
-      scope.
+      Choose the EU markets. The support period is already filled in from the
+      product's lifecycle.
 
-  verdict:
+  record_manufacturer_established:
     text: >-
-      And there's the verdict, with the reasoning attached rather than a bare
-      yes. [pause] If the answer had been no, you would have that recorded too,
-      which is worth having when somebody asks why you didn't comply.
+      Record that the manufacturer is established in the EU, then save and
+      continue.
 
-  wizard_start:
+  step_two_confirms:
     text: >-
-      From here it's a wizard, in five steps, and most of the answers are
-      already in your workspace.
+      Step two confirms every component has an SBOM, and shows its BSI TR-03183
+      status when that check is on.
 
-  step_one:
+  four_components_four:
     text: >-
-      Step one is the product profile. Who makes it, what it is, and how long
-      you intend to support it.
+      Four components, four SBOMs. On to security.
 
-  step_one_detail:
+  step_three_annex:
     text: >-
-      The support period is the part with teeth. Under the CRA you're expected
-      to state it, and to actually honour it for the lifetime you claimed.
+      Step three is the Annex I security checklist. Each requirement is satisfied,
+      not satisfied, or not applicable with a written reason.
 
-  step_two:
+  last_two_answers:
     text: >-
-      Step two is the SBOM itself, and this is where the earlier work pays off.
+      The last two answers clear the unanswered count.
 
-  step_two_detail:
+  vulnerability_handling_sets:
     text: >-
-      The regulation requires a bill of materials for the top level
-      dependencies at minimum. [pause] sbomify already has yours, so this step
-      reports what you have rather than asking you to produce it.
+      Vulnerability handling sets your disclosure policy, security.txt, and how
+      fast you acknowledge a report.
 
-  step_three:
+  incident_reporting_names:
     text: >-
-      Step three is the biggest, because it covers everything you do after
-      shipping.
+      Incident reporting names the CSIRT you notify under Article 14.
 
-  step_three_checklist:
+  step_four_collects:
     text: >-
-      A security checklist first. Secure by default configuration, protection
-      of stored data, and reducing the attack surface.
+      Step four collects what users must be told: updates, support, and how to
+      delete their data.
 
-  step_three_vuln:
+  step_five_review:
     text: >-
-      Then vulnerability handling, which the Act treats as an ongoing
-      obligation rather than a one-off audit. You need a coordinated disclosure
-      policy and a way for a researcher to reach you.
+      Step five is review and export. The summary shows every step and control
+      accounted for.
 
-  step_three_incident:
+  sign_declaration_conformity:
     text: >-
-      And incident reporting, under Article 14. [pause] An actively exploited
-      vulnerability has to be reported within twenty four hours, so knowing
-      that in advance matters rather more than reading it afterwards.
+      Sign the Declaration of Conformity. It is embedded in the generated
+      document.
 
-  step_four:
+  generate_documents_disclosure:
     text: >-
-      Step four is what you tell your users. Installation, secure
-      configuration, and how you'll notify them when something changes.
+      Then generate the documents: the disclosure policy, security.txt, incident
+      reports, user instructions, and the declaration.
 
-  step_five:
+  every_document_current:
     text: >-
-      Step five reviews the whole thing and shows you where the gaps are.
+      Every document is now current.
 
-  export:
+  export_compliance_bundle:
     text: >-
-      Then it exports a compliance bundle. The declaration of conformity, the
-      SBOMs, the vulnerability disclosure policy, and the risk assessment, as
-      one file.
+      Export the compliance bundle: every document, the SBOMs, and the OSCAL
+      results, with an integrity manifest.
 
-  outro:
+  mark_assessment_complete:
     text: >-
-      That's the technical documentation the regulation expects you to keep.
-      [pause] Not assembled the week before an audit, but generated from the
-      artifacts you were maintaining all along.
+      Then mark the assessment complete to lock in the results.
+
+  bundle_lists_each:
+    text: >-
+      The bundle lists each file with the CRA article it answers, plus a checksum
+      to verify it.
+
+  product_s_public:
+    text: >-
+      On the product's public Trust Center page, customers now find the disclosure
+      policy and the declaration.
+
+  vulnerability_disclosure_policy:
+    text: >-
+      The vulnerability disclosure policy tells researchers how to report an issue
+      and what to expect.
+
+  signed_eu_declaration:
+    text: >-
+      And the signed EU Declaration of Conformity is published, always matching
+      your latest assessment.
+
+  cra_scope_public:
+    text: >-
+      That is the CRA, from scope to a public declaration, in one place.

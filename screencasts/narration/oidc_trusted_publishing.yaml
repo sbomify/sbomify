@@ -1,66 +1,46 @@
 # Narration for screencasts/oidc_trusted_publishing.py
-#
-# Thesis: long-lived API tokens in CI are the thing that leaks. Trusted
-# publishing removes the secret entirely — the pipeline proves who it is with a
-# short-lived identity token GitHub already issues.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      The usual way to upload an SBOM from CI is to mint an API token and paste
-      it into your repository secrets. It works, and it's also the thing that
-      leaks.
+      Here is how to let GitHub Actions upload SBOMs to sbomify with no API token
+      to store or rotate.
 
-  why:
+  open_component_choose:
     text: >-
-      Trusted publishing removes the secret altogether. Your pipeline proves
-      who it is using an identity token GitHub already issues, and sbomify
-      trades that for credentials good for a few minutes.
+      Open the component, then choose Trusted publishers from its actions menu.
 
-  component:
+  enter_github_repository:
     text: >-
-      The trust is bound to a single component, so a compromised workflow can
-      only ever write to the one thing it was authorised for.
+      Enter the GitHub repository whose workflows may publish here.
 
-  open_publishers:
+  binding_pins_repository:
     text: >-
-      Trusted publishers live behind the component's menu.
+      The binding pins the repository's permanent IDs, so a renamed or recreated
+      repository cannot take over.
 
-  repository:
+  add_step_workflow:
     text: >-
-      You name the repository allowed to publish here. That's the entire
-      configuration. [pause] No token is created, because there's nothing to
-      create.
+      Add this step to your workflow. It trades the GitHub token for a short-lived
+      sbomify token, then uploads.
 
-  binding:
+  workflow_running_first:
     text: >-
-      From now on, only a workflow running in that repository can upload to
-      this component.
+      Here is that workflow running. First, the runner asks GitHub for an OIDC
+      token.
 
-  workflow:
+  sbomify_checks_token:
     text: >-
-      And here's the other half of the contract, the workflow snippet. Note it
-      asks GitHub for an id-token and never references a secret.
+      sbomify checks the token against the binding and returns its own, valid for
+      15 minutes.
 
-  simulate:
+  runner_uploads_sbom:
     text: >-
-      So let's play the part of the runner. [pause] First it asks GitHub for an
-      OIDC token that says which repository, branch and workflow it is.
+      Then the runner uploads the SBOM with it.
 
-  exchange:
+  new_version_component:
     text: >-
-      That token goes to sbomify, which checks the claims against the binding
-      you just made and hands back a short-lived credential.
-
-  upload:
-    text: >-
-      Then the SBOM uploads with that credential, exactly as a real pipeline
-      would.
-
-  outro:
-    text: >-
-      And it lands on the component. [pause] No secret was stored, nothing to
-      rotate, and nothing left behind that would still work tomorrow if it
-      leaked today.
+      The new version is on the component, uploaded by the workflow with no stored
+      secret.
