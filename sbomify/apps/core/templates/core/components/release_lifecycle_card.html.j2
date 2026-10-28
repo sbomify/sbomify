@@ -1,87 +1,122 @@
 {% comment %}
 Where a named release stands and, for someone who can manage it, what to do about it, as settings rows.
 The facts come from its supersession edges, its CLE dates and its withdrawn column. A release can have
-several previous and next releases, each on the same line or a new one. Each action is its own form
-posting to ReleaseLifecycleView. A release with no edges, no dates and no withdrawal shows the card
+several previous and next releases, each on the same line or a new one. A link only says how two
+releases relate; whether this one is monitored is the state badge's job, so the words never claim it.
+Each action is its own form posting to ReleaseLifecycleView. A manager can remove a link, through one
+confirm dialog the rows open with the link they name. The dialog sits beside the card, not in it, so
+the card's last row keeps its divider and corners; the contents wrapper holds the shared state without
+adding a box to the page's layout. A release with no edges, no dates and no withdrawal shows the card
 only to managers, for the actions.
 {% endcomment %}
 {% if lifecycle.can_manage or lifecycle.predecessors or lifecycle.successors or lifecycle.end_of_support or lifecycle.end_of_life or release.withdrawn_at %}
     {% url 'core:release_lifecycle' release.product.id release.id as lifecycle_url %}
-    <c-cards.card flush>
-    <c-cards.header compact title="Lifecycle" hint="sbomify monitors a release until it is replaced, withdrawn, archived or past its support dates." />
-    {% if lifecycle.predecessors %}
-        <c-forms.field horizontal label="Previous releases">
-        {% for edge in lifecycle.predecessors %}
-            {% url 'core:release_details' release.product.id edge.from_release_id as predecessor_url %}
-            {% if edge.drop_in %}
-                <c-overview.record href="{{ predecessor_url }}" title="{{ edge.from_release.name }}" detail="Same line, this release replaces it" />
-            {% else %}
-                <c-overview.record href="{{ predecessor_url }}" title="{{ edge.from_release.name }}" detail="Older line, still monitored" />
-            {% endif %}
-        {% endfor %}
-        </c-forms.field>
-    {% endif %}
-    {% if lifecycle.successors %}
-        <c-forms.field horizontal label="Next releases">
-        {% for edge in lifecycle.successors %}
-            {% if not edge.to_release %}
-                <c-overview.record title="{{ edge.successor_label }}" detail="Outside sbomify" />
-            {% else %}
-                {% url 'core:release_details' release.product.id edge.to_release_id as successor_url %}
-                {% if edge.drop_in %}
-                    <c-overview.record href="{{ successor_url }}" title="{{ edge.to_release.name }}" detail="Same line, replaces this release" />
-                {% else %}
-                    <c-overview.record href="{{ successor_url }}" title="{{ edge.to_release.name }}" detail="New line, this release stays monitored" />
-                {% endif %}
-            {% endif %}
-        {% endfor %}
-        </c-forms.field>
-    {% endif %}
-    {% if lifecycle.end_of_support %}
-        <c-forms.field horizontal label="End of support">
-        <c-forms.static>{{ lifecycle.end_of_support|date:"j M Y" }}</c-forms.static>
-        </c-forms.field>
-    {% endif %}
-    {% if lifecycle.end_of_life %}
-        <c-forms.field horizontal label="End of life">
-        <c-forms.static>{{ lifecycle.end_of_life|date:"j M Y" }}</c-forms.static>
-        </c-forms.field>
-    {% endif %}
-    {% if release.withdrawn_at %}
-        <c-forms.field horizontal label="Withdrawn">
-        <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
-        </c-forms.field>
-    {% endif %}
-    {% if lifecycle.can_manage %}
-        {% if release.withdrawn_at or release.archived_at %}
-            <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again. A supersession or a support date still applies.">
-            <form method="post" action="{{ lifecycle_url }}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="reactivate">
-                <c-buttons.secondary size="sm" type="submit"><i class="fas fa-rotate-left" aria-hidden="true"></i>Reactivate release</c-buttons.secondary>
-            </form>
-            </c-forms.field>
-        {% else %}
-            <c-forms.field horizontal label="Withdraw release" hint="Defective, compromised or published in error. sbomify stops monitoring it and marks it withdrawn.">
-            <form method="post"
-                  action="{{ lifecycle_url }}"
-                  class="flex flex-wrap items-center gap-2 md:justify-end">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="withdraw">
-                <c-forms.select size="md" id="release-withdraw-reason" name="reason" label="Why withdraw it">
-                {% for value, label in lifecycle.withdrawn_reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                </c-forms.select>
-                <c-buttons.secondary size="sm" type="submit"><i class="fas fa-ban" aria-hidden="true"></i>Withdraw release</c-buttons.secondary>
-            </form>
-            </c-forms.field>
-            <c-forms.field horizontal label="Archive release" hint="No longer supported. sbomify stops monitoring it.">
-            <form method="post" action="{{ lifecycle_url }}">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="archive">
-                <c-buttons.secondary size="sm" type="submit"><i class="fas fa-box-archive" aria-hidden="true"></i>Archive release</c-buttons.secondary>
-            </form>
+    <div class="contents" x-data="{ removeLink: null }">
+        <c-cards.card flush>
+        <c-cards.header compact title="Lifecycle" hint="sbomify monitors a release until it is replaced, withdrawn, archived or past its support dates." />
+        {% if lifecycle.predecessors %}
+            <c-forms.field horizontal label="Previous releases">
+            {% for edge in lifecycle.predecessors %}
+                {% url 'core:release_details' release.product.id edge.from_release_id as predecessor_url %}
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        {% if edge.drop_in %}
+                            <c-overview.record href="{{ predecessor_url }}" title="{{ edge.from_release.name }}" detail="Same line, this release replaces it" />
+                        {% else %}
+                            <c-overview.record href="{{ predecessor_url }}" title="{{ edge.from_release.name }}" detail="New line" />
+                        {% endif %}
+                    </div>
+                    {% if lifecycle.can_manage %}
+                        <c-buttons.icon size="sm" label="Remove link to {{ edge.from_release.name }}" @click="removeLink = { id: '{{ edge.pk|escapejs }}', name: '{{ edge.from_release.name|escapejs }}' }"><i class="fas fa-link-slash" aria-hidden="true"></i></c-buttons.icon>
+                    {% endif %}
+                </div>
+            {% endfor %}
             </c-forms.field>
         {% endif %}
-    {% endif %}
-    </c-cards.card>
+        {% if lifecycle.successors %}
+            <c-forms.field horizontal label="Next releases">
+            {% for edge in lifecycle.successors %}
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        {% if not edge.to_release %}
+                            <c-overview.record title="{{ edge.successor_label }}" detail="Outside sbomify" />
+                        {% else %}
+                            {% url 'core:release_details' release.product.id edge.to_release_id as successor_url %}
+                            {% if edge.drop_in %}
+                                <c-overview.record href="{{ successor_url }}" title="{{ edge.to_release.name }}" detail="Same line, replaces this release" />
+                            {% else %}
+                                <c-overview.record href="{{ successor_url }}" title="{{ edge.to_release.name }}" detail="New line" />
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% if lifecycle.can_manage %}
+                        {% firstof edge.to_release.name edge.successor_label as successor_name %}
+                        <c-buttons.icon size="sm" label="Remove link to {{ successor_name }}" @click="removeLink = { id: '{{ edge.pk|escapejs }}', name: '{{ successor_name|escapejs }}' }"><i class="fas fa-link-slash" aria-hidden="true"></i></c-buttons.icon>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            </c-forms.field>
+        {% endif %}
+        {% if lifecycle.end_of_support %}
+            <c-forms.field horizontal label="End of support">
+            <c-forms.static>{{ lifecycle.end_of_support|date:"j M Y" }}</c-forms.static>
+            </c-forms.field>
+        {% endif %}
+        {% if lifecycle.end_of_life %}
+            <c-forms.field horizontal label="End of life">
+            <c-forms.static>{{ lifecycle.end_of_life|date:"j M Y" }}</c-forms.static>
+            </c-forms.field>
+        {% endif %}
+        {% if release.withdrawn_at %}
+            <c-forms.field horizontal label="Withdrawn">
+            <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            </c-forms.field>
+        {% endif %}
+        {% if lifecycle.can_manage %}
+            {% if release.withdrawn_at or release.archived_at %}
+                <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again. A supersession or a support date still applies.">
+                <form method="post" action="{{ lifecycle_url }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reactivate">
+                    <c-buttons.secondary size="sm" type="submit"><i class="fas fa-rotate-left" aria-hidden="true"></i>Reactivate release</c-buttons.secondary>
+                </form>
+                </c-forms.field>
+            {% else %}
+                <c-forms.field horizontal label="Withdraw release" hint="Defective, compromised or published in error. sbomify stops monitoring it and marks it withdrawn.">
+                <form method="post"
+                      action="{{ lifecycle_url }}"
+                      class="flex flex-wrap items-center gap-2 md:justify-end">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="withdraw">
+                    <c-forms.select size="md" id="release-withdraw-reason" name="reason" label="Why withdraw it">
+                    {% for value, label in lifecycle.withdrawn_reasons %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                    </c-forms.select>
+                    <c-buttons.secondary size="sm" type="submit"><i class="fas fa-ban" aria-hidden="true"></i>Withdraw release</c-buttons.secondary>
+                </form>
+                </c-forms.field>
+                <c-forms.field horizontal label="Archive release" hint="No longer supported. sbomify stops monitoring it.">
+                <form method="post" action="{{ lifecycle_url }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="archive">
+                    <c-buttons.secondary size="sm" type="submit"><i class="fas fa-box-archive" aria-hidden="true"></i>Archive release</c-buttons.secondary>
+                </form>
+                </c-forms.field>
+            {% endif %}
+        {% endif %}
+        </c-cards.card>
+        {% if lifecycle.can_manage and lifecycle.predecessors or lifecycle.can_manage and lifecycle.successors %}
+            <c-modal id="release-remove-link" title="Remove link" show="removeLink !== null" close="removeLink = null" role="alertdialog" size="sm">
+            <c-feedback.alert variant="warning">Remove the link between {{ release.name }} and <span x-text="removeLink?.name"></span>? A release this link retired is monitored again.</c-feedback.alert>
+            <c-slot name="footer">
+            <c-buttons.ghost @click="removeLink = null">Cancel</c-buttons.ghost>
+            <form method="post" action="{{ lifecycle_url }}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove_link">
+                <input type="hidden" name="edge_id" :value="removeLink?.id">
+                <c-buttons.danger type="submit">Remove link</c-buttons.danger>
+            </form>
+            </c-slot>
+            </c-modal>
+        {% endif %}
+    </div>
 {% endif %}

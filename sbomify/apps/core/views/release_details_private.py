@@ -15,7 +15,7 @@ from sbomify.apps.core.apis import get_release, set_release_lifecycle
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Release
 from sbomify.apps.core.schemas import ReleaseLifecycleSchema
-from sbomify.apps.core.services.release_lifecycle import supersession_links
+from sbomify.apps.core.services.release_lifecycle import remove_supersession, supersession_links
 from sbomify.apps.core.services.release_links import release_link_rows
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -62,9 +62,9 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         vulnerabilities = build_release_vulnerabilities(request, release_id)
         lifecycle = {
             **supersession_links(release["id"]),
-            # A release without dates of its own takes the product's, as tracked_releases() does.
-            "end_of_support": release["end_of_support"] or product.end_of_support,
-            "end_of_life": release["end_of_life"] or product.end_of_life,
+            # The dates that apply: its own, else the product's for every version, as tracked_releases() reads.
+            "end_of_support": release["effective_end_of_support"],
+            "end_of_life": release["effective_end_of_life"],
             "withdrawn_reason": Release.WithdrawnReason(release["withdrawn_reason"]).label
             if release["withdrawn_reason"]
             else "",
@@ -106,6 +106,9 @@ class ReleaseLifecycleView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, product_id: str, release_id: str) -> HttpResponse:
         action = request.POST.get("action", "")
+        if action == "remove_link":
+            self.remove_link(request, release_id, request.POST.get("edge_id", ""))
+            return redirect("core:release_details", product_id=product_id, release_id=release_id)
         try:
             payload = ReleaseLifecycleSchema.model_validate(
                 {"action": action, "reason": request.POST.get("reason", "") if action == "withdraw" else ""}
@@ -119,3 +122,14 @@ class ReleaseLifecycleView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             else:
                 messages.error(request, result.get("detail") or "The release could not be changed.")
         return redirect("core:release_details", product_id=product_id, release_id=release_id)
+
+    def remove_link(self, request: HttpRequest, release_id: str, edge_id: str) -> None:
+        status_code, release = get_release(request, release_id)
+        if status_code != 200 or not release.get("has_crud_permissions"):
+            messages.error(request, "You cannot change this release.")
+            return
+        result = remove_supersession(release_id, edge_id, actor_id=request.user.pk)
+        if result.ok:
+            messages.success(request, "Link removed.")
+        else:
+            messages.error(request, result.error or "The link could not be removed.")

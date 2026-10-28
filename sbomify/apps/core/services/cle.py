@@ -459,7 +459,8 @@ def create_release_cle_event(
     A release names one successor per event and may name several. The
     successor must be a sibling release or none (outside sbomify), and the
     edge may not make a cycle or exceed the successor cap. Repeating a live
-    edge returns its event with 200; restating it differently is a 409.
+    edge returns its event with 200, whatever its date; restating it on the
+    other line is a 409.
     ``drop_in`` marks a successor that replaces this release, which stops it
     being monitored. A ``withdrawn`` event naming a ``supersededBy`` event
     withdraws its edge.
@@ -479,7 +480,7 @@ def create_release_cle_event(
 
         successor: Release | None = None
         if is_supersession and superseded_by_version:
-            existing = existing_supersession(release, superseded_by_version, drop_in, effective)
+            existing = existing_supersession(release, superseded_by_version, drop_in)
             if not existing.ok:
                 return ServiceResult.failure(existing.error or "Conflicting supersession", existing.status_code)
             if existing.value is not None and existing.value.cle_event is not None:
@@ -489,6 +490,20 @@ def create_release_cle_event(
             if not resolved.ok:
                 return ServiceResult.failure(resolved.error or "Invalid supersession", status_code=400)
             successor = resolved.value
+            # A release cannot take over a line from one that came out after it. Without this,
+            # a backdated entry would retire the current release the moment it was saved.
+            if (
+                drop_in
+                and successor is not None
+                and successor.released_at
+                and release.released_at
+                and successor.released_at < release.released_at
+            ):
+                return ServiceResult.failure(
+                    f"Release {release.name} was released after {successor.name}, so {successor.name} cannot "
+                    "replace it on the same line. Choose a new line, or check the release dates.",
+                    status_code=400,
+                )
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
             entity=release,
@@ -630,6 +645,8 @@ def recompute_lifecycle_dates(product: Product) -> None:
 
     Iterates all events in event_id order, skips withdrawn events, and sets
     ``release_date``, ``end_of_support``, and ``end_of_life`` on the product.
+    Then rederives the releases' dates, since a release without its own takes
+    the product's.
 
     Should be called within a ``transaction.atomic()`` block when used alongside
     event creation to ensure consistency.
@@ -662,6 +679,7 @@ def recompute_lifecycle_dates(product: Product) -> None:
     product.end_of_support = end_of_support
     product.end_of_life = end_of_life
     product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
+    recompute_release_lifecycle(product)
 
 
 def _get_cle_document_generic(

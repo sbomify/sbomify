@@ -730,12 +730,27 @@ class ReleaseResponseSchema(BaseModel):
     lifecycle_state: str = Field(
         description="active, superseded, end_of_support, end_of_life, withdrawn or archived. Only active is monitored."
     )
-    is_tracked: bool
+    is_tracked: bool = Field(
+        description=(
+            "Whether the release itself is still monitored: lifecycle_state is active. Its SBOMs can still be "
+            "scanned while a monitored release ships them too or links to it."
+        )
+    )
     superseded_at: datetime | None = None
-    end_of_support: date | None = None
-    end_of_life: date | None = None
+    end_of_support: date | None = Field(default=None, description="The release's own end of support, if it has one")
+    end_of_life: date | None = Field(default=None, description="The release's own end of life, if it has one")
+    effective_end_of_support: date | None = Field(
+        default=None,
+        description="The end of support that applies: the release's own, else the product's for every version",
+    )
+    effective_end_of_life: date | None = Field(
+        default=None,
+        description="The end of life that applies: the release's own, else the product's for every version",
+    )
     withdrawn_at: datetime | None = None
-    withdrawn_reason: str = ""
+    withdrawn_reason: str | None = Field(
+        default=None, description="Why the release was withdrawn. Null for readers outside the workspace."
+    )
     archived_at: datetime | None = None
     predecessors: list[ReleaseEdgeSchema] | None = Field(
         default=None, description="Every release this one follows. On a single release only, not in lists."
