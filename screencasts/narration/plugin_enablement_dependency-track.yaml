@@ -1,23 +1,31 @@
-# Narration for the plugin_enablement_dependency-track clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      If you already run Dependency-Track, sbomify does not ask you to abandon
-      it.
+      Here is how to turn on the Dependency Track plugin in sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      This plugin forwards your SBOMs to your own Dependency-Track instance and
-      pulls the findings back, so the analysis keeps happening where your team
-      already tuned it. [pause] You point it at your server and give it an API
-      key.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      The result is one place to look. Dependency-Track carries on doing the
-      scanning, and sbomify carries on being the thing you hand to a customer.
+      Dependency Track sends CycloneDX SBOMs to a Dependency Track server for
+      vulnerability analysis. It needs a Business or Enterprise plan.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      Dependency Track is on. New CycloneDX uploads are now analyzed for
+      vulnerabilities.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

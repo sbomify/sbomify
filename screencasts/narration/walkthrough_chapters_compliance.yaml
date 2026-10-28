@@ -1,0 +1,28 @@
+# Narration for screencasts/walkthrough_chapters.py
+voice: carina
+speed: 1.0
+
+beats:
+  compliance_intro:
+    text: >-
+      The CRA wizard turns that evidence into a conformity assessment, one product
+      at a time.
+
+  compliance_scope_screening_sbom:
+    text: >-
+      Scope screening, SBOM coverage, the Annex I checklist and user information
+      roll up into one summary.
+
+  compliance_sbomify_writes_documents:
+    text: >-
+      sbomify writes the documents the CRA asks for, from the disclosure policy to
+      the Declaration of Conformity, and flags one stale when the evidence behind
+      it changes.
+
+  compliance_every_control_answered:
+    text: >-
+      Every control is answered, so the assessment can be marked complete.
+
+  compliance_back_list_assessment:
+    text: >-
+      Back on the list, the assessment reads complete, five of five steps.

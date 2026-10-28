@@ -1,69 +1,58 @@
 # Narration for screencasts/trust_center_setup.py
-#
-# Thesis: the trust center is the public face of everything already in the
-# workspace — one URL you hand a customer instead of answering the same
-# questionnaire by email, with per-component control over what they see.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      Sooner or later a customer asks for your SBOMs, your audit report, and
-      your security contact. Usually as a spreadsheet, usually on a deadline.
+      Here is how to set up a Trust Center, the public page where customers find
+      your security information.
 
-  what_it_is:
+  lives_under_settings:
     text: >-
-      A trust center answers that in advance. It's a public page backed by the
-      artifacts already in your workspace, so nothing has to be assembled by
-      hand.
+      It lives under Settings, on the Trust Center tab. Switch it on.
 
-  enable:
+  trust_center_live:
     text: >-
-      Turning it on publishes the page. [pause] Nothing becomes visible yet,
-      though. Every component is still private until you say otherwise.
+      Your Trust Center is live, with a public address you can share.
 
-  security_txt:
+  add_welcome_message:
     text: >-
-      security dot txt is worth enabling while you're here. It's the standard
-      file a researcher looks for when they need to report something, and
-      sbomify keeps it in sync with your contact profile.
+      Add a welcome message for visitors.
 
-  nda:
+  turn_security_txt:
     text: >-
-      You can also attach a company NDA. That's what makes gated access
-      possible later, where somebody signs before they see the detail.
+      Turn on security.txt so researchers know how to report a vulnerability.
 
-  domain:
+  upload_nda_visitors:
     text: >-
-      A custom domain puts the page on your own name rather than ours, which
-      matters when the link goes into a procurement document.
+      Upload your NDA. Visitors sign it before they can download gated artifacts.
 
-  domain_save:
+  serve_own_address:
     text: >-
-      Save it, and sbomify gives you the DNS record to point at us.
+      To serve it from your own address, enter a custom domain and add the DNS
+      records shown.
 
-  component:
+  sbomify_verifies_domain:
     text: >-
-      Now the part that decides what a visitor actually sees. Visibility is set
-      per component, not once for the whole workspace.
+      sbomify verifies the domain automatically once DNS is in place.
 
-  visibility_public:
+  next_choose_what:
     text: >-
-      Public means anyone with the link can see it, and it's the right setting
-      for the SBOM of something you already ship openly.
+      Next, choose what to share. Everything starts private.
 
-  visibility_gated:
+  public_means_anyone:
     text: >-
-      Gated is the middle ground. The component is listed, but a visitor has to
-      request access and sign your NDA before the artifacts open up.
+      Public means anyone can view and download this component.
 
-  visibility_private:
+  gated_keeps_listed:
     text: >-
-      And private keeps it out of the trust center entirely.
+      Gated keeps it listed, but downloads need your approval and a signed NDA.
 
-  outro:
+  what_customers_see:
     text: >-
-      That's the whole trade. [pause] One link you can put in a sales
-      conversation, and per component control over exactly how much of it a
-      stranger gets to read.
+      This is what your customers see, starting with your welcome message.
+
+  below_products_have:
+    text: >-
+      Below it are the products you have made public, and your NDA.

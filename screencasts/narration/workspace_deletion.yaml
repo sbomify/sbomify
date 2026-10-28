@@ -1,34 +1,26 @@
 # Narration for screencasts/workspace_deletion.py
-#
-# Thesis: deleting a workspace is deliberate and total. The narration's job is
-# to make the consequence clear before the confirmation, not to describe the
-# buttons.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      Deleting a workspace removes everything inside it. Components, SBOMs,
-      releases, and the trust center that points at them.
+      Here is how to delete a workspace in sbomify. Only the workspace owner can
+      do this.
 
-  settings:
+  open_settings_danger:
     text: >-
-      It lives in workspace settings, at the bottom, behind a collapsed danger
-      zone. That's deliberate. Nobody reaches it by accident.
+      Open Settings. The danger zone is at the bottom of the General tab.
 
-  expand:
+  deleting_workspace_removes:
     text: >-
-      Expanding it spells out what goes, so you can read the consequence before
-      you commit to it.
+      Deleting a workspace removes every product, component and artifact in it.
 
-  confirm:
+  confirm_type_delete:
     text: >-
-      And you have to type the word delete by hand. There is no undo behind
-      this, and no support ticket that brings it back.
+      To confirm, type delete.
 
-  outro:
+  workspace_gone_back:
     text: >-
-      Confirm, and the workspace is gone. [pause] If you only wanted to hand it
-      to someone else, transfer ownership instead. That keeps the artifacts and
-      the history intact.
+      The workspace is gone, and you are back on the dashboard of your default
+      workspace.

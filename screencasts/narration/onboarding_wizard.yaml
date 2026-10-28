@@ -1,0 +1,68 @@
+# Narration for screencasts/onboarding_wizard.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to set up a new sbomify workspace with the Get started wizard.
+
+  asks_three_things:
+    text: >-
+      It asks three things once: who you are, where to report a vulnerability, and
+      how you support your software.
+
+  first_organization_these:
+    text: >-
+      First, your organization. These details become your default contact profile.
+
+  next_security_promises:
+    text: >-
+      Next, your security promises. Security researchers report vulnerabilities to
+      this address.
+
+  can_also_publish:
+    text: >-
+      You can also publish it in your Trust Center's security.txt file.
+
+  set_default_support:
+    text: >-
+      Set a default support period, and the maximum time to fix each severity. The
+      recommended targets are seven days for critical and thirty for high.
+
+  workspace_ready_checklist:
+    text: >-
+      The workspace is ready, and the checklist on the right shows what was saved.
+
+  until_first_artifact:
+    text: >-
+      Until your first artifact arrives, the dashboard helps you connect a
+      repository.
+
+  coding_agent_tab:
+    text: >-
+      The coding agent tab gives you a prompt for Claude Code, Cursor or another
+      agent. First, create a setup token.
+
+  token_part_prompt:
+    text: >-
+      The token is now part of the prompt. It expires after seven days, and you
+      can revoke it in Settings.
+
+  copy_prompt_paste:
+    text: >-
+      Copy the prompt and paste it into your agent. It finds your lockfiles,
+      creates the components and adds an SBOM workflow, after you review the
+      changes.
+
+  prefer_terminal_same:
+    text: >-
+      Prefer the terminal? The same wizard runs with Docker or uv.
+
+  come_back_page:
+    text: >-
+      To come back to this page later, search for connect a repository.
+
+  commit_push_workflow:
+    text: >-
+      Commit and push the workflow, and your first SBOM lands in this workspace.

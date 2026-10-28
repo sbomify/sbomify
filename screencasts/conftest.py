@@ -434,6 +434,13 @@ def _hold_in_frame(page: Page, locator: Locator, attempts: int = 5) -> None:
                 const max = s.scrollHeight - window.innerHeight;
                 const want = s.scrollTop + r.top - (window.innerHeight - r.height) / 2;
                 s.scrollTop = Math.max(0, Math.min(max, want));
+                // A target inside its own scrolling box (a dialog, a code
+                // block's panel) does not move with the document; let the
+                // browser scroll whichever ancestors it takes.
+                const after = el.getBoundingClientRect();
+                const held = fits ? (after.top >= 0 && after.bottom <= window.innerHeight)
+                                  : (after.top >= 0 && after.top <= window.innerHeight * 0.4);
+                if (!held) el.scrollIntoView({ block: fits ? 'center' : 'start', behavior: 'instant' });
             }"""
         )
         page.wait_for_timeout(350)
@@ -599,6 +606,22 @@ def rewrite_localhost_urls(page: Page, domain: str = PLATFORM_DOMAIN) -> None:
     }""",
         domain,
     )
+
+
+def rewrite_localhost_inputs(page: Page) -> None:
+    """Like :func:`rewrite_localhost_urls`, for read-only input values.
+
+    Copy fields (the Trust Center public URL, the security.txt canonical URL)
+    render their value in an ``<input readonly>``, which a text-node walk does
+    not reach. Call both after a navigation that shows such a field.
+    """
+    page.evaluate("""() => {
+        for (const el of document.querySelectorAll('input[readonly], input[value*="localhost"]')) {
+            el.value = el.value
+                .replace(/http:\\/\\/localhost:\\d+/g, 'https://app.sbomify.com')
+                .replace(/\\blocalhost\\b/g, 'app.sbomify.com');
+        }
+    }""")
 
 
 # ---------------------------------------------------------------------------
@@ -818,9 +841,19 @@ def start_on_dashboard(page: Page, pause_ms: int = 1500) -> None:
     pace(page, pause_ms)
 
 
+def sidebar_link(page: Page, label: str) -> Locator:
+    """The sidebar's link for ``label``.
+
+    Scoped to ``#sidebar`` because page bodies now repeat the same names (the
+    empty-state "Products" button, the "Add components" card), and an unscoped
+    role lookup trips Playwright's strict mode on two matches.
+    """
+    return page.locator("#sidebar").get_by_role("link", name=label, exact=True)
+
+
 def navigate_to_settings(page: Page) -> None:
     """Click the sidebar Settings link and wait for the page to load."""
-    settings_link = page.get_by_role("link", name="Settings")
+    settings_link = sidebar_link(page, "Settings")
     hover_and_click(page, settings_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -828,7 +861,7 @@ def navigate_to_settings(page: Page) -> None:
 
 def navigate_to_components(page: Page) -> None:
     """Click the sidebar Components link and wait for the page to load."""
-    components_link = page.get_by_role("link", name="Components")
+    components_link = sidebar_link(page, "Components")
     hover_and_click(page, components_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -836,7 +869,7 @@ def navigate_to_components(page: Page) -> None:
 
 def navigate_to_products(page: Page) -> None:
     """Click the sidebar Products link and wait for the page to load."""
-    products_link = page.get_by_role("link", name="Products")
+    products_link = sidebar_link(page, "Products")
     hover_and_click(page, products_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -861,7 +894,7 @@ def navigate_to_advisories(page: Page) -> None:
 
 def navigate_to_plugins(page: Page) -> None:
     """Click the sidebar Plugins link and wait for the page to load."""
-    plugins_link = page.get_by_role("link", name="Plugins")
+    plugins_link = sidebar_link(page, "Plugins")
     hover_and_click(page, plugins_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -875,19 +908,32 @@ def navigate_to_trust_center_tab(page: Page) -> None:
     matched by its href and the click is a navigation.
     """
     navigate_to_settings(page)
-    trust_center_tab = page.locator("a.settings-tab[href$='/trust-center']")
-    trust_center_tab.wait_for(state="visible", timeout=15_000)
-    hover_and_click(page, trust_center_tab)
+    navigate_to_settings_tab(page, "trust-center")
+
+
+def navigate_to_settings_tab(page: Page, key: str) -> None:
+    """Click a settings tab by its key (``members``, ``trust-center``, ...).
+
+    Assumes the settings page is already open. The tabs are real links to
+    ``/settings/<key>``, tagged with ``data-settings-tab``.
+    """
+    tab = page.locator(f"a[data-settings-tab='{key}']")
+    tab.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, tab)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
 
 
 def click_into_row(page: Page, name: str) -> None:
-    """Click a table row containing the given name."""
-    row = page.locator("tr", has=page.locator(f"span:text-is('{name}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
+    """Open the item a table row names, by its name link.
+
+    Inventory rows used to be clickable as a whole; now only the name inside
+    them is a link.
+    """
+    link = page.locator("main tr").get_by_role("link", name=name, exact=True)
+    link.first.wait_for(state="visible", timeout=10_000)
     pace(page, 500)
-    hover_and_click(page, row.first)
+    hover_and_click(page, link.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
 
@@ -1080,12 +1126,44 @@ def configure_custom_domain(page: Page, domain: str = CUSTOM_TRUST_DOMAIN) -> No
 
 
 def enable_and_configure_trust_center(page: Page) -> None:
-    """Both halves, for the recordings that narrate them as one step.
+    """Enable the trust center and configure a custom domain.
 
-    Shared between trust_center_setup and tea_enabling screencasts.
+    Shared between trust_center_setup, tea_enabling and the walkthrough. The
+    visibility switch submits its form on change and reloads the tab; the
+    custom domain card then loads over HTMX, and its save is an Alpine call
+    that flips the status to "Pending verification" without a reload.
     """
-    enable_trust_center(page)
-    configure_custom_domain(page)
+    toggle = page.locator("#workspace-visibility-toggle")
+    toggle.wait_for(state="visible", timeout=10_000)
+    pace(page, 400)
+    if not toggle.is_checked():
+        with page.expect_navigation():
+            hover_and_click(page, toggle)
+        page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    rewrite_localhost_inputs(page)
+    pace(page, 800)
+
+    domain_input = page.locator("#custom-domain-input")
+    domain_input.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, domain_input, 600)
+
+    hover_and_click(page, domain_input)
+    pace(page, 200)
+    type_text(domain_input, "trust.piedpiper.com")
+    pace(page, 400)
+
+    save_btn = page.get_by_role("button", name="Save domain")
+    save_btn.wait_for(state="visible", timeout=5_000)
+    hover_and_click(page, save_btn)
+
+    page.locator("#team-custom-domain-wrapper").get_by_text("Pending verification").wait_for(
+        state="visible", timeout=10_000
+    )
+    page.wait_for_load_state("networkidle")
+    dismiss_toasts(page)
+    rewrite_localhost_urls(page)
+    pace(page, 800)
 
 
 # ---------------------------------------------------------------------------
@@ -1307,8 +1385,18 @@ def deletable_team(
     sample_user: AbstractBaseUser,
     team_with_business_plan: Team,
 ) -> Team:
-    """Unmark the team as default so the delete button is enabled."""
+    """The recording's workspace: Pied Piper, owned by Richard Hendricks.
+
+    The shared fixtures name these "Test Business Team" and "Test User", and
+    both are in frame on every page (sidebar, account menu, public footer).
+    The team is also unmarked as default so the delete button is enabled.
+    """
     Member.objects.filter(user=sample_user, team=team_with_business_plan).update(is_default_team=False)
+    team_with_business_plan.name = "Pied Piper"
+    team_with_business_plan.save(update_fields=["name"])
+    sample_user.first_name = "Richard"
+    sample_user.last_name = "Hendricks"
+    sample_user.save(update_fields=["first_name", "last_name"])
     return team_with_business_plan
 
 
@@ -1415,36 +1503,19 @@ def pied_piper_with_sboms(pied_piper_product: dict) -> dict:
     Note: creating SBOMs triggers a signal that auto-creates a 'latest' Release.
     """
     sboms = {}
-    history: dict[str, list[SBOM]] = {}
-    now = datetime.now(timezone.utc)
-
     for name, component in pied_piper_product["components"].items():
-        slug = component.name.lower().replace(" ", "-")
-        versions = []
-        for version, spec, days_ago in PIED_PIPER_SBOM_VERSIONS[name]:
-            sbom = SBOM.objects.create(
-                name=f"com.piedpiper/{slug}",
-                version=version,
-                format="cyclonedx",
-                format_version=spec,
-                sbom_filename=f"{slug}-{version}.json",
-                source="api",
-                component=component,
-            )
-            # created_at is auto_now_add, so every row would otherwise read as
-            # "now" — and `Component.latest_sbom` orders by it, which would
-            # make "latest" arbitrary among the four.
-            stamped = now - timedelta(days=days_ago)
-            SBOM.objects.filter(pk=sbom.pk).update(created_at=stamped)
-            sbom.created_at = stamped
-            versions.append(sbom)
+        sbom = SBOM.objects.create(
+            name=f"com.piedpiper/{component.name.lower().replace(' ', '-')}",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename=f"{component.name.lower().replace(' ', '-')}.json",
+            source="api",
+            component=component,
+        )
+        sboms[name] = sbom
 
-        history[name] = versions
-        # The newest, so the existing consumers of ``sboms`` — which each want
-        # "the component's SBOM" — keep getting one object and the right one.
-        sboms[name] = versions[-1]
-
-    return {**pied_piper_product, "sboms": sboms, "sbom_history": history}
+    return {**pied_piper_product, "sboms": sboms}
 
 
 def setup_browser_session(

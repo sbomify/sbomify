@@ -1,23 +1,31 @@
-# Narration for the plugin_enablement_fda-medical-device-2025 clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      If you ship software inside a medical device, the FDA expects an SBOM as
-      part of your premarket submission.
+      Here is how to turn on the FDA Medical Device Cybersecurity check in
+      sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      This plugin checks your SBOMs against those expectations, including the
-      support and end of life information the agency wants to see alongside the
-      component list. [pause] That last part is where most submissions come up
-      short.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      It won't file the submission for you, but it does mean the SBOM half of
-      it stops being a surprise.
+      It checks SBOMs against the 2025 FDA guidance for medical device
+      submissions, including support status and end of support dates.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      The FDA check is on. Every new SBOM upload now gets a compliance result.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

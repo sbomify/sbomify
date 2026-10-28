@@ -1,0 +1,57 @@
+# Narration for screencasts/team_members.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to manage who has access to your sbomify workspace.
+
+  members_tab_settings:
+    text: >-
+      The Members tab in Settings lists everyone in the workspace, with their
+      role.
+
+  not_sure_which:
+    text: >-
+      Not sure which role to give? Open What can each role do.
+
+  owners_admins_run:
+    text: >-
+      Owners and admins run the workspace. Members do the day to day work.
+      Operators read everything and triage vulnerabilities, but change nothing
+      else.
+
+  add_someone_choose:
+    text: >-
+      To add someone, choose Invite member.
+
+  pick_role_each:
+    text: >-
+      Pick a role. Each role is explained below the list.
+
+  jared_joins_operator:
+    text: >-
+      Jared joins as an operator, to help triage vulnerabilities.
+
+  sbomify_emails_invite:
+    text: >-
+      sbomify emails the invite. Until Jared accepts, it waits under Pending
+      invitations.
+
+  changed_mind_revoke:
+    text: >-
+      Changed your mind? Revoke the invitation, and the link stops working.
+
+  take_someone_s:
+    text: >-
+      To take someone's access away, open the menu on their row and remove them.
+
+  their_access_ends:
+    text: >-
+      Their access ends immediately.
+
+  there_no_role:
+    text: >-
+      There is no role switch on this tab. To give someone a different role,
+      remove them and invite them again.

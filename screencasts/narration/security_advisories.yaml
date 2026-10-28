@@ -1,45 +1,55 @@
 # Narration for screencasts/security_advisories.py
-#
-# Thesis: an advisory is the outbound half of vulnerability handling. Scanning
-# tells you what you have; an advisory is how you tell your customers, and the
-# timeline is what proves you handled it.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      Scanning tells you what's wrong with your software. An advisory is how
-      you tell everyone else.
+      Here is how to publish a security advisory in sbomify, from first report to
+      your Trust Center.
 
-  navigate:
+  security_advisories_lists:
     text: >-
-      It's the outbound half of vulnerability handling, and under the Cyber
-      Resilience Act it stops being optional.
+      Security advisories lists every advisory in the workspace, with its severity
+      and status.
 
-  the_list:
+  start_title_all:
     text: >-
-      Two here, and they show the shape of the whole process. One published and
-      resolved, which is the finished story a customer reads, and one still in
-      progress, which is the page a team actually works in.
+      Start with a title. That is all a draft needs.
 
-  open_advisory:
+  set_severity_where:
     text: >-
-      This is the one being worked.
+      Set the severity, and where the work stands right now.
 
-  detail:
+  next_pick_what:
     text: >-
-      Severity and status at the top, then the products it actually affects.
-      [pause] That link matters, because it's drawn from the releases you
-      published rather than typed in by hand, so it stays honest.
+      Next, pick what it affects. Open a product to choose specific releases.
 
-  timeline:
+  add_cve_cvss:
     text: >-
-      Underneath is the timeline, and it's the part worth caring about. Every
-      update, dated, in the order it happened.
+      Add the CVE, a CVSS score and a short description if you have them.
 
-  outro:
+  advisory_opens_draft:
     text: >-
-      When a regulator or a customer asks how you handled something, this is
-      the answer. [pause] Not a recollection, but a record you were keeping
-      anyway.
+      The advisory opens as a draft. Only your workspace can see it.
+
+  timeline_records_every:
+    text: >-
+      The timeline records every change. Post updates as the fix moves along.
+
+  update_lands_timeline:
+    text: >-
+      The update lands on the timeline, and the status moves to fix in progress.
+
+  when_ready_publish:
+    text: >-
+      When you are ready, publish it. Choose who can read it, then confirm.
+
+  has_permanent_tracking:
+    text: >-
+      It now has a permanent tracking ID and appears on your Trust Center.
+
+  customers_see_public:
+    text: >-
+      Customers see it on your public advisories page, next to every advisory you
+      have published.

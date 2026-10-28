@@ -1,23 +1,30 @@
-# Narration for the plugin_enablement_ntia-minimum-elements-2021 clip.
-#
-# Every plugin clip defines the same three beat keys; only the copy differs.
+# Narration for screencasts/plugin_enablement.py
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      The NTIA minimum elements are the closest thing there is to an agreed
-      definition of an acceptable SBOM.
+      Here is how to turn on the NTIA Minimum Elements check in sbomify.
 
-  what_it_does:
+  open_plugins:
     text: >-
-      Seven data fields, including supplier, component name, version, and the
-      dependency relationships between them. [pause] This plugin checks every
-      SBOM against them and reports what's missing, rather than leaving you to
-      find out when a customer rejects the file.
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
 
-  outro:
+  about:
     text: >-
-      It's the cheapest quality gate available. An SBOM that fails here will
-      fail everywhere else too.
+      It checks each SBOM for the NTIA minimum elements, such as supplier,
+      component name, version and author.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then save your changes.
+
+  done:
+    text: >-
+      The NTIA check is on. Every new SBOM upload now gets a compliance result.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

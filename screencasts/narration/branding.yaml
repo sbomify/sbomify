@@ -1,0 +1,36 @@
+# Narration for screencasts/branding.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to put your own brand on your Trust Center in sbomify.
+
+  branding_tab_sets:
+    text: >-
+      The Branding tab sets the colors and logo your customers see. Turn on custom
+      branding.
+
+  pick_brand_color:
+    text: >-
+      Pick a brand color and an accent color, or type the hex from your brand
+      guide.
+
+  add_logo_goes:
+    text: >-
+      Then add your logo. It goes in the Trust Center header.
+
+  preview_shows_saved:
+    text: >-
+      The preview shows your saved branding. Save, and your customers see it right
+      away.
+
+  public_trust_center:
+    text: >-
+      This is the public Trust Center, now with the Pied Piper logo and colors.
+
+  visitors_see_logo:
+    text: >-
+      Visitors see your logo in the header and your accent color on the page
+      highlights.

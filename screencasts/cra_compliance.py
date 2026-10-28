@@ -1,38 +1,26 @@
-"""Record the CRA Compliance Wizard screencast.
+"""Record the CRA compliance screencast.
 
-Drives the full flow end-to-end: Dashboard → Products → Pied Piper
-product → CRA Compliance card "Start Scope Screening" → walk the
-five Article 2/3 scope questions → save → land in the wizard shell
-→ walk every panel of every step (Steps 1–5) → exercise Step 3's
-three tabs (Security Checklist, Vulnerability Handling, Incident
-Reporting) → close on Step 5 with the Export Compliance Bundle CTA
-in view. The recording's job is to give the FAQ a visual companion
-that covers what each step actually contains, not just the headline
-of each step — so we scroll every named section into the viewport
-and linger long enough for a viewer to read the heading.
+Drives the whole flow through the real UI: sidebar Compliance → Start
+assessment → pick the product → scope screening → the five wizard steps
+(each advanced with its own "Save and continue") → sign the Declaration of
+Conformity → export the compliance bundle → mark the assessment complete →
+the public product page, where the vulnerability disclosure policy and the
+Declaration of Conformity are now published.
 
-The screencast pairs with the FAQ article at
-``how-do-i-use-cra-compliance``. We deliberately do NOT pre-create
-the ``CRAScopeScreening`` or ``CRAAssessment``: the FAQ wants viewers
-to see the actual screening UI (FAQ §1) being filled in, and the
-backend builds the assessment + OSCAL catalog/result on save (using
-``ensure_cra_catalog``, which is collision-safe). Once the screening
-is saved we read the assessment back from the ORM, seed
-``CRAGeneratedDocument`` placeholders for every CRA document kind
-(so Step 5's Export Compliance Bundle button renders enabled
-without actually triggering an export), and mutate
-``completed_steps`` + ``current_step`` between step navigations so
-the stepper shows the realistic in-progress shape (current step
-blue, completed green, rest muted) rather than implying everything
-is already done.
+Preconditions that are not the subject of the video are seeded with the ORM:
+a manufacturer in the workspace Parties (the wizard refuses a placeholder
+manufacturer), product lifecycle dates (which pre-fill the support period),
+and all but the first two Annex I controls already answered, so Step 3 shows
+the viewer answering the last two rather than twenty-one.
 
-``CRAStepView`` accepts any step number, so we do not need to click
-stepper links (which only render for steps already in
-``completed_steps``); driving the database mirrors what the user
-would see after pressing Save & Continue.
+The screencast stack runs no S3, so :func:`cra_fake_s3` backs the object
+store with a dict. Everything above the store (document generation, the
+export ZIP and its manifest, the public pages reading the documents back)
+runs for real.
 """
 
 import re
+from datetime import date
 
 import pytest
 from playwright.sync_api import Page
@@ -42,431 +30,358 @@ from conftest import (
     auto_dismiss_toasts,
     hover_and_click,
     narrate,
-    navigate_to_products,
     pace,
+    rewrite_localhost_urls,
     settle,
+    sidebar_link,
+    smooth_scroll,
     start_on_dashboard,
+    type_text,
 )
-from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument, OSCALFinding
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, Team
+from sbomify.apps.compliance.models import CRAAssessment, OSCALFinding
+from sbomify.apps.core.object_store import StorageClient
+from sbomify.apps.sboms.models import Component
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+
+MINIMAL_CYCLONEDX = b'{"bomFormat": "CycloneDX", "specVersion": "1.5", "version": 1, "components": []}'
 
 
-def _seed_export_ready_state(assessment: CRAAssessment) -> None:
-    """Drive ``export_available`` to ``True`` so Step 5's CTA enables.
+@pytest.fixture
+def cra_fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
+    """Back :class:`StorageClient` with an in-process dict.
 
-    ``wizard_service._compute_compliance_summary`` gates the Export
-    Compliance Bundle button behind four conditions, all seeded here
-    (the manufacturer is the fifth, and is seeded earlier — see
-    :func:`_seed_manufacturer`):
-
-    1. Steps 1-4 in ``completed_steps`` (the recording mutates this
-       directly between page loads, so already covered).
-    2. Zero unanswered ``OSCALFinding`` rows. The CRA wizard bulk-
-       creates 21 findings (one per Annex I control) at status
-       ``unanswered`` when the assessment is built, and the
-       screencast never opens Step 3's checklist deeply enough to
-       answer them. We flip every finding to ``satisfied`` here.
-    3. One non-stale ``CRAGeneratedDocument`` for every
-       ``DocumentKind`` value. We seed placeholders (dummy
-       ``storage_key`` / ``content_hash``).
-
-    Both seedings use ``get_or_create`` / ``update`` so re-running
-    the screencast against a DB that already carries some state
-    (for example a prior run that survived) does not raise
-    ``IntegrityError`` on the unique constraints
-    (``OSCALFinding`` is unique on (assessment_result, control) and
-    ``CRAGeneratedDocument`` is unique on (assessment, document_kind)).
-
-    The recording deliberately hovers the Export CTA and never
-    clicks it, so no real export is attempted against the test
-    environment.
+    Generated documents and the export ZIP are written here and read back by
+    the wizard and the public pages. SBOM reads return a minimal CycloneDX
+    body so the bundle carries one SBOM per component, and the presigned
+    download URL points at ``about:blank`` (the popup it opens is closed).
     """
-    OSCALFinding.objects.filter(
-        assessment_result=assessment.oscal_assessment_result,
-    ).update(status=OSCALFinding.FindingStatus.SATISFIED)
+    store: dict[tuple[str, str], bytes] = {}
 
-    # 4. An answered EU-establishment determination. Left unanswered,
-    #    ``eu_representation_problems`` reports one blocker, ``overall_ready``
-    #    goes false, and Step 5 closes the recording on "Not ready to export"
-    #    with the CTA greyed out — directly contradicting the narration, which
-    #    says the wizard exports a bundle. Established in the EU needs no
-    #    Authorized Representative, so this one answer clears the block.
-    if assessment.is_eu_established is None:
-        assessment.is_eu_established = True
-        assessment.save(update_fields=["is_eu_established"])
+    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
+        store[(bucket_name, object_name)] = data
 
-    DocumentKind = CRAGeneratedDocument.DocumentKind  # noqa: N806
-    for kind in DocumentKind.values:
-        CRAGeneratedDocument.objects.update_or_create(
-            assessment=assessment,
-            document_kind=kind,
-            defaults={
-                "storage_key": f"compliance/{assessment.id}/{kind}.md",
-                "content_hash": "0" * 64,
-                "is_stale": False,
-                "version": 1,
-            },
-        )
+    def _get(self: StorageClient, bucket_name: str, object_name: str) -> bytes | None:
+        return store.get((bucket_name, object_name))
+
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
+    monkeypatch.setattr(StorageClient, "get_file_data", _get)
+    monkeypatch.setattr(StorageClient, "get_sbom_data", lambda self, name: MINIMAL_CYCLONEDX)
+    monkeypatch.setattr(StorageClient, "generate_presigned_url", lambda self, *a, **kw: "about:blank")
+    return store
 
 
-def _seed_manufacturer(team: Team) -> None:
-    """Give the workspace a real manufacturer entity.
+@pytest.fixture
+def cra_ready_workspace(pied_piper_with_sboms: dict) -> dict:
+    """Manufacturer, security contact and lifecycle dates the wizard reads."""
+    product = pied_piper_with_sboms["product"]
+    team = product.team
+    # The shared fixture names the workspace "Test Business Team", which shows
+    # in the sidebar and the public page footer.
+    team.name = "Pied Piper"
+    team.save(update_fields=["name"])
 
-    Without one the name is empty, which the manufacturer policy treats as a
-    placeholder: Step 1 renders "Manufacturer — Not configured" next to a red
-    "Annex V item 2 requires a legal manufacturer name" banner, and both sit on
-    camera for the whole step.
-
-    This is workspace data rather than assessment data, so it has to be seeded
-    *before* the wizard is opened — seeding it alongside the export state runs
-    after Step 1 has already rendered, and the banner stays on the filmed DOM.
-    """
-    profile, _ = ContactProfile.objects.get_or_create(
-        team=team,
-        name="Pied Piper",
-        defaults={"is_default": True},
-    )
-    ContactEntity.objects.update_or_create(
+    profile = ContactProfile.objects.create(team=team, name="Pied Piper", is_default=True)
+    entity = ContactEntity.objects.create(
         profile=profile,
-        name="Pied Piper Inc.",
-        defaults={
-            "email": "compliance@piedpiper.com",
-            "address": "1 Middle-Out Way, Palo Alto, CA 94301, USA",
-            "is_manufacturer": True,
-        },
+        name="Pied Piper B.V.",
+        email="compliance@example.com",
+        address="Keizersgracht 100, 1015 AA Amsterdam, Netherlands",
+        website_urls=["https://piedpiper.example.com"],
+        is_manufacturer=True,
+        is_supplier=True,
     )
+    ContactProfileContact.objects.create(
+        entity=entity,
+        name="Richard Hendricks",
+        email="security@example.com",
+        is_security_contact=True,
+    )
+
+    # Published up front: any later product save marks every CRA document
+    # stale, and a stale Declaration of Conformity is hidden from the public
+    # page the video ends on.
+    team.is_public = True
+    team.save(update_fields=["is_public"])
+    product.release_date = date(2026, 3, 15)
+    product.end_of_support = date(2031, 3, 15)
+    product.is_public = True
+    product.save(update_fields=["release_date", "end_of_support", "is_public"])
+    Component.objects.filter(products=product).update(visibility=Component.Visibility.PUBLIC)
+    return pied_piper_with_sboms
+
+
+def _answer_all_but_first_two(assessment: CRAAssessment) -> None:
+    findings = list(
+        OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result)
+        .order_by("control__sort_order")
+        .values_list("pk", flat=True)
+    )
+    OSCALFinding.objects.filter(pk__in=findings[2:]).update(status=OSCALFinding.FindingStatus.SATISFIED)
+
+
+def _save_and_continue(page: Page, step: int, label: str = "Save and continue") -> None:
+    """Press the step's own continue button and wait for the next step.
+
+    The steps do not share a label: step 2 says "Continue", step 3
+    "Save & Continue", steps 1 and 4 "Save and continue".
+    """
+    btn = page.get_by_role("button", name=label, exact=True)
+    smooth_scroll(page, btn, 500)
+    hover_and_click(page, btn)
+    page.wait_for_url(re.compile(rf".*/cra/[^/]+/step/{step}/?$"), timeout=20_000)
+    page.wait_for_load_state("networkidle")
+    pace(page, 900)
 
 
 @pytest.mark.django_db(transaction=True)
+# Requested as marks so they run before ``recording_page`` builds the session:
+# the sidebar reads the workspace name from it.
+@pytest.mark.usefixtures("cra_fake_s3", "cra_ready_workspace")
 def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
+    product = pied_piper_with_sboms["product"]
 
-    # The wizard's product detail page lazy-loads HTMX panels
-    # (Releases, Identifiers, Vulnerability Trends) that fail in the
-    # screencast environment and pop "Failed to load …" toasts
-    # unrelated to the wizard flow. The shared
-    # ``auto_dismiss_toasts`` helper attaches a MutationObserver
-    # that drains those toasts the moment they are appended; the
-    # observer runs only on real DOM mutations rather than a 100 ms
-    # ``setInterval`` loop, so it adds zero polling overhead.
-
-    # Seeded before anything renders: the manufacturer is workspace data the
-    # wizard reads on every step, and Step 1 is filmed from an already-loaded
-    # DOM, so seeding it later leaves the banner on the frames.
-    _seed_manufacturer(pied_piper_with_sboms["product"].team)
+    # The bundle download opens a new tab; it is not part of the story.
+    page.context.on("page", lambda popup: popup.close())
 
     auto_dismiss_toasts(page)
+    start_on_dashboard(page, pause_ms=600)
+
     narrate(page, "intro")
-    start_on_dashboard(page, pause_ms=400)
+    settle(page)
 
-    narrate(page, "what_it_asks")
-    # ── 1. Navigate to Products ──────────────────────────────────────────
-    navigate_to_products(page)
-
-    narrate(page, "product")
-    # ── 2. Click into Pied Piper ─────────────────────────────────────────
-    product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
-    product_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 500)
-    hover_and_click(page, product_link)
+    # ── CRA overview → Start assessment ───────────────────────────────────
+    hover_and_click(page, sidebar_link(page, "Compliance"))
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
-
-    # ── 3. Unfold and show the CRA Compliance card ───────────────────────
-    # The product page keeps its compliance cards in collapsed accordions,
-    # so the card's CTA does not exist on screen until the header is
-    # clicked. Unfolding on camera also shows viewers where the card lives.
-    narrate(page, "card")
-    cra_accordion = page.locator("button:has-text('CRA Compliance')").first
-    cra_accordion.wait_for(state="visible", timeout=15_000)
-    cra_accordion.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
-    hover_and_click(page, cra_accordion)
     pace(page, 800)
 
-    # No assessment exists yet, so the card's CTA reads "Start Scope
-    # Screening" — the FAQ §1 entry point that gates the whole wizard.
-    start_screening_btn = page.locator("a:has-text('Start Scope Screening')").first
-    start_screening_btn.wait_for(state="visible", timeout=15_000)
-    start_screening_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
+    start_btn = page.get_by_role("button", name="Start assessment").first
+    start_btn.wait_for(state="visible", timeout=15_000)
+    narrate(page, "compliance_lists_every")
+    hover_and_click(page, start_btn)
+    pace(page, 700)
 
-    narrate(page, "start_screening")
-    # ── 4. Open the scope-screening page ────────────────────────────────
-    hover_and_click(page, start_screening_btn)
+    product_select = page.locator("#cra-product-choice")
+    product_select.wait_for(state="visible", timeout=10_000)
+    hover_and_click(page, product_select)
+    product_select.select_option(label=PIED_PIPER_PRODUCT_NAME)
+    pace(page, 600)
+
+    hover_and_click(page, page.get_by_role("button", name="Start scope screening"))
+    page.wait_for_url("**/cra/scope/**", timeout=15_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 2000)
+    pace(page, 600)
 
-    narrate(page, "scope_questions")
-    # ── 5. Scope screening: walk the five Article 2/3 questions ─────────
-    # FAQ §1 enumerates these explicitly. Each ``tw-card`` carries a
-    # checkbox plus a one-line legal-basis link. Pace values here are
-    # tuned so the whole screening segment runs in ~6 s — long enough
-    # for a viewer to recognise each question, short enough not to
-    # drag against the rest of the wizard walk.
-    page.locator("h1:has-text('CRA Scope Screening')").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 1200)
-
-    screening_questions = [
-        "Product has a data connection",
+    # ── Scope screening ───────────────────────────────────────────────────
+    narrate(page, "first_scope_screening")
+    for question in (
         "Manufactured exclusively for own use",
-        "Testing or pre-release version",
         "Covered by exempted EU legislation",
         "Dual-use (civilian + defense)",
-    ]
-    for q in screening_questions:
-        page.locator(f"span:has-text('{q}')").first.evaluate(
-            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
-        )
-        pace(page, 700)
+    ):
+        smooth_scroll(page, page.get_by_text(question, exact=True), 900)
 
-    narrate(page, "data_connection")
-    # ── 6. Tick the data-connection inclusion gate ──────────────────────
-    # The data-connection question is the inclusion gate — checking
-    # it flips the verdict card from "CRA does not apply" to "CRA
-    # applies" without leaving the page. ``check()`` drives the input
-    # directly so Alpine's ``x-model`` reliably picks up the change;
-    # clicking on the wrapping ``<label>`` is racy on first paint
-    # because the Alpine reactivity is mid-init.
-    data_conn_input = page.locator("input[x-model='hasDataConnection']").first
-    data_conn_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 400)
-    data_conn_input.check()
-    pace(page, 1200)
+    verdict = page.get_by_role("heading", name="CRA applies to this product")
+    verdict.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, verdict, 600)
+    narrate(page, "pied_piper_has")
+    settle(page)
 
-    # Show the verdict flip — "CRA applies to this product" card.
-    # The card is gated by ``x-show="craApplies"`` so we wait for it
-    # to become visible (Alpine evaluates the predicate after the
-    # input change above).
-    narrate(page, "verdict")
-    verdict_heading = page.locator("h3:has-text('CRA applies to this product')").first
-    verdict_heading.wait_for(state="visible", timeout=10_000)
-    verdict_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 1500)
-
-    narrate(page, "wizard_start")
-    # ── 7. Save & Continue ──────────────────────────────────────────────
-    # Backend creates the OSCAL catalog (via ``ensure_cra_catalog``,
-    # so re-running the screencast after another test seeded the
-    # same row does not raise ``IntegrityError``), the
-    # AssessmentResult, and the CRAAssessment in one go, then
-    # redirects to Step 1.
-    save_btn = page.locator("button:has-text('Save & Continue to Wizard')").first
-    save_btn.wait_for(state="visible", timeout=10_000)
-    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 400)
-    hover_and_click(page, save_btn)
-    # Match Step 1 specifically (with optional trailing slash). A
-    # broader ``**/cra/*/step/**`` would silently swallow an
-    # unexpected redirect to a different step; matching ``/step/1``
-    # explicitly fails loudly if the backend lands us elsewhere.
+    save_screening = page.get_by_role("button", name="Save & Continue to Wizard")
+    hover_and_click(page, save_screening)
     page.wait_for_url(re.compile(r".*/cra/[^/]+/step/1/?$"), timeout=20_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 2000)
+    pace(page, 700)
 
-    # Read the freshly-created assessment back, then seed the export
-    # placeholders so Step 5's CTA renders enabled when we get there.
-    product = pied_piper_with_sboms["product"]
     assessment = CRAAssessment.objects.get(product=product)
-    _seed_export_ready_state(assessment)
+    _answer_all_but_first_two(assessment)
 
-    narrate(page, "step_one")
-    # ── 8. Step 1: Product Profile ──────────────────────────────────────
-    # Walk every named section so the recording captures the full shape
-    # of the first step. The wizard is sticky-headed; scrolling each h2
-    # into view brings the next panel above the fold without the
-    # navigation flicker of a fresh page load.
-    step_1_sections = [
-        "Product Information",
-        "CRA Classification",
-        "Harmonized Standards Applicability",
-        "Target EU Markets",
-        "Support Period",
-        "Intended Use",
-    ]
-    first_step_1 = page.locator(f"h2:has-text('{step_1_sections[0]}')").first
-    first_step_1.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
-    for heading in step_1_sections[1:]:
-        page.locator(f"h2:has-text('{heading}')").first.evaluate(
-            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
-        )
-        pace(page, 2000)
-
-    narrate(page, "step_one_detail")
-    # ── 9. Scroll back up so the stepper is fully visible ───────────────
-    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
-    pace(page, 1500)
-
-    narrate(page, "step_two")
-    # ── 10. Advance to Step 2 (SBOM Compliance) ─────────────────────────
-    # Mark Step 1 complete and advance current_step before navigating —
-    # the stepper then renders Step 1 with a green check and Step 2 as
-    # the active blue marker, matching what the user would see after
-    # pressing Save & Continue from Step 1.
-    assessment.completed_steps = [1]
-    assessment.current_step = 2
-    assessment.save(update_fields=["completed_steps", "current_step"])
-    page.goto(f"/compliance/cra/{assessment.id}/step/2/")
-    page.wait_for_load_state("networkidle")
-    pace(page, 2000)
-
-    narrate(page, "step_two_detail")
-    # ── 11. Step 2: SBOM Compliance ─────────────────────────────────────
-    # "SBOM Compliance Summary" is the rolled-up BSI TR-03183 status
-    # across the product; "Components" lists each component with its
-    # individual findings. Walking both gives viewers the per-product /
-    # per-component shape the FAQ describes.
-    for heading in ("SBOM Compliance Summary", "Components"):
-        loc = page.locator(f"h2:has-text('{heading}')").first
-        loc.wait_for(state="visible", timeout=15_000)
-        loc.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-        pace(page, 2500)
-
-    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
-    pace(page, 1500)
-
-    narrate(page, "step_three")
-    # ── 12. Advance to Step 3 (Security & Vulnerability) ────────────────
-    # Step 3 has three tabs (Annex I checklist, vulnerability disclosure,
-    # incident reporting) all driven from one Alpine ``activeTab``
-    # state. The recording exercises each tab so the FAQ can refer
-    # back to specific sections without saying "click somewhere on
-    # this page".
-    assessment.completed_steps = [1, 2]
-    assessment.current_step = 3
-    assessment.save(update_fields=["completed_steps", "current_step"])
-    page.goto(f"/compliance/cra/{assessment.id}/step/3/")
-    page.wait_for_load_state("networkidle")
-    pace(page, 2000)
-
-    # The default tab is "Security Checklist" — Annex I controls.
-    # Linger long enough for the viewer to take in the structure, then
-    # click the other two tabs in turn. Tab button labels and the
-    # ``activeTab`` state names differ ("Vulnerability Handling" vs
-    # ``activeTab === 'vulnerability'``); we drive on the visible
-    # button text because that is what the viewer actually sees.
-    checklist_tab = page.locator("button:has-text('Security Checklist')").first
-    if checklist_tab.count():
-        checklist_tab.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
-    page.evaluate("window.scrollBy({ top: 250, behavior: 'smooth' })")
-    pace(page, 2000)
-
-    vuln_tab = page.locator("button:has-text('Vulnerability Handling')").first
-    vuln_tab.wait_for(state="visible", timeout=10_000)
-    hover_and_click(page, vuln_tab)
-    pace(page, 2500)
-
-    narrate(page, "step_three_checklist")
+    # ── Step 1: product profile ───────────────────────────────────────────
+    narrate(page, "answers_saved_audit")
     settle(page)
 
-    narrate(page, "step_three_vuln")
-    page.locator("h2:has-text('Vulnerability Disclosure')").first.evaluate(
-        "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
-    )
-    pace(page, 2000)
+    category = page.locator("#product-category")
+    smooth_scroll(page, category, 500)
+    narrate(page, "pick_product_category")
+    hover_and_click(page, category)
+    category.select_option("default")
+    pace(page, 500)
+    module_a = page.locator("input[name='conformity_procedure']").first
+    if not module_a.is_checked():
+        hover_and_click(page, module_a)
+    pace(page, 600)
 
-    incident_tab = page.locator("button:has-text('Incident Reporting')").first
-    incident_tab.wait_for(state="visible", timeout=10_000)
-    hover_and_click(page, incident_tab)
-    pace(page, 2500)
-    narrate(page, "step_three_incident")
-    page.locator("h2:has-text('Incident Reporting (Article 14)')").first.evaluate(
-        "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
-    )
-    pace(page, 2000)
+    all_markets = page.locator("label[for='all-markets']")
+    smooth_scroll(page, all_markets, 500)
+    narrate(page, "choose_eu_markets")
+    hover_and_click(page, all_markets)
+    pace(page, 900)
+    smooth_scroll(page, page.locator("#support-period-end"), 1200)
 
-    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
+    intended_use = page.locator("#intended-use")
+    smooth_scroll(page, intended_use, 400)
+    hover_and_click(page, intended_use)
+    type_text(intended_use, "Middle-out compression for enterprise data pipelines.", delay=25)
+    pace(page, 300)
+
+    eu_yes = page.get_by_test_id("eu-established-yes")
+    smooth_scroll(page, eu_yes, 400)
+    narrate(page, "record_manufacturer_established")
+    hover_and_click(page, eu_yes)
+    pace(page, 600)
+    _save_and_continue(page, 2)
+
+    # ── Step 2: SBOM compliance ───────────────────────────────────────────
+    narrate(page, "step_two_confirms")
+    components_heading = page.get_by_role("heading", name="Components")
+    components_heading.wait_for(state="visible", timeout=15_000)
     pace(page, 1500)
+    smooth_scroll(page, components_heading, 1800)
+    narrate(page, "four_components_four")
+    settle(page)
+    _save_and_continue(page, 3, "Continue")
 
-    narrate(page, "step_four")
-    # ── 13. Advance to Step 4 (User Information) ────────────────────────
-    # Annex II inputs that drive the "User Instructions" generated
-    # document. Walk every named section so the FAQ can call out what
-    # the operator has to fill in here.
-    assessment.completed_steps = [1, 2, 3]
-    assessment.current_step = 4
-    assessment.save(update_fields=["completed_steps", "current_step"])
-    page.goto(f"/compliance/cra/{assessment.id}/step/4/")
-    page.wait_for_load_state("networkidle")
-    pace(page, 2000)
+    # ── Step 3: security requirements ─────────────────────────────────────
+    narrate(page, "step_three_annex")
+    satisfied = page.locator("#panel-checklist label").filter(has=page.locator("input[value='satisfied']"))
+    satisfied.first.wait_for(state="visible", timeout=15_000)
+    pace(page, 1200)
+    for i in range(2):
+        hover_and_click(page, satisfied.nth(i))
+        pace(page, 900)
+    narrate(page, "last_two_answers")
+    settle(page)
 
-    step_4_sections = [
-        "Product Type",
-        "Update & Distribution",
-        "Support Contact",
-        "Data & Decommissioning",
-    ]
-    first_step_4 = page.locator(f"h2:has-text('{step_4_sections[0]}')").first
-    first_step_4.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
-    for heading in step_4_sections[1:]:
-        page.locator(f"h2:has-text('{heading}')").first.evaluate(
-            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
-        )
-        pace(page, 2000)
+    hover_and_click(page, page.locator("#tab-vulnerability"))
+    pace(page, 500)
+    narrate(page, "vulnerability_handling_sets")
+    settle(page)
+    hover_and_click(page, page.locator("#tab-incident"))
+    pace(page, 500)
+    narrate(page, "incident_reporting_names")
+    csirt = page.locator("#csirt-country")
+    hover_and_click(page, csirt)
+    csirt.select_option("NL")
+    pace(page, 900)
+    _save_and_continue(page, 4, "Save & Continue")
 
-    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
-    pace(page, 1500)
+    # ── Step 4: user information ──────────────────────────────────────────
+    narrate(page, "step_four_collects")
+    product_type = page.locator("#product-type")
+    product_type.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, product_type)
+    product_type.select_option("library")
+    pace(page, 900)
+    deletion = page.locator("#data-deletion")
+    smooth_scroll(page, deletion, 400)
+    hover_and_click(page, deletion)
+    type_text(deletion, "Remove the library from your build and delete its cache directory.", delay=25)
+    pace(page, 400)
+    _save_and_continue(page, 5)
 
-    narrate(page, "step_five")
-    # ── 14. Advance to Step 5 (Review & Export) ─────────────────────────
-    # Step 5 is what the FAQ leads with as the deliverable. Walk every
-    # panel: Compliance Summary (rolled-up posture), Export (the
-    # bundle CTA), Last Export Bundle (manifest preview), Documents
-    # (per-document staleness + preview/generate buttons).
-    assessment.completed_steps = [1, 2, 3, 4]
-    assessment.current_step = 5
-    assessment.save(update_fields=["completed_steps", "current_step"])
-    page.goto(f"/compliance/cra/{assessment.id}/step/5/")
-    page.wait_for_load_state("networkidle")
-    pace(page, 2000)
+    # ── Step 5: sign, export, complete ────────────────────────────────────
+    narrate(page, "step_five_review")
+    settle(page)
 
-    summary_heading = page.locator("h2:has-text('Compliance Summary')").first
-    summary_heading.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
-
-    # Highlight the Export Compliance Bundle button — hover only, do
-    # not click. Clicking would kick off a real export that the
-    # screencast environment cannot complete (no S3, no signing). The
-    # FAQ's "What is in the export bundle" section unpacks what the
-    # button produces. The placeholder ``CRAGeneratedDocument`` rows
-    # we seeded earlier flip ``exportAvailable`` to true so the CTA
-    # renders enabled — without that the closing frame would show a
-    # greyed-out button which is the wrong message for the FAQ.
-    narrate(page, "export")
-    export_heading = page.locator("h2:has-text('Export')").first
-    export_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2000)
-
-    export_btn = page.locator("button:has-text('Export Compliance Bundle')").first
-    export_btn.wait_for(state="visible", timeout=10_000)
-    export_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
-    box = export_btn.bounding_box()
+    signature_heading = page.get_by_role("heading", name="Sign the Declaration of Conformity")
+    smooth_scroll(page, signature_heading, 500)
+    narrate(page, "sign_declaration_conformity")
+    sign_card = page.locator("[x-data='craDocSignature()']")
+    for placeholder, value in (
+        ("City, country", "Amsterdam, Netherlands"),
+        ("Full legal name", "Richard Hendricks"),
+        ("Role / title", "Chief Executive Officer"),
+    ):
+        field = sign_card.get_by_placeholder(placeholder)
+        hover_and_click(page, field)
+        type_text(field, value, delay=25)
+    canvas = sign_card.locator("canvas")
+    smooth_scroll(page, canvas, 400)
+    box = canvas.bounding_box()
     if box:
-        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    pace(page, 2500)
+        x0, y0, w, h = box["x"], box["y"], box["width"], box["height"]
+        points = [(0.12, 0.65), (0.18, 0.3), (0.24, 0.7), (0.3, 0.35), (0.36, 0.6), (0.44, 0.4), (0.52, 0.62)]
+        page.mouse.move(x0 + w * points[0][0], y0 + h * points[0][1])
+        page.mouse.down()
+        for px, py in points[1:]:
+            page.mouse.move(x0 + w * px, y0 + h * py, steps=8)
+        page.mouse.up()
+    pace(page, 400)
+    with page.expect_response(lambda r: "/signature" in r.url and r.request.method in ("PUT", "POST")):
+        hover_and_click(page, sign_card.get_by_role("button", name="Save signature"))
+    pace(page, 900)
 
-    # The "Last Export Bundle" card appears only when a previous
-    # export exists for this assessment. In the screencast environment
-    # there is no prior export, so we fall back to a no-op when the
-    # heading is absent — keeps the recording resilient to test data
-    # shape without fabricating an unrealistic bundle row.
-    bundle_card = page.locator("h2:has-text('Last Export Bundle')").first
-    if bundle_card.count():
-        bundle_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-        pace(page, 2500)
-
-    documents_heading = page.locator("h2:has-text('Documents')").first
-    documents_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
-    # One extra scroll so the bottom of the document list (Declaration
-    # of Conformity row + the Back link) is in view at the closing
-    # frame, mirroring how a user would end the wizard pass.
-    page.evaluate("window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })")
-    pace(page, 2500)
-
-    narrate(page, "outro")
+    # Generate every document from its own card. The DoC is generated after
+    # the signature is saved, so it carries the signature.
+    documents = page.get_by_role("heading", name="Documents", exact=True)
+    smooth_scroll(page, documents, 400)
+    narrate(page, "generate_documents_disclosure")
+    generate_buttons = page.locator("button[aria-label^='Generate ']")
+    for i in range(generate_buttons.count()):
+        with page.expect_response(lambda r: "/generate/" in r.url, timeout=30_000):
+            hover_and_click(page, generate_buttons.nth(i), pause_ms=120)
+        pace(page, 250)
+    page.locator("text=Not generated").first.wait_for(state="detached", timeout=15_000)
+    narrate(page, "every_document_current")
     settle(page)
+
+    # The export button only re-reads its readiness on load.
+    page.reload()
+    page.wait_for_load_state("networkidle")
+
+    export_btn = page.get_by_role("button", name="Export compliance bundle")
+    smooth_scroll(page, export_btn, 400)
+    narrate(page, "export_compliance_bundle")
+    with page.expect_response(lambda r: r.url.endswith("/export") and r.status == 201, timeout=60_000):
+        hover_and_click(page, export_btn)
+    page.wait_for_load_state("networkidle")
+    pace(page, 900)
+
+    complete_btn = page.get_by_role("button", name="Mark Assessment Complete")
+    smooth_scroll(page, complete_btn, 400)
+    narrate(page, "mark_assessment_complete")
+    hover_and_click(page, complete_btn)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+    bundle = page.get_by_role("heading", name="Last Export Bundle")
+    bundle.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, bundle, 600)
+    narrate(page, "bundle_lists_each")
+    settle(page)
+
+    # ── The public product page ───────────────────────────────────────────
+    page.goto(f"/public/product/{product.id}/")
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    vdp_link = page.get_by_role("link", name="Vulnerability disclosure policy")
+    vdp_link.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, vdp_link, 600)
+    narrate(page, "product_s_public")
+    settle(page)
+
+    hover_and_click(page, vdp_link)
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    pace(page, 800)
+    narrate(page, "vulnerability_disclosure_policy")
+    settle(page)
+    page.mouse.wheel(0, 600)
+    pace(page, 500)
+
+    page.go_back()
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    doc_link = page.get_by_role("link", name="View declaration")
+    smooth_scroll(page, doc_link, 400)
+    hover_and_click(page, doc_link)
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    pace(page, 800)
+    narrate(page, "signed_eu_declaration")
+    settle(page)
+    page.mouse.wheel(0, 900)
+    pace(page, 1500)
+    narrate(page, "cra_scope_public")
+    settle(page)
+    pace(page, 600)

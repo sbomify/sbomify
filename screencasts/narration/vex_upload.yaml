@@ -1,58 +1,40 @@
 # Narration for screencasts/vex_upload.py
-#
-# Thesis: a scanner reports what is present, not what is exploitable. VEX is
-# how you state, in machine-readable form, that a finding does not apply — and
-# sbomify shows you the effect before storing anything.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      A scanner tells you a vulnerable package is present. It cannot tell you
-      whether the vulnerable code is ever actually reached.
+      Here is how to upload a VEX document, to tell sbomify and customers which
+      vulnerabilities do not affect you.
 
-  why_vex:
+  component_s_scan:
     text: >-
-      Most of the time it isn't, and answering that question by email, once per
-      customer, does not scale. VEX is the machine-readable version of that
-      answer.
+      This component's scan reports a critical in the requests package. Your team
+      found it is not reachable.
 
-  component:
+  open_component_s:
     text: >-
-      It attaches to the component the finding was raised against.
+      Open the component's actions menu and choose Upload VEX.
 
-  upload_menu:
+  drop_cyclonedx_vex:
     text: >-
-      A VEX document uploads like any other artifact, from the same menu you'd
-      use for an SBOM.
+      Drop in a CycloneDX VEX, an OpenVEX file or a CSAF document.
 
-  pick_type:
+  nothing_stored_yet:
     text: >-
-      But tell sbomify it's a VEX rather than an SBOM, because the two are
-      treated very differently from here. An SBOM is stored; a VEX changes how
-      existing findings are counted.
+      Nothing is stored yet. The preview shows what the VEX would suppress.
 
-  preview:
+  if_looks_right:
     text: >-
-      Now the useful part. [pause] Before anything is stored, sbomify dry runs
-      the document and shows exactly what it would change.
+      If it looks right, apply it.
 
-  preview_detail:
+  critical_has_left:
     text: >-
-      This one marks a high severity finding as not affected, because the
-      vulnerable code path is never reachable. You can see the counts move
-      before you commit to it.
+      The critical has left the open list, and the latest version now lists its
+      VEX.
 
-  apply:
+  nothing_deleted_filter:
     text: >-
-      Apply it, and only now is anything written.
-
-  outro:
-    text: >-
-      The VEX sits beside the SBOM as its own artifact, and the original SBOM
-      is untouched. [pause] sbomify never edits what you uploaded, so the
-      assessment lives next to the evidence rather than inside it. An auditor
-      sees both the claim and the reasoning behind it, and your customer's
-      tooling can consume the VEX directly instead of asking you to explain
-      the finding by email.
+      Nothing is deleted. Filter to closed by a decision to see it, with the
+      reason attached.

@@ -1,52 +1,39 @@
 # Narration for screencasts/document_signatures.py
-#
-# Thesis: a signature answers "did this really come from you, and has anyone
-# touched it since". The badges and the verification result are the visible
-# form of that answer.
 voice: ara
 speed: 1.0
 
 beats:
   intro:
     text: >-
-      An SBOM is a claim about your software. A signature is what makes that
-      claim checkable by somebody who has no reason to trust you yet.
+      Here is how to attach a signature and build provenance to an SBOM, so anyone
+      can check it is genuine.
 
-  components:
+  after_uploading_sbom:
     text: >-
-      Signatures attach to the artifact itself, so you find them where the
-      artifact lives.
+      After uploading the SBOM, your pipeline signs it, for example with cosign.
 
-  open_sbom:
+  posts_signature_bundle:
     text: >-
-      The badges sit on the SBOM's own page rather than the component summary,
-      because they describe this exact file and this exact version of it.
+      Then it posts the signature bundle to the SBOM's signature endpoint.
 
-  signed_badge:
+  slsa_provenance_attestation:
     text: >-
-      Signed means a detached signature is stored alongside the SBOM, and that
-      sbomify recomputed the digest and it still matches. [pause] If a single
-      byte had changed, this badge would not be here.
+      A SLSA provenance attestation goes to the provenance endpoint. Its subject
+      must match the SBOM's hash.
 
-  provenance_badge:
+  sbomify_open_component:
     text: >-
-      Provenance goes further. It ties the file back to the build that produced
-      it, which is what tells a consumer it came out of your pipeline and not
-      somebody's laptop.
+      In sbomify, open the component, then the version you signed.
 
-  verification:
+  sbom_carries_signed:
     text: >-
-      Underneath, the verification plugin reports the individual checks rather
-      than a single opaque verdict.
+      The SBOM now carries a Signed badge and a Provenance badge.
 
-  all_passed:
+  sbom_verification_assessment:
     text: >-
-      Digest integrity, signature present, signature valid, provenance present,
-      and the digest in the attestation matching the file. [pause] All passed.
+      The SBOM Verification assessment checks them, and every check passed.
 
-  outro:
+  open_met_requirements:
     text: >-
-      That's the difference between sending someone a file and giving them
-      something they can verify. [pause] And because the compliance plugins
-      consume the same result, it's what satisfies the attestation requirement
-      in the BSI and FDA checks too.
+      Open the met requirements to see each one: the digest, the signature and the
+      provenance.
