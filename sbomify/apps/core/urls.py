@@ -60,7 +60,6 @@ urlpatterns = [
     # Main URLs
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path("products/new/", views.ProductCreateView.as_view(), name="product_new"),
-    path("products/table/", views.ProductsTableView.as_view(), name="products_table"),
     path(
         "product/<str:product_id>/",
         views.ProductDetailsPrivateView.as_view(),
@@ -93,7 +92,7 @@ urlpatterns = [
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path("components/new/", views.ComponentCreateView.as_view(), name="component_new"),
-    path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
+    path("upload/", views.ArtifactUploadView.as_view(), name="artifact_upload"),
     path(
         "component/<str:component_id>/",
         views.ComponentDetailsPrivateView.as_view(),
@@ -111,7 +110,6 @@ urlpatterns = [
     ),
     path("releases/new/", views.ReleaseCreateView.as_view(), name="release_new"),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
-    path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
         "security-advisories/",
         views.SecurityAdvisoriesDashboardView.as_view(),
@@ -122,7 +120,12 @@ urlpatterns = [
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
     ),
-    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    # Before the <advisory_id> pattern, which would otherwise swallow "new" and "delete".
+    path(
+        "security-advisories/delete/",
+        views.SecurityAdvisoriesBulkDeleteView.as_view(),
+        name="security_advisories_bulk_delete",
+    ),
     path(
         "security-advisories/new/",
         views.SecurityAdvisoryCreateView.as_view(),
@@ -132,6 +135,11 @@ urlpatterns = [
         "security-advisories/<str:advisory_id>/",
         views.SecurityAdvisoryDetailView.as_view(),
         name="security_advisory_detail",
+    ),
+    path(
+        "security-advisories/<str:advisory_id>/product-releases/",
+        views.SecurityAdvisoryProductReleasesView.as_view(),
+        name="security_advisory_product_releases",
     ),
     path(
         "public/component/<str:component_id>/",

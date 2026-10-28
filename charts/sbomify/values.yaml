@@ -60,6 +60,7 @@ app:
 # plus, unless objectStorage.useWorkloadIdentity is true:
 #   AWS_MEDIA_ACCESS_KEY_ID, AWS_MEDIA_SECRET_ACCESS_KEY,
 #   AWS_SBOMS_ACCESS_KEY_ID, AWS_SBOMS_SECRET_ACCESS_KEY
+# and may supply GITHUB_API_TOKEN (optional).
 secrets:
   # Name of a Secret you manage. This is the integration point for an external
   # secret manager: have External Secrets Operator, the Vault Agent injector,
@@ -91,6 +92,13 @@ secrets:
   # Rotating it invalidates outstanding links.
   signedUrlSalt: ""
 
+  # Optional. GitHub token the SBOM Verification plugin uses to fetch
+  # attestations. Without it every lookup shares GitHub's unauthenticated limit
+  # of 60 requests an hour. A fine-grained token with no repository access is
+  # enough. With `existingSecret`, supply it under the GITHUB_API_TOKEN key
+  # instead; the key may be absent.
+  githubApiToken: ""
+
 # -- OIDC / Keycloak client configuration (the app is the OIDC *client*).
 auth:
   keycloak:
@@ -101,6 +109,11 @@ auth:
     # discovery hands the *browser* whatever endpoints it finds here, so the
     # app pods and the browser have to agree on it.
     serverUrl: ""
+    # Optional. Keycloak base URL the *browser* uses, e.g.
+    # https://sso.example.com/. Logout redirects the browser to Keycloak
+    # directly instead of going through OIDC discovery, so set this when
+    # serverUrl is an address the browser cannot reach. Defaults to serverUrl.
+    publicUrl: ""
     realm: "sbomify"
     clientId: "sbomify"
     clientSecret: ""

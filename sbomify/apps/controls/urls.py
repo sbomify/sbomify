@@ -13,24 +13,24 @@ from .views import (
 app_name = "controls"
 
 urlpatterns = [
-    path("<team_key>/product/<product_id>/", ProductControlsView.as_view(), name="product_controls"),
+    path("<workspace_key>/product/<product_id>/", ProductControlsView.as_view(), name="product_controls"),
     path(
-        "<team_key>/catalog",
+        "<workspace_key>/catalog",
         ControlsCatalogView.as_view(),
         name="catalog_action",
     ),
     path(
-        "<team_key>/status",
+        "<workspace_key>/status",
         ControlsStatusView.as_view(),
         name="status_update",
     ),
     path(
-        "<team_key>/bulk-category",
+        "<workspace_key>/bulk-category",
         BulkCategoryUpdateView.as_view(),
         name="bulk_category_update",
     ),
     path(
-        "<team_key>/product/<product_id>/status",
+        "<workspace_key>/product/<product_id>/status",
         ProductControlsStatusView.as_view(),
         name="product_status_update",
     ),

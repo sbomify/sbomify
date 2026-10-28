@@ -1,15 +1,15 @@
-{# Public releases — a tc-panel table matching the advisory detail page. #}
+{# Public releases: a section heading over a flush table, as the rest of the trust center lists records. #}
 {% load humanize %}
 {% if public_releases %}
-    <div class="tc-panel tc-panel-flush">
-        <div class="tc-timeline-header px-6 pt-5">
-            <h2 class="tc-panel-title tc-panel-title-flush !p-0">Releases</h2>
-            {% if view_all_releases_url %}
-                <a class="tc-section-link" href="{{ view_all_releases_url }}">
-                    All releases <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                </a>
-            {% endif %}
-        </div>
+    <section class="flex flex-col gap-4">
+        <c-branded.section-header title="Releases" subtitle="Published releases of this product, newest first.">
+        {% if view_all_releases_url %}
+            <c-slot name="action">
+            <c-buttons.secondary size="sm" href="{{ view_all_releases_url }}">All releases</c-buttons.secondary>
+            </c-slot>
+        {% endif %}
+        </c-branded.section-header>
+        <c-branded.surface flush>
         <c-tables.table>
         <c-tables.head>
         <c-tables.header-cell nowrap>Release</c-tables.header-cell>
@@ -20,25 +20,27 @@
             {% for release in public_releases %}
                 <c-tables.row>
                 <c-tables.cell nowrap>
-                <a class="font-medium text-text hover:text-primary no-underline"
+                <a class="font-medium text-text hover:text-text no-underline"
+                   data-button
                    href="{{ release.public_url }}">{{ release.name }}</a>
                 {% if release.description %}
-                    <div class="text-xs opacity-75 mt-1" title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
+                    <div class="text-xs text-text-muted mt-1"
+                         title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
                 {% endif %}
-                <div class="md:hidden text-xs opacity-75 mt-1">
+                <div class="md:hidden text-xs text-text-muted mt-1">
                     {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                 </div>
                 </c-tables.cell>
                 <c-tables.cell>
                 {% if release.is_latest %}
-                    <c-badges.success>Latest</c-badges.success>
+                    <c-branded.badge tone="success">Latest</c-branded.badge>
                 {% elif release.is_prerelease %}
-                    <c-badges.warning>Pre-release</c-badges.warning>
+                    <c-branded.badge tone="medium">Pre-release</c-branded.badge>
                 {% else %}
-                    <span class="text-xs opacity-75">Stable</span>
+                    <c-branded.badge>Stable</c-branded.badge>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell date class="hidden md:table-cell">
+                <c-tables.cell date muted class="hidden md:table-cell">
                 <span title="{{ release.released_at|default_if_none:release.created_at }}">
                     {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                 </span>
@@ -47,5 +49,6 @@
             {% endfor %}
         </tbody>
         </c-tables.table>
-    </div>
+        </c-branded.surface>
+    </section>
 {% endif %}

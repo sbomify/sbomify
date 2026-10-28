@@ -11,6 +11,10 @@ lives in core/design_system.html.j2 and is for looking at.
 <c-branded.badge tone="critical" data-probe="badge-critical">Critical</c-branded.badge>
 <c-branded.badge brand data-probe="badge-brand">Verified</c-branded.badge>
 <c-branded.badge data-probe="badge-neutral">Draft</c-branded.badge>
+<c-branded.badge dashed data-probe="badge-dashed">Withdrawn</c-branded.badge>
+{% with ids="CVE-2026-0001 CVE-2026-0002" %}
+    <c-branded.meta-item mono label="CVE IDs" :values="ids.split" data-probe="meta-labelled" />
+{% endwith %}
 <c-branded.nav>
 <c-branded.nav-item href="/a" icon="fas fa-house" current data-probe="nav-current">Overview</c-branded.nav-item>
 <c-branded.nav-item href="/b" icon="fas fa-shield-halved" data-probe="nav-other">Advisories</c-branded.nav-item>
@@ -51,7 +55,41 @@ This artifact is shared with named recipients.
 <c-slot name="side"><c-branded.badge tone="low">Low</c-branded.badge></c-slot>
 </c-branded.list-row>
 </c-branded.surface>
+<c-branded.masthead data-probe="masthead">
+<c-branded.back-link href="/advisories/" data-probe="back-link">Security advisories</c-branded.back-link>
+</c-branded.masthead>
+<c-branded.panel title="Details" data-probe="panel">
+<c-branded.facts>
+<c-branded.fact label="Published" data-probe="fact">3 Aug 2026</c-branded.fact>
+<c-branded.fact label="CPE" stacked data-probe="fact-stacked">cpe:2.3:a:acme:widget</c-branded.fact>
+</c-branded.facts>
+</c-branded.panel>
+<c-branded.meta-item icon="fas fa-tag" mono data-probe="meta-item">2.4.1</c-branded.meta-item>
+<c-branded.timeline>
+<c-branded.timeline-item icon="fas fa-check" tone="success" data-probe="timeline-latest">
+<c-slot name="heading">Resolved</c-slot>
+<c-branded.markdown data-probe="markdown">
+<p>
+    See the <a href="/notes" class="text-primary">notes</a>.
+</p>
+</c-branded.markdown>
+</c-branded.timeline-item>
+<c-branded.timeline-item tone="unheard-of" data-probe="timeline-last">
+<c-slot name="heading">Reported</c-slot>
+</c-branded.timeline-item>
+</c-branded.timeline>
 </c-branded.theme>
+<c-branded.version-check checks="probe-checks" data-probe="version-check">
+<c-branded.version-row key="row" heading="Acme Gateway" status_label="Fixed" status_variant="success" :versions="['1.0.0', '1.1.0', 'From 2.0.0, fixed in 2.4.1']" label="Affected versions of Acme Gateway" limit="2" data-probe="version-row">
+Upgrade to 2.4.1.
+</c-branded.version-row>
+<c-branded.version-row key="quiet" heading="Acme Console" data-probe="version-row-quiet">
+{% if False %}<c-slot name="eyebrow">CVE-2026-0001</c-slot>{% endif %}
+</c-branded.version-row>
+</c-branded.version-check>
+<c-branded.expandable data-probe="expandable">
+<p>Long text</p>
+</c-branded.expandable>
 <c-branded.theme brand="#FDE68A" data-probe="theme-light">
 <c-buttons.primary>Pale brand</c-buttons.primary>
 </c-branded.theme>

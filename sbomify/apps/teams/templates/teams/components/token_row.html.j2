@@ -18,6 +18,6 @@
 <c-tables.actions-cell>
 <c-buttons.icon-quiet size="sm" label="Delete token {{ token.description }}" @click="showDeleteModal = true"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon-quiet>
 {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-{% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' dialog_id=token.id title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+{% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' dialog_id=token.id title='Delete token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete token' hx_url=delete_url hx_method='delete' success_message='Token deleted' refresh_event='refreshTeamTokens' %}
 </c-tables.actions-cell>
 </c-tables.row>

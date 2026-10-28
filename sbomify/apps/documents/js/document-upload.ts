@@ -133,7 +133,7 @@ export function registerDocumentUpload(): void {
             } catch (error) {
                 if (error instanceof Error) {
                     if (error.name === 'AbortError') {
-                        showError('Upload was cancelled.');
+                        showError('Upload was canceled.');
                     } else {
                         showError(`Network error: ${error.message}`);
                     }

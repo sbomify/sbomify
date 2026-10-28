@@ -2,40 +2,31 @@
 {% load static %}
 {% block title %}Access Denied{% endblock %}
 {% block content %}
-    <div class="public-section">
-        <c-cards.card>
-        {% comment %} The card body pads by 6; the extra 6 here is the deeper top and bottom
-        the panel has always had. {% endcomment %}
-        <div class="text-center py-6">
-            <div class="mb-6">
-                <i class="fas fa-lock text-5xl text-warning mb-4"></i>
-                <h2 class="text-2xl font-bold text-text mb-3">Access Denied</h2>
-                <p class="text-text-muted mb-6">{{ error_message }}</p>
-            </div>
-            <div class="flex flex-col sm:flex-row justify-center gap-3">
-                {% comment %}
-                Not every denial is "go and ask": a request already under review
-                has no action to offer, and an unsigned NDA is a different one.
-                Callers that pass neither label nor icon keep the request-access
-                button this page has always shown.
+    <div class="mx-auto flex w-full max-w-lg flex-col">
+        <c-branded.surface flush>
+        <c-feedback.empty-state icon="fas fa-lock" icon_variant="neutral" title="Access Denied" message="{{ error_message }}">
+        {% comment %}
+        Not every denial is "go and ask": a request already under review
+        has no action to offer, and an unsigned NDA is a different one.
+        Callers that pass neither label nor icon keep the request-access
+        button this page has always shown.
 
-                Secondary, not primary: this page renders on a workspace's own
-                Trust Center, and a filled library button hardcodes white text
-                over whatever accent the workspace picked. Neutral is the only
-                variant that stays readable on a pale one.
-                {% endcomment %}
-                {% if request_access_url %}
-                    <c-buttons.secondary href="{{ request_access_url }}">
-                    <i class="fas {{ action_icon|default:"fa-key" }} mr-2"></i>{{ action_label|default:"Request Access" }}
-                    </c-buttons.secondary>
-                {% endif %}
-                {% if back_url %}
-                    <c-buttons.secondary href="{{ back_url }}" onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                    <i class="fas fa-arrow-left mr-2"></i>Go Back
-                    </c-buttons.secondary>
-                {% endif %}
-            </div>
-        </div>
-        </c-cards.card>
+        Secondary, not primary: this page renders on a workspace's own
+        Trust Center, and a filled library button hardcodes white text
+        over whatever accent the workspace picked. Neutral is the only
+        variant that stays readable on a pale one.
+        {% endcomment %}
+        {% if request_access_url %}
+            <c-buttons.secondary href="{{ request_access_url }}">
+            <i class="fas {{ action_icon|default:"fa-key" }}" aria-hidden="true"></i>{{ action_label|default:"Request Access" }}
+            </c-buttons.secondary>
+        {% endif %}
+        {% if back_url %}
+            <c-buttons.secondary href="{{ back_url }}" onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>Go Back
+            </c-buttons.secondary>
+        {% endif %}
+        </c-feedback.empty-state>
+        </c-branded.surface>
     </div>
 {% endblock %}

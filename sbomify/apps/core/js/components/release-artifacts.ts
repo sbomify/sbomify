@@ -1,6 +1,6 @@
 import Alpine from 'alpinejs';
 import { artifactLink, type ArtifactRoutes } from './artifact-links';
-import $axios, { formatDate as sharedFormatDate } from '../utils';
+import $axios, { formatDate as sharedFormatDate, parseJsonScript } from '../utils';
 import { showError, showSuccess } from '../alerts';
 
 interface SBOMData {
@@ -63,6 +63,16 @@ interface AvailableArtifact {
     };
 }
 
+interface ArtifactVulnerabilities {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    scanned_nothing: boolean;
+    url: string;
+}
+
 interface ReleaseArtifactsParams {
     routes: ArtifactRoutes;
     releaseId: string;
@@ -70,6 +80,7 @@ interface ReleaseArtifactsParams {
     initialArtifacts?: Artifact[];
     canEdit?: boolean;
     isLatest?: boolean;
+    vulnerabilitiesScriptId?: string;
 }
 
 function formatSbomDisplay(format?: string, version?: string): string {
@@ -85,7 +96,8 @@ export function registerReleaseArtifacts() {
         initialArtifacts = [],
         routes,
         canEdit = true,
-        isLatest = false
+        isLatest = false,
+        vulnerabilitiesScriptId = ''
     }: ReleaseArtifactsParams) => {
         return {
             artifacts: initialArtifacts as Artifact[],
@@ -101,6 +113,10 @@ export function registerReleaseArtifacts() {
             productId,
             canEdit,
             isLatest,
+            // Each SBOM's own scan counts, rendered by the server with the page.
+            vulnerabilities: (vulnerabilitiesScriptId
+                ? parseJsonScript<Record<string, ArtifactVulnerabilities | null>>(vulnerabilitiesScriptId)
+                : null) ?? {},
 
             // Main table filters
             search: '',
@@ -127,6 +143,13 @@ export function registerReleaseArtifacts() {
                 if (initialArtifacts.length === 0) {
                     this.loadArtifacts();
                 }
+            },
+
+            /** The artifact's scan counts: undefined when it is not a scannable SBOM, null when never scanned. */
+            getArtifactVulnerabilities(artifact: Artifact): ArtifactVulnerabilities | null | undefined {
+                const sbomId = artifact.sbom_id || artifact.sbom?.id;
+                if (!sbomId || !(sbomId in this.vulnerabilities)) return undefined;
+                return this.vulnerabilities[sbomId];
             },
 
             async loadArtifacts() {
@@ -501,24 +524,26 @@ export function registerReleaseArtifacts() {
             // Available artifact methods
             getAvailableArtifactType(artifact: AvailableArtifact): string {
                 if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
+                    // VEX, CBOM and HBOM are SBOM rows carrying a bom_type.
+                    // Report each as itself, exactly as getArtifactType does for
+                    // the collection above, so one artifact does not read as two
+                    // different types on the same page.
+                    const bomType = artifact.bom_type || 'sbom';
+                    return bomType === 'sbom' ? 'sbom' : bomType;
                 }
                 return artifact.artifact_type;
             },
 
             getAvailableTypeIcon(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'fas fa-file-contract' : 'fas fa-file-code';
-                }
-                if (artifact.artifact_type === 'document') return 'fas fa-file-alt';
-                return 'fas fa-file';
+                return this.getTypeIcon(this.getAvailableArtifactType(artifact));
             },
 
             getAvailableArtifactIconClass(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') {
-                    return artifact.bom_type === 'vex' ? 'bg-info/10 text-info' : 'bg-success/10 text-success';
-                }
-                if (artifact.artifact_type === 'document') return 'bg-warning/10 text-warning';
+                const type = this.getAvailableArtifactType(artifact);
+                if (type === 'sbom') return 'bg-success/10 text-success';
+                if (type === 'vex') return 'bg-info/10 text-info';
+                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary';
+                if (type === 'document') return 'bg-warning/10 text-warning';
                 return 'bg-surface text-text-muted';
             },
 

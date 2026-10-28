@@ -11,11 +11,15 @@ two cannot drift. Expects `advisory` (a trust_center projection) and
 <c-slot name="eyebrow">
 {{ advisory.id }}
 {% if advisory.is_gated %}
-    <c-branded.badge brand title="Visible to you because you have access to the affected products">
+    <c-branded.badge title="Visible to you because you have access to the affected products">
     <i class="fas fa-lock" aria-hidden="true"></i>Restricted
     </c-branded.badge>
 {% endif %}
-{% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
+{% if advisory.is_withdrawn %}
+    <c-branded.badge dashed>
+    <i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn
+    </c-branded.badge>
+{% endif %}
 </c-slot>
 <c-slot name="heading">{{ advisory.title }}</c-slot>
 {% if advisory.summary %}<c-slot name="summary">{{ advisory.summary }}</c-slot>{% endif %}

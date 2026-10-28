@@ -142,9 +142,9 @@ class TestGetOrCreateAssessment:
         assert result.status_code == 404
 
     def test_fails_for_wrong_team(self, sample_team_with_owner_member, sample_user, product):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         result = get_or_create_assessment(product.id, sample_user, other_team)
 
         assert not result.ok
@@ -257,7 +257,7 @@ class TestSaveStepData:
         result = save_step_data(assessment, 1, {"product_category": "class_i"}, sample_user)
         assert not result.ok
         assert result.status_code == 400
-        assert "harmonised standard" in result.error.lower()
+        assert "harmonized standard" in result.error.lower()
 
     def test_step_1_invalid_category_rejected(self, assessment, sample_user):
         result = save_step_data(assessment, 1, {"product_category": "invalid"}, sample_user)
@@ -355,7 +355,7 @@ class TestSaveStepData:
         )
         assert not second.ok
         assert second.status_code == 400
-        assert "harmonised standard" in (second.error or "").lower()
+        assert "harmonized standard" in (second.error or "").lower()
 
     def test_step_1_support_period_justification_cleared_after_gate(self, assessment, sample_user):
         """CRA Art 13(8) audit-trail bypass regression (P0). A payload
@@ -867,9 +867,9 @@ class TestGetAssessmentListForTeam:
         assert "updated_at" in item
 
     def test_empty_for_other_team(self, assessment):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         result = get_assessment_list_for_team(other_team.id)
         assert result.ok
         assert len(result.value) == 0

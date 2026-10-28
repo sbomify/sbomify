@@ -202,9 +202,9 @@ class TestOSCALAssessmentResult:
         assert ar.created_by is None
 
     def test_team_cascade_delete(self, catalog, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.create(name="cascade-test-team")
+        team = Workspace.objects.create(name="cascade-test-team")
         ar = OSCALAssessmentResult.objects.create(
             catalog=catalog,
             team=team,

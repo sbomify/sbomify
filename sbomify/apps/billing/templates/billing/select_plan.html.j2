@@ -5,7 +5,7 @@
     {{ plan_selection_data|json_script:"plan-selection-data" }}
     <c-layout.frame x-data="planSelection(window.parseJsonScript('plan-selection-data'))">
     <c-layout.page-header title="Plans and billing" subtitle="Choose a plan for {{ team.name|workspace_display }}.">
-    <c-buttons.secondary size="sm" href="{% url 'teams:team_settings' team_key %}"><i class="fas fa-gear" aria-hidden="true"></i>Workspace settings</c-buttons.secondary>
+    <c-buttons.secondary size="sm" href="{% url 'workspaces:team_settings' team_key %}"><i class="fas fa-gear" aria-hidden="true"></i>Workspace settings</c-buttons.secondary>
     </c-layout.page-header>
     <c-feedback.alert variant="warning" icon="fas fa-calendar" x-show="cancelAtPeriodEnd" x-cloak>
     Your plan ends on <span x-text="formatDate(currentPeriodEnd)"></span>. Manage your subscription to change this.
@@ -15,7 +15,7 @@
     </c-feedback.alert>
     <section class="flex flex-col gap-3" aria-label="Current usage">
         <c-layout.section-header title="Current usage" subtitle="Resources in this workspace." level="2" />
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <c-layout.stat-card compact value="{{ usage.users }}" label="Members" accent="muted" />
             <c-layout.stat-card compact value="{{ usage.products }}" label="Products" accent="muted" />
             <c-layout.stat-card compact value="{{ usage.components }}" label="Components" accent="muted" />

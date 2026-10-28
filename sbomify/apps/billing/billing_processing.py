@@ -6,17 +6,14 @@ from __future__ import annotations
 
 import datetime
 from enum import Enum
-from functools import wraps
 from types import SimpleNamespace
 from typing import Any, NoReturn
 
 from django.conf import settings
 from django.db import models, transaction
-from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 
-from sbomify.apps.core.queries import get_team_asset_count, get_team_asset_counts
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from . import email_notifications
@@ -30,7 +27,8 @@ from .billing_helpers import (
 )
 from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
-from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
+from .services.plan_selection import usage_over
+from .stripe_cache import invalidate_subscription_cache
 from .stripe_client import (
     LIVE_SUBSCRIPTION_STATUSES,
     TERMINAL_SUBSCRIPTION_STATUSES,
@@ -64,7 +62,7 @@ def cancel_replaced_subscription(subscription_id: str) -> None:
     if subscription.status in TERMINAL_SUBSCRIPTION_STATUSES:
         return
     stripe_client.cancel_subscription(subscription_id)
-    logger.info("Cancelled the subscription a checkout replaced")
+    logger.info("Canceled the subscription a checkout replaced")
 
 
 def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
@@ -103,7 +101,7 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     """
     if isinstance(exc, BillingRetryableError):
         raise exc
-    if isinstance(exc, Team.DoesNotExist):
+    if isinstance(exc, Workspace.DoesNotExist):
         # Terminal: a genuinely nonexistent workspace cannot be conjured by a retry.
         raise WorkspaceGoneError(str(exc) or "No workspace found for webhook event") from exc
     if isinstance(exc, StripeError):
@@ -175,15 +173,14 @@ class BillingResourceType(str, Enum):
 
     PRODUCT = "product"
     COMPONENT = "component"
+    USER = "user"
 
-
-# Set of valid billing resource type values for quick validation
-BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
 
 # Mapping from resource type to BillingPlan field name for limits
 RESOURCE_TYPE_TO_LIMIT_FIELD = {
     BillingResourceType.PRODUCT.value: "max_products",
     BillingResourceType.COMPONENT.value: "max_components",
+    BillingResourceType.USER.value: "max_users",
 }
 
 
@@ -195,148 +192,8 @@ def get_resource_limit(plan: BillingPlan, resource_type: str) -> int | None:
     return None
 
 
-def _billing_error_response(request: HttpRequest, message: str, status: int = 403) -> HttpResponse:
-    """Return a JSON or HTML error response based on request type."""
-    is_ajax = (
-        request.headers.get("Accept") == "application/json"
-        or request.META.get("HTTP_X_REQUESTED_WITH") == "XMLHttpRequest"
-    )
-    if is_ajax:
-        return JsonResponse({"error": message, "limit_reached": True}, status=status)
-    return HttpResponseForbidden(message)
-
-
-def check_billing_limits(resource_type: str) -> Any:
-    """
-    Decorator to check if a team has reached their billing plan limits.
-
-    Args:
-        resource_type: Type of resource being created. Must be one of: 'product' or 'component'
-    """
-
-    def decorator(view_func: Any) -> Any:
-        @wraps(view_func)
-        def _wrapped_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-            if request.method != "POST":
-                return view_func(request, *args, **kwargs)
-
-            if not is_billing_enabled():
-                return view_func(request, *args, **kwargs)
-
-            team_key = request.session.get("current_workspace", {}).get("key")
-            if not team_key:
-                return HttpResponseForbidden("No team selected")
-
-            try:
-                team = Team.objects.get(key=team_key)
-            except Team.DoesNotExist:
-                return HttpResponseForbidden("Workspace not found")
-
-            if not team.billing_plan:
-                return HttpResponseForbidden("No active billing plan")
-
-            with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                billing_limits = team.billing_plan_limits or {}
-                subscription_status = billing_limits.get("subscription_status")
-
-                cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
-                scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
-                stripe_subscription_id = billing_limits.get("stripe_subscription_id")
-
-                if cancel_at_period_end and scheduled_downgrade_plan:
-                    sub_id = str(stripe_subscription_id) if stripe_subscription_id else ""
-                    real_cancel_at_period_end = get_subscription_cancel_at_period_end(
-                        sub_id, team.key or "", fallback_value=bool(cancel_at_period_end)
-                    )
-
-                    if not real_cancel_at_period_end:
-                        billing_limits = billing_limits.copy()
-                        billing_limits.pop("scheduled_downgrade_plan", None)
-                        if stripe_subscription_id:
-                            invalidate_subscription_cache(str(stripe_subscription_id), team.key)
-                        team.billing_plan_limits = billing_limits
-                        team.save()
-                        logger.info("User reactivated subscription, cleared scheduled downgrade")
-                    else:
-                        try:
-                            target_plan = BillingPlan.objects.get(key=scheduled_downgrade_plan)
-                        except BillingPlan.DoesNotExist:
-                            logger.warning("Target plan not found for scheduled downgrade, skipping check")
-                        else:
-                            max_allowed = get_resource_limit(target_plan, resource_type)
-
-                            if max_allowed is not None:
-                                current_count = get_team_asset_count(str(team.id), resource_type)
-                                if (current_count + 1) > max_allowed:
-                                    error_message = (
-                                        f"You cannot create this {resource_type} because your scheduled downgrade to "
-                                        f"{target_plan.name} would exceed the plan limit of "
-                                        f"{max_allowed} {resource_type}s. "
-                                        "Please reduce your usage or continue with your current plan."
-                                    )
-                                    return _billing_error_response(request, error_message)
-
-                if subscription_status == "past_due":
-                    failed_at_str = billing_limits.get("payment_failed_at")
-
-                    if not failed_at_str:
-                        # A past_due subscription with no recorded failure time would otherwise
-                        # skip the grace check entirely and escape enforcement. Stamp it now so
-                        # the grace window starts (persisted — team is select_for_update'd here).
-                        failed_at_str = timezone.now().isoformat()
-                        billing_limits = billing_limits.copy()
-                        billing_limits["payment_failed_at"] = failed_at_str
-                        team.billing_plan_limits = billing_limits
-                        team.save(update_fields=["billing_plan_limits"])
-
-                    try:
-                        failed_at = datetime.datetime.fromisoformat(failed_at_str.replace("Z", "+00:00"))
-                        delta = timezone.now() - failed_at
-                        grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
-                        grace_period_seconds = grace_days * 24 * 60 * 60
-
-                        if delta.total_seconds() > grace_period_seconds:
-                            msg = (
-                                "Payment failed. Grace period expired. "
-                                "Please update payment method to create resources."
-                            )
-                            logger.warning("Blocking resource access: Grace period expired")
-                            return _billing_error_response(request, msg)
-
-                    except (ValueError, TypeError):
-                        logger.error("Invalid payment_failed_at format")
-                        msg = "Payment failed. Unable to verify grace period. Please contact support."
-                        return _billing_error_response(request, msg)
-
-            try:
-                plan = BillingPlan.objects.get(key=team.billing_plan)
-            except BillingPlan.DoesNotExist:
-                return HttpResponseForbidden("Invalid billing plan")
-
-            if resource_type not in BILLING_RESOURCE_TYPES:
-                return HttpResponseForbidden("Invalid resource type")
-
-            max_allowed = get_resource_limit(plan, resource_type)
-
-            current_count = get_team_asset_count(str(team.id), resource_type)
-
-            if plan.key == "enterprise" or max_allowed is None:
-                return view_func(request, *args, **kwargs)
-
-            if current_count >= max_allowed:
-                error_message = f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan"
-                return _billing_error_response(request, error_message)
-
-            return view_func(request, *args, **kwargs)
-
-        return _wrapped_view
-
-    return decorator
-
-
 @handle_stripe_errors
-def handle_trial_period(subscription: Any, team: Team) -> bool:
+def handle_trial_period(subscription: Any, team: Workspace) -> bool:
     """Handle trial period status and notifications."""
     if subscription.status == "trialing" and subscription.trial_end:
         trial_end_value = subscription.trial_end
@@ -355,7 +212,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
         trial_has_ended = trial_end <= timezone.now()
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits.update(
                 {"is_trial": True, "trial_end": subscription.trial_end, "trial_days_remaining": days_remaining}
@@ -377,7 +234,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             guard = TrialExpiryEmissionGuard()
             now = timezone.now()
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 should_run_side_effects = guard.should_claim(billing_limits, now)
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
@@ -392,7 +249,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # Under the row lock again, and only if the plan is still Community:
                 # an update that restored the paid plan since the claim wins.
                 with transaction.atomic():
-                    locked = Team.objects.select_for_update().get(pk=team.pk)
+                    locked = Workspace.objects.select_for_update().get(pk=team.pk)
                     if locked.billing_plan == BillingPlan.KEY_COMMUNITY:
                         apply_community_downgrade(locked)
                 notify_billing_managers(team, email_notifications.notify_trial_expired)
@@ -402,8 +259,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # Distinct_id = team_key matches the Tier 1 signal pattern at
                 # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
                 # consistent workspace-level attribution across tiers.
-                team_key = team.key or ""
-                distinct_id = team_key or "system"
+                workspace_key = team.key or ""
+                distinct_id = workspace_key or "system"
 
                 # Stamp the completion marker FIRST, defer the PostHog capture
                 # via ``transaction.on_commit`` so the marker is durable before
@@ -411,7 +268,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # marker-then-event (vs. event-then-marker) is the correct
                 # crash-tolerance ordering.
                 with transaction.atomic():
-                    team = Team.objects.select_for_update().get(pk=team.pk)
+                    team = Workspace.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
                     guard.stamp_emitted(billing_limits, timezone.now())
                     team.billing_plan_limits = billing_limits
@@ -423,8 +280,8 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                         lambda: capture(
                             distinct_id,
                             "billing:trial_expired",
-                            {"team_key": team_key},
-                            groups={"workspace": team_key} if team_key else None,
+                            {"team_key": workspace_key},
+                            groups={"workspace": workspace_key} if workspace_key else None,
                         )
                     )
 
@@ -495,23 +352,23 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
-def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, Any]]:
+def _resolve_team_from_subscription(subscription: Any) -> tuple[Workspace, dict[str, Any]]:
     """Resolve Team from subscription using multiple lookup strategies.
 
     Returns:
         Tuple of (team, billing_limits)
     """
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
+        team = Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription.id)
         return team, team.billing_plan_limits or {}
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         pass
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
+        team = Workspace.objects.get(billing_plan_limits__stripe_customer_id=subscription.customer)
         logger.warning("Found team by customer ID instead of subscription ID")
         return team, team.billing_plan_limits or {}
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         pass
 
     # Last resort: recover the team via the Stripe customer's metadata. A *transient*
@@ -535,8 +392,8 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     metadata = getattr(customer, "metadata", None)
     if metadata and "team_key" in metadata:
         try:
-            team = Team.objects.get(key=metadata["team_key"])
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=metadata["team_key"])
+        except Workspace.DoesNotExist:
             pass
         else:
             logger.warning("Found team by customer metadata")
@@ -550,11 +407,11 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
 
     # Definitively unresolved after every strategy → the workspace is gone. Keep the
     # message free of the Stripe subscription id (re-logged by the webhook view).
-    raise Team.DoesNotExist("No workspace holds the subscription in this webhook event")
+    raise Workspace.DoesNotExist("No workspace holds the subscription in this webhook event")
 
 
 def _update_billing_from_subscription(
-    team: Team, subscription: Any, webhook_id: str, created: int | None
+    team: Workspace, subscription: Any, webhook_id: str, created: int | None
 ) -> tuple[bool, str | None]:
     """Update team billing limits from subscription data within a transaction.
 
@@ -565,7 +422,7 @@ def _update_billing_from_subscription(
         already applied.
     """
     with transaction.atomic():
-        team = Team.objects.select_for_update().get(pk=team.pk)
+        team = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
 
         if _was_applied(billing_limits, webhook_id, created):
@@ -717,7 +574,7 @@ def _update_billing_from_subscription(
     return True, previous_status
 
 
-def _send_subscription_notifications(team: Team, status: str, previous_status: Any) -> None:
+def _send_subscription_notifications(team: Workspace, status: str, previous_status: Any) -> None:
     """Send appropriate notifications based on subscription status *transitions*.
 
     A move to active sends nothing: the payment behind it sends its own receipt
@@ -733,7 +590,7 @@ def _send_subscription_notifications(team: Team, status: str, previous_status: A
 
     elif status == "canceled":
         notify_billing_managers(team, email_notifications.notify_subscription_cancelled)
-        logger.info("Subscription cancelled notification sent")
+        logger.info("Subscription canceled notification sent")
 
     elif status in ["incomplete", "incomplete_expired"]:
         notify_billing_managers(team, email_notifications.notify_payment_failed, None)
@@ -760,7 +617,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             # Decided from the locked row. A checkout cancels the subscription it
             # replaces while holding this lock, and Stripe can send this event before
             # that checkout commits, so the row found above can predate the switch.
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = team.billing_plan_limits or {}
 
             if billing_limits.get("stripe_subscription_id") != subscription.id:
@@ -797,22 +654,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                     team.save()
                     downgrade_ended_subscription(team.pk, subscription.id)
                 else:
-                    counts = get_team_asset_counts(str(team.id))
-                    product_count = counts["products"]
-                    component_count = counts["components"]
+                    exceeded_resources = usage_over(team, target_plan)
 
-                    usage_exceeds_limits = False
-                    exceeded_resources: list[str] = []
-
-                    if target_plan.max_products is not None and product_count > target_plan.max_products:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
-
-                    if target_plan.max_components is not None and component_count > target_plan.max_components:
-                        usage_exceeds_limits = True
-                        exceeded_resources.append(f"{component_count} components (limit: {target_plan.max_components})")
-
-                    if usage_exceeds_limits:
+                    if exceeded_resources:
                         existing_limits: dict[str, Any] = (team.billing_plan_limits or {}).copy()
                         existing_limits.update(
                             {
@@ -923,7 +767,7 @@ def _invoice_subscription_id(invoice: Any) -> str | None:
     return subscription_id
 
 
-def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
+def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Workspace:
     """The workspace holding the subscription a paid invoice bills.
 
     A checkout's first invoice (``billing_reason`` ``subscription_create``) can arrive
@@ -933,8 +777,8 @@ def _team_for_paid_invoice(invoice: Any, subscription_id: str) -> Team:
     workspace as gone.
     """
     try:
-        return Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
-    except Team.DoesNotExist:
+        return Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+    except Workspace.DoesNotExist:
         if getattr(invoice, "billing_reason", None) != "subscription_create":
             raise
 
@@ -956,7 +800,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
         return
 
     try:
-        team = Team.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
+        team = Workspace.objects.get(billing_plan_limits__stripe_subscription_id=subscription_id)
         billing_limits = team.billing_plan_limits or {}
 
         webhook_id = getattr(event, "id", None) or f"inv_fail_{invoice.id}_{invoice.created}"
@@ -967,7 +811,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             return
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             created = _event_created(event)
             if _was_applied(billing_limits, webhook_id, created):
@@ -1057,7 +901,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
                 logger.warning(f"Failed to fetch subscription for next billing date: {e}")
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             if _payment_already_recorded(billing_limits, webhook_id):
                 logger.info("Payment succeeded webhook already processed (checked after lock)")
@@ -1123,7 +967,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
         _raise_classified_webhook_error(e)
 
 
-def get_current_limits(team: Team) -> dict[str, Any]:
+def get_current_limits(team: Workspace) -> dict[str, Any]:
     """
     Get current billing limits for a team.
 
@@ -1161,20 +1005,20 @@ def handle_checkout_completed(session: Any) -> None:
         logger.error("Payment status was not valid: %s", session.payment_status)
         return
 
-    team_key = session.metadata.get("team_key")
-    if not team_key:
+    workspace_key = session.metadata.get("team_key")
+    if not workspace_key:
         logger.error("No team key found in session metadata")
         return
 
     try:
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=workspace_key)
 
         # Idempotency: a redelivery of the same checkout session must short-circuit
         # BEFORE the outbound Stripe calls (get_subscription / cancel_subscription),
         # otherwise each retry re-issues them. Keyed on the session id since the view
         # dispatches this handler without an event object.
         if (team.billing_plan_limits or {}).get("last_processed_checkout_session") == session.id:
-            logger.info("Checkout session %s already processed for team %s, skipping", session.id, team_key)
+            logger.info("Checkout session %s already processed for team %s, skipping", session.id, workspace_key)
             return
 
         plan_key = session.metadata.get("plan_key", "business")
@@ -1183,7 +1027,7 @@ def handle_checkout_completed(session: Any) -> None:
         subscription = stripe_client.get_subscription(session.subscription)
 
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
 
             # Re-check under the row lock: the unlocked guard above closes the common
             # sequential-redelivery case, but two concurrent deliveries could both pass
@@ -1197,7 +1041,7 @@ def handle_checkout_completed(session: Any) -> None:
             existing_subscription_id = (team.billing_plan_limits or {}).get("stripe_subscription_id")
 
             if existing_subscription_id and existing_subscription_id != session.subscription:
-                logger.info("Cancelling old subscription to prevent double billing")
+                logger.info("Canceling old subscription to prevent double billing")
                 try:
                     cancel_replaced_subscription(existing_subscription_id)
                 except StripeError as e:
@@ -1216,12 +1060,12 @@ def handle_checkout_completed(session: Any) -> None:
                     ) from e
                 except Exception as e:
                     logger.critical(
-                        "CRITICAL: Unexpected error cancelling old subscription: %s. "
+                        "CRITICAL: Unexpected error canceling old subscription: %s. "
                         "Both subscriptions would be active — deferring via retry.",
                         e,
                     )
                     raise BillingRetryableError(
-                        "Cannot complete checkout yet: unexpected error cancelling existing subscription; "
+                        "Cannot complete checkout yet: unexpected error canceling existing subscription; "
                         "retrying to avoid leaving both subscriptions active."
                     ) from e
 
@@ -1260,14 +1104,14 @@ def handle_checkout_completed(session: Any) -> None:
             # subsequent customer.subscription.updated event and the trial-sync cron.
             handle_trial_period(subscription, team)
 
-        logger.info("Successfully processed checkout session for team %s", team_key)
+        logger.info("Successfully processed checkout session for team %s", workspace_key)
 
         from sbomify.apps.core.posthog_service import capture, group_identify
 
         amount = session.amount_total / 100.0 if session.amount_total else 0.0
-        if team_key:
+        if workspace_key:
             capture(
-                team_key,
+                workspace_key,
                 "billing:checkout_completed",
                 {
                     "plan": plan.key,
@@ -1275,10 +1119,10 @@ def handle_checkout_completed(session: Any) -> None:
                     "currency": session.currency or "usd",
                     "subscription_status": subscription.status,
                 },
-                groups={"workspace": team_key},
+                groups={"workspace": workspace_key},
             )
             group_identify(
-                "workspace", team_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
+                "workspace", workspace_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
             )
 
     except Exception as e:

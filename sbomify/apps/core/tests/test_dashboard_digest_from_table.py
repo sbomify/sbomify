@@ -161,9 +161,9 @@ class TestTheSameAdvisoryFromTwoScannersShowsOnce:
         team = sample_team_with_owner_member.team
         _component_with(team, {"osv": [_finding("GHSA-x", "high", aliases=["CVE-2026-9999"])]})
 
-        stored = Finding.objects.get(advisory_id="GHSA-x")
+        stored = Finding.objects.get(record__advisory_id="GHSA-x")
 
-        assert stored.aliases == ["CVE-2026-9999"]
+        assert stored.record.aliases == ["CVE-2026-9999"]
 
     def test_title_only_malware_keeps_its_projected_priority(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
@@ -232,10 +232,10 @@ class TestScopeIsKept:
     def test_another_workspace_s_findings_stay_out(self, sample_team_with_owner_member) -> None:
         """Not ``sample_team``: that fixture is the same workspace this one owns,
         so a component added to it lands in the digest under test."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team = sample_team_with_owner_member.team
-        somebody_else = Team.objects.create(name="somebody else")
+        somebody_else = Workspace.objects.create(name="somebody else")
         _component_with(team, {"osv": [_finding("CVE-MINE", "high")]}, name="mine")
         _component_with(somebody_else, {"osv": [_finding("CVE-THEIRS", "critical")]}, name="theirs")
 

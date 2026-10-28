@@ -212,7 +212,7 @@ def test_avatar_class_is_layout_only_and_lands_last(rendered: str) -> None:
 
 
 def test_progress_track_recipe_and_default_size(rendered: str) -> None:
-    track = _probe(rendered, "progress-labelled")
+    track = _probe(rendered, "progress-labeled")
     assert "w-full rounded-full overflow-hidden bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)]" in track
     assert "h-2" in track
     assert 'role="progressbar"' in track
@@ -251,14 +251,14 @@ def test_progress_default_variant_leaves_the_accent_at_primary(rendered: str) ->
 
 
 def test_progress_fill_width_is_the_value(rendered: str) -> None:
-    assert 'style="width: 72%"' in _section(rendered, "progress-labelled")
+    assert 'style="width: 72%"' in _section(rendered, "progress-labeled")
 
 
 def test_progress_label_row_names_the_track_and_shows_a_tabular_value(rendered: str) -> None:
-    header = rendered[: rendered.index('data-probe="progress-labelled"')]
+    header = rendered[: rendered.index('data-probe="progress-labeled"')]
     assert "flex items-baseline justify-between gap-3 mb-1.5 text-xs font-semibold text-text-muted" in header
     assert '<span class="tabular-nums text-text">72%</span>' in header
-    assert 'aria-label="Coverage"' in _probe(rendered, "progress-labelled")
+    assert 'aria-label="Coverage"' in _probe(rendered, "progress-labeled")
 
 
 def test_progress_without_a_label_has_no_header_row(rendered: str) -> None:
@@ -412,14 +412,14 @@ def test_copy_button_uses_the_shared_controller_and_quiet_button(rendered: str) 
 
 
 def test_copy_button_labels_reserve_both_states(rendered: str) -> None:
-    section = _section(rendered, "copy-labelled")
+    section = _section(rendered, "copy-labeled")
     assert 'group-data-[copied=true]:invisible">Copy ID</span>' in section
     assert 'group-data-[copied=true]:visible">Copied ID</span>' in section
     assert "Copied to clipboard" in section
 
 
 def test_copy_button_forwards_attrs_and_class(rendered: str) -> None:
-    button = _probe(rendered, "copy-labelled")
+    button = _probe(rendered, "copy-labeled")
     assert '@click.stop="track()"' in button
     assert "ml-2" in button
 
@@ -431,7 +431,7 @@ def test_inline_copy_is_a_monospace_chip_a_keyboard_can_reach(rendered: str) -> 
     chip = _probe(rendered, "inline-copy")
     assert "<button" in chip
     assert 'type="button"' in chip
-    assert "group inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono" in chip
+    assert "group relative inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono" in chip
     assert "text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md" in chip
     # No line-height: an arbitrary font-size attaches none to cancel, and the
     # public pages read 1.6 where the app reads 1.5.
@@ -484,7 +484,7 @@ def test_actions_menu_wrapper_holds_the_alpine_component(rendered: str) -> None:
 
 def test_actions_menu_trigger_is_the_library_icon_button(rendered: str) -> None:
     section = _section(rendered, "menu-default")
-    assert "w-9 h-9 text-sm rounded-md" in section
+    assert "w-9 h-9 max-sm:min-w-11 max-sm:min-h-11 text-sm rounded-md" in section
     assert 'aria-label="Product actions"' in section
     assert 'x-ref="trigger"' in section
     assert '@click.stop="toggle()"' in section

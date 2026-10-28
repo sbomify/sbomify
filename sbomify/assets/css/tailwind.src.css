@@ -152,6 +152,18 @@
   --color-severity-high: rgb(253 126 20);       /* 5.19 */
   --color-severity-medium: rgb(255 193 7);      /* 7.55 */
   --color-severity-low: rgb(13 202 240);        /* 6.46 */
+  /* The same idea for the brand statuses: read as text on a tint of themselves.
+     The brand value stays the fill, only the ink moves, and only where a theme
+     needs it. Dark repeats the brand value where it clears 4.5:1 on its 12%
+     tint over the surface, and lifts danger, accent and primary, whose brand
+     values measure 4.46, 4.16 and 4.45 there. :root.light darkens the five
+     statuses; primary is already navy there. */
+  --color-success-ink: rgb(54 197 143);
+  --color-warning-ink: rgb(247 181 70);
+  --color-danger-ink: rgb(246 109 113);  /* 4.75 on its tint */
+  --color-info-ink: rgb(108 183 240);
+  --color-accent-ink: rgb(162 137 255);  /* 4.83 */
+  --color-primary-ink: rgb(136 151 255); /* 5.00 */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
   --color-alert-danger-bg: rgb(254 242 242);    /* var(--color-alert-danger-bg) */
@@ -181,16 +193,41 @@
      Two deliberate placements. They are theme-independent, because the contrast
      partner is #fff either way, so there is nothing to retune and they are not
      redeclared under :root.light. And they live in this plain :root block
-     rather than in @theme, because their only consumer is static/css/
-     trust-center.css, which Tailwind does not process: an @theme variable no
-     Tailwind-scanned source mentions is tree-shaken out of the build, and every
-     rule reading it would fall back to transparent. Verified against the
-     production build, not assumed. */
+     rather than in @theme, because their consumers read them from inline style
+     attributes (the filter facet's severity swatch), which are not utilities:
+     an @theme variable no utility uses is tree-shaken out of the build, and
+     every style reading it would fall back to transparent. */
   --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
   --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
   --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
   --color-severity-low-fill: rgb(10 109 129);      /* 5.97 */
   --color-severity-none-fill: rgb(100 116 139);    /* 4.76 */
+
+  /* The radius scale, and the only place it is declared. The values are
+     Tailwind's own defaults, restated so that this file owns the scale outright.
+
+     Public pages load tokens.css and six other legacy sheets before this one,
+     all unlayered, while Tailwind publishes its theme inside @layer theme. An
+     unlayered declaration beats a layered one whatever the source order, so a
+     --radius-* redeclared in any of those sheets silently forked every
+     rounded-* utility on the public side: rounded-xl measured 16px there
+     against 12px in the app, on every card, table frame, stat card and alert.
+     Declaring the scale here, unlayered and last, is what closes that.
+
+     This plain :root block rather than @theme, for the reason the severity
+     fills above give: static/css/*.css is not processed by Tailwind, and an
+     @theme variable no scanned source mentions is tree-shaken out of the
+     build, so the var(--radius-*) rules in pages.css and public-pages.css
+     would fall back to nothing. Theme-independent, so not redeclared under
+     :root.light.
+
+     --radius-full has no Tailwind counterpart, because rounded-full compiles
+     to a literal calc(infinity * 1px). It is here for public-pages.css. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
 
   /* Primary Brand Colors */
 
@@ -333,6 +370,17 @@
   --color-severity-medium: rgb(133 100 3);      /* 4.54, 5.50 */
   --color-severity-low: rgb(11 115 136);        /* 4.51, 5.49 */
 
+  /* Status ink, light theme, for a status read as text on a tint of itself.
+     Each clears 4.5:1 on the darkest such surface in use: its own 12% tint
+     over a selected row's 4% primary tint, which is darker than the 14% a
+     branded badge paints on white. */
+  --color-success-ink: rgb(0 115 65);           /* 4.70 on a 12% tint over a selected row, 5.95 on white */
+  --color-warning-ink: rgb(154 82 0);           /* 4.65, 5.86 */
+  --color-danger-ink: rgb(191 36 49);           /* 4.67, 5.98 */
+  --color-info-ink: rgb(57 87 218);             /* 4.67, 5.92 */
+  --color-accent-ink: rgb(112 83 201);          /* 4.61, 5.57 */
+  --color-primary-ink: rgb(37 41 63);           /* navy, 10.6 */
+
   /* Alert backgrounds (same across themes) */
   --color-alert-success-bg: rgb(240 253 244);   /* var(--color-alert-success-bg) */
   --color-alert-success-border: rgb(187 247 208); /* var(--color-alert-success-border) */
@@ -410,7 +458,7 @@ html.no-transitions * {
     display: block;
   }
 
-  table[data-stack] > thead:not(:has([data-table-sort])) {
+  table[data-stack] > thead:not(:has([data-table-sort], [data-row-select-all])) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -448,6 +496,12 @@ html.no-transitions * {
 
   table[data-stack] > thead > tr > th:has([data-table-sort]) {
     display: block;
+  }
+
+  /* Select-all stays reachable too, leading the bar. */
+  table[data-stack] > thead > tr > th:has([data-row-select-all]) {
+    display: block;
+    order: -1;
   }
 
   table[data-stack] > tbody {
@@ -493,21 +547,37 @@ html.no-transitions * {
     display: none;
   }
 
-  /* The label sits in a left gutter beside its value, not above it, which
-     halves a row's height. It is positioned rather than a flex or grid item so
-     a value made of several nodes (a name, a version and a badge) keeps its
-     own flow. The row's first cell is its subject and needs no label. */
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]) {
+  /* A selectable row keeps its box in the top-left corner, beside the row's
+     subject, and the cell after the box becomes the unlabelled subject. */
+  table[data-stack] > tbody > tr:has(> td[data-cell-select]) {
     position: relative;
+    padding-left: 3.25rem;
+  }
+
+  table[data-stack] > tbody > tr > td[data-cell-select] {
+    position: absolute;
+    top: 0.875rem;
+    left: 1rem;
+    width: auto;
+  }
+
+  /* The label sits in a left gutter beside its value, not above it, which
+     halves a row's height. It floats into the cell's padding rather than being
+     a flex or grid item, so a value made of several nodes (a name, a version
+     and a badge) keeps its own flow, and the cell is its own formatting
+     context so it grows to hold a label that wraps onto a second line under a
+     one-line value. The row's first cell is its subject and needs no label. */
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not(:empty):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td) {
+    display: flow-root;
     padding-left: 7.5rem;
     min-height: 1.25rem;
   }
 
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end])::before {
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td)::before {
     content: attr(data-label);
-    position: absolute;
-    top: 0.125rem;
-    left: 0;
+    float: left;
+    margin-top: 0.125rem;
+    margin-left: -7.5rem;
     width: 6.75rem;
     font-size: 0.6875rem;
     line-height: 1.4;

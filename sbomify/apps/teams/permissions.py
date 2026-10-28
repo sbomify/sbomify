@@ -93,16 +93,16 @@ class TeamRoleRequiredMixin(AccessMixin):
         # happened to hold *somewhere else*. Being an owner of A is not a claim
         # about B. Guests were turned away by other gates, so until `member`
         # existed there was no role below ADMINISTER left to fall through this.
-        url_team_key = kwargs.get("team_key")
-        team_key = url_team_key or current_team.get("key", None)
-        if team_key is None:
+        url_team_key = kwargs.get("workspace_key")
+        workspace_key = url_team_key or current_team.get("key", None)
+        if workspace_key is None:
             return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
         try:
-            Member.objects.get(user=request.user, team__key=team_key, role__in=self.allowed_roles)
+            Member.objects.get(user=request.user, team__key=workspace_key, role__in=self.allowed_roles)
         except Member.DoesNotExist:
             # Check if user has ANY membership in this team (just not the right role)
-            has_any_membership = Member.objects.filter(user=request.user, team__key=team_key).exists()
+            has_any_membership = Member.objects.filter(user=request.user, team__key=workspace_key).exists()
 
             if has_any_membership:
                 # User is a member but doesn't have the required role
@@ -137,12 +137,12 @@ class GuestAccessBlockedMixin(AccessMixin):
         # Check if user is authenticated and is a guest member
         if request.user.is_authenticated:
             current_team: dict[str, Any] = request.session.get("current_workspace", {})
-            team_key = current_team.get("key")
-            if team_key:
+            workspace_key = current_team.get("key")
+            if workspace_key:
                 try:
-                    Member.objects.get(user=request.user, team__key=team_key, role="guest")
+                    Member.objects.get(user=request.user, team__key=workspace_key, role="guest")
                     # Redirect guest members to public workspace page
-                    return redirect("core:workspace_public", workspace_key=team_key)
+                    return redirect("core:workspace_public", workspace_key=workspace_key)
                 except Member.DoesNotExist:
                     pass
         return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]

@@ -47,6 +47,9 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=your-secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+# Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
+# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -132,6 +135,9 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+# Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
+# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -169,7 +175,23 @@ REDIS_URL=redis://redis.example.com:6379
 
 # Features
 BILLING=False
+
+# GitHub token for SBOM attestation lookups (see below)
+# GITHUB_API_TOKEN=github_pat_your_token
 ```
+
+### GitHub token for attestation checks
+
+The SBOM Verification plugin fetches each SBOM's attestation from the GitHub
+API. Without a token, every lookup shares GitHub's unauthenticated limit of 60
+requests an hour for your server's IP. A release that uploads several SBOMs can
+use that up, and the checks then wait and retry until the limit resets.
+
+Set `GITHUB_API_TOKEN` to raise the limit to 5,000 requests an hour. Create a
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
+with **Public repositories (read-only)** access and no permissions. The
+attestations it reads belong to public repositories, so it needs nothing more.
+The worker is the service that uses it.
 
 ## Common Tasks
 

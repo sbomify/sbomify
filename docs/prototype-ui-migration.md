@@ -128,12 +128,56 @@ continue through the existing HTMX endpoints.
 Browser coverage checks saving and reloading every field type, keyboard selection,
 the upgrade link and empty state. Responsive screenshots cover four widths.
 
+## Artifact details and security surfaces
+
+Artifact detail pages compose the shared page header, metric chips, stat cards
+and tables. One page serves SBOM, CBOM, VEX and document artifacts; the download
+control names the format and the kind, so three artifact types no longer share
+one label. Release artifact rows and the Add artifact picker take URLs reversed
+by Django for all four types, and both report a CBOM as a CBOM.
+
+Assessment results are a flat section rather than a nested card. Status badges
+carry their verdict: passed, issues, warnings, error, and a distinct state for a
+run whose stored result could not be read, which previously reported the same
+"warnings only" as a real verdict.
+
+Vulnerability reports share one filter, table, triage action and pager across
+the component panel, the full artifact report and per-run findings. Recording a
+triage decision refreshes the panel it was recorded in, keeping the reader's
+filters, page and scroll position, and refreshes again when the background
+re-apply broadcasts. Nothing on these surfaces reloads the page.
+
+The findings list inside an expanded assessment card is the one region here
+still on pre-migration markup and its own stylesheet. It is listed below.
+
 ## Remaining migration order
 
 | Group | Remaining work |
 | --- | --- |
-| Release and component details | Release artifact table and collection metadata; BOM/document component pages, uploads, setup, memberships and artifact details. |
-| Security | Vulnerability queue, artifact vulnerability detail, scan history, crypto assessments and trends. |
+| Assessment findings list | The list inside an expanded assessment card, plus `static/css/components/assessment-results-card.css`, which still carries raw hex values and rules for classes no page renders. |
+| Document artifact detail | The page states only that the file was stored. It has no delete control, unlike its SBOM, CBOM and VEX siblings, which offer one. |
 | Posture | Product CRA list, scope screening and assessment steps, retaining the production classification and evidence workflow. |
-| Trust Center and advisories | Internal landing and management flows, advisory list/detail/editor, and customer-facing pages where they still differ from the prototype. |
+| Trust Center and advisories | Internal landing and management flows and the advisory list/detail/editor. The customer-facing pages are migrated; see below. |
 | Supporting pages | Workspace selection/invitations, onboarding, billing and creation flows that remain outside the migrated settings and inventory surfaces. |
+
+## Public Trust Center
+
+Every page a workspace's customers see now composes the branded library and
+the main library's controls: the landing page, product, release history,
+release, component, artifact, advisory index and advisory detail pages, the
+VDP and Declaration of Conformity pages, access requests, NDA signing and the
+access-denied page. The header and footer are the platform's, with the
+workspace logo on the left and the account control on the right.
+
+Each page opens with `c-branded.masthead`, which shares one track with the nav
+and the content so every edge lines up. Detail pages lead with
+`c-branded.back-link` naming the parent page. Main-column sections are a
+section header over a surface; side panels are `c-branded.panel` holding
+`c-branded.facts`. The advisory timeline is `c-branded.timeline`, and the
+advisory filters use the main library's `c-forms.facet`, checkboxes, search,
+select and pager. The mobile filter disclosure still needs no script.
+
+`static/css/trust-center.css` and its colour guard are retired: no template
+reads a `tc-*` class any more. New snapshots cover the public advisory index
+and detail pages at four widths, and a browser test opens the filter
+disclosure on a phone.

@@ -113,6 +113,52 @@ def test_field_without_a_for_labels_the_group_and_holds_several_controls(rendere
     assert field.count('name="probe-format"') == 2
 
 
+CONTROL_COLUMN = '<div class="flex min-w-0 w-full flex-col'
+
+
+def _row(rendered: str, probe: str) -> str:
+    """A horizontal field's row attributes, through its control column's tag.
+
+    The two recipes under test sit on different elements: the column split is on
+    the row, the cap is on the control column. _chunk stops at the label
+    column's closing tag, before either.
+    """
+    start = rendered.index(f'data-probe="{probe}"')
+    control = rendered.index(CONTROL_COLUMN, start)
+    return rendered[start : rendered.index(">", control) + 1]
+
+
+def test_horizontal_field_puts_the_label_beside_the_control(rendered: str) -> None:
+    row = _open_tag(rendered, "div", 'data-probe="field-horizontal"')
+    assert "md:grid-cols-[minmax(0,1fr)_minmax(0,44%)]" in row
+    assert "space-y-1.5" not in row
+
+
+def test_wide_widens_the_control_column_and_drops_its_cap(rendered: str) -> None:
+    """Without it every control took the same narrow column whatever it held,
+    and a public address rendered clipped with the label column empty beside
+    it."""
+    assert "md:grid-cols-[minmax(0,1fr)_minmax(0,60%)]" in _open_tag(rendered, "div", 'data-probe="field-wide"')
+    row = _row(rendered, "field-wide")
+    assert "md:max-w-none" in row
+    assert "md:max-w-[340px]" not in row
+
+
+def test_a_horizontal_field_resolves_one_column_recipe_and_one_cap(rendered: str) -> None:
+    """Two utilities for one property resolve by stylesheet order, not by which
+    is "on", so each must render as a single branch."""
+    for probe, columns, cap in (
+        ("field-horizontal", "44%", "md:max-w-[340px]"),
+        ("field-wide", "60%", "md:max-w-none"),
+    ):
+        opening = _open_tag(rendered, "div", f'data-probe="{probe}"')
+        assert opening.count("md:grid-cols-[minmax(0,1fr)_minmax(0,") == 1
+        assert f"minmax(0,{columns})]" in opening
+        row = _row(rendered, probe)
+        assert row.count("md:max-w-") == 1
+        assert cap in row
+
+
 def test_field_passes_required_to_its_label(rendered: str) -> None:
     assert '<span class="text-danger">*</span>' in _chunk(rendered, "label", 'for="probe-error"')
     assert "text-danger" not in _chunk(rendered, "label", 'for="probe-text"')
@@ -154,6 +200,7 @@ def test_input_hover_and_disabled_utilities_are_shared(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-text"')
     assert "hover:not-focus:not-disabled:border-border-light" in field
     assert "disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background" in field
+    assert "read-only:bg-background read-only:text-text-muted" in field
 
 
 def test_input_boolean_props_render_bare_attributes(rendered: str) -> None:
@@ -182,7 +229,7 @@ def test_select_default_segments_and_chevron(rendered: str) -> None:
     assert all(
         token in select for token in ("bg-no-repeat", "bg-[position:right_0.75rem_center]", "bg-[length:1.25rem]")
     )
-    assert "w-full py-3 pr-10 pl-4 text-sm" in select
+    assert "w-full py-3 pr-10 pl-[1rem] text-sm" in select
     assert "bg-surface border-border text-text" in select
     assert PRIMARY_RING in select
 
@@ -190,9 +237,18 @@ def test_select_default_segments_and_chevron(rendered: str) -> None:
 def test_select_small_segment_never_conflicts_with_the_default(rendered: str) -> None:
     select = _open_tag(rendered, "select", 'id="probe-select-sm"')
     classes = _classes(rendered, "select", 'id="probe-select-sm"')
-    assert "w-auto py-1 pr-7 pl-2 text-xs" in select
-    for bit in ("w-full", "py-3", "pr-10", "pl-4", "text-sm"):
+    assert "w-auto py-1 pr-7 pl-2 max-sm:min-h-11 text-xs" in select
+    for bit in ("w-full", "py-3", "pr-10", "pl-[1rem]", "text-sm"):
         assert bit not in classes
+
+
+def test_select_compact_size_is_capped_and_the_default_fills(rendered: str) -> None:
+    small = _classes(rendered, "select", 'id="probe-select-sm"')
+    default = _classes(rendered, "select", 'id="probe-select"')
+    assert "max-w-[min(100%,12rem)]" in small
+    assert "truncate" in small
+    assert not any(bit.startswith("max-w-") for bit in default)
+    assert "truncate" not in default
 
 
 @pytest.mark.parametrize("accent", ["success", "warning", "danger"])
@@ -201,7 +257,7 @@ def test_select_accent_tints_border_fill_and_ink_together(rendered: str, accent:
     classes = _classes(rendered, "select", f'id="probe-select-{accent}"')
     assert f"bg-[color-mix(in_oklab,var(--color-{accent})_10%,transparent)]" in classes
     assert f"border-[color-mix(in_oklab,var(--color-{accent})_30%,transparent)]" in classes
-    assert f"text-{accent}" in classes
+    assert f"text-{accent}-ink" in classes
     assert "bg-surface" not in classes
     assert "border-border" not in classes
     assert "text-text" not in classes
@@ -361,7 +417,7 @@ def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> N
 def test_search_hint_segment_reserves_the_shortcut_room(rendered: str) -> None:
     field = _open_tag(rendered, "input", 'id="probe-search-hint"')
     assert "pl-11" in field and "pr-14" in field
-    assert "pr-4 sm:pr-14" in field
+    assert "pr-[1rem] sm:pr-14" in field
 
 
 def test_search_clear_button_is_wired_to_the_model(rendered: str) -> None:
@@ -390,7 +446,7 @@ def test_file_upload_active_swaps_the_whole_recipe_rather_than_adding_to_it(rend
     assert set("group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl".split()) <= set(
         panel.split('class="', 1)[1].split('"', 1)[0].split()
     )
-    # Nothing static may fight the binding: border style, border colour and fill
+    # Nothing static may fight the binding: border style, border color and fill
     # come from whichever branch is live, never from two utilities at once.
     for utility in ("border-dashed", "border-solid", "border-border", "border-primary", "bg-background"):
         assert utility not in classes
@@ -498,20 +554,20 @@ def test_textarea_carries_the_runtime_state_recipes(rendered: str) -> None:
 # ── Colour field ────────────────────────────────────────────────────────────
 
 
-def _colour(rendered: str) -> str:
-    """The whole colour field, from its label through to the hidden input."""
-    start = rendered.index('for="probe-colour"')
-    return rendered[start : rendered.index("probe-colour-bare", start)]
+def _color(rendered: str) -> str:
+    """The whole color field, from its label through to the hidden input."""
+    start = rendered.index('for="probe-color"')
+    return rendered[start : rendered.index("probe-color-bare", start)]
 
 
-def test_colour_field_wears_the_field_label_and_hint(rendered: str) -> None:
-    """A colour reads as one of the form's fields, not a block beside them."""
-    field = _colour(rendered)
+def test_color_field_wears_the_field_label_and_hint(rendered: str) -> None:
+    """A color reads as one of the form's fields, not a block beside them."""
+    field = _color(rendered)
     assert "Primary brand color" in field
     assert "Headers, navigation, primary elements" in field
 
 
-def test_colour_field_draws_one_border_around_both_halves(rendered: str) -> None:
+def test_color_field_draws_one_border_around_both_halves(rendered: str) -> None:
     """The swatch and the hex are one control, so the wrapper owns the ring."""
     wrapper = _open_tag(rendered, "div", "focus-within:border-primary")
     assert "border-[1.5px] border-solid border-border" in wrapper
@@ -520,13 +576,13 @@ def test_colour_field_draws_one_border_around_both_halves(rendered: str) -> None
         in wrapper
     )
     # Neither input paints a border of its own.
-    assert "border" not in _classes(rendered, "input", 'id="probe-colour"')
+    assert "border" not in _classes(rendered, "input", 'id="probe-color"')
 
 
-def test_colour_field_binds_both_halves_to_one_value(rendered: str) -> None:
+def test_color_field_binds_both_halves_to_one_value(rendered: str) -> None:
     """Typing a hex drives the swatch and picking drives the hex."""
-    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
-    hexed = _open_tag(rendered, "input", 'id="probe-colour"')
+    swatch = _open_tag(rendered, "input", 'id="probe-color-swatch"')
+    hexed = _open_tag(rendered, "input", 'id="probe-color"')
     for half in (swatch, hexed):
         assert ':value="branding.primary"' in half
         assert '@input="branding.primary = $event.target.value"' in half
@@ -534,13 +590,13 @@ def test_colour_field_binds_both_halves_to_one_value(rendered: str) -> None:
     assert 'type="text"' in hexed
 
 
-def test_colour_field_names_the_picker_for_a_screen_reader(rendered: str) -> None:
-    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
-    assert 'aria-label="Primary brand color, colour picker"' in swatch
+def test_color_field_names_the_picker_for_a_screen_reader(rendered: str) -> None:
+    swatch = _open_tag(rendered, "input", 'id="probe-color-swatch"')
+    assert 'aria-label="Primary brand color, color picker"' in swatch
 
 
-def test_colour_field_posts_through_a_hidden_input_only_when_named(rendered: str) -> None:
+def test_color_field_posts_through_a_hidden_input_only_when_named(rendered: str) -> None:
     """The visible halves are display; a form gets one value, once."""
-    field = _colour(rendered)
-    assert '<input type="hidden" name="probe-colour" :value="branding.primary">' in field
-    assert 'type="hidden"' not in rendered[rendered.index("probe-colour-bare") :]
+    field = _color(rendered)
+    assert '<input type="hidden" name="probe-color" :value="branding.primary">' in field
+    assert 'type="hidden"' not in rendered[rendered.index("probe-color-bare") :]

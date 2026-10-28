@@ -7,8 +7,10 @@
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
     {% url 'core:component_details_public' component.id as component_public_url %}
+    {% url 'core:components_dashboard' as components_url %}
+    {% comment %}The header follows edits made elsewhere, and leaves for the component list once the component is deleted.{% endcomment %}
     {% comment %}The visibility state lives on the header because only its menu items read it. The freshness badge goes in the header's meta slot, beside the title.{% endcomment %}
-    <c-layout.page-header title="{{ component.name }}" subtitle="{{ component.component_type_display }} Component" editable_item_type="{{ component.has_crud_permissions|yesno:'component,' }}" editable_item_id="{{ component.id }}" :copy_values="header_copy_values" x-data="{ ...publicSharing('{{ component_public_url|escapejs }}'), visibility: '{{ component.visibility|escapejs }}' }" @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
+    <c-layout.page-header title="{{ component.name }}" subtitle="{{ component.component_type_display }} Component" editable_item_type="{{ component.has_crud_permissions|yesno:'component,' }}" editable_item_id="{{ component.id }}" :copy_values="header_copy_values" id="component-header" x-data="{ ...publicSharing('{{ component_public_url|escapejs }}'), ...liveRegion({ refresh: ['component_updated', 'sbom_uploaded'], remove: ['component_deleted'], key: 'component_id', id: '{{ component.id|escapejs }}', leaveTo: '{{ components_url|escapejs }}' }), visibility: '{{ component.visibility|escapejs }}' }" hx-get="{{ request.get_full_path }}" hx-select="#component-header" hx-trigger="live-refresh" hx-swap="morph" hx-disinherit="*" @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
     {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
     {% if component.freshness.is_stale %}
         <c-slot name="meta">
@@ -30,7 +32,14 @@
             {% if component.has_crud_permissions %}
                 {% block meatball_artifacts %}
                     <c-dropdowns.header>Artifacts</c-dropdowns.header>
-                    <c-dropdowns.item icon="fas fa-upload" @click="$dispatch('open-upload')">Upload artifact…</c-dropdowns.item>
+                    {% comment %}One item per type the uploader takes, each opening it with that type selected. A document component takes documents only.{% endcomment %}
+                    {% if component.component_type == 'bom' %}
+                        <c-dropdowns.item icon="fas fa-file-code" @click="$dispatch('open-upload', { bomType: 'sbom' })">Upload SBOM…</c-dropdowns.item>
+                        <c-dropdowns.item icon="fas fa-key" @click="$dispatch('open-upload', { bomType: 'cbom' })">Upload CBOM…</c-dropdowns.item>
+                        <c-dropdowns.item icon="fas fa-file-shield" @click="$dispatch('open-upload', { bomType: 'vex' })">Upload VEX…</c-dropdowns.item>
+                    {% else %}
+                        <c-dropdowns.item icon="fas fa-upload" @click="$dispatch('open-upload')">Upload document…</c-dropdowns.item>
+                    {% endif %}
                     <c-dropdowns.divider />
                 {% endblock %}
             {% endif %}
@@ -128,9 +137,9 @@
     {% block upload_section %}{% endblock %}
     {% block table_section %}{% endblock %}
     {# Danger Zone #}
-    {% if component.has_crud_permissions %}
+    {% if can_delete_component %}
         <div>
-            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete %}
+            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete_component %}
         </div>
     {% endif %}
     </c-layout.frame>

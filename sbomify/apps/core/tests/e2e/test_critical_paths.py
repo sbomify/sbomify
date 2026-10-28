@@ -154,7 +154,7 @@ class TestCriticalPaths:
         # The view re-renders the tokens list with the new token, so the
         # description is visible in the response.
         response = client.post(
-            reverse("teams:team_tokens", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}),
             {"description": "Test Token"},
         )
         assert response.status_code == 200
@@ -165,7 +165,7 @@ class TestCriticalPaths:
         )
 
         # Verify token appears in list on a fresh fetch
-        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         content = response.content.decode()
         assert "Test Token" in content
@@ -215,7 +215,7 @@ class TestCriticalPaths:
 
         # Test sboms pages
         response = client.get(reverse("core:components_dashboard"))
-        assert "<title> Products · sbomify </title>" in " ".join(response.content.decode().split())
+        assert "<title> Components · sbomify </title>" in " ".join(response.content.decode().split())
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
         assert f"sbomify Component: {component.name}" in response.content.decode()
@@ -224,8 +224,8 @@ class TestCriticalPaths:
         # The workspace name is passed through workspace_display, which appends its
         # own suffix; assert the convention and the name, not the filter's output.
         for url in (
-            reverse("teams:team_details", kwargs={"team_key": team.key}),
-            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_details", kwargs={"workspace_key": team.key}),
+            reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}),
         ):
             title = " ".join(client.get(url, follow=True).content.decode().split())
             assert f"<title> Settings · {team.name}" in title

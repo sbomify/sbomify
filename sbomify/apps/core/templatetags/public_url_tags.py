@@ -263,12 +263,12 @@ def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
     if isinstance(team, dict):
         custom_domain = team.get("custom_domain")
         custom_domain_validated = team.get("custom_domain_validated", False)
-        team_key = team.get("key")
+        workspace_key = team.get("key")
         team_slug = team.get("slug")
     else:
         custom_domain = getattr(team, "custom_domain", None)
         custom_domain_validated = getattr(team, "custom_domain_validated", False)
-        team_key = getattr(team, "key", None)
+        workspace_key = getattr(team, "key", None)
         team_slug = getattr(team, "slug", None)
 
     # Priority 1: Custom domain (BYOD)
@@ -281,9 +281,9 @@ def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
         return f"https://{team_slug}.{trust_center_domain}"
 
     # Priority 3: Standard URL
-    if team_key:
+    if workspace_key:
         base_url = getattr(settings, "APP_BASE_URL", "")
-        return f"{base_url}/public/workspace/{team_key}"
+        return f"{base_url}/public/workspace/{workspace_key}"
 
     return ""
 
@@ -332,7 +332,7 @@ def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any
     # Get team properties
     custom_domain = getattr(team, "custom_domain", None)
     custom_domain_validated = getattr(team, "custom_domain_validated", False)
-    team_key = getattr(team, "key", None)
+    workspace_key = getattr(team, "key", None)
     team_slug = getattr(team, "slug", None)
 
     # Priority 1: Custom domain (BYOD) with slug-based URL
@@ -345,8 +345,8 @@ def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any
         return f"https://{team_slug}.{trust_center_domain}/{resource_type}/{resource_slug}/"
 
     # Priority 3: Standard URL with ID
-    if team_key:
+    if workspace_key:
         base_url = getattr(settings, "APP_BASE_URL", "")
-        return f"{base_url}/public/workspace/{team_key}/{resource_type}/{resource_id}"
+        return f"{base_url}/public/workspace/{workspace_key}/{resource_type}/{resource_id}"
 
     return ""

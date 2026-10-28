@@ -74,6 +74,33 @@ def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict[str
         return False
 
 
+def user_group_name(user_id: Any) -> str:
+    """The channel group a signed-in user's own socket joins, whatever workspace they are in."""
+    return f"user_{user_id}"
+
+
+def broadcast_to_user(user_id: Any, message_type: str, data: dict[str, Any] | None = None) -> bool:
+    """Send a message to one user's own sockets rather than to a workspace.
+
+    For news meant for a person who is not a member of the workspace it is
+    about, such as a trust-center visitor whose access request was decided.
+    The workspace feed would tell them everything else too, so they never get
+    it. Safe to call from synchronous code. Returns whether it was sent.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return False
+        async_to_sync(channel_layer.group_send)(
+            user_group_name(user_id),
+            {"type": "workspace_message", "data": {"type": message_type, **(data or {})}},
+        )
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to broadcast to user {user_id}: {e}")
+        return False
+
+
 def push_notification(
     workspace_key: str,
     message: str,
@@ -81,6 +108,8 @@ def push_notification(
     notification_type: str = "system",
     action_url: str | None = None,
     notification_id: str | None = None,
+    title: str | None = None,
+    action_label: str | None = None,
 ) -> bool:
     """
     Push a notification to all connected WebSocket clients in a workspace.
@@ -95,6 +124,8 @@ def push_notification(
         notification_type: The type of notification (e.g., "system", "billing"). Default: "system".
         action_url: Optional URL for an action button. If provided, displays a modal with action.
         notification_id: Optional unique ID for the notification. Auto-generated if not provided.
+        title: Optional heading for the modal. Defaults to the severity on the frontend.
+        action_label: Optional label for the action button. Defaults to "Take Action" on the frontend.
 
     Returns:
         bool: True if the notification was sent successfully, False otherwise.
@@ -119,6 +150,10 @@ def push_notification(
 
     if action_url:
         notification_data["action_url"] = action_url
+    if title:
+        notification_data["title"] = title
+    if action_label:
+        notification_data["action_label"] = action_label
 
     return broadcast_to_workspace(
         workspace_key=workspace_key,
@@ -236,11 +271,11 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_workspace", {}).get("key")
-    if team_key is None:
+    workspace_key = request.session.get("current_workspace", {}).get("key")
+    if workspace_key is None:
         return None
 
-    return token_to_number(team_key)
+    return token_to_number(workspace_key)
 
 
 @lru_cache(maxsize=1)
@@ -482,7 +517,7 @@ def get_team_id_from_session(request: Any) -> str | None:
 
 def _extract_team_id(item: Any) -> int | None:
     """Extract the team_id from any model that has a team relationship."""
-    if hasattr(item, "_meta") and item._meta.label == "teams.Team":
+    if hasattr(item, "_meta") and item._meta.label == "teams.Workspace":
         return item.id  # type: ignore[no-any-return]
     if hasattr(item, "team_id"):
         return item.team_id  # type: ignore[no-any-return]

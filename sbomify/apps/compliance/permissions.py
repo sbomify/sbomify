@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from sbomify.apps.compliance.models import CRAAssessment
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class AccessCheckFailure:
     error_code: str = "access_denied"
 
 
-def check_cra_access(team: Team | None = None, *, billing_plan_key: str | None = None) -> bool:
+def check_cra_access(team: Workspace | None = None, *, billing_plan_key: str | None = None) -> bool:
     """Returns True if team has Business+ plan (or billing disabled).
 
     Pure key check — no DB query. Can be called with either a Team object

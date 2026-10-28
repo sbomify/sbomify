@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any, cast
@@ -14,18 +15,22 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.template.defaultfilters import pluralize
 from django.utils import timezone
 
+from sbomify.apps.billing.billing_processing import get_resource_limit
 from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.core.queries import get_team_asset_count
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
-from .models import Invitation, Member, Team, get_team_name_for_user
-from .queries import count_team_members, get_team_user_counts, invitation_email
+from .models import Invitation, Member, Workspace, get_team_name_for_user
+from .queries import invitation_email
 
 # Valid tab names for team settings - used for input validation
 # Names still linked to by fragment that have no settings page of their own.
@@ -47,12 +52,29 @@ ALLOWED_TABS = frozenset(
 )
 
 
-def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
+def find_invitation_by_token(token: Any, **filters: Any) -> Invitation | None:
+    """Look up an invitation by token, treating an unusable token as no match.
+
+    ``Invitation.token`` is a UUIDField, so a truncated or mangled invite link —
+    mail clients wrap long URLs, and the legacy links carried a numeric id rather
+    than a token — reaches the ORM as a string it cannot coerce and raises
+    ValidationError straight out of the query. A bad link is a missing invitation,
+    which every caller here already handles, not a 500.
+    """
+    try:
+        uuid.UUID(str(token))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+    return Invitation.objects.filter(token=token, **filters).first()
+
+
+def redirect_to_team_settings(workspace_key: str, active_tab: str | None = None) -> HttpResponseRedirect:
     """
     Return a redirect response to team settings, optionally with a validated tab anchor.
 
     Args:
-        team_key: The workspace key to redirect
+        workspace_key: The workspace key to redirect
         active_tab: Optional tab name to append as URL fragment (validated against ALLOWED_TABS)
 
     Returns:
@@ -61,9 +83,9 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from django.shortcuts import redirect
     from django.urls import reverse
 
-    # Validate team_key exists to prevent open redirect vulnerabilities
-    if not Team.objects.filter(key=team_key).exists():
-        return redirect("teams:teams_dashboard")
+    # Validate workspace_key exists to prevent open redirect vulnerabilities
+    if not Workspace.objects.filter(key=workspace_key).exists():
+        return redirect("workspaces:teams_dashboard")
 
     # Each section is its own page, so a known tab is a URL rather than a
     # fragment — the browser lands on the section directly instead of loading the
@@ -71,9 +93,9 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
     if active_tab and active_tab in TABS_BY_KEY:
-        return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab)
+        return redirect("workspaces:team_settings_tab", workspace_key=workspace_key, tab=active_tab)
 
-    base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
+    base_url = reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
     # The names still in ALLOWED_TABS with no page of their own keep the old
     # fragment, so links to them are not broken by the move.
     #
@@ -213,10 +235,10 @@ def get_user_teams(user: User) -> dict[str, Any]:
     )
 
     for membership in memberships:
-        team_key = membership.team.key
-        if team_key is None:
+        workspace_key = membership.team.key
+        if workspace_key is None:
             continue
-        teams[team_key] = {
+        teams[workspace_key] = {
             "id": membership.team.id,
             "name": membership.team.name,
             "role": membership.role,
@@ -251,7 +273,7 @@ def update_user_teams_session(
     return teams
 
 
-def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
+def refresh_current_team_session(request: HttpRequest, team: Workspace) -> None:
     """
     Update the current_team session entry to reflect the latest team state.
 
@@ -276,7 +298,7 @@ def refresh_current_team_session(request: HttpRequest, team: Team) -> None:
     request.session.modified = True
 
 
-def switch_active_workspace(request: HttpRequest, team: Team, role: str | None = None) -> None:
+def switch_active_workspace(request: HttpRequest, team: Workspace, role: str | None = None) -> None:
     """
     Canonical helper to switch the user's active session context.
 
@@ -334,7 +356,7 @@ def get_user_default_team(user: User) -> int | None:
 
 
 @contextmanager
-def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
+def user_seat(team: Workspace, *, is_joining_via_invite: bool = False) -> Iterator[tuple[bool, str]]:
     """Hold the workspace row while a seat is counted and then taken.
 
     ``can_add_user_to_team`` counts and returns a verdict, and a verdict cannot
@@ -360,13 +382,53 @@ def user_seat(team: Team, *, is_joining_via_invite: bool = False) -> Iterator[tu
 
     Nested inside an outer transaction the lock is simply held until that one
     commits, which is the behaviour wanted either way.
+
+    Whether Stripe still holds a scheduled cancel is read before the lock, as
+    ``core.apis._enforce_limit_under_lock`` does for products and components: it
+    can be an HTTPS round trip, and every write that takes this lock would wait
+    on it. That gives nothing back to the race the lock closes. The lock
+    serialises the seat count against concurrent inserts, and the count stays
+    inside it; the cancel is Stripe's state, which no row lock protects.
     """
+    cancel_due = None if is_joining_via_invite else _cancel_still_due(team)
     with transaction.atomic():
-        locked = Team.objects.select_for_update().get(pk=team.pk)
-        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite)
+        locked = Workspace.objects.select_for_update().get(pk=team.pk)
+        yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite, cancel_due=cancel_due)
 
 
-def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tuple[bool, str]:
+def _cancel_still_due(team: Workspace) -> bool:
+    """Whether Stripe still holds the cancel ``team``'s stored limits record.
+
+    With no cancel recorded there is nothing to ask, and True leaves the answer
+    to the stored row, so a cancel written after this read counts as due: the
+    same answer an unreachable Stripe gets.
+    """
+    limits = team.billing_plan_limits or {}
+    if not (limits.get("cancel_at_period_end") and limits.get("scheduled_downgrade_plan")):
+        return True
+    subscription_id = str(limits.get("stripe_subscription_id") or "")
+    return get_subscription_cancel_at_period_end(subscription_id, team.key or "", fallback_value=True)
+
+
+def _scheduled_downgrade_plan(team: Workspace, cancel_due: bool | None = None) -> BillingPlan | None:
+    """The plan a cancelled subscription drops to, while that cancel is still due.
+
+    Products and components stop at this plan's limits for the rest of the
+    billing period, so the downgrade cannot land over them. Seats follow the
+    same rule. ``cancel_due`` is Stripe's answer read earlier; None asks now.
+    """
+    limits = team.billing_plan_limits or {}
+    key = limits.get("scheduled_downgrade_plan")
+    if not (limits.get("cancel_at_period_end") and key):
+        return None
+    if not (_cancel_still_due(team) if cancel_due is None else cancel_due):
+        return None
+    return BillingPlan.objects.filter(key=key).first()
+
+
+def can_add_user_to_team(
+    team: Workspace, is_joining_via_invite: bool = False, cancel_due: bool | None = None
+) -> tuple[bool, str]:
     """
     Check if a team can add more users based on their billing plan limits.
 
@@ -375,6 +437,8 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
         is_joining_via_invite: If True, we are checking if an existing pending user can join.
                                In this case, we allow joining if total_users <= max_users
                                (because the pending user is already counted in total_users).
+        cancel_due: Whether Stripe still holds the scheduled cancel, read before a
+                    row lock was taken. None reads it here, which can reach Stripe.
 
     Returns:
         Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
@@ -382,60 +446,66 @@ def can_add_user_to_team(team: Team, is_joining_via_invite: bool = False) -> tup
     if not team.billing_plan:
         try:
             plan = BillingPlan.objects.get(key="community")
-            if plan.max_users is not None:
-                current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
-                # If joining with existing invite, allowing total == max is fine (slot consumed)
-                limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
-
-                if limit_reached:
-                    return (
-                        False,
-                        f"Community plan allows only {plan.max_users} users. "
-                        "Please upgrade your plan to add more members.",
-                    )
+            max_users = get_resource_limit(plan, "user")
+            if max_users is not None and _seats_full(team, max_users, is_joining_via_invite):
+                return (
+                    False,
+                    f"Community plan allows only {max_users} users. Please upgrade your plan to add more members.",
+                )
             return True, ""
         except BillingPlan.DoesNotExist:
             pass
 
-        current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
         # Fallback limit is 1
-        limit_reached = total_users > 1 if is_joining_via_invite else total_users >= 1
-
-        if limit_reached:
+        if _seats_full(team, 1, is_joining_via_invite):
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""
 
     try:
         plan = BillingPlan.objects.get(key=team.billing_plan)
+        max_users = get_resource_limit(plan, "user")
 
-        if plan.key == "enterprise" or plan.max_users is None:
-            return True, ""
-
-        current_members, pending_invites, total_users = get_team_user_counts(team.id)
-
-        if plan.max_users is not None:
-            limit_reached = total_users > plan.max_users if is_joining_via_invite else total_users >= plan.max_users
-
-            if limit_reached:
+        # A pending invitee already holds the seat it joins with, so only a new
+        # seat is weighed against the plan the workspace is moving to.
+        scheduled = None if is_joining_via_invite else _scheduled_downgrade_plan(team, cancel_due)
+        if scheduled is not None and scheduled.max_users is not None:
+            if get_team_asset_count(str(team.id), "user") >= scheduled.max_users:
                 return (
                     False,
-                    f"Your {plan.name} plan allows only {plan.max_users} users. "
-                    f"Please upgrade your plan to add more members.",
+                    f"You cannot add this member because your scheduled downgrade to {scheduled.name} would "
+                    f"exceed the plan limit of {scheduled.max_users} member{pluralize(scheduled.max_users)}. "
+                    "Please reduce your usage or continue with your current plan.",
                 )
+
+        if plan.key == "enterprise" or max_users is None:
+            return True, ""
+
+        if _seats_full(team, max_users, is_joining_via_invite):
+            return (
+                False,
+                f"Your {plan.name} plan allows only {max_users} users. Please upgrade your plan to add more members.",
+            )
 
         return True, ""
 
     except BillingPlan.DoesNotExist:
         # If plan doesn't exist, treat as community
-        current_members = count_team_members(team.id)
-        if current_members >= 1:
+        if _seats_full(team, 1, is_joining_via_invite):
             return (False, "Community plan allows only 1 user (owner). Please upgrade your plan to add more members.")
         return True, ""
 
 
-def create_user_team_and_subscription(user: User) -> Team | None:
+def _seats_full(team: Workspace, max_users: int, is_joining_via_invite: bool) -> bool:
+    """Whether ``team`` has no seat left for one more person.
+
+    An invitee who is accepting already holds one of the counted seats, so they
+    may join when every seat is taken. Only a count past the limit refuses them.
+    """
+    taken = get_team_asset_count(str(team.id), "user")
+    return taken > max_users if is_joining_via_invite else taken >= max_users
+
+
+def create_user_team_and_subscription(user: User) -> Workspace | None:
     """
     Create a team and set up billing subscription for a new user.
 
@@ -456,9 +526,9 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     """
     # Check if user already has a team (idempotency check)
     # Only do this if user has been saved to DB (has a PK)
-    if user.pk and Team.objects.filter(members=user).exists():
+    if user.pk and Workspace.objects.filter(members=user).exists():
         logger.debug(f"User {user.username} already has a team, skipping creation")
-        return Team.objects.filter(members=user).first()
+        return Workspace.objects.filter(members=user).first()
 
     # Skip auto-creation if the user has an active invitation to another workspace
     if email := invitation_email(user):
@@ -496,7 +566,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
         # Still create team, but set up community plan as fallback
         team_name = get_team_name_for_user(user)
         with transaction.atomic():
-            team = Team.objects.create(name=team_name)
+            team = Workspace.objects.create(name=team_name)
             team.key = number_to_random_token(team.pk)
             team.save()
             Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -508,7 +578,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     # Create team
     team_name = get_team_name_for_user(user)
     with transaction.atomic():
-        team = Team.objects.create(name=team_name)
+        team = Workspace.objects.create(name=team_name)
         team.key = number_to_random_token(team.pk)
         team.save()
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -522,7 +592,7 @@ def create_user_team_and_subscription(user: User) -> Team | None:
     return team
 
 
-def setup_trial_subscription(user: User, team: Team) -> bool:
+def setup_trial_subscription(user: User, team: Workspace) -> bool:
     """
     Set up a trial subscription for a team.
 
@@ -555,7 +625,7 @@ def setup_trial_subscription(user: User, team: Team) -> bool:
         )
         try:
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 team.billing_plan = "business"
                 team.billing_plan_limits = {
                     "max_products": business_plan.max_products,
@@ -589,7 +659,7 @@ def setup_trial_subscription(user: User, team: Team) -> bool:
         return False
 
 
-def _setup_community_plan(team: Team) -> None:
+def _setup_community_plan(team: Workspace) -> None:
     """
     Set up community plan for a team (fallback when billing is disabled or trial fails).
 
@@ -799,7 +869,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
             request,
             "team:member_removed",
             {"role": removed_role, "self_removal": is_self_removal},
-            team_key=removed_team_key,
+            workspace_key=removed_team_key,
         )
     )
 
@@ -876,13 +946,13 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
             request.session.pop("current_workspace", None)
 
         request.session.modified = True
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
     else:
         messages.info(request, f"Member {removed_user.username} removed from workspace.")
         return redirect_to_team_settings(removed_team_key, active_tab)
 
 
-def delete_workspace_with_billing_cleanup(team: Team) -> None:
+def delete_workspace_with_billing_cleanup(team: Workspace) -> None:
     """Delete a workspace and cancel whatever it was paying for.
 
     Both delete paths route through here because the billing half is easy to

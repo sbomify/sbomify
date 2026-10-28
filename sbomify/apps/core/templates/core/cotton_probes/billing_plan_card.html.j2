@@ -1,0 +1,6 @@
+{% comment %}
+Plan comparison cards, rendered from a context list the way select_plan does.
+The test supplies the plan dicts, so it can pin which downgrades carry the
+cancellation notice.
+{% endcomment %}
+{% for plan in plans %}<c-billing.plan-card :plan="plan" />{% endfor %}

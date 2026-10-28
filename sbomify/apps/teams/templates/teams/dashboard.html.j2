@@ -8,16 +8,14 @@
     </c-layout.page-header>
     {% if teams %}
         <section class="flex flex-col gap-3" aria-label="Your workspaces">
-            <c-layout.section-header title="Your workspaces" level="2">
-            <c-slot name="actions"><c-badges.secondary size="sm">{{ teams|length|intcomma }} workspace{{ teams|length|pluralize }}</c-badges.secondary></c-slot>
-            </c-layout.section-header>
+            <c-layout.section-header title="Your workspaces" subtitle="{{ teams|length|intcomma }} workspace{{ teams|length|pluralize }}." level="2" />
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {% for team in teams %}
                     {% current_member team.members as me %}
                     <c-workspaces.card name="{{ team.name|workspace_display }}" role="{{ me.role }}" member_count="{{ team.members|length }}" invitation_count="{{ team.invitations|length }}" workspace_key="{{ team.key }}" current_key="{{ request.session.current_workspace.key }}" :default="me.is_default_workspace">
                     <c-slot name="actions">
                     <c-actions-menu label="Actions for {{ team.name|workspace_display }}">
-                    <form method="post" action="{% url 'teams:teams_dashboard' %}">
+                    <form method="post" action="{% url 'workspaces:teams_dashboard' %}">
                         {% csrf_token %}
                         <input type="hidden" name="_method" value="PATCH">
                         <input type="hidden" name="key" value="{{ team.key }}">
@@ -36,9 +34,9 @@
                     {% if request.session.current_workspace.key == team.key %}
                         <c-buttons.secondary size="sm" href="{% url 'core:dashboard' %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
                     {% else %}
-                        <c-buttons.secondary size="sm" href="{% url 'teams:switch_team' team.key %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
+                        <c-buttons.secondary size="sm" href="{% url 'workspaces:switch_team' team.key %}">Open workspace<i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.secondary>
                     {% endif %}
-                    <c-buttons.secondary size="sm" href="{% url 'teams:team_settings' team.key %}"><i class="fas fa-gear" aria-hidden="true"></i>Settings</c-buttons.secondary>
+                    <c-buttons.secondary size="sm" href="{% url 'workspaces:team_settings' team.key %}"><i class="fas fa-gear" aria-hidden="true"></i>Settings</c-buttons.secondary>
                     </c-workspaces.card>
                 {% endfor %}
             </div>

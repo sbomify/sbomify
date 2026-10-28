@@ -26,7 +26,7 @@ from sbomify.apps.plugins.sdk import (
 from sbomify.apps.plugins.sdk.base import SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class SecurityMockPlugin(AssessmentPlugin):
@@ -92,16 +92,16 @@ def _vex_doc(cve: str, purl: str) -> bytes:
 
 
 @pytest.fixture
-def team(db) -> Team:
+def team(db) -> Workspace:
     BillingPlan.objects.get_or_create(
         key="community",
         defaults={"name": "Community", "max_products": 1, "max_components": 5, "max_users": 2},
     )
-    return Team.objects.create(name="VEX Hook Team", billing_plan="community")
+    return Workspace.objects.create(name="VEX Hook Team", billing_plan="community")
 
 
 @pytest.fixture
-def component(team: Team) -> Component:
+def component(team: Workspace) -> Component:
     return Component.objects.create(team=team, name="vex-hook-component")
 
 
@@ -144,6 +144,7 @@ class TestOrchestratorVexHook:
             sbom_filename="component.vex.json",
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.return_value = _vex_doc("CVE-2026-1111", "pkg:npm/foo@1.0.0")
@@ -166,6 +167,7 @@ class TestOrchestratorVexHook:
             sbom_filename="component.vex.json",
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.side_effect = RuntimeError("S3 unavailable")
@@ -187,6 +189,7 @@ class TestOrchestratorVexHook:
             sbom_filename="release.vex.json",
             component=component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         SBOM.objects.create(
             name="latest-vex",
@@ -195,6 +198,7 @@ class TestOrchestratorVexHook:
             sbom_filename="latest.vex.json",
             component=component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         product = Product.objects.create(team=component.team, name="vex-hook-product")
         release = Release.objects.create(product=product, name="v1")
@@ -215,3 +219,47 @@ class TestOrchestratorVexHook:
         states = {f["id"]: f.get("analysis_state") for f in run.result["findings"]}
         assert states["CVE-2026-1111"] == "not_affected"
         assert states["CVE-2026-2222"] is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_scan_is_seen_completed_only_with_its_rows_and_releases(sbom, scan_sbom_bytes, mocker):
+    """The VEX re-apply picks completed runs. If it could see a run marked
+    completed before the scan's finding rows and release set were written, it
+    would annotate the run against the wrong release context and the scan's own
+    projection would then overwrite its rows. The task stores the three in one
+    transaction, so another connection sees nothing completed until all of it is
+    in place."""
+    import threading
+
+    from django.db import connection
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.tasks import run_assessment_task
+    from sbomify.apps.vulnerability_scanning import findings
+
+    mocker.patch("sbomify.apps.plugins.orchestrator.get_sbom_data_bytes", return_value=(sbom, scan_sbom_bytes))
+    mocker.patch.object(PluginOrchestrator, "get_plugin_instance", return_value=SecurityMockPlugin())
+    project = findings.sync_findings_safely
+    seen_completed_elsewhere: list[bool] = []
+
+    def project_then_look(run, statements=None, **kwargs):
+        project(run, statements, **kwargs)
+
+        def look() -> None:
+            try:
+                seen_completed_elsewhere.append(
+                    AssessmentRun.objects.filter(pk=run.pk, status=RunStatus.COMPLETED.value).exists()
+                )
+            finally:
+                connection.close()
+
+        other = threading.Thread(target=look)
+        other.start()
+        other.join(10)
+
+    mocker.patch.object(findings, "sync_findings_safely", project_then_look)
+
+    run_assessment_task(sbom.id, "mock-security", RunReason.ON_UPLOAD.value)
+
+    assert seen_completed_elsewhere == [False]
+    assert AssessmentRun.objects.get(sbom=sbom, plugin_name="mock-security").status == RunStatus.COMPLETED.value

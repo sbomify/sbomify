@@ -98,7 +98,9 @@ class PendingInvitationSchema(BaseModel):
 
 class InvitationCreateSchema(BaseModel):
     email: str
-    role: str = Field(default="member", description="owner, admin or member. Only an owner can invite an owner.")
+    role: str = Field(
+        default="member", description="owner, admin, member or operator. Only an owner can invite an owner."
+    )
 
 
 class TeamSchema(BaseModel):

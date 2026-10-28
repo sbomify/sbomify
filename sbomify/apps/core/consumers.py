@@ -153,9 +153,9 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         the action that decides.
         """
         from sbomify.apps.core.authz import can
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        team = Team.objects.filter(key=workspace_key).first()
+        team = Workspace.objects.filter(key=workspace_key).first()
         if team is None:
             return False
         return can(user, "workspace:read", team).allowed
@@ -231,6 +231,41 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             if not _is_socket_closed(exc):
                 raise
             logger.debug("workspace_message send failed; socket already closed", exc_info=True)
+
+        if await self._lost_access(data):
+            # Access is checked once, at connect, so a socket opened before the
+            # member was removed (or demoted out of workspace:read) would
+            # otherwise keep streaming this workspace's events to someone who no
+            # longer may read them. The message goes first so the client knows
+            # why; 1008 tells the store not to reconnect into a refusal.
+            logger.debug(f"Closing WebSocket for a member who lost access to {getattr(self, 'workspace_key', '?')}")
+            try:
+                await self.close(code=WS_CLOSE_POLICY_VIOLATION)
+            except _SOCKET_GONE:
+                logger.debug("close after losing access failed; socket likely gone", exc_info=True)
+            except RuntimeError as exc:
+                if not _is_socket_closed(exc):
+                    raise
+
+    async def _lost_access(self, data: Any) -> bool:
+        """Whether a ``member_updated`` broadcast took this socket's own user out of the workspace.
+
+        A removal is final. A role change is re-checked, because a demotion to
+        ``guest`` leaves a Member row but no ``workspace:read``.
+        """
+        if not isinstance(data, dict) or data.get("type") != "member_updated":
+            return False
+        action = data.get("action")
+        if action not in ("removed", "role_changed"):
+            return False
+        user = getattr(self, "scope", {}).get("user")
+        if not user or not user.is_authenticated:
+            return False
+        if str(data.get("user_id")) != str(user.id):
+            return False
+        if action == "removed":
+            return True
+        return not await self._check_workspace_membership(user, self.workspace_key)
 
 
 class UnknownPathConsumer(AsyncWebsocketConsumer):

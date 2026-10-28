@@ -9,12 +9,17 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
 # The Trends filters a shared link may carry. The chart view rides in the URL
 # too, but only the browser reads that one, so it never reaches the fragment.
 TRENDS_URL_FILTERS = ("product_id", "release_id", "days")
+
+
+# The overview's replacement root, which refreshes itself on socket messages.
+OVERVIEW_TARGET = "overview-content"
 
 
 def trends_query(request: HttpRequest) -> str:
@@ -39,11 +44,11 @@ class ValidateWorkspaceMixin:
 
     def dispatch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         current_team = request.session.get("current_workspace", {})
-        team_key = current_team.get("key")
+        workspace_key = current_team.get("key")
 
-        if team_key:
+        if workspace_key:
             # Check if user is still a member of this workspace
-            is_member = get_member_role_by_key(request.user, team_key) is not None
+            is_member = get_member_role_by_key(request.user, workspace_key) is not None
 
             if not is_member:
                 # User was removed from this workspace, recover their session
@@ -62,7 +67,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         current_team = request.session.get("current_workspace", {})
 
         if not current_team.get("has_completed_wizard", True):
-            return redirect("teams:onboarding_wizard")
+            return redirect("workspaces:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
         from sbomify.apps.core.services.dashboard_page import get_dashboard_workspace
@@ -73,14 +78,17 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         team = workspace_result.value
 
         if needs_plan_selection(team, request.user):
-            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+            return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
 
         if self.show_trends:
             return render(request, "core/dashboard_trends.html.j2", {"trends_query": trends_query(request)})
 
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
-        result = build_dashboard_context(team.id) if team else None
+        # A live refresh comes from a socket message about a change, which the
+        # cached snapshot cannot yet reflect.
+        live_refresh = request.headers.get("HX-Target") == OVERVIEW_TARGET
+        result = build_dashboard_context(team.id, fresh=live_refresh) if team else None
         if result is not None and not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
         dashboard = result.value if result and result.value else {"is_first_visit": True}
@@ -88,10 +96,21 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         context = {
             "current_team": current_team,
-            "page_subtitle": "Prioritise vulnerabilities and keep your product evidence current.",
+            "page_subtitle": "Prioritize vulnerabilities and keep your product evidence current.",
             "dashboard": dashboard,
             "show_repository_setup": show_repository_setup,
         }
+
+        # The approval queue is read per request rather than from the cached
+        # snapshot: an approval elsewhere must take the count down at once, and
+        # whether the card shows at all depends on the reader, not the workspace.
+        if team and not show_repository_setup and can(request, "vex_submission:read", team):
+            from sbomify.apps.vulnerability_scanning.services.vex_submissions import pending_count
+
+            context["vex_review"] = {
+                "pending": pending_count(team.id),
+                "url": reverse("vulnerability_scanning:vulnerability_scans", args=[team.key]) + "?view=review",
+            }
 
         # An SBOM upload needs a BOM component. Without one, the empty state
         # links to component creation instead.

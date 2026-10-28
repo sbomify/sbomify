@@ -34,6 +34,10 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+#: How a scanner is named to a reader. Plugin names are identifiers, not copy.
+SCANNER_NAMES = {"osv": "OSV", "dependency-track": "Dependency-Track"}
+
+
 class ComponentItemPublicView(View):
     @staticmethod
     def _owns_artifact(item_type: str, item_id: str, component_id: str) -> bool:
@@ -120,7 +124,7 @@ class ComponentItemPublicView(View):
             if action_is_nda:
                 action_url = component_url
             elif team:
-                action_url = reverse("documents:request_access", kwargs={"team_key": team.key})
+                action_url = reverse("documents:request_access", kwargs={"workspace_key": team.key})
 
         return render(
             request,
@@ -275,7 +279,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             from sbomify.apps.sboms.models import SBOM
             from sbomify.apps.vulnerability_scanning.vex import vex_suppression_rows
 
-            sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename").first()
+            sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename", "version").first()
             actual_bom_type = sbom_row.bom_type if sbom_row else None
             # Keep the URL canonical: a VEX opens under /vex/, a CBOM under /cbom/,
             # everything else under /sboms/. Redirect a mismatched path.
@@ -389,7 +393,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     if not result_scanned_nothing(result)
                 ]
                 merged = merge_findings_by_alias([result for _, result, _ in provider_runs])
-                rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
+                rows = extract_finding_rows(
+                    merged, load_vex_suppressions(component_id_from_item, sbom_row.version if sbom_row else None)
+                )
                 if rows:
                     counts = severity_counts_from_rows(rows)
                 else:
@@ -409,7 +415,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     # was scanned.
                     vulnerability_summary = {
                         **counts,
-                        "provider": ", ".join(sorted({name for name, _, _ in provider_runs})),
+                        "provider": ", ".join(sorted({SCANNER_NAMES.get(name, name) for name, _, _ in provider_runs})),
                         "scan_date": max(created_at for _, _, created_at in provider_runs),
                     }
 
@@ -462,6 +468,8 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         # Same tier the rerun endpoint enforces, so the button is only offered
         # to a caller the API would actually accept.
         can_rerun = can(request, "component:manage", component)
+        # sbom:delete is the DELETE tier, which neither a member nor an operator holds.
+        can_delete_sbom = can(request, "sbom:delete", component)
         can_manage_plugins = can(request, "workspace:administer", component.team)
 
         # The header takes the copy chip and breadcrumb trail as lists.
@@ -500,6 +508,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
                 "can_rerun": can_rerun,
+                "can_delete_sbom": can_delete_sbom,
                 "can_manage_plugins": can_manage_plugins,
                 "team_key": component.team.key,
             },

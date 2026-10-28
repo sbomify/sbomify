@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.apis import (
     get_team,
@@ -17,15 +17,15 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
 
-class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamBrandingView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        status_code, branding_info = get_team_branding(request, team_key)
+        status_code, branding_info = get_team_branding(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
@@ -38,12 +38,12 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        status_code, branding_info = get_team_branding(request, team_key)
+        status_code, branding_info = get_team_branding(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(branding_info.get("detail", "Failed to load branding"))
 
@@ -58,14 +58,16 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             icon_pending_deletion=form.cleaned_data.get("icon_pending_deletion", False),
             logo_pending_deletion=form.cleaned_data.get("logo_pending_deletion", False),
         )
-        status_code, result = update_team_branding(request, team_key, payload)
+        status_code, result = update_team_branding(request, workspace_key, payload)
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update branding"))
 
         # Deferred via ``on_commit`` so the event only ships if the
         # branding update commits — under ATOMIC_REQUESTS an outer
         # rollback would otherwise produce a ghost event.
-        transaction.on_commit(lambda: capture_for_request(request, "team:branding_updated", team_key=team_key))
+        transaction.on_commit(
+            lambda: capture_for_request(request, "team:branding_updated", workspace_key=workspace_key)
+        )
 
         # A color saved while custom branding is off changes nothing anyone can
         # see; without the hint the toast reads as "done" and the trust center

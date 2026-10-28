@@ -29,7 +29,7 @@
             <c-layout.choice-group name="remediation_status" label="Status" :options="status_options" selected="identified" hint="Where the work stands now." />
         </div>
         </c-layout.form-section>
-        <c-layout.form-section step="2" title="What it affects" description="Tick a product to cover every version. Open one to pick versions.">
+        <c-layout.form-section step="2" title="What it affects" description="Check a product to cover every version. Open one to pick versions.">
         <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
         </c-layout.form-section>
         <c-layout.form-section step="3" accent="neutral" title="What else is known" description="Optional. You can add these later.">
@@ -40,7 +40,7 @@
             </c-forms.field>
             <div class="grid gap-5 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
                 <c-forms.field label="CVSS score" for="cvss_score">
-                <c-forms.input name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" />
+                <c-forms.input name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="0 to 10" />
                 </c-forms.field>
                 <c-forms.field label="CVSS vector" for="cvss_vector">
                 <c-forms.input name="cvss_vector" placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" />

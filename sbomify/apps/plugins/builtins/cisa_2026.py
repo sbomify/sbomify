@@ -615,7 +615,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 "sbom_author",
                 stated=self._cyclonedx_has_author(metadata),
                 details="No metadata.authors or metadata.manufacturer names an entity.",
-                remediation="Add metadata.authors[].name, or metadata.manufacturer.name for an organisation. "
+                remediation="Add metadata.authors[].name, or metadata.manufacturer.name for an organization. "
                 "A tool in metadata.tools is not the author.",
             ),
             self._signature_finding(
@@ -711,7 +711,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         assessed = sum(1 for c in components if _text(c.get("type")).lower() != "file")
         remediations = {
-            "component_producer": "Add manufacturer.name for the organisation that created the component, "
+            "component_producer": "Add manufacturer.name for the organization that created the component, "
             "or authors[].name. supplier.name is accepted where the supplier is the producer.",
             "component_name": "Add name to every component.",
             "component_version": "Add version to every component, or state that it is unknown.",
@@ -719,7 +719,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             "component_hash_value": "Add hashes[].content for every component.",
             "component_hash_algorithm": "Name the algorithm in hashes[].alg, such as SHA-256.",
             "component_license": "Add licenses[] with an SPDX identifier or expression, "
-            "or state that the licence is unknown.",
+            "or state that the license is unknown.",
             "component_dependency_relationship": "Add a dependencies[] entry with dependsOn for each component.",
         }
         for element in self.COMPONENT_ELEMENTS:

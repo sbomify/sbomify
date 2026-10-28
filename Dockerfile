@@ -1,5 +1,5 @@
 # Base Python version
-ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
+ARG PYTHON_VERSION=3.14-slim-trixie@sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.3.8
 # For releases, see: https://github.com/sigstore/cosign/releases
@@ -8,7 +8,9 @@ ARG COSIGN_VERSION=v3.1.3
 # Chainguard distroless Python for production, pinned by digest for reproducibility.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3c42b518cc44bb5277a954826cdb4f9275ef95818d7eb7
+# Since 2026-10-10 :latest is Python 3.15, so this pins the last 3.14 build
+# (2026-10-10, Python 3.14.8, glibc 2.44-r8) until PYTHON_VERSION moves to 3.15.
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:3f411b4aac1ed9cd6c9dec1486f92a8898737d9d6f95488dd727ca7d6f5254ee
 # Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
 # digest so the builder image itself is reproducible. The actual .so
 # versions still come from `apk add` against the live Wolfi repo at build
@@ -17,7 +19,7 @@ ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3
 # compatible across rebuilds. Bump the digest below when you want to pick
 # up newer patches.
 # To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:34977aa13765da89f60fee8fe5230e2bb1c55192df08e383c58221ee0d1277fb
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:bc76fa39ddd1482dd56a761b3331e03ba8f0e093ebb525618a56d014b480da88
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -28,7 +30,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 0: Keycloak Theme Build (Fully Independent)
-FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS keycloak-build
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS keycloak-build
 
 WORKDIR /keycloak-build
 
@@ -42,7 +44,7 @@ COPY keycloak/themes/ ./themes/
 RUN bun install --frozen-lockfile && bun run build
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS js-build-prod
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS js-build-prod
 
 WORKDIR /js-build
 
@@ -68,6 +70,7 @@ COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanni
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 COPY sbomify/apps/compliance/js/ ./sbomify/apps/compliance/js/
 COPY sbomify/apps/controls/js/ ./sbomify/apps/controls/js/
+COPY sbomify/apps/ops/js/ ./sbomify/apps/ops/js/
 
 # Copy templates for Tailwind CSS content scanning (@source directives)
 COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
@@ -81,6 +84,7 @@ COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
 COPY sbomify/apps/compliance/templates/ ./sbomify/apps/compliance/templates/
 COPY sbomify/apps/controls/templates/ ./sbomify/apps/controls/templates/
 COPY sbomify/apps/oidc/templates/ ./sbomify/apps/oidc/templates/
+COPY sbomify/apps/ops/templates/ ./sbomify/apps/ops/templates/
 COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy existing static files
@@ -95,8 +99,13 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 # Build main frontend assets (Keycloak is built separately in Stage 0)
 RUN bun run copy-deps && bun x vite build
 
+# Vite only minifies what it bundles; the hand-written sheets in static/css
+# are minified here, on this stage's copy, before collectstatic picks them up.
+COPY bin/minify-static-css.ts ./bin/
+RUN bun bin/minify-static-css.ts sbomify/static/css
+
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.4-debian@sha256:4f6e31d1a54d6a3dd312daef655fc998101b5043d52e12592ac293ef04b9bc73 AS frontend-dev-server
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS frontend-dev-server
 
 WORKDIR /app-frontend
 
@@ -121,6 +130,7 @@ COPY sbomify/apps/documents/js/ ./sbomify/apps/documents/js/
 COPY sbomify/apps/vulnerability_scanning/js/ ./sbomify/apps/vulnerability_scanning/js/
 COPY sbomify/apps/plugins/js/ ./sbomify/apps/plugins/js/
 COPY sbomify/apps/compliance/js/ ./sbomify/apps/compliance/js/
+COPY sbomify/apps/ops/js/ ./sbomify/apps/ops/js/
 
 # Copy templates for Tailwind CSS content scanning (@source directives)
 COPY sbomify/apps/core/templates/ ./sbomify/apps/core/templates/
@@ -132,6 +142,7 @@ COPY sbomify/apps/vulnerability_scanning/templates/ ./sbomify/apps/vulnerability
 COPY sbomify/apps/plugins/templates/ ./sbomify/apps/plugins/templates/
 COPY sbomify/apps/onboarding/templates/ ./sbomify/apps/onboarding/templates/
 COPY sbomify/apps/compliance/templates/ ./sbomify/apps/compliance/templates/
+COPY sbomify/apps/ops/templates/ ./sbomify/apps/ops/templates/
 COPY sbomify/templates/ ./sbomify/templates/
 
 # Copy static files (needed for Tailwind CSS source)
@@ -346,7 +357,8 @@ RUN apk add --no-cache \
         fontconfig \
         freetype \
         glib \
-        font-liberation
+        font-liberation \
+        ca-certificates-bundle
 
 # Stage just the .so files WeasyPrint actually dlopen()s plus their transitive
 # deps (verified with ld-linux --list against libpango / libpangoft2 / libharfbuzz
@@ -396,6 +408,14 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
           /staged/usr/share/fonts/font-liberation/ && \
     cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
     cp -a /etc/fonts/. /staged/etc/fonts/
+
+# Stage the CA bundle from the live Wolfi repo so the prod image's system trust
+# store tracks upstream distrust decisions (e.g. the 2026 emSign removal) on
+# every rebuild, instead of being frozen at the CHAINGUARD_PYTHON_IMAGE digest.
+# OpenSSL (Python's ssl defaults) and the Go binaries (cosign, osv-scanner)
+# all read this file.
+RUN mkdir -p /staged/etc/ssl/certs && \
+    cp -L /etc/ssl/certs/ca-certificates.crt /staged/etc/ssl/certs/ca-certificates.crt
 
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.

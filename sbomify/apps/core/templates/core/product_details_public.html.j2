@@ -13,53 +13,44 @@
 {% endblock %}
 {% block page_header %}
     {% comment %}
-    The same masthead the advisory pages use, so a product reads as a page of
-    this trust center rather than a card dropped onto it: the way back, what
-    kind of page this is, the name, the description, then the facts a reader
-    checks before scrolling.
+    The same masthead every trust center page uses, so a product reads as a
+    page of this trust center rather than a card dropped onto it: the way back,
+    what kind of page this is, the name, the description, then the facts a
+    reader checks before scrolling.
     {% endcomment %}
-    <header class="tc-masthead">
-        <div class="tc-masthead-inner tc-masthead-detail">
-            {% if workspace_public_url %}
-                <a class="tc-backlink" href="{{ workspace_public_url }}">
-                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                    Trust Center
-                </a>
-            {% endif %}
-            <div class="tc-detail-eyebrow">
-                <p class="tc-eyebrow">
-                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
-                    Product
-                </p>
-            </div>
-            <h1 class="tc-detail-title">{{ product.name }}</h1>
-            {% if product.description %}<p class="tc-detail-summary">{{ product.description }}</p>{% endif %}
-            <div class="tc-detail-meta">
-                <span class="tc-detail-meta-item">
-                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-                    {{ public_components|length|intcomma }} component{{ public_components|length|pluralize }}
-                </span>
-                {% for assessment in passing_assessments %}
-                    {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-                {% endfor %}
-            </div>
-        </div>
-    </header>
+    <c-branded.masthead>
+    {% if workspace_public_url %}
+        <c-branded.back-link href="{{ workspace_public_url }}">Trust Center</c-branded.back-link>
+    {% endif %}
+    <c-branded.page-header title="{{ product.name }}" lede="{{ product.description }}">
+    <c-slot name="eyebrow">
+    <c-branded.badge brand>Product</c-branded.badge>
+    </c-slot>
+    <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
+        <c-branded.meta-item icon="fas fa-puzzle-piece">
+        {{ public_components|length|intcomma }} component{{ public_components|length|pluralize }}
+        </c-branded.meta-item>
+        {% for assessment in passing_assessments %}
+            {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+        {% endfor %}
+    </div>
+    </c-branded.page-header>
+    </c-branded.masthead>
 {% endblock %}
 {% block content %}
-    <div class="tc-detail-grid">
+    <div class="grid items-start gap-8 min-[900px]:grid-cols-[minmax(0,1fr)_20rem]">
         {# ---- Main column --------------------------------------------------- #}
-        <div class="min-w-0">
+        <div class="min-w-0 flex flex-col gap-10">
             {% if has_downloadable_content or has_cbom %}
-                <div class="tc-panel">
-                    <h2 class="tc-panel-title">Download latest release</h2>
-                    <p class="tc-prose mb-4">Combined artifacts from the latest release of this product.</p>
+                <section class="flex flex-col gap-4">
+                    <c-branded.section-header title="Download latest release" subtitle="Combined artifacts from the latest release of this product." />
+                    <c-branded.surface>
                     {% comment %}
                     secondary, not a primary or accent-tinted button: on a public page
                     the accent is the workspace's own colour, and a neutral button is
                     the only one readable on every accent a workspace might pick.
                     {% endcomment %}
-                    <div class="flex gap-3 flex-wrap">
+                    <div class="flex gap-3 [flex-wrap:wrap]">
                         {% if has_downloadable_content %}
                             <c-buttons.secondary href="{% url 'core:sbom_download_product' product.id %}" title="Download combined SBOM as CycloneDX" class="no-underline">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -86,70 +77,52 @@
                             </c-buttons.secondary>
                         {% endif %}
                     </div>
-                </div>
+                    </c-branded.surface>
+                </section>
             {% endif %}
             {% include 'core/components/public_releases_list.html.j2' %}
             {% if public_components %}
-                <div class="tc-panel">
-                    <h2 class="tc-panel-title">Components</h2>
-                    <ul class="divide-y divide-border/40 list-none p-0 m-0">
-                        {% for component in public_components %}
-                            <li class="py-3 flex items-start justify-between gap-4 {% if forloop.first %}pt-0{% endif %} {% if forloop.last %}pb-0{% endif %}">
-                                <div class="min-w-0">
-                                    <a class="text-text font-medium hover:text-primary no-underline"
-                                       href="{{ component.public_url }}">{{ component.name }}</a>
-                                    <div class="text-text-muted text-xs mt-1">{{ component.component_type_display }}</div>
-                                </div>
-                                {% if component.passing_assessments %}
-                                    <div class="flex flex-wrap gap-1 shrink-0 justify-end">
-                                        {% for assessment in component.passing_assessments %}
-                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                        {% endfor %}
-                                    </div>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </div>
+                <section class="flex flex-col gap-4">
+                    <c-branded.section-header title="Components" subtitle="The parts this product is built from, each with its own published artifacts." />
+                    <c-branded.surface flush>
+                    {% for component in public_components %}
+                        <c-branded.list-row href="{{ component.public_url }}">
+                        <c-slot name="heading">{{ component.name }}</c-slot>
+                        <c-slot name="meta">{{ component.component_type_display }}</c-slot>
+                        {% if component.passing_assessments %}
+                            <c-slot name="side">
+                            <span class="inline-flex items-center gap-1">
+                                {% for assessment in component.passing_assessments %}
+                                    {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                {% endfor %}
+                            </span>
+                            </c-slot>
+                        {% endif %}
+                        </c-branded.list-row>
+                    {% endfor %}
+                    </c-branded.surface>
+                </section>
             {% endif %}
         </div>
         {# ---- Sidebar ------------------------------------------------------- #}
-        <aside>
-            <div class="tc-panel">
-                <h2 class="tc-panel-title">Details</h2>
-                <div class="tc-facts">
-                    <div>
-                        <p class="tc-fact-label">Components</p>
-                        <p class="tc-fact-value">{{ public_components|length|intcomma }}</p>
-                    </div>
-                    {% if product.release_date %}
-                        <div>
-                            <p class="tc-fact-label">Release date</p>
-                            <p class="tc-fact-value">{{ product.release_date }}</p>
-                        </div>
-                    {% endif %}
-                    {% if product.end_of_support %}
-                        <div>
-                            <p class="tc-fact-label">End of support</p>
-                            <p class="tc-fact-value">{{ product.end_of_support }}</p>
-                        </div>
-                    {% endif %}
-                    {% if product.end_of_life %}
-                        <div>
-                            <p class="tc-fact-label">End of life</p>
-                            <p class="tc-fact-value">{{ product.end_of_life }}</p>
-                        </div>
-                    {% endif %}
-                    {% if product_tei %}
-                        <div>
-                            <p class="tc-fact-label">TEI</p>
-                            <div class="tc-fact-value">
-                                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+        <aside class="flex flex-col gap-4">
+            <c-branded.panel title="Details">
+            <c-branded.facts>
+            <c-branded.fact label="Components">{{ public_components|length|intcomma }}</c-branded.fact>
+            {% if product.release_date %}
+                <c-branded.fact label="Release date">{{ product.release_date }}</c-branded.fact>
+            {% endif %}
+            {% if product.end_of_support %}
+                <c-branded.fact label="End of support">{{ product.end_of_support }}</c-branded.fact>
+            {% endif %}
+            {% if product.end_of_life %}<c-branded.fact label="End of life">{{ product.end_of_life }}</c-branded.fact>{% endif %}
+            {% if product_tei %}
+                <c-branded.fact label="TEI" stacked>
+                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
+                </c-branded.fact>
+            {% endif %}
+            </c-branded.facts>
+            </c-branded.panel>
             {% include 'core/components/public_product_identifiers.html.j2' %}
             {% include 'core/components/public_product_links.html.j2' %}
             {% include 'compliance/components/public_vdp_link.html.j2' %}

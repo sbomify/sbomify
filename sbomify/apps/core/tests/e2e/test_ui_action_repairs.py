@@ -14,7 +14,7 @@ from playwright.sync_api import Page, expect
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact, User
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytest_plugins = [
     "sbomify.apps.core.tests.e2e.fixtures",
@@ -116,7 +116,7 @@ def test_product_form_errors_preserve_editor(
 def test_component_sharing_does_not_require_visibility_permission(
     authenticated_page: Page,
     component_factory: Callable[..., Component],
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     sample_user: User,
     role: str,
     component_type: str,
@@ -160,19 +160,38 @@ def test_upload_menu_and_deep_links(
     page.add_init_script("localStorage.setItem('document-upload-expanded', 'false')")
     path = reverse("core:component_details", args=[component.pk])
     page.goto(path)
-    page.get_by_role("button", name="Component actions", exact=True).click()
-    page.get_by_role("menuitem", name="Upload artifact…", exact=True).click()
     dialog = page.get_by_role(
         "dialog", name="Upload Artifact" if component_type == "bom" else "Upload document", exact=True
     )
-    expect(dialog).to_be_visible()
-    dialog.get_by_role("button", name="Close", exact=True).click()
-    expect(dialog).to_be_hidden()
+    artifact_type = dialog.get_by_label("Artifact type", exact=True)
+    menu_items = ["Upload SBOM…", "Upload CBOM…", "Upload VEX…"] if component_type == "bom" else ["Upload document…"]
+    for label in menu_items:
+        page.get_by_role("button", name="Component actions", exact=True).click()
+        page.get_by_role("menuitem", name=label, exact=True).click()
+        expect(dialog).to_be_visible()
+        if component_type == "bom":
+            # Each item opens the one uploader with its own type selected.
+            expect(artifact_type).to_have_value(label.removeprefix("Upload ").removesuffix("…").lower())
+        dialog.get_by_role("button", name="Close", exact=True).click()
+        expect(dialog).to_be_hidden()
     page.goto(path + "#upload-artifact")
     expect(dialog).to_be_visible()
+    if component_type == "bom":
+        # A generic open after a typed one starts from the default again.
+        expect(artifact_type).to_have_value("sbom")
     dialog.get_by_role("button", name="Close", exact=True).click()
+    page.goto(path + "#upload-vex")
+    if component_type == "bom":
+        expect(dialog).to_be_visible()
+        expect(artifact_type).to_have_value("vex")
+        dialog.get_by_role("button", name="Close", exact=True).click()
+    else:
+        # A document component takes no VEX, so the link opens nothing.
+        expect(dialog).to_be_hidden()
     page.goto(path + "#upload-sbom")
     expect(dialog).to_be_visible()
+    if component_type == "bom":
+        expect(artifact_type).to_have_value("sbom")
     page.goto(path + "#upload-artifact")
     page.reload()
     expect(dialog).to_be_visible()
@@ -198,8 +217,8 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
         settings.get_by_role("navigation", name="Settings sections").get_by_role("link", name="Parties", exact=True)
     ).to_have_attribute("aria-current", "page")
     expect(settings.locator('#contact-profiles-content > [x-data="contactProfileList"]')).to_be_visible()
-    settings.get_by_role("button", name="Add profile", exact=True).click()
-    settings.get_by_role("button", name="Back to profiles", exact=True).click()
+    settings.get_by_role("button", name="Add party", exact=True).click()
+    settings.get_by_role("button", name="Back to parties", exact=True).click()
     expect(settings.locator("#contact-profiles-content")).to_be_visible()
     settings.close()
     expect(page).to_have_url(re.compile(re.escape(wizard_url) + "$"))
@@ -207,11 +226,11 @@ def test_cra_parties_link_opens_complete_settings(authenticated_page: Page, cra_
 
 
 def test_controls_navigation_and_product_overrides(
-    authenticated_page: Page, team_with_business_plan: Team, product_factory: Callable[..., Product]
+    authenticated_page: Page, team_with_business_plan: Workspace, product_factory: Callable[..., Product]
 ) -> None:
     page = authenticated_page
     workspace = team_with_business_plan
-    page.goto(reverse("teams:team_settings", args=[workspace.key]) + "#controls")
+    page.goto(reverse("workspaces:team_settings", args=[workspace.key]) + "#controls")
     expect(page).to_have_url(re.compile(r"/settings/controls$"))
     page.get_by_role("button", name="Activate SOC 2 Type II", exact=True).click()
     expect(page.get_by_role("button", name="Deactivate SOC 2 Type II", exact=True)).to_be_visible()
@@ -307,9 +326,9 @@ def test_unchanged_lifecycle_keeps_the_editor(
     assert product.release_date is not None
 
 
-def test_catalog_import_and_deletion(authenticated_page: Page, team_with_business_plan: Team) -> None:
+def test_catalog_import_and_deletion(authenticated_page: Page, team_with_business_plan: Workspace) -> None:
     page = authenticated_page
-    page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
+    page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
     page.get_by_role("button", name="Import catalog", exact=True).click()
     dialog = page.get_by_role("dialog", name="Import OSCAL catalog", exact=True)
     upload = page.locator("#catalog-import-file")
@@ -330,6 +349,8 @@ def test_catalog_import_and_deletion(authenticated_page: Page, team_with_busines
     page.get_by_role("button", name="Deactivate Imported audit", exact=True).click()
     page.get_by_role("button", name="Activate Imported audit", exact=True).click()
     expect(page.get_by_role("button", name="Deactivate Imported audit", exact=True)).to_be_visible()
+    # The toggle reloads the page, which shows Delete before Alpine binds it; a click before then is dropped.
+    page.wait_for_load_state()
     page.get_by_role("button", name="Delete Imported audit", exact=True).click()
     deletion = page.get_by_role("alertdialog", name="Delete catalog", exact=True)
     deletion.get_by_role("button", name="Cancel", exact=True).click()
@@ -343,7 +364,7 @@ def test_catalog_import_and_deletion(authenticated_page: Page, team_with_busines
 
 @pytest.mark.parametrize("width,theme", [(1440, "light"), (1440, "dark"), (390, "light"), (390, "dark")])
 def test_controls_settings_snapshot(
-    authenticated_page: Page, team_with_business_plan: Team, snapshot: Any, width: int, theme: str
+    authenticated_page: Page, team_with_business_plan: Workspace, snapshot: Any, width: int, theme: str
 ) -> None:
     catalog = ControlCatalog.objects.create(
         team=team_with_business_plan, name="Access controls", source="custom", version="1"
@@ -352,7 +373,7 @@ def test_controls_settings_snapshot(
     page = authenticated_page
     page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}')")
     page.set_viewport_size({"width": width, "height": 1080})
-    page.goto(reverse("teams:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
+    page.goto(reverse("workspaces:team_settings_tab", args=[team_with_business_plan.key, "controls"]))
     page.get_by_role("button", name="Access (1)", exact=True).click()
     page.wait_for_load_state("networkidle")
     assert page.locator("body").evaluate("el => el.scrollWidth <= innerWidth")

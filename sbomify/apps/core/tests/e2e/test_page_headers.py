@@ -37,16 +37,16 @@ def test_app_headers_match_products(
         ("core:dashboard_trends", []),
         ("core:components_dashboard", []),
         ("core:releases_dashboard", []),
-        ("teams:vulnerability_scans", [workspace_key]),
+        ("workspaces:vulnerability_scans", [workspace_key]),
         ("plugins:plugins_page", []),
         ("core:security_advisories_dashboard", []),
         ("compliance:cra_product_list", []),
         ("compliance:cra_scope_screening", [product.id]),
         ("compliance:cra_step", [cra_assessment.id, 1]),
-        ("teams:team_settings", [workspace_key]),
-        ("teams:teams_dashboard", []),
-        ("teams:suppliers", [workspace_key]),
-        ("teams:invite_user", [workspace_key]),
+        ("workspaces:team_settings", [workspace_key]),
+        ("workspaces:teams_dashboard", []),
+        ("workspaces:suppliers", [workspace_key]),
+        ("workspaces:invite_user", [workspace_key]),
         ("billing:select_plan", [workspace_key]),
         ("billing:enterprise_contact", []),
         ("sboms:workspace_crypto", [workspace_key]),
@@ -61,7 +61,6 @@ def test_app_headers_match_products(
         ("core:release_details", [product.id, release.id]),
         ("core:security_advisory_detail", [advisory_detail.id]),
         ("sboms:component_artifacts", [component.id]),
-        ("sboms:sbom_vulnerabilities", [sbom.id]),
     ]
     page = authenticated_page
     page.set_viewport_size({"width": width, "height": 900})
@@ -114,9 +113,14 @@ def test_component_sections_keep_the_frame_gap(
 
 @pytest.mark.parametrize("width", [1280, 375])
 def test_artifact_assessment_uses_the_frame_gap(
-    authenticated_page: Page, sbom_component_details: Any, width: int
+    authenticated_page: Page, sbom_component_details: Any, mocker: Any, width: int
 ) -> None:
+    from sbomify.apps.core.tests.e2e.test_assessment_requirements import _seed
+
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=None)
     sbom = SBOM.objects.get(component=sbom_component_details)
+    # Scans are not listed in the section, so with the fixture's scan alone it is not rendered.
+    _seed(sbom)
     page = authenticated_page
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(reverse("core:component_item", args=[sbom_component_details.id, "sboms", sbom.id]))

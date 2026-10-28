@@ -12,7 +12,8 @@ from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.broadcasts import broadcast_custom_domain_updated
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
 
@@ -92,11 +93,14 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
     limit instead of holding up the domains queued after it.
     """
     if not _serves_challenge(team_id, domain):
+        # The attempt was counted before the probe, so an open settings page
+        # shows a stale "last checked" until it hears this.
+        _announce_domain_check(team_id, "failed")
         return
 
     # Conditional on the domain the probe fetched: the workspace may have
     # changed it while the request was in flight.
-    validated = Team.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
+    validated = Workspace.objects.filter(pk=team_id, custom_domain=domain, custom_domain_validated=False).update(
         custom_domain_validated=True,
         # Validation is what makes the custom domain the preferred one,
         # so it rewrites every absolute URL in the CSAF distribution.
@@ -112,6 +116,13 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
     if validated:
         invalidate_custom_domain_cache(domain)
         logger.info(f"Successfully validated domain {domain}")
+        _announce_domain_check(team_id, "verified")
+
+
+def _announce_domain_check(team_id: int, status: str) -> None:
+    """Tell the workspace a verification attempt finished. The domain itself is not in the message."""
+    workspace_key = Workspace.objects.filter(pk=team_id).values_list("key", flat=True).first()
+    broadcast_custom_domain_updated(workspace_key, status)
 
 
 def _backoff(failures: int) -> timedelta:
@@ -130,7 +141,7 @@ def _check(team_id: int, domain: str, last_checked_at: datetime | None) -> None:
     """
     now = timezone.now()
     # Use F() expression for atomic increment to prevent race conditions
-    counted = Team.objects.filter(
+    counted = Workspace.objects.filter(
         pk=team_id,
         custom_domain=domain,
         custom_domain_validated=False,
@@ -141,7 +152,9 @@ def _check(team_id: int, domain: str, last_checked_at: datetime | None) -> None:
     )
     if not counted:
         return
-    failures = Team.objects.filter(pk=team_id).values_list("custom_domain_verification_failures", flat=True).first()
+    failures = (
+        Workspace.objects.filter(pk=team_id).values_list("custom_domain_verification_failures", flat=True).first()
+    )
     check_custom_domain.send_with_options(
         args=(team_id, domain, now.isoformat()),
         delay=int(_backoff(failures or 0).total_seconds() * 1000),
@@ -170,7 +183,9 @@ def verify_custom_domains() -> None:
     record_task_breadcrumb("verify_custom_domains", "start")
 
     # Get unvalidated domains
-    teams = Team.objects.filter(custom_domain__isnull=False, custom_domain_validated=False).exclude(custom_domain="")
+    teams = Workspace.objects.filter(custom_domain__isnull=False, custom_domain_validated=False).exclude(
+        custom_domain=""
+    )
 
     for team in teams:
         # Check if it's time to retry based on failure count

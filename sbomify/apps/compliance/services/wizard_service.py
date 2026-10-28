@@ -40,7 +40,7 @@ from sbomify.apps.teams.services.contacts import (
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Allowed conformity assessment procedures per product category.
 # CRA Art 32(1): Default → Module A (self-assessment)
@@ -169,7 +169,7 @@ def _auto_fill_from_product(assessment: CRAAssessment) -> None:
 def get_or_create_assessment(
     product_id: str,
     user: User,
-    team: Team,
+    team: Workspace,
 ) -> ServiceResult[CRAAssessment]:
     """Get existing or create new CRA assessment for a product.
 
@@ -936,8 +936,8 @@ def _save_step_1(
         and not assessment.harmonised_standard_applied
     ):
         return ServiceResult.failure(
-            "Class I products may only use Module A when a harmonised standard has been applied "
-            "(CRA Art 32(2)). Either select a different procedure or confirm harmonised standard.",
+            "Class I products may only use Module A when a harmonized standard has been applied "
+            "(CRA Art 32(2)). Either select a different procedure or confirm harmonized standard.",
             status_code=400,
         )
     assessment.conformity_assessment_procedure = chosen
@@ -1385,7 +1385,7 @@ def get_compliance_summary(
 
 def get_assessment_list_for_team(team_id: int | str) -> ServiceResult[list[dict[str, Any]]]:
     """Get CRA assessments for a team, formatted for the product list view."""
-    assessments = CRAAssessment.objects.filter(team_id=team_id).select_related("product").order_by("-updated_at")
+    assessments = CRAAssessment.objects.filter(team_id=int(team_id)).select_related("product").order_by("-updated_at")
     return ServiceResult.success(
         [
             {
@@ -1407,7 +1407,7 @@ def get_products_without_cra_assessment(team_id: int | str) -> ServiceResult[lis
     """Products available to start screening, excluding existing assessments."""
     from sbomify.apps.core.models import Product
 
-    products = Product.objects.filter(team_id=team_id, cra_assessment__isnull=True).order_by("name", "id")
+    products = Product.objects.filter(team_id=int(team_id), cra_assessment__isnull=True).order_by("name", "id")
     return ServiceResult.success([{"id": product.id, "name": product.name} for product in products.only("id", "name")])
 
 

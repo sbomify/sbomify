@@ -198,9 +198,10 @@ value written the natural way, without a trailing slash, silently yields
 persists that same string into the SocialApp row, so the damage outlives the
 misconfiguration.
 
-There is deliberately no separate browser-facing URL: the application reads only
-KEYCLOAK_SERVER_URL, and OIDC discovery hands the browser whatever endpoints it
-finds there. A second value would be a knob that silently does nothing.
+Login reaches the browser through OIDC discovery, so it follows whatever
+endpoints Keycloak advertises at this URL. Logout does not: the app builds that
+redirect itself, from KEYCLOAK_PUBLIC_URL (auth.keycloak.publicUrl) when set and
+from this URL otherwise.
 */}}
 
 {{/* Public hostname, parsed out of app.baseUrl. */}}
@@ -280,6 +281,16 @@ here would quietly beat the workload's own identity.
     secretKeyRef:
       name: {{ $secretName }}
       key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "KEYCLOAK_CLIENT_SECRET") }}
+{{/*
+Optional, so a Secret without the key (the default, or an existingSecret that
+never set one) starts the pod with the variable unset rather than failing it.
+*/}}
+- name: GITHUB_API_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName }}
+      key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "GITHUB_API_TOKEN") }}
+      optional: true
 {{- with $ctx.Values.app.extraEnv }}
 {{ toYaml . }}
 {{- end }}

@@ -35,6 +35,7 @@ from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_l
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.core.views.artifact_upload import ArtifactUploadView as ArtifactUploadView
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
@@ -45,7 +46,6 @@ from sbomify.apps.core.views.component_vulnerabilities import (
 )
 from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
-from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
 from sbomify.apps.core.views.design_system import DesignSystemView as DesignSystemView
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
@@ -58,19 +58,23 @@ from sbomify.apps.core.views.product_releases_private import ProductReleasesPriv
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
 from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
-from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
-from sbomify.apps.core.views.releases_dashboard import ReleasesTableView as ReleasesTableView
 from sbomify.apps.core.views.search import SearchView as SearchView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoriesBulkDeleteView as SecurityAdvisoriesBulkDeleteView,
+)
 from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoriesDashboardView as SecurityAdvisoriesDashboardView,
 )
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableView as SecurityAdvisoriesTableView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryCreateView as SecurityAdvisoryCreateView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoryProductReleasesView as SecurityAdvisoryProductReleasesView,
+)
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,
@@ -99,18 +103,18 @@ def home(request: HttpRequest) -> HttpResponse:
 
         # Wizard not finished yet → send to Welcome step (not plan)
         if not current_team.get("has_completed_wizard", True):
-            return redirect("teams:onboarding_wizard")
+            return redirect("workspaces:onboarding_wizard")
 
         from sbomify.apps.billing.config import needs_plan_selection
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team = None
-        team_key = current_team.get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+        workspace_key = current_team.get("key")
+        if workspace_key:
+            team = Workspace.objects.filter(key=workspace_key).first()
 
         if needs_plan_selection(team, request.user):
-            return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
+            return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=plan")
         return redirect("core:dashboard")
     return redirect("core:keycloak_login")
 
@@ -178,7 +182,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         current_team = request.session.get("current_workspace")
         if current_team and current_team.get("key"):
-            return redirect("teams:team_tokens", team_key=current_team["key"])
+            return redirect("workspaces:team_settings_tab", workspace_key=current_team["key"], tab="tokens")
 
         messages.add_message(
             request,
@@ -191,7 +195,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
     # Check if user has a current workspace - if so, redirect to tokens tab
     current_team = request.session.get("current_workspace")
     if current_team and current_team.get("key"):
-        return redirect("teams:team_settings", team_key=current_team["key"])
+        return redirect("workspaces:team_settings", workspace_key=current_team["key"])
 
     # If no current workspace, show pending invitations only (backward compatibility)
     context = _build_settings_context(request.user)
@@ -203,7 +207,7 @@ def user_settings(request: HttpRequest) -> HttpResponse:
             messages.INFO,
             "Please select a workspace to access token settings.",
         )
-        return redirect("teams:teams_dashboard")
+        return redirect("workspaces:teams_dashboard")
 
     return render(request, "core/settings.html.j2", context)
 
@@ -288,7 +292,7 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
             request,
             "team:member_invitation_accepted",
             {"role": role},
-            team_key=captured_team_key,
+            workspace_key=captured_team_key,
         )
     )
 
@@ -372,7 +376,9 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
         # legacy and rare; the count of their deletions is not load-
         # bearing for any current funnel.
         if token_team_key:
-            transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "api_token:deleted", workspace_key=token_team_key)
+            )
 
         if is_api_request:
             return HttpResponse(status=200)
@@ -404,10 +410,8 @@ def logout(request: HttpRequest) -> HttpResponse:
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.
     # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    if hasattr(settings, "KEYCLOAK_PUBLIC_URL"):
-        base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")  # type: ignore[misc]
-    else:
-        base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
+    # The browser follows this redirect, so it must be the browser-facing URL.
+    base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
     realm = settings.KEYCLOAK_REALM
     client_id = settings.KEYCLOAK_CLIENT_ID
 
@@ -463,8 +467,8 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     if request.method != "POST":
         return error_response(request, HttpResponseBadRequest("Invalid request"))
 
-    team_key = request.POST.get("team_key")
-    team_id = token_to_number(team_key)  # type: ignore[arg-type]
+    workspace_key = request.POST.get("team_key")
+    team_id = token_to_number(workspace_key)  # type: ignore[arg-type]
 
     try:
         component = Component.objects.get(pk=component_id)
@@ -477,13 +481,13 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     # Read the target workspace's role from the live Member row, not the session
     # cache: that copy has a 300s TTL, so a demotion in the target workspace left
     # a window in which a component could still be transferred into it.
-    from sbomify.apps.teams.models import Member, Team
+    from sbomify.apps.teams.models import Member, Workspace
 
-    if not Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists():
+    if not Member.objects.filter(user=cast(User, request.user), team__key=workspace_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
     # Existence is checked after the role, so a missing workspace is refused like
     # one the caller does not administer. None here means it was deleted since.
-    target_team = Team.objects.filter(key=team_key).first()
+    target_team = Workspace.objects.filter(key=workspace_key).first()
     if target_team is None:
         return error_response(request, HttpResponseNotFound("Workspace not found"))
 
@@ -539,7 +543,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         return error_response(request, HttpResponseNotFound("Product not found"))
 
     if not product.is_public:
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     # Get format parameters from query string and normalize early
@@ -580,7 +584,7 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal", component):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     metadata = component.metadata or {}

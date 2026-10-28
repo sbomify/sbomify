@@ -18,7 +18,7 @@ from django.urls import reverse
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.documents.access_models import AccessRequest
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 PUBLIC_REF = "crypto/public"
 GATED_REF = "crypto/gated"
@@ -94,7 +94,7 @@ def signed_in_outsider(request, mixed_components, guest_user):
         Member.objects.create(team=team, user=guest_user, role="guest")
         AccessRequest.objects.create(team=team, user=guest_user, status=AccessRequest.Status.APPROVED)
     else:
-        Member.objects.create(team=Team.objects.create(name="Elsewhere"), user=guest_user, role="owner")
+        Member.objects.create(team=Workspace.objects.create(name="Elsewhere"), user=guest_user, role="owner")
     client = Client()
     client.force_login(guest_user)
     return client

@@ -44,13 +44,14 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Length
 from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.security_advisories.expressions import csaf_filename_expression
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # CVE ID syntax: the sequence part is four or more digits and has no upper bound.
 CVE_ID_RE = re.compile(r"^CVE-\d{4}-\d{4,}$")
@@ -137,6 +138,36 @@ def detect_reference_type(identifier: str | None) -> str:
     return ReferenceType.OTHER
 
 
+ADVISORY_ID_PREFIX_RE = re.compile(r"[A-Z0-9]+(?:-[A-Z0-9]+)*")
+ADVISORY_ID_PREFIX_MAX_LENGTH = 20
+
+
+def normalize_advisory_id_prefix(value: str) -> str:
+    """A workspace's advisory id prefix as stored, or raise ``ValidationError``.
+
+    Uppercased, like every other advisory scheme. A prefix that another
+    database already owns (``CVE``, ``GHSA``…) is refused: ``CVE-2026-0001``
+    would be classified, linked and searched as a real CVE.
+    """
+    prefix = value.strip().upper()
+    if not prefix:
+        return ""
+    if not ADVISORY_ID_PREFIX_RE.fullmatch(prefix):
+        raise ValidationError("Use letters, numbers and single hyphens, e.g. ACME-SA.")
+    # Measured after uppercasing, which can lengthen a value ("ß" becomes "SS").
+    if len(prefix) > ADVISORY_ID_PREFIX_MAX_LENGTH:
+        raise ValidationError(f"Use at most {ADVISORY_ID_PREFIX_MAX_LENGTH} characters.")
+    if detect_reference_type(f"{prefix}-") != ReferenceType.OTHER:
+        raise ValidationError(f"{prefix} is used by another vulnerability database. Choose a different prefix.")
+    return prefix
+
+
+def default_advisory_id_prefix(team: Workspace) -> str:
+    """The generated prefix a workspace gets until it sets its own, e.g. ``ACME-SA``."""
+    token = re.sub(r"[^A-Z0-9]+", "", (team.name or "").upper())[:12] or "SA"
+    return f"{token}-SA"
+
+
 class SecurityAdvisory(models.Model):
     """A workspace's advisory. Zero or more vulnerabilities, zero or more products."""
 
@@ -205,7 +236,7 @@ class SecurityAdvisory(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="security_advisories", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="security_advisories", db_column="workspace_id"
     )
 
     advisory_type = models.CharField(max_length=20, choices=AdvisoryType.choices, default=AdvisoryType.PRODUCT_ADVISORY)
@@ -263,29 +294,30 @@ class SecurityAdvisory(models.Model):
         return self.status != self.Status.DRAFT and self.visibility != self.Visibility.PRIVATE
 
     @classmethod
-    def allocate_tracking_id(cls, team: Team, *, prefix: str | None = None, year: int | None = None) -> str:
+    def allocate_tracking_id(cls, team: Workspace, *, prefix: str | None = None, year: int | None = None) -> str:
         """Next per-team, per-year tracking id, e.g. ``ACME-SA-2026-0001``.
 
-        The sequence restarts each year, matching CVE and CSAF practice. Callers
-        must already hold a lock that serialises concurrent publishes for the team
-        (lock the ``Team`` row); there is no counter table to lock instead, and the
-        highest existing id for the year is the counter.
+        The prefix is the workspace's ``advisory_id_prefix``, or one derived from
+        its name when that is blank. The sequence restarts each year, matching
+        CVE and CSAF practice, and never goes below ``advisory_id_start_at``, so
+        a team moving from another platform can skip the numbers it already
+        issued there. Callers must already hold a lock that serialises concurrent
+        publishes for the team (lock the ``Team`` row); there is no counter table
+        to lock instead, and the highest existing id for the year is the counter.
         """
         year = year or timezone.now().year
-        token = (prefix or (team.name or "").upper()) or "SA"
-        token = re.sub(r"[^A-Z0-9]+", "", token.upper())[:12] or "SA"
-        stem = f"{token}-SA-{year}-"
+        prefix = prefix or team.advisory_id_prefix or default_advisory_id_prefix(team)
+        stem = f"{prefix}-{year}-"
 
-        # Descending order plus a lazy iterator means the first row is normally the
-        # only one fetched, rather than the whole year's ids. The loop continues
-        # only past ids whose tail is not a number, which the allocator never
-        # writes. Zero padding keeps the ordering numeric; a team that somehow
-        # published past 9999 in one year would read a stale maximum and hit the
-        # unique constraint, which fails loudly rather than reusing an id.
+        # Longest first, then descending, is numeric order for digit tails
+        # padded to at least four places, so 10000 sorts above 9999. A lazy
+        # iterator means the first row is normally the only one fetched, rather
+        # than the whole year's ids. The loop continues only past ids whose tail
+        # is not a number, which the allocator never writes.
         highest = 0
         existing = (
             cls.objects.filter(team=team, tracking_id__startswith=stem)
-            .order_by("-tracking_id")
+            .order_by(Length("tracking_id").desc(), "-tracking_id")
             .values_list("tracking_id", flat=True)
         )
         for value in existing.iterator():
@@ -293,7 +325,7 @@ class SecurityAdvisory(models.Model):
             if tail.isdigit():
                 highest = int(tail)
                 break
-        return f"{stem}{highest + 1:04d}"
+        return f"{stem}{max(highest + 1, team.advisory_id_start_at or 1):04d}"
 
     def clean(self) -> None:
         super().clean()
@@ -769,6 +801,19 @@ class AdvisoryProductStatus(models.Model):
     def is_suppressing(self) -> bool:
         return self.status in self.SUPPRESSING_STATES
 
+    @property
+    def names_fix(self) -> bool:
+        """Whether this row tells a reader which version carries the fix.
+
+        A recommended version or release, or a range with a ``fixed`` endpoint.
+        Reads ``version_ranges.all()`` so a prefetched graph costs no query.
+        """
+        return bool(
+            self.recommended_version
+            or self.recommended_release_id
+            or any(version_range.fixed for version_range in self.version_ranges.all())
+        )
+
     def clean(self) -> None:
         super().clean()
         errors: dict[str, str] = {}
@@ -1025,12 +1070,20 @@ class AdvisoryEvent(models.Model):
         CRA_NOTIFICATION = "cra_notification", "CRA notification submitted"
         CRA_FINAL_REPORT = "cra_final_report", "CRA final report submitted"
         USERS_NOTIFIED = "users_notified", "Impacted users notified"
+        # A new body for an earlier message. The timeline is append-only, so an
+        # edit is recorded rather than written over the original: the payload
+        # names the event it edits and keeps the text it replaced, and readers
+        # show the newest body in the original's place.
+        MESSAGE_EDITED = "message_edited", "Message edited"
 
     # Event kinds a trust-center visitor may read.
     PUBLIC_EVENT_TYPES = frozenset(
         {EventType.UPDATE, EventType.PUBLISHED, EventType.WITHDRAWN, EventType.STATUS_CHANGE}
     )
     MESSAGE_EVENT_TYPES = frozenset({EventType.COMMENT, EventType.UPDATE})
+    # Kinds whose note a person may correct after posting. A status change's
+    # move is final; only the words posted with it are editable.
+    EDITABLE_EVENT_TYPES = frozenset({EventType.COMMENT, EventType.UPDATE, EventType.STATUS_CHANGE})
 
     class Meta:
         db_table = "security_advisories_events"
@@ -1061,6 +1114,12 @@ class AdvisoryEvent(models.Model):
             missing = {"field", "old", "new"} - set(self.payload or {})
             if missing:
                 raise ValidationError({"payload": f"A field_change payload needs {sorted(missing)}."})
+        if self.event_type == self.EventType.MESSAGE_EDITED:
+            if not self.body.strip():
+                raise ValidationError({"body": "An edited message needs a body."})
+            missing = {"event_id", "event_type", "old"} - set(self.payload or {})
+            if missing:
+                raise ValidationError({"payload": f"A message_edited payload needs {sorted(missing)}."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:
@@ -1070,6 +1129,101 @@ class AdvisoryEvent(models.Model):
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         raise ValidationError("Advisory events are append-only.")
+
+
+class AdvisoryProposal(models.Model):
+    """A change to a published advisory, waiting for a person to approve it.
+
+    An AI agent may draft an advisory and edit the draft freely, because a draft
+    reaches nobody until a person publishes it. Once published, its timeline,
+    fields and product statuses are what the Trust Center and CSAF serve, so an
+    agent's change to one is held here instead of applied. Approving runs the
+    same service write a person's own edit would, attributed to the agent's
+    token and to the person who approved it.
+
+    ``payload`` is what the agent asked for, in the arguments of the service it
+    will be applied through. ``baseline`` is what those fields held when it was
+    sent, so the reviewer sees the change as a diff, and is warned when someone
+    changed the same thing since.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Awaiting review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        # A later proposal from the same token changes the same thing, or the
+        # advisory was withdrawn, so this one no longer applies.
+        SUPERSEDED = "superseded", "Replaced"
+
+    class Kind(models.TextChoices):
+        # A new timeline entry: a note, or a remediation status move with one.
+        POST_UPDATE = "post_update", "New update"
+        # A new body for an update already on the timeline.
+        EDIT_UPDATE = "edit_update", "Edit to an update"
+        # The advisory's own fields: title, summary, description, severity, CVSS.
+        EDIT_ADVISORY = "edit_advisory", "Edit to the advisory"
+        # One product's status rows.
+        PRODUCT_STATUS = "product_status", "Product status change"
+        # A product, or more releases, named on the advisory.
+        ADD_PRODUCT = "add_product", "Product added"
+
+    class RejectionReason(models.TextChoices):
+        # Why a person turned a change down, in words an agent can branch on.
+        # The note says the specifics; the reason says what to do next.
+        INACCURATE = "inaccurate", "Not accurate"
+        PREMATURE = "premature", "Too early"
+        WORDING = "wording", "Needs rewording"
+        DUPLICATE = "duplicate", "Already covered"
+        OTHER = "other", "Something else"
+
+    class Meta:
+        db_table = "security_advisories_proposals"
+        ordering = ["-submitted_at"]
+        indexes = [
+            models.Index(fields=["team", "status"], name="sec_adv_prop_team_status_idx"),
+            models.Index(fields=["advisory", "status"], name="sec_adv_prop_adv_status_idx"),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    team = models.ForeignKey(
+        "teams.Workspace", on_delete=models.CASCADE, related_name="advisory_proposals", db_column="workspace_id"
+    )
+    advisory = models.ForeignKey(SecurityAdvisory, on_delete=models.CASCADE, related_name="proposals")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    # What a later proposal must match to replace this one: the update being
+    # edited, the product, or the fields. Blank for a new update, which never
+    # replaces another.
+    target = models.CharField(max_length=255, blank=True, default="")
+    payload = models.JSONField(default=dict, blank=True)
+    baseline = models.JSONField(default=dict, blank=True)
+    # What the agent says it did and why, for the person reviewing it.
+    context = models.TextField(blank=True, default="")
+
+    # "agent", "api" or "ci", as credential_channel reports it.
+    channel = models.CharField(max_length=10, default="agent")
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="advisory_proposals"
+    )
+    submitted_token = models.ForeignKey(
+        "access_tokens.AccessToken", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # The token's description when it submitted, so the agent stays named after
+    # the token is renamed or deleted.
+    submitted_token_description = models.CharField(max_length=255, blank=True, default="")
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True, default="")
+    rejection_reason = models.CharField(max_length=20, choices=RejectionReason.choices, blank=True, default="")
+    # True when the reviewer changed the text before approving it.
+    revised = models.BooleanField(default=False)
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} on {self.advisory_id} ({self.status})"
 
 
 def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
@@ -1089,7 +1243,9 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
     # would pay N+1 to validate.
     vulnerabilities = list(
         advisory.vulnerabilities.prefetch_related(
-            "product_statuses__advisory_product", "product_statuses__version_ranges"
+            "product_statuses__advisory_product",
+            "product_statuses__advisory_component",
+            "product_statuses__version_ranges",
         )
     )
     is_notice = advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
@@ -1102,28 +1258,24 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
     for vulnerability in vulnerabilities:
         statuses = list(vulnerability.product_statuses.all())
         by_product = {status.advisory_product_id for status in statuses}
+        # Portfolio-wide names no subject at all. A component-scoped row has no
+        # product either, and is not one.
+        has_portfolio = any(s.advisory_product_id is None and s.advisory_component_id is None for s in statuses)
 
         if is_notice:
-            if None not in by_product:
+            if not has_portfolio:
                 problems.append(f"{vulnerability} needs a portfolio-wide status.")
         else:
-            if None in by_product:
+            if has_portfolio:
                 problems.append(f"{vulnerability} has a portfolio status on a product advisory.")
             for product in products:
                 if product.id not in by_product:
                     problems.append(f"{vulnerability} has no status for {product.product_name}.")
 
         for status in statuses:
-            label = f"{vulnerability} / {status.advisory_product or 'all products'}"
-            if status.status == AdvisoryProductStatus.Status.RESOLVED:
-                # ``.all()`` reads the prefetch cache; ``.exclude()`` would re-query.
-                has_fix = (
-                    status.recommended_version
-                    or status.recommended_release_id
-                    or any(version_range.fixed for version_range in status.version_ranges.all())
-                )
-                if not has_fix:
-                    problems.append(f"{label} is fixed but names no fixed version.")
+            label = f"{vulnerability} / {status.advisory_product or status.advisory_component or 'all products'}"
+            if status.status == AdvisoryProductStatus.Status.RESOLVED and not status.names_fix:
+                problems.append(f"{label} is fixed but names no fixed version.")
             if status.status == AdvisoryProductStatus.Status.NOT_AFFECTED:
                 if not status.justification and not status.impact_statement.strip():
                     problems.append(f"{label} is not_affected without a justification or impact statement.")

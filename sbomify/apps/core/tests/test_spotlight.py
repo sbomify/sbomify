@@ -15,7 +15,7 @@ from sbomify.apps.core.spotlight import SECTION_ORDER, initial_suggestions, load
 class TestRegistryIntegrity:
     def test_every_destination_resolves(self):
         """A typo'd url_name would 404 a user; fail here instead."""
-        unresolved = [d.url_name for d in load_destinations() if d.resolve(team_key="AAAAAAAA") is None]
+        unresolved = [d.url_name for d in load_destinations() if d.resolve(workspace_key="AAAAAAAA") is None]
 
         assert unresolved == []
 
@@ -44,7 +44,7 @@ class TestRegistryIntegrity:
 class TestRanking:
     def _titles(self, query, **kwargs):
         kwargs.setdefault("role", "owner")
-        kwargs.setdefault("team_key", "AAAAAAAA")
+        kwargs.setdefault("workspace_key", "AAAAAAAA")
         return [r["title"] for r in search_destinations(query, **kwargs)]
 
     def test_a_title_prefix_leads(self):
@@ -74,29 +74,42 @@ class TestRanking:
         assert self._titles("se") == self._titles("se")
 
     def test_the_limit_is_honoured(self):
-        assert len(search_destinations("e", role="owner", team_key="AAAAAAAA", limit=3)) == 3
+        assert len(search_destinations("e", role="owner", workspace_key="AAAAAAAA", limit=3)) == 3
 
 
 class TestRoleVisibility:
     def test_a_guest_does_not_see_admin_destinations(self):
-        titles = [r["title"] for r in search_destinations("token", role="guest", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("token", role="guest", workspace_key="AAAAAAAA")]
 
         assert "API tokens" not in titles
 
+    def test_every_internal_role_finds_what_its_views_admit(self):
+        """The API tokens tab and the vulnerability pages admit every internal
+        role, so search finds them for each one, the operator included."""
+        from sbomify.apps.core.authz import READ_INTERNAL
+
+        for role in READ_INTERNAL:
+            titles = {
+                r["title"]
+                for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
+                for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")
+            }
+            assert {"API tokens", "Vulnerabilities", "Vulnerability trends", "Cryptography"} <= titles, role
+
     def test_an_owner_sees_owner_only_destinations(self):
-        titles = [r["title"] for r in search_destinations("billing", role="owner", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("billing", role="owner", workspace_key="AAAAAAAA")]
 
         assert "Billing" in titles
 
     def test_an_admin_does_not_see_owner_only_destinations(self):
-        titles = [r["title"] for r in search_destinations("billing", role="admin", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("billing", role="admin", workspace_key="AAAAAAAA")]
 
         assert "Billing" not in titles
 
     def test_a_blank_role_sees_only_unrestricted_entries(self):
         """No workspace in session is the safe default: a palette entry is a
         hint that a feature exists."""
-        titles = [r["title"] for r in search_destinations("workspace", role="", team_key="AAAAAAAA")]
+        titles = [r["title"] for r in search_destinations("workspace", role="", workspace_key="AAAAAAAA")]
 
         assert "Workspace settings" not in titles
         assert "Switch workspace" in titles
@@ -105,7 +118,7 @@ class TestRoleVisibility:
 class TestUrlBuilding:
     def _find(self, title, **kwargs):
         kwargs.setdefault("role", "owner")
-        kwargs.setdefault("team_key", "AAAAAAAA")
+        kwargs.setdefault("workspace_key", "AAAAAAAA")
         for result in search_destinations(title.lower(), **kwargs):
             if result["title"] == title:
                 return result
@@ -127,7 +140,7 @@ class TestUrlBuilding:
 
     def test_a_team_scoped_destination_is_dropped_without_a_workspace(self):
         """Better a missing row than a link that 500s on reverse()."""
-        titles = [r["title"] for r in search_destinations("supplier", role="owner", team_key="")]
+        titles = [r["title"] for r in search_destinations("supplier", role="owner", workspace_key="")]
 
         assert "Suppliers" not in titles
 
@@ -221,7 +234,7 @@ class TestRootLevelCoverage:
     by typing — the palette is only a navigation tool if it covers the app."""
 
     def _titles(self, query):
-        return [r["title"] for r in search_destinations(query, role="owner", team_key="AAAAAAAA")]
+        return [r["title"] for r in search_destinations(query, role="owner", workspace_key="AAAAAAAA")]
 
     @pytest.mark.parametrize(
         "query,expected",
@@ -396,15 +409,115 @@ class TestInitialSuggestions:
         suggestions = initial_suggestions(role="owner", workspace_key="AAAAAAAA")
         assert {item["section"] for item in suggestions} == {"suggested", "examples"}
         for item in suggestions:
-            results = search_destinations(item.get("query", item["title"]), role="owner", team_key="AAAAAAAA")
+            results = search_destinations(item.get("query", item["title"]), role="owner", workspace_key="AAAAAAAA")
             assert any(result["url"] == item["url"] for result in results)
 
-    @pytest.mark.parametrize("role", ["member", "admin", "owner", ""])
+    @pytest.mark.parametrize("role", ["operator", "member", "admin", "owner", ""])
     def test_examples_follow_destination_permissions(self, role: str) -> None:
         queries = {item.get("query") for item in initial_suggestions(role=role, workspace_key="AAAAAAAA")}
-        assert ("api key" in queries) == (role in {"admin", "owner"})
+        assert ("api key" in queries) == (role in {"operator", "member", "admin", "owner"})
         assert ("new release" in queries) == (role in {"member", "admin", "owner"})
         assert "versions" in queries
 
     def test_workspace_examples_are_omitted_without_a_workspace(self) -> None:
         assert "api key" not in {item.get("query") for item in initial_suggestions(role="owner")}
+
+
+class TestUploadActions:
+    """Uploading happens on a component page, so the upload actions go through
+    the picker, which ends on that page with its upload dialog open."""
+
+    KINDS = {"Upload SBOM": "sbom", "Upload CBOM": "cbom", "Upload VEX": "vex", "Upload document": "document"}
+
+    def _destination(self, title):
+        return next(d for d in load_destinations() if d.title == title)
+
+    def _titles(self, query, role="member"):
+        return [r["title"] for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")]
+
+    @pytest.mark.parametrize("title", KINDS)
+    def test_roles_mirror_the_upload_gate(self, title):
+        """Derived from the tiers, not written out, so a tier change fails here
+        instead of quietly drifting: the page renders the uploader on MANAGE,
+        the API accepts on PUBLISH, and a VEX file also needs TRIAGE."""
+        from django.conf import settings
+
+        from sbomify.apps.core.authz import MANAGE, PUBLISH, TRIAGE
+
+        human_roles = {key for key, _label in settings.WORKSPACE_SUPPORTED_ROLES} - {"bot"}
+        expected = {r for r in human_roles if r in MANAGE and r in PUBLISH}
+        if self.KINDS[title] == "vex":
+            expected = {r for r in expected if r in TRIAGE}
+
+        assert set(self._destination(title).roles) == expected
+
+    @pytest.mark.parametrize(("title", "kind"), KINDS.items())
+    def test_each_points_at_the_picker_for_its_type(self, title, kind):
+        url = self._destination(title).resolve(workspace_key="AAAAAAAA")
+
+        assert url == f"{reverse('core:artifact_upload')}?type={kind}"
+
+    def test_vex_leads_with_the_upload_and_keeps_vulnerabilities(self):
+        titles = self._titles("vex")
+
+        assert titles[0] == "Upload VEX"
+        assert titles.index("Vulnerabilities") > 0
+
+    def test_typing_the_action_is_an_exact_match(self):
+        result = search_destinations("upload vex", role="member", workspace_key="AAAAAAAA")[0]
+
+        assert (result["title"], result["score"]) == ("Upload VEX", 100)
+
+    def test_cbom_ranks_the_upload_above_cryptography(self):
+        titles = self._titles("cbom")
+
+        assert titles.index("Upload CBOM") < titles.index("Cryptography")
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [
+            ("openvex", "Upload VEX"),
+            ("csaf", "Upload VEX"),
+            ("import sbom", "Upload SBOM"),
+            ("upload document", "Upload document"),
+            ("upload a document", "Upload document"),
+            ("documents", "Upload document"),
+            ("sboms", "Upload SBOM"),
+            ("sbom upload", "Upload SBOM"),
+            ("vex upload", "Upload VEX"),
+            ("cbom upload", "Upload CBOM"),
+        ],
+    )
+    def test_the_words_people_type_find_the_upload(self, query, expected):
+        assert expected in self._titles(query)
+
+    @pytest.mark.parametrize(
+        ("query", "expected"),
+        [("upload an sbom", "Upload SBOM"), ("upload a vex", "Upload VEX"), ("upload a cbom", "Upload CBOM")],
+    )
+    def test_the_old_titles_and_the_app_copy_still_lead(self, query, expected):
+        """These were the action titles before, and the app's own copy still says
+        "Upload an SBOM", so someone typing what they just read lands on it."""
+        assert self._titles(query)[0] == expected
+
+    def test_bom_offers_both_bom_uploads(self):
+        """Both titles contain "bom", so they tie on a title match and the
+        tiebreak is alphabetical: CBOM lists first. Accepted, as both show."""
+        assert self._titles("bom")[:2] == ["Upload CBOM", "Upload SBOM"]
+
+    def test_upload_offers_every_kind(self):
+        assert set(self.KINDS) <= set(self._titles("upload"))
+
+    @pytest.mark.parametrize("role", ["owner", "admin", "member"])
+    def test_upload_roles_see_every_kind(self, role):
+        assert set(self.KINDS) <= set(self._titles("upload", role=role))
+
+    @pytest.mark.parametrize("role", ["operator", "guest", ""])
+    def test_other_roles_see_none(self, role):
+        assert not set(self.KINDS) & set(self._titles("upload", role=role))
+
+    def test_an_operator_searching_vex_still_finds_where_it_triages(self):
+        titles = self._titles("vex", role="operator")
+
+        assert "Vulnerabilities" in titles
+        assert "Upload VEX" not in titles

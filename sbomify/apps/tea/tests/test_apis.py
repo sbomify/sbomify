@@ -1906,9 +1906,9 @@ class TestTEACrossWorkspaceIsolation:
 
     def test_product_not_accessible_from_other_workspace(self, tea_enabled_product):
         """A product's UUID should not be accessible from a different workspace."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Workspace",
             tea_enabled=True,
         )
@@ -1921,11 +1921,11 @@ class TestTEACrossWorkspaceIsolation:
 
     def test_release_not_accessible_from_other_workspace(self, tea_enabled_product):
         """A release's UUID should not be accessible from a different workspace."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Workspace",
             tea_enabled=True,
         )
@@ -1938,9 +1938,9 @@ class TestTEACrossWorkspaceIsolation:
 
     def test_component_not_accessible_from_other_workspace(self, tea_enabled_component):
         """A component's UUID should not be accessible from a different workspace."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Workspace",
             tea_enabled=True,
         )
@@ -1953,9 +1953,9 @@ class TestTEACrossWorkspaceIsolation:
 
     def test_artifact_not_accessible_from_other_workspace(self, tea_enabled_component, sample_sbom):
         """An artifact (SBOM) UUID should not be accessible from a different workspace."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Workspace",
             tea_enabled=True,
         )

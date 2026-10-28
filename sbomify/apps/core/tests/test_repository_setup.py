@@ -12,7 +12,7 @@ from pytest_mock import MockerFixture
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.authz import ALL_ACTIONS, can
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -68,7 +68,7 @@ def test_setup_token_checks_live_role(setup_client: tuple[Client, Member, str], 
 
 def test_setup_token_cannot_target_another_workspace(setup_client: tuple[Client, Member, str]) -> None:
     client, member, url = setup_client
-    other = Team.objects.create(name="Other workspace")
+    other = Workspace.objects.create(name="Other workspace")
     other_url = reverse("core:repository_setup_token", kwargs={"workspace_key": other.key})
     assert client.post(other_url).status_code == 403
     foreign = AccessToken.objects.create(user=member.user, team=other, encoded_token="synthetic", description="Other")

@@ -27,7 +27,14 @@ from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Invitation, Member, Team
+from sbomify.apps.teams.models import (
+    ContactEntity,
+    ContactProfile,
+    ContactProfileContact,
+    Invitation,
+    Member,
+    Workspace,
+)
 from sbomify.apps.teams.schemas import (
     AuthorContactSchema,
     BrandingInfo,
@@ -78,17 +85,26 @@ class FieldValue(BaseModel):
     value: str | bool | None
 
 
-def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
+def _build_team_response(request: HttpRequest, team: Workspace) -> TeamSchema:
     current_user_id = getattr(getattr(request, "user", None), "id", None)
+    # The settings pages show members and billing to admins and owners only, so
+    # the API does too. Everyone keeps their own row and both counts, which the
+    # workspaces page reads.
+    sees_members = bool(can(request, "member:manage", team))
+    sees_billing = bool(can(request, "billing:manage", team))
 
     members_data = [
         MemberSchema(
             id=member.id,
-            user=UserSchema(
-                id=member.user.id,
-                first_name=member.user.first_name,
-                last_name=member.user.last_name,
-                email=member.user.email,
+            user=(
+                UserSchema(
+                    id=member.user.id,
+                    first_name=member.user.first_name,
+                    last_name=member.user.last_name,
+                    email=member.user.email,
+                )
+                if sees_members or member.user.id == current_user_id
+                else UserSchema(id=member.user.id, first_name="", last_name="", email="")
             ),
             role=member.role,
             # One value, two names, while clients migrate off the old one.
@@ -111,8 +127,8 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     invitations_data = [
         InvitationSchema(
             id=invitation.id,
-            token=str(invitation.token),
-            email=invitation.email,
+            token=str(invitation.token) if sees_members else "",
+            email=invitation.email if sees_members else "",
             role=invitation.granted_role,
             created_at=invitation.created_at,
             expires_at=invitation.expires_at,
@@ -127,7 +143,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
         is_public=team.is_public,
         created_at=team.created_at,
         billing_plan=team.billing_plan,
-        billing_plan_limits=team.billing_plan_limits,
+        billing_plan_limits=team.billing_plan_limits if sees_billing else None,
         has_completed_wizard=team.has_completed_wizard,
         custom_domain=team.custom_domain,
         custom_domain_validated=team.custom_domain_validated,
@@ -140,7 +156,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     )
 
 
-def _private_workspace_allowed(team: Team) -> bool:
+def _private_workspace_allowed(team: Workspace) -> bool:
     return team.can_be_private()
 
 
@@ -175,8 +191,8 @@ def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     user = cast(User, request.user)
@@ -218,8 +234,8 @@ def update_team_branding_field(
         return 400, {"detail": f"Invalid field. Must be one of: {', '.join(valid_fields)}"}
 
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
@@ -374,7 +390,7 @@ def _branding_image_type(data: bytes) -> tuple[str, str] | None:
     return None
 
 
-def generate_branding_filename(team: Team, field: str, extension: str) -> str:
+def generate_branding_filename(team: Workspace, field: str, extension: str) -> str:
     unique_id = str(uuid.uuid4())
     return f"team_{team.key}_{field}_{unique_id}{extension}"
 
@@ -388,7 +404,7 @@ def upload_to_s3(
     s3_client.upload_media(filename, data, content_type)
 
 
-def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
+def _is_own_branding_key(team: Workspace, field: str, filename: str) -> bool:
     """True when the key is one this workspace's uploads generate, current or legacy."""
     if "/" in filename:
         return False
@@ -398,7 +414,7 @@ def _is_own_branding_key(team: Team, field: str, filename: str) -> bool:
     return bool(suffix) and filename == f"{team.key}_{field}{suffix}"
 
 
-def delete_from_s3(team: Team, field: str, filename: str) -> None:
+def delete_from_s3(team: Workspace, field: str, filename: str) -> None:
     """Delete a replaced or cleared branding file, only if this workspace uploaded it."""
     if not _is_own_branding_key(team, field, filename):
         logger.warning(f"Not deleting {field} key {filename!r}: not an upload of workspace {team.key}")
@@ -407,7 +423,7 @@ def delete_from_s3(team: Team, field: str, filename: str) -> None:
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
-def _delete_branding_files(team: Team, files: Sequence[tuple[str, str]]) -> None:
+def _delete_branding_files(team: Workspace, files: Sequence[tuple[str, str]]) -> None:
     for field, filename in files:
         try:
             delete_from_s3(team, field, filename)
@@ -448,8 +464,8 @@ def update_team_branding(
 ) -> tuple[int, Any]:
     # TODO: has to be in middleware or decorator or anything else
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
@@ -540,8 +556,8 @@ def upload_branding_file(
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -600,18 +616,18 @@ def upload_branding_file(
 
 
 def _get_team_and_membership_role(
-    request: HttpRequest, team_key: str
-) -> tuple[Team | None, str | None, tuple[int, dict[str, str]] | None]:
+    request: HttpRequest, workspace_key: str
+) -> tuple[Workspace | None, str | None, tuple[int, dict[str, str]] | None]:
     user = cast(User, request.user)
 
     try:
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
     except ValueError:
         return None, None, (404, {"detail": "Workspace not found"})
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return None, None, (404, {"detail": "Workspace not found"})
 
     membership = Member.objects.filter(user=user, team=team).first()
@@ -635,7 +651,7 @@ def _clean_url_list(urls: list[str]) -> list[str]:
     return unique
 
 
-def _get_team_owner_email(team: Team) -> str:
+def _get_team_owner_email(team: Workspace) -> str:
     """Get the team owner's email for fallback purposes."""
     owner = Member.objects.filter(team=team, role="owner").select_related("user").first()
     return owner.user.email if owner and owner.user and owner.user.email else "no-reply@sbomify.com"
@@ -1238,8 +1254,8 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1289,8 +1305,8 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1334,6 +1350,9 @@ class TeamDomainResponseSchema(BaseModel):
 @router.patch(
     "/{team_key}/domain",
     response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # Both methods share the view, and Ninja names an operation after its view, so
+    # without this the PATCH duplicates the PUT's operationId in the schema.
+    operation_id="sbomify_apps_teams_apis_patch_team_domain",
 )
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
@@ -1347,8 +1366,8 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1381,7 +1400,7 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # write, so two concurrent first-time saves can't both observe an
         # empty value and both treat themselves as the "first" domain set.
         with transaction.atomic():
-            locked_team = Team.objects.select_for_update().get(pk=team.pk)
+            locked_team = Workspace.objects.select_for_update().get(pk=team.pk)
             old_domain = locked_team.custom_domain
             locked_team.custom_domain = normalized_domain
             locked_team.custom_domain_validated = False  # Reset validation on change
@@ -1408,7 +1427,9 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # ``on_commit`` so a rollback in the surrounding flow doesn't
         # ship a ghost event for a domain that wasn't actually persisted.
         if is_first_time_set:
-            transaction.on_commit(lambda: capture_for_request(request, "team:custom_domain_added", team_key=team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "team:custom_domain_added", workspace_key=team_key)
+            )
 
         return 200, {"domain": normalized_domain, "validated": False}
 
@@ -1433,8 +1454,8 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1508,8 +1529,8 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
@@ -1655,14 +1676,14 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
         slug = domain_normalized[: -(len(trust_center_domain) + 1)]
         # Validate slug format before DB query to reject random probing cheaply
         if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
-            if Team.objects.filter(slug=slug, is_public=True).exists():
+            if Workspace.objects.filter(slug=slug, is_public=True).exists():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
                 return 200
         logger.warning(f"On-demand TLS denied: {domain_normalized} (unknown trust center slug)")
         return 404
 
     # Check if domain exists and belongs to Business/Enterprise team
-    is_allowed = Team.objects.filter(
+    is_allowed = Workspace.objects.filter(
         custom_domain=domain_normalized, billing_plan__in=["business", "enterprise"]
     ).exists()
 
@@ -1674,7 +1695,7 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
         return 404
 
 
-def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
+def _supplier_team(request: HttpRequest, workspace_key: str, action: str) -> tuple[int, Any]:
     """Resolve the workspace for a supplier or invitation call, or the error to return.
 
     Every such endpoint needs the same three answers — does the workspace
@@ -1682,8 +1703,8 @@ def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[in
     and getting one of them wrong on one endpoint is how a scoping hole opens.
     """
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(workspace_key))
+    except (ValueError, Workspace.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
     user = cast(User, request.user)

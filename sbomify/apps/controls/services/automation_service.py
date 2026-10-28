@@ -12,13 +12,20 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
+from sbomify.apps.controls.models import (
+    INTEGRATION_SOURCES,
+    Control,
+    ControlCatalog,
+    ControlStatus,
+    ControlStatusLog,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.public_assessment_utils import _is_run_passing
 from sbomify.apps.plugins.sdk.enums import RunStatus
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Plugin name → list of SOC 2 control IDs that can be auto-verified.
 PLUGIN_CONTROL_MAP: dict[str, list[str]] = {
@@ -41,41 +48,7 @@ def get_automation_mappings() -> dict[str, list[str]]:
     return dict(PLUGIN_CONTROL_MAP)
 
 
-def _is_passing(run: AssessmentRun) -> bool:
-    """Determine whether an assessment run's result is passing.
-
-    Mirrors ``PluginOrchestrator._is_passing`` — kept in sync because both
-    feed downstream consumers (control-status promotion here, dependency
-    gates in the orchestrator). For non-security plugins, "passing"
-    requires at least one explicit pass finding so a warnings-only run
-    cannot promote a control to ``compliant`` on no positive evidence.
-    """
-    if not run.result or not isinstance(run.result, dict):
-        return False
-
-    summary = run.result.get("summary")
-    if not isinstance(summary, dict):
-        return False
-
-    if run.category == "security":
-        by_severity: dict[str, int] = summary.get("by_severity") or {}
-        total_from_severity: int = sum(
-            by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
-        )
-        return total_from_severity == 0
-
-    fail_count: int = summary.get("fail_count", 0)
-    error_count: int = summary.get("error_count", 0)
-    # Legacy summaries (from before pass_count was tracked) won't have
-    # the key. Treat absent-key as the old contract so historical runs
-    # don't retroactively flip from "promote control" to "don't promote".
-    pass_count = summary.get("pass_count")
-    if pass_count is None:
-        return fail_count == 0 and error_count == 0
-    return fail_count == 0 and error_count == 0 and pass_count > 0
-
-
-def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> ServiceResult[int]:
+def auto_update_from_assessment(team: Workspace, plugin_name: str, passed: bool) -> ServiceResult[int]:
     """Update control statuses based on a plugin assessment result.
 
     * If *passed* is ``True``, controls mapped to the plugin that currently
@@ -92,8 +65,15 @@ def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> S
     if not passed:
         return ServiceResult.success(0)
 
-    # Find controls in this team's active catalogs that match the mapped IDs
-    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True)
+    # Find controls in this team's active catalogs that match the mapped IDs.
+    #
+    # Catalogues an integration owns are excluded. Their statuses come from the
+    # workspace's own compliance tool and are rewritten on every sync, so
+    # promoting one from a plugin result would both overwrite the authoritative
+    # answer and be silently undone a few hours later. The SOC 2 codes below
+    # are exactly the ones a synced SOC 2 catalogue also uses, so this is not
+    # hypothetical.
+    active_catalogs = ControlCatalog.objects.filter(team=team, is_active=True).exclude(source__in=INTEGRATION_SOURCES)
     controls = Control.objects.filter(catalog__in=active_catalogs, control_id__in=control_ids)
 
     if not controls.exists():
@@ -136,7 +116,7 @@ def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> S
     return ServiceResult.success(updated_count)
 
 
-def sync_from_latest_assessments(team: Team) -> ServiceResult[dict[str, Any]]:
+def sync_from_latest_assessments(team: Workspace) -> ServiceResult[dict[str, Any]]:
     """Sync control statuses from the latest completed assessment runs for a team.
 
     Looks at the most recent ``AssessmentRun`` for each plugin, checks
@@ -167,7 +147,8 @@ def sync_from_latest_assessments(team: Team) -> ServiceResult[dict[str, Any]]:
         if not latest_run:
             continue
 
-        passed = _is_passing(latest_run)
+        # The same judgement that satisfies a dependency gate and earns a public badge.
+        passed = _is_run_passing(latest_run)
         result = auto_update_from_assessment(team, plugin_name, passed)
         if result.ok and result.value:
             by_plugin[plugin_name] = result.value

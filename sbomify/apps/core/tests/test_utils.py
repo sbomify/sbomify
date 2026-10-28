@@ -186,10 +186,10 @@ class TestAddArtifactToReleaseCrossTeamCheck:
         from sbomify.apps.core.models import Component, Product, Release
         from sbomify.apps.core.utils import add_artifact_to_release
         from sbomify.apps.sboms.models import SBOM
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team_a = sample_team_with_owner_member.team
-        team_b = Team.objects.create(name="cross-team-sbom-other")
+        team_b = Workspace.objects.create(name="cross-team-sbom-other")
 
         component_b = Component.objects.create(name="comp-cross-sbom", team=team_b)
         sbom_b = SBOM.objects.create(
@@ -210,10 +210,10 @@ class TestAddArtifactToReleaseCrossTeamCheck:
         from sbomify.apps.core.models import Component, Product, Release
         from sbomify.apps.core.utils import add_artifact_to_release
         from sbomify.apps.documents.models import Document
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         team_a = sample_team_with_owner_member.team
-        team_b = Team.objects.create(name="cross-team-doc-other")
+        team_b = Workspace.objects.create(name="cross-team-doc-other")
 
         component_b = Component.objects.create(
             name="comp-cross-doc",

@@ -64,7 +64,7 @@ def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
     suffix = 2
     while True:
         if candidate not in RESERVED_SLUGS:
-            qs = Team.objects.filter(slug=candidate)
+            qs = Workspace.objects.filter(slug=candidate)
             if exclude_pk is not None:
                 qs = qs.exclude(pk=exclude_pk)
             if not qs.exists():
@@ -152,15 +152,14 @@ def default_patch_sla_days() -> dict[str, int | None]:
     return dict(CRA_DEFAULT_PATCH_SLA_DAYS)
 
 
-class Team(models.Model):
+class Workspace(models.Model):
     class Plan(models.TextChoices):
         COMMUNITY = "community", "Community"
         BUSINESS = "business", "Business"
         ENTERPRISE = "enterprise", "Enterprise"
 
     class Meta:
-        # Deliberate half-state: the table says workspace, the Python model
-        # keeps its Team name until the code rename lands as its own change.
+        # The app label is still teams, so the table name is pinned.
         db_table = "workspaces_workspaces"
         indexes = [
             models.Index(fields=["key"]),
@@ -273,6 +272,20 @@ class Team(models.Model):
             "miss the removal."
         ),
     )
+    # The workspace's own advisory numbering, for a team that already publishes
+    # under a scheme or is moving from a platform that issued numbers in it.
+    # Blank keeps the generated ``<NAME>-SA`` prefix.
+    advisory_id_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Prefix for new security advisory ids, e.g. ACME-SA. Blank uses one derived from the name.",
+    )
+    advisory_id_start_at = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(999_999)],
+        help_text="Lowest number a new security advisory id may take in each year's sequence.",
+    )
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,
@@ -280,7 +293,11 @@ class Team(models.Model):
         "contact_id (str), policy_url (str), encryption_urls (list[str]), encryption_url (str, legacy), "
         "acknowledgments_url (str), canonical_url (str), hiring_url (str), preferred_languages (str)",
     )
-    members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
+    # Pinned to the names the Team model gave them, so user.team_set and a
+    # filter(team=...) on users read the same after the rename.
+    members: models.ManyToManyField[User, Any] = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="Member", related_name="team_set", related_query_name="team"
+    )
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
@@ -343,9 +360,9 @@ class Team(models.Model):
         if not plan:
             return False
 
-        allowed_plans = {choice.value for choice in Team.Plan}
+        allowed_plans = {choice.value for choice in Workspace.Plan}
         if plan in allowed_plans:
-            return plan != Team.Plan.COMMUNITY
+            return plan != Workspace.Plan.COMMUNITY
 
         # Custom plan keys that exist in BillingPlan are treated as paid/allowed
         if BillingPlan.objects.filter(key__iexact=plan).exists():
@@ -398,7 +415,7 @@ class Team(models.Model):
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()
 
-        is_paid_plan = bool(current_plan) and current_plan != Team.Plan.COMMUNITY
+        is_paid_plan = bool(current_plan) and current_plan != Workspace.Plan.COMMUNITY
 
         # Default paid plans to private only at creation time (opt-in later for upgrades)
         if is_new and is_paid_plan and self.is_public:
@@ -419,10 +436,10 @@ class Team(models.Model):
         old_slug = None
         if not is_new:
             try:
-                old_instance = Team.objects.only("custom_domain", "slug").get(pk=self.pk)
+                old_instance = Workspace.objects.only("custom_domain", "slug").get(pk=self.pk)
                 old_custom_domain = old_instance.custom_domain
                 old_slug = old_instance.slug
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 pass
 
         super().save(*args, **kwargs)
@@ -526,6 +543,10 @@ class Team(models.Model):
         return self.get_company_nda_document() is not None
 
 
+# The old name answers until every open branch has re-run bin/rename_to_workspace.py.
+Team = Workspace  # rename-to-workspace: keep
+
+
 class Member(models.Model):
     class Meta:
         db_table = "workspaces_members"
@@ -541,14 +562,14 @@ class Member(models.Model):
             # three files. This constraint is what stops another one appearing:
             # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_SUPPORTED_ROLES]),
                 name="member_role_is_supported",
             ),
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
-    role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_SUPPORTED_ROLES)
     is_default_team = models.BooleanField(default=False, db_column="is_default_workspace")
     joined_at = models.DateTimeField(auto_now_add=True)
 
@@ -578,12 +599,12 @@ class Invitation(models.Model):
             # fixtures, admin — that bypasses full_clean(). The clean() below
             # gives the normal form flow a friendlier ValidationError first.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_INVITABLE_ROLES]),
                 name="invitation_role_is_invitable",
             ),
         ]
 
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, db_column="workspace_id")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     # Invitable roles only — ``bot`` is reserved for synthetic OIDC
@@ -591,8 +612,9 @@ class Invitation(models.Model):
     # above + Python clean() below). ``guest`` IS valid here because
     # the trust-center auto-accept flow creates guest-role invitations.
     # InviteUserForm UI further restricts choices but the model layer
-    # allows the broader set so non-UI flows work.
-    role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
+    # allows the broader set so non-UI flows work. ``operator`` is invited
+    # like any other internal role and needs no special handling.
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
     # Who issued it, read again at accept time: an owner invitation only makes
@@ -619,7 +641,7 @@ class Invitation(models.Model):
 
     def get_granted_role_display(self) -> str:
         role = self.granted_role
-        return str(dict(settings.TEAMS_INVITABLE_ROLES).get(role, role))
+        return str(dict(settings.WORKSPACE_INVITABLE_ROLES).get(role, role))
 
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any
@@ -683,7 +705,9 @@ class ContactProfile(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id")
+    team = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id"
+    )
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
     is_component_private = models.BooleanField(
@@ -926,7 +950,7 @@ class Supplier(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
     name = models.CharField(max_length=255, help_text="The vendor organization's name")
     contact_name = models.CharField(
         max_length=255,

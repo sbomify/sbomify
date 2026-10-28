@@ -31,7 +31,7 @@ from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Release
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 MAX_PARSE_BYTES = 50 * 1024 * 1024
 """Largest stored artifact an export will pull into memory; larger ones get
@@ -40,7 +40,7 @@ the explicit unreadable row instead of an OOM."""
 UNREADABLE = "(unreadable artifact)"
 
 
-def _latest_sboms(team: Team, product: Product | None = None) -> list[SBOM]:
+def _latest_sboms(team: Workspace, product: Product | None = None) -> list[SBOM]:
     """The newest ``bom_type=sbom`` per component in scope — the dashboards'
     counting rule, so an export never stacks superseded uploads."""
     queryset = SBOM.objects.filter(component__team=team, bom_type=SBOM.BomType.SBOM)
@@ -145,7 +145,7 @@ def _csv(header: list[str], rows: list[list[Any]]) -> str:
     return output.getvalue()
 
 
-def export_inventory_csv(team: Team, product: Product | None = None) -> ServiceResult[str]:
+def export_inventory_csv(team: Workspace, product: Product | None = None) -> ServiceResult[str]:
     """Package inventory across the newest SBOM per component."""
     rows: list[list[Any]] = []
     for sbom in _latest_sboms(team, product):
@@ -171,7 +171,7 @@ def export_inventory_csv(team: Team, product: Product | None = None) -> ServiceR
 
 
 def export_licenses_csv(
-    team: Team,
+    team: Workspace,
     product: Product | None = None,
     release: Release | None = None,
 ) -> ServiceResult[str]:
@@ -233,7 +233,7 @@ def export_findings_csv(sbom: SBOM) -> ServiceResult[str]:
 
 
 def export_vulnerabilities_csv(
-    team: Team,
+    team: Workspace,
     component: Component | None = None,
     release: Release | None = None,
 ) -> ServiceResult[str]:
@@ -288,7 +288,7 @@ def export_vulnerabilities_csv(
         ]
         sbom = sbom_runs[0].sbom
         providers = "; ".join(sorted({run.plugin_name for run in sbom_runs}))
-        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache)
+        statements = load_vex_suppressions(sbom.component_id, sbom.version, cache=vex_cache)
         for row in extract_finding_rows(merged, statements):
             rows.append(
                 [

@@ -13,6 +13,7 @@ x-logging: &default-logging
 x-keycloak-env: &keycloak-env
   KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}

@@ -50,7 +50,7 @@ def _skipped(total_findings: int) -> dict[str, Any]:
         "findings": [
             {
                 "id": "osv:no-packages",
-                "title": "No Packages Recognised",
+                "title": "No Packages Recognized",
                 "status": "warning",
                 "severity": "info",
             }
@@ -164,7 +164,7 @@ class TestTheScanCard:
         summary = self._summary(client, component, sbom)
         assert summary is not None
         assert summary["total"] == 0
-        assert summary["provider"] == "osv"
+        assert summary["provider"] == "OSV"
 
     def test_the_date_comes_from_the_scan_it_reports_not_from_a_later_skip(
         self, signed_in: tuple[Client, Component]
@@ -178,7 +178,7 @@ class TestTheScanCard:
 
         summary = self._summary(client, component, sbom)
         assert summary is not None
-        assert summary["provider"] == "osv"
+        assert summary["provider"] == "OSV"
         assert summary["scan_date"] == scanned_at
 
     def test_a_scanner_that_ran_is_not_hidden_by_one_that_skipped(self, signed_in: tuple[Client, Component]) -> None:
@@ -189,17 +189,16 @@ class TestTheScanCard:
 
         summary = self._summary(client, component, sbom)
         assert summary is not None
-        assert summary["provider"] == "osv"
+        assert summary["provider"] == "OSV"
 
 
 @pytest.mark.django_db
 class TestTheCardIsNotHandedEveryFinding:
     """The artifact page carried every finding to a card nobody had opened.
 
-    `_assessment_run_item` renders its header from `result.summary` plus one
-    title, `result.findings.0.title`. The list under it is a collapsed
-    accordion, so it now arrives over HTMX a page at a time when a reader opens
-    the card. Building it for every plugin on every page load, closed or not,
+    The page reads each run's counts from `result.summary` plus one title,
+    `result.findings.0.title`; the findings list is served a page at a time by
+    its own endpoint. Building it for every plugin on every page load
     measured 9 MB on staging for a thousand findings and 31 MB for four
     thousand, and a 504 at the 60s gateway in both cases. That is the same shape
     as the panel bug, one page over.
@@ -383,7 +382,8 @@ class TestTheFindingsListArrivesWhenAsked:
         """Fetch the list the way the card does, as HTMX."""
         return client.get(self._findings_url(run, page), headers={"hx-request": "true"})
 
-    def test_the_closed_card_carries_the_link_and_none_of_the_rows(self, signed_in) -> None:
+    def test_the_artifact_page_carries_a_link_and_none_of_the_rows(self, signed_in) -> None:
+        """The page lists no scan's findings; it links the Vulnerabilities list for this version."""
         client, component = signed_in
         run = self._run_with(component, 300)
 
@@ -393,12 +393,9 @@ class TestTheFindingsListArrivesWhenAsked:
         )
         html = client.get(url).content.decode()
 
-        assert self._findings_url(run) in html
-        # The placeholder and the partial that replaces it have to agree on the
-        # id, or the pager swaps into nothing.
-        assert f'id="findings-{run.id}"' in html
-        assert f"from:#run-trigger-{run.id}" in html
-        # One title rides along in the header; the three hundredth is not on the page.
+        workspace = reverse("vulnerability_scanning:vulnerability_scans", args=[component.team.key])
+        assert f"{workspace}?component={component.id}&version={run.sbom_id}" in html
+        assert "CVE-2026-00000" not in html
         assert "CVE-2026-00299" not in html
 
     def test_a_page_of_findings_comes_back(self, signed_in) -> None:
@@ -439,14 +436,14 @@ class TestTheFindingsListArrivesWhenAsked:
         client, component = signed_in
         run = self._run_with(component, 1)
         run.result["findings"].append(
-            {"id": "osv:no-packages", "title": "No Packages Recognised", "status": "warning", "severity": "info"}
+            {"id": "osv:no-packages", "title": "No Packages Recognized", "status": "warning", "severity": "info"}
         )
         AssessmentRun.objects.filter(pk=run.pk).update(result=run.result)
 
         html = self._open(client, run).content.decode()
 
         assert "CVE-2026-00000" in html
-        assert "No Packages Recognised" not in html
+        assert "No Packages Recognized" not in html
 
     def test_a_reader_without_the_component_gets_nothing(self, signed_in, guest_user) -> None:
         _, component = signed_in

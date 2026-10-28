@@ -10,7 +10,7 @@ from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Workspace
 
 
 class DeleteFormParser(HTMLParser):
@@ -65,7 +65,7 @@ def test_api_rejects_empty_profile_without_changing_default(
 @pytest.mark.django_db
 @pytest.mark.parametrize("deleted_entity", [False, True])
 def test_form_rejects_profile_without_entities(
-    authenticated_web_client: Client, team_with_business_plan: Team, deleted_entity: bool
+    authenticated_web_client: Client, team_with_business_plan: Workspace, deleted_entity: bool
 ) -> None:
     workspace = team_with_business_plan
     data = profile_form_data()
@@ -75,7 +75,7 @@ def test_form_rejects_profile_without_entities(
         data["entities-TOTAL_FORMS"] = "0"
 
     response = authenticated_web_client.post(
-        reverse("teams:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true"
+        reverse("workspaces:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true"
     )
 
     messages = json.loads(response["HX-Trigger"])["messages"]
@@ -89,7 +89,7 @@ def test_form_rejects_profile_without_entities(
 @pytest.mark.parametrize("incomplete_entity", [False, True])
 def test_delete_incomplete_profile_from_every_list_render(
     authenticated_web_client: Client,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     render_source: str,
     incomplete_entity: bool,
 ) -> None:
@@ -98,8 +98,8 @@ def test_delete_incomplete_profile_from_every_list_render(
     if incomplete_entity:
         ContactEntity.objects.create(profile=empty_profile, is_author=True)
 
-    list_url = reverse("teams:contact_profiles_list", args=[workspace.key])
-    create_url = reverse("teams:contact_profiles_form", args=[workspace.key])
+    list_url = reverse("workspaces:contact_profiles_list", args=[workspace.key])
+    create_url = reverse("workspaces:contact_profiles_form", args=[workspace.key])
     client = authenticated_web_client
     if render_source == "list":
         response = client.get(list_url, HTTP_HX_REQUEST="true")
@@ -119,7 +119,7 @@ def test_delete_incomplete_profile_from_every_list_render(
                 }
             )
             response = client.post(
-                reverse("teams:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+                reverse("workspaces:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
                 data,
                 HTTP_HX_REQUEST="true",
             )
@@ -135,7 +135,7 @@ def test_delete_incomplete_profile_from_every_list_render(
     assert parser.action == list_url
 
 
-def create_profile_via_api(client: Client, token: AccessToken, workspace: Team, name: str, entity_name: str) -> str:
+def create_profile_via_api(client: Client, token: AccessToken, workspace: Workspace, name: str, entity_name: str) -> str:
     """Create a profile with a single complete entity and return its id."""
     response = client.post(
         f"/api/v1/workspaces/{workspace.key}/contact-profiles",
@@ -228,3 +228,52 @@ def test_api_update_with_empty_entities_list_keeps_existing_entities(
     profile = ContactProfile.objects.get(pk=profile_id)
     assert profile.name == "Renamed"
     assert [entity.name for entity in profile.entities.all()] == ["Keep Corp"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("render_source", ["create", "update"])
+def test_the_list_a_save_returns_shows_when_each_party_changed(
+    authenticated_web_client: Client, team_with_business_plan: Workspace, render_source: str
+) -> None:
+    """A create or update answers with the list, rendered by the same formatter as
+    a plain load, so its Last updated cells are filled rather than blank."""
+    workspace = team_with_business_plan
+    client = authenticated_web_client
+    data = profile_form_data()
+    response = client.post(reverse("workspaces:contact_profiles_form", args=[workspace.key]), data, HTTP_HX_REQUEST="true")
+    if render_source == "update":
+        profile = ContactProfile.objects.get(team=workspace, name=data["name"])
+        entity = profile.entities.get()
+        contact = entity.contacts.get()
+        data.update(
+            {
+                "entities-INITIAL_FORMS": "1",
+                "entities-0-id": entity.pk,
+                "entities-0-contacts-INITIAL_FORMS": "1",
+                "entities-0-contacts-0-id": contact.pk,
+            }
+        )
+        response = client.post(
+            reverse("workspaces:contact_profiles_detail_form", args=[workspace.key, profile.pk]),
+            data,
+            HTTP_HX_REQUEST="true",
+        )
+
+    assert response.status_code == 200
+    displays = [profile.get("updated_display") for profile in response.context["profiles"]]
+    assert displays and all(displays), displays
+
+
+@pytest.mark.django_db
+def test_an_api_error_reaches_the_settings_in_their_word(
+    authenticated_web_client: Client, team_with_business_plan: Workspace
+) -> None:
+    """The API names this resource a contact profile; the settings call it a party,
+    so an API message shown as a toast there is put in the settings' word."""
+    response = authenticated_web_client.get(
+        reverse("workspaces:contact_profiles_detail_form", args=[team_with_business_plan.key, "missingprof1"]),
+        HTTP_HX_REQUEST="true",
+    )
+
+    messages = [message["message"] for message in json.loads(response.headers["HX-Trigger"])["messages"]]
+    assert messages == ["Party not found"]

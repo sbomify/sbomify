@@ -8,9 +8,9 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 
 
-def plugins_added_since_last_save(team_key: str) -> ServiceResult[set[str]]:
+def plugins_added_since_last_save(workspace_key: str) -> ServiceResult[set[str]]:
     """Names of the plugins registered after the workspace last saved its plugin settings."""
-    saved_at = TeamPluginSettings.objects.filter(team__key=team_key).values_list("updated_at", flat=True).first()
+    saved_at = TeamPluginSettings.objects.filter(team__key=workspace_key).values_list("updated_at", flat=True).first()
     if saved_at is None:
         return ServiceResult.success(set())
     return ServiceResult.success(

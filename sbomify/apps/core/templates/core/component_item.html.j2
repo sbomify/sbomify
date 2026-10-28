@@ -49,7 +49,7 @@
         what the reader has opened. hx-disinherit keeps the select and the swap
         off descendants that do their own requests.
     {% endcomment %}
-    <c-layout.frame id="artifact-content" x-data hx-ext="ignore:alpine-morph, morph-preserve" hx-get="{% url 'core:component_item' component_id=component_id item_type=item_type item_id=item.id %}" hx-trigger="refresh-assessments from:body" hx-select="#artifact-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if (($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ item.id }}') || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}')) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
+    <c-layout.frame id="artifact-content" x-data="{ refreshTimer: null }" hx-ext="ignore:alpine-morph, morph-preserve" hx-get="{% url 'core:component_item' component_id=component_id item_type=item_type item_id=item.id %}" hx-trigger="refresh-assessments from:body" hx-select="#artifact-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window=" if ($event.detail.type === 'resync' || (['assessment_started', 'assessment_complete'].includes($event.detail.type) && $event.detail.sbom_id === '{{ item.id }}') || ($event.detail.type === 'vex_reapplied' && $event.detail.component_id === '{{ component_id }}')) { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-assessments')), 500); } ">
     {# Stats Badges #}
     <div class="flex flex-wrap gap-2">
         {% if is_sbom_backed %}
@@ -145,9 +145,9 @@
         {% if vulnerability_summary %}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header level="2" title="Vulnerability scan">
-                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider|upper }}</c-slot>
+                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider }}</c-slot>
                 <c-slot name="actions">
-                <c-buttons.secondary size="sm" href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
+                <c-buttons.secondary size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' team_key %}?component={{ item.component_id }}&version={{ item.id }}">
                 Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>
                 </c-buttons.secondary>
                 </c-slot>
@@ -259,10 +259,12 @@
                 {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
             </div>
         {% endif %}
-        {# Danger Zone #}
-        <div>
-            {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
-        </div>
+        {% if can_delete_sbom %}
+            {# Danger Zone #}
+            <div>
+                {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
+            </div>
+        {% endif %}
     {% elif item_type == 'documents' %}
         {# Document Info Card #}
         <c-cards.card flush>

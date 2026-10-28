@@ -276,6 +276,8 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.ops",
+    "sbomify.apps.integrations",
 ]
 
 
@@ -1064,6 +1066,11 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+# Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
+# directly (logout) rather than via OIDC discovery. Only needs setting when the
+# app reaches Keycloak at an address the browser cannot, e.g. an in-cluster
+# Service name. Empty counts as unset so a blank Helm/Compose value falls back.
+KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
 KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
@@ -1088,7 +1095,7 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -1216,10 +1223,11 @@ sentry_sdk.init(
 # The ``bot`` role is reserved for synthetic identities provisioned by
 # OIDC Trusted Publishing bindings (see ``sbomify.apps.oidc``); it should
 # NEVER appear in invite or role-change UIs presented to humans.
-TEAMS_SUPPORTED_ROLES = [
+WORKSPACE_SUPPORTED_ROLES = [
     ("owner", "Owner"),
     ("admin", "Admin"),
     ("member", "Member"),
+    ("operator", "Operator"),
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]
@@ -1232,7 +1240,10 @@ TEAMS_SUPPORTED_ROLES = [
 # The InviteUserForm UI further excludes guest from its choices since
 # admins shouldn't invite guests directly (they self-serve), but the
 # model-level constraint stays permissive.
-TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k != "bot"]
+WORKSPACE_INVITABLE_ROLES = [(k, v) for k, v in WORKSPACE_SUPPORTED_ROLES if k != "bot"]
+# The team names answer until every open branch has re-run bin/rename_to_workspace.py.
+TEAMS_SUPPORTED_ROLES = WORKSPACE_SUPPORTED_ROLES  # rename-to-workspace: keep
+TEAMS_INVITABLE_ROLES = WORKSPACE_INVITABLE_ROLES  # rename-to-workspace: keep
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
@@ -1390,6 +1401,7 @@ NOTIFICATION_PROVIDERS = [
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
+    "sbomify.apps.vulnerability_scanning.notifications.get_vex_submission_notifications",
 ]
 
 # Optionally override refresh interval
@@ -1413,3 +1425,30 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Integrations
+#
+# One OAuth client per provider, registered by whoever runs this deployment.
+# Without both halves the provider's tile renders disabled rather than hidden,
+# so a self-hoster can see the feature exists and what it wants.
+#
+# The redirect URI to register is /integrations/oauth/<provider>/callback on
+# whichever hostname the app is served from.
+
+VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
+VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
+
+# Vanta serves its API from one host for every region, but consent happens on
+# the customer's own regional app host: app.eu.vanta.com for EU accounts,
+# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
+# overrides the authorize URL.
+VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
+VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Token for the GitHub API calls the SBOM Verification plugin makes to fetch
+# attestations. Optional: without it every lookup shares GitHub's unauthenticated
+# limit of 60 requests an hour, which one release uploading several SBOMs can
+# use up. A fine-grained token with no repository access is enough, because the
+# attestations it reads belong to public repositories.
+GITHUB_API_TOKEN = os.environ.get("GITHUB_API_TOKEN", "")

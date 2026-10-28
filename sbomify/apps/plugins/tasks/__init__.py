@@ -6,9 +6,11 @@ in the background using Dramatiq workers.
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import timedelta
+from itertools import batched
 from typing import Any, TypedDict
 
 import dramatiq
@@ -42,9 +44,10 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
+from ..announce import announce_assessment_settled
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
-from ..sdk.enums import RunReason, ScanMode
+from ..sdk.enums import RunReason, RunStatus, ScanMode
 from ..services.access import plugin_plan_requirement, team_has_plugin_access
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,211 @@ BACKFILL_CUTOFF_HOURS = 24
 # sooner just repeats the rejection; a day still picks up a scanner upgrade
 # that closes the gap without anyone having to intervene.
 UNSUPPORTED_INPUT_SKIP_HOURS = 24
+
+# How long a scheduled sweep leaves an SBOM alone after its last run *failed*,
+# indexed by how many times in a row it has now failed.
+#
+# A failed run deliberately does not fill the ordinary skip window — a failure
+# may well be transient, and waiting out a whole cadence to find out is the
+# wrong default. What was missing is the other half: a failure that keeps
+# happening. Without a backoff, an SBOM whose Dependency Track project cannot be
+# polled is re-enqueued on every tick, which at ``skip_hours=1`` is an hourly
+# retry for as long as the artifact exists, each attempt writing another run row
+# and another error to the tracker.
+#
+# So the first failure is still retried on the very next sweep, and only a
+# repeating one escalates. The ceiling matches UNSUPPORTED_INPUT_SKIP_HOURS for
+# the same reason it does: a day is short enough that a server-side fix is picked
+# up promptly and long enough that the retry cost stops mattering.
+FAILURE_BACKOFF_HOURS = (0, 2, 4, 8, 24)
+
+# How far back the consecutive-failure count is read. Comfortably past the
+# ceiling above, so a run of failures is counted whole rather than truncated, and
+# bounded so each probe's index descent has somewhere to stop even for an SBOM
+# with years of history. Truncating would only shorten a backoff, never lengthen
+# one.
+#
+# A week is sized for the sweep this backoff is for, the hourly one, where a
+# five-deep streak spans a day or two even once the waits are stretching it. A
+# slower sweep puts its failures further apart, but it is also the sweep this
+# backoff cannot affect: the ladder tops out at 24 hours and
+# ``weekly_osv_scan_task`` already skips anything scanned in the last 168, so
+# whatever this returned for it would be a subset of what its own window
+# excludes. If the ceiling ever grows past a sweep's ``skip_hours``, this
+# horizon has to grow with it.
+FAILURE_HISTORY_HOURS = 24 * 7
+
+
+_FAILURE_STREAK_SQL = """
+    SELECT driver.sbom_id, run.id, run.status, run.error_message, run.result_summary, run.settled_at
+    FROM unnest(%s::text[]) AS driver(sbom_id)
+    CROSS JOIN LATERAL (
+        SELECT candidate.id,
+               candidate.status,
+               candidate.error_message,
+               candidate.result_summary,
+               COALESCE(candidate.completed_at, candidate.created_at) AS settled_at
+        FROM {table} candidate
+        WHERE candidate.plugin_name = %s
+          AND candidate.sbom_id = driver.sbom_id
+          AND candidate.status NOT IN ('pending', 'running')
+          AND COALESCE(candidate.completed_at, candidate.created_at) >= %s
+        ORDER BY COALESCE(candidate.completed_at, candidate.created_at) DESC, candidate.id DESC
+        LIMIT %s
+    ) run
+    ORDER BY driver.sbom_id, run.settled_at DESC, run.id DESC
+"""
+
+
+def _decoded_summary(value: Any) -> Any:
+    """``result_summary`` as a dict, however the driver handed it over.
+
+    Django registers its own jsonb loader so that ``JSONField`` controls
+    decoding, which means a column read through a plain cursor arrives as the
+    undecoded string rather than as the dict the ORM would have given. Raw SQL
+    is what buys the per-SBOM bound here (see ``_FAILURE_STREAK_SQL``), so this
+    does the decoding the ORM would have done. Anything unparseable comes back as
+    ``None``, which ``_run_failed`` reads as unknown -- and unknown can only
+    shorten a backoff, never lengthen one.
+    """
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+    return value
+
+
+def _run_failed(status: str, error_message: str, result_summary: Any) -> bool:
+    """Whether a terminal run is a failure, by any of the ways one is stored.
+
+    ``status=failed`` is the obvious one, written by
+    ``orchestrator._mark_failed``. The Dependency Track failures this backoff
+    exists for mostly do not land there, and they do not all land in the same
+    place as each other either:
+
+    * ``finalize_retry_exhausted`` and ``finalize_stranded`` write a COMPLETED
+      row with ``error_message`` set. That is deliberate -- the compliance gates
+      and the SBOM page need a settled run rather than one stuck in PENDING.
+    * A plugin that cannot reach, upload to or poll its server returns
+      ``_create_error_result``: an ordinary result carrying one ``error``
+      finding. The orchestrator stores that on its *success* path, which writes
+      ``status``, ``completed_at`` and ``result`` and nothing else -- so these
+      rows, which are the common case and the reason this backoff exists, have
+      an empty ``error_message``. Keying on that column alone classified them as
+      successes and the sweep kept re-enqueueing them every hour, which is
+      exactly the defect being fixed.
+
+      Their marker is ``summary.error_count``. The scanners' success paths leave
+      it at zero (only ``build_single_finding_result`` raises it), and
+      ``orchestrator._is_passing`` already treats a non-zero count as a failing
+      run, so reading it here agrees with the rest of the codebase rather than
+      inventing a second notion of failure.
+
+    Both markers are small columns. ``result_summary`` is the denormalised copy
+    of ``result.summary`` that exists precisely so readers like this one never
+    de-TOAST the multi-MB blob, which keeps the promise that the fat payload is
+    never fetched here.
+    """
+    if status == RunStatus.FAILED.value:
+        return True
+    if status != RunStatus.COMPLETED.value:
+        return False
+    if error_message:
+        return True
+    if not isinstance(result_summary, dict):
+        # Rows written before the column existed read as "unknown" rather than
+        # as a failure (``backfill_result_summaries`` fills them in). Unknown
+        # can only ever shorten a backoff, never lengthen one.
+        return False
+    error_count = result_summary.get("error_count")
+    # ``bool`` is an ``int`` subclass, and a junk ``true`` in the blob should not
+    # read as one error.
+    return isinstance(error_count, int) and not isinstance(error_count, bool) and error_count > 0
+
+
+def _failure_backed_off_sbom_ids(plugin_name: str, sbom_ids: Sequence[str], now: Any) -> set[str]:
+    """Which of ``sbom_ids`` have failed recently enough, and often enough in a
+    row, that retrying now would just fail again.
+
+    Keyed on each SBOM's *latest* run and on the length of the failure streak
+    ending there, so the two cases the sweep has to tell apart stay apart:
+
+    * One failure, or a failure followed by a success — nothing is held back.
+      ``FAILURE_BACKOFF_HOURS`` starts at zero precisely so the common transient
+      case keeps exactly the cadence it has today.
+    * A streak — the wait grows with it, and a standing failure settles at one
+      attempt a day instead of one an hour.
+
+    Pending and running runs are excluded rather than counted either way. An
+    in-flight run has not failed and has not succeeded, and treating it as
+    either would make the streak depend on when the sweep happened to look: as a
+    success it would clear the backoff the moment a retry was enqueued, as a
+    failure it would extend it before the attempt had a verdict. The sweep's own
+    skip window already covers in-flight work.
+
+    Takes the SBOMs to ask about rather than a team filter, so the caller can
+    hand it the batch it is about to enqueue and the cost stays proportional to
+    that. See ``_FAILURE_STREAK_SQL`` for how the per-SBOM bound is enforced.
+    """
+    from ..models import AssessmentRun
+
+    # dict.fromkeys rather than a set: one probe per SBOM is what the LATERAL
+    # promises, and a duplicate in the driver array would quietly buy a second
+    # one. The caller passes distinct ids today; this keeps the promise true
+    # without depending on that.
+    driver_ids = list(dict.fromkeys(str(sbom_id) for sbom_id in sbom_ids))
+    if not driver_ids:
+        return set()
+
+    # ``settled_at``: when the run reached a verdict, not when its row was
+    # created. Scheduled enqueueing writes the PENDING row and the worker picks
+    # it up later, so the two differ by however long the queue is backed up.
+    # Keying the wait on ``created_at`` meant a run could fail *now* while its
+    # creation timestamp was already past the 24-hour ceiling, and the next
+    # sweep retried it immediately -- the backoff was defeated by exactly the
+    # queue delay that makes a failing scan expensive.
+    #
+    # ``completed_at`` is written by ``_mark_failed`` and by the success path,
+    # so every terminal row this query can see has one, apart from rows written
+    # before that was true; ``COALESCE`` falls back to ``created_at`` for those
+    # rather than treating them as infinitely old.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            _FAILURE_STREAK_SQL.format(table=AssessmentRun._meta.db_table),
+            [
+                driver_ids,
+                plugin_name,
+                now - timedelta(hours=FAILURE_HISTORY_HOURS),
+                len(FAILURE_BACKOFF_HOURS),
+            ],
+        )
+        rows = cursor.fetchall()
+
+    # Newest first within each SBOM, so the streak is the leading run of failures
+    # and the first non-failure settles that SBOM for good. Ties break on id, for
+    # the same reason the retention sweep breaks them there: runs created in one
+    # transaction can share a timestamp, and an unstable order would let a
+    # success sort below a failure it actually followed.
+    streak: dict[str, int] = {}
+    newest_failure_at: dict[str, Any] = {}
+    settled: set[str] = set()
+    for sbom_id, _run_id, status, error_message, result_summary, run_settled_at in rows:
+        key = str(sbom_id)
+        if key in settled:
+            continue
+        if not _run_failed(status, error_message or "", _decoded_summary(result_summary)):
+            settled.add(key)
+            continue
+        streak[key] = streak.get(key, 0) + 1
+        newest_failure_at.setdefault(key, run_settled_at)
+
+    backed_off: set[str] = set()
+    for key, count in streak.items():
+        wait = FAILURE_BACKOFF_HOURS[min(count, len(FAILURE_BACKOFF_HOURS)) - 1]
+        if wait and now - newest_failure_at[key] < timedelta(hours=wait):
+            backed_off.add(key)
+    return backed_off
 
 
 def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> set[str]:
@@ -166,7 +374,7 @@ def run_assessment_task(
 
     If a plugin raises RetryLaterError (e.g., attestation not yet available,
     external service still processing), the task will retry with increasing
-    delays: 2 min, 5 min, 10 min, 15 min.
+    delays: 2 min, 5 min, 10 min, 15 min, or longer when the service asks us to wait.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -252,6 +460,8 @@ def run_assessment_task(
 
             if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
                 delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
+                if retry_error.retry_after_seconds is not None:
+                    delay_ms = max(delay_ms, retry_error.retry_after_seconds * 1000)
                 logger.info(
                     f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
                     f"(run: {run_id or 'unknown'}): {retry_error}. "
@@ -272,6 +482,15 @@ def run_assessment_task(
                 }
                 if run_id is not None:
                     retry_kwargs["_existing_run_id"] = run_id
+
+                # The stranded-run sweep must allow this wait, even when the
+                # external service's reset is hours after the first attempt.
+                if run_id is not None:
+                    from ..models import AssessmentRun
+
+                    AssessmentRun.objects.filter(id=run_id, status=RunStatus.PENDING.value).update(
+                        retry_at=timezone.now() + timedelta(milliseconds=delay_ms)
+                    )
 
                 # Re-enqueue the task with incremented retry count
                 run_assessment_task.send_with_options(
@@ -311,12 +530,16 @@ def run_assessment_task(
                     # carry on; the row stays in PENDING but at least the
                     # exhaustion event is recorded.
                     try:
-                        PluginOrchestrator().finalize_retry_exhausted(run_id, str(retry_error))
+                        PluginOrchestrator().finalize_retry_exhausted(
+                            run_id, str(retry_error), title=getattr(retry_error, "title", None)
+                        )
                     except Exception as finalize_err:  # noqa: BLE001
                         logger.error(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
                             exc_info=True,
                         )
+                    else:
+                        announce_assessment_settled(sbom_id, plugin_name, RunStatus.COMPLETED.value)
 
                 response = {
                     "status": "retry_exhausted",
@@ -340,7 +563,6 @@ def run_assessment_task(
         if assessment_run is None:
             if _existing_run_id:
                 from .. import models as plugin_models
-                from ..sdk.enums import RunStatus
 
                 deleted, _ = plugin_models.AssessmentRun.objects.filter(
                     id=_existing_run_id, status=RunStatus.PENDING.value
@@ -350,6 +572,7 @@ def run_assessment_task(
                         f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
                         f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
                     )
+                    announce_assessment_settled(sbom_id, plugin_name, "skipped")
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -381,6 +604,7 @@ def run_assessment_task(
                     message_type="assessment_complete",
                     data={
                         "sbom_id": sbom_id,
+                        "component_id": str(assessment_run.sbom.component_id),
                         "plugin_name": plugin_name,
                         "status": assessment_run.status,
                     },
@@ -390,10 +614,9 @@ def run_assessment_task(
                 if assessment_run.status == "failed":
                     push_notification(
                         workspace_key=workspace_key,
-                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
                         severity="warning",
                         notification_type="assessment",
-                        action_url=f"/component/{assessment_run.sbom.component.id}/",
+                        **_failed_run_notification(assessment_run),
                     )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
@@ -416,11 +639,84 @@ def run_assessment_task(
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
+        announce_assessment_settled(sbom_id, plugin_name, RunStatus.FAILED.value)
         return format_task_error("run_assessment", sbom_id, str(e))
 
     except Exception as e:
         logger.exception(f"[TASK_run_assessment] Unexpected error: {e}")
         raise  # Re-raise for Dramatiq retry
+
+
+def announce_assessment_started(
+    sbom_id: str, plugin_name: str, *, component_id: str | None = None, workspace_key: str | None = None
+) -> None:
+    """Broadcast ``assessment_started`` for one SBOM once the current transaction commits.
+
+    Pages that show a run's state repaint on it, so a queued run reads as
+    pending without a reload. Callers that already hold the SBOM's component
+    and workspace pass them to skip the lookup. Never raises.
+    """
+    try:
+        if component_id is None or workspace_key is None:
+            from sbomify.apps.sboms.models import SBOM
+
+            row = SBOM.objects.filter(pk=sbom_id).values("component_id", "component__team__key").first()
+            if not row:
+                return
+            component_id = str(row["component_id"])
+            workspace_key = row["component__team__key"]
+        if not workspace_key:
+            return
+        key = workspace_key
+        data = {"sbom_id": str(sbom_id), "component_id": str(component_id), "plugin_name": plugin_name}
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(workspace_key=key, message_type="assessment_started", data=data)
+        )
+    except Exception:
+        logger.warning("Could not announce started assessment for SBOM %s", sbom_id, exc_info=True)
+
+
+def _failed_run_notification(assessment_run: Any) -> dict[str, str]:
+    """Title, message and action for the notification a failed run raises.
+
+    The run stopped on an error, so it recorded no result: the artifact keeps
+    whatever an earlier run found. The message says that, and sends the reader
+    to the artifact page, which shows the error itself.
+    """
+    from django.urls import reverse
+
+    from ..models import RegisteredPlugin
+    from ..sdk.enums import AssessmentCategory
+
+    sbom = assessment_run.sbom
+    plugin_label = (
+        RegisteredPlugin.objects.filter(name=assessment_run.plugin_name).values_list("display_name", flat=True).first()
+        or assessment_run.plugin_name
+    )
+    artifact = f"{sbom.name} {sbom.version}" if sbom.version else sbom.name
+
+    if assessment_run.category == AssessmentCategory.SECURITY.value:
+        title = "Vulnerability scan failed"
+        message = (
+            f"{plugin_label} could not scan {artifact}. "
+            "Its vulnerability results were not updated, so new vulnerabilities may be missing. "
+            "Open the SBOM to see the error."
+        )
+        action_label = "View SBOM"
+    else:
+        title = "Assessment failed"
+        message = (
+            f"{plugin_label} could not check {artifact}, so no new result was recorded. "
+            "Open the artifact to see the error."
+        )
+        action_label = "View artifact"
+
+    return {
+        "title": title,
+        "message": message,
+        "action_label": action_label,
+        "action_url": reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]),
+    }
 
 
 def _create_pending_assessment_run(
@@ -472,6 +768,7 @@ def _create_pending_assessment_run(
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
         return None
 
+    announce_assessment_started(sbom_id, registered.name)
     return str(run.id)
 
 
@@ -622,6 +919,16 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+def _reconcile_findings(sbom_id: str) -> None:
+    """Re-align the SBOM's finding rows after a release change; a failure here never fails the task."""
+    from sbomify.apps.vulnerability_scanning.findings import reconcile_sbom_findings
+
+    try:
+        reconcile_sbom_findings(sbom_id)
+    except Exception:
+        logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -728,6 +1035,7 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     ]
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    _reconcile_findings(sbom_id)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -814,6 +1122,7 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
             assessment_run__sbom_id=sbom_id,
             release_id=release_id,
         ).delete()
+    _reconcile_findings(sbom_id)
 
     if detached_count == 0:
         logger.debug(
@@ -938,7 +1247,7 @@ def enqueue_assessments_for_sbom(
 
     # Get team settings
     try:
-        settings = TeamPluginSettings.objects.get(team_id=team_id)
+        settings = TeamPluginSettings.objects.get(team_id=int(team_id))
         enabled_plugins = settings.enabled_plugins or []
     except TeamPluginSettings.DoesNotExist:
         # No settings configured, no plugins to run
@@ -1032,7 +1341,7 @@ def enqueue_assessments_for_existing_sboms_task(
     """
     # Imports inside function to avoid circular imports at module load time
     from sbomify.apps.sboms.models import SBOM, Component
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     from ..models import AssessmentRun, RegisteredPlugin
     from ..sdk.enums import AssessmentCategory
@@ -1048,8 +1357,8 @@ def enqueue_assessments_for_existing_sboms_task(
     try:
         # Look up the team
         try:
-            team = Team.objects.get(id=team_id)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(id=team_id)
+        except Workspace.DoesNotExist:
             logger.error(f"[TASK_bulk_enqueue] Team {team_id} not found")
             return {
                 "team_id": team_id,
@@ -1231,6 +1540,13 @@ def _run_scheduled_security_scans(
         "sboms_found": 0,
         "assessments_enqueued": 0,
         "skipped_recent": 0,
+        # Counted apart from skipped_recent rather than folded into it. The two
+        # mean different things to whoever reads the logs: "recent" is the
+        # cadence working as designed, while a backoff hold says a scanner has
+        # been failing this artifact repeatedly. A rising number here is the
+        # signal that something upstream is wrong, and it is invisible if it is
+        # summed with the ordinary skips.
+        "skipped_failure_backoff": 0,
     }
 
     try:
@@ -1313,32 +1629,54 @@ def _run_scheduled_security_scans(
         if only_cyclonedx:
             sbom_qs = sbom_qs.filter(format="cyclonedx")
 
-        for sbom_row in sbom_qs.iterator(chunk_size=500):
-            stats["sboms_found"] += 1
-            sbom_id_str = str(sbom_row["id"])
+        # The failure backoff is applied per batch rather than precomputed over
+        # the whole table, and only to what has already survived the skip window
+        # above. That ordering is the point: the SBOMs reaching it are the ones
+        # this sweep would otherwise enqueue, which on a healthy fleet is a
+        # small fraction of the rows an up-front sweep would have read. Asking
+        # about them by name is also what lets the query be one indexed probe
+        # per SBOM instead of a scan over everyone's history.
+        for sbom_batch in batched(sbom_qs.iterator(chunk_size=500), 500):
+            stats["sboms_found"] += len(sbom_batch)
 
-            if sbom_id_str in recent_sbom_ids:
-                stats["skipped_recent"] += 1
+            candidates = [row for row in sbom_batch if str(row["id"]) not in recent_sbom_ids]
+            stats["skipped_recent"] += len(sbom_batch) - len(candidates)
+            if not candidates:
                 continue
 
-            team_id = sbom_row["component__team_id"]
-            plugin_config = team_configs.get(team_id) or None
+            # A run that failed does not fill the skip window above, so without
+            # this an SBOM that fails every time is re-enqueued every time. One
+            # failure still retries on the next tick; a streak backs off. Only
+            # ever removes candidates, so no cadence gets shorter than today's.
+            backed_off = _failure_backed_off_sbom_ids(plugin_name, [str(row["id"]) for row in candidates], now)
 
-            enqueue_assessment(
-                sbom_id=sbom_id_str,
-                plugin_name=plugin_name,
-                run_reason=RunReason.SCHEDULED_REFRESH,
-                config=plugin_config,
-            )
-            stats["assessments_enqueued"] += 1
+            for sbom_row in candidates:
+                sbom_id_str = str(sbom_row["id"])
+
+                if sbom_id_str in backed_off:
+                    stats["skipped_failure_backoff"] += 1
+                    continue
+
+                team_id = sbom_row["component__team_id"]
+                plugin_config = team_configs.get(team_id) or None
+
+                enqueue_assessment(
+                    sbom_id=sbom_id_str,
+                    plugin_name=plugin_name,
+                    run_reason=RunReason.SCHEDULED_REFRESH,
+                    config=plugin_config,
+                )
+                stats["assessments_enqueued"] += 1
 
         logger.info(
-            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, %d skipped (recent)",
+            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, "
+            "%d skipped (recent), %d skipped (failing)",
             task_name,
             stats["assessments_enqueued"],
             plugin_name,
             stats["teams_scanned"],
             stats["skipped_recent"],
+            stats["skipped_failure_backoff"],
         )
         return stats
 
@@ -1458,6 +1796,23 @@ def sweep_stranded_runs_task() -> None:
     logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
+@cron("45 3 * * *")  # type: ignore[untyped-decorator]  # Daily, after the retention prune
+@dramatiq.actor(queue_name="assessment_retention", max_retries=0, time_limit=4 * 3600 * 1000)
+def offload_assessment_results_task() -> None:
+    """Move superseded result payloads out of Postgres, findings stored once.
+
+    Nothing ran the sweep before: it was a management command, and with its
+    floor at a year it could not have reached the hourly rescans that fill the
+    table anyway. It is resumable at any row, so it stops inside its time limit
+    and the next night carries on from the oldest row left; a large backlog can
+    be cleared faster with ``manage.py offload_assessment_results``.
+    """
+    from sbomify.apps.plugins.offload import offload_assessment_results
+
+    moved = offload_assessment_results(max_seconds=3.5 * 3600)
+    logger.info(f"[TASK_offload_assessment_results] offloaded {moved} results")
+
+
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
 def prune_assessment_runs_task() -> None:
@@ -1467,7 +1822,23 @@ def prune_assessment_runs_task() -> None:
     scheduled run, which feeds TOAST bloat and the long checkpoints seen on
     staging. See plugins/retention.py for the two rules.
     """
-    from sbomify.apps.plugins.retention import prune_assessment_runs
+    from sbomify.apps.plugins import result_store, retention
+    from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records, drop_legacy_findings_table
 
-    removed = prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
+    # A deferred legacy drop can leave foreign keys that block run deletion.
+    # Finish it before pruning, or leave retention for the next daily attempt.
+    if not drop_legacy_findings_table():
+        logger.warning("[TASK_prune_assessment_runs] Skipping retention while the legacy finding table is locked")
+        return
+
+    # Before the prune, so a retry collects what a failed delete left behind.
+    orphans = result_store.delete_orphaned_result_objects()
+    shared = result_store.delete_unreferenced_findings_objects()
+    removed = retention.prune_assessment_runs()
+    # After it: a pruned run's finding rows go with it, and the records they
+    # shared with no other run are left behind.
+    records = delete_orphaned_records()
+    logger.info(
+        f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
+        f"{shared} unreferenced shared findings objects, {records} unreferenced finding records"
+    )

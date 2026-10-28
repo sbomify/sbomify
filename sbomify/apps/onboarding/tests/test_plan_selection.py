@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.django_db
 
 def _wizard_plan_url(**params):
     """Build the wizard plan step URL."""
-    url = reverse("teams:onboarding_wizard") + "?step=plan"
+    url = reverse("workspaces:onboarding_wizard") + "?step=plan"
     for key, value in params.items():
         url += f"&{key}={value}"
     return url
@@ -89,7 +89,7 @@ def billing_disabled(settings):
 def new_user(community_plan):
     """Simulate a freshly signed-up user whose workspace has NOT selected a plan."""
     user = User.objects.create_user(username="newuser", email="new@example.com", password="testpass123")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="New Team",
         billing_plan="community",
         has_completed_wizard=True,
@@ -110,7 +110,7 @@ def new_user(community_plan):
 def existing_user(community_plan):
     """Simulate an existing user whose workspace already selected a plan."""
     user = User.objects.create_user(username="existinguser", email="existing@example.com", password="testpass123")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Existing Team",
         billing_plan="community",
         has_completed_wizard=True,
@@ -181,7 +181,7 @@ class TestOnboardingPlanSelectionGet:
 class TestOnboardingPlanSelectionPost:
     def test_select_community(self, billing_enabled, authed_client, community_plan):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "community"})
         assert resp.status_code == 302
 
         team.refresh_from_db()
@@ -195,7 +195,7 @@ class TestOnboardingPlanSelectionPost:
         mock_checkout.return_value = mock_session
         client, user, team = authed_client
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert resp.url == mock_session.url
 
@@ -213,7 +213,7 @@ class TestOnboardingPlanSelectionPost:
         mock_checkout.side_effect = StripeError("Stripe error")
         client, user, team = authed_client
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert "step=plan" in resp.url
 
@@ -222,7 +222,7 @@ class TestOnboardingPlanSelectionPost:
 
     def test_select_enterprise_redirects_to_contact(self, billing_enabled, authed_client, enterprise_plan):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "enterprise"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "enterprise"})
         assert resp.status_code == 302
         assert "enterprise-contact" in resp.url
 
@@ -231,7 +231,7 @@ class TestOnboardingPlanSelectionPost:
 
     def test_invalid_plan_rejected(self, billing_enabled, authed_client):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "invalid"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "invalid"})
         assert resp.status_code == 302
 
         team.refresh_from_db()
@@ -248,7 +248,7 @@ class TestOnboardingPlanSelectionPost:
         }
         session.save()
 
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "business"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "business"})
         assert resp.status_code == 302
         assert "/dashboard" in resp.url or resp.url == "/"
 
@@ -261,7 +261,7 @@ class TestBillingDisabled:
 
     def test_post_redirects_to_dashboard(self, billing_disabled, authed_client):
         client, user, team = authed_client
-        resp = client.post(reverse("teams:onboarding_wizard"), {"plan": "community"})
+        resp = client.post(reverse("workspaces:onboarding_wizard"), {"plan": "community"})
         assert resp.status_code == 302
 
 
@@ -314,7 +314,7 @@ class TestTrialExpirationDowngrade:
         from sbomify.apps.billing.billing_processing import handle_trial_period
 
         expired_ts = int((timezone.now() - timezone.timedelta(days=1)).timestamp())
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Trial Team",
             billing_plan="business",
             billing_plan_limits={
@@ -352,7 +352,7 @@ class TestTrialExpirationDowngrade:
         from sbomify.apps.billing.billing_processing import handle_trial_period
 
         future_ts = int((timezone.now() + timezone.timedelta(days=7)).timestamp())
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Active Trial Team",
             billing_plan="business",
             billing_plan_limits={

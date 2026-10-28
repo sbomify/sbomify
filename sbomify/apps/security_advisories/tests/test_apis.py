@@ -12,8 +12,14 @@ contract says a field means, and whether one workspace can see another's.
 from __future__ import annotations
 
 import pytest
+from django.test import Client
 
-from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from django.urls import reverse
+
+from sbomify.apps.core import authz
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers, setup_authenticated_client_session
 from sbomify.apps.security_advisories.models import SecurityAdvisory
 
 from .conftest import publish
@@ -472,6 +478,179 @@ class TestWhoMayWrite:
         assert response.status_code == 201, response.content
 
 
+class TestTheAgentToken:
+    """An AI agent drafts and edits advisories; a person publishes them.
+
+    Driven with an owner's token, so every refusal below is the scope talking,
+    not the role.
+    """
+
+    @pytest.fixture
+    def agent(self, sample_user, sample_team_with_owner_member):
+        token = AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=create_personal_access_token(sample_user),
+            description="Advisory agent",
+            scopes=authz.SCOPE_PRESETS["agent"],
+        )
+        return Client(), get_api_headers(token)
+
+    def test_it_creates_reads_and_edits(self, agent) -> None:
+        client, headers = agent
+
+        created = client.post(LIST, data={"title": "Drafted by an agent"}, content_type="application/json", **headers)
+        assert created.status_code == 201, created.content
+        advisory_id = created.json()["id"]
+
+        edited = client.patch(
+            _detail(advisory_id), data={"title": "Edited by an agent"}, content_type="application/json", **headers
+        )
+        assert edited.status_code == 200, edited.content
+        assert client.get(_detail(advisory_id), **headers).json()["title"] == "Edited by an agent"
+
+    def test_it_posts_timeline_updates(self, agent, advisory) -> None:
+        client, headers = agent
+
+        response = client.post(
+            f"{_detail(advisory.id)}/updates",
+            data={"kind": "update", "note": "Root cause found."},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 200, response.content
+
+    def test_it_cannot_publish(self, agent, advisory, make_publishable) -> None:
+        client, headers = agent
+
+        response = client.post(
+            f"{_detail(advisory.id)}/publish",
+            data={"visibility": SecurityAdvisory.Visibility.PUBLIC},
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 403
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+
+    def test_it_cannot_withdraw(self, agent, make_publishable) -> None:
+        client, headers = agent
+        advisory = publish(make_publishable)
+
+        response = client.post(
+            f"{_detail(advisory.id)}/withdraw", data={"reason": "no"}, content_type="application/json", **headers
+        )
+
+        assert response.status_code == 403
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.PUBLISHED
+
+    def test_it_cannot_delete(self, agent, make_publishable) -> None:
+        """Deleting a published advisory takes it off the trust center, which is a publishing act."""
+        client, headers = agent
+        advisory = publish(make_publishable)
+
+        assert client.delete(_detail(advisory.id), **headers).status_code == 403
+        assert SecurityAdvisory.objects.filter(id=advisory.id).exists()
+
+    def test_a_member_agent_token_still_cannot_write(self, agent, sample_team_with_owner_member) -> None:
+        """The scope narrows; it never lifts a member to advisory author."""
+        client, headers = agent
+        sample_team_with_owner_member.role = "member"
+        sample_team_with_owner_member.save()
+
+        response = client.post(LIST, data={"title": "Nope"}, content_type="application/json", **headers)
+
+        assert response.status_code == 403
+
+
+class TestWhoMadeTheChange:
+    """Every API token belongs to a person, so the actor alone cannot say whether
+    an owner made a change or their AI agent did. The timeline records how."""
+
+    @pytest.fixture
+    def agent_token(self, sample_user, sample_team_with_owner_member):
+        return AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=create_personal_access_token(sample_user),
+            description="Advisory agent",
+            scopes=authz.SCOPE_PRESETS["agent"],
+        )
+
+    def _timeline(self, client, headers, advisory_id: str) -> list[dict]:
+        return client.get(_detail(advisory_id), **headers).json()["timeline"]
+
+    def test_an_agent_token_is_named_on_every_event_it_writes(self, agent_token) -> None:
+        client, headers = Client(), get_api_headers(agent_token)
+        advisory_id = client.post(LIST, data={"title": "Drafted"}, content_type="application/json", **headers).json()[
+            "id"
+        ]
+        client.patch(_detail(advisory_id), data={"title": "Redrafted"}, content_type="application/json", **headers)
+        client.post(
+            f"{_detail(advisory_id)}/updates",
+            data={"kind": "update", "note": "Root cause found."},
+            content_type="application/json",
+            **headers,
+        )
+
+        timeline = self._timeline(client, headers, advisory_id)
+
+        assert len(timeline) == 3
+        assert {event["channel"] for event in timeline} == {"agent"}
+        assert {event["token_id"] for event in timeline} == {str(agent_token.pk)}
+        assert all(event["actor"] for event in timeline), "the person who owns the token is still named"
+
+    def test_any_other_token_is_api(self, client_and_headers) -> None:
+        client, headers = client_and_headers
+        advisory_id = client.post(LIST, data={"title": "By hand"}, content_type="application/json", **headers).json()[
+            "id"
+        ]
+
+        (event,) = self._timeline(client, headers, advisory_id)
+
+        assert event["channel"] == "api"
+        assert event["token_id"]
+
+    def test_publishing_and_withdrawing_record_the_token(self, client_and_headers, advisory, make_publishable) -> None:
+        client, headers = client_and_headers
+        client.post(
+            f"{_detail(advisory.id)}/publish",
+            data={"visibility": SecurityAdvisory.Visibility.PUBLIC},
+            content_type="application/json",
+            **headers,
+        )
+        client.post(
+            f"{_detail(advisory.id)}/withdraw", data={"reason": "no"}, content_type="application/json", **headers
+        )
+
+        kinds = {event["kind"]: event["channel"] for event in self._timeline(client, headers, advisory.id)}
+
+        assert kinds["published"] == "api"
+        assert kinds["withdrawn"] == "api"
+
+    def test_a_change_made_in_the_app_has_no_channel(self, client_and_headers, advisory) -> None:
+        """Events written before this was kept look the same, so blank must not mean agent."""
+        client, headers = client_and_headers
+        advisory.events.create(event_type="update", actor=None, body="From the app.")
+
+        (event,) = self._timeline(client, headers, advisory.id)
+
+        assert event["channel"] == ""
+        assert event["token_id"] == ""
+
+    def test_the_timeline_page_marks_the_agent(self, agent_token, sample_team_with_owner_member) -> None:
+        api, headers = Client(), get_api_headers(agent_token)
+        advisory_id = api.post(LIST, data={"title": "Drafted"}, content_type="application/json", **headers).json()["id"]
+        page = Client()
+        setup_authenticated_client_session(page, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+        html = page.get(reverse("core:security_advisory_detail", args=[advisory_id])).content.decode()
+
+        assert "AI agent" in html
+        assert "fa-robot" in html
+
+
 class TestWithdrawing:
     def test_a_published_advisory_can_be_withdrawn(self, client_and_headers, advisory, make_publishable) -> None:
         """The record keeps its id and its publication date; only the status and the reason move."""
@@ -724,11 +903,11 @@ class TestThePublicSide:
         assert body["pagination"]["total"] == 1
 
     def test_a_private_workspace_is_not_found(self, client_and_headers, team, public_product) -> None:
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         client, _ = client_and_headers
         _publish_for(team, [public_product], visibility=SecurityAdvisory.Visibility.PUBLIC)
-        Team.objects.filter(pk=team.pk).update(is_public=False)
+        Workspace.objects.filter(pk=team.pk).update(is_public=False)
 
         assert client.get(_public(team.key)).status_code == 404
 

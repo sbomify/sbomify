@@ -9,7 +9,7 @@ import pytest
 from django.core.cache import cache
 
 from sbomify.apps.core.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -31,7 +31,7 @@ def clear_cache():
 @pytest.fixture
 def custom_domain_team(db):
     """Create a team with a custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Company",
         billing_plan="business",
         custom_domain="trust.example.com",
@@ -128,7 +128,7 @@ class TestCustomDomainRouting:
     def test_wrong_workspace_product_returns_404(self, client, db, custom_domain_team):
         """Test that accessing another workspace's product on custom domain returns 404."""
         # Create another team and product
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Company",
             billing_plan="community",
             is_public=True,
@@ -236,7 +236,7 @@ class TestCustomDomainNonPublicWorkspace:
 
     @pytest.fixture
     def private_domain_team(self, db):
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Unlisted Company",
             billing_plan="business",
             custom_domain="private.example.com",
@@ -301,7 +301,7 @@ class TestCustomDomainNonPublicWorkspace:
 
     def test_another_workspaces_component_is_not_found(self, client, private_domain_team):
         """The domain resolves to one workspace or to none — never to all of them."""
-        other_team = Team.objects.create(
+        other_team = Workspace.objects.create(
             name="Other Company",
             billing_plan="community",
             is_public=True,

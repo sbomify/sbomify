@@ -16,8 +16,8 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace, get_client_ip
+from sbomify.apps.teams.models import Member, Workspace
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
@@ -43,7 +43,24 @@ log = logging.getLogger(__name__)
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
-def _invalidate_access_requests_cache(team: Team) -> None:
+def _announce_decision(access_request: AccessRequest, status: str) -> None:
+    """Tell the workspace's admins, and the requester on their own channel, how a request was decided.
+
+    The requester is not a workspace member, so the workspace feed never
+    reaches them; their own channel is how their open public page learns.
+    """
+    data = {
+        "access_request_id": str(access_request.id),
+        "user_id": str(access_request.user_id),
+        "status": status,
+        "action": status,
+    }
+    if access_request.team.key:
+        broadcast_to_workspace(workspace_key=access_request.team.key, message_type="access_request_updated", data=data)
+    broadcast_to_user(access_request.user_id, "access_request_updated", data)
+
+
+def _invalidate_access_requests_cache(team: Workspace) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
 
@@ -52,7 +69,7 @@ def _invalidate_access_requests_cache(team: Team) -> None:
         cache.delete(cache_key)
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Workspace) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     # Check if there are any pending requests left
     company_nda = team.get_company_nda_document()
@@ -97,8 +114,8 @@ def create_access_request(
     try:
         # Get team
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         if not can(request, "access_request:submit", team):
@@ -206,7 +223,7 @@ def create_access_request(
                         request,
                         "document:access_requested",
                         {"requires_nda": requires_nda},
-                        team_key=team_key,
+                        workspace_key=team_key,
                     )
                 )
 
@@ -214,6 +231,20 @@ def create_access_request(
             # If NDA is required, notification will be sent after NDA is signed
             if not requires_nda:
                 notify_admins_of_access_request(access_request, team, requires_nda=False)
+            if not requires_nda and team.key:
+                ws_team_key, ws_request_id, ws_user_id = team.key, str(access_request.id), str(access_request.user_id)
+                transaction.on_commit(
+                    lambda: broadcast_to_workspace(
+                        workspace_key=ws_team_key,
+                        message_type="access_request_updated",
+                        data={
+                            "access_request_id": ws_request_id,
+                            "user_id": ws_user_id,
+                            "status": "pending",
+                            "action": "requested",
+                        },
+                    )
+                )
 
             # If NDA is required, return info that NDA signing is needed
             if requires_nda:
@@ -268,8 +299,8 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
     """Get NDA document for signing."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -331,8 +362,8 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
     """Sign NDA for access request."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -452,10 +483,10 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     teams_requiring_nda = []
     for team_id in member_teams:
         try:
-            team = Team.objects.get(pk=team_id)
+            team = Workspace.objects.get(pk=team_id)
             if team.get_company_nda_document():
                 teams_requiring_nda.append(team_id)
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             # Team no longer exists, skip it
             pass
 
@@ -555,20 +586,8 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
-    # Broadcast to workspace for real-time UI updates
-    # This notifies both:
-    # 1. The requester's browser to update their access status on public pages
-    # 2. Admins' browsers to update the access request queue
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "approved",
-            "action": "approved",
-        },
-    )
+    # Admins' queues and the requester's open public page both follow it.
+    _announce_decision(access_request, "approved")
 
     return 200, AccessRequestResponse(
         id=access_request.id,
@@ -627,16 +646,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "rejected",
-            "action": "rejected",
-        },
-    )
+    _announce_decision(access_request, "rejected")
 
     return 200, AccessRequestResponse(
         id=access_request.id,
@@ -705,16 +715,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     notify_access_revoked(access_request)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "revoked",
-            "action": "revoked",
-        },
-    )
+    _announce_decision(access_request, "revoked")
 
     return 200, AccessRequestResponse(
         id=access_request.id,

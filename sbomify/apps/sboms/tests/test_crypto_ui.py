@@ -85,7 +85,9 @@ def test_inventory_card_renders_tabs_and_drilldown(sample_sbom: SBOM, mocker: Mo
     team = sample_sbom.component.team
     setup_test_session(client, team, team.members.first())
 
-    response = client.get(reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}))
+    response = client.get(
+        reverse("sboms:sbom_crypto_inventory", kwargs={"sbom_id": sample_sbom.id}), HTTP_HX_REQUEST="true"
+    )
 
     assert response.status_code == 200
     html = response.content.decode()
@@ -157,7 +159,7 @@ def test_workspace_crypto_rollup_aggregates_runs(sample_sbom: SBOM):  # noqa: F8
 @pytest.mark.django_db
 def test_workspace_crypto_page_renders_and_gates(sample_sbom: SBOM, guest_user):  # noqa: F811
     team = sample_sbom.component.team
-    url = reverse("sboms:workspace_crypto", kwargs={"team_key": team.key})
+    url = reverse("sboms:workspace_crypto", kwargs={"workspace_key": team.key})
 
     member = Client()
     setup_test_session(member, team, team.members.first())
@@ -241,7 +243,7 @@ def test_workspace_crypto_page_blocks_guests_of_url_workspace(sample_sbom: SBOM,
     guest.force_login(guest_user)
 
     # The session-team path is covered by GuestAccessBlockedMixin (redirect).
-    same_team_session = guest.get(reverse("sboms:workspace_crypto", kwargs={"team_key": team.key}))
+    same_team_session = guest.get(reverse("sboms:workspace_crypto", kwargs={"workspace_key": team.key}))
     assert same_team_session.status_code == 302
 
     # The bypass: session's current team unset (or another workspace) makes the
@@ -249,7 +251,7 @@ def test_workspace_crypto_page_blocks_guests_of_url_workspace(sample_sbom: SBOM,
     session = guest.session
     session["current_workspace"] = {}
     session.save()
-    response = guest.get(reverse("sboms:workspace_crypto", kwargs={"team_key": team.key}))
+    response = guest.get(reverse("sboms:workspace_crypto", kwargs={"workspace_key": team.key}))
 
     assert response.status_code == 403
 

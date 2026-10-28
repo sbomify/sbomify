@@ -195,7 +195,7 @@ def test_dangerzone_repaints_its_header_and_body(rendered: str) -> None:
 def test_dangerzone_header_ink_is_danger(rendered: str) -> None:
     header = _card_holding(rendered, "Danger body")
     assert 'class="fas fa-exclamation-triangle text-danger"' in header
-    assert 'class="text-lg font-semibold m-0 text-danger"' in header
+    assert 'class="text-lg font-semibold m-0 text-danger-ink"' in header
     assert "text-text-muted mr-2" not in header
 
 
@@ -240,7 +240,7 @@ def test_flush_dangerzone_emits_no_padded_body_of_its_own(rendered: str) -> None
 
 def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
     """The composite owns the band, the chevron and the collapse, so a page
-    never assembles a Danger Zone from the parts again."""
+    never assembles a danger zone from the parts again."""
     zone = _card_holding(rendered, "Assembled danger rows")
     # The band is the control, with the toggle derived from the state name.
     assert 'role="button"' in zone
@@ -256,7 +256,7 @@ def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
     assert "fa-chevron-down shrink-0 text-text-muted" in zone
     # The band reads before it warns: danger ink on the title, a quiet default
     # explainer under it, and the ground left alone.
-    assert "Danger Zone" in zone
+    assert "Danger zone" in zone
     assert "Actions here cannot be undone." in zone
     # The collapse lands on the padded body element.
     assert 'x-show="isExpanded"' in zone
@@ -276,7 +276,9 @@ def test_dangerzone_collapsible_state_prop_renames_every_hook(rendered: str) -> 
 
 def test_inset_is_sunken_not_raised(rendered: str) -> None:
     inset = _open_tag(rendered, "Outer inset")
-    assert "rounded-xl border border-solid border-border p-4" in inset
+    # px-4 py-4 and not p-4: this card is reached from a public page, where the
+    # legacy .p-4 is !important at 1.5rem. tables/cell.html has the long version.
+    assert "rounded-xl border border-solid border-border px-4 py-4" in inset
     assert "bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)]" in inset
     assert "shadow-" not in inset
 

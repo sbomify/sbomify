@@ -6,6 +6,8 @@ from typing import Any
 import pytest
 from playwright.sync_api import Page, expect
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.teams.models import ContactProfile
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
@@ -41,7 +43,7 @@ def test_settings_controls_and_navigation(
     name = page.get_by_role("textbox", name="Workspace name", exact=True)
     expect(name).to_have_value(workspace.name)
     name.fill("Unsaved workspace name")
-    page.get_by_role("button", name="Discard", exact=True).click()
+    page.locator("#team-general-form").get_by_role("button", name="Discard", exact=True).click()
     expect(name).to_have_value(workspace.name)
     name.fill("Draft workspace name")
     page.get_by_label("Patch targets", exact=True).select_option("custom")
@@ -55,8 +57,12 @@ def test_settings_controls_and_navigation(
     expect(name).to_have_value("Draft workspace name")
     page.get_by_label("Freshness window (days)").fill("0")
     page.get_by_role("button", name="Save changes", exact=True).click()
-    expect(page.get_by_text("Workspace settings updated successfully", exact=True)).to_be_visible()
-    expect(page.locator("#team-general-content")).to_have_attribute("data-team-name", "Draft workspace name")
+    expect(page.get_by_text("Workspace settings updated", exact=True)).to_be_visible()
+    # The tab re-renders from the server, so its starting values are the saved ones.
+    page.wait_for_function(
+        "document.getElementById('team-general-fields')?.textContent.includes('Draft workspace name')",
+        timeout=5000,
+    )
     expect(page.get_by_role("button", name="Save changes", exact=True)).to_be_disabled()
     expect(name).to_have_value("Draft workspace name")
     workspace.refresh_from_db()
@@ -75,6 +81,7 @@ def test_settings_controls_and_navigation(
         "Account",
         "General",
     ):
+        page.evaluate("window.scrollTo({ top: 0, behavior: 'instant' })")
         page.locator("#main-content").evaluate("el => el.scrollTop = 0")
         navigation.get_by_role("link", name=label, exact=True).click()
         expect(page.get_by_role("region", name=f"{label} settings", exact=True)).to_be_visible()
@@ -112,13 +119,13 @@ def test_settings_controls_and_navigation(
             expect(page.locator("#company_nda_file")).to_have_attribute("required", "")
         if label == "Parties":
             expect(page.get_by_text("Product contacts", exact=True)).to_be_visible()
-            search = page.get_by_role("searchbox", name="Search contact profiles")
+            search = page.get_by_role("searchbox", name="Search parties")
             search.fill("No matching profile")
             expect(page.get_by_text("No matches found", exact=True)).to_be_visible()
             search.fill("")
-            page.get_by_role("button", name="Profile actions", exact=True).click()
-            page.get_by_role("menuitem", name="Edit profile", exact=True).click()
-            expect(page.get_by_role("textbox", name=re.compile("Profile name"))).to_have_value("Product contacts")
+            page.get_by_role("button", name="Party actions", exact=True).click()
+            page.get_by_role("menuitem", name="Edit party", exact=True).click()
+            expect(page.get_by_role("textbox", name=re.compile("Party name"))).to_have_value("Product contacts")
             entities = page.locator("#entities-container")
             expect(entities).to_be_hidden()
             # An empty list cannot create a second gap before the empty state.
@@ -128,7 +135,7 @@ def test_settings_controls_and_navigation(
             }""") == pytest.approx(16)
             page.get_by_role("button", name="Add entity", exact=True).first.click()
             expect(entities).to_be_visible()
-            page.get_by_role("button", name="Back to profiles", exact=True).click()
+            page.get_by_role("button", name="Back to parties", exact=True).click()
             expect(page.get_by_text("Product contacts", exact=True)).to_be_visible()
         if label == "Branding":
             expect(page.get_by_role("textbox", name="Brand color", exact=True)).not_to_have_value("")
@@ -150,10 +157,35 @@ def test_settings_controls_and_navigation(
     ).to_be_visible()
     expect(page.get_by_text("Copy your token now", exact=True)).to_have_count(0)
     page.get_by_role("button", name="Delete token Browser test token", exact=True).click()
-    dialog = page.get_by_role("alertdialog", name="Delete Token", exact=True)
+    dialog = page.get_by_role("alertdialog", name="Delete token", exact=True)
     expect(dialog).to_be_visible()
-    dialog.get_by_role("button", name="Delete Token", exact=True).click()
+    dialog.get_by_role("button", name="Delete token", exact=True).click()
     expect(
         page.get_by_role("region", name="API tokens settings").get_by_text("Browser test token", exact=True)
     ).to_have_count(0)
     assert not errors, "\n".join([*errors, *console])
+
+
+@pytest.mark.django_db
+def test_revoke_all_tokens_confirmation_revokes(
+    authenticated_page: Page, sample_user: Any, team_with_business_plan: Any
+) -> None:
+    workspace = team_with_business_plan
+    for description in ("First token", "Second token"):
+        AccessToken(
+            user=sample_user,
+            team=workspace,
+            description=description,
+            encoded_token=create_personal_access_token(sample_user),
+        ).save()
+    page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"/workspaces/{workspace.key}/settings/tokens")
+    page.get_by_role("button", name="Revoke all", exact=True).click()
+    revoke = page.get_by_role("alertdialog", name="Revoke all tokens", exact=True)
+    revoke.get_by_role("button", name="Revoke all", exact=True).click()
+    expect(revoke).to_be_hidden()
+    expect(page.get_by_text("No tokens yet", exact=True)).to_be_visible()
+    assert not AccessToken.objects.filter(user=sample_user, team=workspace).exists()
+    assert not errors

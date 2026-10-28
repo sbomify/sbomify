@@ -1,10 +1,12 @@
 """Shared settings context for initial pages and HTMX refreshes."""
 
+from datetime import datetime
 from typing import Any, cast
 
 from django.core.cache import cache
 from django.db import transaction
 from django.http import HttpRequest
+from django.template.defaultfilters import date as date_filter
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.forms import CreateAccessTokenForm
@@ -12,9 +14,10 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.services.dashboard_page import dashboard_cache_key
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.security_advisories.models import SecurityAdvisory, default_advisory_id_prefix
 from sbomify.apps.teams.apis import get_team_branding
 from sbomify.apps.teams.forms import ContactProfileForm, PatchSLAForm
-from sbomify.apps.teams.models import Member, Team, default_patch_sla_days
+from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
 
 
 def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
@@ -22,14 +25,50 @@ def general_context(request: HttpRequest, workspace_key: str) -> ServiceResult[d
         Member.objects.select_related("team").filter(user=cast(User, request.user), team__key=workspace_key).first()
     )
     targets = membership.team.patch_sla_days if membership else default_patch_sla_days()
+    workspace = membership.team if membership else None
+    support_period = workspace.default_support_period_years if workspace else None
+    advisory_id_prefix = workspace.advisory_id_prefix if workspace else ""
+    advisory_id_start_at = workspace.advisory_id_start_at if workspace else 1
+    # Each form's starting values, for the shared dirty-tracking component. They
+    # are strings so an emptied field compares equal to an unset one.
+    patch_sla_fields = {"mode": "recommended" if targets == default_patch_sla_days() else "custom"}
+    patch_sla_fields.update({severity: _as_field_value(days) for severity, days in targets.items()})
     return ServiceResult.success(
         {
             "is_default_team": bool(membership and membership.is_default_team),
-            "default_support_period_years": membership.team.default_support_period_years if membership else None,
+            "default_support_period_years": support_period,
             "patch_sla_form": PatchSLAForm(initial=targets),
-            "patch_sla_mode": "recommended" if targets == default_patch_sla_days() else "custom",
+            "team_general_fields": {
+                "name": workspace.name if workspace else "",
+                "sbom_freshness_days": _as_field_value(workspace.sbom_freshness_days if workspace else None),
+            },
+            "patch_sla_fields": patch_sla_fields,
+            "support_period_fields": {"default_support_period_years": _as_field_value(support_period)},
+            "advisory_id_fields": {
+                "advisory_id_prefix": advisory_id_prefix,
+                "advisory_id_start_at": _as_field_value(advisory_id_start_at),
+            },
+            "advisory_id_default_prefix": default_advisory_id_prefix(workspace) if workspace else "",
+            "next_advisory_id": SecurityAdvisory.allocate_tracking_id(workspace) if workspace else "",
         }
     )
+
+
+def _as_field_value(value: Any) -> str:
+    """A form field's value as the browser will report it: a string, blank when unset."""
+    return "" if value is None else str(value)
+
+
+def _format_iso_date(value: Any) -> str:
+    """An ISO timestamp in the settings date format, or "" if it is not one."""
+    if isinstance(value, datetime):
+        return date_filter(value, "j M Y") or ""
+    if not isinstance(value, str) or not value:
+        return ""
+    try:
+        return date_filter(datetime.fromisoformat(value), "j M Y") or ""
+    except ValueError:
+        return ""
 
 
 def tokens_context(request: HttpRequest, workspace_key: str) -> ServiceResult[dict[str, Any]]:
@@ -67,7 +106,7 @@ def build_panel_context(request: HttpRequest, workspace_key: str, tab: str) -> S
 
 def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> ServiceResult[None]:
     with transaction.atomic():
-        workspace = Team.objects.select_for_update().filter(key=workspace_key).first()
+        workspace = Workspace.objects.select_for_update().filter(key=workspace_key).first()
         if workspace is None:
             return ServiceResult.failure("Workspace not found", status_code=404)
         workspace.patch_sla_days = targets
@@ -77,7 +116,14 @@ def update_patch_sla(workspace_key: str, targets: dict[str, int | None]) -> Serv
 
 
 def update_support_period(workspace_key: str, years: int | None) -> ServiceResult[None]:
-    if not Team.objects.filter(key=workspace_key).update(default_support_period_years=years):
+    if not Workspace.objects.filter(key=workspace_key).update(default_support_period_years=years):
+        return ServiceResult.failure("Workspace not found", status_code=404)
+    return ServiceResult.success()
+
+
+def update_advisory_ids(workspace_key: str, prefix: str, start_at: int) -> ServiceResult[None]:
+    """Change how new advisories are numbered. Advisories already published keep their ids."""
+    if not Workspace.objects.filter(key=workspace_key).update(advisory_id_prefix=prefix, advisory_id_start_at=start_at):
         return ServiceResult.failure("Workspace not found", status_code=404)
     return ServiceResult.success()
 
@@ -92,5 +138,11 @@ def profiles_context(profiles: Any) -> dict[str, Any]:
         profile["contact_count"] = sum(len(entity.get("contacts", [])) for entity in entities)
         profile["manufacturer"] = next((entity for entity in entities if entity.get("is_manufacturer")), None)
         profile["supplier"] = next((entity for entity in entities if entity.get("is_supplier")), None)
+        # Formatted here rather than in the browser: the rest of settings renders
+        # dates through the date filter, and toLocaleDateString put a second
+        # format on the same page for anyone outside en-GB. The schema carries
+        # this as an ISO string, and the date filter answers "" for anything that
+        # is not a date, so it is parsed rather than handed over as text.
+        profile["updated_display"] = _format_iso_date(profile.get("updated_at"))
         rows.append(profile)
     return {"profiles": rows, "form": ContactProfileForm()}

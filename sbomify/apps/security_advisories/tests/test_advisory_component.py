@@ -82,9 +82,9 @@ class TestAdvisoryComponent:
         assert "component_name" in exc.value.message_dict
 
     def test_a_component_from_another_workspace_is_rejected(self, advisory, django_user_model):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Somewhere Else")
+        other_team = Workspace.objects.create(name="Somewhere Else")
         outsider = Component.objects.create(name="theirs", team=other_team)
 
         with pytest.raises(ValidationError) as exc:

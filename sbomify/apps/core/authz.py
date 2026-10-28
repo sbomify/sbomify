@@ -37,10 +37,11 @@ from typing import Any
 
 from django.http import HttpRequest
 
-# Roles — mirror the keys of ``settings.TEAMS_SUPPORTED_ROLES``.
+# Roles — mirror the keys of ``settings.WORKSPACE_SUPPORTED_ROLES``.
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
 ROLE_MEMBER = "member"
+ROLE_OPERATOR = "operator"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
@@ -49,11 +50,11 @@ ROLE_BOT = "bot"
 # and template capability flags all derive from them, so widening a tier widens
 # every gate that uses it.
 #
-# Invariant: the human roles form a linear ladder, guest ⊂ member ⊂ admin ⊂ owner.
-# No role
-# may hold a capability a more-privileged role lacks. ``bot`` sits outside the
-# ladder — it is a synthetic OIDC publishing identity that can publish releases
-# without being able to read most internal data. ``test_role_ladder_is_upward_closed``
+# Invariant: the human roles form a linear ladder,
+# guest ⊂ operator ⊂ member ⊂ admin ⊂ owner. No role may hold a capability a
+# more-privileged role lacks. ``bot`` sits outside the ladder — it is a synthetic
+# OIDC publishing identity that can publish releases without being able to read
+# most internal data. ``test_role_ladder_is_upward_closed``
 # enforces the invariant; keeping it is what stops this degenerating into
 # per-role permission soup where "what can an admin do" needs a codebase search.
 OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
@@ -72,12 +73,32 @@ MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
 """Create/update products, components, releases, and artifact metadata — the
 day-to-day work. Deliberately excludes *making things public*: changing a
 product's or component's visibility is ``ADMINISTER``, because publishing to the
-trust center is an outward-facing decision, not routine maintenance."""
+trust center is an outward-facing decision, not routine maintenance.
+
+This is the line ``operator`` sits below: an operator reads the whole
+inventory and rules on its vulnerabilities, but does not shape the inventory
+itself. Adding a role here hands it product and component creation, so a
+read-mostly role must never be added to this tier."""
 
 DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Deletion of a domain resource (product / component / release / SBOM /
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
+
+TRIAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR, ROLE_BOT)
+"""Rule on a vulnerability finding: record an in-app triage decision (exploitable
+/ not affected / risk accepted) and, for the roles that can also upload, store
+the VEX that decision produces.
+
+The one capability ``operator`` holds beyond reading. Carved out of ``PUBLISH``
+because judging a finding and shipping an artifact are different jobs done by
+different people — the same split every vulnerability-management tool draws
+(Dependency-Track separates ``VULNERABILITY_ANALYSIS`` from ``BOM_UPLOAD``).
+
+Holding this tier is NOT by itself enough to upload a VEX *file*: those endpoints
+require ``artifact:publish`` as well, so an operator triages in the app and
+through the triage API while artifact upload stays with members, admins and CI
+bots."""
 
 PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_BOT)
 """Upload artifacts and cut/tag releases — the CI publish workflow, granted to
@@ -93,7 +114,7 @@ guests holding nothing, it was identical to this tier and has been removed."""
 # Renamed because the tier means "internal roles only, guests excluded", which
 # "READ_MEMBER" no longer conveys once guests are external — and would be
 # actively misleading next to a role literally named ``member`` (#468).
-READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR)
 """Read internal (non-public) workspace data. Internal roles only — a guest is
 an external trust-center visitor and must not be able to enumerate a workspace's
 private inventory. Guests reach restricted content solely through the
@@ -135,6 +156,14 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         "upload SBOMs and documents, and triage vulnerabilities. Cannot delete "
         "anything, change what is public, or reach workspace settings, billing "
         "or members.",
+    ),
+    (
+        ROLE_OPERATOR,
+        "Operator",
+        "Reads the workspace and rules on its vulnerabilities: sees every product, "
+        "component, release, SBOM and document, and triages findings as exploitable, "
+        "not affected or risk accepted. Cannot create or edit anything else, upload "
+        "artifacts, or reach workspace settings, billing or members.",
     ),
     (
         ROLE_GUEST,
@@ -181,8 +210,11 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # and the API is the same door. Publishing and withdrawing move an
     # advisory in and out of the trust center, the same act as setting a
     # product's visibility, so they share this tier rather than MANAGE.
+    # Deleting is its own action so the AI agent preset can draft and edit
+    # without being able to take a published advisory off the trust center.
     "advisory:manage": ADMINISTER,
     "advisory:publish": ADMINISTER,
+    "advisory:delete": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -215,9 +247,21 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "document:delete": DELETE,
     # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
-    # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard).
-    "artifact:publish_vex": PUBLISH,
+    # Ruling on a finding — the in-app triage decisions, and the VEX they are
+    # written into. Rewrites the workspace's stored vulnerability posture (the
+    # re-annotated scan summaries feed every dashboard), which is why it is a
+    # capability at all rather than part of reading. ``TRIAGE``, not ``PUBLISH``:
+    # this is the ``operator`` role's whole job. The VEX *file upload* endpoints
+    # pair it with ``artifact:publish``, so they stay closed to operators.
+    "artifact:publish_vex": TRIAGE,
+    # The VEX approval queue. Submitting changes nothing until someone approves,
+    # so it is open to everyone who may rule on a finding, CI bots and the AI
+    # agents working from a fix prompt included. Deciding applies the
+    # submission, which is a triage ruling, so it is open to every internal role
+    # but never to a bot: an agent must not approve its own work.
+    "vex_submission:create": TRIAGE,
+    "vex_submission:read": TRIAGE,
+    "vex_submission:decide": READ_INTERNAL,
     # internal reads — guests are external and hold none of these
     "workspace:read": READ_INTERNAL,
     "component:read_internal": READ_INTERNAL,
@@ -267,6 +311,20 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
     # then check / create / tag its release. Without the release actions a
     # publish-scoped CI token uploads fine but 403s the moment it cuts a release.
     "publish": ["artifact:publish", "release:read", "release:create", "release:tag"],
+    # An AI agent working from a fix prompt: read the prompt, then submit its VEX
+    # to the approval queue and check on it. It cannot apply a ruling itself, so
+    # nothing it sends takes effect until a person approves it. It may also draft
+    # and edit security advisories, but publishing, withdrawing and deleting stay
+    # with a person, and once an advisory is published every change it sends is
+    # held for approval (security_advisories/services/proposals.py), so nothing
+    # it writes reaches the trust center on its own.
+    "agent": [
+        "workspace:read",
+        "vex_submission:create",
+        "vex_submission:read",
+        "advisory:read",
+        "advisory:manage",
+    ],
     # Every read action (``<resource>:read`` / ``read_internal``) plus the ABAC
     # component:access read path, so a read-only token can still read
     # gated/public components (can() checks scope before ABAC). Keyed on the verb,
@@ -276,6 +334,38 @@ SCOPE_PRESETS: dict[str, list[str] | None] = {
         [action for action in _ROLE_ACTIONS if action.split(":", 1)[1].startswith("read")] + list(_ABAC_ACTIONS)
     ),
 }
+
+
+# Every scope list the AI agent preset has ever stored. Tokens keep the list they
+# were created with, so recognising an agent token means matching any of these,
+# not just today's preset.
+_AGENT_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
+    frozenset({"workspace:read", "vex_submission:create", "vex_submission:read"}),
+    frozenset(SCOPE_PRESETS["agent"] or []),
+)
+
+
+def is_agent_scope(scopes: list[str] | None) -> bool:
+    """True iff ``scopes`` is a list the AI agent preset produced, now or before."""
+    return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
+
+
+def credential_channel(request: Any) -> str:
+    """How an API request was sent, read off its credential: ``ci``, ``agent`` or ``api``.
+
+    ``ci`` is an OIDC trusted-publishing token. ``agent`` is a token made with
+    the AI agent preset: a choice a person made when creating it, which is as
+    close to "this is an agent" as a token, always owned by a person, can say.
+    Anything else, a signed-in session calling the API included, is ``api``.
+    """
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    if request_is_oidc_authed(request):
+        return "ci"
+    token = getattr(request, "access_token_record", None)
+    if token is not None and is_agent_scope(token.scopes):
+        return "agent"
+    return "api"
 
 
 def _scope_permits(scopes: list[str] | None, action: str) -> bool:

@@ -15,7 +15,7 @@ from sbomify.apps.core.services import inventory_page
 from sbomify.apps.core.services.product_page import build_product_page_context, build_product_releases_context
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.tests.test_inventory_page import scan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -48,7 +48,7 @@ def test_product_metrics_remain_unfiltered_and_releases_use_their_own_artifacts(
     result = context(member, product, search="Clean")
     assert [row["id"] for row in result["inventory"]["rows"]] == [clean.id]
     # Open is a real count, so it is reported even though one component is
-    # unassessed. Past your patch SLA is a zero standing beside that unassessed
+    # unassessed. Past patch SLA is a zero standing beside that unassessed
     # component, which is a zero the page cannot stand behind.
     assert result["metrics"] == {
         "components": 4,
@@ -73,7 +73,7 @@ def test_product_scope_cannot_be_changed_by_filters_or_foreign_relationships(
     other = Product.objects.create(name="Other", team=member.team)
     own = Component.objects.create(name="Own", team=member.team)
     unrelated = Component.objects.create(name="Unrelated", team=member.team)
-    foreign = Component.objects.create(name="Secret", team=Team.objects.create(name="Foreign"))
+    foreign = Component.objects.create(name="Secret", team=Workspace.objects.create(name="Foreign"))
     product.components.add(own)
     from sbomify.apps.sboms.models import ProductComponent
 
@@ -113,7 +113,7 @@ def test_product_membership_forms_preserve_other_assignments_and_reject_foreign_
         Component.objects.create(
             name="Workspace document", team=member.team, component_type="document", is_global=True
         ),
-        Component.objects.create(name="Foreign", team=Team.objects.create(name="Other workspace")),
+        Component.objects.create(name="Foreign", team=Workspace.objects.create(name="Other workspace")),
     ]
     for component in invalid:
         response = client.post(
@@ -187,3 +187,45 @@ def test_release_postures_are_computed_for_the_shown_releases_only(
     assert max(len(call.args[0]) for call in postures.call_args_list) == 10
     assert releases.value["inventory"]["total"] == total
     assert releases.value["release_editor_data"] == releases.value["inventory"]["rows"]
+
+
+def test_release_preview_shares_the_full_table_columns_and_the_page_says_where_it_sits(
+    sample_team_with_owner_member: Member,
+) -> None:
+    from sbomify.apps.core.services.inventory_page import COLUMNS
+    from sbomify.apps.core.services.product_page import build_product_releases_context
+
+    member = sample_team_with_owner_member
+    product = Product.objects.create(name="Product", team=member.team)
+    Release.objects.create(product=product, name="release-candidate-nightly-build")
+    result = context(member, product)
+    # The preview and the full history are one table: without the column keys
+    # every preview column falls back to the same width and the two read as
+    # different tables one screen apart.
+    assert result["release_inventory"]["headers"] == [
+        {"key": key, "label": label} for key, label in COLUMNS["releases"]
+    ]
+    assert result["breadcrumb_items"] == [
+        {"label": "Products", "url": reverse("core:products_dashboard")},
+        {"label": product.name},
+    ]
+    request = RequestFactory().get(reverse("core:product_releases", args=[product.id]))
+    request.user = member.user
+    request.session = {"current_workspace": {"key": member.team.key, "role": "owner"}}
+    history = build_product_releases_context(request, product.id)
+    assert history.ok and history.value is not None
+    assert history.value["breadcrumb_items"] == [
+        {"label": "Products", "url": reverse("core:products_dashboard")},
+        {"label": product.name, "url": reverse("core:product_details", args=[product.id])},
+        {"label": "Releases"},
+    ]
+
+
+def test_product_page_renders_its_trail_above_the_description(sample_team_with_owner_member: Member) -> None:
+    member = sample_team_with_owner_member
+    product = Product.objects.create(name="Product", team=member.team, description="What this product is")
+    client = Client()
+    setup_authenticated_client_session(client, member.team, member.user)
+    html = client.get(reverse("core:product_details", args=[product.id])).content.decode()
+    assert 'aria-label="Breadcrumb"' in html
+    assert "What this product is" in html

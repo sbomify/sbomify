@@ -16,20 +16,35 @@ legacy stylesheets carrying 140 !important declarations. A class name that
 collides with one of those loses, silently, only on the pages this library
 exists for. test_no_component_uses_a_class_the_legacy_sheets_override is the
 guard.
+
+That seam is wider than this library, so the guards over it are too. A public
+page renders mostly main-library components, and it carries its own layout
+classes; test_no_public_template_uses_a_class_the_legacy_sheets_override walks
+out from the page shells that link the legacy sheet and covers everything they
+reach. The collision does not need a class name either: a redeclared
+--radius-* forked the whole radius scale through variables the utilities read,
+which is what test_only_the_tailwind_entrypoint_declares_the_radius_scale pins.
 """
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
 from django.conf import settings
 from django.template.loader import render_to_string
+from django.urls import URLResolver, get_resolver
 
 from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
 
 APP_ROOT = Path(settings.BASE_DIR) / "sbomify"
 BRANDED_DIR = APP_ROOT / "templates" / "components" / "branded"
 LEGACY_CSS = APP_ROOT / "static" / "css" / "utilities.css"
+TOKENS_CSS = APP_ROOT / "static" / "css" / "tokens.css"
+TEMPLATE_DIRS = [APP_ROOT / "templates", *sorted((APP_ROOT / "apps").glob("*/templates"))]
+COTTON_DIR = settings.COTTON_DIR
+# Tailwind's --spacing, the base its numbered spacing utilities multiply.
+TAILWIND_SPACING_REM = 0.25
 
 
 @pytest.fixture(scope="module")
@@ -134,6 +149,111 @@ def test_current_nav_item_is_marked_for_a_reader_and_a_screen_reader(rendered: s
     assert "border-transparent" in other
 
 
+# ── Page furniture ─────────────────────────────────────────────────────────
+
+
+def test_masthead_shares_the_track_the_nav_and_content_use(rendered: str) -> None:
+    """One width and gutter, so the header, nav and page read as one column."""
+    track = _classes(rendered, "div", 'data-probe="masthead"')
+    assert "border-border" in track
+    assert not any("var(--brand)" in utility for utility in track)
+    inner = rendered.split('data-probe="masthead"', 1)[1]
+    assert "max-w-[1200px]" in inner[: inner.index(">", inner.index("<div")) + 1]
+
+
+def test_back_link_is_muted_text_the_legacy_sheet_leaves_alone(rendered: str) -> None:
+    """Read before it is acted on, so never brand-coloured; data-button keeps the
+    public sheet's bare-anchor rule from repainting it in the accent."""
+    link = _open_tag(rendered, "a", 'data-probe="back-link"')
+    assert "data-button" in link
+    assert 'href="/advisories/"' in link
+    classes = _classes(rendered, "a", 'data-probe="back-link"')
+    assert "text-text-muted" in classes
+    assert not any("--brand" in utility for utility in classes)
+
+
+def test_fact_is_a_definition_pair_on_one_line_unless_stacked(rendered: str) -> None:
+    inline = _classes(rendered, "div", 'data-probe="fact"')
+    stacked = _classes(rendered, "div", 'data-probe="fact-stacked"')
+    assert "justify-between" in inline and "flex-col" not in inline
+    assert "flex-col" in stacked and "justify-between" not in stacked
+    pair = rendered.split('data-probe="fact"', 1)[1]
+    assert pair.index("<dt") < pair.index("Published") < pair.index("<dd") < pair.index("3 Aug 2026")
+
+
+def test_panel_is_a_surface_with_its_title_inside(rendered: str) -> None:
+    panel = _classes(rendered, "div", 'data-probe="panel"')
+    assert {"bg-surface", "border-border"} <= panel
+    assert "<h2" in rendered.split('data-probe="panel"', 1)[1].split("</h2>", 1)[0]
+
+
+def test_timeline_dot_takes_the_status_ramp_never_the_brand(rendered: str) -> None:
+    """A timeline colour means something, so it is a platform token, and a
+    status the model gains later is quiet instead of unstyled."""
+    latest = _open_tag(rendered, "li", 'data-probe="timeline-latest"')
+    assert "--tone: var(--color-success)" in latest
+    assert "--brand" not in latest
+    unknown = _open_tag(rendered, "li", 'data-probe="timeline-last"')
+    assert "--tone: var(--color-text-muted)" in unknown
+
+
+def test_timeline_reads_newest_and_oldest_from_the_list_not_from_props(rendered: str) -> None:
+    """A conditional prop renders empty, and cotton reads an empty attribute as
+    a set boolean, so position comes from the list: the first item is ringed
+    and the last drops its rail."""
+    item = rendered.split('data-probe="timeline-latest"', 1)[1].split("</li>", 1)[0]
+    assert "group-first/event:shadow-" in item
+    assert "group-last/event:hidden" in item
+
+
+def test_version_check_keeps_its_title_inside_and_announces_one_result(rendered: str) -> None:
+    """The title sits in the panel so its top edge lines up with the side
+    column, and a typed version is announced once, not by every row."""
+    check = rendered.split('data-probe="version-check"', 1)[1]
+    assert "versionCheck('probe-checks')" in _open_tag(rendered, "div", 'data-probe="version-check"')
+    assert "<h2" in check.split('data-probe="version-row"', 1)[0]
+    assert 'aria-live="polite"' in check
+
+
+def test_version_row_folds_its_chips_without_scripts_and_unfolds_a_match(rendered: str) -> None:
+    """Chips past the limit fold behind a native details, and a chip whose range
+    holds the typed version shows even while folded."""
+    row = rendered.split('data-probe="version-row"', 1)[1].split('data-probe="version-row-quiet"', 1)[0]
+    assert 'aria-label="Affected versions of Acme Gateway"' in row
+    assert row.count("<li") == 3
+    assert "Show all 3" in row
+    folded = _classes(row, "li", "From 2.0.0")
+    assert {"[display:none]", "group-has-[details[open]]/fold:[display:list-item]"} <= folded
+    assert "data-[match=in]:[display:list-item]" in folded
+    assert ":data-match=\"match('row', 2)\"" in row
+
+
+def test_version_row_renders_nothing_for_a_slot_left_empty(rendered: str) -> None:
+    """A slot a page leaves out, or sets inside a false condition, must not
+    leave an empty paragraph holding a gap open in the row."""
+    row = rendered.split('data-probe="version-row-quiet"', 1)[1].split("</c-branded", 1)[0]
+    row = row.split('data-probe="expandable"', 1)[0]
+    assert "font-mono text-xs text-text-muted" not in row
+    assert "text-sm leading-6" not in row
+
+
+def test_expandable_clamps_only_once_scripts_run(rendered: str) -> None:
+    """Without scripts the whole text shows: the clamp is bound by Alpine,
+    never written into the markup."""
+    body = _open_tag(rendered.split('data-probe="expandable"', 1)[1], "div", 'x-ref="body"')
+    assert ":data-clamped=" in body
+    assert " data-clamped" not in body.replace(":data-clamped", "")
+
+
+def test_a_markdown_link_reads_in_the_body_ink_over_the_legacy_repaint(rendered: str) -> None:
+    """The renderer marks links .text-primary, which a public page repaints in
+    the accent with !important, so the note's link colour has to be important
+    too, and has to be the body ink rather than the brand."""
+    markdown = _classes(rendered, "div", 'data-probe="markdown"')
+    assert {"[&_a]:text-text!", "[&_a]:underline!"} <= markdown
+    assert not any("brand" in name for name in markdown)
+
+
 # ── The legacy-collision guard ──────────────────────────────────────────────
 
 
@@ -149,10 +269,277 @@ def _legacy_important_classes() -> set[str]:
     return important
 
 
+def _elements(template: Path) -> list[set[str]]:
+    """The literal class tokens each ``class="…"`` writes, one set per element.
+
+    Per element rather than per file, because whether a collision bites can
+    depend on what else is on the same element: see
+    _exemptions_on. Branches inside one attribute are merged, which can only
+    make the guard stricter.
+
+    Variant-prefixed utilities are kept whole on purpose. ``first:pl-4`` puts the
+    class ``first:pl-4`` on the element, which the legacy ``.pl-4`` selector
+    cannot match, so it is not a collision; ``tables/cell.html`` relies on that.
+    Only a bare name can lose.
+    """
+    return [
+        # Drop template tags, then keep the literal utilities around them.
+        set(re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split())
+        for attr in re.findall(r'class="([^"]*)"', template.read_text(errors="ignore"))
+    ]
+
+
+def _class_names(template: Path) -> set[str]:
+    """Every literal class token a template writes, element boundaries dropped."""
+    return set().union(*_elements(template)) if _elements(template) else set()
+
+
+def _spacing_utility(name: str) -> tuple[str, bool] | None:
+    """``('m' | 'p', is_shorthand)`` for a spacing utility, else None.
+
+    ``m-0`` is the shorthand, ``mt-0``, ``mx-4`` and ``ms-2`` are not. Variant
+    prefixes are stripped first; a ``:`` inside an arbitrary value is not one.
+    """
+    depth, start = 0, 0
+    for index, character in enumerate(name):
+        depth += (character == "[") - (character == "]")
+        if character == ":" and depth == 0:
+            start = index + 1
+    head = name[start:].lstrip("-").split("-", 1)[0]
+    if head in ("m", "p"):
+        return head, True
+    if len(head) == 2 and head[0] in ("m", "p") and head[1] in "tblrxyse":
+        return head[0], False
+    return None
+
+
+def _rem(length: str) -> float:
+    length = length.strip()
+    return float(length.removesuffix("rem")) if length.endswith("rem") else float(length)
+
+
+def _spacing_steps_that_cannot_diverge() -> set[str]:
+    """Bootstrap steps whose legacy length equals Tailwind's step of the same name.
+
+    ``.p-2 { padding: var(--spacing-sm) !important }`` only hurts if
+    ``--spacing-sm`` is not what Tailwind's ``p-2`` would have been. It is
+    0.5rem and Tailwind's second step is 0.5rem, so that override paints the
+    value it replaced. Step 3 upwards is where the two scales part: the legacy
+    sheet runs 1rem / 1.5rem / 2rem against Tailwind's 0.75 / 1 / 1.25.
+
+    Read out of tokens.css rather than listed, so retuning that scale moves
+    which names this guard forbids instead of quietly invalidating it.
+    """
+    scale = dict(re.findall(r"--spacing-(\w+):\s*([^;]+);", TOKENS_CSS.read_text()))
+    agree = {"0"}
+    for step, name in (("1", "xs"), ("2", "sm"), ("3", "md"), ("4", "lg"), ("5", "xl")):
+        if name in scale and abs(_rem(scale[name]) - int(step) * TAILWIND_SPACING_REM) < 1e-9:
+            agree.add(step)
+    return agree
+
+
+def _collisions_that_cannot_bite() -> set[str]:
+    """Legacy !important names whose declaration states the value it overrides.
+
+    Every other name in that sheet is forbidden on a public page. These are not
+    forbidden because the override is a no-op: the legacy rule and Tailwind's
+    utility of the same name compute the same thing, so the page renders as the
+    app does. Each group has a reason, and the spacing group has a test.
+    """
+    sides = ("m", "mt", "mb", "ml", "mr", "p", "pt", "pb", "pl", "pr")
+    return {
+        # The steps where the two spacing scales still agree, zero included.
+        *(f"{side}-{step}" for side in sides for step in _spacing_steps_that_cannot_diverge()),
+        # One keyword, spelled the same on both sides. There is no scale to drift.
+        "flex-row",
+        "flex-wrap",
+        "text-left",
+        "text-right",
+        "text-center",
+        "overflow-auto",
+        "overflow-hidden",
+        "overflow-visible",
+        "overflow-scroll",
+        "w-auto",
+        "h-auto",
+        # These read the very --radius-* variable Tailwind's own utility reads,
+        # so they cannot part from it. Bare `rounded` is not here: the legacy
+        # rule reads --radius-md where Tailwind's `rounded` is a literal 0.25rem.
+        "rounded-sm",
+        "rounded-lg",
+    }
+
+
+def _exemptions_on(element: set[str]) -> set[str]:
+    """The exemptions that still hold for one element's class list.
+
+    Matching lengths make an override harmless only while nothing else on the
+    element writes the same property. ``.m-0 { margin: 0 !important }`` is a
+    shorthand: on ``class="m-0 mt-0.5"`` it zeroes the top margin Tailwind's
+    longhand asked for, so the pair renders differently on a public page even
+    though ``m-0`` and Tailwind's ``m-0`` agree in isolation. A shorthand is
+    therefore only forgiven on an element that writes no longhand of its family.
+    """
+    families = {found[0] for token in element if (found := _spacing_utility(token)) is not None and not found[1]}
+    return {
+        name
+        for name in _collisions_that_cannot_bite()
+        if not ((found := _spacing_utility(name)) is not None and found[1] and found[0] in families)
+    }
+
+
+def _resolve(name: str) -> Path | None:
+    for directory in TEMPLATE_DIRS:
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _component_template(tag: str) -> Path | None:
+    """``<c-forms.search-input>`` is ``components/forms/search_input.html``."""
+    parts = [part.replace("-", "_") for part in tag.removeprefix("c-").split(".")]
+    for suffix in (".html", ".html.j2", ".j2"):
+        if found := _resolve(f"{COTTON_DIR}/{'/'.join(parts)}{suffix}"):
+            return found
+    return None
+
+
+def _views_by_url_name() -> dict[str, object]:
+    """Every ``{% url %}`` name in the project mapped to the view behind it."""
+
+    def walk(patterns, prefix: str) -> dict[str, object]:
+        found: dict[str, object] = {}
+        for pattern in patterns:
+            if isinstance(pattern, URLResolver):
+                namespace = f"{prefix}{pattern.namespace}:" if pattern.namespace else prefix
+                found.update(walk(pattern.url_patterns, namespace))
+            elif pattern.name:
+                found[f"{prefix}{pattern.name}"] = pattern.callback
+        return found
+
+    return walk(get_resolver().url_patterns, "")
+
+
+def _htmx_templates(template: Path) -> set[Path]:
+    """Templates a public page fetches over HTMX.
+
+    hx-get names a URL, not a template, so the walk goes through the resolver:
+    the URL name gives the view, and the view's own module names the partial it
+    renders. component_item_public pulls crypto_inventory_card.html.j2 in this
+    way, and nothing reached it from a template, so neither guard saw it.
+
+    Deliberately over-inclusive, taking every template path the view's module
+    mentions rather than tracing which branch renders. A guard that is too wide
+    only asks for care in a file that is already one hx-get from a public page.
+    """
+    text = template.read_text(errors="ignore")
+    views = _views_by_url_name()
+    out: set[Path] = set()
+    for name in re.findall(r"""hx-(?:get|post|put|patch|delete)="\{%\s*url\s+['"]([^'"]+)['"]""", text):
+        view = views.get(name)
+        module = sys.modules.get(getattr(view, "__module__", "")) if view else None
+        source = getattr(module, "__file__", None)
+        if not source:
+            continue
+        for quoted in re.findall(r"""["']([\w./-]+\.(?:html\.j2|html|j2))["']""", Path(source).read_text()):
+            if found := _resolve(quoted):
+                out.add(found)
+    return out
+
+
+def _references(template: Path) -> set[Path]:
+    """Every template this one pulls in: extends, include, cotton tags, HTMX."""
+    text = template.read_text(errors="ignore")
+    out: set[Path] = _htmx_templates(template)
+    for name in re.findall(r'{%\s*(?:extends|include)\s+["\']([^"\']+)["\']', text):
+        if found := _resolve(name):
+            out.add(found)
+    for tag in re.findall(r"<(c-[a-zA-Z0-9_.\-]+)", text):
+        if tag.startswith(("c-vars", "c-slot")):
+            continue
+        if found := _component_template(tag):
+            out.add(found)
+    return out
+
+
+def _templates_the_legacy_sheets_reach() -> set[Path]:
+    """Every template rendered on a page that loads utilities.css.
+
+    Derived rather than listed. The roots are the page shells that link the
+    legacy sheet, which today is public_base plus the enterprise contact page;
+    anything extending one of those inherits the problem, and the walk down
+    through include and cotton tags collects the components they compose. A new
+    public page is therefore in scope the moment it extends public_base.
+    """
+    templates = [path for directory in TEMPLATE_DIRS for path in directory.rglob("*") if path.is_file()]
+    reached = {path for path in templates if LEGACY_CSS.name in path.read_text(errors="ignore")}
+    growing = True
+    while growing:
+        growing = False
+        for path in templates:
+            if path in reached:
+                continue
+            for name in re.findall(r'{%\s*extends\s+["\']([^"\']+)["\']', path.read_text(errors="ignore")):
+                if _resolve(name) in reached:
+                    reached.add(path)
+                    growing = True
+    queue = list(reached)
+    while queue:
+        for reference in _references(queue.pop()):
+            if reference not in reached:
+                reached.add(reference)
+                queue.append(reference)
+    return reached
+
+
 def test_the_legacy_sheet_still_looks_the_way_this_guard_assumes() -> None:
     """If utilities.css is deleted, the guard below must fail loudly, not pass."""
     assert LEGACY_CSS.exists(), "utilities.css moved; update or retire the collision guard"
     assert len(_legacy_important_classes()) > 50
+
+
+def test_the_spacing_steps_this_guard_forgives_are_the_ones_that_match() -> None:
+    """_collisions_that_cannot_bite is arithmetic, so the arithmetic gets a test.
+
+    Steps 0, 1 and 2 are forgiven in about forty templates. They are only safe
+    while --spacing-xs and --spacing-sm hold the lengths Tailwind's steps hold,
+    which is exactly the "one prop away" risk this file exists to close. If that
+    scale is retuned, the step drops out of the forgiven set here and the guard
+    starts naming every template using it.
+    """
+    agree = _spacing_steps_that_cannot_diverge()
+    assert {"0", "1", "2"} <= agree, f"the legacy spacing scale moved under the guard: {agree}"
+    assert not {"3", "4", "5"} & agree, "the scales converged; retire the arbitrary-value workarounds"
+
+
+def test_a_shorthand_is_only_forgiven_while_no_longhand_competes() -> None:
+    """m-0 and Tailwind's m-0 agree, but .m-0 is !important and is a shorthand.
+
+    Beside mt-0.5 it zeroes the top margin Tailwind asked for, so the pair does
+    not render the way it does in the app even though each name checks out on
+    its own. release_details_public wrote exactly that combination.
+    """
+    assert "m-0" in _exemptions_on({"text-xs", "m-0"})
+    assert "m-0" not in _exemptions_on({"text-xs", "m-0", "mt-0.5"})
+    assert "p-2" not in _exemptions_on({"p-2", "pl-6"})
+    # Only its own family, and only the shorthand.
+    assert "p-0" in _exemptions_on({"p-0", "mt-1"})
+    assert "mb-0" in _exemptions_on({"m-0", "mb-0", "mt-1"})
+
+
+def test_the_scope_follows_an_hx_get_to_the_partial_it_fetches() -> None:
+    """A public page loads half its content over HTMX, which names no template.
+
+    component_item_public reaches crypto_inventory_card through a URL and a
+    view, so a walk over extends, include and cotton tags alone stops at the
+    placeholder div. Its pt-3 and mt-3 took the larger legacy spacing with no
+    guard watching.
+    """
+    reached = {path.relative_to(APP_ROOT).as_posix() for path in _templates_the_legacy_sheets_reach()}
+    assert "apps/sboms/templates/sboms/components/crypto_inventory_card.html.j2" in reached
+    # Fetched by component_details_public_document, and it carries two modals.
+    assert "apps/documents/templates/documents/documents_table.html.j2" in reached
 
 
 def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
@@ -162,19 +549,16 @@ def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
     !important, so it wins wherever both are loaded. The same trap holds for
     rounded-lg, shadow-sm, w-50 and text-muted. Components stay off those
     names; px-*, py-*, gap-*, rounded-xl and the token utilities are clear.
+
+    This set carries no forgiveness: a branded component is written for the
+    public pages, so it has no excuse for naming one of those classes at all.
     """
     legacy = _legacy_important_classes()
-    offenders: dict[str, set[str]] = {}
-
-    for template in sorted(BRANDED_DIR.rglob("*.html")):
-        used: set[str] = set()
-        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
-            # Drop template tags, then keep the literal utilities around them.
-            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
-                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
-        if collisions := used & legacy:
-            offenders[template.relative_to(BRANDED_DIR).as_posix()] = collisions
-
+    offenders = {
+        template.relative_to(BRANDED_DIR).as_posix(): collisions
+        for template in sorted(BRANDED_DIR.rglob("*.html"))
+        if (collisions := _class_names(template) & legacy)
+    }
     assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
 
 
@@ -186,6 +570,25 @@ def test_badge_drives_every_tone_from_one_recipe(rendered: str) -> None:
     critical = _open_tag(rendered, "span", 'data-probe="badge-critical"')
     assert "--tone: var(--color-severity-critical)" in critical
     assert "bg-[color-mix(in_oklab,var(--tone)_14%,transparent)]" in critical
+
+
+def test_a_dashed_badge_is_an_outline_that_cannot_pass_for_a_tone(rendered: str) -> None:
+    """Withdrawn once borrowed the medium tint and read as a second severity."""
+    dashed = _classes(rendered, "span", 'data-probe="badge-dashed"')
+    assert {"border-dashed", "bg-[transparent]"} <= dashed
+    assert "border-solid" not in dashed
+    assert not any("_14%" in utility for utility in dashed)
+
+
+def test_a_labelled_meta_item_sets_only_its_value_in_mono(rendered: str) -> None:
+    """The label is a word, the value an identifier; several of them wrap apart."""
+    item = _classes(rendered, "span", 'data-probe="meta-labelled"')
+    assert "font-mono" not in item
+    assert "[flex-wrap:wrap]" in item
+    tag = _open_tag(rendered, "span", 'data-probe="meta-labelled"')
+    after = rendered[rendered.index(tag) + len(tag) :]
+    value = r"<span class=\"\[display:contents\] text-text-secondary font-mono text-xs\">"
+    assert re.search(r"<span>\s*CVE IDs\s*</span>\s*" + value, after)
 
 
 def test_badge_covers_the_whole_severity_ramp(rendered: str) -> None:
@@ -295,51 +698,60 @@ def test_a_credential_is_not_branded(rendered: str) -> None:
 
 
 def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
-    """The same guard, applied to the pages rather than the components.
+    """The same guard, over everything the legacy sheets actually reach.
 
-    A component is not the only thing that can name a colliding utility: a page
-    composing them writes layout classes too, and these pages are exactly the
-    ones that load the legacy sheets. mb-4 slipped through this way, resolving
-    to the legacy spacing variable rather than Tailwind's 1rem.
+    A branded component is not the only thing that can name a colliding
+    utility. A page composing them writes layout classes too, and so does every
+    main-library component a public page happens to render, which is most of
+    them: 92 of the 209 named one of these classes while this guard watched
+    three trust-centre pages and the branded directory. mb-4 came out at 24px on
+    a public product page against 16px in the app, and pt-5 at 32px against
+    20px, on shipped markup nothing was looking at.
 
-    Pre-existing offenders are listed rather than fixed, so the guard can be
-    strict about new ones without turning red on markup this branch did not
-    write. Shrink the list, never grow it.
+    Scope is computed, not listed, so a new public page cannot land outside it,
+    and it follows hx-get through the resolver as well as extends, include and
+    cotton tags. What is forgiven is computed too, per element: a name whose
+    legacy declaration states the length it overrides renders the same on both
+    sides, unless something else on that element writes the same property. See
+    _collisions_that_cannot_bite and _exemptions_on. Everything else is an
+    offender, with no per-template allowlist to grow.
     """
-    known = {
-        "components/trust_center/advisories_browse.html.j2": {"flex-wrap", "mb-2", "mb-3", "mt-1", "p-2"},
-        "workspace_public.html.j2": {"flex-wrap", "mt-1"},
-        # Not migrated yet; these go when that page is.
-        "trust_center_advisory_detail.html.j2": {
-            "flex-wrap",
-            "m-0",
-            "mb-3",
-            "mb-5",
-            "ml-1",
-            "mt-1",
-            "mt-4",
-        },
-    }
     legacy = _legacy_important_classes()
-    trust_center = [
-        APP_ROOT / "apps/core/templates/core/workspace_public.html.j2",
-        APP_ROOT / "apps/core/templates/core/trust_center_advisories.html.j2",
-        APP_ROOT / "apps/core/templates/core/trust_center_advisory_detail.html.j2",
-        *sorted((APP_ROOT / "apps/core/templates/core/components/trust_center").glob("*.j2")),
-    ]
     offenders: dict[str, set[str]] = {}
-    for template in trust_center:
-        if not template.exists():
-            continue
-        used: set[str] = set()
-        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
-            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
-                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
-        key = template.as_posix().split("core/templates/core/")[-1]
-        if fresh := (used & legacy) - known.get(key, set()):
-            offenders[key] = fresh
+    for template in sorted(_templates_the_legacy_sheets_reach()):
+        collisions: set[str] = set()
+        for element in _elements(template):
+            collisions |= (element & legacy) - _exemptions_on(element)
+        if collisions:
+            offenders[template.relative_to(APP_ROOT).as_posix()] = collisions
+    assert not offenders, (
+        "classes the legacy !important sheets would override on a public page: "
+        f"{offenders}. Use px-*/py-*/gap-*, an arbitrary value such as mb-[1rem], "
+        "or a token utility instead."
+    )
 
-    assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
+
+def test_only_the_tailwind_entrypoint_declares_the_radius_scale() -> None:
+    """The scale has one home, because a second one forks it silently.
+
+    public_base.htmx.j2 and tokens.css both used to restate --radius-*. Both are
+    unlayered and Tailwind publishes its theme inside @layer theme, so both beat
+    it whatever the source order: rounded-xl measured 16px on a public page
+    against 12px in the app, on every card, table frame, stat card and alert.
+    rounded-xl is the radius AGENTS.md names as the safe one, and the rule that
+    was written to prevent this could not see it, because the class name was
+    never the problem.
+    """
+    searched = [
+        *sorted((APP_ROOT / "static" / "css").rglob("*.css")),
+        *sorted(_templates_the_legacy_sheets_reach()),
+    ]
+    offenders = {
+        path.relative_to(APP_ROOT).as_posix(): sorted(set(found))
+        for path in searched
+        if (found := re.findall(r"(--radius-[a-z0-9]+)\s*:", path.read_text(errors="ignore")))
+    }
+    assert not offenders, f"--radius-* belongs to sbomify/assets/css/tailwind.src.css alone, found in: {offenders}"
 
 
 def test_no_template_has_a_comment_that_renders_as_page_text() -> None:

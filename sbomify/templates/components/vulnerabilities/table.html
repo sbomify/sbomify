@@ -30,27 +30,32 @@
         {% if vuln.cvss_score != None %}<div class="text-xs text-text-muted pt-1">CVSS {{ vuln.cvss_score }}</div>{% endif %}
         </c-tables.cell>
         <c-tables.cell nowrap>
+        <c-tables.name>
         {% with vuln_url=vuln.id|advisory_url %}
             {% if vuln_url %}
                 <a href="{{ vuln_url }}"
                    target="_blank"
                    rel="noopener"
-                   class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                    {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                   title="{{ vuln.id }}"
+                   class="font-medium text-primary hover:underline">
+                    {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem] ml-1" aria-hidden="true"></i>
                 </a>
             {% else %}
-                <span class="font-medium text-text-muted">{{ vuln.id }}</span>
+                <span class="font-medium text-text-muted" title="{{ vuln.id }}">{{ vuln.id }}</span>
             {% endif %}
         {% endwith %}
+        <c-slot name="trail">
         {% if vuln.malicious %}
-            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="Malicious package: remove it rather than upgrade">Malicious</c-badges.solid-danger>
+            <c-badges.solid-danger size="sm" title="Malicious package: remove it rather than upgrade">Malicious</c-badges.solid-danger>
         {% endif %}
         {% if vuln.kev %}
-            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
+            <c-badges.solid-danger size="sm" title="In CISA's Known Exploited Vulnerabilities catalog">KEV</c-badges.solid-danger>
         {% endif %}
         {% if vuln.euvd %}
-            <c-badges.solid-danger size="sm" class="ml-1.5 align-middle" title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</c-badges.solid-danger>
+            <c-badges.solid-danger size="sm" title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</c-badges.solid-danger>
         {% endif %}
+        </c-slot>
+        </c-tables.name>
         {% if vuln.title %}
             <div class="text-xs text-text-muted mt-1 whitespace-normal max-w-md">
                 {{ vuln.title|advisory_prose|truncatewords:20 }}
@@ -109,7 +114,7 @@
         </c-tables.cell>
         {% if can_triage %}
             <c-tables.cell nowrap>
-            <c-vulnerabilities.triage-action :id="vuln.id" :purl="vuln.purl" :state="vuln.vex_state" :justification="vuln.vex_justification" :detail="vuln.vex_detail" :aliases="vuln.aliases" />
+            <c-vulnerabilities.triage-action :id="vuln.triage_id" :purl="vuln.triage_purl" :anchor="vuln.triage_anchor_purl" :state="vuln.triage_state" :justification="vuln.triage_justification" :detail="vuln.triage_detail" :aliases="vuln.triage_aliases" :accepted_until="vuln.triage_accepted_until" :risk_owner="vuln.triage_risk_owner" />
             </c-tables.cell>
         {% endif %}
         </c-tables.row>

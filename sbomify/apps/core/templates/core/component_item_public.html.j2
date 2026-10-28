@@ -18,90 +18,75 @@
     {% endif %}
 {% endblock %}
 {% block page_header %}
-    <header class="tc-masthead">
-        <div class="tc-masthead-inner tc-masthead-detail" x-data>
-            <a class="tc-backlink"
-               href="{% url 'core:component_details_public' component.id %}"
-               @click.prevent="window.history.length > 1 ? window.history.back() : window.location.href = $el.href">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i>
-                {{ component.name }}
-            </a>
-            <div class="tc-detail-eyebrow">
-                <p class="tc-eyebrow">
-                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
-                    {% if component.component_type == 'bom' %}
-                        {{ item.bom_type|default:"SBOM" }}
-                    {% else %}
-                        Document
-                    {% endif %}
-                </p>
-            </div>
-            <h1 class="tc-detail-title">{{ item.name }}</h1>
-            <p class="tc-detail-summary">
-                {% if component.component_type == 'bom' %}
-                    {{ item.bom_type|default:"SBOM"|upper }}
-                {% else %}
-                    Document
-                {% endif %}
-                from {{ component.name }}
-            </p>
-            <div class="tc-detail-meta">
-                {% if component.component_type == 'bom' %}
-                    {# The badge keys its tint off the attribute, so the format has to reach it whole. #}
-                    {% if item.format == 'cyclonedx' %}
-                        <c-badges.format format="cyclonedx">CYCLONEDX {{ item.format_version }}</c-badges.format>
-                    {% elif item.format == 'spdx' %}
-                        <c-badges.format format="spdx">SPDX {{ item.format_version }}</c-badges.format>
-                    {% else %}
-                        <c-badges.format format="spdx">{{ item.format|upper }} {{ item.format_version }}</c-badges.format>
-                    {% endif %}
-                {% elif component.component_type == 'document' %}
-                    <span class="tc-detail-meta-item">
-                        <i class="fas fa-file" aria-hidden="true"></i>
-                        {{ item.document_type|default:"Document" }}
-                    </span>
-                {% endif %}
-                {% if item.version %}
-                    <span class="tc-detail-meta-item tc-detail-meta-mono"
-                          title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                {% endif %}
-                {% for assessment in passing_assessments %}
-                    {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-                {% endfor %}
-            </div>
-        </div>
-    </header>
+    <c-branded.masthead x-data>
+    <c-branded.back-link href="{% url 'core:component_details_public' component.id %}" @click.prevent="window.history.length > 1 ? window.history.back() : window.location.href = $el.href">{{ component.name }}</c-branded.back-link>
+    {% if component.component_type == 'bom' %}
+        {% firstof item.bom_type|upper "SBOM" as item_kind %}
+    {% else %}
+        {% firstof "Document" as item_kind %}
+    {% endif %}
+    <c-branded.page-header title="{{ item.name }}" lede="{{ item_kind }} from {{ component.name }}">
+    <c-slot name="eyebrow">
+    <c-branded.badge brand>{{ item_kind }}</c-branded.badge>
+    </c-slot>
+    <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
+        {% if component.component_type == 'bom' %}
+            {# The badge keys its tint off the attribute, so the format has to reach it whole. #}
+            {% if item.format == 'cyclonedx' %}
+                <c-badges.format format="cyclonedx">CYCLONEDX {{ item.format_version }}</c-badges.format>
+            {% elif item.format == 'spdx' %}
+                <c-badges.format format="spdx">SPDX {{ item.format_version }}</c-badges.format>
+            {% else %}
+                <c-badges.format format="spdx">{{ item.format|upper }} {{ item.format_version }}</c-badges.format>
+            {% endif %}
+        {% elif component.component_type == 'document' %}
+            <c-branded.meta-item icon="fas fa-file">{{ item.document_type|default:"Document" }}</c-branded.meta-item>
+        {% endif %}
+        {% if item.version %}
+            <c-branded.meta-item mono title="{{ item.version }}">{{ item.version|truncatechars:30 }}</c-branded.meta-item>
+        {% endif %}
+        {% for assessment in passing_assessments %}
+            {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+        {% endfor %}
+    </div>
+    </c-branded.page-header>
+    </c-branded.masthead>
 {% endblock %}
 {% block content %}
-    <div class="tc-panel">
-        <h2 class="tc-panel-title">Download</h2>
-        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
-            <div class="min-w-0 flex-1">
-                <p class="text-text font-medium m-0">{{ item.name }}</p>
-                <p class="text-text-muted text-sm m-0 mt-1">The file exactly as it was published. sbomify never modifies artifacts.</p>
-            </div>
-            {% if component.component_type == 'bom' %}
-                {% url 'sboms:sbom_download' item.id as download_url %}
-            {% elif component.component_type == 'document' %}
-                {% url 'documents:document_download' item.id as download_url %}
-            {% endif %}
-            <c-buttons.secondary href="{{ download_url }}" class="no-underline">
-            <i class="fas fa-download"></i>
-            Download
-            {% if component.component_type == 'bom' %}
-                {{ item.bom_type|default:"SBOM"|upper }}
-            {% else %}
-                Document
-            {% endif %}
-            </c-buttons.secondary>
-        </div>
-    </div>
-    {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
+    {# Blocks render in their own context, so the label is worked out again here. #}
     {% if component.component_type == 'bom' %}
-        <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
-             hx-trigger="load"
-             hx-swap="outerHTML"></div>
+        {% firstof item.bom_type|upper "SBOM" as item_kind %}
+    {% else %}
+        {% firstof "Document" as item_kind %}
     {% endif %}
+    <div class="flex flex-col gap-10">
+        <section class="flex flex-col gap-4">
+            <c-branded.section-header title="Download" />
+            <c-branded.surface>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div class="min-w-0 flex-1 flex flex-col gap-1">
+                    <p class="text-sm font-semibold text-text my-0">{{ item.name }}</p>
+                    <p class="text-sm text-text-muted my-0">The file exactly as it was published. sbomify never modifies artifacts.</p>
+                </div>
+                {% if component.component_type == 'bom' %}
+                    {% url 'sboms:sbom_download' item.id as download_url %}
+                {% elif component.component_type == 'document' %}
+                    {% url 'documents:document_download' item.id as download_url %}
+                {% endif %}
+                <c-buttons.secondary href="{{ download_url }}" class="no-underline">
+                <i class="fas fa-download" aria-hidden="true"></i>
+                Download {{ item_kind }}
+                </c-buttons.secondary>
+            </div>
+            </c-branded.surface>
+        </section>
+        {# Cryptographic Assets (CBOM): lazy-loaded for SBOM artifacts; collapses when there are none #}
+        {% if component.component_type == 'bom' %}
+            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

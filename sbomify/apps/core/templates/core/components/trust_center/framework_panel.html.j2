@@ -1,0 +1,58 @@
+{% comment %}
+One compliance framework as the trust center shows it.
+
+Expects `catalog_summary`, one entry from
+`controls.services.public_service.get_public_controls_list`.
+
+Two decisions worth keeping:
+
+**Domains, not every control.** A framework is a few hundred controls and a
+visitor is asking one question: how far along is this programme. The domain
+breakdown answers that in a screen; the full control list is a spreadsheet and
+belongs in the app, where the people who own it work.
+
+**No severity colours on a score.** Red means critical on every trust center,
+and an amber 60% would borrow that meaning for something that is not a
+vulnerability. A domain that is fully addressed gets the success tone and
+everything else stays neutral, so the colour says "finished" rather than
+grading someone's programme in public.
+{% endcomment %}
+<c-branded.surface flush>
+<div class="flex [flex-wrap:wrap] items-center justify-between gap-4 px-5 py-4 border-b border-solid border-border">
+    <div class="min-w-0 flex flex-col gap-1.5">
+        <p class="text-sm font-semibold text-text my-0">{{ catalog_summary.catalog.name }}</p>
+        <div class="flex items-center gap-2 [flex-wrap:wrap]">
+            {% if catalog_summary.catalog.version %}
+                <c-branded.badge>{{ catalog_summary.catalog.version }}</c-branded.badge>
+            {% endif %}
+            {% if catalog_summary.catalog.is_synced %}
+                {% comment %}
+                Where the numbers come from. A visitor treats "kept current by
+                the tool that runs this programme" differently from a figure
+                somebody typed, so the page says which it is looking at.
+                {% endcomment %}
+                <c-branded.badge title="Kept up to date automatically">
+                <i class="fas fa-arrows-rotate" aria-hidden="true"></i>Synced from {{ catalog_summary.catalog.source_label }}
+                </c-branded.badge>
+            {% endif %}
+        </div>
+    </div>
+    <c-branded.stats>
+    <c-branded.stat label="Addressed">{{ catalog_summary.percentage|floatformat:0 }}%</c-branded.stat>
+    <c-branded.stat label="of {{ catalog_summary.total }} control{{ catalog_summary.total|pluralize }}">{{ catalog_summary.addressed|floatformat:"-1" }}</c-branded.stat>
+    </c-branded.stats>
+</div>
+{% for category in catalog_summary.categories %}
+    <c-branded.list-row>
+    <c-slot name="heading">{{ category.name }}</c-slot>
+    <c-slot name="side">
+    {% if category.total and category.addressed >= category.total %}
+        <c-branded.badge tone="success">Fully addressed</c-branded.badge>
+    {% else %}
+        <c-branded.badge>{{ category.percentage|floatformat:0 }}%</c-branded.badge>
+    {% endif %}
+    <span>{{ category.addressed|floatformat:"-1" }} of {{ category.total }}</span>
+    </c-slot>
+    </c-branded.list-row>
+{% endfor %}
+</c-branded.surface>

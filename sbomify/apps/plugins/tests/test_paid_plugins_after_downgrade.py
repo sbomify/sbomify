@@ -25,7 +25,7 @@ from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.tasks import enqueue_assessment
 from sbomify.apps.sboms.models import SBOM, Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 pytestmark = pytest.mark.django_db
 
@@ -33,12 +33,12 @@ DT = "dependency-track"
 NTIA = "ntia-minimum-elements-2021"
 
 
-def _sbom(team: Team) -> SBOM:
+def _sbom(team: Workspace) -> SBOM:
     component = Component.objects.create(name="app", team=team)
     return SBOM.objects.create(name="app", component=component, format="cyclonedx", format_version="1.6")
 
 
-def _enable(team: Team, *plugins: str) -> None:
+def _enable(team: Workspace, *plugins: str) -> None:
     TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": list(plugins)})
 
 

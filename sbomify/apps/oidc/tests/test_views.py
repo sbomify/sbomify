@@ -24,11 +24,11 @@ from sbomify.apps.oidc.github_api import GitHubResolveError, ResolvedRepository
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def component(db, team_with_business_plan: Team) -> Component:
+def component(db, team_with_business_plan: Workspace) -> Component:
     return Component.objects.create(
         name="Trusted Pubs UI",
         team=team_with_business_plan,
@@ -50,7 +50,8 @@ class TestListView:
     @pytest.mark.django_db
     def test_get_renders_empty_state(self, authed_client: Client, component: Component) -> None:
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         assert b"trusted-publishers-section" in response.content
@@ -78,7 +79,8 @@ class TestListView:
         binding.save(update_fields=["bot_user"])
 
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         assert b"acme/widget" in response.content
@@ -89,10 +91,16 @@ class TestListView:
         """Unauthenticated request gets the standard login redirect."""
         client = Client()
         response = client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            HTTP_HX_REQUEST="true",
         )
         # LoginRequiredMixin sends to login URL — status 302
         assert response.status_code in (302, 401, 403)
+
+    def test_a_direct_visit_with_no_session_is_a_404(self, component: Component) -> None:
+        """The URL is a fragment, not a page: a plain GET gets 404 whoever asks, before the login gate."""
+        response = Client().get(reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}))
+        assert response.status_code == 404
 
     @pytest.mark.django_db
     def test_workflow_snippet_normalises_schemeless_app_base_url(
@@ -106,7 +114,8 @@ class TestListView:
         """
         settings.APP_BASE_URL = "app.staging.sbomify.io/"  # schemeless + trailing slash
         response = authed_client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         body = response.content.decode()
@@ -268,7 +277,7 @@ class TestDelete:
 class TestPermissions:
     @pytest.mark.django_db
     def test_admin_role_can_create_and_delete(
-        self, component: Component, team_with_business_plan: Team, mocker
+        self, component: Component, team_with_business_plan: Workspace, mocker
     ) -> None:
         """Test-automator P1: admin-role members (not just owners) can
         manage trusted publishers. ``_TrustedPublishersBase`` accepts
@@ -314,7 +323,7 @@ class TestPermissions:
         assert not OIDCBinding.objects.filter(pk=binding.id).exists()
 
     @pytest.mark.django_db
-    def test_guest_member_blocked(self, component: Component, team_with_business_plan: Team) -> None:
+    def test_guest_member_blocked(self, component: Component, team_with_business_plan: Workspace) -> None:
         from django.contrib.auth import get_user_model
 
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -327,7 +336,10 @@ class TestPermissions:
         client = Client()
         setup_authenticated_client_session(client, team_with_business_plan, guest)
         response = client.get(
-            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            HTTP_HX_REQUEST="true",
         )
         # GuestAccessBlockedMixin redirects guests
         assert response.status_code in (302, 403)
+        # A plain visit is a 404 for a guest too: the URL is a fragment, not a page.
+        assert client.get(reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})).status_code == 404

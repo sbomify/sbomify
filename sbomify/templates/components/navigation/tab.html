@@ -10,12 +10,17 @@ and the panel it points at is id="panel-<panel>". active selects it. icon is a
 Font Awesome class and badge a short count, both of which sit in fixed places
 the slot cannot express; the slot is the label.
 
+badge_event names a workspace socket message whose badge_field carries the new
+count, so a count another person or a background task changes stays true
+without a reload. The span is always rendered and hidden while empty, since a
+count can go from nothing to something.
+
 active_binding optionally supplies an Alpine expression. Static and live tabs
 share the same data-active recipe. The pills utilities
 hang off the row's data-tabs-pills, so a tab never carries two borders or two
 backgrounds at once.
 {% endcomment %}
-<c-vars href panel active active_binding icon badge type="button" class />
+<c-vars href panel active active_binding icon badge badge_event badge_field type="button" class />
 {# djlint:off #}
 {% if href %}<a href="{{ href }}"{% if active %} aria-current="page"{% endif %}{% if active_binding %} :aria-current="({{ active_binding }}) ? 'page' : null" :data-active="{{ active_binding }}" data-active="{{ active|yesno:'true,false' }}"{% endif %}{% else %}<button type="{{ type }}"
         role="tab"
@@ -39,10 +44,10 @@ class="{% if href %}inline-flex shrink-0 items-center whitespace-nowrap gap-2 px
     <i class="{{ icon }}{% if slot %} mr-2{% endif %}" aria-hidden="true"></i>
 {% endif %}
 {{ slot }}
-{% if href and badge %}
-    <span class="text-xs tabular-nums text-text-muted">{{ badge }}</span>
-{% elif badge %}
-    <span class="inline-flex items-center justify-center min-w-5 h-5 ml-2 px-1.5 text-[0.625rem] font-semibold rounded-full {% if active %}bg-[color-mix(in_oklab,var(--color-primary)_15%,transparent)] text-primary{% else %}bg-border text-text-muted{% endif %}">{{ badge }}</span>
+{% if badge or badge_event %}
+    {# djlint:off #}
+    <span class="{% if href %}text-xs tabular-nums text-text-muted{% else %}inline-flex items-center justify-center min-w-5 h-5 ml-2 px-1.5 text-[0.625rem] font-semibold rounded-full {% if active %}bg-[color-mix(in_oklab,var(--color-primary)_15%,transparent)] text-primary{% else %}bg-border text-text-muted{% endif %}{% endif %}"{% if badge_event %} x-data="{ badge: '{{ badge|default:''|escapejs }}' }" x-show="badge" x-text="badge" @ws:{{ badge_event }}.window="badge = $event.detail.{{ badge_field }} || ''"{% endif %}>{{ badge|default:'' }}</span>
+    {# djlint:on #}
 {% endif %}
 {# djlint:off #}
 {% if href %}</a>{% else %}</button>{% endif %}

@@ -1,0 +1,41 @@
+{% comment %}
+One fact in a row of them under a page title: "Released 3 days ago",
+"12 components", a version string.
+
+A quiet line of text with an optional icon, so a row of these reads as one
+sentence of context rather than a set of buttons. Anything that is a status the
+reader should spot without reading is a c-branded.badge instead, and sits in
+the same row.
+
+mono is for identifiers (versions, CVE ids) that a reader copies, where the
+fixed-width face says "this is a value" and keeps digits from shifting.
+
+label names the value in words, muted, with the value after it in a stronger
+ink: "CVSS 8.6", "CVE IDs CVE-2026-0001". A bare identifier or number gives a
+reader nothing to go on, and an icon only works for the few facts that have an
+obvious one. With a label, mono applies to the value alone. The value's wrapper
+is display: contents, so its parts sit in the item's own wrapping row: several
+identifiers break between one another, the first staying beside its label,
+rather than the whole list dropping to a line of its own.
+
+values takes a list, such as several CVE ids, and renders it in place of the
+slot: comma-separated, each held together so a hyphenated id never breaks
+inside itself.
+{% endcomment %}
+<c-vars icon mono label values class />
+<span class="inline-flex items-center gap-x-1.5 [flex-wrap:wrap] text-text-muted {% if mono and not label %}font-mono text-xs{% else %}text-sm{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>
+    {% if icon %}<i class="{{ icon }} text-xs" aria-hidden="true"></i>{% endif %}
+    {% if label %}
+        <span>{{ label }}</span>
+        <span class="[display:contents] text-text-secondary{% if mono %} font-mono text-xs{% endif %}">
+            {% if values %}
+                {% for value in values %}<span class="whitespace-nowrap">{{ value }}{% if not forloop.last %},{% endif %}</span>{% endfor %}
+            {% else %}
+                {{ slot }}
+            {% endif %}
+        </span>
+    {% else %}
+        {{ slot }}
+    {% endif %}
+</span>

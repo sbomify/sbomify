@@ -25,7 +25,7 @@ from sbomify.apps.sboms.models import SBOM, Component
 
 # Import SBOM-related fixtures from sboms app
 from sbomify.apps.sboms.tests.fixtures import sample_component, sample_sbom  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
@@ -36,6 +36,25 @@ def subscription_gone_at_stripe(monkeypatch: pytest.MonkeyPatch) -> None:
         raise stripe.error.InvalidRequestError("No such subscription", param="id", code="resource_missing")
 
     monkeypatch.setattr(stripe.Subscription, "retrieve", retrieve)
+
+
+@pytest.fixture
+def subscription_live_at_stripe(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Stripe reports the stored subscription active. Returns the ids it was asked to modify."""
+    modified: list[str] = []
+
+    def retrieve(subscription_id: str, **kwargs) -> stripe.Subscription:
+        return stripe.Subscription.construct_from(
+            {"id": subscription_id, "status": "active", "cancel_at_period_end": False, "cancel_at": None},
+            "sk_test",
+        )
+
+    def modify(subscription_id: str, **kwargs) -> None:
+        modified.append(subscription_id)
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", retrieve)
+    monkeypatch.setattr(stripe.Subscription, "modify", modify)
+    return modified
 
 
 @pytest.mark.django_db
@@ -87,7 +106,7 @@ def test_get_usage_no_team(client: Client, sample_user: AbstractBaseUser):  # no
 def test_get_usage(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """Test retrieving team's usage statistics."""
     from sbomify.apps.sboms.models import Component, ProductComponent
@@ -111,7 +130,7 @@ def test_get_usage(
 def test_get_usage_token_scope_gate(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """get_usage is a READ_MEMBER action gated by can("workspace:read", team).
 
@@ -151,7 +170,7 @@ def test_change_plan_token_scope_gate(
     client: Client,
     mocker: MockerFixture,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
 ):
     """change_plan is gated by can("billing:manage", team), the only check that applies a token's scopes.
@@ -212,7 +231,7 @@ def test_change_plan_token_scope_gate(
 def test_change_plan_unauthorized_user(
     client: Client,
     guest_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
 ):
     """Test that non-team-owners cannot change plans."""
@@ -243,7 +262,7 @@ def test_change_plan_unauthorized_user(
 def test_change_plan_to_community(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
     subscription_gone_at_stripe: None,
 ):
@@ -299,7 +318,7 @@ def test_change_plan_no_team_selected(
 def test_change_plan_invalid_plan(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
 ):
     """Test changing to a non-existent plan."""
     client.force_login(sample_user)
@@ -319,7 +338,7 @@ def test_change_plan_invalid_plan(
 def test_change_plan_to_business_monthly(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with monthly billing."""
@@ -339,7 +358,7 @@ def test_change_plan_to_business_monthly(
 def test_change_plan_to_business_annual(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test changing to business plan with annual billing."""
@@ -359,7 +378,7 @@ def test_change_plan_to_business_annual(
 def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_community_plan: Team,  # noqa: F811
+    team_with_community_plan: Workspace,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -403,7 +422,7 @@ def test_change_plan_business_upgrade_passes_allow_promotion_codes(
 def test_change_plan_to_community_with_active_subscription(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811,
     subscription_gone_at_stripe: None,
 ):
@@ -426,10 +445,156 @@ def test_change_plan_to_community_with_active_subscription(
 
 
 @pytest.mark.django_db
+def test_change_plan_to_community_refuses_a_workspace_over_its_limits(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_live_at_stripe: list[str],
+):
+    """The API asks the same downgrade check as the plan page, so an over-limit move is refused."""
+    from sbomify.apps.core.models import Product
+
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert "Reduce usage to choose Community" in response.json()["detail"]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
+def test_change_plan_to_community_checks_the_status_stripe_reports_not_the_stored_one(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_live_at_stripe: list[str],
+):
+    """A stored status that missed a reactivation must not skip the check.
+
+    The workspace reads canceled, Stripe reports the subscription active. Read
+    from the stored copy, the guard would wave the move through and the live
+    branch would schedule an over-limit downgrade at Stripe.
+    """
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits = {
+        **team_with_business_plan.billing_plan_limits,
+        "subscription_status": "canceled",
+    }
+    team_with_business_plan.save()
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert subscription_live_at_stripe == []
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
+def test_change_plan_to_community_settles_a_subscription_stripe_no_longer_has(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_gone_at_stripe: None,
+):
+    """A stored live status whose subscription is gone at Stripe is not refused.
+
+    Nothing is left to cancel, so the move is a reconciliation with no Stripe
+    side effect, and refusing it would leave the workspace on a plan it no longer
+    pays for. Over Community's limits or not, it lands on Community.
+    """
+    from sbomify.apps.core.models import Product
+
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == community_plan.key
+
+
+@pytest.mark.django_db
+def test_change_plan_to_community_refuses_when_the_sync_with_stripe_fails(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811,
+    subscription_live_at_stripe: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A sync that fails must not leave the stale stored status to decide.
+
+    The workspace reads canceled and Stripe has the subscription active, but the
+    sync's read fails transiently and the next one succeeds. Carried on, the
+    guard would skip the check on the stored status and the live branch would
+    schedule an over-limit downgrade at Stripe.
+    """
+    from sbomify.apps.core.models import Product
+
+    live_retrieve = stripe.Subscription.retrieve
+    calls: list[str] = []
+
+    def flaky_retrieve(subscription_id: str, **kwargs) -> stripe.Subscription:
+        calls.append(subscription_id)
+        if len(calls) == 1:
+            raise stripe.error.APIConnectionError("Network blip")
+        return live_retrieve(subscription_id, **kwargs)
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", flaky_retrieve)
+    team_with_business_plan.billing_plan_limits = {
+        **team_with_business_plan.billing_plan_limits,
+        "subscription_status": "canceled",
+    }
+    team_with_business_plan.save()
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": community_plan.key, "billing_period": None}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 503, response.content
+    assert subscription_live_at_stripe == []
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
 def test_changing_to_community_makes_sboms_public(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811

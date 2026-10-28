@@ -178,9 +178,9 @@ class TestCrossWorkspaceIsolation:
         """Test that products from one workspace aren't visible in another."""
         from django.test import Client
 
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team", key="other-ws", tea_enabled=True, is_public=True)
+        other_team = Workspace.objects.create(name="Other Team", key="other-ws", tea_enabled=True, is_public=True)
 
         client = Client()
         url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.id}?workspace_key={other_team.key}"
@@ -193,9 +193,9 @@ class TestCrossWorkspaceIsolation:
         """Test that components from one workspace aren't visible in another."""
         from django.test import Client
 
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_team = Team.objects.create(name="Other Team", key="other-ws-2", tea_enabled=True, is_public=True)
+        other_team = Workspace.objects.create(name="Other Team", key="other-ws-2", tea_enabled=True, is_public=True)
 
         client = Client()
         url = f"{TEA_URL_PREFIX}/component/{tea_enabled_component.id}?workspace_key={other_team.key}"

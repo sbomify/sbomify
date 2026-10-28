@@ -2,7 +2,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.utils import can_add_user_to_team
 
 
@@ -19,7 +19,7 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     )
     
     user1 = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
-    team = Team.objects.create(name="Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Test Team", billing_plan="community")
     Member.objects.create(user=user1, team=team, role="owner")
     
     # 2. Verify team has 1 member
@@ -48,3 +48,77 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     # 6. Attempt to send the 2nd invitation again (Should succeed: 1 member + 0 pending = 1 < 2)
     can_add, _ = can_add_user_to_team(team)
     assert can_add is True
+
+
+@pytest.mark.django_db
+def test_a_scheduled_downgrade_caps_seats_at_the_plan_it_drops_to(django_user_model, mocker):
+    """Products and components already stop at the plan a cancelled subscription
+    drops to. Seats stop there too, so the downgrade cannot land over its limit."""
+    still_cancelling = mocker.patch(
+        "sbomify.apps.teams.utils.get_subscription_cancel_at_period_end", return_value=True
+    )
+    BillingPlan.objects.create(key="community", name="Community", max_users=1)
+    BillingPlan.objects.create(key="business", name="Business", max_users=10)
+    owner = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
+    team = Workspace.objects.create(
+        name="Downgrading Team",
+        billing_plan="business",
+        billing_plan_limits={
+            "cancel_at_period_end": True,
+            "scheduled_downgrade_plan": "community",
+            "stripe_subscription_id": "sub_test",
+            "stripe_customer_id": "cus_test",
+        },
+    )
+    Member.objects.create(user=owner, team=team, role="owner")
+
+    can_add, msg = can_add_user_to_team(team)
+    assert can_add is False
+    assert "scheduled downgrade to Community" in msg
+    assert "the plan limit of 1 member." in msg
+
+    # Reactivated in Stripe before the webhook landed: the paid plan decides again.
+    still_cancelling.return_value = False
+    assert can_add_user_to_team(team) == (True, "")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_seat_lock_is_not_held_across_the_stripe_read(django_user_model, mocker):
+    """The scheduled downgrade's Stripe read runs before ``user_seat`` locks the row.
+
+    Product, component and seat creation all wait on that lock, so an HTTPS round
+    trip inside it stalls every one of them for the workspace. The seat count and
+    the comparison still run under the lock.
+    """
+    from django.db import connection
+
+    from sbomify.apps.teams.utils import user_seat
+
+    in_transaction: list[bool] = []
+
+    def stripe_read(*args, **kwargs) -> bool:
+        in_transaction.append(connection.in_atomic_block)
+        return True
+
+    mocker.patch("sbomify.apps.teams.utils.get_subscription_cancel_at_period_end", side_effect=stripe_read)
+    BillingPlan.objects.create(key="community", name="Community", max_users=1)
+    BillingPlan.objects.create(key="business", name="Business", max_users=10)
+    owner = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
+    team = Workspace.objects.create(
+        name="Downgrading Team",
+        billing_plan="business",
+        billing_plan_limits={
+            "cancel_at_period_end": True,
+            "scheduled_downgrade_plan": "community",
+            "stripe_subscription_id": "sub_test",
+            "stripe_customer_id": "cus_test",
+        },
+    )
+    Member.objects.create(user=owner, team=team, role="owner")
+
+    with user_seat(team) as (can_add, msg):
+        pass
+
+    assert in_transaction == [False]
+    assert can_add is False
+    assert "scheduled downgrade to Community" in msg

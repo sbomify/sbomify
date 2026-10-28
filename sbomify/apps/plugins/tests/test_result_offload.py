@@ -1,0 +1,1434 @@
+"""Demoting a superseded result payload to object storage must lose nothing.
+
+The row, its summary columns and its normalised findings stay in Postgres; only
+the payload moves. Three properties carry the whole design and each has a test
+here:
+
+* **A current run is never demoted**, where current means per (sbom, plugin,
+  release set) — one SBOM in two releases has a live run for each.
+* **A payload is stored before the row is changed**, and the key and the NULL
+  land in one UPDATE, so no row can be observed holding neither.
+* **The summary columns survive.** They are recomputed from the payload while it
+  is still in hand, so a legacy row whose columns were never backfilled comes
+  out with counts rather than losing them.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Iterator
+from datetime import timedelta
+from typing import Any
+
+import pytest
+from django.utils import timezone
+from pytest_mock import MockerFixture
+
+from sbomify.apps.core.models import Component, Product, Release
+from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.offload import (
+    DEFAULT_OFFLOAD_AFTER_DAYS,
+    demotable_run_ids,
+    offload_assessment_results,
+    offload_run,
+)
+from sbomify.apps.plugins.result_store import (
+    FINDINGS_PREFIX,
+    FINDINGS_REF,
+    RESULT_PREFIX,
+    ResultObjectMissing,
+    delete_unreferenced_findings_objects,
+    findings_key_for,
+    load_result,
+    object_key_for,
+    serialise_result,
+)
+from sbomify.apps.sboms.models import SBOM, ProductComponent
+
+
+class FakeBucket:
+    """An in-memory stand-in for the SBOMS bucket, with the methods used here."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+        self.puts = 0
+
+    def upload_data_as_file(self, bucket: str, key: str, data: bytes) -> None:
+        self.puts += 1
+        self.objects[key] = data
+
+    def get_file_data(self, bucket: str, key: str) -> bytes | None:
+        return self.objects.get(key)
+
+    def object_exists(self, bucket: str, key: str) -> bool:
+        return key in self.objects
+
+    def list_cached_aggregates(self, prefix: str) -> list[str]:
+        return [key for key in self.objects if key.startswith(prefix)]
+
+    def iter_cached_aggregates(self, prefix: str) -> Iterator[str]:
+        # A snapshot, sorted as S3 lists, so deleting while walking is safe here as there.
+        yield from sorted(key for key in self.objects if key.startswith(prefix))
+
+    def delete_object(self, bucket: str, key: str) -> None:
+        self.objects.pop(key, None)
+
+
+@pytest.fixture
+def bucket(monkeypatch) -> FakeBucket:
+    fake = FakeBucket()
+    monkeypatch.setattr("sbomify.apps.plugins.result_store._client", lambda: fake)
+    monkeypatch.setattr("sbomify.apps.plugins.result_store._bucket", lambda: "test-bucket")
+    return fake
+
+
+def _result(total: int = 2) -> dict[str, Any]:
+    return {
+        "plugin_name": "osv",
+        "plugin_version": "1.0.0",
+        "category": "security",
+        "assessed_at": timezone.now().isoformat(),
+        "summary": {"total_findings": total, "by_severity": {"high": total}},
+        "findings": [
+            {
+                "id": f"CVE-2026-{index}",
+                # title and description are required by FindingSchema, so a
+                # fixture without them serialises as result=None and would hide
+                # whether the payload was loaded at all.
+                "title": f"CVE-2026-{index}",
+                "description": "a finding",
+                "severity": "high",
+                "component": {"name": "foo", "version": "1"},
+            }
+            for index in range(total)
+        ],
+    }
+
+
+def _run(
+    sbom: SBOM,
+    plugin: str = "osv",
+    *,
+    days_ago: int,
+    result: dict[str, Any] | None = None,
+    status: str = "completed",
+) -> AssessmentRun:
+    run = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name=plugin,
+        plugin_version="1.0.0",
+        plugin_config_hash="0" * 64,
+        category="security",
+        run_reason="scheduled_refresh",
+        status=status,
+        result=_result() if result is None else result,
+    )
+    AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(days=days_ago))
+    run.refresh_from_db()
+    return run
+
+
+@pytest.fixture
+def sbom(sample_team_with_owner_member) -> SBOM:
+    component = Component.objects.create(name="c", team=sample_team_with_owner_member.team)
+    return SBOM.objects.create(
+        name="app",
+        version="1.0.0",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="a.json",
+        component=component,
+    )
+
+
+@pytest.mark.django_db
+class TestWhatIsSafeToDemote:
+    def test_the_current_run_is_never_demotable(self, sbom):
+        """However old it is. It is the answer every reader resolves to, and a
+        frozen release keeps its posture from its last scan indefinitely."""
+        only = _run(sbom, days_ago=900)
+
+        assert demotable_run_ids(older_than_days=0) == []
+        assert only.id not in demotable_run_ids(older_than_days=0)
+
+    def test_a_superseded_run_is_demotable(self, sbom):
+        current = _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+
+        doomed = demotable_run_ids()
+
+        assert doomed == [superseded.id]
+        assert current.id not in doomed
+
+    def test_the_age_floor_holds_recent_runs_back(self, sbom):
+        _run(sbom, days_ago=0)
+        recent_superseded = _run(sbom, days_ago=0)
+        AssessmentRun.objects.filter(pk=recent_superseded.pk).update(created_at=timezone.now() - timedelta(hours=12))
+
+        assert demotable_run_ids() == []
+        # …and is a parameter, not a law.
+        assert demotable_run_ids(older_than_days=0) == [recent_superseded.id]
+
+    def test_each_provider_keeps_its_own_current_run(self, sbom):
+        osv_current = _run(sbom, "osv", days_ago=400)
+        dt_current = _run(sbom, "dependency-track", days_ago=500)
+        osv_old = _run(sbom, "osv", days_ago=800)
+        dt_old = _run(sbom, "dependency-track", days_ago=900)
+
+        doomed = set(demotable_run_ids())
+
+        assert doomed == {osv_old.id, dt_old.id}
+        assert osv_current.id not in doomed
+        assert dt_current.id not in doomed
+
+    def test_a_newer_failed_run_does_not_unseat_the_last_completed_one(self, sbom):
+        """The findings readers ask for the newest completed run, and a failed
+        run can carry a synthesised result, so it ranks as a payload too."""
+        completed = _run(sbom, days_ago=800)
+        older = _run(sbom, days_ago=900)
+        _run(sbom, days_ago=1, status="failed")
+
+        assert demotable_run_ids() == [older.id]
+        assert completed.id not in demotable_run_ids()
+
+    def test_a_newer_skipped_run_does_not_unseat_the_last_real_scan(self, sbom, bucket):
+        """The lifecycle check reads each peer's newest completed run that was
+        not skipped, straight from the column. A newer skip must leave that
+        payload inline, or the peer's findings would read as gone."""
+        from sbomify.apps.plugins.lifecycle import _still_reported_by_peers
+
+        real = _run(sbom, "dependency-track", days_ago=800)
+        older = _run(sbom, "dependency-track", days_ago=900)
+        _run(sbom, "dependency-track", days_ago=1, result={**_result(0), "metadata": {"skipped": True}})
+
+        assert demotable_run_ids() == [older.id]
+        offload_assessment_results()
+        assert "CVE-2026-0" in _still_reported_by_peers(str(sbom.component_id), "osv")
+        real.refresh_from_db()
+        assert real.result_object_key == ""
+
+    def test_a_run_with_no_payload_is_not_a_candidate(self, sbom):
+        _run(sbom, days_ago=400)
+        pending = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason="scheduled_refresh",
+            status="pending",
+        )
+        AssessmentRun.objects.filter(pk=pending.pk).update(created_at=timezone.now() - timedelta(days=800))
+
+        assert pending.id not in demotable_run_ids()
+
+    def test_a_run_superseded_days_ago_is_moved_by_default(self, sbom):
+        """The floor was a year, held there by the drill-down reading payloads
+        from the column, and with hourly rescans that kept nearly the whole table
+        inline. The drill-down reads offloaded findings now, so it is a margin."""
+        _run(sbom, days_ago=0)
+        superseded = _run(sbom, days_ago=2)
+
+        assert DEFAULT_OFFLOAD_AFTER_DAYS == 1
+        assert demotable_run_ids() == [superseded.id]
+
+
+@pytest.mark.django_db
+class TestReleaseContextsAreBothCurrent:
+    """One SBOM in two releases has a live run for each, because the VEX
+    re-annotation is release-aware. Keyed on (sbom, plugin) alone the older one
+    looks superseded, and demoting it takes the payload of a row a VEX upload is
+    still expected to rewrite."""
+
+    def test_the_older_release_context_is_protected(self, sbom):
+        product = Product.objects.create(name="p", team=sbom.component.team)
+        ProductComponent.objects.create(product=product, component=sbom.component)
+        v1 = Release.objects.create(product=product, name="v1")
+        v2 = Release.objects.create(product=product, name="v2")
+
+        older = _run(sbom, days_ago=800)
+        older.releases.add(v1)
+        newer = _run(sbom, days_ago=400)
+        newer.releases.add(v2)
+
+        doomed = demotable_run_ids()
+
+        assert older.id not in doomed
+        assert newer.id not in doomed
+
+    def test_two_runs_in_the_same_release_still_rank(self, sbom):
+        """The release set widens the key; it does not disable the ranking."""
+        product = Product.objects.create(name="p2", team=sbom.component.team)
+        ProductComponent.objects.create(product=product, component=sbom.component)
+        v1 = Release.objects.create(product=product, name="v1")
+
+        current = _run(sbom, days_ago=400)
+        current.releases.add(v1)
+        superseded = _run(sbom, days_ago=800)
+        superseded.releases.add(v1)
+
+        assert demotable_run_ids() == [superseded.id]
+
+    def test_a_release_attached_after_the_move_keeps_column_readers_inline(self, sbom, bucket, monkeypatch):
+        """Attaching a release to the newest run makes the moved older run the
+        newest of the set it left. The readers of the column rank per (sbom,
+        plugin) and stay on the inline run. The VEX re-apply leaves the moved
+        one alone: the newer run covers every release it covers, so no reader
+        resolves to it (plugins.latest), and rewriting it would only fetch its
+        payload back from storage."""
+        from sbomify.apps.plugins.latest import latest_run_ids
+        from sbomify.apps.plugins.models import RegisteredPlugin
+        from sbomify.apps.plugins.offload import current_run_ids
+        from sbomify.apps.vulnerability_scanning import vex
+
+        RegisteredPlugin.objects.update_or_create(
+            name="osv",
+            defaults={
+                "display_name": "osv",
+                "category": "security",
+                "version": "1.0.0",
+                "plugin_class_path": "tests.osv",
+                "is_enabled": True,
+            },
+        )
+        product = Product.objects.create(name="p3", team=sbom.component.team)
+        ProductComponent.objects.create(product=product, component=sbom.component)
+        v1 = Release.objects.create(product=product, name="v1")
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        older = _run(sbom, days_ago=800, result=payload)
+        newer = _run(sbom, days_ago=400)
+        assert demotable_run_ids() == [older.id]
+        assert offload_run(older)
+        older.refresh_from_db()
+        moved_key = older.result_object_key
+
+        # The row attach_release_to_runs_task writes for each plugin's newest run.
+        newer.releases.add(v1)
+
+        assert older.id in current_run_ids({sbom.id}, {"osv"})
+        assert latest_run_ids(AssessmentRun.objects.filter(status="completed"), [sbom.id]) == [newer.id]
+        newer.refresh_from_db()
+        assert newer.result is not None
+
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        bucket.objects.clear()
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        older.refresh_from_db()
+        assert older.result is None
+        assert older.result_object_key == moved_key
+
+
+@pytest.mark.django_db
+class TestTheMove:
+    def test_the_payload_lands_in_storage_and_the_row_points_at_it(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        payload = superseded.result
+
+        assert offload_assessment_results() == 1
+
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        # The run's own object holds everything but the findings, which it names.
+        findings_key = findings_key_for(serialise_result(payload["findings"]))
+        remainder = {**{k: v for k, v in payload.items() if k != "findings"}, FINDINGS_REF: findings_key}
+        assert superseded.result_object_key == object_key_for(superseded.id, serialise_result(remainder))
+        assert superseded.result_object_key.startswith(f"{RESULT_PREFIX}{superseded.id}/")
+        assert json.loads(bucket.objects[superseded.result_object_key]) == remainder
+        # The findings are one shared object, keyed by their content.
+        assert superseded.result_findings_key == findings_key
+        assert json.loads(bucket.objects[findings_key]) == payload["findings"]
+
+    def test_it_reads_back_byte_identical(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        payload = superseded.result
+
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        assert load_result(superseded) == payload
+
+    def test_the_summary_columns_survive(self, sbom, bucket):
+        """They are what every dashboard reads, and the only copy of the counts
+        once the payload has moved."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=_result(total=7))
+
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        assert superseded.result is None
+        assert superseded.result_summary == {"total_findings": 7, "by_severity": {"high": 7}}
+
+    @pytest.mark.parametrize("update_fields", [None, ["result"], ["status"]])
+    def test_saving_a_moved_run_keeps_its_summary_columns(self, sbom, bucket, update_fields):
+        """Once the payload has moved, the columns are the only copy of the counts,
+        so a save must not recompute them from the empty payload column."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result={**_result(total=7), "metadata": {"skipped": False}})
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        superseded.save(update_fields=update_fields)
+        superseded.refresh_from_db()
+
+        assert superseded.result_summary == {"total_findings": 7, "by_severity": {"high": 7}}
+        assert superseded.result_skipped is False
+
+    def test_a_legacy_row_with_no_summary_gains_one(self, sbom, bucket):
+        """A row written before the summary columns existed has them NULL.
+        Nulling its payload without filling them first would lose its counts for
+        good, so the sweep recomputes them from the payload it is holding rather
+        than trusting a backfill to have run first."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=_result(total=3))
+        # Simulate the legacy state: payload present, derived columns never set.
+        AssessmentRun.objects.filter(pk=superseded.pk).update(result_summary=None, result_skipped=None)
+
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        assert superseded.result_summary == {"total_findings": 3, "by_severity": {"high": 3}}
+
+    def test_a_dry_run_stores_nothing_and_changes_nothing(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+
+        assert offload_assessment_results(dry_run=True) == 1
+
+        superseded.refresh_from_db()
+        assert superseded.result is not None
+        assert superseded.result_object_key == ""
+        assert bucket.objects == {}
+
+    def test_running_twice_stores_once_and_moves_once(self, sbom, bucket):
+        """Keys are content hashes, so the sweep is safe to interrupt and re-run:
+        the second pass finds nothing left to do and uploads nothing."""
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=800)
+
+        assert offload_assessment_results() == 1
+        puts_after_first = bucket.puts
+
+        assert offload_assessment_results() == 0
+        assert bucket.puts == puts_after_first
+
+    def test_batching_does_not_change_the_outcome(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        for day in range(500, 900, 50):
+            _run(sbom, days_ago=day)
+
+        moved = offload_assessment_results(batch_size=2)
+
+        assert moved == 8
+        assert AssessmentRun.objects.filter(result__isnull=False).count() == 1
+
+    def test_the_limit_bounds_one_pass(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        for day in range(500, 900, 50):
+            _run(sbom, days_ago=day)
+
+        assert offload_assessment_results(limit=3) <= 3
+        assert AssessmentRun.objects.exclude(result_object_key="").count() <= 3
+
+    def test_the_sweep_holds_one_page_of_candidates_at_a_time(self, sbom, bucket, mocker):
+        """A first pass over a large table must not load every candidate up
+        front, so each page is ranked on its own SBOMs and plugins."""
+        from sbomify.apps.plugins import offload
+
+        current = _run(sbom, days_ago=400)
+        older = [_run(sbom, days_ago=day) for day in (500, 600, 700)]
+        ranked = mocker.spy(offload, "current_run_ids")
+
+        assert offload_assessment_results(batch_size=2) == len(older)
+
+        assert ranked.call_count == 2
+        assert AssessmentRun.objects.get(pk=current.pk).result_object_key == ""
+        assert all(AssessmentRun.objects.get(pk=run.pk).result_object_key for run in older)
+
+    def test_a_dry_run_counts_across_pages(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+
+        assert offload_assessment_results(batch_size=2, dry_run=True) == 3
+        assert bucket.puts == 0
+
+    def test_each_page_is_a_range_on_the_offload_index(self, sbom):
+        """A page must start at its cursor in the index, not scan past every
+        earlier candidate. Rows a pass keeps (the current runs, a dry run's
+        whole backlog) stay in the index, so a filter-only cursor rescans them
+        on every page."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.plugins.offload import demotable_batches
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        with CaptureQueriesContext(connection) as captured:
+            list(demotable_batches(batch_size=1))
+        pages = [q["sql"] for q in captured.captured_queries if '"plugins_assessment_runs"."created_at" <' in q["sql"]]
+        assert len(pages) > 2
+
+        with connection.cursor() as cursor:
+            # Small tables plan as a scan and sort; force the ordered index path
+            # so the plan shows which conditions bound it.
+            for setting in ("enable_seqscan", "enable_bitmapscan", "enable_sort"):
+                cursor.execute(f"SET LOCAL {setting} = off")
+            plans = []
+            for sql in pages:
+                cursor.execute("EXPLAIN (COSTS OFF) " + sql)
+                plans.append("\n".join(row[0] for row in cursor.fetchall()))
+
+        assert all("plugins_ar_offload_idx" in plan for plan in plans)
+        for plan in plans[1:]:
+            index_cond = next(line for line in plan.splitlines() if "Index Cond" in line)
+            assert "created_at >=" in index_cond, plan
+
+
+@pytest.mark.django_db
+class TestTheSweepStoresOutsideTransactions:
+    """Storing a payload is a network round trip, so the sweep makes it outside
+    any transaction. The UPDATE guards against a rewrite landing in between: it
+    applies only while the row still holds the payload that was read."""
+
+    def test_storage_is_called_outside_a_transaction(self, sbom, bucket):
+        from django.db import connection
+
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=800)
+        depth = len(connection.atomic_blocks)
+        seen: list[int] = []
+        exists = bucket.object_exists
+
+        def recording(bucket_name: str, key: str) -> bool:
+            seen.append(len(connection.atomic_blocks))
+            return exists(bucket_name, key)
+
+        bucket.object_exists = recording  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 1
+        # The shared findings and the run's own object, both outside a transaction.
+        assert seen == [depth, depth]
+
+    def test_a_rewrite_landing_mid_offload_is_kept(self, sbom, bucket):
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        rewrite = _result(total=1)
+        upload = bucket.upload_data_as_file
+
+        def rewritten_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            if bucket.puts == 1:
+                save_result(AssessmentRun.objects.get(pk=superseded.pk), rewrite)
+
+        bucket.upload_data_as_file = rewritten_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        superseded.refresh_from_db()
+        assert superseded.result == rewrite
+        assert superseded.result_object_key == ""
+
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert load_result(superseded) == rewrite
+
+    def test_a_missed_write_leaves_no_object_behind(self, sbom, bucket):
+        """Nothing points at a revision the UPDATE did not apply, and the orphan
+        sweep only collects objects of deleted runs, so the sweep removes it."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        upload = bucket.upload_data_as_file
+
+        def rewritten_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            save_result(AssessmentRun.objects.get(pk=superseded.pk), _result(total=1))
+
+        bucket.upload_data_as_file = rewritten_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")]
+
+    def test_a_miss_keeps_the_object_a_concurrent_sweep_moved_the_row_to(self, sbom, bucket):
+        """Same payload, same key: when another sweep has already moved the row
+        to this object, the miss must not delete what the row now reads."""
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        upload = bucket.upload_data_as_file
+
+        def moved_while_storing(bucket_name: str, key: str, data: bytes) -> None:
+            upload(bucket_name, key, data)
+            AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=key)
+
+        bucket.upload_data_as_file = moved_while_storing  # type: ignore[method-assign]
+
+        assert offload_assessment_results() == 0
+        superseded.refresh_from_db()
+        assert superseded.result_object_key in bucket.objects
+
+    def test_a_miss_keeps_a_revision_the_row_has_moved_past(self, sbom, bucket):
+        """One sweep moves the row, a VEX rewrite moves it on to a new key and
+        keeps the old object as a prior revision, then a second sweep that read
+        the original payload misses. The row reads a key, so the miss must not
+        delete the revision both sweeps stored."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        stale = AssessmentRun.objects.get(pk=superseded.pk)
+        assert offload_run(AssessmentRun.objects.get(pk=superseded.pk))
+        revision = AssessmentRun.objects.get(pk=superseded.pk).result_object_key
+        save_result(AssessmentRun.objects.get(pk=superseded.pk), _result(total=1))
+
+        assert not offload_run(stale)
+
+        assert revision in bucket.objects
+        superseded.refresh_from_db()
+        assert superseded.result_object_key != revision
+        assert superseded.result_object_key in bucket.objects
+
+
+@pytest.mark.django_db
+class TestAMissingPayloadIsNotAnEmptyOne:
+    """The failure this design must never have: a run whose payload cannot be
+    read showing up as a run that found nothing. `result_summary` stays in the
+    database precisely so the counts do not depend on the object."""
+
+    def test_load_result_raises_rather_than_returning_empty(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        offload_assessment_results()
+        superseded.refresh_from_db()
+
+        bucket.objects.clear()
+
+        with pytest.raises(ResultObjectMissing):
+            load_result(superseded)
+
+    def test_a_run_that_never_had_a_payload_reads_as_none(self, sbom, bucket):
+        """Absent and unreadable are different answers and must stay apart."""
+        pending = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason="scheduled_refresh",
+            status="pending",
+        )
+
+        assert load_result(pending) is None
+
+    def test_the_counts_still_read_without_the_object(self, sbom, bucket):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=_result(total=5))
+        offload_assessment_results()
+        bucket.objects.clear()
+        superseded.refresh_from_db()
+
+        from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts, reconstruct_result_summary
+
+        assert extract_severity_counts(reconstruct_result_summary(superseded))["total"] == 5
+
+
+@pytest.mark.django_db
+class TestTheApiDegradesRatherThanFailing:
+    def test_an_unreadable_payload_serialises_without_it(self, sbom, bucket, rf, monkeypatch):
+        """One bad object must not blank the assessments response for the SBOM,
+        the same treatment a result failing schema validation already gets."""
+        from sbomify.apps.plugins.apis import get_sbom_assessments
+
+        current = _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        offload_assessment_results()
+        bucket.objects.clear()
+
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: sbom)
+        request = rf.get("/")
+        request.user = None
+        response = get_sbom_assessments(request, sbom.id)
+
+        by_id = {run.id: run for run in response.all_runs}
+        assert by_id[str(superseded.id)].result is None
+        assert by_id[str(current.id)].result is not None
+
+    def test_an_offloaded_history_row_is_served_from_storage_without_findings(self, sbom, bucket, rf, monkeypatch):
+        """A history row is the result minus its findings, inline or moved: the
+        stored payload supplies the envelope, never the findings array."""
+        from sbomify.apps.plugins.apis import get_sbom_assessments
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800, result=_result(total=2))
+        offload_assessment_results()
+
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: sbom)
+        request = rf.get("/")
+        request.user = None
+        response = get_sbom_assessments(request, sbom.id)
+
+        served = {run.id: run for run in response.all_runs}[str(superseded.id)]
+        assert served.result is not None
+        assert served.result.summary.total_findings == 2
+        assert served.result.findings == []
+
+
+@pytest.mark.django_db
+class TestFindingRowsOutliveTheMove:
+    """``backfill_findings`` re-projects every completed security run. An
+    offloaded run's payload is in storage, not in ``result``, and reading the
+    empty column as "no findings" would delete the run's rows."""
+
+    def test_a_superseded_offloaded_run_is_not_fetched_again(self, sbom, bucket):
+        """Only a run a newer one supersedes is offloaded, and such a run keeps
+        no rows. Walking it again must neither fetch its payload nor fail."""
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        bucket.objects.clear()
+
+        assert sync_findings(superseded, []) == 0
+        assert not Finding.objects.filter(run=superseded).exists()
+
+    def test_an_unreadable_payload_leaves_the_rows_alone(self, sbom, bucket):
+        """A missing object is not an empty result: the re-projection fails
+        loudly and the rows it would have rewritten stay."""
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        current = _run(sbom, days_ago=800)
+        sync_findings(current, [])
+        assert Finding.objects.filter(run=current).count() == 2
+        AssessmentRun.objects.filter(pk=current.pk).update(
+            result=None, result_object_key=f"{RESULT_PREFIX}{current.id}/missing.json"
+        )
+        current.refresh_from_db()
+
+        with pytest.raises(ResultObjectMissing):
+            sync_findings(current, [])
+
+        assert Finding.objects.filter(run=current).count() == 2
+
+
+@pytest.mark.django_db
+class TestRetentionReclaimsTheStoredPayload:
+    def test_pruning_an_offloaded_run_deletes_its_objects(self, sbom, bucket):
+        """Retention prunes runs beyond the per-plugin quota. The row is the only
+        pointer to an offloaded payload, so deleting it must take the objects too
+        or they stay in the bucket for good."""
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+
+        assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
+
+    @pytest.mark.django_db(transaction=True)
+    def test_an_offload_landing_mid_prune_still_has_its_objects_deleted(self, sbom, bucket):
+        """An offload that commits its key after the batch read which rows hold
+        one, but before the delete, would leave its object behind for good.
+        Here its UPDATE holds the row lock while the prune starts."""
+        import threading
+
+        from django.db import connection, transaction
+
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        late_key = f"{RESULT_PREFIX}{superseded.id}/late.json"
+        locked = threading.Event()
+
+        def offload_commits_late() -> None:
+            try:
+                with transaction.atomic():
+                    AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=late_key)
+                    bucket.objects[late_key] = b"{}"
+                    locked.set()
+                    # Held long enough for the prune to have read its batch.
+                    threading.Event().wait(1)
+            finally:
+                connection.close()
+
+        worker = threading.Thread(target=offload_commits_late)
+        worker.start()
+        assert locked.wait(5)
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+        worker.join(5)
+
+        assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
+        assert late_key not in bucket.objects
+
+    def test_objects_a_failed_delete_left_behind_are_collected(self, sbom, bucket):
+        """The row commits before its objects go, so an object store error in
+        between leaves them pointing at nothing, and the retry can no longer
+        find the row. The orphan sweep finds them by their run id instead."""
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        kept = _run(sbom, days_ago=800)
+        pruned = _run(sbom, days_ago=900)
+        assert offload_assessment_results() == 2
+
+        def unreachable(bucket_name: str, key: str) -> None:
+            raise ConnectionError("object store unreachable")
+
+        bucket.delete_object = unreachable  # type: ignore[method-assign]
+        with pytest.raises(ConnectionError):
+            prune_assessment_runs(keep_per_plugin=2, min_age_days=0)
+        del bucket.delete_object
+        assert not AssessmentRun.objects.filter(pk=pruned.pk).exists()
+
+        assert delete_orphaned_result_objects() == 1
+
+        assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{pruned.id}/")]
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{kept.id}/")]
+
+    def test_the_orphan_sweep_checks_runs_a_batch_at_a_time(self, sbom, bucket, django_assert_num_queries):
+        """The listing is read as a stream and checked against the table a
+        bounded batch of run ids at a time, so neither the keys nor the ids are
+        ever all held at once."""
+        import uuid
+
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+
+        live = _run(sbom, days_ago=1)
+        bucket.objects[f"{RESULT_PREFIX}{live.id}/a.json"] = b"{}"
+        gone = [uuid.uuid4() for _ in range(3)]
+        for run_id in gone:
+            bucket.objects[f"{RESULT_PREFIX}{run_id}/a.json"] = b"{}"
+            bucket.objects[f"{RESULT_PREFIX}{run_id}/b.json"] = b"{}"
+        bucket.list_cached_aggregates = None  # type: ignore[assignment,method-assign]
+
+        with django_assert_num_queries(2):
+            assert delete_orphaned_result_objects(batch_size=2) == 6
+
+        assert list(bucket.objects) == [f"{RESULT_PREFIX}{live.id}/a.json"]
+
+    def test_the_daily_task_collects_orphans_before_it_prunes(self, mocker):
+        """First, so the retry of a run that failed mid-delete collects what
+        that attempt left behind."""
+        from sbomify.apps.plugins.tasks import prune_assessment_runs_task
+
+        calls = mocker.Mock()
+        calls.orphans.return_value = calls.shared.return_value = calls.prune.return_value = 0
+        mocker.patch("sbomify.apps.plugins.result_store.delete_orphaned_result_objects", calls.orphans)
+        mocker.patch("sbomify.apps.plugins.result_store.delete_unreferenced_findings_objects", calls.shared)
+        mocker.patch("sbomify.apps.plugins.retention.prune_assessment_runs", calls.prune)
+
+        prune_assessment_runs_task.fn()
+
+        assert [name for name, *_ in calls.mock_calls] == ["orphans", "shared", "prune"]
+
+
+@pytest.mark.django_db
+class TestTheRunFindingsCardReadsStorage:
+    """The card on the artifact page pages one run's findings out of ``result``
+    in SQL. An offloaded run holds nothing there, so read the old way its card
+    would list no findings at all, the one answer an unreachable payload must
+    never give."""
+
+    def _page(self, run, sbom, rf, monkeypatch):
+        from sbomify.apps.plugins.services.run_findings import build_run_findings_page
+
+        monkeypatch.setattr("sbomify.apps.plugins.apis._readable_sbom", lambda request, sbom_id: sbom)
+        return build_run_findings_page(rf.get("/"), str(run.id))
+
+    def test_an_offloaded_run_pages_the_same_findings(self, sbom, bucket, rf, monkeypatch):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        before = self._page(superseded, sbom, rf, monkeypatch)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+
+        after = self._page(superseded, sbom, rf, monkeypatch)
+
+        assert before.ok and len(before.value.findings) == 2
+        assert after.ok and after.value.panel == before.value.panel
+
+    def test_an_unreadable_payload_is_an_error_not_an_empty_page(self, sbom, bucket, rf, monkeypatch):
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        bucket.objects.clear()
+
+        page = self._page(superseded, sbom, rf, monkeypatch)
+
+        assert not page.ok and page.status_code == 503
+
+
+@pytest.mark.django_db
+class TestVexReachesAnOffloadedRun:
+    """A VEX uploaded after a scan is re-applied to the component's current
+    runs. One can be moved between being picked and being written, when a newer
+    scan completes in between. Read from the column, its payload is not there,
+    so the run would be skipped and keep a disposition the new VEX changed.
+    These tests move the picked run directly to stand in for that sweep."""
+
+    def test_the_rewrite_lands_as_a_new_revision(self, sbom, bucket, monkeypatch):
+        from sbomify.apps.vulnerability_scanning import vex
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+        from sbomify.apps.vulnerability_scanning.models import Finding
+
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        superseded = _run(sbom, days_ago=800, result=payload)
+        sync_findings(superseded, [])
+        assert offload_run(superseded)
+        superseded.refresh_from_db()
+        first_key = superseded.result_object_key
+
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert superseded.result_object_key not in ("", first_key)
+        # Content-addressed: the earlier revision stays where it was.
+        assert first_key in bucket.objects
+        assert Finding.objects.get(run=superseded, record__advisory_id="CVE-2026-0").vex_suppressed is True
+        assert Finding.objects.get(run=superseded, record__advisory_id="CVE-2026-1").vex_suppressed is False
+
+    def test_an_unreadable_payload_does_not_stop_the_rest(self, sbom, bucket, monkeypatch):
+        from sbomify.apps.vulnerability_scanning import vex
+
+        _run(sbom, "dependency-track", days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_run(superseded)
+        bucket.objects.clear()
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [])
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+
+        vex.reannotate_component_runs(sbom.component_id)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None and superseded.result_object_key
+
+    def test_a_row_that_is_gone_stores_nothing(self, sbom, bucket):
+        """The row is locked before anything is stored, so a run retention has
+        already taken gets no object nothing would ever point at."""
+        from sbomify.apps.plugins.result_store import save_result
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        superseded.refresh_from_db()
+        AssessmentRun.objects.filter(pk=superseded.pk).delete()
+        puts = bucket.puts
+
+        save_result(superseded, _result(total=1))
+
+        assert bucket.puts == puts
+
+    @pytest.mark.django_db(transaction=True)
+    def test_an_offload_landing_mid_rewrite_does_not_split_the_payload(self, sbom, bucket, monkeypatch):
+        """The re-apply reads a run, then writes it. An offload committing in
+        between must not leave
+        the rewrite inline beside a key to the payload it replaced: readers
+        would take the inline copy and no later sweep would move it."""
+        import threading
+
+        from django.db import connection, transaction
+
+        from sbomify.apps.plugins.result_store import object_key_for
+        from sbomify.apps.vulnerability_scanning import vex
+
+        payload = _result()
+        for finding in payload["findings"]:
+            finding["component"]["ecosystem"] = "pypi"
+        superseded = _run(sbom, days_ago=800, result=payload)
+        old_bytes = serialise_result(superseded.result)
+        old_key = object_key_for(superseded.id, old_bytes)
+        statement = {
+            "ids": {"cve-2026-0"},
+            "packages": {("pypi", "foo", "1")},
+            "state": "not_affected",
+            "justification": "code_not_reachable",
+            "product_scoped": False,
+            "source": "manual",
+        }
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
+        monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
+        locked = threading.Event()
+
+        def offload_commits_late() -> None:
+            try:
+                with transaction.atomic():
+                    bucket.objects[old_key] = old_bytes
+                    AssessmentRun.objects.filter(pk=superseded.pk).update(result=None, result_object_key=old_key)
+                    locked.set()
+                    # Held long enough for the re-apply to have read the run.
+                    threading.Event().wait(1)
+            finally:
+                connection.close()
+
+        worker = threading.Thread(target=offload_commits_late)
+        worker.start()
+        assert locked.wait(5)
+
+        vex.reannotate_component_runs(sbom.component_id)
+        worker.join(5)
+
+        superseded.refresh_from_db()
+        assert superseded.result is None
+        assert superseded.result_object_key not in ("", old_key)
+        rewritten = load_result(superseded)
+        assert next(f for f in rewritten["findings"] if f["id"] == "CVE-2026-0").get("analysis_state") == "not_affected"
+
+
+@pytest.mark.django_db
+def test_a_run_completing_between_the_release_lookup_and_the_ranking_does_not_crash(sbom, monkeypatch):
+    """The two reads are separate queries; a run can appear in the second only."""
+    from sbomify.apps.plugins import latest
+    from sbomify.apps.plugins.offload import current_run_ids
+
+    run = _run(sbom, days_ago=400)
+    monkeypatch.setattr(latest, "release_sets", lambda run_ids: {})
+
+    assert run.id in current_run_ids({sbom.id}, {"osv"})
+
+
+@pytest.mark.django_db
+class TestFindingsAreStoredOnce:
+    """A rescan of an unchanged SBOM reports the same findings array and nothing
+    else repeats: ``assessed_at`` and the scanner's metrics differ every time.
+    So the array is one shared object per distinct content, and every run that
+    reported it points there."""
+
+    def _rescans(self, sbom: SBOM, count: int) -> list[AssessmentRun]:
+        _run(sbom, days_ago=0)
+        runs = []
+        for index in range(count):
+            result = {**_result(), "assessed_at": f"2026-01-0{index + 1}T00:00:00+00:00", "metadata": {"poll": index}}
+            runs.append(_run(sbom, days_ago=10 + index, result=result))
+        return runs
+
+    def test_identical_findings_share_one_object(self, sbom, bucket):
+        runs = self._rescans(sbom, 3)
+
+        assert offload_assessment_results() == 3
+
+        shared = [key for key in bucket.objects if key.startswith(FINDINGS_PREFIX)]
+        assert len(shared) == 1
+        for run in runs:
+            run.refresh_from_db()
+            assert run.result_findings_key == shared[0]
+
+    def test_each_run_reads_back_its_own_payload(self, sbom, bucket):
+        runs = self._rescans(sbom, 2)
+        originals = {run.id: run.result for run in runs}
+
+        offload_assessment_results()
+
+        for run in runs:
+            run.refresh_from_db()
+            assert load_result(run) == originals[run.id]
+
+    def test_a_daily_epss_restamp_does_not_make_a_new_copy(self, sbom, bucket):
+        """Dependency Track restamps EPSS on every finding each day while the
+        finding is unchanged. Those fields are kept per run, so the shared array
+        stays one object, and each run still reads back its own scores."""
+        _run(sbom, "dependency-track", days_ago=0)
+        runs = []
+        for day in range(3):
+            result = _result()
+            for finding in result["findings"]:
+                finding["epss_score"] = 0.01 * (day + 1)
+                finding["epss_percentile"] = 0.5 + 0.1 * day
+            runs.append(_run(sbom, "dependency-track", days_ago=10 + day, result=result))
+        originals = {run.id: run.result for run in runs}
+
+        assert offload_assessment_results() == 3
+
+        assert len([key for key in bucket.objects if key.startswith(FINDINGS_PREFIX)]) == 1
+        for run in runs:
+            run.refresh_from_db()
+            assert load_result(run) == originals[run.id]
+
+    def test_a_missing_shared_object_is_an_error_not_an_empty_list(self, sbom, bucket):
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        del bucket.objects[run.result_findings_key]
+
+        with pytest.raises(ResultObjectMissing):
+            load_result(run)
+
+    def test_the_collector_keeps_named_objects_and_takes_the_rest(self, sbom, bucket):
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        stray = findings_key_for(b"[]")
+        bucket.objects[stray] = b"[]"
+
+        assert delete_unreferenced_findings_objects() == 1
+
+        assert run.result_findings_key in bucket.objects
+        assert stray not in bucket.objects
+
+    def test_the_collector_rechecks_references_under_the_lock(
+        self, sbom: SBOM, bucket: FakeBucket, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from contextlib import contextmanager
+
+        from sbomify.apps.plugins import result_store
+
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        key = run.result_findings_key
+        AssessmentRun.objects.filter(pk=run.pk).update(result_findings_key="")
+        lock = result_store._findings_lock
+
+        @contextmanager
+        def named_before_lock(object_key: str) -> Iterator[None]:
+            AssessmentRun.objects.filter(pk=run.pk).update(result_findings_key=key)
+            with lock(object_key):
+                yield
+
+        monkeypatch.setattr(result_store, "_findings_lock", named_before_lock)
+        monkeypatch.setattr(bucket, "delete_object", lambda *args: pytest.fail("deleted a referenced object"))
+
+        assert delete_unreferenced_findings_objects() == 0
+        assert key in bucket.objects
+
+    def test_a_rewrite_of_an_offloaded_run_is_split_too(self, sbom, bucket, django_capture_on_commit_callbacks):
+        from sbomify.apps.plugins.result_store import save_result
+
+        (run,) = self._rescans(sbom, 1)
+        offload_assessment_results()
+        run.refresh_from_db()
+        rewrite = _result(total=1)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            save_result(run, rewrite)
+
+        run.refresh_from_db()
+        assert run.result is None
+        assert run.result_findings_key == findings_key_for(serialise_result(rewrite["findings"]))
+        assert load_result(run) == rewrite
+
+    def test_the_sweep_stops_when_its_time_is_spent(self, sbom, bucket):
+        self._rescans(sbom, 3)
+
+        assert offload_assessment_results(max_seconds=0) == 0
+        assert offload_assessment_results() == 3
+
+    def test_the_daily_task_runs_the_sweep_inside_its_time_limit(self, mocker):
+        from sbomify.apps.plugins.tasks import offload_assessment_results_task
+
+        sweep = mocker.patch("sbomify.apps.plugins.offload.offload_assessment_results", return_value=0)
+
+        offload_assessment_results_task.fn()
+
+        assert sweep.call_args.kwargs["max_seconds"] < 4 * 3600
+
+
+@pytest.mark.django_db(transaction=True)
+class TestFindingsCollectionConcurrency:
+    @staticmethod
+    def _on_connection(action: Callable[[], Any]) -> Any:
+        from django.db import connection
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '5s'")
+            return action()
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _assert_locked_elsewhere(key: str, *, shared: bool = False) -> None:
+        from django.db import connection
+
+        suffix = "_shared" if shared else ""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT pg_try_advisory_lock{suffix}(hashtextextended(%s, 0))", [f"assessment-findings:{key}"]
+            )
+            acquired = cursor.fetchone()[0]
+            if acquired:
+                cursor.execute(
+                    f"SELECT pg_advisory_unlock{suffix}(hashtextextended(%s, 0))", [f"assessment-findings:{key}"]
+                )
+        assert not acquired, "the other connection must hold the conflicting lock"
+
+    @pytest.mark.parametrize("rewrite", [False, True], ids=["offload", "rewrite-in-outer-transaction"])
+    def test_collector_waits_until_a_writer_publishes_its_reference(
+        self, sbom: SBOM, bucket: FakeBucket, monkeypatch: pytest.MonkeyPatch, rewrite: bool
+    ) -> None:
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from contextlib import contextmanager
+
+        from django.db import transaction
+
+        from sbomify.apps.plugins import result_store
+
+        run = _run(sbom, days_ago=10)
+        payload = _result(total=1) if rewrite else run.result
+        assert isinstance(payload, dict)
+        if rewrite:
+            assert offload_run(run)
+            run.refresh_from_db()
+        key = findings_key_for(serialise_result(payload["findings"]))
+        # The collector must see the object before the writer's reference exists.
+        bucket.objects[key] = serialise_result(payload["findings"])
+        stored = threading.Event()
+        collecting = threading.Event()
+        lock = result_store._findings_lock
+        upload = bucket.upload_data_as_file
+
+        @contextmanager
+        def observed_lock(object_key: str, *, shared: bool = False) -> Iterator[None]:
+            if object_key == key and not shared:
+                self._assert_locked_elsewhere(object_key)
+                collecting.set()
+            with lock(object_key, shared=shared):
+                yield
+
+        def uploaded(bucket_name: str, object_key: str, data: bytes) -> None:
+            upload(bucket_name, object_key, data)
+            if not rewrite and object_key.startswith(f"{RESULT_PREFIX}{run.id}/"):
+                stored.set()
+                assert collecting.wait(5)
+
+        def publish() -> None:
+            if rewrite:
+                with transaction.atomic():
+                    result_store.save_result(run, payload)
+                    # save_result has returned, but its reference is still uncommitted.
+                    stored.set()
+                    assert collecting.wait(5)
+            else:
+                assert offload_run(run)
+
+        def collect() -> int:
+            assert stored.wait(5)
+            return delete_unreferenced_findings_objects()
+
+        monkeypatch.setattr(result_store, "_findings_lock", observed_lock)
+        monkeypatch.setattr(bucket, "upload_data_as_file", uploaded)
+        monkeypatch.setattr(bucket, "delete_object", lambda *args: pytest.fail("deleted a writer's findings"))
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            writer = executor.submit(self._on_connection, publish)
+            collector = executor.submit(self._on_connection, collect)
+            writer.result(timeout=10)
+            assert collector.result(timeout=10) == 0
+
+        run.refresh_from_db()
+        assert run.result_findings_key == key
+        assert load_result(run) == payload
+
+    def test_a_lost_delete_response_cannot_remove_a_concurrent_writers_findings(
+        self, sbom: SBOM, bucket: FakeBucket, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from contextlib import contextmanager
+
+        from sbomify.apps.plugins import result_store
+
+        run = _run(sbom, days_ago=10)
+        payload = run.result
+        assert isinstance(payload, dict)
+        key = findings_key_for(serialise_result(payload["findings"]))
+        bucket.objects[key] = serialise_result(payload["findings"])
+        deleting = threading.Event()
+        writing = threading.Event()
+        lock = result_store._findings_lock
+        delete = bucket.delete_object
+
+        @contextmanager
+        def observed_lock(object_key: str, *, shared: bool = False) -> Iterator[None]:
+            if shared:
+                self._assert_locked_elsewhere(object_key, shared=True)
+                writing.set()
+            with lock(object_key, shared=shared):
+                yield
+
+        def lost_delete_response(bucket_name: str, object_key: str) -> None:
+            deleting.set()
+            assert writing.wait(5)
+            delete(bucket_name, object_key)
+            raise ConnectionError("DELETE succeeded but its response was lost")
+
+        def publish() -> bool:
+            assert deleting.wait(5)
+            return offload_run(run)
+
+        monkeypatch.setattr(result_store, "_findings_lock", observed_lock)
+        monkeypatch.setattr(bucket, "delete_object", lost_delete_response)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            collector = executor.submit(self._on_connection, delete_unreferenced_findings_objects)
+            writer = executor.submit(self._on_connection, publish)
+            with pytest.raises(ConnectionError, match="response was lost"):
+                collector.result(timeout=10)
+            assert writer.result(timeout=10)
+
+        run.refresh_from_db()
+        assert load_result(run) == payload
+        assert delete_unreferenced_findings_objects() == 0
+
+
+@pytest.mark.django_db
+class TestSplitResultVerification:
+    def test_verification_reports_every_run_with_missing_shared_findings(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        runs = [_run(sbom, days_ago=day) for day in (10, 11)]
+        for run in runs:
+            assert offload_run(run)
+            run.refresh_from_db()
+        del bucket.objects[runs[0].result_findings_key]
+        errors = StringIO()
+
+        with pytest.raises(CommandError, match="2 offloaded results, 2 missing"):
+            call_command("verify_offloaded_results", stderr=errors)
+
+        for run in runs:
+            assert f"{run.id} -> {run.result_findings_key}" in errors.getvalue()
+
+    def test_verification_checks_each_shared_object_once(
+        self, sbom: SBOM, bucket: FakeBucket, mocker: MockerFixture
+    ) -> None:
+        from django.core.management import call_command
+
+        runs = [_run(sbom, days_ago=day) for day in (10, 11)]
+        for run in runs:
+            assert offload_run(run)
+            run.refresh_from_db()
+        exists = mocker.spy(bucket, "object_exists")
+
+        call_command("verify_offloaded_results", batch_size=1)
+
+        assert exists.call_count == 3
+        assert sum(call.args[1] == runs[0].result_findings_key for call in exists.call_args_list) == 1
+
+    def test_verification_still_checks_legacy_unsplit_results(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        from sbomify.apps.plugins.result_store import put_result
+
+        run = _run(sbom, days_ago=10)
+        assert isinstance(run.result, dict)
+        key = put_result(run.id, run.result)
+        AssessmentRun.objects.filter(pk=run.pk).update(result=None, result_object_key=key)
+
+        call_command("verify_offloaded_results")
+        del bucket.objects[key]
+        with pytest.raises(CommandError, match="1 offloaded results, 1 missing"):
+            call_command("verify_offloaded_results")
+
+
+@pytest.mark.django_db
+class TestOffloadProgress:
+    def test_progress_is_reported_after_every_page(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        seen: list[tuple[int, int, int, int]] = []
+
+        moved = offload_assessment_results(
+            batch_size=2, on_progress=lambda p: seen.append((p.pages, p.scanned, p.demotable, p.moved))
+        )
+
+        assert moved == 3
+        # Oldest first: the three superseded runs, then the current one, which is kept.
+        assert seen == [(1, 2, 2, 2), (2, 4, 3, 3)]
+
+    def test_a_dry_run_reports_progress_without_moving(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=500)
+        seen: list[tuple[int, int, int]] = []
+
+        offload_assessment_results(dry_run=True, on_progress=lambda p: seen.append((p.scanned, p.demotable, p.moved)))
+
+        assert seen == [(2, 1, 0)]
+
+    def test_the_command_prints_a_total_and_progress_lines(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        out = StringIO()
+
+        call_command("offload_assessment_results", batch_size=2, progress_interval=0, stdout=out)
+
+        output = out.getvalue()
+        assert "4 candidates to scan in batches of 2" in output
+        assert "batch 1: scanned 2/4 (50.0%), 2 moved, 0 kept" in output
+        assert "batch 2: scanned 4/4 (100.0%), 3 moved, 1 kept" in output
+        assert "done: 3 results offloaded (1 current kept, 0 changed underneath)" in output
+
+    def test_the_command_throttles_but_always_prints_the_last_batch(self, sbom: SBOM, bucket: FakeBucket) -> None:
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        _run(sbom, days_ago=400)
+        for day in (500, 600, 700):
+            _run(sbom, days_ago=day)
+        out = StringIO()
+
+        call_command("offload_assessment_results", batch_size=1, progress_interval=3600, stdout=out)
+
+        lines = [line for line in out.getvalue().splitlines() if line.startswith("batch ")]
+        assert len(lines) == 1
+        assert lines[0].startswith("batch 4: scanned 4/4")

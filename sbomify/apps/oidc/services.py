@@ -64,7 +64,11 @@ logger = getLogger(__name__)
 # routable, so a misconfigured mailer can't accidentally try to deliver
 # notifications to "oidc-bot-…@sbomify.local".
 BOT_USERNAME_PREFIX = "oidc-bot-"
-_BOT_EMAIL_DOMAIN = "sbomify.local"
+#: Public because a queryset that wants to leave bots out has to express the
+#: same rule ``is_synthetic_bot_user`` applies, and reaching for a private name
+#: to do it is how the two drift apart.
+BOT_EMAIL_DOMAIN = "sbomify.local"
+_BOT_EMAIL_DOMAIN = BOT_EMAIL_DOMAIN
 _BOT_ROLE = "bot"
 
 

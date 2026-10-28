@@ -34,7 +34,7 @@ def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
         scope = (
             getattr(getattr(request, "user", None), "pk", None),
             (session.get("current_workspace") or {}).get("key"),
-            resolver_match.kwargs.get("team_key") if resolver_match else None,
+            resolver_match.kwargs.get("workspace_key") if resolver_match else None,
         )
         cache = getattr(request, "_ctx_cache", None)
         if not isinstance(cache, dict) or getattr(request, "_ctx_cache_scope", None) != scope:
@@ -170,9 +170,9 @@ def pending_access_requests_context(request: Any) -> Any:
         }
 
     current_team_data = request.session.get("current_workspace", {})
-    team_key = current_team_data.get("key")
+    workspace_key = current_team_data.get("key")
 
-    if not team_key:
+    if not workspace_key:
         return {
             "pending_access_requests_count": 0,
             "has_pending_access_requests": False,
@@ -184,10 +184,10 @@ def pending_access_requests_context(request: Any) -> Any:
 
         from sbomify.apps.core.authz import ADMINISTER
         from sbomify.apps.documents.access_models import AccessRequest
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         # Only show count for owners/admins
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=workspace_key)
         member = Member.objects.filter(team=team, user=request.user).first()
 
         if not member or member.role not in ADMINISTER:
@@ -197,7 +197,7 @@ def pending_access_requests_context(request: Any) -> Any:
             }
 
         # Cache the count to avoid querying on every page load
-        cache_key = f"pending_access_requests:{team_key}:{request.user.id}"
+        cache_key = f"pending_access_requests:{workspace_key}:{request.user.id}"
         cached = cache.get(cache_key)
         if cached is not None:
             count = cached
@@ -268,24 +268,24 @@ def team_context(request: Any) -> Any:
     url_team_key = None
     resolver_match = getattr(request, "resolver_match", None)
     if resolver_match is not None:
-        url_team_key = resolver_match.kwargs.get("team_key")
+        url_team_key = resolver_match.kwargs.get("workspace_key")
 
-    team_key = url_team_key or session_team_key
-    if not team_key:
+    workspace_key = url_team_key or session_team_key
+    if not workspace_key:
         return {}
 
     try:
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
-            # A ``team_key`` kwarg that names no workspace isn't necessarily a
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
+            # A ``workspace_key`` kwarg that names no workspace isn't necessarily a
             # workspace key at all. Fall back rather than dropping the whole
             # context and stripping the chrome off the page.
             if not url_team_key or not session_team_key:
                 raise
-            team = Team.objects.get(key=session_team_key)
+            team = Workspace.objects.get(key=session_team_key)
 
         # Determine if owner. Billing status (banners/notifications) is read
         # straight from team.billing_plan_limits below; it is NOT synced from
@@ -300,7 +300,7 @@ def team_context(request: Any) -> Any:
         from django.conf import settings
 
         from sbomify.apps.billing.config import is_billing_enabled
-        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, ROLE_OWNER
+        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, READ_INTERNAL, ROLE_OWNER, TRIAGE
 
         return {
             "team": team,
@@ -311,6 +311,10 @@ def team_context(request: Any) -> Any:
             "can_administer": role in ADMINISTER,
             "can_manage": role in MANAGE,
             "can_delete": role in DELETE,
+            "can_read_internal": role in READ_INTERNAL,
+            # Not can_triage: views pass that name per component, and this one
+            # is the workspace role's, for surfaces such as the Overview.
+            "can_triage_vulnerabilities": role in TRIAGE,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
@@ -380,11 +384,11 @@ def posthog_context(request: Any) -> dict[str, Any]:
         from sbomify.apps.core.posthog_service import hash_email
 
         user = request.user
-        team_key = request.session.get("current_workspace", {}).get("key", "")
+        workspace_key = request.session.get("current_workspace", {}).get("key", "")
         identify = {
             "distinct_id": str(user.pk),
             "email_hash": hash_email(getattr(user, "email", "")),
-            "workspace_key": team_key,
+            "workspace_key": workspace_key,
         }
 
     return {

@@ -4,12 +4,12 @@ import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
 def team(db):
-    return Team.objects.create(name="Team A", key="team-a-key")
+    return Workspace.objects.create(name="Team A", key="team-a-key")
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def other_team(db):
             "max_users": 10,
         },
     )
-    return Team.objects.create(name="Team B", key="team-b-key", billing_plan="business")
+    return Workspace.objects.create(name="Team B", key="team-b-key", billing_plan="business")
 
 
 @pytest.fixture
@@ -65,11 +65,11 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     _setup_session(client, team, "owner")
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
-    url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
+    url = reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id})
     response = client.delete(url)
 
     assert response.status_code == 302
-    assert response.url == reverse("teams:team_settings", kwargs={"team_key": team.key})
+    assert response.url == reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
 
     # 3. Verify: User removed
     assert not Member.objects.filter(pk=membership.pk).exists()
@@ -99,7 +99,7 @@ def test_self_removal_fallback_when_pending_invites_exist(client, user_with_one_
     _setup_session(client, team, "admin")
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
-    url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
+    url = reverse("workspaces:team_membership_delete", kwargs={"membership_id": membership.id})
     response = client.delete(url)
 
     assert response.status_code == 302
@@ -124,7 +124,7 @@ def paid_team(db):
         key="business",
         defaults={"name": "Business", "description": "Business Plan", "max_users": 10},
     )
-    return Team.objects.create(
+    return Workspace.objects.create(
         name="Paid Workspace",
         key="paid-workspace-key",
         billing_plan="business",
@@ -155,7 +155,7 @@ def _delete_workspace(client, user, workspace, mocker, capture, settings, billin
     _setup_session(client, workspace, "owner")
     with capture(execute=True):
         response = client.post(
-            reverse("teams:teams_dashboard"),
+            reverse("workspaces:teams_dashboard"),
             {"_method": "DELETE", "key": workspace.key},
         )
     return response, queued
@@ -170,7 +170,7 @@ def test_deleting_a_workspace_cancels_its_subscription(
     )
 
     assert response.status_code == 302
-    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    assert not Workspace.objects.filter(pk=paid_team.pk).exists()
     queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
 
 
@@ -187,7 +187,7 @@ def test_deleting_a_free_workspace_queues_no_ids_to_cancel(
     )
 
     assert response.status_code == 302
-    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    assert not Workspace.objects.filter(pk=paid_team.pk).exists()
     assert queued.call_args[0][:2] == (None, None)
 
 
@@ -202,7 +202,7 @@ def test_the_delete_does_not_wait_on_stripe(
     )
 
     assert response.status_code == 302
-    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    assert not Workspace.objects.filter(pk=paid_team.pk).exists()
     client_cls.assert_not_called()
 
 
@@ -279,7 +279,7 @@ def test_a_customer_only_cleanup_does_not_claim_a_cancellation(mocker, settings)
 
     said = log.warning.call_args[0][0]
     assert "no subscription" in said
-    assert "was cancelled" not in said
+    assert "was canceled" not in said
 
 
 def test_stripe_is_left_alone_when_billing_is_disabled(settings, mocker):
@@ -301,7 +301,7 @@ def _delete_workspace_from_settings(client, user, workspace, mocker, capture, se
     _setup_session(client, workspace, "owner")
     with capture(execute=True):
         response = client.post(
-            reverse("teams:team_general", kwargs={"team_key": workspace.key}),
+            reverse("workspaces:team_general", kwargs={"workspace_key": workspace.key}),
             {"action": "delete"},
         )
     return response, queued
@@ -312,7 +312,7 @@ def test_deleting_a_workspace_from_settings_cancels_its_subscription(
 ):
     """The Danger Zone is the delete a user actually reaches.
 
-    Its form posts to teams:team_general, not to the dashboard, so the
+    Its form posts to workspaces:team_general, not to the dashboard, so the
     cancellation the dashboard path performs has to happen here too or the
     subscription outlives the workspace and keeps charging.
     """
@@ -323,7 +323,7 @@ def test_deleting_a_workspace_from_settings_cancels_its_subscription(
     # 302 exactly: the success path redirects to the workspace that is left.
     # Accepting 200 would let a delete that fell into the error handler pass.
     assert response.status_code == 302
-    assert not Team.objects.filter(pk=paid_team.pk).exists()
+    assert not Workspace.objects.filter(pk=paid_team.pk).exists()
     queued.assert_called_once_with("sub_test123", "cus_test123", paid_team.key)
 
 
@@ -348,5 +348,5 @@ def test_a_rolled_back_delete_cancels_nothing(paid_team, mocker):
             delete_workspace_with_billing_cleanup(paid_team)
             raise RuntimeError("the caller failed after deleting")
 
-    assert Team.objects.filter(pk=pk).exists(), "the rollback should have restored it"
+    assert Workspace.objects.filter(pk=pk).exists(), "the rollback should have restored it"
     queued.assert_not_called()

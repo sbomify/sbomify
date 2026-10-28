@@ -110,6 +110,23 @@ def test_logout_view(client: Client, sample_user: AbstractBaseUser):
 
 
 @pytest.mark.django_db
+def test_logout_redirects_browser_to_public_keycloak_url(client: Client, sample_user: AbstractBaseUser):
+    """Logout sends the browser to KEYCLOAK_PUBLIC_URL, not the internal server URL."""
+    client.force_login(sample_user)
+    with override_settings(
+        KEYCLOAK_SERVER_URL="http://keycloak.internal:8080/",
+        KEYCLOAK_PUBLIC_URL="https://sso.example.com/",
+        KEYCLOAK_REALM="sbomify",
+        APP_BASE_URL="http://test-return.url",
+        KEYCLOAK_CLIENT_ID="sbomify",
+    ):
+        response = client.get(reverse("core:logout"))
+        assert response.status_code == 302
+        assert response.url.startswith("https://sso.example.com/realms/sbomify/protocol/openid-connect/logout?")
+        assert "keycloak.internal" not in response.url
+
+
+@pytest.mark.django_db
 def test_delete_nonexistent_access_token(sample_user: AbstractBaseUser):
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -245,7 +262,8 @@ def test_settings_post_redirects_with_workspace(sample_user: AbstractBaseUser):
     )
 
     assert response.status_code == 302
-    assert "/tokens" in response.url
+    workspace_key = client.session["current_workspace"]["key"]
+    assert response.url == reverse("workspaces:team_settings_tab", kwargs={"workspace_key": workspace_key, "tab": "tokens"})
     assert AccessToken.objects.count() == initial_count
 
 
@@ -278,6 +296,14 @@ def test_logout_unauthenticated_user_redirects_to_login(client: Client) -> None:
     assert response.status_code == 302
     # Should redirect to keycloak_login
     assert "/login" in response["Location"] or "keycloak" in response["Location"].lower()
+
+
+@pytest.mark.django_db
+def test_login_required_redirect_lands_on_the_login_route_directly(client: Client) -> None:
+    """LOGIN_URL carries the trailing slash, so APPEND_SLASH adds no extra hop."""
+    response = client.get(reverse("core:support_contact"), follow=False)
+    assert response.status_code == 302
+    assert response["Location"].startswith(f"{reverse('core:keycloak_login')}?next=")
 
 
 @pytest.mark.django_db

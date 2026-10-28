@@ -15,15 +15,15 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
-from sbomify.apps.billing.team_pricing_service import TeamPricingService
-from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
+from sbomify.apps.billing.team_pricing_service import QuotaDisplay, TeamPricingService
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
-from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
@@ -39,10 +39,15 @@ logger = getLogger(__name__)
 
 @method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    # MANAGE so members can reach the tabs they are allowed (API tokens, Account).
+    # READ_INTERNAL, not MANAGE: this route only has to let a role reach the
+    # page, and which sections it then sees is decided per-tab by
+    # visible_tabs(). Gating the route at MANAGE meant an operator got a 403
+    # before the tab filter ran, including for the API tokens tab the registry
+    # offers it -- and a token is how the triage API is reached at all. The
+    # individual workspace-setting actions stay where they were.
     # Which sections they actually see is decided per-tab by visible_tabs(), and
     # every POST sub-action re-checks ADMINISTER for itself.
-    allowed_roles = list(MANAGE)
+    allowed_roles = list(READ_INTERNAL)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
@@ -61,7 +66,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         self.tab: str | None = kwargs.pop("tab", None)
         return super().dispatch(request, *args, **kwargs)
 
-    def _redirect_with_tab(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _redirect_with_tab(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Redirect back to the section the form was submitted from.
 
         Forms carry an ``active_tab``, but the URL already knows which section
@@ -71,11 +76,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
         active_tab = request.POST.get("active_tab", "") or self.tab
-        return redirect_to_team_settings(team_key, active_tab if active_tab else None)
+        return redirect_to_team_settings(workspace_key, active_tab if active_tab else None)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         tab = self.tab
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=team.get("detail", "Unknown error"))
@@ -88,7 +93,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # is wanted at all. Live Member row rather than the session cache: this
         # picks which sections are rendered, so a demoted user reading a stale
         # role would be shown sections they can no longer act on.
-        role = get_member_role_by_key(request.user, team_key)
+        role = get_member_role_by_key(request.user, workspace_key)
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:
@@ -106,7 +111,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # the highlighted tab and the content all agree. Returning here also
         # means a redirect costs no billing work.
         if tab is not None and tab != active_tab.key:
-            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+            return redirect("workspaces:team_settings_tab", workspace_key=workspace_key, tab=active_tab.key)
 
         # Stripe is reached only where its answer is on screen. Eight sections
         # render from this view and one of them shows billing, so syncing on
@@ -117,12 +122,12 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         wants_fresh_billing = billing_enabled_flag and active_tab.key == "billing"
 
         try:
-            team_obj = Team.objects.get(key=team_key)
+            team_obj = Workspace.objects.get(key=workspace_key)
             if wants_fresh_billing:
                 sync_subscription_from_stripe(team_obj)
                 # Refresh team data after sync
                 team_obj.refresh_from_db()
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             team_obj = None
 
         # Built only for the tab that renders it. billing.html.j2 is the sole
@@ -134,10 +139,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # id, and _fetch_invoice_amount when the cached invoice fields are
         # missing. Skipping the call is the only way to be sure a tab with no
         # billing on it does not depend on Stripe.
-        billing_plan = team.billing_plan or Team.Plan.COMMUNITY
+        billing_plan = team.billing_plan or Workspace.Plan.COMMUNITY
         plan_features: list[Any] = []
         plan_pricing: dict[str, Any] = {}
-        plan_limits: list[dict[str, str]] = []
+        plan_limits: list[QuotaDisplay] = []
 
         if wants_fresh_billing:
             plan_features = list(PLAN_FEATURES.get(billing_plan, ()))
@@ -162,8 +167,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # team_obj was already fetched above for sync, reuse it
         if not team_obj:
             try:
-                team_obj = Team.objects.get(key=team_key)
-            except Team.DoesNotExist:
+                team_obj = Workspace.objects.get(key=workspace_key)
+            except Workspace.DoesNotExist:
                 team_obj = None
 
         # Convert Pydantic model to dict so we can inject properties
@@ -207,7 +212,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Fetch contact profiles for the settings tab
         profiles: list[Any] = []
         if active_tab.key == "contact-profiles":
-            profiles_status, profiles = list_contact_profiles(request, team_key)
+            profiles_status, profiles = list_contact_profiles(request, workspace_key)
             if profiles_status != 200:
                 return error_response(request, HttpResponse("Unable to load party profiles", status=profiles_status))
 
@@ -271,66 +276,70 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # answered.
             "is_admin_or_owner": role in ADMINISTER,
         }
-        panel = build_panel_context(request, team_key, active_tab.key)
+        panel = build_panel_context(request, workspace_key, active_tab.key)
         if not panel.ok:
             return error_response(request, HttpResponse(panel.error, status=panel.status_code or 400))
         context.update(panel.value or {})
         if active_tab.key == "contact-profiles":
             context.update(profiles_context(profiles))
-        template = (
-            "teams/team_settings_content.html.j2"
-            if request.headers.get("HX-Target") == "settings-content"
-            else "teams/team_settings.html.j2"
-        )
+        # A live region inside a tab (``<tab>-panel``) refreshes itself from the
+        # tab alone; it selects its own element out of the response.
+        hx_target = request.headers.get("HX-Target")
+        if hx_target == "settings-content":
+            template = "teams/team_settings_content.html.j2"
+        elif hx_target == f"{active_tab.key}-panel":
+            template = active_tab.template_path
+        else:
+            template = "teams/team_settings.html.j2"
         return render(request, template, context)
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         if request.POST.get("visibility_action") == "update":
-            return self._update_visibility(request, team_key)
+            return self._update_visibility(request, workspace_key)
 
         if request.POST.get("trust_center_description_action") == "update":
-            return self._update_trust_center_description(request, team_key)
+            return self._update_trust_center_description(request, workspace_key)
 
         company_nda_action = request.POST.get("company_nda_action")
         if company_nda_action in ("upload", "replace", "delete"):
-            return self._handle_company_nda(request, team_key, company_nda_action)
+            return self._handle_company_nda(request, workspace_key, company_nda_action)
 
         if request.POST.get("tea_action") == "update":
-            return self._update_tea_enabled(request, team_key)
+            return self._update_tea_enabled(request, workspace_key)
 
         if request.POST.get("vulnerability_posture_action") == "update":
-            return self._update_vulnerability_posture(request, team_key)
+            return self._update_vulnerability_posture(request, workspace_key)
 
         if request.POST.get("security_txt_action") == "update":
-            return self._update_security_txt(request, team_key)
+            return self._update_security_txt(request, workspace_key)
 
         if request.POST.get("slug_action") == "update":
-            return self._update_slug(request, team_key)
+            return self._update_slug(request, workspace_key)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
-                return self._delete_member(request, team_key)
+                return self._delete_member(request, workspace_key)
             elif "invitation_id" in request.POST:
-                return self._delete_invitation(request, team_key)
+                return self._delete_invitation(request, workspace_key)
 
         messages.error(request, "Invalid request method")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _delete_member(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _delete_member(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import remove_member_safely
 
         user = cast(User, request.user)
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         member_id = form.cleaned_data["member_id"]
         try:
-            membership = Member.objects.get(pk=member_id, team__key=team_key)
+            membership = Member.objects.get(pk=member_id, team__key=workspace_key)
         except Member.DoesNotExist:
             messages.error(request, "Member not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         # Same rules as the bare-PK ``teams.views.delete_member`` path; kept in
         # one helper so the two can't drift (they already had, this one was
@@ -345,18 +354,18 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if denial.forbidden:
                 return error_response(request, HttpResponseForbidden(denial.message))
             messages.add_message(request, denial.level, denial.message)
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         active_tab = request.POST.get("active_tab", "")
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
-    def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        # Managing invitations is ADMINISTER, but the class gate is MANAGE so
+    def _delete_invitation(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        # Managing invitations is ADMINISTER, but the class gate is READ_INTERNAL so
         # members can reach their own tabs — so this has to re-check for itself,
         # as its siblings do. Without it a member could cancel any invitation in
         # the workspace, including an owner-level one. A 403 rather than a
         # message: this is an authorization failure, matching _delete_member.
-        membership = Member.objects.filter(user=cast(User, request.user), team__key=team_key).first()
+        membership = Member.objects.filter(user=cast(User, request.user), team__key=workspace_key).first()
         if not membership or membership.role not in ADMINISTER:
             return error_response(
                 request, HttpResponseForbidden("You don't have permission to manage this workspace's invitations")
@@ -365,32 +374,32 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         form = DeleteInvitationForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         try:
-            invitation = Invitation.objects.get(pk=form.cleaned_data["invitation_id"], team__key=team_key)
+            invitation = Invitation.objects.get(pk=form.cleaned_data["invitation_id"], team__key=workspace_key)
         except Invitation.DoesNotExist:
             messages.error(request, "Invitation not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         invitation_email = invitation.email
         invitation.delete()
         messages.info(request, f"Invitation for {invitation_email} deleted")
 
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _update_visibility(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_visibility(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change visibility")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         visibility_values = request.POST.getlist("is_public")
         desired_visibility = self._parse_checkbox_value(visibility_values, default=team.is_public)
@@ -398,7 +407,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         can_set_private = team.can_be_private()
         if desired_visibility is False and not can_set_private:
             messages.error(request, "Disabling the Trust Center is available on Business or Enterprise plans.")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         team.is_public = desired_visibility
         team.save()
@@ -406,27 +415,27 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Trust center is now {'public' if team.is_public else 'private'}.")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _update_trust_center_description(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_trust_center_description(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change the trust center description")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         description = request.POST.get("trust_center_description", "").strip()
 
         # Validate length
         if len(description) > 500:
             messages.error(request, "Description must be 500 characters or less")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         # Update branding_info with new description
         # Create a copy of the dict to ensure Django detects the change
@@ -439,32 +448,32 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, "Trust center description updated.")
         else:
             messages.success(request, "Trust center description cleared. Using default description.")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _handle_company_nda(self, request: HttpRequest, team_key: str, action: str) -> HttpResponse:
+    def _handle_company_nda(self, request: HttpRequest, workspace_key: str, action: str) -> HttpResponse:
         """Handle company-wide NDA upload, replace, or delete."""
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can manage company NDA")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         if action == "delete":
-            return self._delete_company_nda(request, team_key, team)
+            return self._delete_company_nda(request, workspace_key, team)
         else:
-            return self._upload_company_nda(request, team_key, team)
+            return self._upload_company_nda(request, workspace_key, team)
 
-    def _upload_company_nda(self, request: HttpRequest, team_key: str, team: Team) -> HttpResponse:
+    def _upload_company_nda(self, request: HttpRequest, workspace_key: str, team: Workspace) -> HttpResponse:
         """Upload a new version of company-wide NDA (versioning enabled)."""
         if "company_nda_file" not in request.FILES:
             messages.error(request, "No file provided")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         uploaded_file_raw = request.FILES["company_nda_file"]
         # request.FILES values can be UploadedFile or list; we always get a single file here
@@ -472,13 +481,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if not isinstance(uploaded_file_raw, UploadedFile):
             messages.error(request, "Invalid file upload")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
         uploaded_file: UploadedFile = uploaded_file_raw
 
         # Validate file
         if uploaded_file.content_type != "application/pdf":
             messages.error(request, "Only PDF files are allowed")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         # The one artifact upload that used to carry its own literal, so raising
         # DATA_UPLOAD_MAX_MEMORY_SIZE_MB (which is what sets
@@ -487,7 +496,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         max_size_mb = max_size // (1024 * 1024)
         if (uploaded_file.size or 0) > max_size:
             messages.error(request, f"File size must be {max_size_mb}MB or smaller")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         try:
             import hashlib
@@ -606,20 +615,20 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 # First NDA uploaded - no signatures to invalidate
                 messages.success(request, f"Company NDA version {next_version} uploaded successfully.")
 
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         except Exception as e:
             logger.error(f"Error uploading company NDA: {e}")
             messages.error(request, "Failed to upload company NDA. Please try again.")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
-    def _delete_company_nda(self, request: HttpRequest, team_key: str, team: Team) -> HttpResponse:
+    def _delete_company_nda(self, request: HttpRequest, workspace_key: str, team: Workspace) -> HttpResponse:
         """Delete company-wide NDA."""
         try:
             company_nda_id = team.branding_info.get("company_nda_document_id")
             if not company_nda_id:
                 messages.error(request, "No company NDA found to delete")
-                return self._redirect_with_tab(request, team_key)
+                return self._redirect_with_tab(request, workspace_key)
 
             # Remove from branding_info
             # Create a copy of the dict to ensure Django detects the change
@@ -637,25 +646,25 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             #     pass
 
             messages.success(request, "Company NDA deleted successfully.")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         except Exception as e:
             logger.error(f"Error deleting company NDA: {e}")
             messages.error(request, "Failed to delete company NDA. Please try again.")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
-    def _update_tea_enabled(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_tea_enabled(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change TEA settings")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         tea_values = request.POST.getlist("tea_enabled")
         desired_tea_enabled = self._parse_checkbox_value(tea_values, default=team.tea_enabled)
@@ -666,20 +675,20 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _update_vulnerability_posture(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_vulnerability_posture(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change Trust Center settings")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         values = request.POST.getlist("publish_vulnerability_posture")
         team.publish_vulnerability_posture = self._parse_checkbox_value(
@@ -695,20 +704,20 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             if team.publish_vulnerability_posture
             else "Vulnerability posture is no longer published on your Trust Center.",
         )
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _update_security_txt(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_security_txt(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change security.txt settings")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         from sbomify.apps.teams.services.security_txt import validate_security_txt_url
 
@@ -723,7 +732,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team.save(update_fields=["security_txt_config"])
             refresh_current_team_session(request, team)
             messages.success(request, "security.txt is now disabled.")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         # Validate and store selected contact ID (CharField PK, not int)
         contact_id = request.POST.get("security_txt_contact_id", "").strip()
@@ -732,7 +741,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 id=contact_id, entity__profile__team=team, entity__profile__is_component_private=False
             ).exists():
                 messages.error(request, "Selected contact does not belong to this workspace")
-                return self._redirect_with_tab(request, team_key)
+                return self._redirect_with_tab(request, workspace_key)
         config["contact_id"] = contact_id
 
         # CSIRT mailbox — the second contact line TR-03183-3 4.2.3 expects
@@ -743,7 +752,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             email_error = validate_security_email(csirt_email)
             if email_error:
                 messages.error(request, f"Invalid CSIRT email: {email_error}")
-                return self._redirect_with_tab(request, team_key)
+                return self._redirect_with_tab(request, workspace_key)
         config["csirt_email"] = csirt_email
 
         # Validate and store URL fields
@@ -764,7 +773,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 error = validate_security_txt_url(value)
                 if error:
                     messages.error(request, f"Invalid {config_key.replace('_', ' ')}: {error}")
-                    return self._redirect_with_tab(request, team_key)
+                    return self._redirect_with_tab(request, workspace_key)
             config[config_key] = value
 
         # Encryption URLs — multiple allowed (stored as JSON list)
@@ -783,7 +792,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 error = validate_security_txt_url(enc_url)
                 if error:
                     messages.error(request, f"Invalid encryption URL: {error}")
-                    return self._redirect_with_tab(request, team_key)
+                    return self._redirect_with_tab(request, workspace_key)
         config["encryption_urls"] = [str(u).strip() for u in encryption_urls if str(u).strip()]
 
         # Preferred languages — use centralized validator
@@ -795,7 +804,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         lang_error = validate_preferred_languages(preferred_languages)
         if lang_error:
             messages.error(request, lang_error)
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
         config["preferred_languages"] = preferred_languages
 
         # Refresh Expires on every save per RFC 9116 semantics; clean_expires
@@ -812,38 +821,38 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
         else:
             messages.success(request, "security.txt settings saved.")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
-    def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_slug(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         from django.core.exceptions import ValidationError
         from django.db import IntegrityError
 
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             messages.error(request, "Workspace not found")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         membership = Member.objects.filter(user=user, team=team).first()
         if not membership or membership.role not in ADMINISTER:
             messages.error(request, "Only workspace owners and admins can change the slug")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         new_slug = request.POST.get("slug", "").strip().lower()
         if not new_slug:
             messages.error(request, "Slug cannot be empty")
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         if new_slug == team.slug:
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         team.slug = new_slug
         # Validate the slug only. A bare full_clean() also flags unrelated fields that are
         # legitimately empty on most workspaces (branding_info defaults to {}, and
         # billing_plan/billing_plan_limits are null on community plans), which made every
         # rename fail with a bare "This field cannot be blank."
-        slug_only_exclude = [field.name for field in Team._meta.fields if field.name != "slug"]
+        slug_only_exclude = [field.name for field in Workspace._meta.fields if field.name != "slug"]
         try:
             team.full_clean(exclude=slug_only_exclude)
         except ValidationError as e:
@@ -854,17 +863,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "; ".join(e.messages))
             # Restore original slug on the in-memory instance
             team.refresh_from_db(fields=["slug"])
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         try:
             team.save(update_fields=["slug"])
         except IntegrityError:
             messages.error(request, f'The slug "{new_slug}" is already taken.')
             team.refresh_from_db(fields=["slug"])
-            return self._redirect_with_tab(request, team_key)
+            return self._redirect_with_tab(request, workspace_key)
 
         messages.success(request, "Trust Center slug updated successfully.")
-        return self._redirect_with_tab(request, team_key)
+        return self._redirect_with_tab(request, workspace_key)
 
     @staticmethod
     def _parse_checkbox_value(values: list[str], default: bool) -> bool:

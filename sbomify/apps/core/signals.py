@@ -12,6 +12,24 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _schedule_latest_release_updated(release: Any, product: Any) -> None:
+    """Send ``release_updated`` for a latest release once the change commits.
+
+    ``product`` must carry its workspace (``select_related("team")``) so this
+    costs no query. Pages debounce the message, so the few one upload can send
+    repaint once.
+    """
+    from sbomify.apps.core.utils import broadcast_to_workspace
+
+    workspace_key = product.team.key
+    if not workspace_key:
+        return
+    data = {"release_id": str(release.id), "product_id": str(product.id), "name": release.name}
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="release_updated", data=data)
+    )
+
+
 @receiver(post_save, sender="sboms.SBOM")
 def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Update the latest release when a new SBOM artifact is created."""
@@ -32,12 +50,12 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
         "hbom": events.HBOM_UPLOADED,
     }.get(instance.bom_type, events.SBOM_UPLOADED)
     team = getattr(instance.component, "team", None) if instance.component else None
-    team_key = team.key if team else ""
+    workspace_key = team.key if team else ""
     component_id = getattr(instance.component, "id", "")
     sbom_id = instance.id
     source = instance.source or ""
-    groups = {"workspace": team_key} if team_key else None
-    distinct_id = team_key or "system"
+    groups = {"workspace": workspace_key} if workspace_key else None
+    distinct_id = workspace_key or "system"
     transaction.on_commit(
         lambda: capture(
             distinct_id,
@@ -65,7 +83,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
         # Get all products that contain this SBOM's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=sbom_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -73,6 +91,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
 
             # Add the SBOM to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(sbom_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added SBOM %s to latest release %s for product %s",
@@ -95,11 +114,11 @@ def update_latest_release_on_document_created(sender: Any, instance: Any, create
     from sbomify.apps.core.posthog_service import capture
 
     team = getattr(instance.component, "team", None) if instance.component else None
-    team_key = team.key if team else ""
+    workspace_key = team.key if team else ""
     component_id = getattr(instance.component, "id", "")
     document_id = instance.id
-    groups = {"workspace": team_key} if team_key else None
-    distinct_id = team_key or "system"
+    groups = {"workspace": workspace_key} if workspace_key else None
+    distinct_id = workspace_key or "system"
     transaction.on_commit(
         lambda: capture(
             distinct_id, "document:uploaded", {"component_id": component_id, "document_id": document_id}, groups=groups
@@ -116,7 +135,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         # Get all products that contain this document's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=document_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -124,6 +143,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
 
             # Add the document to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(document_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added Document %s to latest release %s for product %s",
@@ -200,7 +220,7 @@ def update_latest_release_on_product_components_changed(
 
     # Single query for all affected products instead of one .get() per id —
     # bulk add/remove can pass dozens of PKs in pk_set.
-    products_by_id = Product.objects.in_bulk(product_ids)
+    products_by_id = Product.objects.select_related("team").in_bulk(product_ids)
     for prod_id in product_ids:
         product = products_by_id.get(prod_id)
         if product is None:
@@ -208,6 +228,7 @@ def update_latest_release_on_product_components_changed(
         try:
             latest_release = Release.get_or_create_latest_release(product)
             latest_release.refresh_latest_artifacts()
+            _schedule_latest_release_updated(latest_release, product)
             logger.info(
                 "Refreshed latest release %s for product %s after component changes",
                 latest_release.id,
@@ -242,15 +263,17 @@ def bump_collection_version_on_artifact_added(sender: Any, instance: Any, create
 
 @receiver(post_save, sender="core.ReleaseArtifact")
 def pin_latest_vex_on_sbom_artifact_added(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
-    """When a component's SBOM is pinned to a release, pin its newest VEX too.
+    """When a component's SBOM is pinned to a release, pin the VEX written for its version.
 
     Covers every path that attaches SBOM artifacts (the Add Artifact dialog,
     the GitHub action's release tagging, latest-release maintenance) so a
-    release carries the component's exploitability statements without a manual
-    pin. A *manually* pinned VEX is a deliberate snapshot: it evicts any auto
-    pin for the same component and is never replaced automatically. Acts only
-    on bom_type='sbom' and manual bom_type='vex' rows — the auto pin this
-    creates matches neither branch, so it can't recurse.
+    release carries the exploitability statements made for the build it ships
+    without a manual pin. A VEX written for another version is never pinned:
+    its statements were verified against a different build. A *manually*
+    pinned VEX is a deliberate snapshot: it evicts any auto pin for the same
+    component and is never replaced automatically. Acts only on
+    bom_type='sbom' and manual bom_type='vex' rows — the auto pin this creates
+    matches neither branch, so it can't recurse.
     """
     if not created or not instance.sbom_id:
         return
@@ -265,14 +288,14 @@ def pin_latest_vex_on_sbom_artifact_added(sender: Any, instance: Any, created: A
         return
 
     try:
-        from sbomify.apps.core.services.vex_pins import ensure_latest_vex_pinned
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
         from sbomify.apps.sboms.models import SBOM
 
         sbom = SBOM.objects.select_related("component").filter(id=instance.sbom_id).first()
         if sbom is None:
             return
         if sbom.bom_type == SBOM.BomType.SBOM.value:
-            ensure_latest_vex_pinned(instance.release, sbom.component)
+            sync_vex_pins(instance.release, sbom.component)
         elif sbom.bom_type == SBOM.BomType.VEX.value and not instance.auto_pinned:
             # A hand-pinned VEX supersedes whatever sbomify auto-pinned for
             # this component on this release.
@@ -300,6 +323,31 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
         pass
     except Exception:
         logger.error("Error bumping collection version for release %s", instance.release_id, exc_info=True)
+
+
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def sync_vex_pins_on_sbom_artifact_removed(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """When a component's SBOM leaves a release, drop the VEX pinned for its version.
+
+    Without this the release would keep listing a VEX written for a build it no
+    longer ships. Bulk operations manage their own VEX slots, as on the way in.
+    """
+    from sbomify.apps.core.models import Release, _suppress_collection_signals
+
+    if _suppress_collection_signals.get(False) or not instance.sbom_id:
+        return
+
+    try:
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component").filter(id=instance.sbom_id).first()
+        release = Release.objects.filter(pk=instance.release_id).first()
+        if sbom is None or release is None or sbom.bom_type != SBOM.BomType.SBOM.value:
+            return
+        sync_vex_pins(release, sbom.component)
+    except Exception:
+        logger.error("Error syncing VEX pins for release %s", instance.release_id, exc_info=True)
 
 
 @receiver(post_save, sender="sboms.SBOM")

@@ -12,12 +12,12 @@
     {% endif %}
     {% if new_encoded_access_token %}
         <c-feedback.alert variant="warning" title="Copy your token now">You cannot see this token again.</c-feedback.alert>
-        {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
+        <c-token-display label="Your new token" token="{{ new_encoded_access_token }}" masked />
     {% endif %}
     <c-cards.card flush>
     <c-cards.header compact title="Your tokens" />
     {% if access_tokens or unscoped_tokens %}
-        <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
+        <div x-data="window.getBulkRevokeData({ url: '{% url 'workspaces:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
             <c-tables.toolbar>
             <c-forms.checkbox @change="toggleAll($event.target.checked, [
             {% for t in access_tokens %}{{ t.id }},{% endfor %}
@@ -46,8 +46,8 @@
                 {% endfor %}
             </tbody>
             </c-tables.table>
-            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke Tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
-            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke All Tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
+            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
+            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke all tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
         </div>
     {% else %}
         <c-feedback.empty-state compact icon="fas fa-key" title="No tokens yet" message="Generate a token to connect your tools to this workspace." />
@@ -57,8 +57,8 @@
     <c-modal teleport="false" id="createTokenModal" show="showCreateToken" title="Generate token" size="lg">
     <form method="post"
           id="tokenGenerationForm"
-          x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}' }"
-          hx-post="{% url 'teams:team_tokens' team.key %}"
+          x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}', scopeChoice: '{{ create_access_token_form.scope.value|default:"full"|escapejs }}' }"
+          hx-post="{% url 'workspaces:team_tokens' team.key %}"
           hx-target="#team-tokens-content"
           hx-disabled-elt="#generate-token-button"
           hx-swap="innerHTML settle:0"
@@ -71,7 +71,7 @@
         {% endwith %}
         {% with field=create_access_token_form.scope %}
             <c-forms.field label="Access scope" for="{{ field.id_for_label }}" error="{{ field.errors|join:', ' }}">
-            <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}">
+            <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}" x-model="scopeChoice">
             {% for value, label in field.field.choices %}
                 <option value="{{ value }}"
                         {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
@@ -81,6 +81,10 @@
             </c-forms.select>
             </c-forms.field>
         {% endwith %}
+        <c-feedback.alert variant="info" icon="fas fa-robot" title="For an AI agent" x-show="scopeChoice === 'agent'" x-cloak>
+        This token can read fix prompts and send VEX rulings for approval. Nothing it sends changes your vulnerabilities until someone approves it, and its rulings are marked as coming from an AI agent.
+        It can also create and edit security advisories. It cannot publish, withdraw or delete them, so nothing it writes reaches your Trust Center until a person publishes it. Advisory changes need a token made by an owner or admin.
+        </c-feedback.alert>
         {% with field=create_access_token_form.expires_in_hours %}
             <c-forms.field label="Expiration" for="{{ field.id_for_label }}" error="{{ field.errors|join:', ' }}">
             <c-forms.select size="sm" id="{{ field.id_for_label }}" name="{{ field.html_name }}" x-model="expiryChoice">

@@ -29,7 +29,7 @@ dialog, and a context key one of them forgot would break the button silently.
 The ``as`` form swallows NoReverseMatch, so a session without a workspace
 leaves it empty and the button is not offered rather than 500ing the page.
 {% endcomment %}
-{% url 'teams:ci_token' team_key=request.session.current_workspace.key as ci_token_url %}
+{% url 'workspaces:ci_token' workspace_key=request.session.current_workspace.key as ci_token_url %}
 {% comment %}
     Reachable from onboarding, where there is no component, so the copy target
     needs an id that still resolves.
@@ -79,6 +79,6 @@ leaves it empty and the button is not offered rather than 500ing the page.
        x-cloak
        x-text="error"
        class="text-xs text-danger mt-3 mb-0"></p>
-    <p class="text-xs text-text-muted mt-3 mb-0">For a manual one-off, use Upload artifact in the component menu.</p>
+    <p class="text-xs text-text-muted mt-3 mb-0">For a one-off upload, use the component menu.</p>
     </c-modal>
 </div>

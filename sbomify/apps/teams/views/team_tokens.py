@@ -17,9 +17,9 @@ from django.views.decorators.cache import never_cache
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
-from sbomify.apps.core.authz import MANAGE
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.forms import CreateAccessTokenForm
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -29,14 +29,14 @@ from sbomify.apps.teams.services.settings_page import tokens_context
 
 
 @method_decorator(never_cache, name="dispatch")
-class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamTokensView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
-    # Tokens are personal: this page only ever lists, creates and revokes the
-    # caller's own, scoped to this workspace. So it is the MANAGE tier rather
-    # than ADMINISTER — a member who can upload artifacts needs a token to do it
-    # from CI, and a token can never exceed its holder's role.
-    allowed_roles = list(MANAGE)
+    # READ_INTERNAL, the same tier as the tab registry: tokens are personal, and
+    # this view only ever lists, creates and revokes the caller's own, scoped to
+    # this workspace. A member needs one to upload from CI and an operator needs
+    # one to reach the triage API, and a token can never exceed its holder's role.
+    allowed_roles = list(READ_INTERNAL)
 
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None
@@ -46,8 +46,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             context.update(extra_context)
         return context
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -57,8 +57,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             self._get_team_tokens_context(team, request),
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -68,7 +68,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(first_error)
 
         user = cast(User, request.user)
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
 
         # PAT expiry lives in the DB row (the JWT carries no ``exp``/``aud`` —
         # those are reserved for short-lived OIDC tokens). ``get_user_and_token_record``
@@ -98,7 +98,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             lambda: capture_for_request(
                 request,
                 "api_token:created",
-                team_key=team_key,
+                workspace_key=workspace_key,
             )
         )
 
@@ -110,7 +110,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             self._get_team_tokens_context(team, request, {"new_encoded_access_token": access_token_str}),
         )
 
-    def delete(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def delete(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Bulk-revoke the caller's tokens (#1061).
 
         Owner/admin gate + workspace scoping come from TeamRoleRequiredMixin + get_team.
@@ -119,7 +119,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         revoke-all targets exactly what this page shows (this team's tokens + the
         unscoped legacy ones).
         """
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             # delete() is called via fetch (JSON), not HTMX -- return a JSON error.
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
@@ -136,9 +136,9 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Scope to exactly what this page manages: the caller's tokens in THIS workspace
         # plus the unscoped legacy ones. Without the team filter, crafted ids could revoke
         # the caller's tokens in OTHER workspaces -- tokens this page never shows.
-        # Use the team_key path param (already a valid token) rather than the nullable
+        # Use the workspace_key path param (already a valid token) rather than the nullable
         # team.key DB field, which would 500 on token_to_number if null.
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
         tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
         if payload.get("all") is not True:
             ids = payload.get("token_ids")
@@ -165,10 +165,10 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Register inside the atomic block so the event is tied to THIS transaction
             # (registered after it exits, on_commit fires immediately in autocommit mode).
             # Unscoped (team is None) deletions are intentionally not captured, matching
-            # the single-delete convention; partial binds team_key per iteration.
+            # the single-delete convention; partial binds workspace_key per iteration.
             for token_team_key in scoped_team_keys:
                 transaction.on_commit(
-                    partial(capture_for_request, request, "api_token:deleted", team_key=token_team_key)
+                    partial(capture_for_request, request, "api_token:deleted", workspace_key=token_team_key)
                 )
 
         return HttpResponse(status=200)

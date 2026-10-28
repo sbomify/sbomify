@@ -7,7 +7,7 @@ submission and HTMX replacement; options and selected values come from its servi
 <c-forms.search-input size="sm" name="search" id="{{ inventory.content_id|default:'inventory' }}-search" label="Search {{ inventory.kind }}" placeholder="Search {{ inventory.kind }}" value="{{ inventory.params.search }}" />
 {% if inventory.kind != 'products' and not inventory.scope_product %}
     {# Product scope also changes the links between inventory tabs. #}
-    <c-forms.select hx-get="{{ inventory.base_url }}" hx-trigger="change" hx-include="closest form" hx-target="#{{ inventory.content_id }}" size="md" name="product" id="{{ inventory.content_id|default:'inventory' }}-product" label="Filter by product" class="max-w-full">
+    <c-forms.select hx-get="{{ inventory.base_url }}" hx-trigger="change" hx-include="closest form" hx-target="#{{ inventory.content_id }}" size="md" name="product" id="{{ inventory.content_id|default:'inventory' }}-product" label="Filter by product">
     <option value="">All products</option>
     {% if inventory.kind == 'components' %}
         <option value="unassigned"
@@ -26,7 +26,7 @@ submission and HTMX replacement; options and selected values come from its servi
 <option value="clear"
         {% if inventory.params.risk == 'clear' %}selected{% endif %}>No open vulnerabilities</option>
 <option value="unassessed"
-        {% if inventory.params.risk == 'unassessed' %}selected{% endif %}>Not fully assessed</option>
+        {% if inventory.params.risk == 'unassessed' %}selected{% endif %}>Not fully scanned</option>
 </c-forms.select>
 <c-forms.select size="md" name="visibility" id="{{ inventory.content_id|default:'inventory' }}-visibility" label="Filter by visibility">
 <option value="all">All visibility</option>

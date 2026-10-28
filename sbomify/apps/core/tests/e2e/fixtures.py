@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Product, Release
 from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
@@ -341,7 +341,7 @@ def trust_center_product(product_factory, component_factory, sbom_factory, docum
 
 
 @pytest.fixture
-def priced_plans(team_with_business_plan: Team) -> Team:
+def priced_plans(team_with_business_plan: Workspace) -> Workspace:
     """Priced plans served from the database, with a promotion and renewal date."""
     business = BillingPlan.objects.get(key="business")
     business.monthly_price = 199
@@ -366,7 +366,7 @@ def priced_plans(team_with_business_plan: Team) -> Team:
         key="enterprise",
         defaults={
             "name": "Enterprise",
-            "description": "For organisations with custom needs",
+            "description": "For organizations with custom needs",
         },
     )
 

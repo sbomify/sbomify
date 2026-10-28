@@ -1,0 +1,31 @@
+{% comment %}
+A link in a navigation bar, for moving between pages rather than between panels
+on one page. c-navigation.tab is the sibling for the in-page case: that one is a
+button with tab semantics, this one is a real anchor with an href.
+
+current marks the page you are on. It renders aria-current="page" on the anchor
+itself, so the state lives on the real element and a screen reader gets it from
+the same place the eye does.
+
+The selected colour is one conditional segment rather than an aria-[current]
+variant, so the resting and current recipes can never both apply to the same
+property and leave Tailwind's stylesheet order to settle it.
+
+The selected fill is --color-primary-dark, not --color-primary. On dark the
+primary token is periwinkle, which carries white text at about 3:1 and fails
+WCAG AA for text this size; the darker token measures about 5:1. On light both
+tokens are near-black navy, so this costs nothing there.
+
+icon is a Font Awesome class in the fixed slot before the label; the slot is the
+label.
+{% endcomment %}
+<c-vars href current icon class />
+<a href="{{ href }}"
+   {% if current %}aria-current="page"{% endif %}
+   class="px-3 py-2 rounded-lg text-sm font-medium no-underline transition-colors duration-200 focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] {% if current %}bg-primary-dark text-white{% else %}text-text-muted hover:text-text hover:bg-surface-elevated{% endif %}{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>
+    {% if icon %}
+        <i class="{{ icon }}{% if slot.strip %} mr-2{% endif %}" aria-hidden="true"></i>
+    {% endif %}
+    {{ slot }}
+</a>

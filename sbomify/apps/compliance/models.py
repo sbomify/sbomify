@@ -117,7 +117,7 @@ class OSCALAssessmentResult(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     catalog = models.ForeignKey(OSCALCatalog, on_delete=models.PROTECT, related_name="assessment_results")
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="oscal_assessment_results", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="oscal_assessment_results", db_column="workspace_id"
     )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, default="")
@@ -241,7 +241,7 @@ class CRAAssessment(models.Model):
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="cra_assessments", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="cra_assessments", db_column="workspace_id"
     )
     product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_assessment")
     oscal_assessment_result = models.OneToOneField(
@@ -261,7 +261,7 @@ class CRAAssessment(models.Model):
     is_open_source_steward = models.BooleanField(default=False)
     harmonised_standard_applied = models.BooleanField(
         default=False,
-        help_text="Whether a harmonised standard has been applied (CRA Art 32(2)); required for Class I + Module A",
+        help_text="Whether a harmonized standard has been applied (CRA Art 32(2)); required for Class I + Module A",
     )
     conformity_assessment_procedure = models.CharField(
         max_length=20, choices=ConformityProcedure.choices, default=ConformityProcedure.MODULE_A
@@ -598,7 +598,7 @@ class CRAScopeScreening(models.Model):
     id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
     product = models.OneToOneField("core.Product", on_delete=models.CASCADE, related_name="cra_scope_screening")
     team = models.ForeignKey(
-        "teams.Team", on_delete=models.CASCADE, related_name="cra_scope_screenings", db_column="workspace_id"
+        "teams.Workspace", on_delete=models.CASCADE, related_name="cra_scope_screenings", db_column="workspace_id"
     )
 
     # FAQ 1.1/1.3 — CRA Art 3(1-2): data connection capability
@@ -637,7 +637,7 @@ class CRAScopeScreening(models.Model):
     # FAQ 1.8 — CRA Art 2(2): national security / dual-use
     is_dual_use = models.BooleanField(
         default=False,
-        help_text="Is this a dual-use product with both civilian and defence applications? (FAQ 1.8, CRA Art 2(2))",
+        help_text="Is this a dual-use product with both civilian and defense applications? (FAQ 1.8, CRA Art 2(2))",
     )
 
     screening_notes = models.TextField(blank=True, default="")

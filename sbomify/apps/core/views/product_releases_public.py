@@ -11,13 +11,14 @@ from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     custom_domain_redirect,
     get_public_path,
+    get_release_public_slugs,
     get_workspace_public_url,
     resolve_product_identifier,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class ProductReleasesPublicView(View):
@@ -43,7 +44,7 @@ class ProductReleasesPublicView(View):
                 request, HttpResponse(status=status_code, content=releases.get("detail", "Unknown error"))
             )
 
-        team = Team.objects.filter(pk=product.get("team_id")).first()
+        team = Workspace.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
@@ -61,7 +62,14 @@ class ProductReleasesPublicView(View):
         # Hide the synthetic auto-`latest` release from the public list.
         # It serves as a stable download URL but is surfaced via the
         # "Download Latest Release" CTA on the product page, not here.
-        items = [r for r in (releases.get("items") or []) if r.get("name") != LATEST_RELEASE_NAME]
+        # The list API carries no slug, so without one every link here fell
+        # back to the release ID: a second URL for each release page.
+        public_slugs = get_release_public_slugs(product_obj)
+        items = [
+            {**r, "slug": public_slugs.get(r["id"], r["id"])}
+            for r in (releases.get("items") or [])
+            if r.get("name") != LATEST_RELEASE_NAME
+        ]
 
         context = {
             "product": product,

@@ -28,6 +28,8 @@ class FindingSchema(BaseModel):
     # package than the one now scanned — still applied, but flagged for re-review.
     # Optional (None) so only stale findings carry it, matching the stored result.
     analysis_stale: bool | None = None
+    # The suppression covers the whole component, not this package.
+    analysis_component_wide: bool | None = None
     # In CISA's Known Exploited Vulnerabilities catalog; stamped at serialization
     # time from the cached KEV feed, never stored.
     kev: bool = False
@@ -148,7 +150,23 @@ class SBOMAssessmentsResponse(BaseModel):
     sbom_id: str
     status_summary: AssessmentStatusSummary
     latest_runs: list[AssessmentRunSchema] = Field(description="Latest run for each plugin")
-    all_runs: list[AssessmentRunSchema] = Field(description="All assessment runs, ordered by date")
+    all_runs: list[AssessmentRunSchema] = Field(
+        description=(
+            "Assessment run history, newest first, bounded by the ``history_limit`` "
+            "query parameter and a server-side ceiling. Empty when ``include_history`` is "
+            "false. Use ``all_runs_total`` to tell whether it was truncated. Each row carries "
+            "the run's status and result summary with an empty findings list; the latest run "
+            "per plugin in ``latest_runs`` carries the findings."
+        )
+    )
+    all_runs_total: int = Field(
+        default=0,
+        description=(
+            "How many runs exist for this SBOM, whatever ``history_limit`` or "
+            "``include_history`` returned. Equals len(all_runs) only when the history "
+            "was included and not truncated."
+        ),
+    )
 
 
 class AssessmentBadgeData(BaseModel):

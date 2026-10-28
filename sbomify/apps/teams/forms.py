@@ -7,10 +7,11 @@ from django.conf import settings
 from django.forms import inlineformset_factory
 
 from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.security_advisories.models import normalize_advisory_id_prefix
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Workspace
 
 if TYPE_CHECKING:
-    _TeamFormBase = forms.ModelForm[Team]
+    _TeamFormBase = forms.ModelForm[Workspace]
     _ContactProfileFormBase = forms.ModelForm[ContactProfile]
     _ContactEntityFormBase = forms.ModelForm[ContactEntity]
     _ContactProfileContactFormBase = forms.ModelForm[ContactProfileContact]
@@ -23,10 +24,10 @@ else:
 
 class AddTeamForm(_TeamFormBase):
     class Meta:
-        model = Team
+        model = Workspace
         fields = ["name"]
 
-    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Team:
+    def save(self, *args: Any, user: Any = None, **kwargs: Any) -> Workspace:
         is_new = self.instance._state.adding
         super().save(*args, **kwargs)
         if is_new and user:
@@ -62,8 +63,8 @@ class InviteUserForm(forms.Form):
         required=True,
         # ``guest`` is a self-service trust-center role (not invited).
         # ``bot`` is reserved for synthetic OIDC binding identities and
-        # must NEVER be human-assignable — see settings.TEAMS_SUPPORTED_ROLES.
-        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")],
+        # must NEVER be human-assignable — see settings.WORKSPACE_SUPPORTED_ROLES.
+        choices=[(role, label) for role, label in settings.WORKSPACE_SUPPORTED_ROLES if role not in ("guest", "bot")],
         # Least privilege by default: most people being invited need to do the
         # work, not configure the workspace.
         initial="member",
@@ -76,7 +77,7 @@ class InviteUserForm(forms.Form):
             role_field = cast(forms.ChoiceField, self.fields["role"])
             role_field.choices = [
                 (role, label)
-                for role, label in settings.TEAMS_SUPPORTED_ROLES
+                for role, label in settings.WORKSPACE_SUPPORTED_ROLES
                 if role not in (ROLE_GUEST, ROLE_BOT, ROLE_OWNER)
             ]
 
@@ -135,6 +136,22 @@ class SupportPeriodForm(forms.Form):
     default_support_period_years = forms.IntegerField(required=False, min_value=5, max_value=100)
 
 
+class AdvisoryIdForm(forms.Form):
+    """How new security advisories are numbered. Published ids never change."""
+
+    # No max_length here: uppercasing can lengthen a value, so the normaliser
+    # measures it afterwards.
+    advisory_id_prefix = forms.CharField(required=False)
+    # Blank means "from 1" rather than an error, the same as a fresh workspace.
+    advisory_id_start_at = forms.IntegerField(required=False, min_value=1, max_value=999_999)
+
+    def clean_advisory_id_prefix(self) -> str:
+        return normalize_advisory_id_prefix(self.cleaned_data.get("advisory_id_prefix") or "")
+
+    def clean_advisory_id_start_at(self) -> int:
+        return self.cleaned_data.get("advisory_id_start_at") or 1
+
+
 class OnboardingProductForm(forms.Form):
     """Form for creating a product during onboarding."""
 
@@ -178,7 +195,7 @@ class OnboardingComponentForm(forms.Form):
 
 
 class OnboardingCompanyForm(PatchSLAForm):
-    """Organisation and security settings saved together at the end of setup."""
+    """Organization and security settings saved together at the end of setup."""
 
     mode = forms.ChoiceField(
         choices=[("recommended", "Recommended"), ("custom", "Custom")], required=False, initial="recommended"

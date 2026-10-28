@@ -1,10 +1,10 @@
 from typing import Any
 
-from django.http import HttpRequest, HttpResponse, HttpResponseBase
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response, refuse_direct_read
 from sbomify.apps.documents.services.documents_table import (
     build_documents_table_context,
     delete_document_from_request,
@@ -12,8 +12,10 @@ from sbomify.apps.documents.services.documents_table import (
 )
 
 
-class DocumentsTableView(View):
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+class DocumentsTableView(HtmxFragmentMixin, View):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        # A direct visit is a 404 before the access gate below, whoever asks.
+        refuse_direct_read(request)
         # Get is_public_view from kwargs (set by URL configuration)
         is_public_view = kwargs.get("is_public_view", False)
 
@@ -32,17 +34,17 @@ class DocumentsTableView(View):
         # Block guest members from private views
         if request.user.is_authenticated:
             current_team = request.session.get("current_workspace", {})
-            team_key = current_team.get("key")
-            if team_key:
-                from sbomify.apps.teams.models import Member, Team
+            workspace_key = current_team.get("key")
+            if workspace_key:
+                from sbomify.apps.teams.models import Member, Workspace
 
                 try:
-                    team = Team.objects.get(key=team_key)
+                    team = Workspace.objects.get(key=workspace_key)
                     Member.objects.get(user=request.user, team=team, role="guest")
                     from django.shortcuts import redirect
 
-                    return redirect("core:workspace_public", workspace_key=team_key)
-                except (Member.DoesNotExist, Team.DoesNotExist):
+                    return redirect("core:workspace_public", workspace_key=workspace_key)
+                except (Member.DoesNotExist, Workspace.DoesNotExist):
                     pass
 
         return super().dispatch(request, *args, **kwargs)
@@ -61,15 +63,15 @@ class DocumentsTableView(View):
 
         # Block guest members from modifying documents (even on public views)
         current_team = request.session.get("current_workspace", {})
-        team_key = current_team.get("key")
-        if team_key:
-            from sbomify.apps.teams.models import Member, Team
+        workspace_key = current_team.get("key")
+        if workspace_key:
+            from sbomify.apps.teams.models import Member, Workspace
 
             try:
-                team = Team.objects.get(key=team_key)
+                team = Workspace.objects.get(key=workspace_key)
                 Member.objects.get(user=request.user, team=team, role="guest")
                 return htmx_error_response("Guest members cannot modify documents")
-            except (Member.DoesNotExist, Team.DoesNotExist):
+            except (Member.DoesNotExist, Workspace.DoesNotExist):
                 pass
 
         if request.POST.get("_method") == "DELETE":

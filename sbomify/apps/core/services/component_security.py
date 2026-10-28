@@ -114,9 +114,17 @@ class ComponentVulnerabilitiesContext:
 
 
 def build_component_vulnerabilities(
-    component_id: str, query: FindingQuery, *, triage_identity: tuple[str, str, str, str] | None = None
+    component_id: str,
+    query: FindingQuery,
+    *,
+    triage_identity: tuple[str, ...] | None = None,
+    sbom_id: str | None = None,
+    release_id: str | None = None,
 ) -> ComponentVulnerabilitiesContext:
-    """The newest SBOM's findings, summarised whole and paged for display.
+    """The newest SBOM's findings, or ``sbom_id``'s when given, summarised whole and paged for display.
+
+    ``release_id`` reads the SBOM at the runs that release reads, as the release-scoped
+    list does. It is ignored unless the release shipped the SBOM in the component's workspace.
 
     Rows are derived on every request rather than cached. The derivation is the
     cheap half — 0.49 s against the 5.10 s of rendering them all, and most of
@@ -124,42 +132,66 @@ def build_component_vulnerabilities(
     across requests. What made the page time out was handing the template 2,390
     rows to show five of, and that is what paging removes.
     """
-    from sbomify.apps.plugins.latest import latest_run_ids
+    from django.db.models import F
+
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.services.finding_browse import browse_finding_rows
+    from sbomify.apps.vulnerability_scanning.triage import triage_decisions
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
+        package_scopes,
     )
-    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+    from sbomify.apps.vulnerability_scanning.vex import resolve_vex_statements_for_runs, triage_statements
 
+    sboms = SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
     latest_sbom = (
-        SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
-        .order_by("-created_at")
-        .values("id", "version")
-        .first()
+        (sboms.filter(id=sbom_id) if sbom_id else sboms).order_by("-created_at").values("id", "version").first()
     )
     if not latest_sbom:
         return ComponentVulnerabilitiesContext()
 
-    sbom_id = latest_sbom["id"]
-    # The newest run of each provider, and the blob only for those. An empty
+    sbom_id = str(latest_sbom["id"])
+    # The newest run of each provider (a release reads its own), and the blob only for those. An empty
     # list also answers "did anything scan this at all", which is what the
     # summary fallback needs.
-    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id])
-    provider_results = list(
-        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("result", flat=True)
+    if (
+        release_id
+        and not ReleaseArtifact.objects.filter(
+            release_id=release_id, sbom_id=sbom_id, release__product__team_id=F("sbom__component__team_id")
+        ).exists()
+    ):
+        release_id = None
+    latest_ids, _ = release_run_ids(
+        AssessmentRun.objects.filter(category="security", status="completed"), [sbom_id], release_id
     )
-    if not provider_results:
+    provider_runs = list(
+        AssessmentRun.objects.filter(id__in=latest_ids).order_by("plugin_name").values_list("id", "result")
+    )
+    if not provider_runs:
         return ComponentVulnerabilitiesContext(sbom_id=sbom_id, version=latest_sbom["version"])
 
+    # Each run reads VEX in its own release context, as the finding rows behind
+    # the release list do, so a release that pins a VEX never falls back to the
+    # component's latest one. Triage stays a live overlay on top. Only runs
+    # with a finding still missing its analysis are resolved: the fallback
+    # leaves annotated findings alone, and resolving reads an SPDX 3 artifact's
+    # embedded VEX from object storage on every page load.
+    run_statements = resolve_vex_statements_for_runs(
+        component_id, sbom_id, [run_id for run_id, result in provider_runs if _needs_vex_fallback(result)]
+    )
+    provider_results = [_with_vex_fallback(result, run_statements.get(run_id, [])) for run_id, result in provider_runs]
     rows = extract_finding_rows(
         merge_findings_by_alias(provider_results),
-        vex_statements=load_vex_suppressions(component_id),
+        vex_statements=triage_statements(component_id),
         kev_ids=kev_ids_for_serialization(),
+        # Only the triage dialog reopens a decision, and it asks for one occurrence.
+        triage_decisions=triage_decisions(component_id) if triage_identity is not None else None,
     )
 
     # The header badge counts the same merged view the table shows, minus what
@@ -186,12 +218,32 @@ def build_component_vulnerabilities(
         )
 
     if triage_identity is not None:
-        advisory, package, version, ecosystem = triage_identity
+        advisory, package, version, ecosystem, *rest = triage_identity
+        # The purl tells two packages apart that share a name, such as two Maven groupIds.
+        purl = rest[0] if rest else ""
+        # Matched by package scope, not by label: the list merges findings in another
+        # order than this view, so it can name OSV's "com.foo:shared" / "Maven" for the
+        # occurrence this view names by Dependency-Track's "shared" / "maven".
+        wanted, *row_scopes = package_scopes(
+            [
+                {"component": {"name": package, "version": version, "ecosystem": ecosystem, "purl": purl}},
+                *(
+                    {
+                        "component": {
+                            "name": row["package"],
+                            "version": row["version"],
+                            "ecosystem": row["ecosystem"],
+                            "purl": row.get("purl"),
+                        }
+                    }
+                    for row in rows
+                ),
+            ]
+        )
         rows = [
             row
-            for row in rows
-            if advisory in (row["id"], *row["aliases"])
-            and (row["package"], row["version"], row["ecosystem"]) == (package, version, ecosystem)
+            for row, scope in zip(rows, row_scopes, strict=True)
+            if scope == wanted and advisory in (row["id"], *row["aliases"])
         ]
 
     return ComponentVulnerabilitiesContext(
@@ -200,6 +252,46 @@ def build_component_vulnerabilities(
         sbom_id=sbom_id,
         version=latest_sbom["version"],
     )
+
+
+def _needs_vex_fallback(result: Any) -> bool:
+    """Whether ``result`` has a finding :func:`_with_vex_fallback` would read VEX for."""
+    findings = result.get("findings") if isinstance(result, dict) else None
+    return isinstance(findings, list) and any(
+        isinstance(finding, dict) and not finding.get("analysis_state") for finding in findings
+    )
+
+
+def _with_vex_fallback(result: Any, statements: list[dict[str, Any]]) -> Any:
+    """``result`` with each finding that carries no stored VEX analysis read from ``statements``.
+
+    The fallback :func:`extract_finding_rows` applies, done per run so each run
+    answers from its own release context before the providers are merged. A
+    stored analysis is left as it is, and so is everything outside the findings.
+    """
+    from sbomify.apps.vulnerability_scanning.vex import find_in_index, statement_index
+
+    findings = result.get("findings") if isinstance(result, dict) else None
+    if not statements or not isinstance(findings, list):
+        return result
+    index = statement_index(statements)
+    annotated: list[Any] = []
+    for finding in findings:
+        statement = None
+        if isinstance(finding, dict) and not finding.get("analysis_state"):
+            statement = find_in_index(finding, index)
+        if statement is None:
+            annotated.append(finding)
+            continue
+        annotated.append(
+            {
+                **finding,
+                "analysis_state": statement.get("state") or "",
+                "analysis_justification": finding.get("analysis_justification") or statement.get("justification") or "",
+                "analysis_detail": finding.get("analysis_detail") or statement.get("detail") or "",
+            }
+        )
+    return {**result, "findings": annotated}
 
 
 def viewer_manages_component(request: Any, component_id: str) -> bool:
@@ -214,10 +306,12 @@ def viewer_manages_component(request: Any, component_id: str) -> bool:
     its trust center is not publishing its CVE inventory, its VEX dispositions
     or which of its findings are known-exploited.
 
-    ``component:manage`` is the capability the private component page is for,
-    and the one the standalone scan report already requires (`sbom:manage`
-    resolves to the same workspace tiers), so this puts the panel and the page
-    that links to it on the same footing.
+    ``component:read_internal`` is the capability the private component page
+    is for: seeing the internal picture is a read, and gating it on
+    ``component:manage`` meant the one role that exists to read it -- the
+    ``operator``, whose single write is ``artifact:publish_vex`` -- fell
+    through to the public page. Its ``may_triage`` was then unreachable from
+    any screen.
     """
     return viewer_rights(request, component_id).may_see
 
@@ -232,10 +326,14 @@ class ViewerRights:
     query on every filter change and page turn.
     """
 
-    #: ``component:manage``: may see the internal security picture at all.
+    #: ``component:read_internal``: may see the internal security picture at
+    #: all. A read, deliberately: an operator may look without being able to
+    #: change anything but a VEX decision.
     may_see: bool
     #: ``artifact:publish_vex``: may record a VEX decision on what they see.
     may_triage: bool
+    #: The component's own workspace, which a page may not share with the session.
+    team_key: str = ""
 
 
 def viewer_rights(request: Any, component_id: str) -> ViewerRights:
@@ -243,10 +341,16 @@ def viewer_rights(request: Any, component_id: str) -> ViewerRights:
     from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Component
 
-    component = Component.objects.filter(pk=component_id).only("id", "team_id", "visibility").first()
+    component = (
+        Component.objects.filter(pk=component_id)
+        .select_related("team")
+        .only("id", "team_id", "visibility", "team__key")
+        .first()
+    )
     if component is None:
         return ViewerRights(may_see=False, may_triage=False)
     return ViewerRights(
-        may_see=bool(can(request, "component:manage", component)),
+        may_see=bool(can(request, "component:read_internal", component)),
         may_triage=bool(can(request, "artifact:publish_vex", component)),
+        team_key=component.team.key or "",
     )

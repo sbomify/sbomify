@@ -72,7 +72,7 @@ def update_document_metadata(
     request: HttpRequest, document_id: str, payload: DocumentUpdateRequest
 ) -> ServiceResult[dict[str, Any]]:
     try:
-        document = Document.objects.select_related("component").get(pk=document_id)
+        document = Document.objects.select_related("component__team").get(pk=document_id)
     except Document.DoesNotExist:
         return ServiceResult.failure("Document not found", status_code=404)
 
@@ -121,8 +121,20 @@ def update_document_metadata(
             if is_duplicate_document_error(exc):
                 return ServiceResult.failure(duplicate_document_detail(new_name, new_version), status_code=409)
             raise
+        _schedule_document_updated(document)
 
     return ServiceResult.success(serialize_document(document))
+
+
+def _schedule_document_updated(document: Document) -> None:
+    """Tell the workspace a document's metadata changed, once the edit commits."""
+    workspace_key = document.component.team.key
+    if not workspace_key:
+        return
+    data = {"document_id": str(document.id), "component_id": str(document.component.id), "name": document.name}
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="document_updated", data=data)
+    )
 
 
 def delete_document_record(request: HttpRequest, document_id: str) -> ServiceResult[None]:
@@ -132,7 +144,7 @@ def delete_document_record(request: HttpRequest, document_id: str) -> ServiceRes
         return ServiceResult.failure("Document not found", status_code=404)
 
     if not can(request, "document:delete", document.component):
-        return ServiceResult.failure("Only owners can delete documents", status_code=403)
+        return ServiceResult.failure("Only workspace owners and admins can delete documents", status_code=403)
 
     # Capture info for broadcast before deleting
     workspace_key: str = document.component.team.key  # type: ignore[assignment]

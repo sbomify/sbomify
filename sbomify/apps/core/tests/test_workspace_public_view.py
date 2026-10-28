@@ -9,7 +9,7 @@ from django.urls import reverse
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import ProductComponent
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 def _stat_labels(content: str) -> list[str]:
@@ -20,7 +20,7 @@ def _stat_labels(content: str) -> list[str]:
 @pytest.mark.django_db
 def test_workspace_public_page_renders_products_and_global_artifacts():
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     # Create a product with a public component (required for product to be shown)
     product = Product.objects.create(name="Public Product", team=team, is_public=True)
@@ -50,7 +50,7 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
 @pytest.mark.django_db
 def test_workspace_public_page_shows_a_certification_badge():
     client = Client()
-    team = Team.objects.create(name="Certified Workspace", is_public=True)
+    team = Workspace.objects.create(name="Certified Workspace", is_public=True)
     component = Component.objects.create(
         name="ISO 27001",
         team=team,
@@ -79,7 +79,7 @@ def test_workspace_public_page_shows_a_certification_badge():
 def test_workspace_public_page_hides_certifications_when_none_are_earned():
     """No seals means no section, not a section announcing an absence."""
     client = Client()
-    team = Team.objects.create(name="Uncertified Workspace", is_public=True)
+    team = Workspace.objects.create(name="Uncertified Workspace", is_public=True)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -90,7 +90,7 @@ def test_workspace_public_page_hides_certifications_when_none_are_earned():
 @pytest.mark.django_db
 def test_workspace_public_page_returns_404_when_workspace_private():
     client = Client()
-    team = Team.objects.create(name="Private Workspace", billing_plan="business", is_public=False)
+    team = Workspace.objects.create(name="Private Workspace", billing_plan="business", is_public=False)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -100,7 +100,7 @@ def test_workspace_public_page_returns_404_when_workspace_private():
 @pytest.mark.django_db
 def test_workspace_public_page_uses_display_name_for_title():
     client = Client()
-    team = Team.objects.create(name="Aurangzaib's Workspace", is_public=True)
+    team = Workspace.objects.create(name="Aurangzaib's Workspace", is_public=True)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -115,7 +115,7 @@ def test_workspace_public_page_uses_display_name_for_title():
 @pytest.mark.django_db
 def test_workspace_public_page_prefers_logo_when_available():
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Public Workspace",
         is_public=True,
         branding_info={
@@ -141,7 +141,7 @@ def test_workspace_public_page_renders_css_variables():
     client = Client()
     brand_color = "#123456"
     accent_color = "#654321"
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Branded Workspace",
         is_public=True,
         branding_info={
@@ -172,7 +172,7 @@ def test_workspace_public_page_renders_css_variables():
 def test_workspace_public_rejects_xss_in_brand_color():
     """XSS attempt via brand color should be sanitized to fallback."""
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Evil Corp",
         is_public=True,
         branding_info={
@@ -200,7 +200,7 @@ def test_workspace_public_rejects_xss_in_brand_color():
 def test_workspace_public_sanitizes_malformed_hex_colors():
     """Malformed hex colors should fall back to defaults."""
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Malformed Colors Workspace",
         is_public=True,
         branding_info={
@@ -224,7 +224,7 @@ def test_workspace_public_sanitizes_malformed_hex_colors():
 def test_workspace_public_handles_none_colors():
     """None/empty color values should use defaults."""
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="No Colors Workspace",
         is_public=True,
         branding_info={
@@ -248,7 +248,7 @@ def test_workspace_public_handles_none_colors():
 def test_workspace_public_hides_products_with_no_public_components():
     """Products with 0 public components should not be shown."""
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     # Product with no components
     Product.objects.create(name="Empty Product", team=team, is_public=True)
@@ -282,7 +282,7 @@ def test_workspace_public_hides_products_with_no_public_components():
 def test_workspace_public_hides_products_section_when_empty():
     """Products section should be hidden when there are no products with public components."""
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     # Create a product with no public components
     product = Product.objects.create(name="Empty Product", team=team, is_public=True)
@@ -304,22 +304,40 @@ def test_workspace_public_hides_products_section_when_empty():
 def test_workspace_public_hides_artifacts_section_when_empty():
     """Organization Compliance Artifacts section should be hidden when empty."""
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Section header should not be shown when there are no global artifacts
-    assert "Organization Compliance Artifacts" not in content
+    # Neither the section nor an empty state should be shown when there are no global artifacts
+    assert 'id="compliance"' not in content
+    assert "No compliance artifacts" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_shows_artifacts_section_when_present():
+    team = _public_workspace("Artifact Workspace")
+    Component.objects.create(
+        name="SOC 2 Report",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+
+    content = _visit(team)
+
+    assert 'id="compliance"' in content
+    assert "SOC 2 Report" in content
 
 
 @pytest.mark.django_db
 def test_workspace_public_hides_compliance_artifacts_badge_when_zero():
     """Compliance Artifacts badge in hero should be hidden when count is 0."""
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     # Add a product with public component to make the page have some content
     product = Product.objects.create(name="Public Product", team=team, is_public=True)
@@ -342,7 +360,7 @@ def test_workspace_public_uses_configurable_description():
     """Trust center description should be configurable via branding info."""
     client = Client()
     custom_description = "Welcome to our custom trust center! Browse our SBOMs and compliance docs."
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Custom Description Workspace",
         is_public=True,
         branding_info={
@@ -372,7 +390,7 @@ def test_workspace_public_uses_configurable_description():
 def test_workspace_public_uses_default_description_when_empty():
     """Trust center should use default description when no custom description is set."""
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Default Description Workspace",
         is_public=True,
         branding_info={},
@@ -400,7 +418,7 @@ def test_workspace_public_og_image_uses_absolute_url():
     import re
 
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -426,7 +444,7 @@ def test_workspace_public_twitter_image_uses_absolute_url():
     import re
 
     client = Client()
-    team = Team.objects.create(name="Public Workspace", is_public=True)
+    team = Workspace.objects.create(name="Public Workspace", is_public=True)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -450,7 +468,7 @@ def test_workspace_public_og_image_uses_custom_brand_image_when_absolute():
     import re
 
     client = Client()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Branded Workspace",
         is_public=True,
         branding_info={
@@ -483,7 +501,7 @@ def test_workspace_public_og_image_fallback_when_brand_image_relative():
     client = Client()
     # Workspace with branding_enabled but no custom logo/icon
     # This results in brand_image being the relative default path
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Partial Branding Workspace",
         is_public=True,
         branding_info={
@@ -520,16 +538,16 @@ def test_workspace_public_og_image_fallback_when_brand_image_relative():
 ADMIN_PROMPT = "Enable vulnerability scanning to show security status on your products"
 
 
-def _public_workspace(name: str) -> Team:
+def _public_workspace(name: str) -> Workspace:
     """A public workspace with one public product, so the page renders its sections."""
-    team = Team.objects.create(name=name, is_public=True)
+    team = Workspace.objects.create(name=name, is_public=True)
     product = Product.objects.create(name=f"{name} Product", team=team, is_public=True)
     component = Component.objects.create(name=f"{name} Component", team=team, visibility=Component.Visibility.PUBLIC)
     ProductComponent.objects.create(product=product, component=component)
     return team
 
 
-def _visit(team: Team, user=None) -> str:
+def _visit(team: Workspace, user=None) -> str:
     client = Client()
     if user is not None:
         client.force_login(user)
@@ -594,6 +612,21 @@ def test_scanning_prompt_hidden_once_a_scanner_is_enabled(sample_user):
     TeamPluginSettings.objects.create(team=team, enabled_plugins=["osv"])
 
     assert ADMIN_PROMPT not in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_shown_while_the_plan_pauses_the_only_scanner(sample_user, ensure_billing_plans):
+    """Dependency Track stays on file after a downgrade so it resumes on upgrade.
+    Community does not run it, so the workspace still has no scanner."""
+    from sbomify.apps.plugins.models import TeamPluginSettings
+
+    team = _public_workspace("Paused Scanner Workspace")
+    team.billing_plan = "community"
+    team.save(update_fields=["billing_plan"])
+    Member.objects.create(team=team, user=sample_user, role="owner")
+    TeamPluginSettings.objects.create(team=team, enabled_plugins=["dependency-track"])
+
+    assert ADMIN_PROMPT in _visit(team, sample_user)
 
 
 @pytest.mark.django_db

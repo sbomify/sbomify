@@ -20,9 +20,11 @@ document for scanners and aggregators.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
+from django.db import transaction
 from django.http import HttpRequest
 from django.urls import reverse
 from ninja import Router
@@ -30,26 +32,34 @@ from ninja.decorators import decorate_view
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_token_auth
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import can, credential_channel
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.url_utils import build_custom_domain_url, get_base_url
 from sbomify.apps.core.views.workspace_public import fetch_public_team
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.apps.security_advisories.csaf import render_csaf
+from sbomify.apps.security_advisories.models import AdvisoryProposal
 from sbomify.apps.security_advisories.schemas import (
+    AddAdvisoryProductSchema,
     AdvisoryDetailSchema,
+    AdvisoryProposalSchema,
     AdvisorySchema,
     AdvisoryUpdateSchema,
     CreateAdvisorySchema,
+    EditAdvisoryUpdateSchema,
+    ProductStatusUpdateSchema,
+    ProposalDecisionSchema,
     PublicAdvisoryDetailSchema,
     PublicAdvisoryListSchema,
     PublishAdvisorySchema,
+    SentAdvisoryProposalSchema,
     UpdateAdvisorySchema,
     WithdrawAdvisorySchema,
 )
 from sbomify.apps.security_advisories.services import advisories as advisory_service
+from sbomify.apps.security_advisories.services import proposals as proposal_service
 from sbomify.apps.security_advisories.services import trust_center
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 router = Router(tags=["Security Advisories"])
 
@@ -61,7 +71,14 @@ AUTH = (PersonalAccessTokenAuth(), django_auth)
 _PLACEHOLDER_VERSIONS = frozenset({"—", "None", "All"})
 
 
-def _workspace(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
+# Said on every write an AI agent token can make, since all of them are held.
+_PROPOSAL_NOTE = (
+    " From an AI agent token, a write to a published or withdrawn advisory is not applied: it is held for a "
+    "person to approve and answers 202 with the proposed change. A draft is written at once."
+)
+
+
+def _workspace(request: HttpRequest) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
     """The caller's current workspace, from the session or the token."""
     from sbomify.apps.core.apis import _get_user_team_id
 
@@ -71,7 +88,7 @@ def _workspace(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorRespo
             403,
             ErrorResponse(detail="No current workspace selected", error_code=ErrorCode.NO_CURRENT_TEAM),
         )
-    team = Team.objects.filter(pk=team_id).first()
+    team = Workspace.objects.filter(pk=team_id).first()
     if team is None:
         return None, (404, ErrorResponse(detail="Workspace not found", error_code=ErrorCode.TEAM_NOT_FOUND))
     return team, None
@@ -123,6 +140,7 @@ def _api_shape(projection: dict[str, Any]) -> dict[str, Any]:
     }
     if "vulnerabilities" in projection:
         shape["vulnerabilities"] = projection["vulnerabilities"]
+        shape["statuses"] = projection.get("statuses", [])
         shape["references"] = projection.get("references", [])
         shape["timeline"] = [
             {
@@ -130,13 +148,25 @@ def _api_shape(projection: dict[str, Any]) -> dict[str, Any]:
                 "kind": event["kind"],
                 "body": event.get("body", ""),
                 "actor": event.get("actor", ""),
+                "channel": event.get("channel", ""),
+                "token_id": event.get("token_id", ""),
                 "from_status": event.get("from_status"),
                 "to_status": event.get("to_status"),
                 "created_at": event["created_at"],
+                "edited_at": event.get("edited_at"),
             }
             for event in projection.get("timeline", [])
         ]
     return shape
+
+
+def _via(request: HttpRequest) -> dict[str, str]:
+    """How this request reached the API, for the timeline events it writes."""
+    token = getattr(request, "access_token_record", None)
+    return {
+        "channel": credential_channel(request),
+        "token_id": str(token.pk) if token is not None else "",
+    }
 
 
 def _failed(result: Any) -> tuple[int, ErrorResponse]:
@@ -146,7 +176,55 @@ def _failed(result: Any) -> tuple[int, ErrorResponse]:
     return status, ErrorResponse(detail=result.error or "Request failed", error_code=code)
 
 
-def _fetched(team: Team, advisory_id: str) -> tuple[int, Any]:
+def _proposal_shape(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "kind": row["kind"],
+        "status": row["status"],
+        "summary": row["headline"],
+        "note": row["note"],
+        "changes": [{"label": c["label"], "before": c["before"], "after": c["after"]} for c in row["changes"]],
+        "context": row["context"],
+        "is_stale": row["is_stale"],
+        "revised": row["revised"],
+        "submitted_at": row["submitted_at"],
+        "decided_at": row["decided_at"],
+        "decision_note": row["decision_note"],
+        "rejection_reason": row["rejection_reason"],
+        "next_step": row["next_step"],
+    }
+
+
+def _proposed(
+    request: HttpRequest, team: Workspace, advisory_id: str, kind: str, payload: dict[str, Any], context: str
+) -> tuple[int, Any] | None:
+    """Hold an AI agent's write to a published advisory for review, or None to apply it.
+
+    The agent preset grants advisory:manage so an agent can draft advisories,
+    and a draft is its to shape. Past publication every write it makes is
+    queued instead, and the 202 carries the proposal so it can check on it.
+    """
+    # The caller holds this lock through either the direct write or proposal
+    # submission, so publication cannot slip between the decision and the write.
+    advisory = advisory_service._locked_advisory(team, advisory_id)
+    if advisory is None or not proposal_service.needs_approval(advisory, credential_channel(request)):
+        return None
+    result = proposal_service.submit_proposal(
+        team,
+        request.user,
+        advisory_id,
+        kind=kind,
+        payload=payload,
+        context=context,
+        via=_via(request),
+        token=getattr(request, "access_token_record", None),
+    )
+    if not result.ok or result.value is None:
+        return _failed(result)
+    return 202, _proposal_shape(proposal_service.proposal_row(result.value, advisory, team))
+
+
+def _fetched(team: Workspace, advisory_id: str) -> tuple[int, Any]:
     result = advisory_service.get_advisory(team, advisory_id)
     if not result.ok:
         return _failed(result)
@@ -211,12 +289,40 @@ def create_advisory(request: HttpRequest, payload: CreateAdvisorySchema) -> tupl
         cvss_vector=payload.cvss_vector,
         products=products,
         affected_releases=releases,
+        via=_via(request),
     )
     if not created.ok:
         return _failed(created)
 
     status, body = _fetched(team, created.value or "")
     return (201, body) if status == 200 else (status, body)
+
+
+@router.get(
+    "/proposals",
+    response={200: list[SentAdvisoryProposalSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="List the changes you proposed, and what was decided",
+    description=(
+        "Every change the calling token proposed, across the workspace's advisories, newest decision first. "
+        "Called with a session, the signed-in person's own. This is the feedback channel: a rejection carries "
+        "rejection_reason, decision_note and next_step. status narrows to pending, approved, rejected or "
+        "superseded; since (ISO 8601) to what was decided, or sent, after it."
+    ),
+)
+def list_sent_proposals(request: HttpRequest, status: str = "", since: datetime | None = None) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:read", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+    if status and status not in AdvisoryProposal.Status.values:
+        return 400, ErrorResponse(detail="Unknown status.", error_code=ErrorCode.BAD_REQUEST)
+
+    token = getattr(request, "access_token_record", None)
+    rows = proposal_service.sent_proposals(team, token=token, user=request.user, status=status, since=since)
+    return 200, [{**_proposal_shape(row), "advisory_id": row["advisory_id"]} for row in rows]
 
 
 @router.get(
@@ -238,11 +344,22 @@ def get_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
 
 @router.patch(
     "/{advisory_id}",
-    response={200: AdvisoryDetailSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        202: AdvisoryProposalSchema,
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
     auth=AUTH,
     summary="Update an advisory's own fields",
-    description="Fields left out of the body keep their stored value. Send cvss_score as null to clear the CVSS entry.",
+    description=(
+        "Fields left out of the body keep their stored value. Send cvss_score as null to clear the CVSS entry."
+        + _PROPOSAL_NOTE
+    ),
 )
+@decorate_view(transaction.atomic)
 def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvisorySchema) -> tuple[int, Any]:
     team, error = _workspace(request)
     if error:
@@ -250,6 +367,12 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     assert team is not None
     if not can(request, "advisory:manage", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    fields = payload.model_dump(exclude_unset=True, exclude={"context"})
+    if held := _proposed(
+        request, team, advisory_id, AdvisoryProposal.Kind.EDIT_ADVISORY, {"fields": fields}, payload.context
+    ):
+        return held
 
     current = advisory_service.get_advisory(team, advisory_id)
     if not current.ok:
@@ -260,7 +383,7 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
     # missing description as blank, which is right for a form and wrong for
     # a PATCH. Only what the body carried is written; the rest is re-sent as
     # it stands.
-    sent = payload.model_dump(exclude_unset=True)
+    sent = fields
     cvss_score = None
     cvss_vector = None
     if "cvss_score" in sent or "cvss_vector" in sent:
@@ -282,12 +405,182 @@ def update_advisory(request: HttpRequest, advisory_id: str, payload: UpdateAdvis
         title=sent.get("title") or stored["title"],
         severity=(sent["severity"] or "") if "severity" in sent else None,
         description=sent["description"] or "" if "description" in sent else stored.get("description", ""),
+        summary=(sent["summary"] or "") if "summary" in sent else None,
         cvss_score=cvss_score,
         cvss_vector=cvss_vector,
+        via=_via(request),
     )
     if not updated.ok:
         return _failed(updated)
 
+    return _fetched(team, advisory_id)
+
+
+_STATUS_DESCRIPTION = (
+    "Only the fields sent are written, and each change lands on the advisory's timeline. "
+    "A resolved advisory refuses moving a product back to in_triage or exploitable, a published one "
+    "refuses an edit that would fail the rules it was published under, and a withdrawn one is final." + _PROPOSAL_NOTE
+)
+
+
+@router.patch(
+    "/{advisory_id}/statuses/{status_id}",
+    response={
+        202: AdvisoryProposalSchema,
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Update one product status on an advisory",
+    description=_STATUS_DESCRIPTION,
+)
+@decorate_view(transaction.atomic)
+def update_product_status(
+    request: HttpRequest, advisory_id: str, status_id: str, payload: ProductStatusUpdateSchema
+) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    changes = payload.model_dump(exclude_unset=True, exclude={"context"})
+    if held := _proposed(
+        request,
+        team,
+        advisory_id,
+        AdvisoryProposal.Kind.PRODUCT_STATUS,
+        {"status_id": status_id, "changes": changes},
+        payload.context,
+    ):
+        return held
+
+    updated = advisory_service.update_product_status(
+        team,
+        request.user,
+        advisory_id,
+        status_id,
+        changes=changes,
+        via=_via(request),
+    )
+    if not updated.ok:
+        return _failed(updated)
+    return _fetched(team, advisory_id)
+
+
+@router.patch(
+    "/{advisory_id}/products/{product_id}/status",
+    response={
+        202: AdvisoryProposalSchema,
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Update a product's status on an advisory",
+    description=(
+        "The same edit, applied to the product's row for every vulnerability on the advisory, or only to "
+        "vulnerability_id's. product_id is the sbomify product. " + _STATUS_DESCRIPTION
+    ),
+)
+@decorate_view(transaction.atomic)
+def update_product_statuses(
+    request: HttpRequest,
+    advisory_id: str,
+    product_id: str,
+    payload: ProductStatusUpdateSchema,
+    vulnerability_id: str | None = None,
+) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    changes = payload.model_dump(exclude_unset=True, exclude={"context"})
+    if held := _proposed(
+        request,
+        team,
+        advisory_id,
+        AdvisoryProposal.Kind.PRODUCT_STATUS,
+        {"product_id": product_id, "vulnerability_id": vulnerability_id or "", "changes": changes},
+        payload.context,
+    ):
+        return held
+
+    updated = advisory_service.update_product_statuses(
+        team,
+        request.user,
+        advisory_id,
+        product_id,
+        changes=changes,
+        vulnerability_id=vulnerability_id,
+        via=_via(request),
+    )
+    if not updated.ok:
+        return _failed(updated)
+    return _fetched(team, advisory_id)
+
+
+@router.post(
+    "/{advisory_id}/products",
+    response={
+        202: AdvisoryProposalSchema,
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Add a product, or affected releases, to an advisory",
+    description=(
+        "A product already on the advisory gains only the releases it does not list yet. A new product starts "
+        "under investigation unless a status is sent, which a resolved advisory requires."
+    ),
+)
+@decorate_view(transaction.atomic)
+def add_advisory_product(request: HttpRequest, advisory_id: str, payload: AddAdvisoryProductSchema) -> tuple[int, Any]:
+    from sbomify.apps.core.models import Product, Release
+
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    product = Product.objects.filter(id=payload.product_id, team=team).first()
+    if product is None:
+        return _not_found("Product not found")
+    release_ids = list(dict.fromkeys(payload.affected_release_ids))
+    releases = list(Release.objects.filter(id__in=release_ids, product__team=team)) if release_ids else []
+    if len(releases) != len(release_ids):
+        return _not_found("Release not found")
+
+    changes = payload.model_dump(exclude_unset=True, exclude={"product_id", "affected_release_ids", "context"})
+    if held := _proposed(
+        request,
+        team,
+        advisory_id,
+        AdvisoryProposal.Kind.ADD_PRODUCT,
+        {"product_id": product.id, "release_ids": [r.id for r in releases], "changes": changes},
+        payload.context,
+    ):
+        return held
+
+    added = advisory_service.add_advisory_product(
+        team, request.user, advisory_id, product=product, affected_releases=releases, changes=changes, via=_via(request)
+    )
+    if not added.ok:
+        return _failed(added)
     return _fetched(team, advisory_id)
 
 
@@ -313,7 +606,7 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
     if error:
         return error
     assert team is not None
-    if not can(request, "advisory:manage", team):
+    if not can(request, "advisory:delete", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
     result = advisory_service.delete_advisory(team, advisory_id)
@@ -324,11 +617,21 @@ def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
 
 @router.post(
     "/{advisory_id}/updates",
-    response={200: AdvisoryDetailSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        202: AdvisoryProposalSchema,
+        200: AdvisoryDetailSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
     auth=AUTH,
     summary="Post a timeline update or move the remediation status",
-    description="kind is 'update' for a note, or a remediation status to move to, with the note as commentary.",
+    description=(
+        "kind is 'update' for a note, or a remediation status to move to, with the note as commentary." + _PROPOSAL_NOTE
+    ),
 )
+@decorate_view(transaction.atomic)
 def post_advisory_update(request: HttpRequest, advisory_id: str, payload: AdvisoryUpdateSchema) -> tuple[int, Any]:
     team, error = _workspace(request)
     if error:
@@ -337,11 +640,187 @@ def post_advisory_update(request: HttpRequest, advisory_id: str, payload: Adviso
     if not can(request, "advisory:manage", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    posted = advisory_service.post_update(team, request.user, advisory_id, kind=payload.kind, note=payload.note)
+    if held := _proposed(
+        request,
+        team,
+        advisory_id,
+        AdvisoryProposal.Kind.POST_UPDATE,
+        {"kind": payload.kind, "note": payload.note},
+        payload.context,
+    ):
+        return held
+
+    posted = advisory_service.post_update(
+        team, request.user, advisory_id, kind=payload.kind, note=payload.note, via=_via(request)
+    )
     if not posted.ok:
         return _failed(posted)
 
     return _fetched(team, advisory_id)
+
+
+@router.patch(
+    "/{advisory_id}/updates/{event_id}",
+    response={
+        200: AdvisoryDetailSchema,
+        202: AdvisoryProposalSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Edit the text of a timeline update",
+    description=(
+        "event_id is a timeline entry's id: an update, a comment, or the note on a status change. The original "
+        "text stays on record and every reader, the trust center included, shows the new one." + _PROPOSAL_NOTE
+    ),
+)
+@decorate_view(transaction.atomic)
+def edit_advisory_update(
+    request: HttpRequest, advisory_id: str, event_id: str, payload: EditAdvisoryUpdateSchema
+) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:manage", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    if held := _proposed(
+        request,
+        team,
+        advisory_id,
+        AdvisoryProposal.Kind.EDIT_UPDATE,
+        {"event_id": event_id, "note": payload.note},
+        payload.context,
+    ):
+        return held
+
+    edited = advisory_service.edit_message(
+        team, request.user, advisory_id, event_id, note=payload.note, via=_via(request)
+    )
+    if not edited.ok:
+        return _failed(edited)
+    return _fetched(team, advisory_id)
+
+
+@router.get(
+    "/{advisory_id}/proposals",
+    response={200: list[AdvisoryProposalSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="List the changes waiting for approval on an advisory",
+    description="Every pending change, oldest first, then the most recently decided ones.",
+)
+def list_advisory_proposals(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:read", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    result = proposal_service.advisory_proposals(team, advisory_id)
+    if not result.ok or result.value is None:
+        return _failed(result)
+    return 200, [_proposal_shape(row) for row in result.value["pending"] + result.value["decided"]]
+
+
+@router.get(
+    "/{advisory_id}/proposals/{proposal_id}",
+    response={200: AdvisoryProposalSchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=AUTH,
+    summary="Get one proposed change",
+    description="So whoever sent a change can see whether it was approved, and what the reviewer said.",
+)
+def get_advisory_proposal(request: HttpRequest, advisory_id: str, proposal_id: str) -> tuple[int, Any]:
+    team, error = _workspace(request)
+    if error:
+        return error
+    assert team is not None
+    if not can(request, "advisory:read", team):
+        return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
+
+    result = proposal_service.get_proposal(team, advisory_id, proposal_id)
+    if not result.ok or result.value is None:
+        return _failed(result)
+    return 200, _proposal_shape(result.value)
+
+
+def _reviewer(request: HttpRequest) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
+    """The workspace, for a caller who may decide on proposed changes.
+
+    Deciding is publishing by another route, so it takes advisory:publish. An
+    AI agent token is refused even when its scope would allow it: the change
+    it approves could be its own.
+    """
+    team, error = _workspace(request)
+    if error:
+        return None, error
+    assert team is not None
+    if not can(request, "advisory:publish", team) or credential_channel(request) == "agent":
+        return None, (403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN))
+    return team, None
+
+
+@router.post(
+    "/{advisory_id}/proposals/{proposal_id}/approve",
+    response={
+        200: AdvisoryProposalSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Approve a proposed change",
+    description=(
+        "Applies the change through the same write a direct edit uses, so it is refused for the same reasons, and "
+        "stays pending if it is. note rewords a new or edited update before it is posted."
+    ),
+)
+def approve_advisory_proposal(
+    request: HttpRequest, advisory_id: str, proposal_id: str, payload: ProposalDecisionSchema
+) -> tuple[int, Any]:
+    team, error = _reviewer(request)
+    if error:
+        return error
+    result = proposal_service.approve_proposal(
+        team, request.user, advisory_id, proposal_id, note=payload.note, decision_note=payload.decision_note
+    )
+    if not result.ok or result.value is None:
+        return _failed(result)
+    return 200, _proposal_shape(proposal_service.proposal_row(result.value))
+
+
+@router.post(
+    "/{advisory_id}/proposals/{proposal_id}/reject",
+    response={
+        200: AdvisoryProposalSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=AUTH,
+    summary="Reject a proposed change",
+    description=(
+        "reason and decision_note are both required: the sender reads them back, with a next step for the "
+        "reason, so an agent learns what to do differently instead of sending the same change again."
+    ),
+)
+def reject_advisory_proposal(
+    request: HttpRequest, advisory_id: str, proposal_id: str, payload: ProposalDecisionSchema
+) -> tuple[int, Any]:
+    team, error = _reviewer(request)
+    if error:
+        return error
+    result = proposal_service.reject_proposal(
+        team, request.user, advisory_id, proposal_id, reason=payload.reason, decision_note=payload.decision_note
+    )
+    if not result.ok or result.value is None:
+        return _failed(result)
+    return 200, _proposal_shape(proposal_service.proposal_row(result.value))
 
 
 @router.post(
@@ -364,7 +843,9 @@ def publish_advisory(request: HttpRequest, advisory_id: str, payload: PublishAdv
     if not can(request, "advisory:publish", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    published = advisory_service.publish_advisory(team, request.user, advisory_id, visibility=payload.visibility)
+    published = advisory_service.publish_advisory(
+        team, request.user, advisory_id, visibility=payload.visibility, via=_via(request)
+    )
     if not published.ok:
         return _failed(published)
 
@@ -392,7 +873,9 @@ def withdraw_advisory(request: HttpRequest, advisory_id: str, payload: WithdrawA
     if not can(request, "advisory:publish", team):
         return 403, ErrorResponse(detail="Forbidden", error_code=ErrorCode.FORBIDDEN)
 
-    withdrawn = advisory_service.withdraw_advisory(team, request.user, advisory_id, reason=payload.reason)
+    withdrawn = advisory_service.withdraw_advisory(
+        team, request.user, advisory_id, reason=payload.reason, via=_via(request)
+    )
     if not withdrawn.ok:
         return _failed(withdrawn)
 
@@ -402,14 +885,14 @@ def withdraw_advisory(request: HttpRequest, advisory_id: str, payload: WithdrawA
 # --- the trust center over JSON ---------------------------------------------
 
 
-def _public_workspace(request: HttpRequest, workspace_key: str) -> Team | None:
+def _public_workspace(request: HttpRequest, workspace_key: str) -> Workspace | None:
     """The workspace a trust-center reader named, or None when there is nothing to show.
 
     Reuses the page resolver, so a private workspace, a bad key and an
     unknown key are all the same 404 here as they are in the browser.
     """
     status, team = fetch_public_team(request, workspace_key)
-    return team if status == 200 and isinstance(team, Team) else None
+    return team if status == 200 and isinstance(team, Workspace) else None
 
 
 def _not_found(detail: str) -> tuple[int, ErrorResponse]:
@@ -532,7 +1015,7 @@ def get_public_advisory(request: HttpRequest, workspace_key: str, advisory_id: s
     return 200, _public_shape(result.value)
 
 
-def _advisory_url(request: HttpRequest, team: Team, advisory_id: str) -> str:
+def _advisory_url(request: HttpRequest, team: Workspace, advisory_id: str) -> str:
     """Where a reader would find this advisory in a browser: the workspace's own domain when it has one."""
     path = f"/advisories/{quote(advisory_id, safe='')}/"
     custom = build_custom_domain_url(team, path, request.is_secure())

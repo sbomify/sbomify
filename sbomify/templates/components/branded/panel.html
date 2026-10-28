@@ -1,0 +1,21 @@
+{% comment %}
+A titled box in a page's side column: Details, Identifiers, References.
+
+It is a c-branded.surface with its heading inside, which is the one difference
+from a main-column section. A section's heading sits above its surface, at
+section size, because it introduces a block a reader scrolls through. A side
+panel is glanced at, so its title is small and belongs to the box.
+
+The title is a real h2 for the outline, set small. base.css styles h1..h6
+unlayered, so the margin reset takes the important modifier to win.
+{% endcomment %}
+<c-vars title class />
+<c-branded.surface class="flex flex-col gap-3{% if class %} {{ class }}{% endif %}" :attrs="attrs">
+{% if title or action %}
+    <div class="flex items-center justify-between gap-3">
+        {% if title %}<h2 class="text-sm font-semibold text-text my-0! leading-5">{{ title }}</h2>{% endif %}
+        {% if action %}<div class="shrink-0 text-xs text-text-muted">{{ action }}</div>{% endif %}
+    </div>
+{% endif %}
+{{ slot }}
+</c-branded.surface>

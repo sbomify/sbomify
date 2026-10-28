@@ -10,12 +10,12 @@
     "     NOT use in the UI — someone searching 'api key' should land on tokens,",
     "     and someone searching '2fa' should land wherever that lives. Synonyms",
     "     are the whole point; the title is already matched separately.",
-    "  4. `roles` restricts visibility, and must match what the view itself",
-    "     allows: a destination the rail shows but search hides is worse than no",
-    "     entry at all. Omit for everyone; ['owner','admin'] for anything a guest",
-    "     must not see.",
+    "  4. `roles` restricts visibility, and must mirror the authz tier of the",
+    "     view or action the destination leads to (see core/authz.py): a",
+    "     destination the rail shows but search hides is worse than no entry at",
+    "     all. Omit only for pages every signed-in workspace member can use.",
     "  5. `args` names URL kwargs the resolver fills from the current session:",
-    "     'team_key' is the only one supported today.",
+    "     'workspace_key' is the only one supported today.",
     "",
     "  6. `suggested` includes the destination when search first opens.",
     "     `example` offers a clickable search phrase that finds this destination.",
@@ -68,16 +68,16 @@
       "url_name": "plugins:plugins_page",
       "section": "navigate",
       "icon": "fa-plug",
-      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments"],
+      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments", "assessment summary", "plugin results", "checks overview"],
       "roles": ["owner", "admin"]
     },
     {
       "title": "Suppliers",
-      "url_name": "teams:suppliers",
+      "url_name": "workspaces:suppliers",
       "section": "navigate",
       "icon": "fa-truck-field",
       "keywords": ["vendors", "third party", "supply chain", "supplier list"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "roles": ["owner", "admin"]
     },
     {
@@ -94,15 +94,7 @@
       "section": "navigate",
       "icon": "fa-chart-line",
       "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
-      "roles": ["owner", "admin", "member"]
-    },
-    {
-      "title": "Plugin summary",
-      "url_name": "plugins:plugins_summary",
-      "section": "navigate",
-      "icon": "fa-list-check",
-      "keywords": ["assessment summary", "plugin results", "checks overview"],
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Access requests",
@@ -110,7 +102,7 @@
       "section": "navigate",
       "icon": "fa-user-shield",
       "keywords": ["nda requests", "gated access", "approve access", "document requests", "pending requests"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "roles": ["owner", "admin"]
     },
     {
@@ -126,7 +118,7 @@
       "section": "actions",
       "icon": "fa-arrow-up",
       "keywords": ["change plan", "upgrade", "downgrade", "pricing", "buy", "subscribe"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "roles": ["owner"]
     },
     {
@@ -172,115 +164,155 @@
     },
     {
       "title": "Workspace settings",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-sliders",
-      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years"],
-      "args": ["team_key"],
+      "keywords": ["general settings", "workspace name", "preferences", "configuration", "patch SLA", "patch targets", "freshness", "support period", "support years", "advisory prefix", "advisory id", "advisory numbering"],
+      "args": ["workspace_key"],
       "roles": ["owner", "admin"]
     },
     {
       "title": "Members",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-users",
       "keywords": ["team", "invite", "users", "people", "permissions", "roles", "access"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "members",
       "roles": ["owner", "admin"]
     },
     {
       "title": "API tokens",
       "example": "api key",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-key",
       "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "tokens",
-      "roles": ["owner", "admin"]
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Parties",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-address-book",
       "keywords": ["contact profiles", "contacts", "parties", "supplier contact", "author", "manufacturer"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "contact-profiles",
       "roles": ["owner", "admin"]
     },
     {
       "title": "Trust Center",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-globe",
       "keywords": ["public page", "custom domain", "nda", "tea", "security.txt", "publish"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "trust-center",
       "roles": ["owner", "admin"]
     },
     {
+      "title": "Integrations",
+      "url_name": "workspaces:team_settings",
+      "section": "settings",
+      "icon": "fa-plug",
+      "keywords": ["vanta", "connect", "oauth", "sync", "compliance tool", "drata", "data source", "frameworks"],
+      "args": ["workspace_key"],
+      "fragment": "integrations",
+      "roles": ["owner", "admin"]
+    },
+    {
       "title": "Branding",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-palette",
       "keywords": ["logo", "colors", "theme", "look and feel", "white label"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "branding",
       "roles": ["owner", "admin"]
     },
     {
       "title": "Billing",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-credit-card",
       "keywords": ["plan", "subscription", "invoice", "payment", "upgrade", "pricing"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "billing",
       "roles": ["owner"]
     },
     {
       "title": "Account",
-      "url_name": "teams:team_settings",
+      "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-user-gear",
       "keywords": ["profile", "my account", "delete workspace", "danger zone"],
-      "args": ["team_key"],
+      "args": ["workspace_key"],
       "fragment": "account",
       "roles": ["owner", "admin"]
     },
     {
       "title": "Switch workspace",
-      "url_name": "teams:teams_dashboard",
+      "url_name": "workspaces:teams_dashboard",
       "section": "settings",
       "icon": "fa-right-left",
       "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
     },
     {
-      "title": "Upload an SBOM",
-      "url_name": "core:components_dashboard",
+      "title": "Upload SBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "sbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["upload sbom", "upload an sbom", "upload sboms", "sbom upload", "import sbom", "add sbom", "new sbom", "sboms", "sbom file", "cyclonedx", "spdx", "upload artifact", "upload file", "import"],
+      "roles": ["owner", "admin", "member"]
     },
     {
-      "title": "Upload a VEX",
-      "url_name": "core:components_dashboard",
+      "title": "Upload CBOM",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "cbom"},
       "section": "actions",
       "icon": "fa-upload",
-      "keywords": ["import vex", "vex document", "suppress", "triage import"],
-      "roles": ["owner", "admin"]
+      "keywords": ["cbom", "upload cbom", "upload a cbom", "cbom upload", "import cbom", "crypto bom", "cryptography bom", "cryptographic inventory", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
     },
     {
-      "title": "Vulnerability scans",
+      "title": "Upload VEX",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "vex"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["vex", "openvex", "csaf", "upload vex", "upload a vex", "vex upload", "upload vex file", "import vex", "add vex", "vex document", "vex statement", "not affected", "exploitability", "suppress", "triage import", "upload artifact"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Upload document",
+      "url_name": "core:artifact_upload",
+      "query": {"type": "document"},
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["upload document", "upload a document", "upload documents", "document upload", "documents", "add document", "import document", "attach file", "pdf", "policy", "license file", "upload artifact", "upload file"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
+      "title": "Vulnerabilities",
       "url_name": "vulnerability_scanning:vulnerability_scans",
       "section": "navigate",
       "icon": "fa-bug",
-      "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
-      "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "keywords": ["scan results", "findings", "cves", "vulnerability scans", "security scan", "open vulnerabilities", "fix prompt", "known exploited", "kev", "scan history", "release vulnerabilities", "vulnerabilities by version", "triage", "vex"],
+      "args": ["workspace_key"],
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
+      "title": "Review VEX",
+      "url_name": "vulnerability_scanning:vulnerability_scans",
+      "section": "actions",
+      "icon": "fa-clipboard-check",
+      "keywords": ["approve vex", "vex approval", "approval queue", "review queue", "pending vex", "agent vex", "ai agent", "vex submissions", "reject vex"],
+      "args": ["workspace_key"],
+      "query": {"view": "review"},
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Cryptography",
@@ -288,8 +320,8 @@
       "section": "navigate",
       "icon": "fa-lock",
       "keywords": ["crypto", "cryptography", "crypto readiness", "quantum", "post-quantum", "pqc", "algorithms", "certificates", "cbom"],
-      "args": ["team_key"],
-      "roles": ["owner", "admin", "member"]
+      "args": ["workspace_key"],
+      "roles": ["owner", "admin", "member", "operator"]
     },
     {
       "title": "Public Trust Center page",
@@ -308,7 +340,7 @@
     },
     {
       "title": "Get started wizard",
-      "url_name": "teams:onboarding_wizard",
+      "url_name": "workspaces:onboarding_wizard",
       "section": "actions",
       "icon": "fa-rocket",
       "keywords": ["onboarding", "setup", "tutorial", "first steps", "getting started"]
@@ -322,8 +354,8 @@
     },
     {
       "title": "Compliance controls",
-      "url_name": "teams:team_settings",
-      "args": ["team_key"],
+      "url_name": "workspaces:team_settings",
+      "args": ["workspace_key"],
       "section": "settings",
       "icon": "fa-list-check",
       "keywords": ["compliance frameworks", "catalog", "OSCAL", "SOC 2", "ISO 27001", "control status"],

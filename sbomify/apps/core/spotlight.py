@@ -42,6 +42,7 @@ SECTION_ORDER = (
     "findings",
     "releases",
     "documents",
+    "artifacts",
     "assets",
 )
 SECTION_LABELS = {
@@ -53,6 +54,7 @@ SECTION_LABELS = {
     "findings": "Affected components",
     "releases": "Releases",
     "documents": "Documents",
+    "artifacts": "Artifacts",
     "assets": "Products & components",
 }
 
@@ -93,7 +95,7 @@ class Destination:
         """
         return not self.roles or role in self.roles
 
-    def resolve(self, *, team_key: str = "") -> str | None:
+    def resolve(self, *, workspace_key: str = "") -> str | None:
         """The concrete URL, or None when it cannot be built.
 
         Returns None rather than raising so one bad entry degrades to a
@@ -101,10 +103,10 @@ class Destination:
         """
         kwargs = {}
         for arg in self.args:
-            if arg == "team_key":
-                if not team_key:
+            if arg == "workspace_key":
+                if not workspace_key:
                     return None
-                kwargs["team_key"] = team_key
+                kwargs["workspace_key"] = workspace_key
             else:  # pragma: no cover - guarded by the registry test
                 return None
         try:
@@ -166,12 +168,15 @@ def _score(destination: Destination, query: str) -> int:
     return best
 
 
-def search_destinations(query: str, *, role: str = "", team_key: str = "", limit: int = 8) -> list[dict[str, Any]]:
+def search_destinations(query: str, *, role: str = "", workspace_key: str = "", limit: int = 8) -> list[dict[str, Any]]:
     """Ranked app destinations for a query.
 
     Ties break on the section order, so "Go to" beats "Settings" at equal
-    match quality; then on title *length*, because the shorter title is the
-    closer match ("plug" should land on Plugins, not Plugin summary); then
+    match quality; then on whether the query is one of the destination's
+    keywords exactly, so "vex" lands on Upload VEX, which lists it, rather
+    than on another VEX action that only shares the word; then on title
+    *length*, because the shorter title is the closer match ("plug" should
+    land on Plugins, not Plugin summary); then
     alphabetically for a stable result across keystrokes — a palette that
     reshuffles under the cursor is worse than a slightly worse-ranked one.
     """
@@ -179,20 +184,21 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
     if not query:
         return []
 
-    scored: list[tuple[int, int, int, str, Destination, str]] = []
+    scored: list[tuple[int, int, int, int, str, Destination, str]] = []
     for destination in load_destinations():
         if not destination.visible_to(role):
             continue
         score = _score(destination, query)
         if not score:
             continue
-        url = destination.resolve(team_key=team_key)
+        url = destination.resolve(workspace_key=workspace_key)
         if url is None:
             continue
         section_rank = SECTION_ORDER.index(destination.section) if destination.section in SECTION_ORDER else 99
-        scored.append((-score, section_rank, len(destination.title), destination.title, destination, url))
+        named = 0 if query in (keyword.lower() for keyword in destination.keywords) else 1
+        scored.append((-score, section_rank, named, len(destination.title), destination.title, destination, url))
 
-    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
+    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3], row[4]))
     return [
         {
             "title": destination.title,
@@ -202,7 +208,7 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
             "icon": destination.icon,
             "score": -negative_score,
         }
-        for negative_score, _rank, _length, _title, destination, url in scored[:limit]
+        for negative_score, _rank, _named, _length, _title, destination, url in scored[:limit]
     ]
 
 
@@ -212,7 +218,7 @@ def initial_suggestions(*, role: str = "", workspace_key: str = "") -> list[dict
     for destination in load_destinations():
         if not (destination.suggested or destination.example) or not destination.visible_to(role):
             continue
-        url = destination.resolve(team_key=workspace_key)
+        url = destination.resolve(workspace_key=workspace_key)
         if url is None:
             continue
         if destination.suggested:

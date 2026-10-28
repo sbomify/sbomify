@@ -17,11 +17,11 @@ from sbomify.apps.plugins.orchestrator import PluginOrchestrator
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.plugins.tasks import enqueue_assessment, run_assessment_task
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     """Create a test team for integration tests."""
     BillingPlan.objects.get_or_create(
         key="business",
@@ -32,13 +32,13 @@ def test_team(db) -> Team:
             "max_users": 10,
         },
     )
-    team = Team.objects.create(name="Integration Test Team", billing_plan="business")
+    team = Workspace.objects.create(name="Integration Test Team", billing_plan="business")
     yield team
     team.delete()
 
 
 @pytest.fixture
-def test_component(test_team: Team):
+def test_component(test_team: Workspace):
     """Create a test component."""
     component = Component.objects.create(team=test_team, name="Integration Component")
     yield component
@@ -100,7 +100,7 @@ def registered_checksum_plugin(db):
 
 
 @pytest.fixture
-def team_with_checksum_enabled(test_team: Team, registered_checksum_plugin):
+def team_with_checksum_enabled(test_team: Workspace, registered_checksum_plugin):
     """Create team settings with checksum plugin enabled."""
     settings = TeamPluginSettings.objects.create(
         team=test_team,

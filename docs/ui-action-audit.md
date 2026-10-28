@@ -55,11 +55,11 @@ Source: [identifier forms](../sbomify/apps/core/templates/core/components/produc
 
 ### UI-02: Link the CRA wizard to a full settings page
 
-In CRA step 1, **Edit in team settings** links to `teams:contact_profiles_list`. That endpoint renders `profile_list.html.j2`, a partial intended to live inside `#contact-profiles-content`. Direct navigation removes the app shell and scripts. The subsequent contact-profile forms also expect that missing parent.
+In CRA step 1, **Edit in team settings** links to `workspaces:contact_profiles_list`. That endpoint renders `profile_list.html.j2`, a partial intended to live inside `#contact-profiles-content`. Direct navigation removes the app shell and scripts. The subsequent contact-profile forms also expect that missing parent.
 
 Source: [CRA step 1](../sbomify/apps/compliance/templates/compliance/cra_step_1.html.j2), [contact-profile views](../sbomify/apps/teams/views/contact_profiles.py), [profile list](../sbomify/apps/teams/templates/teams/contact_profiles/profile_list.html.j2), [profile form](../sbomify/apps/teams/templates/teams/contact_profiles/profile_form.html.j2).
 
-- [x] Point full-page navigation to `teams:team_settings_tab` with `tab='contact-profiles'`.
+- [x] Point full-page navigation to `workspaces:team_settings_tab` with `tab='contact-profiles'`.
 - [x] Keep fragment endpoints for HTMX consumers and check other direct links to them.
 - [x] From CRA, verify navigation to Parties, opening and cancelling a profile editor, and returning to the assessment.
 

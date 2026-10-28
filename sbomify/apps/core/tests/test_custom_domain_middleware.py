@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.test import RequestFactory
 
 from sbomify.apps.core.middleware import CustomDomainContextMiddleware
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def middleware():
 @pytest.fixture
 def custom_domain_team(db):
     """Create a team with a validated custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Company",
         billing_plan="business",
         custom_domain="trust.example.com",
@@ -203,7 +203,7 @@ class TestCaching:
 
         # Delete the team
         team_id = team.id
-        Team.objects.filter(id=team_id).delete()
+        Workspace.objects.filter(id=team_id).delete()
 
         # Try to get team again - cache has old ID but team is gone
         team2 = middleware._get_team_for_domain("trust.example.com")
@@ -217,7 +217,7 @@ class TestAutoValidation:
 
     def test_does_not_validate_unvalidated_domain(self, request_factory, db):
         """The Host header is the client's choice, so it proves nothing."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Unvalidated Co",
             billing_plan="business",
             custom_domain="unvalidated.example.com",
@@ -239,7 +239,7 @@ class TestAutoValidation:
 
     def test_skips_already_validated_domain(self, request_factory, custom_domain_team):
         """Test that middleware does not write to DB for already-validated domains."""
-        Team.objects.filter(pk=custom_domain_team.pk).update(custom_domain_verification_failures=3)
+        Workspace.objects.filter(pk=custom_domain_team.pk).update(custom_domain_verification_failures=3)
 
         request = request_factory.get("/")
         request.META["HTTP_HOST"] = "trust.example.com"
@@ -278,7 +278,7 @@ class TestEdgeCases:
     def test_handles_uppercase_domain(self, middleware, db):
         """Test that middleware handles uppercase domains."""
         # Create team with lowercase domain
-        Team.objects.create(
+        Workspace.objects.create(
             name="Test",
             custom_domain="UPPER.EXAMPLE.COM".lower(),  # Stored lowercase
             custom_domain_validated=True,
@@ -298,12 +298,12 @@ class TestEdgeCases:
 
     def test_multiple_teams_different_domains(self, middleware, db):
         """Test that middleware distinguishes between different custom domains."""
-        team1 = Team.objects.create(
+        team1 = Workspace.objects.create(
             name="Team 1",
             custom_domain="team1.example.com",
             custom_domain_validated=True,
         )
-        team2 = Team.objects.create(
+        team2 = Workspace.objects.create(
             name="Team 2",
             custom_domain="team2.example.com",
             custom_domain_validated=True,

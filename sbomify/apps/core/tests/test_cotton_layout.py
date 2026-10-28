@@ -7,6 +7,8 @@ from the control itself (the choice tile and the selectable row), so pages can
 rely on them without ever writing a class themselves.
 """
 
+import re
+
 import pytest
 from django.template.loader import render_to_string
 
@@ -20,6 +22,7 @@ STAT_ICON = "absolute flex items-center justify-center rounded-lg"
 STAT_LABEL = "row-start-2 m-0 font-medium"
 STAT_VALUE = "row-start-1 m-0 min-w-0"
 STAT_CHANGE = "inline-flex items-baseline gap-1 text-[0.8125rem]"
+STAT_LIMIT = "text-sm font-medium tracking-normal text-text-muted"
 CHOICE = "inline-flex items-center gap-2 px-3 py-2 rounded-[0.625rem]"
 CHOICE_GROUP = "flex flex-wrap gap-2"
 SELECT_ROW = "flex items-start gap-4 p-4 cursor-pointer"
@@ -28,6 +31,7 @@ SELECT_ROW = "flex items-start gap-4 p-4 cursor-pointer"
 # options loop, the breadcrumb trail and the copyable identifiers as a page
 # would hand them over.
 PROBE_CONTEXT = {
+    "probe_markdown": "## Summary\n\nFix & notes <script>.",
     "probe_breadcrumbs": [{"label": "Products", "url": "/products"}, {"label": "Acme Vault"}],
     "probe_copy_values": [{"value": "DLyQjCBkNJkB", "title": "Product ID"}],
     "probe_choices": [
@@ -96,7 +100,7 @@ def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
 
 def test_page_headers_share_one_unadorned_heading(rendered: str) -> None:
     headers = rendered[: rendered.index("Generate a new token")]
-    assert headers.count("data-page-header") == 5
+    assert headers.count("data-page-header") == 7
     assert "--avatar-accent" not in headers
     assert "fas fa-box" not in headers
     assert "fas fa-cube" not in headers
@@ -108,6 +112,26 @@ def test_description_disclosure_is_scoped_and_accessible(rendered: str) -> None:
     assert ':aria-expanded="expanded"' in header
     assert ":aria-controls=\"$id('page-description')\"" in header
     assert "Show more" in header
+
+
+def test_plain_description_stays_plain_text(rendered: str) -> None:
+    header = rendered[rendered.index('data-probe="header-description"') :].split("</header>")[0]
+    assert '<p x-ref="description"' in header
+    assert "whitespace-pre-line" in header
+
+
+@pytest.mark.parametrize("probe", ["header-markdown", "header-markdown-quoted"])
+def test_markdown_description_renders_once_and_keeps_the_disclosure(rendered: str, probe: str) -> None:
+    header = rendered[rendered.index(f'data-probe="{probe}"') :].split("</header>")[0]
+    assert '<div x-ref="description"' in header
+    assert ":aria-controls=\"$id('page-description')\"" in header
+    assert "line-clamp-2" in header
+    assert "a.setAttribute('tabindex', '-1')" in header
+    assert "<p><strong>Summary</strong></p>" in header
+    assert "<h2>" not in header
+    assert "Fix &amp; notes" in header
+    assert "&amp;amp;" not in header
+    assert "&lt;script&gt;" in header
 
 
 def test_meta_slot_sits_on_the_title_line(rendered: str) -> None:
@@ -317,6 +341,14 @@ def test_the_card_aligns_changes_with_its_value_and_a_bare_change_keeps_its_marg
     assert "color-mix" not in bare
 
 
+def test_a_limit_sits_beside_the_value_in_the_cards_own_recipe(rendered: str) -> None:
+    """The card sets both halves of "250 of 1,000". A page that styled its own
+    suffix would drift from the next page that wanted one."""
+    assert "flex items-baseline" in _classes(rendered, STAT_VALUE, "of 1,000")
+    assert _classes(rendered, STAT_LIMIT, "of 1,000")
+    assert _classes(rendered, STAT_LIMIT, "of unlimited")
+
+
 def test_stat_card_forwards_attrs_and_caller_class(rendered: str) -> None:
     assert "lg:col-span-2" in _classes(rendered, STAT_CARD, "Stale scans")
     assert '@click="drill()"' in _opening(rendered, STAT_CARD, "Stale scans")
@@ -460,11 +492,30 @@ def test_toggle_ref_points_the_row_click_at_its_own_switch(rendered: str) -> Non
     assert 'x-data="{ enabled: false }"' in opening
 
 
-def test_disabled_dims_the_row_while_the_control_blocks_it(rendered: str) -> None:
-    assert "opacity-50 grayscale" in _classes(rendered, SELECT_ROW, "Dependency Track")
+def test_the_control_being_disabled_is_what_drains_the_row(rendered: str) -> None:
+    """The real input is the source of truth, so there is no prop to fall out of step.
+
+    Cursor, hover and colour are all read off ``has-[input:disabled]``, which means
+    a row bound reactively (``::disabled``) greys the moment its control does.
+    """
+    classes = _classes(rendered, SELECT_ROW, "Dependency Track")
+    assert "has-[input:disabled]:grayscale" in classes
     row = rendered[rendered.index("Dependency Track") :]
     assert 'id="probe-row-2"' in row.split("</div>")[0]
     assert "disabled" in row.split("</div>")[0]
+
+
+def test_a_row_never_fades_its_own_explanation(rendered: str) -> None:
+    """A row carrying the reason it is unavailable must keep that reason readable.
+
+    opacity on the row composites every descendant against the page and no
+    descendant can opt out, so a plan-required badge and its description land far
+    under the 4.5:1 AA floor. The contrast the greyed row actually ships is pinned
+    in ``test_select_row_contrast``; this only pins that nothing fades it.
+    """
+    for name in ("BSI TR-03183-2", "Dependency Track"):
+        classes = _classes(rendered, SELECT_ROW, name).split()
+        assert not [c for c in classes if re.fullmatch(r"opacity-\d+", c)], (name, classes)
 
 
 def test_the_control_and_the_body_stay_in_the_slot(rendered: str) -> None:

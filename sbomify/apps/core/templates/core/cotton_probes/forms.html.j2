@@ -37,6 +37,13 @@ on the output; it is not routed anywhere.
 <c-forms.radio name="probe-radio" value="cyclonedx" checked>CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-radio" value="spdx" disabled>SPDX</c-forms.radio>
 <c-forms.radio name="probe-procedure" x_value="proc.value" x-model="procedure" data-probe="radio-bound">Bound value</c-forms.radio>
+{# The settings row: label and hint beside the control, and wide for the rows whose value is the point. #}
+<c-forms.field horizontal label="Horizontal" for="probe-horizontal" hint="Beside the control." data-probe="field-horizontal">
+<c-forms.input size="sm" id="probe-horizontal" name="probe-horizontal" />
+</c-forms.field>
+<c-forms.field horizontal wide label="Horizontal wide" for="probe-wide" hint="A URL needs the room." data-probe="field-wide">
+<c-forms.input size="sm" id="probe-wide" name="probe-wide" value="https://trust.example.com/public/workspace/abc123" />
+</c-forms.field>
 <c-forms.field label="Format" hint="A group has no single control to point at.">
 <c-forms.radio name="probe-format" value="cyclonedx">CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-format" value="spdx">SPDX</c-forms.radio>
@@ -64,5 +71,5 @@ on the output; it is not routed anywhere.
 </c-forms.file-preview>
 <c-forms.input name="probe-bound-state" ::data-state="formErrors.name ? 'error' : ''" x-model="name" />
 <c-forms.textarea name="probe-bound-textarea" ::data-state="formErrors.text ? 'error' : ''" />
-<c-forms.color-field name="probe-colour" id="probe-colour" label="Primary brand color" hint="Headers, navigation, primary elements" colour="branding.primary" on_input="branding.primary = $event.target.value" submit_value="branding.primary" />
-<c-forms.color-field id="probe-colour-bare" label="Accent color" colour="branding.accent" on_input="branding.accent = $event.target.value" />
+<c-forms.color-field name="probe-color" id="probe-color" label="Primary brand color" hint="Headers, navigation, primary elements" color="branding.primary" on_input="branding.primary = $event.target.value" submit_value="branding.primary" />
+<c-forms.color-field id="probe-color-bare" label="Accent color" color="branding.accent" on_input="branding.accent = $event.target.value" />

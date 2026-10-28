@@ -12,7 +12,7 @@ import pytest
 from django.template.loader import render_to_string
 
 TAB = "relative shrink-0 whitespace-nowrap px-0 py-4 text-sm font-medium border-b-2 border-solid"
-CELL = "flex items-center justify-center min-w-8 h-8 px-2 rounded-md border border-solid border-transparent"
+CELL = "flex items-center justify-center min-w-8 h-8 max-sm:min-w-11 max-sm:min-h-11 px-2 rounded-md border border-solid border-transparent"
 CIRCLE = "relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full"
 TRIGGER = "group flex w-full items-center justify-between px-6 py-5 text-left"
 RAIL = "flex-1 h-[3px] rounded-full overflow-hidden"
@@ -374,14 +374,14 @@ def test_density_marks_the_container_and_the_items_read_it(rendered: str) -> Non
 
 
 def test_items_are_divided_and_the_last_one_is_not(rendered: str) -> None:
-    item = _chunk(rendered, "div", "Organisational controls")
+    item = _chunk(rendered, "div", "Organizational controls")
     assert (
         "border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] last:border-b-0" in item
     )
 
 
 def test_trigger_is_a_real_button_bound_to_the_open_state(rendered: str) -> None:
-    trigger = _chunk(rendered, "button", "Organisational controls")
+    trigger = _chunk(rendered, "button", "Organizational controls")
     assert 'type="button"' in trigger
     assert TRIGGER in trigger
     assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in trigger
@@ -393,7 +393,7 @@ def test_trigger_is_a_real_button_bound_to_the_open_state(rendered: str) -> None
 
 
 def test_trigger_turns_the_chevron_over_from_its_own_state(rendered: str) -> None:
-    trigger = _chunk(rendered, "button", "Organisational controls")
+    trigger = _chunk(rendered, "button", "Organizational controls")
     chevron = "fas fa-chevron-down text-text-muted transition-transform duration-300 group-aria-expanded:rotate-180"
     assert chevron in trigger
 
@@ -410,7 +410,7 @@ def test_label_class_lands_on_the_label_and_nowhere_else(rendered: str) -> None:
     assert '<span class="flex flex-1 items-center justify-between gap-3 min-w-0 mr-3">' in trigger
     assert "flex-1" not in trigger[: trigger.index("<span")]
     # A label with no class of its own carries no class attribute at all.
-    assert "<span >Organisational controls</span>" in _chunk(rendered, "button", "Organisational controls")
+    assert "<span >Organizational controls</span>" in _chunk(rendered, "button", "Organizational controls")
 
 
 def test_panel_collapses_on_the_same_expression(rendered: str) -> None:
@@ -548,7 +548,7 @@ def test_segment_resting_ink_is_not_the_important_utility(rendered: str) -> None
 
 def test_segment_states_its_line_height_and_the_pill_shape(rendered: str) -> None:
     seg = _nav_probe(rendered, "segment")
-    assert "px-4 py-1.5 min-h-8 text-[0.8125rem] leading-5 font-medium rounded-md" in seg
+    assert "px-4 py-1.5 min-h-8 max-sm:min-h-11 text-[0.8125rem] leading-5 font-medium rounded-md" in seg
     assert "border-b" not in seg
 
 
@@ -566,3 +566,21 @@ def test_link_tab_can_bind_selection_while_a_panel_loads(rendered: str) -> None:
     assert "data-[active=true]:bg-surface-hover" in link
     assert "data-[active=true]:text-text" in link
     assert 'role="tab"' not in link
+
+
+def test_live_badge_follows_its_socket_message(rendered: str) -> None:
+    badge = unescape(_open_tag(rendered, "span", "x-data=\"{ badge: '3' }\""))
+    assert 'x-show="badge"' in badge
+    assert 'x-text="badge"' in badge
+    assert "@ws:vex_submission_updated.window=\"badge = $event.detail.pending || ''\"" in badge
+    assert "text-xs tabular-nums text-text-muted" in badge
+
+
+def test_live_badge_renders_while_empty_so_a_count_can_appear(rendered: str) -> None:
+    link = unescape(_chunk(rendered, "a", 'data-probe="live-badge-empty"'))
+    assert "x-data=\"{ badge: '' }\"" in link
+    assert 'x-show="badge"' in link
+
+
+def test_a_static_badge_stays_static(rendered: str) -> None:
+    assert "@ws:" not in _chunk(rendered, "button", "Hand built")

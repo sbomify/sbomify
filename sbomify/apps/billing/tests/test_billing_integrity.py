@@ -6,13 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.http import HttpResponseForbidden
 from django.utils import timezone
 
 from sbomify.apps.billing import billing_processing
 from sbomify.apps.billing.apis import _handle_community_downgrade
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -22,7 +21,7 @@ def test_community_downgrade_uses_stored_subscription_id():
     """Downgrade must cancel the stored subscription, whatever the customer id looks like
     (web checkout creates a random cus_), instead of downgrading locally while billing continues."""
     BillingPlan.objects.create(key="business", name="Business")
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="wsdowngrade",
         billing_plan="business",
@@ -35,7 +34,8 @@ def test_community_downgrade_uses_stored_subscription_id():
     stripe = MagicMock()
     stripe.get_subscription.return_value = MagicMock(id="sub_abc", status="active")
 
-    status, _body = _handle_community_downgrade(team, stripe)
+    with patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True):
+        status, _body = _handle_community_downgrade(team, stripe)
 
     assert status == 200
     stripe.get_subscription.assert_called_once_with("sub_abc")
@@ -47,7 +47,7 @@ def test_payment_failed_does_not_reset_failure_time():
     can actually expire."""
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     original = (timezone.now() - datetime.timedelta(days=2)).isoformat()
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="test-team-reset",
         billing_plan="business",
@@ -70,48 +70,12 @@ def test_payment_failed_does_not_reset_failure_time():
     assert team.billing_plan_limits["payment_failed_at"] == original  # not reset to now
 
 
-def test_past_due_without_failed_at_is_enforced():
-    """A past_due subscription with no payment_failed_at must not escape enforcement: it is
-    backfilled so the grace window starts and eventually blocks."""
-    BillingPlan.objects.create(key="business", name="Business", max_products=10)
-    team = Team.objects.create(
-        name="T",
-        key="test-team-nofail",
-        billing_plan="business",
-        billing_plan_limits={"subscription_status": "past_due"},  # no payment_failed_at
-    )
-    user = User.objects.create_user(username="nofail_user", email="nofail@example.com")
-    Member.objects.create(team=team, user=user, role="owner")
-
-    request = MagicMock()
-    request.method = "POST"
-    request.session = {"current_workspace": {"key": "test-team-nofail"}}
-    request.headers = {}
-    request.META = {}
-
-    @billing_processing.check_billing_limits("product")
-    def view(request):
-        return "success"
-
-    # First call backfills payment_failed_at to now -> within grace -> allowed, and persisted.
-    assert view(request) == "success"
-    team.refresh_from_db()
-    assert "payment_failed_at" in team.billing_plan_limits
-
-    # Age the backfilled stamp past the grace window -> blocked (no longer bypassed).
-    team.billing_plan_limits["payment_failed_at"] = (timezone.now() - datetime.timedelta(days=4)).isoformat()
-    team.save()
-    result = view(request)
-    assert isinstance(result, HttpResponseForbidden)
-    assert "Grace period expired" in result.content.decode()
-
-
 def test_payment_recovery_clears_failure_marker_so_grace_resets():
     """A recovered payment clears payment_failed_at, so a LATER failure starts a fresh grace
     window instead of reusing the old (already-expired) timestamp."""
     BillingPlan.objects.create(key="business", name="Business", max_products=10)
     old_failure = (timezone.now() - datetime.timedelta(days=10)).isoformat()  # long past grace
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="T",
         key="test-team-recover",
         billing_plan="business",

@@ -11,6 +11,7 @@ from sbomify.apps.plugins.latest import latest_run_ids
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.forms import SbomDeleteForm
 from sbomify.apps.sboms.services.sboms import delete_sbom_record
+from sbomify.apps.sboms.services.version_rows import build_version_rows
 from sbomify.apps.teams.apis import get_team
 
 
@@ -71,7 +72,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     for run in latest_runs:
         results_by_sbom.setdefault(str(run["sbom_id"]), []).append(run["result"])
 
-    vex_statements = load_vex_suppressions(component_id) if results_by_sbom else []
+    vex_cache: dict[Any, list[dict[str, Any]]] = {}
     for item in sbom_items:
         provider_results = results_by_sbom.get(str(item.get("sbom", {}).get("id", "")))
         if not provider_results:
@@ -81,6 +82,8 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         # scanned the same artifact still leaves a real verdict, and marking
         # that "Nothing scanned" would hide the scan that worked.
         scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
+        # The VEX written for this artifact's version, never one written for another.
+        vex_statements = load_vex_suppressions(component_id, item["sbom"].get("version"), cache=vex_cache)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
             item["vuln"] = severity_counts_from_rows(rows)
@@ -94,6 +97,21 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
                 key=lambda c: c["total"],
             )
         item["vuln"]["scanned_nothing"] = scanned_nothing
+
+
+def sbom_vulnerability_counts(sbom_ids_by_component: dict[str, list[str]]) -> dict[str, dict[str, Any] | None]:
+    """Each SBOM's merged, VEX-applied counts, for SBOMs spread over several components.
+
+    VEX statements belong to a component, so the counts are read one component
+    at a time, exactly as the component's own artifact table reads them. An SBOM
+    with no completed security run maps to ``None``.
+    """
+    counts: dict[str, dict[str, Any] | None] = {}
+    for component_id, sbom_ids in sbom_ids_by_component.items():
+        items: list[dict[str, Any]] = [{"sbom": {"id": sbom_id}} for sbom_id in sbom_ids]
+        _attach_vulnerability_counts(items, component_id)
+        counts.update({item["sbom"]["id"]: item.get("vuln") for item in items})
+    return counts
 
 
 def _summary_artifacts(sbom_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -159,32 +177,36 @@ def build_sboms_table_context(
     # (the "View all" toggle) returns the complete history.
     full_view = request.GET.get("full") == "1"
     total_artifact_count = len(sbom_items)
+    # The private card is one row per version, not per file: see version_rows.
+    versions = build_version_rows(component_id, sbom_items) if not full_view and not is_public_view else None
     if not full_view:
         sbom_items = _summary_artifacts(sbom_items)
 
-    if not is_public_view:
+    if not is_public_view and versions is None:
         _attach_vulnerability_counts(sbom_items, component_id, merged=not full_view)
 
+    shown = sum(len(row["downloads"]) for row in versions) if versions is not None else len(sbom_items)
     context = {
         "component_id": component_id,
         "sboms": sbom_items,
+        "versions": versions,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions", False),
         "full_view": full_view,
-        "show_view_all": not full_view and total_artifact_count > len(sbom_items),
+        "show_view_all": not full_view and total_artifact_count > shown,
         "total_artifact_count": total_artifact_count,
     }
 
     if not is_public_view:
-        team_key = number_to_random_token(component.get("team_id"))
-        status_code, team = get_team(request, team_key)
+        workspace_key = number_to_random_token(component.get("team_id"))
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return ServiceResult.failure(team.get("detail", "Failed to load team"))
 
         context.update(
             {
                 "team_billing_plan": team.billing_plan,
-                "team_key": team_key,
+                "team_key": workspace_key,
                 "delete_form": SbomDeleteForm(),
             }
         )

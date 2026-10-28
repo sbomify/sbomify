@@ -1,27 +1,23 @@
-{# VDP link for the public product page — a sidebar tc-panel. #}
+{# VDP link for the public product page: a side panel. #}
 {# Expects: has_vdp (bool), product (object), preferred_base_url (str), is_custom_domain (bool) #}
 {% if has_vdp %}
-    <div class="tc-panel">
-        <h2 class="tc-panel-title">Reporting a vulnerability</h2>
-        <p class="text-sm text-text-muted mt-0 mb-3">
-            How to report security vulnerabilities for this product, and what to expect from our response.
-        </p>
-        <div class="flex flex-col gap-2">
-            <a class="text-sm"
-               href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}{% url 'compliance:product_vdp_public' product_id=product.id %}">
-                Vulnerability disclosure policy
-                <i class="fas fa-arrow-right text-xs ml-1" aria-hidden="true"></i>
-            </a>
-            {% if is_custom_domain %}
-                <a class="text-sm"
-                   href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}/.well-known/security.txt"
-                   target="_blank"
-                   rel="noopener">
-                    security.txt
-                    <i class="fas fa-arrow-up-right-from-square text-xs ml-1"
-                       aria-hidden="true"></i>
-                </a>
-            {% endif %}
-        </div>
+    {# Resolved first, so no template tag sits inside an href for the formatter to break. #}
+    {% url 'compliance:product_vdp_public' product_id=product.id as vdp_path %}
+    <c-branded.panel title="Reporting a vulnerability">
+    <p class="text-sm text-text-muted my-0">
+        How to report security vulnerabilities for this product, and what to expect from our response.
+    </p>
+    <div class="flex flex-col items-start gap-2">
+        <c-buttons.secondary size="sm" href="{{ preferred_base_url|default:'' }}{{ vdp_path }}">
+        Vulnerability disclosure policy
+        <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
+        </c-buttons.secondary>
+        {% if is_custom_domain %}
+            <c-buttons.ghost size="sm" href="{{ preferred_base_url|default:'' }}/.well-known/security.txt" target="_blank" rel="noopener">
+            security.txt
+            <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
+            </c-buttons.ghost>
+        {% endif %}
     </div>
+    </c-branded.panel>
 {% endif %}

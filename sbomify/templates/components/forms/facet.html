@@ -1,0 +1,29 @@
+{% comment %}
+One option in a filter panel: a checkbox, its label and how many results it
+would leave. Severity, product, any facet a list is narrowed by.
+
+The whole row is the label, so the hit target is the line and not the 20px
+box, and it tints when checked so a reader scanning the panel sees what is on
+without reading every box. A facet that would return nothing stays, because
+its zero is information, but recedes: pass empty.
+
+tone puts a severity swatch before the label, from the platform ramp the badges
+and the table use, so the panel and the results agree about what high looks
+like. It is not brandable; red means critical on every page.
+
+It renders the real checkbox, so checked, name and value are the form's own
+and the filter still submits with scripting off.
+{% endcomment %}
+<c-vars name value checked empty tone count class />
+<label class="flex items-center gap-2.5 px-2 py-1.5 rounded-[var(--radius-md)] cursor-pointer text-sm text-text-secondary transition-colors duration-150 hover:bg-surface-hover has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[:checked]:text-text has-[:checked]:font-semibold max-[900px]:min-h-9{% if empty %} opacity-50{% endif %}{% if class %} {{ class }}{% endif %}">
+    <c-forms.checkbox-input name="{{ name }}" value="{{ value }}" :checked="checked" :attrs="attrs" />
+    {% if tone %}
+        <span class="h-2 w-2 shrink-0 rounded-full"
+              style="background: {% if tone == 'critical' %}var(--color-severity-critical-fill){% elif tone == 'high' %}var(--color-severity-high-fill){% elif tone == 'medium' %}var(--color-severity-medium-fill){% elif tone == 'low' %}var(--color-severity-low-fill){% else %}var(--color-severity-none-fill){% endif %}"
+              aria-hidden="true"></span>
+    {% endif %}
+    <span class="min-w-0 flex-1">{{ slot }}</span>
+    {% if count is not None and count != "" %}
+        <span class="text-xs text-text-muted tabular-nums">{{ count }}</span>
+    {% endif %}
+</label>

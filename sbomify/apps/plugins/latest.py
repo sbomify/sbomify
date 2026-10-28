@@ -39,6 +39,37 @@ def latest_run_ids(runs: QuerySet[Any], sbom_ids: Any) -> list[Any]:
     return [run_id for row in rows for run_id in row if run_id is not None]
 
 
+def release_run_ids(runs: QuerySet[Any], sbom_ids: Any, release_id: Any) -> tuple[list[Any], set[Any]]:
+    """The runs a release reads for its SBOMs, and which of them cover the release itself.
+
+    Two releases can share an SBOM yet each hold a live run of one scanner, because a
+    run is annotated with its own releases' VEX. The newest run overall may then carry
+    another release's suppressions, so a release reads the newest run that covers it,
+    and falls back to the newest run for a scanner none of whose runs name it. Without
+    a release this is :func:`latest_run_ids` and the second set is empty.
+
+    The list, its Triage dialog and its fix prompt all select runs here, so an action
+    never reads another scan than the row it was opened from.
+    """
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    sbom_ids = list(sbom_ids)
+    latest_ids = latest_run_ids(runs, sbom_ids)
+    if not release_id:
+        return latest_ids, set()
+    covering = set(latest_run_ids(runs.filter(releases=release_id), sbom_ids))
+    candidates = list(
+        AssessmentRun.objects.filter(id__in=[*latest_ids, *covering])
+        .order_by("sbom_id", "plugin_name")
+        .values_list("id", "sbom_id", "plugin_name")
+    )
+    covered = {(sbom_id, plugin) for run_id, sbom_id, plugin in candidates if run_id in covering}
+    chosen = [
+        run_id for run_id, sbom_id, plugin in candidates if run_id in covering or (sbom_id, plugin) not in covered
+    ]
+    return chosen, covering
+
+
 def status_runs(run_ids: Any, order_by: str) -> list[Any]:
     """The runs with only what status readers use, so no findings list leaves the database.
 
@@ -64,3 +95,114 @@ def status_runs(run_ids: Any, order_by: str) -> list[Any]:
             if value is not None
         }
     return runs
+
+
+# What a reader can still resolve to, defined once.
+#
+# Readers take the newest completed security run per (SBOM, plugin)
+# (latest_run_ids), and a release takes the newest such run that covers it
+# (release_run_ids). So a completed run stops being readable once a newer
+# completed run of the same SBOM and plugin covers every release it covers: it
+# is then neither the newest run nor the newest for any of its releases. A run
+# with no releases is superseded by any newer completed run, and a run that did
+# not complete supersedes nothing, because no reader resolves to it.
+#
+# The finding projection keeps rows only for readable runs, the backfill and
+# migration 0017's copy project only those, and the VEX re-apply rewrites only
+# those. 0017 carries a frozen copy of this rule, as migrations must, and
+# test_findings_table checks the two still agree.
+# The result offload deliberately keys on the exact release set instead (see
+# offload.current_run_ids): it governs the payload, which other readers rank
+# differently.
+
+
+def superseded_run_ids(runs: Any) -> set[Any]:
+    """Which of ``runs`` a newer run of the same pair supersedes.
+
+    ``runs`` yields ``(run_id, sbom_id, plugin_name, releases)`` for completed
+    security runs, newest first (``-created_at`` then ``-id``), and must hold
+    every such run of each pair it mentions. ``releases`` is a frozenset of
+    release ids. Answered in one pass, without a query per run.
+    """
+    # The distinct release sets seen so far per pair: runs of one pair nearly
+    # always share a set, so this stays a handful long however many runs there are.
+    covering: dict[tuple[Any, str], set[frozenset[Any]]] = {}
+    superseded: set[Any] = set()
+    for run_id, sbom_id, plugin_name, releases in runs:
+        newer = covering.setdefault((sbom_id, plugin_name), set())
+        if any(releases <= other for other in newer):
+            superseded.add(run_id)
+        newer.add(releases)
+    return superseded
+
+
+def readable_runs(completed: QuerySet[Any]) -> tuple[list[Any], dict[Any, frozenset[Any]], set[Any]]:
+    """Split ``completed`` into the runs a reader can resolve to and the ones it cannot.
+
+    ``completed`` is a queryset of completed security runs covering whole
+    (SBOM, plugin) pairs, typically every such run of some SBOMs. Returns the
+    readable run ids newest first, the release set of every run, and the
+    superseded ids. Two queries, over small columns only, so no result payload
+    is read to decide.
+    """
+    identities = list(completed.order_by("-created_at", "-id").values_list("id", "sbom_id", "plugin_name"))
+    releases = release_sets(completed.values("id"))
+    superseded = superseded_run_ids(
+        (run_id, sbom_id, plugin_name, releases[run_id]) for run_id, sbom_id, plugin_name in identities
+    )
+    readable = [run_id for run_id, _sbom_id, _plugin in identities if run_id not in superseded]
+    return readable, releases, superseded
+
+
+def release_sets(run_ids: Any) -> dict[Any, frozenset[Any]]:
+    """``{run id: frozenset of release ids}`` in one query; a run with no releases reads as an empty set.
+
+    ``run_ids`` may be a queryset of ids, which goes to the database as a
+    subquery rather than as a list of every id.
+    """
+    from collections import defaultdict
+
+    from sbomify.apps.plugins.models import AssessmentRunRelease
+
+    sets: dict[Any, set[Any]] = defaultdict(set)
+    for run_id, release_id in AssessmentRunRelease.objects.filter(assessment_run_id__in=run_ids).values_list(
+        "assessment_run_id", "release_id"
+    ):
+        sets[run_id].add(release_id)
+    frozen: defaultdict[Any, frozenset[Any]] = defaultdict(frozenset)
+    frozen.update((run_id, frozenset(releases)) for run_id, releases in sets.items())
+    return frozen
+
+
+def newer_than(run: Any, prefix: str = "") -> Any:
+    """A Q for runs newer than ``run``: by ``created_at``, ties broken on id, the order every reader ranks in."""
+    from django.db.models import Q
+
+    return Q(**{f"{prefix}created_at__gt": run.created_at}) | Q(
+        **{f"{prefix}created_at": run.created_at, f"{prefix}id__gt": run.id}
+    )
+
+
+def pair_superseded_run_ids(run: Any) -> set[Any]:
+    """The superseded runs of ``run``'s (SBOM, plugin), by :func:`superseded_run_ids`, ``run`` itself included.
+
+    ``run`` is ranked among the pair's completed security runs even when it has
+    not completed itself, so a caller can ask about any run. Two queries over
+    small columns: the pair's runs and their release sets.
+    """
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
+
+    pair = AssessmentRun.objects.filter(
+        sbom_id=run.sbom_id,
+        plugin_name=run.plugin_name,
+        category=AssessmentCategory.SECURITY.value,
+        status=RunStatus.COMPLETED.value,
+    ) | AssessmentRun.objects.filter(pk=run.pk)
+    _readable, _releases, superseded = readable_runs(pair)
+    return superseded
+
+
+def is_superseded(run: Any) -> bool:
+    """Whether a newer completed security run of ``run``'s pair covers every release ``run`` covers."""
+    return run.id in pair_superseded_run_ids(run)

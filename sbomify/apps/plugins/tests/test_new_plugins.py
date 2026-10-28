@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.plugins.services.new_plugins import plugins_added_since_last_save
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 NEW_BADGE = b'title="Added since this page was last saved"'
 
@@ -30,14 +30,14 @@ def _register(name: str) -> RegisteredPlugin:
     )
 
 
-def _saved_an_hour_ago(team: Team, enabled: list[str] | None = None) -> None:
+def _saved_an_hour_ago(team: Workspace, enabled: list[str] | None = None) -> None:
     settings, _ = TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": enabled or []})
     TeamPluginSettings.objects.filter(pk=settings.pk).update(updated_at=timezone.now() - timedelta(hours=1))
 
 
-def _settings_page(client: Client, team: Team) -> tuple[list[str], bytes]:
+def _settings_page(client: Client, team: Workspace) -> tuple[list[str], bytes]:
     response = client.get(
-        reverse("plugins:team_plugin_settings", kwargs={"team_key": team.key}), HTTP_HX_REQUEST="true"
+        reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
     )
     assert response.status_code == 200
     plugins = response.context["plugin_settings"]["available_plugins"]
@@ -45,7 +45,7 @@ def _settings_page(client: Client, team: Team) -> tuple[list[str], bytes]:
 
 
 @pytest.mark.django_db
-def test_only_plugins_registered_after_the_last_save_are_new(team_with_business_plan: Team) -> None:
+def test_only_plugins_registered_after_the_last_save_are_new(team_with_business_plan: Workspace) -> None:
     _saved_an_hour_ago(team_with_business_plan)
     _register("newer-plugin")
 
@@ -53,14 +53,14 @@ def test_only_plugins_registered_after_the_last_save_are_new(team_with_business_
 
 
 @pytest.mark.django_db
-def test_a_workspace_that_never_saved_has_nothing_new(team_with_business_plan: Team) -> None:
+def test_a_workspace_that_never_saved_has_nothing_new(team_with_business_plan: Workspace) -> None:
     _register("newer-plugin")
 
     assert plugins_added_since_last_save(team_with_business_plan.key).value == set()
 
 
 @pytest.mark.django_db
-def test_disabled_registry_plugins_are_never_new(team_with_business_plan: Team) -> None:
+def test_disabled_registry_plugins_are_never_new(team_with_business_plan: Workspace) -> None:
     _saved_an_hour_ago(team_with_business_plan)
     hidden = _register("hidden-plugin")
     RegisteredPlugin.objects.filter(pk=hidden.pk).update(is_enabled=False)
@@ -70,7 +70,7 @@ def test_disabled_registry_plugins_are_never_new(team_with_business_plan: Team) 
 
 @pytest.mark.django_db
 def test_settings_page_marks_new_plugins_until_saved(
-    authenticated_web_client: Client, team_with_business_plan: Team
+    authenticated_web_client: Client, team_with_business_plan: Workspace
 ) -> None:
     _register("enabled-plugin")
     _saved_an_hour_ago(team_with_business_plan, enabled=["enabled-plugin"])
@@ -85,7 +85,7 @@ def test_settings_page_marks_new_plugins_until_saved(
     assert content.count(NEW_BADGE) == 1
 
     authenticated_web_client.post(
-        reverse("plugins:team_plugin_settings", kwargs={"team_key": team_with_business_plan.key}),
+        reverse("plugins:team_plugin_settings", kwargs={"workspace_key": team_with_business_plan.key}),
         {"enabled_plugins": ["enabled-plugin", "also-newer-enabled"]},
         HTTP_HX_REQUEST="true",
     )
@@ -97,7 +97,7 @@ def test_settings_page_marks_new_plugins_until_saved(
 
 @pytest.mark.django_db
 def test_plugins_the_plan_does_not_include_are_not_marked_new(
-    authenticated_web_client: Client, team_with_business_plan: Team, monkeypatch: pytest.MonkeyPatch
+    authenticated_web_client: Client, team_with_business_plan: Workspace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _saved_an_hour_ago(team_with_business_plan)
     _register("gated-plugin")

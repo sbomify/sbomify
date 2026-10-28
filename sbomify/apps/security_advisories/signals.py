@@ -49,6 +49,7 @@ explicitly uses ``track_component_changes``; M2M manager operations use
 
 from __future__ import annotations
 
+import threading
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator
 
@@ -106,10 +107,10 @@ def _in_batches(ids: Iterable[Any]) -> Iterator[list[Any]]:
 
 
 def _bump(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     for batch in _in_batches(team_ids):
-        Team.objects.filter(pk__in=batch).update(csaf_feed_updated_at=_forward_only("csaf_feed_updated_at"))
+        Workspace.objects.filter(pk__in=batch).update(csaf_feed_updated_at=_forward_only("csaf_feed_updated_at"))
     for batch in _in_batches(advisory_ids):
         # The workspace marker tells a poller the distribution moved; this tells
         # it which document moved, because a consumer that deduplicates by
@@ -123,10 +124,20 @@ def _bump(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
         )
 
 
+# Set while a ``one_csaf_revision`` block runs: receivers add to it instead of
+# scheduling a bump each.
+_collecting = threading.local()
+
+
 def _schedule(team_ids: Iterable[Any], advisory_ids: Iterable[Any] = ()) -> None:
     teams = list(team_ids)
     advisories = list(advisory_ids)
     if not teams and not advisories:
+        return
+    collector = getattr(_collecting, "pending", None)
+    if collector is not None:
+        collector[0].update(teams)
+        collector[1].update(advisories)
         return
     # After commit, so the workspace row is never taken while an advisory row is
     # held: that ordering is what would deadlock against publish_advisory.
@@ -140,8 +151,13 @@ def _renders_in_public_document(advisory: SecurityAdvisory, instance: Any) -> bo
         return False
     # The timeline is filtered to the public event types, so an internal comment
     # or a field-change row changes nothing a reader can fetch.
-    if isinstance(instance, AdvisoryEvent) and instance.event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
-        return False
+    if isinstance(instance, AdvisoryEvent):
+        # An edit renders as the message it edits, so it is public when that is.
+        event_type = instance.event_type
+        if event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+            event_type = (instance.payload or {}).get("event_type", "")
+        if event_type not in AdvisoryEvent.PUBLIC_EVENT_TYPES:
+            return False
     from sbomify.apps.security_advisories.services.trust_center import (
         anonymous_viewer_scope,
         product_link_is_readable,
@@ -228,7 +244,7 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
         anonymous_viewer_scope,
         product_link_is_readable,
     )
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     links = list(
         AdvisoryProduct.objects.filter(
@@ -237,7 +253,7 @@ def _product_signature_batch(link_ids: list[Any], scopes: dict[Any, Any]) -> dic
             advisory__visibility=SecurityAdvisory.Visibility.PUBLIC,
         ).select_related("product", "advisory__team")
     )
-    teams: dict[Any, Team] = {link.advisory.team_id: link.advisory.team for link in links}
+    teams: dict[Any, Workspace] = {link.advisory.team_id: link.advisory.team for link in links}
     for pk, team in teams.items():
         if pk not in scopes:
             scopes[pk] = anonymous_viewer_scope(team)
@@ -288,6 +304,28 @@ def _component_products(component_ids: Iterable[Any]) -> QuerySet[Any, Any]:
     from sbomify.apps.sboms.models import ProductComponent
 
     return ProductComponent.objects.filter(component_id__in=component_ids).values_list("product_id", flat=True)
+
+
+@contextmanager
+def one_csaf_revision() -> Iterator[None]:
+    """Count every row written inside the block as one change to each document.
+
+    One edit to a product status can save the status and its fix range, and a
+    bump per save would advance the document's revision once per row. The
+    collected bump is scheduled when the block exits cleanly; an exception
+    discards it along with the transaction it belonged to.
+    """
+    outer = getattr(_collecting, "pending", None)
+    if outer is not None:
+        yield
+        return
+    _collecting.pending = (set(), set())
+    try:
+        yield
+        teams, advisories = _collecting.pending
+    finally:
+        _collecting.pending = None
+    _schedule(teams, advisories)
 
 
 @contextmanager
@@ -400,11 +438,11 @@ def connect() -> None:
     from sbomify.apps.core.models import Component as CoreComponent
     from sbomify.apps.core.models import Product as CoreProduct
     from sbomify.apps.sboms.models import Component, Product, ProductComponent
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     pre_save.connect(_before_advisory_save, sender=SecurityAdvisory, dispatch_uid="csaf_marker_advisory_before")
-    pre_save.connect(_before_team_save, sender=Team, dispatch_uid="csaf_marker_team_before")
-    post_save.connect(_on_team_save, sender=Team, dispatch_uid="csaf_marker_team_save")
+    pre_save.connect(_before_team_save, sender=Workspace, dispatch_uid="csaf_marker_team_before")
+    post_save.connect(_on_team_save, sender=Workspace, dispatch_uid="csaf_marker_team_save")
 
     for child_model in _TO_ADVISORY:
         if child_model is SecurityAdvisory:  # Has its own, reading the row's own team.

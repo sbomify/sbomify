@@ -1,8 +1,8 @@
-{# Upload artifact — a modal opened from the component header ⋮ menu (open-upload window event), not a body card. #}
+{# Upload artifact: a modal opened from the component header ⋮ menu (open-upload window event, optionally carrying the bomType to preselect), not a body card. #}
 <div class="contents"
      x-data="uploadDialog"
      @hashchange.window="openFromHash()"
-     @open-upload.window="uploadOpen = true"
+     @open-upload.window="openFromEvent($event)"
      @close-upload.window="uploadOpen = false"
      @keydown.escape.window="if (uploadOpen) uploadOpen = false">
     <c-modal id="upload-sbom" show="uploadOpen" title="{{ upload_title|default:'Upload Artifact' }}" icon="fas fa-upload" x-data="sbomUpload('{{ component_id }}', {{ component.sbom_count|default:0 }} > 0, '{{ upload_bom_type|default:'sbom'|escapejs }}')">
@@ -81,6 +81,11 @@
             <c-layout.stat-card compact accent="warning" x_value="preview.unmatched_statements" label="Statements matching nothing" />
             <c-layout.stat-card compact x_value="preview.findings_checked" label="Findings checked" />
         </div>
+        <div class="mb-3">
+            <c-typography.description>
+            Counted on the newest version of each format and every released version. Applying it also updates older versions.
+            </c-typography.description>
+        </div>
         <template x-if="preview.matched.length">
             <ul class="text-sm text-text-muted mb-3 space-y-1">
                 <template x-for="match in preview.matched.slice(0, 8)"
@@ -95,10 +100,15 @@
                 </template>
             </ul>
         </template>
+        <c-forms.checkbox id="upload-send-for-review" x-model="sendForReview" class="mb-3">
+        Send for approval first. Nothing changes until someone approves it.
+        </c-forms.checkbox>
         <div class="flex gap-2 justify-end">
             <c-buttons.secondary @click="cancelPreview()">Cancel</c-buttons.secondary>
             <c-buttons.primary @click="applyPreview()">
-            <i class="fas fa-upload mr-1"></i>Apply this VEX
+            <i class="fas mr-1"
+               :class="sendForReview ? 'fa-paper-plane' : 'fa-upload'"
+               aria-hidden="true"></i><span x-text="sendForReview ? 'Send for approval' : 'Apply this VEX'">Apply this VEX</span>
             </c-buttons.primary>
         </div>
         </c-cards.inset>

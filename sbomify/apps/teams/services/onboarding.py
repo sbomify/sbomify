@@ -16,7 +16,7 @@ from sbomify.apps.teams.models import (
     ContactProfile,
     ContactProfileContact,
     Member,
-    Team,
+    Workspace,
     default_patch_sla_days,
     format_workspace_name,
 )
@@ -28,14 +28,14 @@ log = getLogger(__name__)
 
 @dataclass(frozen=True)
 class SetupResult:
-    workspace: Team
+    workspace: Workspace
     warning: str = ""
 
 
-def complete_workspace_setup(workspace: Team, user: User, data: dict[str, Any]) -> ServiceResult[SetupResult]:
+def complete_workspace_setup(workspace: Workspace, user: User, data: dict[str, Any]) -> ServiceResult[SetupResult]:
     try:
         with transaction.atomic():
-            workspace = Team.objects.select_for_update().get(pk=workspace.pk)
+            workspace = Workspace.objects.select_for_update().get(pk=workspace.pk)
             if not Member.objects.filter(team=workspace, user=user, role__in=ADMINISTER).exists():
                 return ServiceResult.failure("You cannot configure this workspace.", status_code=403)
             if workspace.is_payment_restricted:
@@ -121,7 +121,7 @@ def complete_workspace_setup(workspace: Team, user: User, data: dict[str, Any]) 
         )
 
 
-def build_onboarding_plan_context(request: HttpRequest, workspace: Team, plan_hint: str) -> dict[str, Any]:
+def build_onboarding_plan_context(request: HttpRequest, workspace: Workspace, plan_hint: str) -> dict[str, Any]:
     from sbomify.apps.billing.services.plan_selection import build_plan_selection_context
     from sbomify.apps.billing.stripe_pricing_service import StripePricingService
 

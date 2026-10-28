@@ -9,6 +9,10 @@ So the thing worth pinning is a size, not a feature: the response must carry the
 page, not the set. The rest of these tests cover what paging had to take with
 it, because filtering a list the browser can no longer see all of has to happen
 before the slice.
+
+The panel is now the workspace Vulnerabilities list scoped to the component, so
+it takes that list's parameters (``search``, ``severity``, ``exposure``,
+``per_page``, ``page``) and pages 25 rows at a time by default.
 """
 
 from __future__ import annotations
@@ -22,10 +26,13 @@ from sbomify.apps.sboms.models import Component
 
 pytestmark = pytest.mark.django_db
 
+PANEL = "core:component_vulnerabilities_panel"
+
 
 def _component_with_findings(team, count: int = 40, name: str = "embedded-image", **row_overrides):
     from sbomify.apps.plugins.models import AssessmentRun
     from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
     component = Component.objects.create(
         name=name,
@@ -45,21 +52,21 @@ def _component_with_findings(team, count: int = 40, name: str = "embedded-image"
     findings = [
         {
             "id": f"CVE-2026-{n:04d}",
-            # All one severity so the display sort keeps the generated order and
-            # "page two continues where page one stopped" is a real assertion.
             "severity": "high",
             "component": {"name": f"pkg-{n:04d}", "version": "1.0", "ecosystem": "deb"},
             **row_overrides,
         }
         for n in range(count)
     ]
-    AssessmentRun.objects.create(
+    run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency-track",
         category="security",
         status="completed",
         result={"findings": findings},
     )
+    # The panel reads the projected findings, as the workspace list does.
+    sync_findings(run)
     return component, sbom
 
 
@@ -69,20 +76,34 @@ def _client(team, user) -> Client:
     return client
 
 
+def _ids(response) -> list[str]:
+    return [row["id"] for row in response.context["vuln_data"]["rows"]]
+
+
+def _page(client: Client, component, **params):
+    return client.get(reverse("core:component_details", kwargs={"component_id": component.id}), params)
+
+
+def _panel(client: Client, component, **params):
+    return client.get(reverse(PANEL, kwargs={"component_id": component.id}), params, headers={"hx-request": "true"})
+
+
 class TestThePageShipsOnePage:
-    def test_the_component_page_renders_five_rows_not_every_finding(self, sample_team_with_owner_member, sample_user):
+    def test_the_component_page_renders_one_page_not_every_finding(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=40)
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
         body = response.content.decode()
+        shown = _ids(response)
+        hidden = {f"CVE-2026-{n:04d}" for n in range(40)} - set(shown)
 
         assert response.status_code == 200
-        assert body.count("CVE-2026-") >= 5
-        assert "CVE-2026-0004" in body
-        assert "CVE-2026-0005" not in body
-        assert "CVE-2026-0039" not in body
+        assert len(shown) == 25
+        assert all(cve in body for cve in shown)
+        assert len(hidden) == 15
+        assert not any(cve in body for cve in hidden)
 
     def test_the_header_badge_still_counts_every_finding(self, sample_team_with_owner_member, sample_user):
         """The summary is the whole scan; only the table is a page of it."""
@@ -90,21 +111,22 @@ class TestThePageShipsOnePage:
         component, _ = _component_with_findings(member.team, count=40)
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
 
         assert response.context["vuln_summary"]["total"] == 40
         assert response.context["vuln_summary"]["high"] == 40
-        assert response.context["vuln_panel"]["unfiltered_total"] == 40
-        assert len(response.context["vuln_panel"]["rows"]) == 5
+        assert response.context["vuln_data"]["summary"]["vulnerabilities"] == 40
+        assert response.context["vuln_data"]["total"] == 40
+        assert len(response.context["vuln_data"]["rows"]) == 25
 
     def test_the_footer_counts_the_whole_list(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=40)
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
 
-        assert "Showing 1 to 5 of 40" in response.content.decode()
+        assert "Showing 1 to 25 of 40" in response.content.decode()
 
 
 class TestTheReportedIncident:
@@ -117,13 +139,8 @@ class TestTheReportedIncident:
     What went wrong is not "the page was slow" but "the page grew with the
     scan", so that is what is asserted: **the response size does not depend on
     how many findings the component has.** A 2,390-finding component and a
-    50-finding one must ship within a few hundred bytes of each other, the
-    difference being the footer's count and the page number.
-
-    That is the assertion that would have failed before. Rendering this same
-    fixture unbounded produces **7.83 MB** of HTML against **0.027 MB** paged,
-    so the old page failed the comparison by roughly 290x rather than by a
-    margin someone could argue about.
+    300-finding one must ship within a few hundred bytes of each other, the
+    difference being the footer's count and the page numbers.
 
     Marked slow because it builds the real number of findings; it runs in a
     couple of seconds, which is itself the point.
@@ -132,18 +149,21 @@ class TestTheReportedIncident:
     @pytest.mark.slow
     def test_the_response_size_does_not_grow_with_the_finding_count(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
-        small, _ = _component_with_findings(member.team, count=50, name="small")
+        # Enough pages that both pagers elide the same way, so what is compared
+        # is the findings, not the shape of the page links.
+        small, _ = _component_with_findings(member.team, count=300, name="small")
         huge, _ = _component_with_findings(member.team, count=2390, name="large-image")
         client = _client(member.team, sample_user)
 
-        small_body = client.get(reverse("core:component_details", kwargs={"component_id": small.id})).content
-        huge_body = client.get(reverse("core:component_details", kwargs={"component_id": huge.id})).content
+        small_body = _page(client, small).content
+        huge_body = _page(client, huge).content
 
         growth = len(huge_body) - len(small_body)
-        assert growth < 1024, f"the page grew {growth} bytes for 2,340 more findings"
+        assert growth < 1024, f"the page grew {growth} bytes for 2,090 more findings"
         # An absolute ceiling as well, so a future regression that makes both
-        # pages huge cannot pass by growing them equally.
-        assert len(huge_body) < 512 * 1024, f"{len(huge_body)} bytes for one component page"
+        # pages huge cannot pass by growing them equally. The page carries 25
+        # rows by default now, each with its own actions menu.
+        assert len(huge_body) < 640 * 1024, f"{len(huge_body)} bytes for one component page"
 
     @pytest.mark.slow
     def test_the_page_is_still_correct_at_that_size(self, sample_team_with_owner_member, sample_user):
@@ -152,11 +172,11 @@ class TestTheReportedIncident:
         component, _ = _component_with_findings(member.team, count=2390)
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
 
         assert response.context["vuln_summary"]["total"] == 2390
-        assert response.context["vuln_panel"]["page_count"] == 478
-        assert "Showing 1 to 5 of 2,390" in response.content.decode()
+        assert response.context["vuln_data"]["page"].paginator.num_pages == 96
+        assert "Showing 1 to 25 of 2,390" in response.content.decode()
 
     @pytest.mark.slow
     def test_the_last_finding_is_still_reachable(self, sample_team_with_owner_member, sample_user):
@@ -165,11 +185,7 @@ class TestTheReportedIncident:
         component, _ = _component_with_findings(member.team, count=2390)
         client = _client(member.team, sample_user)
 
-        response = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            {"vuln_search": "CVE-2026-2389"},
-            headers={"hx-request": "true"},
-        )
+        response = _panel(client, component, search="CVE-2026-2389")
 
         assert "CVE-2026-2389" in response.content.decode()
 
@@ -212,12 +228,12 @@ class TestTheSummaryFallback:
             )
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
 
         assert response.context["vuln_summary"]["total"] == 4
-        # Nothing to page through, so the panel renders no table at all.
-        assert response.context["vuln_panel"]["unfiltered_total"] == 0
-        assert "component-vulnerabilities-table" not in response.content.decode()
+        # Nothing to list row by row, so the panel has no rows to page through.
+        assert response.context["vuln_data"]["total"] == 0
+        assert response.context["vuln_data"]["rows"] == []
 
 
 class TestPublishedComponentsAreNotOpen:
@@ -228,7 +244,7 @@ class TestPublishedComponentsAreNotOpen:
     authorization hands every authenticated user the findings, VEX dispositions
     and KEV flags of every published component in the install, none of which the
     public component page renders. The panel and the page it lives on both gate
-    on ``component:manage`` instead.
+    on the reader's rights in the workspace instead.
     """
 
     @pytest.fixture
@@ -244,10 +260,7 @@ class TestPublishedComponentsAreNotOpen:
         component, _ = _component_with_findings(member.team, count=8, name=f"published-{visibility}")
         Component.objects.filter(pk=component.id).update(visibility=visibility)
 
-        response = outsider.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        )
+        response = _panel(outsider, component)
 
         assert response.status_code in (403, 404)
         assert "CVE-2026-0000" not in response.content.decode()
@@ -259,7 +272,7 @@ class TestPublishedComponentsAreNotOpen:
         component, _ = _component_with_findings(member.team, count=8, name=f"page-{visibility}")
         Component.objects.filter(pk=component.id).update(visibility=visibility)
 
-        response = outsider.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(outsider, component)
 
         assert "CVE-2026-0000" not in response.content.decode()
         assert "component-vulnerabilities-table" not in response.content.decode()
@@ -273,7 +286,7 @@ class TestPublishedComponentsAreNotOpen:
         Component.objects.filter(pk=component.id).update(visibility="public")
         client = _client(member.team, sample_user)
 
-        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+        response = _page(client, component)
 
         assert response.status_code == 200
         assert "CVE-2026-0000" in response.content.decode()
@@ -293,11 +306,7 @@ class TestTheFiltersSurviveALeaveAndAReturn:
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
 
-        body = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            {"vuln_severity": "high", "page": "2"},
-            headers={"hx-request": "true"},
-        ).content.decode()
+        body = _panel(client, component, severity="high", page="2", per_page="10").content.decode()
 
         assert 'hx-push-url="true"' in body
 
@@ -306,20 +315,15 @@ class TestTheFiltersSurviveALeaveAndAReturn:
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
-        params = {"vuln_severity": "high", "page": "2", "vuln_submitted": "1"}
+        params = {"severity": "high", "page": "2", "per_page": "10"}
 
-        panel = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            params,
-            headers={"hx-request": "true"},
-        )
-        page = client.get(reverse("core:component_details", kwargs={"component_id": component.id}), params)
+        panel = _panel(client, component, **params)
+        page = _page(client, component, **params)
 
         assert panel.status_code == 200
         assert page.status_code == 200
-        assert [r["id"] for r in page.context["vuln_panel"]["rows"]] == [
-            r["id"] for r in panel.context["vuln_panel"]["rows"]
-        ]
+        assert len(_ids(panel)) == 2
+        assert _ids(page) == _ids(panel)
 
 
 class TestThePanelEndpoint:
@@ -328,10 +332,7 @@ class TestThePanelEndpoint:
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
 
-        response = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        )
+        response = _panel(client, component)
         body = response.content.decode()
 
         assert response.status_code == 200
@@ -339,31 +340,50 @@ class TestThePanelEndpoint:
         # The region and nothing around it: no page chrome, no other panel.
         assert "<html" not in body
 
+    def test_the_pager_and_a_refresh_get_only_the_results(self, sample_team_with_owner_member, sample_user):
+        member = sample_team_with_owner_member
+        component, _ = _component_with_findings(member.team, count=12)
+        client = _client(member.team, sample_user)
+
+        response = client.get(
+            reverse(PANEL, kwargs={"component_id": component.id}),
+            headers={"hx-request": "true", "hx-target": "component-vulnerabilities-results"},
+        )
+        body = response.content.decode()
+
+        assert response.status_code == 200
+        assert 'id="component-vulnerabilities-results"' in body
+        # Not the toolbar around it.
+        assert 'id="component-vulnerabilities-table"' not in body
+        assert 'id="component-vulnerabilities-search"' not in body
+
     def test_it_pages(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
-        url = reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id})
 
-        response = client.get(url, {"vuln_page": "2"}, headers={"hx-request": "true"})
-        body = response.content.decode()
+        first = _panel(client, component, per_page="10")
+        second = _panel(client, component, per_page="10", page="2")
+        body = second.content.decode()
 
-        assert "CVE-2026-0005" in body
-        assert "CVE-2026-0004" not in body
+        assert len(_ids(second)) == 2
+        assert not set(_ids(second)) & set(_ids(first))
+        assert all(cve in body for cve in _ids(second))
         assert 'aria-current="page"' in body
-        assert "Showing 6 to 10 of 12" in body
+        assert "Showing 11 to 12 of 12" in body
 
     def test_it_filters_before_it_slices(self, sample_team_with_owner_member, sample_user):
-        """Searching for row 30 of 40 has to find it, though it is not rendered."""
+        """Searching for a row past the first page has to find it, though it is not rendered."""
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=40)
         client = _client(member.team, sample_user)
-        url = reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id})
+        unfiltered = _panel(client, component)
+        beyond = sorted({f"CVE-2026-{n:04d}" for n in range(40)} - set(_ids(unfiltered)))[0]
 
-        response = client.get(url, {"vuln_search": "CVE-2026-0030"}, headers={"hx-request": "true"})
+        response = _panel(client, component, search=beyond)
         body = response.content.decode()
 
-        assert "CVE-2026-0030" in body
+        assert _ids(response) == [beyond]
         assert "Showing 1 to 1 of 1" in body
 
     def test_a_plain_request_is_sent_to_the_page_carrying_its_parameters(
@@ -373,15 +393,16 @@ class TestThePanelEndpoint:
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
-        url = reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id})
+        url = reverse(PANEL, kwargs={"component_id": component.id})
 
-        response = client.get(url, {"vuln_page": "2", "vuln_search": "pkg-0006"})
+        response = client.get(url, {"page": "2", "search": "pkg-0006"})
 
         assert response.status_code == 302
         assert response.headers["Location"].startswith(
             reverse("core:component_details", kwargs={"component_id": component.id})
         )
-        assert "vuln_search=pkg-0006" in response.headers["Location"]
+        assert "search=pkg-0006" in response.headers["Location"]
+        assert "page=2" in response.headers["Location"]
         assert response.headers["Location"].endswith("#component-vulnerabilities")
 
     def test_the_page_renders_the_state_the_redirect_carries(self, sample_team_with_owner_member, sample_user):
@@ -389,13 +410,11 @@ class TestThePanelEndpoint:
         component, _ = _component_with_findings(member.team, count=12)
         client = _client(member.team, sample_user)
 
-        response = client.get(
-            reverse("core:component_details", kwargs={"component_id": component.id}),
-            {"vuln_page": "2"},
-        )
+        response = _page(client, component, page="2", per_page="10")
 
-        assert response.context["vuln_panel"]["page"] == 2
-        assert "CVE-2026-0005" in response.content.decode()
+        assert response.context["vuln_data"]["page"].number == 2
+        assert len(_ids(response)) == 2
+        assert all(cve in response.content.decode() for cve in _ids(response))
 
     def test_a_document_component_has_no_panel_to_serve(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
@@ -407,10 +426,7 @@ class TestThePanelEndpoint:
         )
         client = _client(member.team, sample_user)
 
-        response = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        )
+        response = _panel(client, component)
 
         assert response.status_code == 404
 
@@ -421,10 +437,7 @@ class TestThePanelEndpoint:
         client = Client()
         client.force_login(guest_user)
 
-        response = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        )
+        response = _panel(client, component)
 
         assert response.status_code in (403, 404)
         assert "CVE-2026-0000" not in response.content.decode()
@@ -433,39 +446,19 @@ class TestThePanelEndpoint:
         member = sample_team_with_owner_member
         component, _ = _component_with_findings(member.team, count=3)
 
-        response = Client().get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        )
+        response = _panel(Client(), component)
 
         assert response.status_code in (302, 403, 404)
         assert "CVE-2026-0000" not in response.content.decode()
 
 
-class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
-    """A filter that can only ever return nothing is not a filter.
+class TestTheExploitedFilter:
+    """Known exploited is read from the catalog on every request, never stored,
+    so the feed is what decides which rows the filter keeps."""
 
-    The assessment card and the scan report both hide this control when the run
-    holds no catalogued finding. The panel used to render it regardless, so on
-    the common scan, which has none, ticking it emptied the list and nothing on
-    the page said why.
-    """
-
-    def test_a_scan_with_none_does_not_offer_it(self, sample_team_with_owner_member) -> None:
-        team = sample_team_with_owner_member.team
-        component, _ = _component_with_findings(team, count=3)
-        client = _client(team, sample_team_with_owner_member.user)
-
-        body = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        ).content.decode()
-
-        assert "vuln_kev" not in body
-
-    def test_a_scan_with_one_offers_it_and_counts_it(self, sample_team_with_owner_member, monkeypatch) -> None:
-        """KEV is read from the catalog on every request, never stored, so the
-        feed is what decides whether the control appears."""
+    def test_it_keeps_only_the_catalogued_finding_and_counts_it(
+        self, sample_team_with_owner_member, monkeypatch
+    ) -> None:
         from sbomify.apps.vulnerability_scanning import kev
 
         team = sample_team_with_owner_member.team
@@ -473,25 +466,21 @@ class TestTheKevControlIsOfferedOnlyWhenItCanMatch:
         monkeypatch.setattr(kev, "kev_ids_for_serialization", lambda: frozenset({"cve-2026-0001"}))
         client = _client(team, sample_team_with_owner_member.user)
 
-        body = client.get(
-            reverse("core:component_vulnerabilities_panel", kwargs={"component_id": component.id}),
-            headers={"hx-request": "true"},
-        ).content.decode()
+        response = _panel(client, component, exposure="exploited")
 
-        assert "vuln_kev" in body
-        assert "Known exploited (1)" in body
+        assert _ids(response) == ["CVE-2026-0001"]
+        assert response.context["vuln_data"]["summary"]["exploited"] == 1
+        assert "KEV" in response.content.decode()
 
-    def test_the_three_views_share_the_filter_component(self) -> None:
-        from django.conf import settings
+    def test_a_scan_with_none_lists_nothing_under_it(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        component, _ = _component_with_findings(team, count=3)
+        client = _client(team, sample_team_with_owner_member.user)
 
-        roots = [
-            "core/templates/core/components/component_vulnerabilities_table.html.j2",
-            "plugins/templates/plugins/components/_assessment_run_findings.html.j2",
-            "sboms/templates/sboms/components/scan_vulnerabilities.html.j2",
-        ]
-        for relative in roots:
-            path = settings.BASE_DIR / "sbomify" / "apps" / relative
-            assert "<c-vulnerabilities.filters" in path.read_text(encoding="utf-8")
+        response = _panel(client, component, exposure="exploited")
+
+        assert _ids(response) == []
+        assert response.context["vuln_data"]["summary"]["exploited"] == 0
 
 
 class TestTriageModal:
@@ -506,6 +495,7 @@ class TestTriageModal:
         response = _client(member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0030", "package": "pkg-0030", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         assert response.context["triage_payload"]["id"] == "CVE-2026-0030"
@@ -514,16 +504,39 @@ class TestTriageModal:
         assert response.context["component_id"] == component.id
 
     def test_rejects_another_workspace(self, sample_team_with_owner_member, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other_workspace = Team.objects.create(name="Other workspace")
+        other_workspace = Workspace.objects.create(name="Other workspace")
         component, _ = _component_with_findings(other_workspace, count=1)
         response = _client(sample_team_with_owner_member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.headers["HX-Reswap"] == "none"
         assert "triage-modal" not in response.content.decode()
+
+    def test_names_the_component_s_workspace_not_the_session_s(self, sample_team_with_owner_member, sample_user):
+        """The modal posts this key when the scope is every component in the workspace."""
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Member, Workspace
+
+        other_workspace = Workspace.objects.create(name="Other workspace")
+        other_workspace.key = number_to_random_token(other_workspace.pk)
+        other_workspace.save(update_fields=["key"])
+        Member.objects.create(team=other_workspace, user=sample_user, role="member")
+        component, _ = _component_with_findings(other_workspace, count=1)
+        client = _client(sample_team_with_owner_member.team, sample_user)
+
+        modal = client.get(
+            reverse("core:component_triage_modal", args=[component.id]),
+            {"advisory": "CVE-2026-0000", "package": "pkg-0000", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
+        )
+        page = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+
+        assert modal.context["team_key"] == other_workspace.key
+        assert page.context["team_key"] == other_workspace.key
 
     def test_does_not_fall_back_to_a_different_package(self, sample_team_with_owner_member, sample_user):
         member = sample_team_with_owner_member
@@ -531,6 +544,7 @@ class TestTriageModal:
         response = _client(member.team, sample_user).get(
             reverse("core:component_triage_modal", args=[component.id]),
             {"advisory": "CVE-2026-0000", "package": "missing", "version": "1.0", "ecosystem": "deb"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.headers["HX-Reswap"] == "none"
         assert "triage-modal" not in response.content.decode()

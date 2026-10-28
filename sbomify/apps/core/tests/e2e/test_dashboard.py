@@ -86,8 +86,9 @@ def test_overview_priority_table_and_mobile_drawer(
     expect(priority.get_by_role("link", name="CVE-2026-10001", exact=True)).to_be_visible()
     exposure = page.get_by_role("table", name="Product exposure")
     expect(exposure).to_be_visible()
-    # Hidden dialog mounts must not add empty rows between canvas sections.
-    gaps = page.locator("#main-content > div").evaluate("""frame => {
+    # Hidden dialog mounts must not add empty rows between canvas sections. The
+    # sections sit in the overview's own frame, the region it refreshes live.
+    gaps = page.locator("#overview-content").evaluate("""frame => {
         const rows = Array.from(frame.children)
             .map(child => child.getBoundingClientRect()).filter(rect => rect.height > 0);
         return rows.slice(1).map((row, index) => row.top - rows[index].bottom);
@@ -136,7 +137,7 @@ def test_priority_link_opens_selected_vulnerability(
     panel = page.locator("#component-vulnerabilities")
     expect(panel).to_be_in_viewport()
     expect(panel.get_by_role("searchbox", name="Search vulnerabilities")).to_have_value("CVE-2026-10001")
-    table = panel.get_by_role("table", name="Vulnerabilities", exact=True)
+    table = panel.get_by_role("table", name="Open vulnerabilities", exact=True)
     expect(table).to_contain_text("CVE-2026-10001")
     expect(table).not_to_contain_text("CVE-2026-10002")
     expect(table.locator("tbody tr")).to_have_count(1)
@@ -379,6 +380,8 @@ def test_dashboard_view_switch_and_trend_filters(
                 getComputedStyle(canvas).getPropertyValue('--color-text-muted').trim();
         }""")
     page.get_by_role("combobox", name="Time range").select_option("7")
+    # HTMX binds a swapped-in control during the settle phase; a change before then is dropped.
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     expect(page.get_by_role("combobox", name="Time range")).to_have_value("7")
     page.wait_for_function(
         "window.Chart?.getChart(document.querySelector('.vulnerability-chart-canvas'))?.config.type === 'bar'"
@@ -389,6 +392,7 @@ def test_dashboard_view_switch_and_trend_filters(
     expect(page.get_by_role("heading", name="No vulnerability data")).to_be_visible()
     page.wait_for_function("Object.keys(Chart.instances).length === 0")
     expect(page.get_by_role("combobox", name="Product", exact=True)).to_be_visible()
+    expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
     page.get_by_role("combobox", name="Product", exact=True).select_option(dashboard["products"][0].id)
     expect(chart).to_be_visible()
     expect(page.get_by_role("button", name="Severity", exact=True)).to_have_attribute("aria-pressed", "true")

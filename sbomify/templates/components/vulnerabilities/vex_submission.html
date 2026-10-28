@@ -1,0 +1,111 @@
+{% comment %}
+One VEX ruling waiting for approval, as a row in the Review tab's list. The row
+says what it is in one line (the component and versions, where it came from, how many
+rulings, what approving would hide) and opens to the evidence: the
+submitter's notes, each ruling, the fix it links to, and anything the queue
+could not read from the file. Approve and Reject stay on the row so a reviewer
+never has to open one to decide it.
+
+item is a row from services/vex_review.submission_row. decide_url is the
+review panel's decision endpoint; the row posts its own id to it. open starts
+the row expanded. can_decide renders the two actions; without it the row is
+read-only. Approve posts straight away. Reject dispatches vex-reject with the
+row's id and name, and the panel's one dialog asks for an optional reason, so
+the note is offered where it matters instead of on every row.
+
+A list item: put it in a ul. Rows carry their own divider and drop it on the
+first, so the parent list needs no styling of its own.
+{% endcomment %}
+{% load humanize markdown_tags %}
+<c-vars item decide_url can_decide open />
+<li class="border-t border-solid border-border first:border-t-0"
+    x-data="{ open: {{ open|yesno:'true,false' }} }">
+    <div class="flex flex-wrap items-start gap-3 px-5 py-4 sm:flex-nowrap">
+        <button type="button"
+                class="flex min-w-0 basis-full cursor-pointer items-start gap-3 bg-transparent p-0 text-left sm:basis-auto sm:flex-1"
+                @click="open = !open"
+                :aria-expanded="open"
+                aria-controls="vex-submission-{{ item.id }}">
+            <i class="fas fa-chevron-right mt-1.5 shrink-0 text-xs text-text-muted transition-transform duration-200"
+               :class="open ? 'rotate-90' : ''"
+               aria-hidden="true"></i>
+            <span class="min-w-0">
+                <span class="flex flex-wrap items-center gap-2">
+                    <span class="font-semibold text-text">{{ item.component_name }}</span>
+                    {% if item.version_label %}
+                        <span class="text-sm text-text-muted" title="{{ item.versions|join:', ' }}">{{ item.version_label }}</span>
+                    {% endif %}
+                    {% if item.from_agent %}
+                        <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
+                    {% else %}
+                        <c-badges.secondary size="sm">{{ item.source_label }}</c-badges.secondary>
+                    {% endif %}
+                </span>
+                <span class="mt-0.5 block text-xs text-text-muted">{{ item.summary }} · {{ item.submitted_at|naturaltime }}</span>
+            </span>
+        </button>
+        {% if can_decide %}
+            <div class="flex shrink-0 items-center gap-2 pl-[1.75rem] sm:pl-0">
+                <c-buttons.secondary size="sm" @click="$dispatch('vex-reject', { id: '{{ item.id|escapejs }}', name: '{{ item.display_name|escapejs }}' })">
+                Reject
+                </c-buttons.secondary>
+                <form method="post"
+                      action="{{ decide_url }}"
+                      hx-post="{{ decide_url }}"
+                      hx-target="#vex-review"
+                      hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <input type="hidden" name="submission_id" value="{{ item.id }}">
+                    <input type="hidden" name="decision" value="approve">
+                    <c-buttons.primary size="sm" type="submit">Approve</c-buttons.primary>
+                </form>
+            </div>
+        {% endif %}
+    </div>
+    <div id="vex-submission-{{ item.id }}"
+         x-show="open"
+         {% if not open %}x-cloak{% endif %}
+         class="flex flex-col gap-3 pb-5 pl-[3.25rem] pr-5 max-sm:pl-5">
+        {% if item.context %}
+            <div class="prose prose-sm max-w-none break-words text-text prose-headings:text-text prose-headings:text-base prose-p:text-text prose-strong:text-text prose-li:text-text prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
+                {{ item.context|strict_markdown }}
+            </div>
+        {% endif %}
+        {% if item.rulings %}
+            <ul class="m-0 list-none p-0">
+                {% for ruling in item.rulings %}
+                    <li class="grid grid-cols-1 gap-x-4 gap-y-0.5 border-t border-solid border-border py-2 text-sm sm:grid-cols-[11rem_10rem_minmax(0,1fr)]">
+                        <span class="font-mono text-xs leading-5 text-text">{{ ruling.vuln_id }}</span>
+                        <span class="text-text-muted">{{ ruling.package }}</span>
+                        <span class="text-text">
+                            {{ ruling.state }}
+                            {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
+                        </span>
+                        {% if ruling.detail %}<span class="text-xs text-text-muted sm:col-start-3">{{ ruling.detail }}</span>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% if item.ignored %}
+            <p class="m-0 text-xs text-warning-ink">
+                Not included:
+                {% for skipped in item.ignored %}
+                    {{ skipped.vuln_id }} ({{ skipped.reason }}){% if not forloop.last %},{% endif %}
+                {% endfor %}
+            </p>
+        {% endif %}
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-muted">
+            {% if item.fix_url %}
+                <a href="{{ item.fix_url }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="inline-flex min-w-0 items-center gap-1 break-all text-text-muted hover:text-primary hover:underline"><i class="fas fa-code-pull-request" aria-hidden="true"></i>{{ item.fix_reference }}</a>
+            {% elif item.fix_reference %}
+                <span class="inline-flex items-center gap-1"><i class="fas fa-code-pull-request" aria-hidden="true"></i>{{ item.fix_reference }}</span>
+            {% endif %}
+            <a href="{{ item.component_url }}"
+               class="text-text-muted hover:text-primary hover:underline">View component</a>
+            {% if item.is_file %}<span>Approving stores the {{ item.format_label }} file exactly as uploaded.</span>{% endif %}
+        </div>
+    </div>
+</li>

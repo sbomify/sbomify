@@ -1,0 +1,37 @@
+{% extends "core/base.html.j2" %}
+{% comment %}
+The ops shell. It extends the plain page base rather than the workspace
+dashboard base on purpose: this page reports across every workspace, so the
+workspace sidebar, the workspace switcher and the workspace websocket would
+all be lying about what you are looking at. What it keeps is the app's own
+surface, type and tokens, so it reads as sbomify rather than as Django admin.
+{% endcomment %}
+{% block title %}sbomify Ops{% endblock %}
+{% block main %}
+    <div class="min-h-screen flex flex-col bg-background">
+        <header class="border-b border-solid border-border bg-surface">
+            <div class="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <c-chips.icon-chip size="lg" aria-hidden="true"><i class="fas fa-gauge-high"></i></c-chips.icon-chip>
+                    <div>
+                        <span class="block text-lg font-semibold text-text leading-tight">sbomify Ops</span>
+                        <span class="block text-xs text-text-muted">Internal. Every workspace.</span>
+                    </div>
+                </div>
+                <nav class="flex items-center gap-1" aria-label="Ops sections">
+                    {% if active_section == 'overview' %}
+                        <c-navigation.nav-link href="{% url 'ops:overview' %}" current>Overview</c-navigation.nav-link>
+                    {% else %}
+                        <c-navigation.nav-link href="{% url 'ops:overview' %}">Overview</c-navigation.nav-link>
+                    {% endif %}
+                    <c-navigation.nav-link href="{% url 'core:home' %}">Back to app</c-navigation.nav-link>
+                </nav>
+            </div>
+        </header>
+        <main id="main-content" class="flex-1">
+            <div class="p-6 max-w-7xl mx-auto">
+                {% block ops_content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+{% endblock %}

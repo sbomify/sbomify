@@ -17,7 +17,7 @@ from django.test import Client
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactProfile, Member, Workspace
 
 WORKSPACES_URL = "/api/v1/workspaces/"
 
@@ -26,10 +26,10 @@ WORKSPACES_URL = "/api/v1/workspaces/"
 def owner_of_two_workspaces(db, django_user_model):
     """A user who is owner of two workspaces: the token-bound one and another."""
     user = django_user_model.objects.create_user(username="multiws", email="multiws@example.com", password="pw")
-    bound = Team.objects.create(name="Bound WS")
+    bound = Workspace.objects.create(name="Bound WS")
     bound.key = number_to_random_token(bound.pk)
     bound.save()
-    other = Team.objects.create(name="Other WS")
+    other = Workspace.objects.create(name="Other WS")
     other.key = number_to_random_token(other.pk)
     other.save()
     Member.objects.create(user=user, team=bound, role="owner", is_default_team=False)
@@ -256,3 +256,17 @@ class TestWorkspaceSettingsScope:
         assert response.status_code == 200
         bound.refresh_from_db()
         assert bound.name == "Renamed WS"
+
+
+@pytest.mark.django_db
+class TestBulkTriageScope:
+    def test_scoped_token_cannot_bulk_triage_another_workspace(self, owner_of_two_workspaces, scoped_token):
+        """``other`` holds no components, so no per-component check runs: the workspace check must refuse it."""
+        _, _, other = owner_of_two_workspaces
+        response = _post_json(
+            Client(),
+            "/api/v1/vulnerability-scanning/triage/bulk",
+            {"vuln_id": "CVE-2026-0001", "state": "in_triage", "team_key": other.key},
+            scoped_token,
+        )
+        assert response.status_code == 403

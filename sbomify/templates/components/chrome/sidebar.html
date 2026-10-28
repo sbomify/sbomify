@@ -7,19 +7,31 @@ release and component inventory tabs. Capability flags are live, so this compone
      @click="sidebarMobileOpen = false"
      class="fixed inset-0 bg-navy/50 backdrop-blur-sm z-40 lg:hidden"
      aria-hidden="true"></div>
+{% comment %}
+The drawer moves focus to its own close button when it opens. x-trap arms on
+the open state and hides the page behind with aria-hidden, but its own first
+focus runs before anything in the rail can take it: under reduced motion
+focus stayed on the toggle, outside the drawer, and otherwise it landed on
+the home link. The rail's children transition the visibility they inherit,
+and an element still turning visible ignores focus(). So the trap does not
+place focus, and the effect checks each animation frame, up to 60, for the
+close button to be visible. It re-reads the open state every frame, so a
+drawer dismissed while it opens leaves focus alone.
+{% endcomment %}
 <aside id="sidebar"
        aria-label="Main navigation"
        :data-mobile-open="sidebarMobileOpen"
-       x-trap.inert.noscroll="sidebarMobileOpen"
+       x-trap.inert.noscroll.noautofocus="sidebarMobileOpen"
+       x-effect="if (sidebarMobileOpen) { const close = $refs.drawerClose; const place = (frames) => { if (!sidebarMobileOpen) return; if (getComputedStyle(close).visibility === 'visible') close.focus(); else if (frames) requestAnimationFrame(() => place(frames - 1)); }; place(60); }"
        class="invisible lg:visible data-[mobile-open=true]:visible fixed inset-y-0 left-0 z-50 w-[var(--sidebar-width)] -translate-x-full data-[mobile-open=true]:translate-x-0 lg:translate-x-0 transition-transform duration-200 bg-surface border-r border-border flex flex-col">
     <div class="h-16 flex items-center px-6 shrink-0">
         <a href="{% url 'core:dashboard' %}"
            aria-label="sbomify home"
-           class="inline-flex items-center max-lg:min-h-11">
+           class="inline-flex items-center max-lg:min-h-11 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
             {% include 'core/components/brand/logo.html.j2' with class='h-6 w-auto text-text' %}
         </a>
         <div class="lg:hidden ml-auto">
-            <c-buttons.icon label="Close sidebar" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
+            <c-buttons.icon label="Close sidebar" x-ref="drawerClose" @click="sidebarMobileOpen = false"><i class="fas fa-xmark" aria-hidden="true"></i></c-buttons.icon>
         </div>
     </div>
     <div class="px-3 pb-2">
@@ -28,15 +40,15 @@ release and component inventory tabs. Capability flags are live, so this compone
     <nav class="flex-1 overflow-y-auto px-3 pb-4 space-y-4"
          aria-label="Primary navigation">
         {% if not request.session.current_workspace.has_completed_wizard %}
-            <c-chrome.nav-item href="{% url 'teams:onboarding_wizard' %}" label="Get started" icon="fas fa-rocket" match="teams:onboarding_wizard" />
+            <c-chrome.nav-item href="{% url 'workspaces:onboarding_wizard' %}" label="Get started" icon="fas fa-rocket" match="workspaces:onboarding_wizard" />
         {% endif %}
         <c-chrome.nav-group label="Monitor">
         <c-chrome.nav-item href="{% url 'core:dashboard' %}" label="Overview" icon="fas fa-border-all" match="core:dashboard" />
-        {% if request.session.current_workspace.key %}
-            <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' request.session.current_workspace.key %}" label="Vulnerability scans" icon="fas fa-bullseye" match="vulnerability_scanning:" />
-            {% if can_manage %}
-                {# can_manage is owner, admin and member, which is who WorkspaceCryptoView admits: every role but guest, and bot, which never holds a session. #}
-                <c-chrome.nav-item href="{% url 'sboms:workspace_crypto' request.session.current_workspace.key %}" label="Cryptography" icon="fas fa-lock" match="sboms:workspace_crypto" />
+        {% if team %}
+            <c-chrome.nav-item href="{% url 'vulnerability_scanning:vulnerability_scans' team.key %}" label="Vulnerabilities" icon="fas fa-bullseye" match="vulnerability_scanning:" />
+            {% if can_read_internal %}
+                {# can_read_internal is every internal role, which is who WorkspaceCryptoView admits: every role but guest, and bot, which never holds a session. #}
+                <c-chrome.nav-item href="{% url 'sboms:workspace_crypto' team.key %}" label="Cryptography" icon="fas fa-lock" match="sboms:workspace_crypto" />
             {% endif %}
         {% endif %}
         </c-chrome.nav-group>
@@ -54,16 +66,16 @@ release and component inventory tabs. Capability flags are live, so this compone
         {% if can_administer %}
             <c-chrome.nav-item href="{% url 'plugins:plugins_page' %}" label="Plugins" icon="fas fa-plug" match="plugins:" />
         {% endif %}
-        {% if request.session.current_workspace.key %}
-            {% if request.resolver_match.view_name == 'teams:team_settings_tab' and request.resolver_match.kwargs.tab == 'tokens' %}
+        {% if team %}
+            {% if request.resolver_match.view_name == 'workspaces:team_settings_tab' and request.resolver_match.kwargs.tab == 'tokens' %}
                 {% firstof 'true' as tokens_active %}
             {% else %}
-                {% firstof 'teams:team_settings' as settings_match %}
+                {% firstof 'workspaces:team_settings' as settings_match %}
             {% endif %}
-            {% if can_manage %}
-                <c-chrome.nav-item :active="tokens_active" href="{% url 'teams:team_settings_tab' team_key=request.session.current_workspace.key tab='tokens' %}" label="API keys" icon="fas fa-key" />
+            {% if can_read_internal %}
+                <c-chrome.nav-item :active="tokens_active" href="{% url 'workspaces:team_settings_tab' workspace_key=team.key tab='tokens' %}" label="API keys" icon="fas fa-key" />
             {% endif %}
-            <c-chrome.nav-item href="{% url 'teams:team_settings' request.session.current_workspace.key %}" label="Settings" icon="fas fa-gear" match="{{ settings_match }}" />
+            <c-chrome.nav-item href="{% url 'workspaces:team_settings' team.key %}" label="Settings" icon="fas fa-gear" match="{{ settings_match }}" />
         {% endif %}
     </div>
 </aside>

@@ -500,7 +500,7 @@ class TestReleaseArtifactSignalHandler:
         from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
         from sbomify.apps.sboms.models import SBOM
         from sbomify.apps.sboms.signals import trigger_plugin_assessments
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         captured_attach: list[dict] = []
         monkeypatch.setattr(
@@ -509,7 +509,7 @@ class TestReleaseArtifactSignalHandler:
         )
 
         team_a = sample_team_with_owner_member.team
-        team_b = Team.objects.create(name="other-team")
+        team_b = Workspace.objects.create(name="other-team")
 
         product_a = Product.objects.create(name="product-a", team=team_a)
         release_a = Release.objects.create(product=product_a, name="v1", version="1.0.0")

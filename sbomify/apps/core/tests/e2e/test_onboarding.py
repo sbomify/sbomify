@@ -6,7 +6,7 @@ from pytest_django.fixtures import SettingsWrapper
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
-from sbomify.apps.teams.models import ContactProfileContact, Team
+from sbomify.apps.teams.models import ContactProfileContact, Workspace
 
 
 @pytest.mark.django_db
@@ -48,7 +48,7 @@ class TestOnboardingWizardSnapshot:
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
 def test_onboarding_saves_security_choices(
-    authenticated_page: Page, team_with_business_plan: Team, settings: SettingsWrapper, width: int
+    authenticated_page: Page, team_with_business_plan: Workspace, settings: SettingsWrapper, width: int
 ) -> None:
     settings.BILLING = False
     page = authenticated_page
@@ -56,7 +56,7 @@ def test_onboarding_saves_security_choices(
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.set_viewport_size({"width": width, "height": 900})
     page.goto("/workspaces/onboarding/?step=setup")
-    page.get_by_label("Organisation name *", exact=True).fill("Example Software")
+    page.get_by_label("Organization name *", exact=True).fill("Example Software")
     page.get_by_label("Your name *", exact=True).fill("Example Author")
     page.get_by_label("Contact email", exact=True).fill("author@example.com")
     page.get_by_role("button", name="Registered address", exact=True).click()
@@ -68,7 +68,7 @@ def test_onboarding_saves_security_choices(
     expect(security).to_have_value("author@example.com")
     security.fill("security@example.com")
     page.get_by_role("button", name="Back", exact=True).click()
-    expect(page.get_by_label("Organisation name *", exact=True)).to_have_value("Example Software")
+    expect(page.get_by_label("Organization name *", exact=True)).to_have_value("Example Software")
     expect(page.get_by_role("heading", name="Who are you?", exact=True)).to_be_in_viewport()
     page.get_by_role("button", name="Continue", exact=True).click()
     expect(security).to_have_value("security@example.com")
@@ -99,7 +99,7 @@ def test_onboarding_security_snapshot(authenticated_page: Page, snapshot: Any, w
     page = authenticated_page
     page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
     page.goto("/workspaces/onboarding/?step=setup")
-    page.get_by_label("Organisation name *", exact=True).fill("Example Software")
+    page.get_by_label("Organization name *", exact=True).fill("Example Software")
     page.get_by_role("button", name="Continue", exact=True).click()
     page.get_by_label("Maximum time to fix", exact=True).select_option("custom")
     page.wait_for_load_state("networkidle")
@@ -110,7 +110,7 @@ def test_onboarding_security_snapshot(authenticated_page: Page, snapshot: Any, w
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1280, 375])
-def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Team, snapshot: Any, width: int) -> None:
+def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Workspace, snapshot: Any, width: int) -> None:
     priced_plans.has_selected_billing_plan = False
     priced_plans.save(update_fields=["has_selected_billing_plan"])
     authenticated_page.goto("/workspaces/onboarding/?step=plan")
@@ -122,7 +122,7 @@ def test_onboarding_plan_snapshot(authenticated_page: Page, priced_plans: Team, 
 
 @pytest.mark.django_db
 def test_onboarding_community_plan_finishes_without_checkout(
-    authenticated_page: Page, priced_plans: Team, settings: SettingsWrapper, mocker: MockerFixture
+    authenticated_page: Page, priced_plans: Workspace, settings: SettingsWrapper, mocker: MockerFixture
 ) -> None:
     settings.BILLING = True
     priced_plans.has_selected_billing_plan = False
@@ -132,7 +132,7 @@ def test_onboarding_community_plan_finishes_without_checkout(
     checkout = mocker.patch("sbomify.apps.billing.stripe_pricing_service.StripePricingService.create_checkout_session")
     page = authenticated_page
     page.goto("/workspaces/onboarding/?step=setup")
-    page.get_by_label("Organisation name *", exact=True).fill("Example Software")
+    page.get_by_label("Organization name *", exact=True).fill("Example Software")
     page.get_by_role("button", name="Continue", exact=True).click()
     page.get_by_role("button", name="Save and continue", exact=True).click()
     page.get_by_role("link", name="Choose your plan", exact=True).click()

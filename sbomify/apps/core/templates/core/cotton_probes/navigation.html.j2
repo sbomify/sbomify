@@ -31,7 +31,7 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.stepper-step label="Publish">2</c-navigation.stepper-step>
 </c-navigation.stepper-vertical>
 <c-navigation.accordion class="mb-4" x-data="{ open: 'org' }" data-probe="accordion">
-<c-navigation.accordion-item label="Organisational controls" state="open === 'org'" @click="open = open === 'org' ? '' : 'org'">
+<c-navigation.accordion-item label="Organizational controls" state="open === 'org'" @click="open = open === 'org' ? '' : 'org'">
 <p class="m-0">Policies, roles and supplier relationships.</p>
 </c-navigation.accordion-item>
 <c-navigation.accordion-item state="open === 'tech'" label_class="flex flex-1 items-center justify-between gap-3 min-w-0 mr-3" @click="open = open === 'tech' ? '' : 'tech'" data-probe="item">
@@ -71,3 +71,5 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.segment ::data-active="chart === 'severity'" title="Severity breakdown">Severity</c-navigation.segment>
 </c-navigation.segmented>
 <c-navigation.tab href="/products/?view=components" active_binding="kind === 'components'" data-probe="live-link">Components</c-navigation.tab>
+<c-navigation.tab href="/review" badge="3" badge_event="vex_submission_updated" badge_field="pending" data-probe="live-badge">Review</c-navigation.tab>
+<c-navigation.tab href="/review" badge="" badge_event="vex_submission_updated" badge_field="pending" data-probe="live-badge-empty">Empty review</c-navigation.tab>

@@ -31,8 +31,11 @@ import { registerFileDragAndDrop } from './components/file-drag-and-drop';
 import { registerAccountDangerZone } from './components/account-danger-zone';
 import { advisoryProductPicker } from './components/advisory-product-picker';
 import { actionsMenu } from './components/actions-menu';
+import { tableSelection } from './components/table-selection';
 import { publicSharing } from './components/public-sharing';
 import { uploadDialog } from './components/upload-dialog';
+import { liveRegion } from './components/live-region';
+import { versionCheck } from './components/version-check';
 import { catalogImport } from '../../controls/js/catalog-import';
 
 // ============================================
@@ -144,8 +147,11 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('dangerZone', dangerZone);
     registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
     registerAlpineComponent('actionsMenu', actionsMenu);
+    registerAlpineComponent('tableSelection', tableSelection);
     registerAlpineComponent('publicSharing', publicSharing);
     registerAlpineComponent('uploadDialog', uploadDialog);
+    registerAlpineComponent('versionCheck', versionCheck);
+    registerAlpineComponent('liveRegion', liveRegion);
     registerAlpineComponent('catalogImport', catalogImport);
 }
 

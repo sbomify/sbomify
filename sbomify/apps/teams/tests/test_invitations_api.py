@@ -11,12 +11,12 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.authz import SCOPE_PRESETS
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 
 
 @pytest.fixture
 def team(ensure_billing_plans):
-    return Team.objects.create(name="Invitations API Workspace", billing_plan="business")
+    return Workspace.objects.create(name="Invitations API Workspace", billing_plan="business")
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ class TestInvitationsApi:
 
     def test_a_token_bound_to_another_workspace_cannot_invite(self, team, make_member):
         owner = make_member(team, "inv-owner8", "owner")
-        elsewhere = Team.objects.create(name="Other Workspace", billing_plan="business")
+        elsewhere = Workspace.objects.create(name="Other Workspace", billing_plan="business")
         Member.objects.create(team=elsewhere, user=owner, role="owner")
 
         assert _invite(_client(owner, bound_to=elsewhere), team).status_code == 403
@@ -146,8 +146,18 @@ class TestInvitationsApi:
 
     def test_cannot_revoke_another_workspaces_invitation(self, team, make_member):
         owner = make_member(team, "inv-owner9", "owner")
-        elsewhere = Team.objects.create(name="Other Workspace", billing_plan="business")
+        elsewhere = Workspace.objects.create(name="Other Workspace", billing_plan="business")
         theirs = Invitation.objects.create(team=elsewhere, email="theirs@example.com", role="member")
 
         assert _client(owner).delete(_url(team, theirs.pk)).status_code == 404
         assert Invitation.objects.filter(pk=theirs.pk).exists()
+
+
+def test_the_invitation_schema_names_every_role_an_invite_accepts():
+    """The role field's description is the API's documentation of what it accepts."""
+    from sbomify.apps.teams.schemas import InvitationCreateSchema
+    from sbomify.apps.teams.services.invitations import MEMBER_INVITE_ROLES
+
+    description = InvitationCreateSchema.model_fields["role"].description or ""
+
+    assert [role for role in MEMBER_INVITE_ROLES if role not in description] == []

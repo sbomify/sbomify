@@ -1,7 +1,7 @@
 {% load humanize %}
-<c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace">
+<c-layout.frame id="product-content" x-data="{ assignOpen: false, removeTarget: null, isPublic: {{ product.is_public|yesno:'true,false' }} }" @remove-product-component.window="removeTarget = $event.detail" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic" hx-get="{{ inventory.base_url }}" hx-include="#product-components-filters" hx-trigger="refresh-product from:body" hx-target="this" hx-swap="outerHTML show:none" hx-sync="this:replace" @ws:message.window="const m = $event.detail; if (m.type === 'product_deleted' && m.product_id === '{{ product.id|escapejs }}') { window.location.assign('{% url 'core:products_dashboard' %}'); } else if (m.type === 'resync' || (['product_updated', 'release_created', 'release_updated', 'release_deleted'].includes(m.type) && m.product_id === '{{ product.id|escapejs }}') || ['component_updated', 'component_deleted', 'assessment_complete', 'vex_reapplied'].includes(m.type)) { clearTimeout($el._wsDebounce); const refresh = () => { if (assignOpen || removeTarget || (document.activeElement?.matches('input, textarea, select, [contenteditable]') && $el.contains(document.activeElement))) { $el._wsDebounce = setTimeout(refresh, 2000); } else { $dispatch('refresh-product'); } }; $el._wsDebounce = setTimeout(refresh, 1000); }">
 {% url 'core:product_details_public' product.id as product_public_url %}
-<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" x-data="publicSharing('{{ product_public_url|escapejs }}')">
+<c-layout.page-header title="{{ product.name }}" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" x-data="publicSharing('{{ product_public_url|escapejs }}')">
 <c-slot name="subtitle">
 {% if product.has_crud_permissions %}
     {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.description|default:'' field_name='description' field_type='textarea' placeholder='Add a description' %}
@@ -41,11 +41,11 @@
     <c-layout.stat-card label="Artifacts" :value="metrics.artifacts" icon="fas fa-file-lines" />
     {# djlint:off #}
     <c-layout.stat-card label="Open vulnerabilities" :value="metrics.open" :unmeasured="metrics.unmeasured_open" unmeasured_label="Not scanned yet" icon="fas fa-crosshairs" accent="warning" />
-    <c-layout.stat-card label="Past your patch SLA" :value="metrics.past_sla" :unmeasured="metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" icon="fas fa-clock" accent="danger" />
+    <c-layout.stat-card label="Past patch SLA" :value="metrics.past_sla" :unmeasured="metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" icon="fas fa-clock" accent="danger" />
     {# djlint:on #}
 </div>
 {% if metrics.unassessed %}
-    <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
+    <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} {{ metrics.unassessed|pluralize:'has,have' }} not been scanned yet. The counts above leave {{ metrics.unassessed|pluralize:'it,them' }} out.</c-feedback.alert>
 {% endif %}
 {% include 'core/product_components.html.j2' %}
 <div class="flex flex-col gap-4">
