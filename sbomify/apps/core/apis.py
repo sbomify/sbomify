@@ -12,8 +12,8 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
-from django.template.defaultfilters import pluralize
 from django.utils import timezone
+from django.utils.text import get_text_list
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
@@ -37,8 +37,11 @@ from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     declare_supersedes,
     link_pending_supersessions,
+    reconcile_after_removal,
+    save_release_changes,
     set_release_state,
     supersession_links,
+    undeclared_supersedes,
 )
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.validation_response import validation_error_response
@@ -1086,7 +1089,9 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
     product_name = product.name
 
     try:
-        product.delete()
+        with transaction.atomic():
+            reconcile_after_removal(product.releases.values_list("pk", flat=True))
+            product.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
@@ -2623,7 +2628,7 @@ def list_component_releases(
                         "id": str(release.product.id),
                         "name": release.product.name,
                     },
-                    **_release_lifecycle_fields(release),
+                    **_release_lifecycle_fields(release, internal=has_workspace_access),
                 }
             )
 
@@ -2984,6 +2989,7 @@ def list_all_releases(
 
         # Build response items
         response_data = []
+        internal_by_product: dict[str, bool] = {}
         for release in paginated_releases:
             try:
                 # Count artifacts for this release
@@ -2996,6 +3002,8 @@ def list_all_releases(
                 if not release.product:
                     log.error(f"Release {release.id} has no product - skipping")
                     continue
+                if release.product_id not in internal_by_product:
+                    internal_by_product[release.product_id] = can(request, "release:read", release.product).allowed
 
                 response_data.append(
                     {
@@ -3016,7 +3024,7 @@ def list_all_releases(
                             "id": str(release.product.id),
                             "name": release.product.name,
                         },
-                        **_release_lifecycle_fields(release),
+                        **_release_lifecycle_fields(release, internal=internal_by_product[release.product_id]),
                     }
                 )
             except Exception as e:
@@ -3030,8 +3038,12 @@ def list_all_releases(
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
-def _release_lifecycle_fields(release: Release) -> dict[str, Any]:
-    """Where the release stands, for every response that describes one."""
+def _release_lifecycle_fields(release: Release, *, internal: bool) -> dict[str, Any]:
+    """Where the release stands, for every response that describes one.
+
+    Why a release was withdrawn is internal: the Trust Center only says that it
+    was, so a reader outside the workspace gets ``withdrawn_reason`` as null.
+    """
     state = release.lifecycle_state
     return {
         "lifecycle_state": state,
@@ -3039,8 +3051,10 @@ def _release_lifecycle_fields(release: Release) -> dict[str, Any]:
         "superseded_at": release.superseded_at,
         "end_of_support": release.end_of_support,
         "end_of_life": release.end_of_life,
+        "effective_end_of_support": release.effective_end_of_support,
+        "effective_end_of_life": release.effective_end_of_life,
         "withdrawn_at": release.withdrawn_at,
-        "withdrawn_reason": release.withdrawn_reason,
+        "withdrawn_reason": release.withdrawn_reason if internal else None,
         "archived_at": release.archived_at,
     }
 
@@ -3127,7 +3141,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
             "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
-        **_release_lifecycle_fields(release),
+        **_release_lifecycle_fields(release, internal=can(request, "release:read", release.product).allowed),
         **_release_edges(release),
     }
 
@@ -3259,7 +3273,7 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     return names_the_columns or details_the_columns
 
 
-def _supersedes_error(result: ServiceResult[None]) -> tuple[int, dict[str, Any]]:
+def _supersedes_error(result: ServiceResult[Any]) -> tuple[int, dict[str, Any]]:
     """A refused ``supersedes``: 409 when it contradicts a live edge, as the CLE endpoint answers, else 400."""
     if result.status_code == 409:
         return 409, {"detail": result.error, "error_code": ErrorCode.CONFLICT}
@@ -3420,15 +3434,22 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             # except Exception below and 500, so this mirrors that branch.
             log.error(f"Unexpected IntegrityError creating release: {e}")
             return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-        existing = Release.objects.filter(product=product, name=payload.name).first()
+        existing = Release.objects.select_related("product").filter(product=product, name=payload.name).first()
         if existing is not None:
-            # A retry declares the same edges, which add nothing; a caller that
-            # created the release first and names its predecessors now gets them.
-            with transaction.atomic():
-                declared = declare_supersedes(existing, payload.supersedes, actor_id=request.user.pk)
-                if not declared.ok:
-                    transaction.set_rollback(True)
-                    return _supersedes_error(declared)
+            # A retry may only confirm the edges the release already has. Writing
+            # new ones here would let a name typed by mistake retire whatever
+            # release the form had preselected.
+            missing = undeclared_supersedes(existing, payload.supersedes)
+            if not missing.ok:
+                return _supersedes_error(missing)
+            if missing.value:
+                return 409, {
+                    "detail": (
+                        f"A release named {existing.name} already exists and does not replace "
+                        f"{get_text_list(missing.value, 'and')}. Choose another name."
+                    ),
+                    "error_code": ErrorCode.CONFLICT,
+                }
             return 200, _build_release_response(request, existing, include_artifacts=True)
         return 400, {
             "detail": "A release with this name already exists for this product",
@@ -3495,6 +3516,12 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
     return 200, _build_release_response(request, release, include_artifacts=True)
 
 
+def _release_edit_refused(status_code: int | None, error: str | None) -> tuple[int, dict[str, Any]]:
+    if status_code == 404:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+    return 400, {"detail": error or "Invalid release", "error_code": ErrorCode.VALIDATION_ERROR}
+
+
 @router.put(
     "/releases/{release_id}",
     response={
@@ -3541,19 +3568,21 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
     try:
         with transaction.atomic():
-            release.name = payload.name
-            release.version = payload.version or ""
-            release.description = payload.description or ""
-            release.is_prerelease = payload.is_prerelease
+            changes: dict[str, Any] = {
+                "name": payload.name,
+                "version": payload.version or "",
+                "description": payload.description or "",
+                "is_prerelease": payload.is_prerelease,
+            }
             if payload.created_at is not None:
-                release.created_at = payload.created_at
+                changes["created_at"] = payload.created_at
             if payload.released_at is not None:
-                release.released_at = payload.released_at
-            release.save()
-            linked = link_pending_supersessions(release)
-            if not linked.ok:
+                changes["released_at"] = payload.released_at
+            saved = save_release_changes(release.pk, changes)
+            if not saved.ok or saved.value is None:
                 transaction.set_rollback(True)
-                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
+                return _release_edit_refused(saved.status_code, saved.error)
+            release = saved.value[0]
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
@@ -3629,22 +3658,12 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             if "description" in update_data and update_data["description"] is None:
                 update_data["description"] = ""
 
-            # Update only fields that have actually changed to avoid unnecessary unique constraint checks
-            changed = False
-            for field, value in update_data.items():
-                current_value = getattr(release, field)
-                if current_value != value:
-                    setattr(release, field, value)
-                    changed = True
-
-            # Only save if something actually changed
-            if changed:
-                release.save()
-            if {"name", "version"} & update_data.keys():
-                linked = link_pending_supersessions(release)
-                if not linked.ok:
-                    transaction.set_rollback(True)
-                    return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
+            # Writes only the fields that changed, from the locked row.
+            saved = save_release_changes(release.pk, update_data)
+            if not saved.ok or saved.value is None:
+                transaction.set_rollback(True)
+                return _release_edit_refused(saved.status_code, saved.error)
+            release, changed = saved.value
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
@@ -3731,21 +3750,21 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             # The product lock keeps a new edge from landing between the check
             # and the delete.
             Product.objects.select_for_update().filter(pk=release.product_id).first()
-            superseded = (
-                ReleaseSupersession.objects.live()
-                .filter(to_release=release, drop_in=True)
-                .values("from_release_id")
-                .distinct()
-                .count()
+            replaced = sorted(
+                set(
+                    ReleaseSupersession.objects.live()
+                    .filter(to_release=release, drop_in=True)
+                    .values_list("from_release__name", flat=True)
+                )
             )
-            if superseded:
+            if replaced:
+                links = "that link" if len(replaced) == 1 else "those links"
+                names = get_text_list(replaced, "and")
                 return 400, {
-                    "detail": (
-                        f"Release {release.name} supersedes {superseded} release{pluralize(superseded)}. "
-                        "Withdraw those supersessions first."
-                    ),
+                    "detail": f"Release {release.name} replaces {names}. Remove {links} on its Lifecycle card first.",
                     "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
                 }
+            reconcile_after_removal([release.pk])
             release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)

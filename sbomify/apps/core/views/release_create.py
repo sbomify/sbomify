@@ -49,7 +49,6 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
                 "replaces": ""
                 if is_prerelease
                 else next((release.pk for release in candidates if not release.is_prerelease), ""),
-                "replaces_line": "same",
             },
         )
         if request.method == "POST" and form.is_valid():

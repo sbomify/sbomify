@@ -449,7 +449,9 @@ Each SBOM sbomify sends to Dependency Track is a project version named `{prefix}
 
 Collections carry no BOM; Dependency Track sums their children.
 
-sbomify tracks the newest SBOM of each format for a component and every SBOM a release ships. Those versions stay active, and the newest of them is marked latest. Every other version is set inactive, never deleted: Dependency Track stops analysing it and keeps its findings and audit history. A version comes back when a release ships it again.
+sbomify tracks the newest SBOM of each format for a component and every SBOM a release it still monitors ships, including the releases those link to. A release stops counting once it is withdrawn, archived, replaced by a release on the same line, or past its end of support or end of life. Tracked versions stay active, and the newest of them is marked latest. Every other version is set inactive, never deleted: Dependency Track stops analysing it and keeps its findings and audit history. A version comes back when a release that sbomify monitors ships it again. The scheduled scans cover the same SBOMs.
+
+Each change to a release, its links or its artifacts queues an update of the component versions it touches. If Dependency Track is unreachable, sbomify retries for about four hours. After a longer outage, run the backfill below.
 
 New uploads land in the tree as they arrive. To bring projects uploaded before this in line, run the backfill, first as a dry run:
 
@@ -458,7 +460,7 @@ python manage.py dt_tracked_scope --dry-run
 python manage.py dt_tracked_scope
 ```
 
-`--server <name>` and `--workspace <key>` limit it. It is safe to run again.
+`--server=<name>` and `--workspace=<key>` limit it. It is safe to run again.
 
 ##### DT Configuration
 

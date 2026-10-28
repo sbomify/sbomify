@@ -22,8 +22,10 @@ from django.utils import timezone
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.models import Component, Release, ReleaseSupersession
 from sbomify.apps.core.services.cle import (
+    create_cle_event,
     create_release_cle_event,
     create_release_support_definition,
+    create_support_definition,
     get_release_cle_document,
 )
 from sbomify.apps.core.services.release_lifecycle import (
@@ -33,7 +35,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     tracked_releases,
 )
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.models import Product, ReleaseCLEEvent
+from sbomify.apps.sboms.models import Product, ProductCLEEvent, ReleaseCLEEvent
 
 backfill = importlib.import_module("sbomify.apps.core.migrations.0035_backfill_release_lifecycle")
 
@@ -79,6 +81,17 @@ def _fresh(release: Release) -> Release:
 
 def _on(day: datetime) -> dict[str, object]:
     return {"versions": [{"version": "any"}], "effective": day}
+
+
+EVERY_VERSION = [{"range": "vers:generic/*"}]
+
+
+def _product_event(product: Product, event_type: str, day: datetime, **fields: object) -> ProductCLEEvent:
+    fields.setdefault("versions", EVERY_VERSION)
+    result = create_cle_event(product, event_type, day, **fields)  # type: ignore[arg-type]
+    assert result.ok, result.error
+    assert result.value is not None
+    return result.value
 
 
 @pytest.mark.django_db
@@ -149,6 +162,29 @@ class TestSupersededAt:
 
         assert set_release_state(new, "reactivate").ok
         assert _fresh(old).superseded_at == PAST
+
+    def test_withdrawing_a_middle_release_keeps_the_line_moved_on(self, sample_product: Product) -> None:
+        # 1.0 -> 1.1 -> 1.2 on one line. Pulling 1.1 is not a rollback to 1.0: 1.2 still carries the line.
+        releases = {name: _release(sample_product, name) for name in ("1.0", "1.1", "1.2")}
+        assert _supersede(releases["1.0"], "1.1").ok
+        assert _supersede(releases["1.1"], "1.2").ok
+
+        assert set_release_state(releases["1.1"], "withdraw", reason="defective").ok
+
+        assert _fresh(releases["1.0"]).lifecycle_state == Release.LifecycleState.SUPERSEDED
+        assert _tracked(sample_product) == {"1.2"}
+
+    def test_withdrawing_the_head_brings_back_only_the_release_before_it(self, sample_product: Product) -> None:
+        releases = {name: _release(sample_product, name) for name in ("1.0", "1.1", "1.2")}
+        assert _supersede(releases["1.0"], "1.1").ok
+        assert _supersede(releases["1.1"], "1.2").ok
+
+        assert set_release_state(releases["1.2"], "withdraw", reason="defective").ok
+        assert _tracked(sample_product) == {"1.1"}
+
+        # With 1.1 pulled as well, nothing carries the line on, so it rolls back to 1.0.
+        assert set_release_state(releases["1.1"], "withdraw", reason="defective").ok
+        assert _tracked(sample_product) == {"1.0"}
 
     def test_withdrawing_the_edge_restores_the_predecessor(self, sample_product: Product) -> None:
         old = _release(sample_product, "1.0.0")
@@ -250,7 +286,6 @@ class TestTrackedPredicate:
     def test_queryset_and_properties_agree(self, sample_product: Product) -> None:
         now = timezone.now()
         today = now.date()
-        Product.objects.filter(pk=sample_product.pk).update(end_of_support=today - timedelta(days=10))
         expected = {
             "latest": Release.LifecycleState.ACTIVE,
             "withdrawn": Release.LifecycleState.WITHDRAWN,
@@ -265,14 +300,20 @@ class TestTrackedPredicate:
         }
         Release.objects.create(product=sample_product, name="latest", is_latest=True)
         _release(sample_product, "withdrawn", withdrawn_at=now, withdrawn_reason="defective")
-        _release(sample_product, "eol", end_of_life=today - timedelta(days=1), end_of_support=today + timedelta(days=9))
-        _release(sample_product, "product-eos")
-        # A release's own later date outlives the product default.
-        _release(sample_product, "extended", end_of_support=today + timedelta(days=30))
-        _release(sample_product, "last-day", end_of_support=today)
-        _release(sample_product, "superseded", superseded_at=now - timedelta(days=1), end_of_support=today)
-        _release(sample_product, "superseded-later", superseded_at=now + timedelta(days=1), end_of_support=today)
-        _release(sample_product, "archived", archived_at=now, end_of_support=today)
+        _release(
+            sample_product,
+            "eol",
+            effective_end_of_life=today - timedelta(days=1),
+            effective_end_of_support=today + timedelta(days=9),
+        )
+        _release(sample_product, "product-eos", effective_end_of_support=today - timedelta(days=10))
+        _release(sample_product, "extended", effective_end_of_support=today + timedelta(days=30))
+        _release(sample_product, "last-day", effective_end_of_support=today)
+        _release(sample_product, "superseded", superseded_at=now - timedelta(days=1), effective_end_of_support=today)
+        _release(
+            sample_product, "superseded-later", superseded_at=now + timedelta(days=1), effective_end_of_support=today
+        )
+        _release(sample_product, "archived", archived_at=now, effective_end_of_support=today)
         _release(
             sample_product,
             "withdrawn-and-superseded",
@@ -288,9 +329,9 @@ class TestTrackedPredicate:
         assert tracked == {release.name for release in releases if release.is_tracked}
 
     def test_a_product_end_of_life_retires_named_releases_but_never_latest(self, sample_product: Product) -> None:
-        Product.objects.filter(pk=sample_product.pk).update(end_of_life=timezone.now().date() - timedelta(days=1))
         Release.objects.create(product=sample_product, name="latest", is_latest=True)
         _release(sample_product, "1.0.0")
+        _product_event(sample_product, "endOfLife", timezone.now() - timedelta(days=2))
 
         assert list(tracked_releases(Release.objects.filter(product=sample_product)).values_list("name", flat=True)) == [
             "latest"
@@ -339,7 +380,8 @@ class TestEdgeValidation:
         assert edge.ok and edge.value is not None
         _withdraw_event(edge.value)
 
-        assert _supersede(new, "1.0.0").ok
+        # The reverse edge records an upgrade path: 1.0.0 came out first, so it cannot replace 1.0.1 on its line.
+        assert _supersede(new, "1.0.0", drop_in=False).ok
 
     def test_successors_are_capped(self, sample_product: Product) -> None:
         old = _release(sample_product, "1.0.0")
@@ -362,15 +404,26 @@ class TestEdgeValidation:
         assert ReleaseCLEEvent.objects.filter(release=old).count() == 1
         assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
 
-    def test_restating_a_live_edge_differently_is_refused(self, sample_product: Product) -> None:
+    def test_restating_a_live_edge_with_the_other_line_is_refused(self, sample_product: Product) -> None:
         old = _release(sample_product, "1.0.0")
         _release(sample_product, "1.0.1")
         assert _supersede(old, "1.0.1", drop_in=True).ok
 
-        for change in ({"drop_in": False}, {"effective": datetime(2025, 2, 1, tzinfo=dt_timezone.utc)}):
-            result = _supersede(old, "1.0.1", **change)  # type: ignore[arg-type]
-            assert not result.ok and result.status_code == 409
-            assert "withdraw" in (result.error or "").lower()
+        result = _supersede(old, "1.0.1", drop_in=False)
+
+        assert not result.ok and result.status_code == 409
+        assert "remove" in (result.error or "").lower()
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
+
+    def test_a_retry_with_another_date_is_the_same_edge(self, sample_product: Product) -> None:
+        # A pipeline re-run, or a release date corrected in the UI, must not fail a build that changed nothing.
+        old = _release(sample_product, "1.0.0")
+        _release(sample_product, "1.0.1")
+        first = _supersede(old, "1.0.1")
+        again = _supersede(old, "1.0.1", effective=datetime(2025, 2, 1, tzinfo=dt_timezone.utc))
+
+        assert first.ok and again.ok and first.value is not None and again.value is not None
+        assert again.status_code == 200 and again.value.pk == first.value.pk
         assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
 
     def test_drop_in_belongs_to_supersession_only(self, sample_product: Product) -> None:
@@ -432,7 +485,8 @@ class TestPendingEdges:
         client, token = authenticated_api_client
         old, other = _release(sample_product, "1.0"), _release(sample_product, "2.1")
         assert _supersede(old, "2.0").ok
-        assert _supersede(other, "1.0").ok
+        # A new-line edge still counts for the cycle check; same line would need 1.0 released after 2.1.
+        assert _supersede(other, "1.0", drop_in=False).ok
 
         response = self._patch(client, token, other, {"version": "2.0"})
 
@@ -463,7 +517,7 @@ class TestReleaseState:
         assert _fresh(release).is_tracked
 
     def test_each_decision_leaves_an_audit_line(
-        self, sample_product: Product, caplog: pytest.LogCaptureFixture
+        self, sample_product: Product, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks
     ) -> None:
         release = _release(sample_product, "1.0.0")
         _release(sample_product, "1.0.1")
@@ -471,16 +525,33 @@ class TestReleaseState:
         audit_logger = logging.getLogger("sbomify.audit.release")
         audit_logger.addHandler(caplog.handler)
         try:
-            set_release_state(release, "withdraw", reason="compromised", actor_id=7)
-            create_release_cle_event(
-                release, "supersededBy", PAST, superseded_by_version="1.0.1", drop_in=True, actor_id=7
-            )
+            with django_capture_on_commit_callbacks(execute=True):
+                set_release_state(release, "withdraw", reason="compromised", actor_id=7)
+                create_release_cle_event(
+                    release, "supersededBy", PAST, superseded_by_version="1.0.1", drop_in=True, actor_id=7
+                )
         finally:
             audit_logger.removeHandler(caplog.handler)
 
         lines = [record for record in caplog.records if record.name == "sbomify.audit.release"]
         assert [(record.action, record.actor_id) for record in lines] == [("withdraw", 7), ("supersede", 7)]
         assert lines[0].reason == "compromised"
+
+    def test_a_rolled_back_decision_leaves_no_audit_line(
+        self, sample_product: Product, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks
+    ) -> None:
+        release = _release(sample_product, "1.0.0")
+        _release(sample_product, "1.0.1")
+        audit_logger = logging.getLogger("sbomify.audit.release")
+        audit_logger.addHandler(caplog.handler)
+        try:
+            with django_capture_on_commit_callbacks(execute=True), transaction.atomic():
+                create_release_cle_event(release, "supersededBy", PAST, superseded_by_version="1.0.1", drop_in=True)
+                transaction.set_rollback(True)
+        finally:
+            audit_logger.removeHandler(caplog.handler)
+
+        assert not [record for record in caplog.records if record.name == "sbomify.audit.release"]
 
 
 @pytest.mark.django_db
@@ -536,7 +607,7 @@ class TestReleaseCLEEndpoint:
         assert ReleaseSupersession.objects.get(from_release=old).drop_in is False
         assert _fresh(old).is_tracked
 
-    def test_a_retry_returns_the_existing_edge_with_200_and_a_new_date_is_a_conflict(
+    def test_a_retry_returns_the_existing_edge_with_200_and_the_other_line_is_a_conflict(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
         client, token = authenticated_api_client
@@ -547,11 +618,14 @@ class TestReleaseCLEEndpoint:
         first = self._post(client, token, old, payload)
         retry = self._post(client, token, old, payload)
         later = self._post(client, token, old, {**payload, "effective": "2025-02-01T00:00:00Z"})
+        other_line = self._post(client, token, old, {**payload, "drop_in": True})
 
         assert first.status_code == 201, first.content
         assert retry.status_code == 200, retry.content
         assert retry.json()["event_id"] == first.json()["event_id"]
-        assert later.status_code == 409, later.content
+        assert later.status_code == 200, later.content
+        assert later.json()["event_id"] == first.json()["event_id"]
+        assert other_line.status_code == 409, other_line.content
         assert ReleaseCLEEvent.objects.filter(release=old).count() == 1
         assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
 
@@ -641,7 +715,7 @@ class TestDeleteGuard:
 
         response = client.delete(f"/api/v1/releases/{new.pk}", **get_api_headers(token))
         assert response.status_code == 400
-        assert response.json()["detail"] == "Release 1.0.1 supersedes 1 release. Withdraw those supersessions first."
+        assert response.json()["detail"] == "Release 1.0.1 replaces 1.0.0. Remove that link on its Lifecycle card first."
         assert Release.objects.filter(pk=new.pk).exists()
 
         _withdraw_event(edge.value)
@@ -690,6 +764,14 @@ class TestBackfillMigration:
             ReleaseCLEEvent.objects.create(
                 release=release, event_id=n, event_type=event_type, **{"effective": PAST, **fields}
             )
+        product_rows = [
+            ("endOfLife", datetime(2030, 1, 1, tzinfo=dt_timezone.utc), EVERY_VERSION),
+            ("endOfSupport", datetime(2020, 1, 1, tzinfo=dt_timezone.utc), [{"range": "vers:semver/<1.0.0"}]),
+        ]
+        for n, (event_type, effective, versions) in enumerate(product_rows, start=1):
+            ProductCLEEvent.objects.create(
+                product=sample_product, event_id=n, event_type=event_type, effective=effective, versions=versions
+            )
 
         backfill.backfill_release_lifecycle(django_apps, None)
 
@@ -712,12 +794,191 @@ class TestBackfillMigration:
         assert edges[("legacy", "latest")].to_release is None
         assert not any(edge.drop_in or edge.withdrawn_at for edge in edges.values())
 
-        migrated = {r.pk: (r.superseded_at, r.end_of_support, r.end_of_life) for r in Release.objects.all()}
-        assert migrated[old.pk] == (None, date(2027, 6, 30), None)
-        assert migrated[new.pk] == (None, None, date(2028, 1, 1))
-        assert migrated[latest.pk] == (None, None, None)
+        def derived() -> dict[str, tuple[object, ...]]:
+            return {
+                r.pk: (r.superseded_at, r.end_of_support, r.end_of_life, r.effective_end_of_support, r.effective_end_of_life)
+                for r in Release.objects.all()
+            }
+
+        migrated = derived()
+        assert migrated[old.pk] == (None, date(2027, 6, 30), None, date(2027, 6, 30), date(2030, 1, 1))
+        assert migrated[new.pk] == (None, None, date(2028, 1, 1), None, date(2028, 1, 1))
+        # A product date for some versions only is never inherited.
+        assert migrated[named.pk] == (None, None, None, None, date(2030, 1, 1))
+        assert migrated[latest.pk] == (None, None, None, None, date(2030, 1, 1))
 
         # The frozen copy and the app's recompute must not drift.
-        Release.objects.update(end_of_support=None, end_of_life=None)
+        Release.objects.update(end_of_support=None, end_of_life=None, effective_end_of_support=None, effective_end_of_life=None)
         recompute_release_lifecycle(sample_product)
-        assert {r.pk: (r.superseded_at, r.end_of_support, r.end_of_life) for r in Release.objects.all()} == migrated
+        assert derived() == migrated
+
+
+@pytest.mark.django_db
+class TestProductDateInheritance:
+    """A release with no date of its own takes the product's, but only a date that covers every version."""
+
+    def test_a_product_date_for_every_version_is_inherited(self, sample_product: Product) -> None:
+        plain = _release(sample_product, "1.0.0")
+        extended = _release(sample_product, "1.1.0")
+        assert create_release_support_definition(extended, "extended", "Extended").ok
+        _event(extended, "endOfSupport", **_on(timezone.now() + timedelta(days=60)), support_id="extended")
+
+        _product_event(sample_product, "endOfSupport", timezone.now() - timedelta(days=5))
+
+        assert _fresh(plain).effective_end_of_support == (timezone.now() - timedelta(days=5)).date()
+        assert _fresh(plain).lifecycle_state == Release.LifecycleState.END_OF_SUPPORT
+        # A release's own date wins, so extended support outlives the product default.
+        assert _fresh(extended).is_tracked
+        assert _tracked(sample_product) == {"1.1.0"}
+
+    def test_a_product_date_for_some_versions_is_never_inherited(self, sample_product: Product) -> None:
+        # sbomify has no version parser, by design, so it cannot tell which releases a range covers.
+        release = _release(sample_product, "2.0.0")
+
+        _product_event(
+            sample_product, "endOfSupport", timezone.now() - timedelta(days=5), versions=[{"range": "vers:semver/<2.0.0"}]
+        )
+
+        assert _fresh(release).effective_end_of_support is None
+        assert _fresh(release).is_tracked
+
+    @pytest.mark.parametrize("order", [("extended", "standard"), ("standard", "extended")])
+    def test_product_support_policies_fold_the_same_whatever_the_order(
+        self, sample_product: Product, order: tuple[str, str]
+    ) -> None:
+        release = _release(sample_product, "1.0.0")
+        days = {"standard": datetime(2026, 6, 30, tzinfo=dt_timezone.utc), "extended": datetime(2027, 6, 30, tzinfo=dt_timezone.utc)}
+        for support_id in order:
+            assert create_support_definition(sample_product, support_id, support_id).ok
+        for support_id in order:
+            _product_event(sample_product, "endOfSupport", days[support_id], support_id=support_id)
+
+        assert _fresh(release).effective_end_of_support == date(2027, 6, 30)
+
+    def test_product_columns_alone_retire_nothing(self, sample_product: Product) -> None:
+        # Monitoring follows the published lifecycle events, not a column another writer can set.
+        release = _release(sample_product, "1.0.0")
+        Product.objects.filter(pk=sample_product.pk).update(end_of_support=date(2020, 1, 1))
+        recompute_release_lifecycle(sample_product)
+
+        assert _fresh(release).is_tracked
+
+    def test_withdrawing_the_product_event_brings_the_release_back(self, sample_product: Product) -> None:
+        release = _release(sample_product, "1.0.0")
+        event = _product_event(sample_product, "endOfLife", timezone.now() - timedelta(days=5))
+        assert not _fresh(release).is_tracked
+
+        _product_event(sample_product, "withdrawn", PAST, versions=[], withdrawn_event_id=event.event_id)
+
+        assert _fresh(release).effective_end_of_life is None
+        assert _fresh(release).is_tracked
+
+
+@pytest.mark.django_db
+class TestReleaseEdits:
+    """Editing a release writes only what changed, under the lock order every lifecycle writer uses."""
+
+    def _send(self, client: Client, token: AccessToken, method: str, release: Release, payload: dict[str, object]):
+        return getattr(client, method)(
+            f"/api/v1/releases/{release.pk}", data=payload, content_type="application/json", **get_api_headers(token)
+        )
+
+    @pytest.mark.parametrize("method", ["patch", "put"])
+    def test_an_edit_does_not_put_back_a_withdrawal_made_after_it_read_the_release(
+        self,
+        authenticated_api_client: tuple[Client, AccessToken],
+        sample_product: Product,
+        mocker,
+        method: str,
+    ) -> None:
+        client, token = authenticated_api_client
+        release = _release(sample_product, "1.0.0")
+        real_can = __import__("sbomify.apps.core.apis", fromlist=["can"]).can
+
+        withdrawn: list[bool] = []
+
+        def withdraw_meanwhile(*args, **kwargs):
+            # Another member withdraws the release between this request's read and its write.
+            if not withdrawn:
+                Release.objects.filter(pk=release.pk).update(withdrawn_at=timezone.now(), withdrawn_reason="compromised")
+                withdrawn.append(True)
+            return real_can(*args, **kwargs)
+
+        mocker.patch("sbomify.apps.core.apis.can", side_effect=withdraw_meanwhile)
+        payload: dict[str, object] = {"description": "Notes"}
+        if method == "put":
+            payload.update({"name": "1.0.0", "version": "1.0.0", "is_prerelease": False})
+
+        response = self._send(client, token, method, release, payload)
+
+        assert response.status_code == 200, response.content
+        edited = _fresh(release)
+        assert edited.description == "Notes"
+        assert edited.withdrawn_at is not None and edited.withdrawn_reason == "compromised"
+
+    def test_an_edit_locks_the_product_before_the_release(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        client, token = authenticated_api_client
+        release = _release(sample_product, "1.0.0")
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self._send(client, token, "patch", release, {"description": "Notes"})
+
+        assert response.status_code == 200, response.content
+        locks = [query["sql"] for query in queries.captured_queries if "FOR UPDATE" in query["sql"]]
+        product_table, release_table = Product._meta.db_table, Release._meta.db_table
+        firsts = [next(i for i, sql in enumerate(locks) if f'FROM "{table}"' in sql) for table in (product_table, release_table)]
+        assert firsts[0] < firsts[1], locks
+
+    def test_moving_the_release_date_moves_the_edges_that_took_their_date_from_it(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
+        old = _release(sample_product, "1.9", created_at=PAST, released_at=PAST)
+        other = _release(sample_product, "1.8", created_at=PAST, released_at=PAST)
+        new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
+        took_its_date = _supersede(old, "2.0", effective=first_date)
+        own_date = _supersede(other, "2.0", effective=PAST)
+        assert took_its_date.ok and own_date.ok and took_its_date.value and own_date.value
+
+        corrected = datetime(2025, 4, 1, 9, 30, tzinfo=dt_timezone.utc)
+        response = self._send(client, token, "patch", new, {"released_at": corrected.isoformat()})
+
+        assert response.status_code == 200, response.content
+        assert _edge(took_its_date.value).effective == corrected
+        assert _fresh(old).superseded_at == corrected
+        assert _edge(own_date.value).effective == PAST
+
+
+@pytest.mark.django_db
+class TestBackfillReruns:
+    def test_the_backfill_can_be_reversed_and_applied_again(self, sample_product: Product) -> None:
+        old, _new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
+        ReleaseCLEEvent.objects.create(
+            release=old, event_id=1, event_type="supersededBy", effective=PAST, superseded_by_version="1.0.1"
+        )
+        ProductCLEEvent.objects.create(
+            product=sample_product,
+            event_id=1,
+            event_type="endOfLife",
+            effective=datetime(2027, 1, 1, tzinfo=dt_timezone.utc),
+            versions=EVERY_VERSION,
+        )
+
+        backfill.backfill_release_lifecycle(django_apps, None)
+        backfill.backfill_release_lifecycle(django_apps, None)
+        assert ReleaseSupersession.objects.count() == 1
+        assert _fresh(old).effective_end_of_life == date(2027, 1, 1)
+
+        backfill.reverse_backfill_release_lifecycle(django_apps, None)
+        assert not ReleaseSupersession.objects.exists()
+        assert _fresh(old).effective_end_of_life is None
+
+        backfill.backfill_release_lifecycle(django_apps, None)
+        assert ReleaseSupersession.objects.count() == 1
+        assert _fresh(old).effective_end_of_life == date(2027, 1, 1)
