@@ -8,8 +8,15 @@ dates come from the CLE stream, so the ``Release`` lifecycle columns are
 derived from both. Withdrawn and archived have no CLE event and are set by a
 person through ``set_release_state``.
 
-Every write locks the product row before anything else. A lock on one release
-would let two edges on different releases each pass their own cycle check.
+A release with no support date of its own takes the product's, but only from a
+product event that covers every version. sbomify has no version parser, by
+design, so it cannot tell which releases a range such as ``vers:semver/<2.0.0``
+covers; a date like that belongs on the releases themselves.
+
+Every write locks the product row before anything else, then the release. A
+lock on one release would let two edges on different releases each pass their
+own cycle check, and taking the two in the other order would deadlock against
+the writers here.
 """
 
 from __future__ import annotations
@@ -23,12 +30,11 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import Q, QuerySet
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import CLEEventType, Product, ReleaseCLEEvent
+from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -44,9 +50,10 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
 
     ``latest`` always: it holds each component's newest SBOMs. A named release
     until it is withdrawn, archived, superseded by a drop-in successor, or past
-    its end of support or end of life. A release's own date wins over its
-    product's, so a release with extended support outlives the product default;
-    with none of its own it inherits the product's. A date is the last
+    its end of support or end of life. The dates are the ``effective_*``
+    columns: a release's own date wins over its product's, so a release with
+    extended support outlives the product default; with none of its own it
+    inherits the product's date for every version. A date is the last
     supported day.
 
     ``Release.lifecycle_state`` applies the same rules to one instance.
@@ -56,17 +63,10 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
     live = (
         Q(withdrawn_at__isnull=True, archived_at__isnull=True)
         & (Q(superseded_at__isnull=True) | Q(superseded_at__gt=now))
-        & (Q(lifecycle_eos__isnull=True) | Q(lifecycle_eos__gte=today))
-        & (Q(lifecycle_eol__isnull=True) | Q(lifecycle_eol__gte=today))
+        & (Q(effective_end_of_support__isnull=True) | Q(effective_end_of_support__gte=today))
+        & (Q(effective_end_of_life__isnull=True) | Q(effective_end_of_life__gte=today))
     )
-    return (
-        (Release.objects.all() if releases is None else releases)
-        .alias(
-            lifecycle_eos=Coalesce("end_of_support", "product__end_of_support"),
-            lifecycle_eol=Coalesce("end_of_life", "product__end_of_life"),
-        )
-        .filter(Q(is_latest=True) | live)
-    )
+    return (Release.objects.all() if releases is None else releases).filter(Q(is_latest=True) | live)
 
 
 def replacement_candidates(product_id: str) -> list[Release]:
@@ -143,19 +143,21 @@ def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:
 
 
 def existing_supersession(
-    predecessor: Release, successor_label: str, drop_in: bool, effective: datetime
+    predecessor: Release, successor_label: str, drop_in: bool
 ) -> ServiceResult[ReleaseSupersession | None]:
-    """The live edge to ``successor_label`` a retry would repeat, or a conflict when it says something else.
+    """The live edge to ``successor_label`` a retry would repeat, or a conflict when it is on the other line.
 
-    One live edge per successor: changing ``drop_in`` or the date means
-    withdrawing the edge and declaring it again, so the history keeps both.
+    One live edge per successor. A retry with another date is the same edge, so
+    a pipeline re-run or a corrected release date never fails a build that
+    changed nothing. Moving it to the other line means removing the link and
+    declaring it again, so the history keeps both.
     """
     edge = ReleaseSupersession.objects.live().filter(from_release=predecessor, successor_label=successor_label).first()
-    if edge is None or (edge.drop_in == drop_in and edge.effective == effective):
+    if edge is None or edge.drop_in == drop_in:
         return ServiceResult.success(edge)
+    line = "the same line" if edge.drop_in else "a new line"
     return ServiceResult.failure(
-        f"Release {predecessor.name} already names {successor_label} as a successor. "
-        "Withdraw that supersession first to change it.",
+        f"Release {predecessor.name} already names {successor_label} as {line}. Remove that link first to change it.",
         status_code=409,
     )
 
@@ -267,56 +269,159 @@ def _leads_back(successor: Release, predecessor: Release) -> bool:
     return False
 
 
+def covers_every_version(versions: list[dict[str, Any]]) -> bool:
+    """Whether a lifecycle event's ``versions`` scope is every version, such as ``vers:generic/*``."""
+    if not versions:
+        return True
+    return any(str(entry.get("range", "")).strip().endswith("/*") for entry in versions if isinstance(entry, dict))
+
+
+def fold_dates(events: Iterable[BaseCLEEvent]) -> tuple[date | None, date | None]:
+    """End of support and end of life from one entity's surviving events, read in event order.
+
+    Per support policy the latest ``endOfSupport`` event wins, so a correction
+    replaces the earlier date even when it moves it earlier; the result is the
+    latest across policies, so a later event under one policy never cuts
+    another short. End of life is the latest ``endOfLife`` event.
+    """
+    support_ends: dict[str, date] = {}
+    end_of_life: date | None = None
+    for event in events:
+        if event.event_type == CLEEventType.END_OF_SUPPORT:
+            support_ends[event.support_id] = event.effective.date()
+        elif event.event_type == CLEEventType.END_OF_LIFE:
+            end_of_life = event.effective.date()
+    return max(support_ends.values(), default=None), end_of_life
+
+
+def _surviving(events: list[Any]) -> list[Any]:
+    """Drop the events a ``withdrawn`` event names. ``events`` belong to one entity."""
+    voided = {
+        event.withdrawn_event_id
+        for event in events
+        if event.event_type == CLEEventType.WITHDRAWN and event.withdrawn_event_id is not None
+    }
+    return [event for event in events if event.event_id not in voided]
+
+
 def recompute_release_lifecycle(product: Product) -> None:
     """Derive every release's lifecycle columns in ``product`` from its edges and CLE events.
 
-    Product-wide, because withdrawing a successor changes its predecessors.
+    Product-wide, because withdrawing a successor changes its predecessors and
+    a product date applies to every release without one of its own.
 
-    - ``end_of_support``: per support policy, the latest surviving
-      ``endOfSupport`` event; the column is the latest across policies.
-    - ``end_of_life``: the latest surviving ``endOfLife`` event.
-    - ``superseded_at``: the earliest live drop-in edge whose successor is
-      outside sbomify or not withdrawn. A withdrawn successor hands its
-      predecessors their liveness back. Edges that start a new line never
-      retire anything, however many a release has.
+    - ``end_of_support`` and ``end_of_life``: the release's own events, folded
+      by ``fold_dates``.
+    - ``effective_end_of_support`` and ``effective_end_of_life``: the
+      release's own date, else the product's from events that cover every
+      version. Read from events, never from the product columns, so the order
+      events were posted in, or a column written another way, cannot change
+      what is monitored.
+    - ``superseded_at``: the earliest live drop-in edge whose line still goes
+      on: its successor is outside sbomify, not withdrawn, or itself replaced
+      by a release that carries the line on. Withdrawing every release after
+      one rolls the line back to it. Edges that start a new line never retire
+      anything, however many a release has.
 
     Writes only the rows that changed, and never through ``save()``.
     """
     releases = {release.pk: release for release in Release.objects.filter(product_id=product.pk)}
-    events = list(ReleaseCLEEvent.objects.filter(release__product_id=product.pk).order_by("release_id", "event_id"))
-    voided = {
-        (event.release_id, event.withdrawn_event_id)
-        for event in events
-        if event.event_type == CLEEventType.WITHDRAWN and event.withdrawn_event_id is not None
-    }
 
-    support_ends: dict[str, dict[str, date]] = defaultdict(dict)
-    life_ends: dict[str, date] = {}
-    for event in events:
-        if (event.release_id, event.event_id) in voided:
-            continue
-        if event.event_type == CLEEventType.END_OF_SUPPORT:
-            support_ends[event.release_id][event.support_id] = event.effective.date()
-        elif event.event_type == CLEEventType.END_OF_LIFE:
-            life_ends[event.release_id] = event.effective.date()
+    by_release: dict[str, list[ReleaseCLEEvent]] = defaultdict(list)
+    for event in ReleaseCLEEvent.objects.filter(release__product_id=product.pk).order_by("release_id", "event_id"):
+        by_release[event.release_id].append(event)
+    own = {pk: fold_dates(_surviving(by_release[pk])) for pk in releases}
+
+    product_events = _surviving(list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id")))
+    product_support, product_life = fold_dates(
+        event for event in product_events if covers_every_version(event.versions)
+    )
+
+    drop_ins: dict[str, list[ReleaseSupersession]] = defaultdict(list)
+    for edge in ReleaseSupersession.objects.live().filter(from_release__product_id=product.pk, drop_in=True):
+        drop_ins[edge.from_release_id].append(edge)
+
+    def carries_on(release_id: str | None, seen: set[str]) -> bool:
+        successor = releases.get(release_id) if release_id else None
+        # No successor in sbomify: outside it, or deleted. It still counts.
+        if successor is None or successor.withdrawn_at is None:
+            return True
+        if successor.pk in seen:
+            return False
+        seen.add(successor.pk)
+        return any(carries_on(edge.to_release_id, seen) for edge in drop_ins.get(successor.pk, ()))
 
     superseded: dict[str, datetime] = {}
-    for edge in ReleaseSupersession.objects.live().filter(from_release__product_id=product.pk, drop_in=True):
-        # No successor in sbomify: outside it, or deleted. It still counts.
-        successor = releases.get(edge.to_release_id) if edge.to_release_id else None
-        if successor is None or successor.withdrawn_at is None:
-            earliest = superseded.get(edge.from_release_id)
-            superseded[edge.from_release_id] = min(earliest, edge.effective) if earliest else edge.effective
+    for source, edges in drop_ins.items():
+        moved_on = [edge.effective for edge in edges if carries_on(edge.to_release_id, set())]
+        if moved_on:
+            superseded[source] = min(moved_on)
 
-    fields = ("superseded_at", "end_of_support", "end_of_life")
+    fields = ("superseded_at", "end_of_support", "end_of_life", "effective_end_of_support", "effective_end_of_life")
     changed = []
     for pk, release in releases.items():
-        derived = (superseded.get(pk), max(support_ends[pk].values(), default=None), life_ends.get(pk))
+        end_of_support, end_of_life = own[pk]
+        derived = (
+            superseded.get(pk),
+            end_of_support,
+            end_of_life,
+            end_of_support or product_support,
+            end_of_life or product_life,
+        )
         if tuple(getattr(release, field) for field in fields) != derived:
-            release.superseded_at, release.end_of_support, release.end_of_life = derived
+            for field, value in zip(fields, derived, strict=True):
+                setattr(release, field, value)
             changed.append(release)
     if changed:
         Release.objects.bulk_update(changed, fields)
+
+
+def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
+    """Write a person's edit to a release, under the product lock and then the release lock.
+
+    That is the order every lifecycle writer takes, so an edit cannot deadlock
+    against a withdrawal or a CLE event. Only the fields that changed are
+    written, from the locked row, so an edit never puts back a withdrawal or
+    a derived date committed after the caller first read the release.
+
+    Moving the release date moves the live edges that took their date from it,
+    and a new name or version links the edges declared before it existed.
+    Call inside a transaction; a duplicate name or version raises
+    ``IntegrityError``. The value is the saved release and whether anything
+    changed.
+    """
+    product_id = Release.objects.filter(pk=release_id).values_list("product_id", flat=True).first()
+    product = Product.objects.select_for_update().filter(pk=product_id).first() if product_id else None
+    release = (
+        Release.objects.select_for_update(of=("self",)).select_related("product").filter(pk=release_id).first()
+        if product
+        else None
+    )
+    if product is None or release is None:
+        return ServiceResult.failure("Release not found", status_code=404)
+
+    changed = [field for field, value in changes.items() if getattr(release, field) != value]
+    if not changed:
+        return ServiceResult.success((release, False))
+
+    previous_release_date = release.released_at
+    for field in changed:
+        setattr(release, field, changes[field])
+    release.save(update_fields=changed)
+
+    if "released_at" in changed and previous_release_date is not None:
+        moved = (
+            ReleaseSupersession.objects.live()
+            .filter(to_release=release, effective=previous_release_date)
+            .update(effective=release.released_at)
+        )
+        if moved:
+            recompute_release_lifecycle(product)
+    if {"name", "version"} & set(changed):
+        linked = link_pending_supersessions(release)
+        if not linked.ok:
+            return ServiceResult.failure(linked.error or "Invalid supersession", status_code=linked.status_code)
+    return ServiceResult.success((release, True))
 
 
 def set_release_state(
@@ -361,7 +466,11 @@ def set_release_state(
 
 
 def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:
-    """One structured line per lifecycle decision a person or a pipeline makes."""
+    """One structured line per lifecycle decision a person or a pipeline makes, once it commits.
+
+    A decision that rolls back leaves no line, so the trail never records what
+    did not happen.
+    """
     extra = {
         "action": action,
         "release_id": release.pk,
@@ -369,4 +478,4 @@ def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:
         "actor_id": actor_id,
         **detail,
     }
-    audit_log.info("release_lifecycle %s", json.dumps(extra, default=str), extra=extra)
+    transaction.on_commit(lambda: audit_log.info("release_lifecycle %s", json.dumps(extra, default=str), extra=extra))
