@@ -446,6 +446,9 @@ if you want to look.
 
 Synthesis needs `XAI_API_KEY` **only** for lines not already in
 `screencasts/narration/audio/`. An unchanged re-record makes zero API calls.
+Set `XAI_BASE_URL` as well to synthesize through a proxy that holds the key;
+`XAI_API_KEY` then carries whatever the proxy accepts. Synthesis is local
+only: CI gets no key.
 
 **The cache is generated, and git-ignored.** Clips are not source; the scripts
 are, and `warm-all` rebuilds the audio from them. Two things follow. A fresh
