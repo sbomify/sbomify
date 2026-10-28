@@ -54,7 +54,7 @@ def mux(cue_file: Path, output_dir: Path) -> None:
     video = output_dir / spec["video"]
     cues = spec["cues"]
     if not video.exists():
-        print(f"skip {cue_file.name}: {video.name} is missing", file=sys.stderr)
+        sys.stderr.write(f"skip {cue_file.name}: {video.name} is missing\n")
         return
 
     inputs: list[str] = ["-i", str(video)]
@@ -96,7 +96,7 @@ def mux(cue_file: Path, output_dir: Path) -> None:
     muxed.replace(video)
     write_vtt(cues, video.with_suffix(".vtt"))
     cue_file.unlink()
-    print(f"narrated {video.name} ({len(cues)} lines)")
+    sys.stdout.write(f"narrated {video.name} ({len(cues)} lines)\n")
 
 
 def main() -> int:
@@ -105,7 +105,7 @@ def main() -> int:
     if not cue_files:
         return 0
     if shutil.which("ffmpeg") is None:
-        print("ffmpeg not found; videos left silent", file=sys.stderr)
+        sys.stderr.write("ffmpeg not found; videos left silent\n")
         return 1
     for cue_file in cue_files:
         mux(cue_file, output_dir)

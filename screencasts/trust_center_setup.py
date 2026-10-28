@@ -1,183 +1,191 @@
 """Record the trust center setup screencast.
 
-Drives: Dashboard → Settings → Trust Center tab → enable trust center →
-enable security.txt → upload a Company NDA → configure custom domain →
-navigate to Components → create a component → demonstrate public /
-private / gated visibility.
-"""
+Drives: Dashboard → Settings → Trust Center tab → enable the Trust Center →
+welcome message → security.txt → upload a Company NDA → custom domain →
+Components → open a component → set its visibility to public, then gated →
+the public Trust Center page.
 
-import tempfile
-from pathlib import Path
+The Pied Piper product is seeded public so the closing public page has
+something on it; the component is the thing whose visibility is set on camera.
+"""
 
 import pytest
 from playwright.sync_api import Page
 
 from conftest import (
     MINIMAL_PDF,
+    auto_dismiss_toasts,
+    caption,
+    clear_caption,
     dismiss_toasts,
     hover_and_click,
     navigate_to_components,
     navigate_to_trust_center_tab,
     pace,
+    rewrite_localhost_inputs,
     rewrite_localhost_urls,
+    smooth_scroll,
     start_on_dashboard,
     type_text,
 )
 
 COMPONENT_NAME = "Compression Core Library"
+WELCOME = "Security and compliance documents for the Pied Piper compression platform."
 
 
-# ---------------------------------------------------------------------------
-# Main screencast
-# ---------------------------------------------------------------------------
+@pytest.fixture
+def public_product(pied_piper_with_sboms: dict) -> dict:
+    product = pied_piper_with_sboms["product"]
+    product.is_public = True
+    product.save(update_fields=["is_public"])
+    return pied_piper_with_sboms
+
+
+@pytest.fixture
+def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The test stack runs no S3, so the NDA upload stores into nothing."""
+    from sbomify.apps.core.object_store import StorageClient
+
+    monkeypatch.setattr(StorageClient, "upload_document", lambda self, data: "pied-piper-mutual-nda.pdf")
+
+
+def _settle(page: Page) -> None:
+    page.wait_for_load_state("networkidle")
+    dismiss_toasts(page)
+    rewrite_localhost_urls(page)
+    rewrite_localhost_inputs(page)
 
 
 @pytest.mark.django_db(transaction=True)
-def trust_center_setup(recording_page: Page) -> None:
+def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circuit: None) -> None:
     page = recording_page
+    auto_dismiss_toasts(page)
+    start_on_dashboard(page, pause_ms=600)
 
-    start_on_dashboard(page)
+    caption(
+        page,
+        "Here is how to set up a Trust Center, the public page where customers find your security information.",
+        block=False,
+    )
 
-    # ── 1. Navigate to Settings → Trust Center tab ────────────────────────
+    # ── 1. Settings → Trust Center ────────────────────────────────────────
     navigate_to_trust_center_tab(page)
-
-    # ── 2. Enable Trust Center ────────────────────────────────────────────
     toggle = page.locator("#workspace-visibility-toggle")
     toggle.wait_for(state="visible", timeout=10_000)
+    caption(page, "It lives under Settings, on the Trust Center tab. Switch it on.", block=False)
     pace(page, 600)
-    hover_and_click(page, toggle)
+    clear_caption(page)
+    with page.expect_navigation():
+        hover_and_click(page, toggle)
+    _settle(page)
+    page.locator("#trust-center-public-url").wait_for(state="visible", timeout=10_000)
+    caption(page, "Your Trust Center is live, with a public address you can share.")
 
-    # The form auto-submits and reloads with active_tab=trust-center
-    page.wait_for_load_state("networkidle")
-    rewrite_localhost_urls(page)
-    pace(page, 2000)
+    # ── 2. Welcome message ────────────────────────────────────────────────
+    description = page.locator("#trust_center_description")
+    smooth_scroll(page, description, 500)
+    caption(page, "Add a welcome message for visitors.", block=False)
+    hover_and_click(page, description)
+    type_text(description, WELCOME, delay=25)
+    clear_caption(page)
+    with page.expect_navigation():
+        hover_and_click(page, page.get_by_role("button", name="Save description"))
+    _settle(page)
 
-    # ── 3. Enable security.txt (RFC 9116) ─────────────────────────────────
+    # ── 3. security.txt ───────────────────────────────────────────────────
     security_toggle = page.locator("#security-txt-toggle")
-    security_toggle.wait_for(state="visible", timeout=10_000)
-    security_toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
+    smooth_scroll(page, security_toggle, 500)
+    caption(page, "Turn on security.txt so researchers know how to report a vulnerability.", block=False)
     hover_and_click(page, security_toggle)
-    pace(page, 1000)
-
-    security_save_btn = page.locator("form:has(#security-txt-toggle) button[type='submit']")
-    security_save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    csirt = page.locator("#security_txt_csirt_email")
+    csirt.wait_for(state="visible", timeout=5_000)
     pace(page, 400)
-    hover_and_click(page, security_save_btn)
+    hover_and_click(page, csirt)
+    type_text(csirt, "security@example.com", delay=40)
+    save_security = page.get_by_role("button", name="Save security.txt")
+    smooth_scroll(page, save_security, 400)
+    clear_caption(page)
+    with page.expect_navigation():
+        hover_and_click(page, save_security)
+    _settle(page)
 
-    page.wait_for_load_state("networkidle")
-    dismiss_toasts(page)
-    rewrite_localhost_urls(page)
-    pace(page, 1500)
-
-    # ── 4. Upload Company NDA ─────────────────────────────────────────────
-    nda_label = page.locator("label[for='company_nda_file']")
-    nda_label.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    # ── 4. Company NDA ────────────────────────────────────────────────────
+    nda_input = page.locator("#company_nda_file")
+    nda_zone = page.locator("label:has(#company_nda_file)")
+    smooth_scroll(page, nda_zone, 500)
+    caption(page, "Upload your NDA. Visitors sign it before they can download gated artifacts.", block=False)
+    nda_input.set_input_files(
+        files=[{"name": "Pied_Piper_Mutual_NDA.pdf", "mimeType": "application/pdf", "buffer": MINIMAL_PDF}]
+    )
     pace(page, 800)
+    clear_caption(page)
+    with page.expect_navigation():
+        hover_and_click(page, page.get_by_role("button", name="Upload NDA"))
+    _settle(page)
+    view_nda = page.get_by_role("link", name="View NDA")
+    view_nda.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, view_nda, 300)
 
-    pdf_path = Path(tempfile.gettempdir()) / "Pied_Piper_Mutual_NDA_2025.pdf"
-    pdf_path.write_bytes(MINIMAL_PDF)
-
-    file_input = page.locator("#company_nda_file")
-    file_input.set_input_files(str(pdf_path))
-    pace(page, 1000)
-
-    upload_btn = page.locator("button:has-text('Upload NDA')")
-    upload_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 500)
-    hover_and_click(page, upload_btn)
-
-    page.wait_for_load_state("networkidle")
-    dismiss_toasts(page)
-    rewrite_localhost_urls(page)
-    pace(page, 2000)
-
-    pdf_path.unlink(missing_ok=True)
-
-    # ── 5. Configure custom domain ────────────────────────────────────────
-    # The custom domain section loads via HTMX after the page reload
+    # ── 5. Custom domain ──────────────────────────────────────────────────
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
-
+    smooth_scroll(page, domain_input, 500)
+    caption(
+        page, "To serve it from your own address, enter a custom domain and add the DNS records shown.", block=False
+    )
     hover_and_click(page, domain_input)
-    pace(page, 400)
     type_text(domain_input, "trust.piedpiper.com")
-    pace(page, 800)
-
-    # ── 6. Save domain ────────────────────────────────────────────────────
-    save_btn = page.locator("button:has-text('Save Domain')")
-    save_btn.wait_for(state="visible", timeout=5_000)
-    hover_and_click(page, save_btn)
-
-    page.wait_for_load_state("networkidle")
-    dismiss_toasts(page)
-    rewrite_localhost_urls(page)
-    pace(page, 2000)
-
-    # ── 7. Create a component to demonstrate visibility ───────────────────
-    navigate_to_components(page)
-
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
-
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 500)
-
-    name_input = page.locator("#componentName")
-    hover_and_click(page, name_input)
     pace(page, 300)
-    type_text(name_input, COMPONENT_NAME)
-    pace(page, 600)
+    hover_and_click(page, page.get_by_role("button", name="Save domain"))
+    page.locator("#team-custom-domain-wrapper").get_by_text("Pending verification").wait_for(
+        state="visible", timeout=10_000
+    )
+    _settle(page)
+    caption(page, "sbomify verifies the domain automatically once DNS is in place.")
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
-
+    # ── 6. Component visibility ───────────────────────────────────────────
+    clear_caption(page)
+    navigate_to_components(page)
+    link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    caption(page, "Next, choose what to share. Everything starts private.", block=False)
+    hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
-    pace(page, 1000)
 
-    # Click into the component
-    row = page.locator("tr", has=page.locator(f"span:text-is('{COMPONENT_NAME}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
-    hover_and_click(page, row.first)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1500)
-
-    # ── 8. Demonstrate visibility options ─────────────────────────────────
-    # Dismiss any lingering toasts so the dropdown is fully visible
-    dismiss_toasts(page)
-
-    visibility_select = page.locator("select[name='visibility']")
-    visibility_select.wait_for(state="visible", timeout=10_000)
-    visibility_select.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 1000)
-
-    # Set to Public
-    hover_and_click(page, visibility_select)
+    visibility = page.get_by_role("button", name="Component visibility")
+    visibility.wait_for(state="visible", timeout=15_000)
     pace(page, 400)
-    visibility_select.select_option("public")
+    hover_and_click(page, visibility)
+    public_item = page.get_by_role("menuitemradio").filter(has_text="Public").first
+    public_item.wait_for(state="visible", timeout=5_000)
+    caption(page, "Public means anyone can view and download this component.", block=False)
+    pace(page, 500)
+    with page.expect_response(lambda r: "toggle" in r.url or "public" in r.url, timeout=10_000):
+        hover_and_click(page, public_item)
     page.wait_for_load_state("networkidle")
-    pace(page, 1000)
     dismiss_toasts(page)
     pace(page, 800)
 
-    # Set to Gated
-    hover_and_click(page, visibility_select)
-    pace(page, 400)
-    visibility_select.select_option("gated")
+    hover_and_click(page, visibility)
+    gated_item = page.get_by_role("menuitemradio").filter(has_text="Gated").first
+    gated_item.wait_for(state="visible", timeout=5_000)
+    caption(page, "Gated keeps it listed, but downloads need your approval and a signed NDA.", block=False)
+    pace(page, 500)
+    with page.expect_response(lambda r: "toggle" in r.url or "public" in r.url, timeout=10_000):
+        hover_and_click(page, gated_item)
     page.wait_for_load_state("networkidle")
-    pace(page, 1000)
     dismiss_toasts(page)
     pace(page, 800)
 
-    # Set back to Private
-    hover_and_click(page, visibility_select)
-    pace(page, 400)
-    visibility_select.select_option("private")
+    # ── 7. The public Trust Center ────────────────────────────────────────
+    clear_caption(page)
+    team_key = public_product["product"].team.key
+    page.goto(f"/public/workspace/{team_key}/")
     page.wait_for_load_state("networkidle")
-    pace(page, 1000)
-    dismiss_toasts(page)
-    pace(page, 2000)
+    rewrite_localhost_urls(page)
+    page.get_by_text(WELCOME).first.wait_for(state="visible", timeout=15_000)
+    caption(page, "This is what your customers see, starting with your welcome message.")
+    product_row = page.get_by_text(public_product["product"].name).last
+    smooth_scroll(page, product_row, 300)
+    caption(page, "Below it are the products you have made public, and your NDA.")
+    pace(page, 600)

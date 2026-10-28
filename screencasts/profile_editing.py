@@ -1,195 +1,130 @@
-"""Record the contact profile editing screencast.
+"""Record the party (contact profile) editing screencast.
 
-Drives: Dashboard → sidebar Settings → Contacts tab → Add Profile →
-fill profile name, toggle default → Add Entity → fill entity details →
-Add Contact ×2 with roles → Done → Create Profile.
+Drives: Dashboard → sidebar Settings → Parties tab → Add party → name and
+default → Add entity → roles and organization details → two contacts with
+roles → Done → Create party → the party listed as the default.
 """
 
 import pytest
 from playwright.sync_api import Page
 
-from conftest import hover_and_click, navigate_to_settings, pace, start_on_dashboard, type_text
+from conftest import (
+    caption,
+    clear_caption,
+    hover_and_click,
+    mock_vuln_trends,
+    navigate_to_settings,
+    navigate_to_settings_tab,
+    pace,
+    smooth_scroll,
+    start_on_dashboard,
+    type_text,
+)
+
+PARTY_NAME = "Pied Piper Compliance"
 
 
-def _set_entity_roles(page: Page, *, manufacturer: bool, supplier: bool, author: bool) -> None:
-    """Set the entity role checkboxes.
-
-    Plain formset checkboxes now (entities-0-is_manufacturer and friends);
-    the Alpine state this helper used to drive is gone.
-    """
-    card = page.locator(".entity-card")
-    for field, wanted in (("is_manufacturer", manufacturer), ("is_supplier", supplier), ("is_author", author)):
-        card.locator(f"input[name$='-{field}']").first.set_checked(wanted)
-        pace(page, 250)
+def _fill(page: Page, locator, text: str, delay: int = 60) -> None:
+    hover_and_click(page, locator)
+    pace(page, 150)
+    type_text(locator, text, delay=delay)
+    pace(page, 250)
 
 
 @pytest.mark.django_db(transaction=True)
-def profile_editing(recording_page: Page) -> None:
+def profile_editing(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
+    mock_vuln_trends(page)
     start_on_dashboard(page)
+    caption(
+        page,
+        "Here is how to set up a party in sbomify. A party holds your supplier, manufacturer and security contacts.",
+    )
+    clear_caption(page)
+
     navigate_to_settings(page)
-
-    # Switch to the Contacts tab
-    contacts_tab = page.locator("a[data-tab='contact-profiles']")
-    hover_and_click(page, contacts_tab)
-    pace(page, 800)
-
-    # Wait for HTMX-loaded profile list content
+    navigate_to_settings_tab(page, "contact-profiles")
     content = page.locator("#contact-profiles-content")
-    content.locator(".tw-empty-state, table").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
+    content.get_by_text("No parties yet").wait_for(state="visible", timeout=15_000)
+    caption(page, "Parties live under Settings. You add one once and reuse it across your components.")
 
-    # Click "Add Profile" — in the card header (always present)
-    add_profile_btn = page.locator("button:has-text('Add Profile')").first
-    hover_and_click(page, add_profile_btn)
-
-    # Wait for the profile form to appear (HTMX swap)
+    add_party = page.get_by_role("button", name="Add party")
+    hover_and_click(page, add_party)
     profile_form = page.locator(".profile-form")
     profile_form.wait_for(state="visible", timeout=10_000)
-    pace(page, 800)
+    pace(page, 400)
 
-    # Fill "Profile Name"
-    name_input = page.locator("input[placeholder*='Default Profile']")
-    hover_and_click(page, name_input)
-    pace(page, 300)
-    type_text(name_input, "Pied Piper Compliance")
-    pace(page, 500)
+    caption(page, "Give the party a name, and make it the default for new components.", block=False)
+    _fill(page, profile_form.locator("input[name='name']"), PARTY_NAME)
+    hover_and_click(page, profile_form.locator("input[name='is_default']"))
+    pace(page, 400)
 
-    # Tick "Set as default" — a plain checkbox since the toggle conversion.
-    default_checkbox = profile_form.locator("input[name='is_default']")
-    hover_and_click(page, default_checkbox)
-    pace(page, 500)
-
-    # Click "Add Entity" — the form starts with zero entities (empty state)
-    add_entity_btn = page.locator("button:has-text('Add Entity')").first
-    hover_and_click(page, add_entity_btn)
-    pace(page, 600)
-
-    # Wait for entity card to appear (Alpine clones the template)
-    entity_card = page.locator(".entity-card")
-    entity_card.wait_for(state="visible", timeout=5_000)
+    hover_and_click(page, profile_form.get_by_role("button", name="Add entity").first)
+    entity_card = page.locator(".entity-card").first
     editor = entity_card.locator(".entity-editor-content")
     editor.wait_for(state="visible", timeout=5_000)
     pace(page, 400)
 
-    # --- Fill entity details ---
-    # The cloned template doesn't preserve checked attributes, so set roles via Alpine
-    _set_entity_roles(page, manufacturer=True, supplier=True, author=True)
+    caption(
+        page,
+        "An entity is an organization. Here, Pied Piper is both the manufacturer and the supplier.",
+        block=False,
+    )
+    # A cloned entity does not always keep the template's ticked roles, so
+    # click only the boxes that are not already in the wanted state.
+    for role, wanted in (("is_manufacturer", True), ("is_supplier", True), ("is_author", False)):
+        box = entity_card.locator(f"input[name$='-{role}']").first
+        if box.is_checked() != wanted:
+            hover_and_click(page, box, pause_ms=150)
+            pace(page, 250)
     pace(page, 300)
 
-    # Entity name
-    entity_name = editor.locator("input[placeholder='e.g. Acme Corporation']")
-    hover_and_click(page, entity_name)
-    pace(page, 200)
-    type_text(entity_name, "Pied Piper Inc")
-    pace(page, 400)
+    _fill(page, editor.locator("input[placeholder='e.g. Acme Corporation']"), "Pied Piper Inc")
+    _fill(page, editor.locator("input[placeholder='contact@example.com']"), "compliance@example.com")
+    _fill(page, editor.locator("input[placeholder='+1 555 123 4567']"), "+1 650 555 0142")
+    caption(page, "The address and website fill in the supplier details on your components.", block=False)
+    _fill(page, editor.locator("textarea[name$='-address']"), "5230 Newell Road, Palo Alto, CA 94303", delay=40)
+    _fill(page, editor.locator("textarea[name$='-website_urls_text']"), "https://piedpiper.example.com", delay=40)
 
-    # Entity email
-    entity_email = editor.locator("input[placeholder='contact@example.com']")
-    hover_and_click(page, entity_email)
-    pace(page, 200)
-    type_text(entity_email, "compliance@piedpiper.com")
-    pace(page, 400)
-
-    # Entity phone
-    entity_phone = editor.locator("input[placeholder='+1 555 123 4567']")
-    hover_and_click(page, entity_phone)
-    pace(page, 200)
-    type_text(entity_phone, "+1 650 555 0142")
-    pace(page, 400)
-
-    # Entity address
-    entity_address = editor.locator("textarea[placeholder*='123 Main Street']")
-    entity_address.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    hover_and_click(page, entity_address)
-    pace(page, 200)
-    type_text(entity_address, "5230 Newell Road, Palo Alto, CA 94303")
-    pace(page, 400)
-
-    # Entity website
-    entity_website = editor.locator("textarea[placeholder*='one URL per line']")
-    hover_and_click(page, entity_website)
-    pace(page, 200)
-    type_text(entity_website, "https://piedpiper.com")
-    pace(page, 600)
-
-    # --- Add first contact ---
-    add_contact_btn = entity_card.locator("button:has-text('Add Contact')")
-    add_contact_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 300)
-    hover_and_click(page, add_contact_btn)
-    pace(page, 500)
-
-    # Fill first contact details — only one contact card exists at this point
+    add_contact = entity_card.get_by_role("button", name="Add contact")
+    smooth_scroll(page, add_contact, 400)
+    caption(page, "Every entity needs at least one contact person. Tick the roles each person covers.", block=False)
+    hover_and_click(page, add_contact)
     contact1 = entity_card.locator(".contact-card").first
     contact1.wait_for(state="visible", timeout=5_000)
-
-    c1_name = contact1.locator("input[aria-label='Contact Name']")
-    hover_and_click(page, c1_name)
-    pace(page, 200)
-    type_text(c1_name, "Bertram Gilfoyle")
     pace(page, 300)
+    _fill(page, contact1.locator("input[aria-label='Contact Name']"), "Bertram Gilfoyle")
+    _fill(page, contact1.locator("input[aria-label='Contact Email']"), "gilfoyle@example.com")
+    caption(page, "Gilfoyle is the security contact. That is who receives vulnerability reports.", block=False)
+    for role in ("is_security_contact", "is_technical_contact"):
+        hover_and_click(page, contact1.locator(f"input[name$='-{role}']"), pause_ms=150)
+        pace(page, 250)
 
-    c1_email = contact1.locator("input[aria-label='Contact Email']")
-    hover_and_click(page, c1_email)
-    pace(page, 200)
-    type_text(c1_email, "gilfoyle@piedpiper.com")
-    pace(page, 300)
-
-    c1_phone = contact1.locator("input[aria-label='Contact Phone']")
-    hover_and_click(page, c1_phone)
-    pace(page, 200)
-    type_text(c1_phone, "+1 650 555 0143")
-    pace(page, 400)
-
-    # Check Author, Security, Technical roles for first contact
-    contact1.locator("input[name$='-is_author']").check()
-    pace(page, 250)
-    contact1.locator("input[name$='-is_security_contact']").check()
-    pace(page, 250)
-    contact1.locator("input[name$='-is_technical_contact']").check()
-    pace(page, 500)
-
-    # --- Add second contact ---
-    add_contact_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 300)
-    hover_and_click(page, add_contact_btn)
-    pace(page, 500)
-
-    # Fill second contact — target the last contact card
-    contact2 = entity_card.locator(".contact-card").last
+    hover_and_click(page, add_contact)
+    contact2 = entity_card.locator(".contact-card").nth(1)
     contact2.wait_for(state="visible", timeout=5_000)
-
-    c2_name = contact2.locator("input[aria-label='Contact Name']")
-    hover_and_click(page, c2_name)
-    pace(page, 200)
-    type_text(c2_name, "Dinesh Chughtai")
     pace(page, 300)
-
-    c2_email = contact2.locator("input[aria-label='Contact Email']")
-    hover_and_click(page, c2_email)
-    pace(page, 200)
-    type_text(c2_email, "dinesh@piedpiper.com")
+    _fill(page, contact2.locator("input[aria-label='Contact Name']"), "Dinesh Chugtai")
+    _fill(page, contact2.locator("input[aria-label='Contact Email']"), "dinesh@example.com")
+    hover_and_click(page, contact2.locator("input[name$='-is_technical_contact']"), pause_ms=150)
     pace(page, 400)
 
-    # Check Technical role for second contact
-    contact2.locator("input[name$='-is_technical_contact']").check()
-    pace(page, 600)
-
-    # --- Done editing entity ---
-    done_btn = entity_card.locator("button:has-text('Done')")
-    done_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 300)
+    done_btn = entity_card.get_by_role("button", name="Done")
+    smooth_scroll(page, done_btn, 400)
+    caption(page, "Click Done to close the entity. The summary shows its roles and contacts.", block=False)
     hover_and_click(page, done_btn)
-    pace(page, 800)
+    pace(page, 1200)
 
-    # --- Submit the form ---
-    create_btn = page.locator("button[type='submit']:has-text('Create Profile')")
-    create_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 300)
+    create_btn = profile_form.get_by_role("button", name="Create party")
+    caption(page, "Then create the party.", block=False)
     hover_and_click(page, create_btn)
 
-    # Wait for the profile list to reappear (HTMX swap after successful creation)
-    content.locator("table, .tw-empty-state").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 2000)
+    content.get_by_role("table", name="Parties").wait_for(state="visible", timeout=15_000)
+    page.wait_for_load_state("networkidle")
+    pace(page, 600)
+    caption(
+        page,
+        "The party is saved and marked as the default. New components pick up these contacts automatically.",
+    )
+    pace(page, 800)

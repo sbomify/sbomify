@@ -330,13 +330,29 @@ def rewrite_localhost_urls(page: Page) -> None:
     }""")
 
 
+def rewrite_localhost_inputs(page: Page) -> None:
+    """Like :func:`rewrite_localhost_urls`, for read-only input values.
+
+    Copy fields (the Trust Center public URL, the security.txt canonical URL)
+    render their value in an ``<input readonly>``, which a text-node walk does
+    not reach. Call both after a navigation that shows such a field.
+    """
+    page.evaluate("""() => {
+        for (const el of document.querySelectorAll('input[readonly], input[value*="localhost"]')) {
+            el.value = el.value
+                .replace(/http:\\/\\/localhost:\\d+/g, 'https://app.sbomify.com')
+                .replace(/\\blocalhost\\b/g, 'app.sbomify.com');
+        }
+    }""")
+
+
 # ---------------------------------------------------------------------------
 # Narration — chapter title cards and lower-third captions
 #
-# The FAQ-length recordings need no narration: each shows one action and the
-# surrounding FAQ text carries the explanation. A marketplace walkthrough has
-# no surrounding text — it plays cold, often muted, next to a listing. These
-# two helpers carry the story instead.
+# Every recording is narrated. A video gets embedded, shared and watched on
+# its own, away from the FAQ entry that explains it, and the marketplace tour
+# has no surrounding text at all. These two helpers carry the story; the
+# caption is also spoken (see "Voice-over" below).
 #
 # Both build their DOM node-by-node and set every dynamic string via
 # ``textContent`` rather than ``innerHTML``, matching the existing overlay in
@@ -709,11 +725,15 @@ def navigate_to_settings_tab(page: Page, key: str) -> None:
 
 
 def click_into_row(page: Page, name: str) -> None:
-    """Click a table row containing the given name."""
-    row = page.locator("tr", has=page.locator(f"span:text-is('{name}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
+    """Open the item a table row names, by its name link.
+
+    Inventory rows used to be clickable as a whole; now only the name inside
+    them is a link.
+    """
+    link = page.locator("main tr").get_by_role("link", name=name, exact=True)
+    link.first.wait_for(state="visible", timeout=10_000)
     pace(page, 500)
-    hover_and_click(page, row.first)
+    hover_and_click(page, link.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
 
@@ -783,35 +803,42 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
 def enable_and_configure_trust_center(page: Page) -> None:
     """Enable the trust center and configure a custom domain.
 
-    Shared between trust_center_setup and tea_enabling screencasts.
+    Shared between trust_center_setup, tea_enabling and the walkthrough. The
+    visibility switch submits its form on change and reloads the tab; the
+    custom domain card then loads over HTMX, and its save is an Alpine call
+    that flips the status to "Pending verification" without a reload.
     """
     toggle = page.locator("#workspace-visibility-toggle")
     toggle.wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
-    hover_and_click(page, toggle)
-
-    page.wait_for_load_state("networkidle")
+    pace(page, 400)
+    if not toggle.is_checked():
+        with page.expect_navigation():
+            hover_and_click(page, toggle)
+        page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
-    pace(page, 2000)
+    rewrite_localhost_inputs(page)
+    pace(page, 800)
 
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
+    smooth_scroll(page, domain_input, 600)
 
     hover_and_click(page, domain_input)
-    pace(page, 400)
+    pace(page, 200)
     type_text(domain_input, "trust.piedpiper.com")
-    pace(page, 800)
+    pace(page, 400)
 
-    save_btn = page.locator("button:has-text('Save Domain')")
+    save_btn = page.get_by_role("button", name="Save domain")
     save_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, save_btn)
 
+    page.locator("#team-custom-domain-wrapper").get_by_text("Pending verification").wait_for(
+        state="visible", timeout=10_000
+    )
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
     rewrite_localhost_urls(page)
-    pace(page, 1500)
+    pace(page, 800)
 
 
 # ---------------------------------------------------------------------------
@@ -955,8 +982,18 @@ def deletable_team(
     sample_user: AbstractBaseUser,
     team_with_business_plan: Team,
 ) -> Team:
-    """Unmark the team as default so the delete button is enabled."""
+    """The recording's workspace: Pied Piper, owned by Richard Hendricks.
+
+    The shared fixtures name these "Test Business Team" and "Test User", and
+    both are in frame on every page (sidebar, account menu, public footer).
+    The team is also unmarked as default so the delete button is enabled.
+    """
     Member.objects.filter(user=sample_user, team=team_with_business_plan).update(is_default_team=False)
+    team_with_business_plan.name = "Pied Piper"
+    team_with_business_plan.save(update_fields=["name"])
+    sample_user.first_name = "Richard"
+    sample_user.last_name = "Hendricks"
+    sample_user.save(update_fields=["first_name", "last_name"])
     return team_with_business_plan
 
 

@@ -211,6 +211,10 @@ screencasts/output/*.webm
 screencasts/output/*.txt
 screencasts/output/*.md
 screencasts/output/screenshots/
+screencasts/output/narration/
+screencasts/output/*.vtt
+screencasts/output/*.narration.json
+screencasts/output/*.png
 
 # VSCode settings
 .vscode/

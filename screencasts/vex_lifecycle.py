@@ -1,32 +1,26 @@
-"""Record the VEX lifecycle screencast — generate → upload → suppress → publish,
-including VEX versioning (a re-issued VEX supersedes the previous one).
-
-Drives the full producer-to-consumer journey for hand-authored CycloneDX VEX:
+"""Record the VEX lifecycle screencast: scan, VEX v1, VEX v2, Trust Center.
 
 1. **The vulnerability.** Open the component. Its scan flagged a critical, a high
    and a medium.
 2. **VEX v1.** Show the CycloneDX VEX (version 1) that marks the critical
-   ``not_affected``, upload it, and watch the critical drop from the component's
-   severity counts. The public Trust Center shows one finding suppressed.
+   ``not_affected``, upload it through Upload VEX with its dry-run preview, and
+   watch the critical leave the component's open vulnerabilities. The public
+   Trust Center release page shows one suppressed by VEX.
 3. **VEX v2 (versioning).** Show a re-issued VEX (version 2) that also clears the
-   high. sbomify applies a component's newest VEX, so uploading v2 supersedes v1:
-   the high now drops too and the Trust Center shows two findings suppressed, with
-   the newer VEX downloadable.
+   high. sbomify applies a component's newest VEX, so v2 supersedes v1: the high
+   leaves too, the Trust Center shows two suppressed and offers the VEX download.
 
-Two infrastructure notes:
+Infrastructure notes:
 
-1. **S3 short-circuit.** The screencast compose stack runs no S3 service, so a
-   real upload would fail at ``put_object``. We back S3 with an in-memory dict:
-   ``upload_data_as_file`` stores the bytes and ``get_file_data`` returns them.
-   Both halves are needed. No-oping only the put would let the upload succeed
-   while ``build_release_vex`` got nothing back from ``get_sbom_data``, so the
-   Trust Center's "Download latest VEX" link would 404 on camera.
-2. **Re-annotation runs the real engine, fed directly.** In production, uploading
-   a VEX enqueues a job that reads the VEX from S3 and re-annotates the stored
-   scan. With no S3 the job cannot fetch the bytes, so ``_apply_vex`` runs the
-   same engine functions (``derive_vex_suppressions`` + ``reapply_vex_to_stored_result``)
-   on the in-memory VEX document. The suppression and rebuilt counts are the real
-   engine's output — only the S3 round-trip is skipped.
+1. **S3 in a dict.** The screencast stack runs no S3 service, so
+   ``upload_data_as_file`` stores bytes in memory and ``get_file_data`` returns
+   them. Both halves matter: re-annotation and the Trust Center VEX download read
+   the uploaded document back.
+2. **Re-annotation runs the real engine, synchronously.** In production the upload
+   enqueues a worker job; here ``reannotate_component_runs`` (the function that job
+   calls) runs right after the upload, reading the VEX through the dict-backed S3.
+   The seeded scan's finding rows are projected with ``sync_findings`` so the
+   component page lists them, as a completed scan would.
 """
 
 import html as html_lib
@@ -37,10 +31,13 @@ from django.urls import reverse
 from playwright.sync_api import Page
 
 from conftest import (
-    click_into_row,
+    auto_dismiss_toasts,
+    caption,
+    clear_caption,
     hover_and_click,
     navigate_to_components,
     pace,
+    rewrite_localhost_urls,
     smooth_scroll,
     start_on_dashboard,
 )
@@ -136,7 +133,9 @@ def _vex_bytes(document: dict) -> bytes:
 @pytest.fixture
 def vex_release(deletable_team: Team) -> dict:
     """Seed a public release whose scanned SBOM has an unmitigated critical."""
-    component = Component.objects.create(team=deletable_team, name=COMPONENT_NAME)
+    component = Component.objects.create(
+        team=deletable_team, name=COMPONENT_NAME, visibility=Component.Visibility.PUBLIC
+    )
 
     sbom = SBOM.objects.create(
         name=SBOM_NAME,
@@ -178,6 +177,17 @@ def vex_release(deletable_team: Team) -> dict:
         },
     )
 
+    # The scan's finding rows, as scan completion projects them.
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+    sync_findings(run, fresh=True)
+
+    # The Trust Center is on and publishes vulnerability posture, so the public
+    # release page shows the VEX-applied counts.
+    deletable_team.is_public = True
+    deletable_team.publish_vulnerability_posture = True
+    deletable_team.save(update_fields=["is_public", "publish_vulnerability_posture"])
+
     return {"component": component, "release": release, "run": run, "product": product}
 
 
@@ -203,31 +213,23 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(StorageClient, "get_file_data", _get)
 
 
-def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:
-    """Suppress via the real VEX engine, then pin the uploaded VEX to the release.
+def _apply_vex(component: Component, release: Release) -> None:
+    """Run the re-annotation the upload enqueues, then pin the newest VEX to the release.
 
-    Runs ``derive_vex_suppressions`` + ``reapply_vex_to_stored_result`` on the
-    in-memory VEX document — the same functions the async job runs after reading
-    the VEX from S3 — so the annotated findings and rebuilt counts are the
-    engine's genuine output. ``reapply`` is a full recompute, so applying v2's
-    statements supersedes v1. Then attaches the component's newest VEX (the one
-    just uploaded through the UI) to the release so it's downloadable.
+    ``reannotate_component_runs`` is what the worker job calls after a VEX upload:
+    it resolves the component's newest VEX (read back through the dict-backed S3),
+    re-annotates the stored scan and re-projects its finding rows. ``reapply`` is
+    a full recompute, so v2's statements supersede v1's.
     """
-    from sbomify.apps.vulnerability_scanning.vex import (
-        derive_vex_suppressions,
-        reapply_vex_to_stored_result,
-    )
-
-    statements = derive_vex_suppressions(document)
-    run.result = reapply_vex_to_stored_result(run.result, statements)
-    run.save(update_fields=["result"])
+    from sbomify.apps.vulnerability_scanning.vex import reannotate_component_runs
 
     vex = SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX).order_by("-created_at").first()
     if vex is not None:
         ReleaseArtifact.objects.get_or_create(release=release, sbom=vex)
+    reannotate_component_runs(component.id)
 
 
-def _show_vex_file(page: Page, document: dict, subtitle: str, pause_ms: int = 5000) -> None:
+def _show_vex_file(page: Page, document: dict, subtitle: str, pause_ms: int = 600) -> None:
     """Render the CycloneDX VEX document full-screen so viewers see its contents.
 
     The in-app VEX Documents card lists uploads but does not render their
@@ -282,88 +284,57 @@ def _show_vex_file(page: Page, document: dict, subtitle: str, pause_ms: int = 50
 
 
 def _upload_vex(page: Page, document: dict) -> None:
-    """Upload a VEX through the header's ⋮ menu modal, via the dry-run preview.
-
-    The upload surface lives in a modal behind the component header's
-    meatball menu now, with a real artifact-type select; a VEX file gets a
-    dry-run preview before anything is stored, and applying it is what
-    persists — both worth having on camera.
-    """
-    more_actions = page.get_by_role("button", name="More actions")
-    more_actions.wait_for(state="visible", timeout=15_000)
-    hover_and_click(page, more_actions)
-    pace(page, 600)
-    hover_and_click(page, page.get_by_role("menuitem", name="Upload artifact"))
-    pace(page, 1000)
-
-    type_select = page.locator("#upload-bom-type")
-    type_select.wait_for(state="visible", timeout=10_000)
-    type_select.select_option("vex")
-    pace(page, 1000)
+    """Upload a VEX from the component's actions menu, through the dry-run preview."""
+    actions = page.get_by_role("button", name="Component actions")
+    actions.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, actions)
+    pace(page, 300)
+    hover_and_click(page, page.get_by_role("menuitem", name="Upload VEX"))
 
     file_input = page.locator("#upload-sbom input[type='file']")
+    file_input.wait_for(state="attached", timeout=10_000)
+    pace(page, 500)
     with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
         file_input.set_input_files(
             files=[{"name": VEX_FILENAME, "mimeType": "application/json", "buffer": _vex_bytes(document)}]
         )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
-    pace(page, 2500)
+    page.get_by_text("Preview: nothing stored yet").first.wait_for(state="visible", timeout=10_000)
 
-    apply_btn = page.locator("button:has-text('Apply this VEX')")
+
+def _apply_upload(page: Page) -> None:
+    apply_btn = page.get_by_role("button", name="Apply this VEX")
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
         timeout=15_000,
     ):
         hover_and_click(page, apply_btn)
-    pace(page, 1500)
+    pace(page, 800)
 
 
-def _show_component_posture(page: Page, component_url: str, struck_cves: list[str], hold_ms: int = 4000) -> None:
-    """Land on the component's vulnerabilities table and show the VEX effect.
-
-    The table strikes a suppressed finding's severity badge through, so the
-    proof on camera is each cleared CVE's row rendering with line-through.
-    """
+def _open_vulnerabilities(page: Page, component_url: str) -> None:
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    anchor = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
-    anchor.wait_for(state="visible", timeout=15_000)
-    pace(page, 1500)
-    smooth_scroll(page, anchor, 1500)
-    for cve in struck_cves:
-        struck = page.locator(f"tr:has-text('{cve}') .line-through").first
-        struck.wait_for(state="visible", timeout=10_000)
-    pace(page, hold_ms)
+    heading = page.locator("main").get_by_text("Vulnerabilities", exact=True).first
+    heading.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, heading, 400)
 
 
-def _show_trust_center(page: Page, public_url: str, show_download: bool) -> None:
-    """Land on the public Trust Center release page and reveal the VEX-applied posture."""
+def _show_trust_center(page: Page, public_url: str) -> None:
     page.goto(public_url)
     page.wait_for_load_state("networkidle")
-
-    posture_heading = page.locator("h4:has-text('Vulnerability Posture')")
-    posture_heading.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, posture_heading, 2000)
-
-    suppression_note = page.locator("text=suppressed by VEX").first
-    suppression_note.wait_for(state="visible", timeout=10_000)
-    smooth_scroll(page, suppression_note, 3000)
-
-    if show_download:
-        vex_download = page.locator("a[title='Download latest VEX (CycloneDX)']").first
-        vex_download.wait_for(state="visible", timeout=10_000)
-        smooth_scroll(page, vex_download, 1200)
-        vex_download.hover()
-        pace(page, 2500)
+    rewrite_localhost_urls(page)
+    posture = page.get_by_text("suppressed by VEX").first
+    posture.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, posture, 400)
 
 
 @pytest.mark.django_db(transaction=True)
 def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: None) -> None:
     page = recording_page
+    auto_dismiss_toasts(page)
 
     component = vex_release["component"]
     release = vex_release["release"]
-    run = vex_release["run"]
     product = vex_release["product"]
     component_url = reverse("core:component_details", kwargs={"component_id": component.id})
     public_url = reverse(
@@ -371,36 +342,80 @@ def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: Non
         kwargs={"product_id": product.id, "release_id": release.id},
     )
 
-    start_on_dashboard(page)
+    start_on_dashboard(page, pause_ms=600)
+    caption(
+        page,
+        "Here is the VEX lifecycle in sbomify: from a scan finding to a statement your customers can see.",
+        block=False,
+    )
 
-    # ── 1. The vulnerability — the component's scan flagged a critical ───
+    # ── 1. The vulnerability ──────────────────────────────────────────────
     navigate_to_components(page)
-    click_into_row(page, COMPONENT_NAME)
+    link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
     critical_row = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
     critical_row.wait_for(state="visible", timeout=15_000)
-    pace(page, 1500)
-    smooth_scroll(page, critical_row, 4000)
+    smooth_scroll(page, critical_row, 400)
+    caption(page, "The latest scan of this component found a critical, a high and a medium vulnerability.")
+    caption(page, "Your team checks the critical and finds the vulnerable code is never reached.")
 
-    # ── 2. VEX v1 — show the file, upload it, watch the critical clear ───
-    _show_vex_file(page, VEX_V1, "CycloneDX VEX · version 1 — clears the critical", 5500)
+    # ── 2. VEX v1 ─────────────────────────────────────────────────────────
+    clear_caption(page)
+    _show_vex_file(page, VEX_V1, "CycloneDX VEX, version 1")
+    caption(page, "So you write a VEX statement: this CVE is not affected, because the code is not reachable.")
 
+    clear_caption(page)
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    pace(page, 800)
+    caption(page, "Upload it from the component's actions menu, with Upload VEX.", block=False)
     _upload_vex(page, VEX_V1)
+    caption(page, "Before anything is stored, a preview shows what the VEX would suppress.")
+    clear_caption(page)
+    _apply_upload(page)
+    _apply_vex(component, release)
 
-    _apply_vex(component, release, run, VEX_V1)
-    _show_component_posture(page, component_url, [CRITICAL_CVE])  # critical struck through
-    _show_trust_center(page, public_url, show_download=False)  # 1 finding suppressed
+    _open_vulnerabilities(page, component_url)
+    page.locator(f"tr:has-text('{HIGH_CVE}')").first.wait_for(state="visible", timeout=15_000)
+    caption(page, "Once applied, the critical leaves the open list. Only the high and the medium remain.")
 
-    # ── 3. VEX v2 — re-issue a newer version that also clears the high ───
-    _show_vex_file(page, VEX_V2, "CycloneDX VEX · version 2 — re-issued, also clears the high", 5500)
+    clear_caption(page)
+    _show_trust_center(page, public_url)
+    caption(page, "Your Trust Center shows the same thing. One vulnerability is suppressed by VEX.")
 
+    # ── 3. VEX v2 ─────────────────────────────────────────────────────────
+    clear_caption(page)
+    _show_vex_file(page, VEX_V2, "CycloneDX VEX, version 2")
+    caption(
+        page,
+        "Later you re-issue the VEX as version 2. It keeps the first statement and also clears the high.",
+        block=False,
+    )
+    pace(page, 1800)
+    page.locator("pre").evaluate("el => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })")
+    pace(page, 1500)
+
+    clear_caption(page)
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    pace(page, 800)
     _upload_vex(page, VEX_V2)
+    caption(page, "Upload it the same way. The preview now counts two.")
+    clear_caption(page)
+    _apply_upload(page)
+    _apply_vex(component, release)
 
-    _apply_vex(component, release, run, VEX_V2)
-    _show_component_posture(page, component_url, [CRITICAL_CVE, HIGH_CVE])  # both struck through
-    _show_trust_center(page, public_url, show_download=True)  # 2 findings suppressed
+    _open_vulnerabilities(page, component_url)
+    page.locator(f"tr:has-text('{HIGH_CVE}')").first.wait_for(state="hidden", timeout=15_000)
+    caption(page, "sbomify always applies the newest VEX, so version 2 replaces version 1. Only the medium is left.")
+
+    clear_caption(page)
+    _show_trust_center(page, public_url)
+    download = page.locator("a[title='Download latest VEX (CycloneDX)']").first
+    download.wait_for(state="visible", timeout=10_000)
+    caption(
+        page, "On the Trust Center, two are now suppressed, and customers can download the latest VEX.", block=False
+    )
+    smooth_scroll(page, download, 300)
+    download.hover()
+    pace(page, 800)

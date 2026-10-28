@@ -4,25 +4,28 @@ Plays every chapter from ``walkthrough_chapters.py`` back-to-back as one
 continuous tour, separated by title cards, opening on a cold dashboard and
 closing on the public trust center a customer would actually visit.
 
-Runs about three and a half minutes. Use this as the single overview video on
-a listing; for listings that cap video length, record
-``walkthrough_chapters.py`` instead, which cuts the same chapters into
-standalone clips from the same step functions.
+Runs about four minutes. Use this as the single overview video on a listing;
+for listings that cap video length, record ``walkthrough_chapters.py``
+instead, which cuts the same chapters into standalone clips from the same step
+functions.
 
-The story arc, in order:
+sbomify is a CRA product security lifecycle platform, from SBOM to security
+disclosure. The story arc, in order:
 
-1. **Know what you ship** — workspace, products, the component hierarchy, and
-   the identifiers and lifecycle dates that make a product record answerable.
-2. **Every artifact, versioned** — SBOMs and documents stored immutably per
-   component, pinned to releases.
-3. **Know what's exploitable** — the posture dashboard, the per-component
-   drill-down, and clearing a false positive with a VEX document.
-4. **Share it with customers** — the trust center on a custom domain, and the
-   public page it serves.
+1. **Know what you ship**: workspace, products, components, and the
+   identifiers and lifecycle dates that make a product record answerable.
+2. **Every SBOM, versioned**: artifacts stored immutably per component, pinned
+   to releases.
+3. **Triage vulnerabilities with VEX**: the workspace vulnerability list,
+   trends, the per-component drill-down, and clearing a false positive with a
+   VEX document.
+4. **Prove CRA compliance**: the CRA assessment's summary and generated
+   documents, marked complete.
+5. **Disclose it to customers**: security advisories, the Trust Center on a
+   custom domain, and the public page it serves.
 
-Chapters 1 and 3 open on the dashboard themselves; the tour relies on that to
-return to a known surface between acts rather than tracking where the previous
-chapter left the cursor.
+Each chapter opens from the sidebar, so it does not depend on where the
+previous one left the page.
 """
 
 import time
@@ -80,7 +83,7 @@ def marketplace_walkthrough(recording_page: Page) -> None:
     title_card(
         page,
         "sbomify",
-        "Supply chain transparency, without the spreadsheet",
+        "From SBOM to security disclosure",
         hold_ms=3000,
     )
 
@@ -91,7 +94,7 @@ def marketplace_walkthrough(recording_page: Page) -> None:
         title_card(page, eyebrow, title)
         step(page)
         dismiss_toasts(page)
-        pace(page, 900)
+        pace(page, 300)
 
     markers.append((time.monotonic() - started, "Get started"))
 

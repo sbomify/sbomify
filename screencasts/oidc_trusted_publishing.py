@@ -1,13 +1,13 @@
 """Record the OIDC trusted-publishing setup screencast.
 
 Drives the full lifecycle:
-    Dashboard → Components → open a component → scroll to the
-    Trusted Publishers section → add a GitHub repository binding →
+    Dashboard → Components → open a component → actions menu →
+    Trusted publishers → add a GitHub repository binding →
     expand the GitHub Actions workflow snippet → SIMULATE the
     Actions runner exchanging an OIDC JWT for a sbomify token →
     upload a CycloneDX SBOM with that short-lived token → reload
-    the component page so the viewer sees the new SBOM land in the
-    SBOMs table.
+    the component page so the viewer sees the new version land in
+    Latest versions.
 
 Prerequisite: ``pied_piper_with_sboms`` seeds a Component the
 screencast can click into. The GitHub REST call that
@@ -31,11 +31,15 @@ from playwright.sync_api import Page
 from conftest import (
     PIED_PIPER_COMPONENTS,
     auto_dismiss_toasts,
+    caption,
+    clear_caption,
     dismiss_toasts,
     hover_and_click,
     mock_vuln_trends,
     navigate_to_components,
     pace,
+    rewrite_localhost_urls,
+    smooth_scroll,
     start_on_dashboard,
     type_text,
 )
@@ -232,78 +236,75 @@ def oidc_trusted_publishing(
 
     auto_dismiss_toasts(page)
     mock_vuln_trends(page)
-    start_on_dashboard(page)
+    start_on_dashboard(page, pause_ms=600)
+    caption(
+        page,
+        "Here is how to let GitHub Actions upload SBOMs to sbomify with no API token to store or rotate.",
+        block=False,
+    )
 
-    # ── 1. Navigate to Components ────────────────────────────────────────
+    # ── 1. The component ─────────────────────────────────────────────────
     navigate_to_components(page)
-
-    # ── 2. Click into the first Pied Piper component ─────────────────────
     target_component_name = PIED_PIPER_COMPONENTS[0]
     component = pied_piper_with_sboms["components"][target_component_name]
-    component_name = page.locator(f"span.text-text:text-is('{target_component_name}')")
-    component_name.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
-    hover_and_click(page, component_name)
+    link = page.locator("main").get_by_role("link", name=target_component_name, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
 
-    # ── 3. Open Trusted Publishers from the header's ⋮ menu ──────────────
-    # The component page keeps its secondary surfaces behind the meatball
-    # menu now, so the section lives in a modal rather than on the page.
-    more_actions = page.get_by_role("button", name="More actions")
-    more_actions.wait_for(state="visible", timeout=15_000)
-    hover_and_click(page, more_actions)
-    pace(page, 600)
+    # ── 2. Trusted publishers, from the actions menu ─────────────────────
+    actions = page.get_by_role("button", name="Component actions")
+    actions.wait_for(state="visible", timeout=15_000)
+    caption(page, "Open the component, then choose Trusted publishers from its actions menu.", block=False)
+    hover_and_click(page, actions)
+    pace(page, 400)
     hover_and_click(page, page.get_by_role("menuitem", name="Trusted publishers"))
-    pace(page, 600)
 
     section = page.locator("#trusted-publishers-section")
     section.wait_for(state="visible", timeout=15_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
+    rewrite_localhost_urls(page)
 
-    # ── 4. Fill the repository field ─────────────────────────────────────
+    # ── 3. Add the repository ────────────────────────────────────────────
     repo_input = page.locator("#id_repository")
     repo_input.wait_for(state="visible", timeout=5_000)
+    caption(page, "Enter the GitHub repository whose workflows may publish here.", block=False)
     hover_and_click(page, repo_input)
-    pace(page, 300)
     type_text(repo_input, DEMO_REPOSITORY)
-    pace(page, 800)
-
-    # ── 5. Click "Add publisher" ─────────────────────────────────────────
-    add_btn = page.locator("#trusted-publishers-section button[type='submit']:has-text('Add publisher')")
-    hover_and_click(page, add_btn)
-
-    # ── 6. Wait for the binding row to land + linger on the result ───────
-    page.locator(f"#trusted-publishers-section table code:has-text('{DEMO_REPOSITORY}')").wait_for(
-        state="visible", timeout=10_000
-    )
+    pace(page, 400)
+    hover_and_click(page, section.get_by_role("button", name="Add publisher"))
+    section.locator(f"code:has-text('{DEMO_REPOSITORY}')").first.wait_for(state="visible", timeout=10_000)
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
-    pace(page, 2000)
+    rewrite_localhost_urls(page)
+    caption(
+        page, "The binding pins the repository's permanent IDs, so a renamed or recreated repository cannot take over."
+    )
 
-    # ── 7. Expand the workflow YAML so the viewer sees the contract ──────
-    disclosure = page.locator("#trusted-publishers-section summary:has-text('Configure your GitHub Actions workflow')")
-    disclosure.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 600)
+    # ── 4. The workflow snippet ──────────────────────────────────────────
+    disclosure = section.locator("summary:has-text('Configure your GitHub Actions workflow')")
+    smooth_scroll(page, disclosure, 300)
     hover_and_click(page, disclosure)
-    pace(page, 2500)
+    pace(page, 400)
+    rewrite_localhost_urls(page)
+    snippet = section.locator("pre").first
+    snippet.wait_for(state="visible", timeout=5_000)
+    smooth_scroll(page, snippet, 300)
+    caption(
+        page,
+        "Add this step to your workflow. It trades the GitHub token for a short-lived sbomify token, then uploads.",
+    )
 
-    # ── 8. Simulate "GitHub Actions runs and uploads" ────────────────────
-    # The screencast can't actually trigger a GitHub Actions job, so the
-    # next three steps do what that runner would do — mint an OIDC JWT,
-    # exchange it for a sbomify token, upload an SBOM — and surface an
-    # on-screen overlay so the viewer sees each phase happen.
-
+    # ── 5. Simulate the Actions run ──────────────────────────────────────
+    # The screencast cannot trigger a GitHub Actions job, so the next steps do
+    # what that runner would do (mint an OIDC JWT, exchange it, upload an
+    # SBOM) with an overlay naming each phase.
     show_overlay(
         page,
         "GitHub Actions runner (simulated)",
-        [
-            "Step 1 / 3 — minting GitHub OIDC JWT",
-            f"audience: {settings.OIDC_GITHUB_AUDIENCE}",
-        ],
+        ["Step 1 of 3: minting a GitHub OIDC token", f"audience: {settings.OIDC_GITHUB_AUDIENCE}"],
     )
-    pace(page, 2200)
+    caption(page, "Here is that workflow running. First, the runner asks GitHub for an OIDC token.")
 
     now = int(time.time())
     oidc_jwt = pyjwt.encode(
@@ -329,11 +330,11 @@ def oidc_trusted_publishing(
         page,
         "GitHub Actions runner (simulated)",
         [
-            "Step 2 / 3 — POST /api/v1/auth/oidc/github/exchange",
-            "→ trading OIDC JWT for short-lived sbomify token",
+            "Step 2 of 3: POST /api/v1/auth/oidc/github/exchange",
+            "trading the OIDC token for a 15 minute sbomify token",
         ],
     )
-    pace(page, 1600)
+    caption(page, "sbomify checks the token against the binding and returns its own, valid for 15 minutes.")
 
     # Use Django's in-process test Client so the request doesn't have to
     # cross the docker network and trip the host-header middleware.
@@ -353,11 +354,12 @@ def oidc_trusted_publishing(
         page,
         "GitHub Actions runner (simulated)",
         [
-            f"Step 3 / 3 — POST /api/v1/sboms/artifact/cyclonedx/{component.id}",
-            "→ uploading CycloneDX SBOM with sbomify token",
+            f"Step 3 of 3: POST /api/v1/sboms/artifact/cyclonedx/{component.id}",
+            "uploading the CycloneDX SBOM with that token",
         ],
     )
-    pace(page, 1600)
+    caption(page, "Then the runner uploads the SBOM with it.", block=False)
+    pace(page, 1200)
 
     upload_resp = api_client.post(
         f"/api/v1/sboms/artifact/cyclonedx/{component.id}",
@@ -367,28 +369,17 @@ def oidc_trusted_publishing(
     )
     assert upload_resp.status_code in (200, 201), f"Upload failed: {upload_resp.status_code} {upload_resp.content!r}"
 
-    show_overlay(
-        page,
-        "Done",
-        ["SBOM uploaded — reloading the component to show it landed."],
-    )
-    pace(page, 1800)
-
-    # ── 9. Reload + scroll to the artifacts table to reveal the new SBOM ─
-    hide_overlay(page)
-    page.reload()
-    page.wait_for_load_state("networkidle")
-    auto_dismiss_toasts(page)
-    pace(page, 1500)
-
-    # The table header reads "Artifacts & security" ("Latest artifacts &
-    # security" in the compact view); match the shared word.
-    sboms_heading = page.locator("h4:has-text('artifacts')").first
-    sboms_heading.wait_for(state="visible", timeout=10_000)
-    sboms_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    show_overlay(page, "Done", ["SBOM uploaded."])
     pace(page, 1000)
 
-    # The newly-uploaded SBOM carries the metadata-supplied component name.
-    new_sbom_row = page.locator("a:has-text('widget')").first
-    new_sbom_row.wait_for(state="visible", timeout=10_000)
-    pace(page, 3000)
+    # ── 6. The new version on the component ──────────────────────────────
+    hide_overlay(page)
+    clear_caption(page)
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    new_version = page.locator("main").get_by_text("1.0.0-oidc-demo").first
+    new_version.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, new_version, 300)
+    new_version.hover()
+    caption(page, "The new version is on the component, uploaded by the workflow with no stored secret.")
+    pace(page, 800)
