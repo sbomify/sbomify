@@ -91,8 +91,16 @@ jobs:
             uv run playwright install ffmpeg
 
       - name: Record screencasts
+        env:
+          # Optional. With it every caption is also spoken; without it the
+          # recordings are silent and captioned.
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         run: |
           INPUT="${{ github.event.inputs.screencast }}"
+          NARRATION_ENV=()
+          if [ -n "$XAI_API_KEY" ]; then
+            NARRATION_ENV=(-e "XAI_API_KEY=$XAI_API_KEY")
+          fi
 
           # Validate input: must be "all", empty, or a safe Python filename (not conftest.py)
           if [[ -n "$INPUT" ]] && [[ "$INPUT" != "all" ]]; then
@@ -113,7 +121,7 @@ jobs:
               [[ "$(basename "$file")" == "conftest.py" ]] && continue
               BASENAME=$(basename "$file" .py)
               echo "--- Recording: $file ---"
-              docker compose -f docker-compose.tests.yml exec -T tests \
+              docker compose -f docker-compose.tests.yml exec -T "${NARRATION_ENV[@]}" tests \
                 uv run pytest "$file" \
                   --override-ini="python_files=*.py" \
                   --override-ini="python_functions=$BASENAME" \
@@ -127,7 +135,7 @@ jobs:
             fi
             BASENAME=$(basename "$FILE" .py)
             echo "Recording: $FILE"
-            docker compose -f docker-compose.tests.yml exec -T tests \
+            docker compose -f docker-compose.tests.yml exec -T "${NARRATION_ENV[@]}" tests \
               uv run pytest "$FILE" \
                 --override-ini="python_files=*.py" \
                 --override-ini="python_functions=$BASENAME" \
@@ -149,6 +157,12 @@ jobs:
             fi
           done
 
+      - name: Add the voice-over to each recording
+        if: always()
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          python3 bin/mux_screencast_narration.py screencasts/output
+
       - name: Upload to Cloudflare R2
         if: ${{ always() && env.R2_BUCKET != '' }}
         env:
@@ -166,6 +180,13 @@ jobs:
             --exclude "*" --include "*.webm" \
             --no-progress
 
+          aws s3 sync screencasts/output/ "s3://${R2_BUCKET}/screencasts/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type text/vtt \
+            --cache-control "public, max-age=300" \
+            --exclude "*" --include "*.vtt" \
+            --no-progress
+
           if [ -d screencasts/output/screenshots ]; then
             aws s3 sync screencasts/output/screenshots/ "s3://${R2_BUCKET}/screenshots/" \
               --endpoint-url "$R2_ENDPOINT" \
@@ -180,7 +201,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: screencasts
-          path: screencasts/output/*.webm
+          path: |
+            screencasts/output/*.webm
+            screencasts/output/*.vtt
           if-no-files-found: warn
 
       - name: Upload screencast screenshots

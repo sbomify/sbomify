@@ -58,12 +58,29 @@ ensure_ffmpeg() {
     fi
 }
 
+# Voice-over settings reach the container only when set here; without them the
+# recordings are silent and captioned. See "Narration" in screencasts/README.md.
+narration_env() {
+    local var
+    for var in XAI_API_KEY SCREENCAST_TTS_URL SCREENCAST_TTS_TOKEN SCREENCAST_TTS_VOICE; do
+        if [ -n "${!var:-}" ]; then
+            printf -- '-e\n%s=%s\n' "$var" "${!var}"
+        fi
+    done
+}
+
+mux_narration() {
+    python3 bin/mux_screencast_narration.py "$OUTPUT_DIR"
+}
+
 run_screencast() {
     local file="$1"
     local basename
+    local env_args=()
     basename=$(basename "$file" .py)
+    mapfile -t env_args < <(narration_env)
     echo "Recording: $file"
-    compose exec tests uv run pytest "$file" \
+    compose exec "${env_args[@]}" tests uv run pytest "$file" \
         --override-ini="python_files=*.py" \
         --override-ini="python_functions=$basename" \
         -s
@@ -115,6 +132,7 @@ case "${1:-}" in
             run_screencast "$file"
         done
         clean_temp_videos
+        mux_narration
         echo "Done. Recordings in $OUTPUT_DIR/"
         ls -lh "$OUTPUT_DIR"/*.webm 2>/dev/null
         ;;
@@ -124,7 +142,7 @@ case "${1:-}" in
         ;;
     clean)
         echo "Removing all videos from $OUTPUT_DIR/"
-        find "$OUTPUT_DIR" -name "*.webm" -delete 2>/dev/null || true
+        find "$OUTPUT_DIR" \( -name "*.webm" -o -name "*.vtt" -o -name "*.narration.json" \) -delete 2>/dev/null || true
         echo "Done."
         ;;
     *.py)
@@ -141,6 +159,7 @@ case "${1:-}" in
         ensure_ffmpeg
         run_screencast "$file"
         clean_temp_videos
+        mux_narration
         echo "Done. Recording at $OUTPUT_DIR/${1%.py}.webm"
         ;;
     ""|help|--help|-h)

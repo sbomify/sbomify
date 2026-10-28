@@ -1,6 +1,13 @@
+import ast
+import hashlib
+import json
+import os
 import re
 import sys
 import time
+import urllib.request
+import wave
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Generator
 from urllib.parse import urlparse
@@ -401,14 +408,27 @@ def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600) -> Non
     page.wait_for_timeout(500)
 
 
-def caption(page: Page, text: str) -> None:
-    """Show (or update) a lower-third caption explaining the current step.
+def caption(page: Page, text: str, *, block: bool = True) -> None:
+    """Show (or update) a lower-third caption and speak it.
 
     Anchored bottom-centre and ``pointer-events:none`` so it never intercepts
     a click the recording is about to make. Call :func:`clear_caption` before
     a navigation — the caption lives in the current document and would
     otherwise vanish on its own mid-sentence.
+
+    The line is also spoken when narration is configured (see
+    :func:`_synthesize`). A caption never starts over the previous one: it
+    first waits out whatever is still being said. With ``block`` (the default)
+    it then holds until this line has been said too, so the action that
+    follows lands after the viewer has heard what it is. Pass
+    ``block=False`` to keep acting while the line plays, for example to type
+    into a field the line is describing.
+
+    Without narration the hold is an estimated reading time instead, so a
+    silent recording keeps the same pacing.
     """
+    clip = _synthesize(text) if _tts_enabled() else None
+    _wait_for_narration(page)
     page.evaluate(
         """(payload) => {
             let bar = document.getElementById(payload.id);
@@ -436,12 +456,170 @@ def caption(page: Page, text: str) -> None:
         }""",
         {"id": CAPTION_ID, "text": text},
     )
-    page.wait_for_timeout(260)
+    _speak(text, clip)
+    if block:
+        _wait_for_narration(page)
+    else:
+        page.wait_for_timeout(260)
 
 
 def clear_caption(page: Page) -> None:
     """Remove the lower-third caption if one is showing."""
     page.evaluate(f"document.getElementById({CAPTION_ID!r})?.remove()")
+
+
+# ---------------------------------------------------------------------------
+# Voice-over
+#
+# Every caption is also spoken. The audio is synthesised while recording,
+# because the recording has to know how long each line runs to hold the screen
+# for it; the clips are cached by text, so a re-record only pays for lines
+# that changed. The video itself is captured silently by Playwright, so each
+# recording also writes ``<name>.narration.json`` — every line, when it
+# started and which clip it is — and ``bin/mux_screencast_narration.py``
+# lays the clips onto the video afterwards, on the host, where ffmpeg is.
+#
+# Narration is on when ``XAI_API_KEY`` is set, or when ``SCREENCAST_TTS_URL``
+# points at a proxy that holds the key itself. Without either the recording
+# is silent and captioned, as before.
+# ---------------------------------------------------------------------------
+
+TTS_URL = os.environ.get("SCREENCAST_TTS_URL", "https://api.x.ai/v1/tts")
+TTS_VOICE = os.environ.get("SCREENCAST_TTS_VOICE", "eve")
+TTS_SAMPLE_RATE = 24_000
+NARRATION_DIR = OUTPUT_DIR / "narration"
+# Spoken English runs at about 2.6 words a second; a silent caption is held
+# that long, plus a beat, so it can be read.
+_READING_WORDS_PER_SEC = 2.6
+
+_narration_state: dict[str, Any] = {
+    "started_at": None,
+    "busy_until": 0.0,
+    "cues": [],
+}
+
+
+# How a word is spelled for the voice, where the caption's spelling reads
+# wrong aloud. Left alone, "sbomify" comes out as "S-bomb-ify".
+_SPOKEN_SPELLINGS = {"sbomify": "S-bom-ify"}
+
+
+def _spoken(text: str) -> str:
+    for written, said in _SPOKEN_SPELLINGS.items():
+        text = re.sub(rf"\b{written}\b", said, text)
+    return text
+
+
+def _tts_enabled() -> bool:
+    return bool(os.environ.get("XAI_API_KEY") or os.environ.get("SCREENCAST_TTS_URL"))
+
+
+def _synthesize(text: str) -> Path:
+    """Return a WAV of ``text`` spoken in :data:`TTS_VOICE`, from cache if possible."""
+    text = _spoken(text)
+    digest = hashlib.sha256(f"{TTS_VOICE}\n{text}".encode()).hexdigest()[:20]
+    path = NARRATION_DIR / f"{digest}.wav"
+    if path.exists():
+        return path
+
+    NARRATION_DIR.mkdir(parents=True, exist_ok=True)
+    headers = {"Content-Type": "application/json"}
+    if api_key := os.environ.get("XAI_API_KEY"):
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif proxy_token := os.environ.get("SCREENCAST_TTS_TOKEN"):
+        headers["Authorization"] = f"Bearer {proxy_token}"
+    body = json.dumps(
+        {
+            "text": text,
+            "voice_id": TTS_VOICE,
+            "language": "en",
+            "output_format": {"codec": "wav", "sample_rate": TTS_SAMPLE_RATE},
+        }
+    ).encode()
+    request = urllib.request.Request(TTS_URL, data=body, headers=headers, method="POST")  # noqa: S310
+    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+        audio = response.read()
+
+    # The WAV is streamed, so its header carries a placeholder length rather
+    # than the real one, and anything trusting it reads a twelve-hour clip.
+    # Keep the samples and write a header that matches them.
+    data_at = audio.find(b"data")
+    if not audio.startswith(b"RIFF") or data_at < 0:
+        raise RuntimeError(f"TTS returned something other than a WAV ({len(audio)} bytes)")
+    samples = audio[data_at + 8 :]
+    tmp = path.with_suffix(".tmp")
+    with wave.open(str(tmp), "wb") as clip:
+        clip.setnchannels(1)
+        clip.setsampwidth(2)
+        clip.setframerate(TTS_SAMPLE_RATE)
+        clip.writeframes(samples[: len(samples) - len(samples) % 2])
+    tmp.replace(path)
+    return path
+
+
+def _clip_seconds(path: Path) -> float:
+    with wave.open(str(path), "rb") as clip:
+        return clip.getnframes() / clip.getframerate()
+
+
+def _speak(text: str, clip: Path | None) -> None:
+    """Start ``text`` now: log a cue and mark the voice busy until it ends."""
+    now = time.monotonic()
+    if clip is None:
+        _narration_state["busy_until"] = now + len(text.split()) / _READING_WORDS_PER_SEC + 0.6
+        return
+
+    duration = _clip_seconds(clip)
+    started_at = _narration_state["started_at"]
+    if started_at is not None:
+        _narration_state["cues"].append(
+            {
+                "at": round(now - started_at, 3),
+                "duration": round(duration, 3),
+                "audio": str(clip.relative_to(OUTPUT_DIR)),
+                "text": text,
+            }
+        )
+    # A short tail keeps one line from running straight into the next.
+    _narration_state["busy_until"] = now + duration + 0.35
+
+
+def _literal_captions(module_path: Path) -> list[str]:
+    """Every caption a recording module passes as a plain string literal."""
+    tree = ast.parse(module_path.read_text())
+    lines = []
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "caption"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            lines.append(node.args[1].value)
+    return lines
+
+
+def prefetch_narration(*module_paths: Path) -> None:
+    """Synthesise the captions of ``module_paths`` before the camera rolls.
+
+    A cache miss costs several seconds, and paid mid-recording it is dead air
+    on screen. The lines are known ahead, so fetch them all, in parallel,
+    before the page opens. Anything built at runtime is still synthesised on
+    demand by :func:`caption`.
+    """
+    if not _tts_enabled():
+        return
+    lines = {line for path in module_paths for line in _literal_captions(path)}
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(_synthesize, sorted(lines)))
+
+
+def _wait_for_narration(page: Page) -> None:
+    remaining = _narration_state["busy_until"] - time.monotonic()
+    if remaining > 0:
+        page.wait_for_timeout(int(remaining * 1000))
 
 
 # ---------------------------------------------------------------------------
@@ -464,9 +642,19 @@ def start_on_dashboard(page: Page, pause_ms: int = 1500) -> None:
     pace(page, pause_ms)
 
 
+def sidebar_link(page: Page, label: str) -> Locator:
+    """The sidebar's link for ``label``.
+
+    Scoped to ``#sidebar`` because page bodies now repeat the same names (the
+    empty-state "Products" button, the "Add components" card), and an unscoped
+    role lookup trips Playwright's strict mode on two matches.
+    """
+    return page.locator("#sidebar").get_by_role("link", name=label, exact=True)
+
+
 def navigate_to_settings(page: Page) -> None:
     """Click the sidebar Settings link and wait for the page to load."""
-    settings_link = page.get_by_role("link", name="Settings")
+    settings_link = sidebar_link(page, "Settings")
     hover_and_click(page, settings_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -474,7 +662,7 @@ def navigate_to_settings(page: Page) -> None:
 
 def navigate_to_components(page: Page) -> None:
     """Click the sidebar Components link and wait for the page to load."""
-    components_link = page.get_by_role("link", name="Components")
+    components_link = sidebar_link(page, "Components")
     hover_and_click(page, components_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -482,23 +670,15 @@ def navigate_to_components(page: Page) -> None:
 
 def navigate_to_products(page: Page) -> None:
     """Click the sidebar Products link and wait for the page to load."""
-    products_link = page.get_by_role("link", name="Products")
+    products_link = sidebar_link(page, "Products")
     hover_and_click(page, products_link)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1200)
-
-
-def navigate_to_releases(page: Page) -> None:
-    """Click the sidebar Releases link and wait for the page to load."""
-    releases_link = page.get_by_role("link", name="Releases")
-    hover_and_click(page, releases_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
 
 
 def navigate_to_plugins(page: Page) -> None:
     """Click the sidebar Plugins link and wait for the page to load."""
-    plugins_link = page.get_by_role("link", name="Plugins")
+    plugins_link = sidebar_link(page, "Plugins")
     hover_and_click(page, plugins_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
@@ -512,9 +692,18 @@ def navigate_to_trust_center_tab(page: Page) -> None:
     matched by its href and the click is a navigation.
     """
     navigate_to_settings(page)
-    trust_center_tab = page.locator("a.settings-tab[href$='/trust-center']")
-    trust_center_tab.wait_for(state="visible", timeout=15_000)
-    hover_and_click(page, trust_center_tab)
+    navigate_to_settings_tab(page, "trust-center")
+
+
+def navigate_to_settings_tab(page: Page, key: str) -> None:
+    """Click a settings tab by its key (``members``, ``trust-center``, ...).
+
+    Assumes the settings page is already open. The tabs are real links to
+    ``/settings/<key>``, tagged with ``data-settings-tab``.
+    """
+    tab = page.locator(f"a[data-settings-tab='{key}']")
+    tab.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, tab)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
 
@@ -581,7 +770,7 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
     hover_and_click(page, toggle)
     pace(page, 1200)
 
-    save_btn = page.locator("#plugin-settings-form button[type='submit']")
+    save_btn = page.locator("#plugin-settings-form button[type='submit']").last
     save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 500)
     hover_and_click(page, save_btn)
@@ -899,6 +1088,15 @@ def recording_page(
     request: pytest.FixtureRequest,
     recording_context: BrowserContext,
 ) -> Generator[Page, Any, None]:
+    # The recording's own module, the shared helpers here (which caption too),
+    # and any sibling module it borrows steps from, as the tour does.
+    here = Path(__file__).parent
+    sources = {Path(request.node.fspath), Path(__file__)}
+    for value in vars(request.module).values():
+        origin = getattr(sys.modules.get(getattr(value, "__module__", "") or ""), "__file__", None)
+        if origin and Path(origin).parent == here:
+            sources.add(Path(origin))
+    prefetch_narration(*sources)
     page = recording_context.new_page()
 
     # Replace the white about:blank with a branded splash screen.  This is
@@ -916,11 +1114,20 @@ def recording_page(
     _screenshot_state["last_time"] = 0.0
     _screenshot_state["counter"] = 0
 
+    # The video starts with the page, so cue times are measured from here.
+    _narration_state["started_at"] = time.monotonic()
+    _narration_state["busy_until"] = 0.0
+    _narration_state["cues"] = []
+
     try:
         yield page
+        # Let the last line finish before the video is cut.
+        _wait_for_narration(page)
+        page.wait_for_timeout(600)
     finally:
         _screenshot_state["dir"] = None
         _screenshot_state["hero_dir"] = None
+        _narration_state["started_at"] = None
 
     # Grab the video handle, close the page (finalizes recording),
     # then save to a meaningful filename.
@@ -930,3 +1137,11 @@ def recording_page(
     if video:
         final_path = OUTPUT_DIR / f"{recording_name}.webm"
         video.save_as(str(final_path))
+
+    cue_path = OUTPUT_DIR / f"{recording_name}.narration.json"
+    if _narration_state["cues"]:
+        cue_path.write_text(
+            json.dumps({"video": final_path.name, "voice": TTS_VOICE, "cues": _narration_state["cues"]}, indent=2)
+        )
+    else:
+        cue_path.unlink(missing_ok=True)
