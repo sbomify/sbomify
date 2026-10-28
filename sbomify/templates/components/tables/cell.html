@@ -44,6 +44,11 @@ lands at the column edge, wherever the layout puts it.
 white-space inherits, so a second line inside the cell, a description or a
 mobile fallback, stays on one line too and ellipses the same way. That is the
 intent: the column is one line per row.
+
+The wrapper clips everything in it as one box, so nothing may follow the name
+on its line: a long name pushes it out of view. A badge, flag or icon link
+beside the name goes in the trail slot of <c-tables.name>, which lets the name
+give way instead. test_cotton_tables.py holds every nowrap cell to that.
 {% endcomment %}
 <c-vars compact end date nowrap muted variant_class class />
 {# djlint:off #}
