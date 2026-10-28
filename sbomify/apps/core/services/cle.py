@@ -7,7 +7,7 @@ recomputation, and conversion to libtea CLE documents for TEA API export.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Any
 
 from django.db import IntegrityError, transaction
@@ -347,6 +347,53 @@ def create_cle_event(
     if result.ok:
         after_lifecycle_change(product.pk)
     return result
+
+
+_PRODUCT_DATE_EVENTS = {
+    "release_date": CLEEventType.RELEASED,
+    "end_of_support": CLEEventType.END_OF_SUPPORT,
+    "end_of_life": CLEEventType.END_OF_LIFE,
+}
+
+
+def set_product_dates(product: Product, dates: dict[str, date | None]) -> ServiceResult[bool]:
+    """Write a product's release date, end of support or end of life as the CLE events they are.
+
+    The product columns are rebuilt from the events on every product CLE write,
+    so a date written to a column alone would be undone by the next event of
+    any type. A new date is recorded as an event for every version, as the
+    lifecycle card records it; clearing one withdraws its surviving events.
+    ``dates`` holds only the fields the caller sets. The value is whether
+    anything changed. Call inside a transaction.
+    """
+    changed = False
+    for field, value in dates.items():
+        if value == getattr(product, field):
+            continue
+        event_type = _PRODUCT_DATE_EVENTS[field]
+        if value is None:
+            events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
+            withdrawn = {e.withdrawn_event_id for e in events if e.event_type == CLEEventType.WITHDRAWN}
+            surviving = [e for e in events if e.event_type == event_type and e.event_id not in withdrawn]
+            for event in surviving:
+                result = create_cle_event(
+                    product, CLEEventType.WITHDRAWN, timezone.now(), withdrawn_event_id=event.event_id
+                )
+                if not result.ok:
+                    return ServiceResult.failure(result.error or "Could not clear the date", result.status_code)
+            if not surviving:
+                # A date written to the column before it was an event has nothing to withdraw.
+                Product.objects.filter(pk=product.pk).update(**{field: None})
+        else:
+            effective = datetime.combine(value, time.min, tzinfo=UTC)
+            versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
+            result = create_cle_event(product, event_type, effective, versions=versions)
+            if not result.ok:
+                return ServiceResult.failure(result.error or "Could not set the date", result.status_code)
+        changed = True
+    if changed:
+        product.refresh_from_db(fields=list(_PRODUCT_DATE_EVENTS))
+    return ServiceResult.success(changed)
 
 
 def create_support_definition(

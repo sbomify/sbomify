@@ -33,8 +33,8 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.cle import set_product_dates
 from sbomify.apps.core.services.release_lifecycle import (
-    after_lifecycle_change,
     declare_supersedes,
     link_pending_supersessions,
     reconcile_after_removal,
@@ -947,15 +947,19 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.description = payload.description
             product.is_public = payload.is_public
 
-            # Update lifecycle event fields (aligned with Common Lifecycle Enumeration)
-            dates = (product.end_of_support, product.end_of_life)
-            product.release_date = payload.release_date
-            product.end_of_support = payload.end_of_support
-            product.end_of_life = payload.end_of_life
-
             product.save()
-            if (product.end_of_support, product.end_of_life) != dates:
-                after_lifecycle_change(product.pk)
+            # Lifecycle dates are CLE events, the one place they are stored.
+            dated = set_product_dates(
+                product,
+                {
+                    "release_date": payload.release_date,
+                    "end_of_support": payload.end_of_support,
+                    "end_of_life": payload.end_of_life,
+                },
+            )
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
             _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
@@ -1042,13 +1046,19 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
                 product.components.set(components_qs)
 
-            # Update simple fields
-            dates = (product.end_of_support, product.end_of_life)
+            # Update simple fields. Lifecycle dates are CLE events, the one place they are stored.
+            dates = {
+                field: update_data.pop(field)
+                for field in ("release_date", "end_of_support", "end_of_life")
+                if field in update_data
+            }
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
-            if (product.end_of_support, product.end_of_life) != dates:
-                after_lifecycle_change(product.pk)
+            dated = set_product_dates(product, dates)
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
             _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
