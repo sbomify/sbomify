@@ -21,7 +21,6 @@ from conftest import (
     narrate,
     navigate_to_components,
     pace,
-    settle,
     start_on_dashboard,
     type_text,
 )
@@ -44,9 +43,9 @@ def document_upload(recording_page: Page, pied_piper_with_sboms: dict, s3_short_
     page = recording_page
 
     mock_vuln_trends(page)
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the dashboard and the walk to Components.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. A workspace-wide Document component ───────────────────────────
     navigate_to_components(page)
@@ -127,13 +126,12 @@ def document_upload(recording_page: Page, pied_piper_with_sboms: dict, s3_short_
     # lands, but the recording's live server is WSGI so no socket connects.
     # Drop the #upload-artifact hash the empty-state button set, or the
     # dialog opens again on load.
+    narrate(page, "report_stored_component")
     page.goto(page.url.split("#")[0])
     page.wait_for_load_state("networkidle")
-    page.locator("#documents-table-region table").wait_for(state="visible", timeout=15_000)
+    table = page.locator("#documents-table-region table")
+    table.wait_for(state="visible", timeout=15_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 600)
-    narrate(page, "report_stored_component")
-    settle(page)
+    table.locator("tbody tr").first.hover()
+
     narrate(page, "show_trust_center")
-    settle(page)
-    pace(page, 600)

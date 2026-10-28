@@ -69,9 +69,9 @@ def _show_json(page: Page, url_label: str, payload: object) -> None:
 def tea_enabling(recording_page: Page, deletable_team: Team, public_product: dict) -> None:
     page = recording_page
     auto_dismiss_toasts(page)
-    start_on_dashboard(page, pause_ms=600)
-
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. Trust Center on, custom domain set ─────────────────────────────
     navigate_to_trust_center_tab(page)
@@ -115,5 +115,3 @@ def tea_enabling(recording_page: Page, deletable_team: Team, public_product: dic
     assert response.status_code == 200, response.content[:300]
     _show_json(page, f"https://{DOMAIN}/tea/v{TEA_API_VERSION}/products", response.json())
     narrate(page, "client_follows_public")
-    settle(page)
-    pace(page, 800)

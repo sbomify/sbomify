@@ -34,7 +34,7 @@ beats:
   choose_eu_markets:
     text: >-
       Choose the EU markets. The support period is already filled in from the
-      product's lifecycle.
+      product's lifecycle, so next you describe what the product is for.
 
   record_manufacturer_established:
     text: >-
@@ -70,8 +70,8 @@ beats:
 
   step_four_collects:
     text: >-
-      Step four collects what users must be told: updates, support, and how to
-      delete their data.
+      Step four collects what users must be told: how they get updates, how long
+      support lasts, and how to delete their data.
 
   step_five_review:
     text: >-
@@ -80,8 +80,8 @@ beats:
 
   sign_declaration_conformity:
     text: >-
-      Sign the Declaration of Conformity. It is embedded in the generated
-      document.
+      Sign the Declaration of Conformity with the place, your name and your
+      role. The signature is embedded in the generated document.
 
   generate_documents_disclosure:
     text: >-

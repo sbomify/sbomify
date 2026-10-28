@@ -145,19 +145,18 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.context.on("page", lambda popup: popup.close())
 
     auto_dismiss_toasts(page)
-    start_on_dashboard(page, pause_ms=600)
-
+    # The opening line plays over the splash while the dashboard loads.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=0)
 
     # ── CRA overview → Start assessment ───────────────────────────────────
+    narrate(page, "compliance_lists_every")
     hover_and_click(page, sidebar_link(page, "Compliance"))
     page.wait_for_load_state("networkidle")
     pace(page, 800)
 
     start_btn = page.get_by_role("button", name="Start assessment").first
     start_btn.wait_for(state="visible", timeout=15_000)
-    narrate(page, "compliance_lists_every")
     hover_and_click(page, start_btn)
     pace(page, 700)
 
@@ -185,21 +184,19 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     verdict.wait_for(state="visible", timeout=10_000)
     smooth_scroll(page, verdict, 600)
     narrate(page, "pied_piper_has")
-    settle(page)
-
     save_screening = page.get_by_role("button", name="Save & Continue to Wizard")
+    smooth_scroll(page, save_screening, 400)
+
+    # Spoken from the save onward: the answers are stored and step one opens.
+    narrate(page, "answers_saved_audit")
     hover_and_click(page, save_screening)
     page.wait_for_url(re.compile(r".*/cra/[^/]+/step/1/?$"), timeout=20_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 700)
 
     assessment = CRAAssessment.objects.get(product=product)
     _answer_all_but_first_two(assessment)
 
     # ── Step 1: product profile ───────────────────────────────────────────
-    narrate(page, "answers_saved_audit")
-    settle(page)
-
     category = page.locator("#product-category")
     smooth_scroll(page, category, 500)
     narrate(page, "pick_product_category")
@@ -238,7 +235,6 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 1500)
     smooth_scroll(page, components_heading, 1800)
     narrate(page, "four_components_four")
-    settle(page)
     _save_and_continue(page, 3, "Continue")
 
     # ── Step 3: security requirements ─────────────────────────────────────
@@ -246,19 +242,17 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     satisfied = page.locator("#panel-checklist label").filter(has=page.locator("input[value='satisfied']"))
     satisfied.first.wait_for(state="visible", timeout=15_000)
     pace(page, 1200)
+    narrate(page, "last_two_answers")
     for i in range(2):
         hover_and_click(page, satisfied.nth(i))
         pace(page, 900)
-    narrate(page, "last_two_answers")
-    settle(page)
 
+    narrate(page, "vulnerability_handling_sets")
     hover_and_click(page, page.locator("#tab-vulnerability"))
     pace(page, 500)
-    narrate(page, "vulnerability_handling_sets")
-    settle(page)
+    narrate(page, "incident_reporting_names")
     hover_and_click(page, page.locator("#tab-incident"))
     pace(page, 500)
-    narrate(page, "incident_reporting_names")
     csirt = page.locator("#csirt-country")
     hover_and_click(page, csirt)
     csirt.select_option("NL")
@@ -281,7 +275,6 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
 
     # ── Step 5: sign, export, complete ────────────────────────────────────
     narrate(page, "step_five_review")
-    settle(page)
 
     signature_heading = page.get_by_role("heading", name="Sign the Declaration of Conformity")
     smooth_scroll(page, signature_heading, 500)
@@ -323,7 +316,6 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         pace(page, 250)
     page.locator("text=Not generated").first.wait_for(state="detached", timeout=15_000)
     narrate(page, "every_document_current")
-    settle(page)
 
     # The export button only re-reads its readiness on load.
     page.reload()
@@ -346,42 +338,36 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
 
     bundle = page.get_by_role("heading", name="Last Export Bundle")
     bundle.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, bundle, 600)
     narrate(page, "bundle_lists_each")
-    settle(page)
+    smooth_scroll(page, bundle, 600)
 
     # ── The public product page ───────────────────────────────────────────
+    narrate(page, "product_s_public")
     page.goto(f"/public/product/{product.id}/")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     vdp_link = page.get_by_role("link", name="Vulnerability disclosure policy")
     vdp_link.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, vdp_link, 600)
-    narrate(page, "product_s_public")
-    settle(page)
 
+    narrate(page, "vulnerability_disclosure_policy")
     hover_and_click(page, vdp_link)
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     pace(page, 800)
-    narrate(page, "vulnerability_disclosure_policy")
-    settle(page)
     page.mouse.wheel(0, 600)
-    pace(page, 500)
+    settle(page)
 
     page.go_back()
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     doc_link = page.get_by_role("link", name="View declaration")
     smooth_scroll(page, doc_link, 400)
+    narrate(page, "signed_eu_declaration")
     hover_and_click(page, doc_link)
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     pace(page, 800)
-    narrate(page, "signed_eu_declaration")
-    settle(page)
     page.mouse.wheel(0, 900)
-    pace(page, 1500)
+    pace(page, 800)
     narrate(page, "cra_scope_public")
-    settle(page)
-    pace(page, 600)

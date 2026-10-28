@@ -142,8 +142,9 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     component = component_with_sbom["component"]
     component_url = reverse("core:component_details", kwargs={"component_id": component.id})
 
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. The component and its scan ─────────────────────────────────────
     navigate_to_components(page)

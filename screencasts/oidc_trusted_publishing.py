@@ -236,8 +236,9 @@ def oidc_trusted_publishing(
 
     auto_dismiss_toasts(page)
     mock_vuln_trends(page)
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. The component ─────────────────────────────────────────────────
     navigate_to_components(page)
@@ -279,13 +280,13 @@ def oidc_trusted_publishing(
     # ── 4. The workflow snippet ──────────────────────────────────────────
     disclosure = section.locator("summary:has-text('Configure your GitHub Actions workflow')")
     smooth_scroll(page, disclosure, 300)
+    narrate(page, "add_step_workflow")
     hover_and_click(page, disclosure)
     pace(page, 400)
     rewrite_localhost_urls(page)
     snippet = section.locator("pre").first
     snippet.wait_for(state="visible", timeout=5_000)
     smooth_scroll(page, snippet, 300)
-    narrate(page, "add_step_workflow")
     settle(page)
 
     # ── 5. Simulate the Actions run ──────────────────────────────────────
@@ -368,6 +369,7 @@ def oidc_trusted_publishing(
     pace(page, 1000)
 
     # ── 6. The new version on the component ──────────────────────────────
+    narrate(page, "new_version_component")
     hide_overlay(page)
     page.reload()
     page.wait_for_load_state("networkidle")
@@ -375,6 +377,3 @@ def oidc_trusted_publishing(
     new_version.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, new_version, 300)
     new_version.hover()
-    narrate(page, "new_version_component")
-    settle(page)
-    pace(page, 800)

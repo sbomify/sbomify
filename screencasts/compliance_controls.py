@@ -55,25 +55,22 @@ def compliance_controls(controls_workspace: dict, recording_page: Page) -> None:
     team = controls_workspace["product"].team
     page.on("dialog", lambda dialog: dialog.accept())
 
-    start_on_dashboard(page, 800)
+    # The opening line plays over the splash and the trip to Settings.
     narrate(page, "intro")
-    settle(page)
-
+    start_on_dashboard(page, 0)
     navigate_to_settings(page)
+    narrate(page, "controls_tab_lists")
     navigate_to_settings_tab(page, "controls")
     activate = page.get_by_role("button", name=f"Activate {FRAMEWORK}")
     smooth_scroll(page, activate, 600)
-    narrate(page, "controls_tab_lists")
-    settle(page)
     narrate(page, "activate_soc_2")
     hover_and_click(page, activate)
     page.wait_for_load_state("networkidle")
 
     table = page.locator("[id^='controls-table-']").first
     table.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
     narrate(page, "controls_grouped_category")
-    settle(page)
+    pace(page, 1500)
 
     availability = _category(table, "Availability")
     hover_and_click(page, availability)
@@ -84,18 +81,19 @@ def compliance_controls(controls_workspace: dict, recording_page: Page) -> None:
     narrate(page, "set_whole_category")
     with page.expect_response(lambda r: "bulk-category" in r.url):
         hover_and_click(page, bulk.get_by_role("button"))
-    pace(page, 1200)
+    pace(page, 600)
 
+    narrate(page, "set_single_control")
     confidentiality = _category(table, "Confidentiality")
     hover_and_click(page, confidentiality)
-    pace(page, 800)
+    pace(page, 600)
     status = table.locator("select[aria-label^='Status for C1']").first
     smooth_scroll(page, status, 400)
-    narrate(page, "set_single_control")
     with page.expect_response(lambda r: r.url.endswith("/status") and r.request.method == "POST"):
         status.select_option("partial")
-    pace(page, 1200)
 
+    # Spoken over the trip to the product, so it lands on its Compliance tab.
+    narrate(page, "each_product_has")
     navigate_to_products(page)
     product_link = page.locator("main").get_by_role("link", name=PIED_PIPER_PRODUCT_NAME).first
     hover_and_click(page, product_link)
@@ -105,26 +103,23 @@ def compliance_controls(controls_workspace: dict, recording_page: Page) -> None:
     product_table = page.locator("#product-controls-panel [id^='controls-table-']").first
     product_table.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, product_table, 800)
-    narrate(page, "each_product_has")
-    settle(page)
 
+    narrate(page, "override_control_where")
     hover_and_click(page, _category(product_table, "Availability"))
-    pace(page, 800)
+    pace(page, 600)
     product_status = product_table.locator("select[aria-label^='Status for A1']").first
     smooth_scroll(page, product_status, 400)
-    narrate(page, "override_control_where")
     with page.expect_response(lambda r: r.url.endswith("/status") and r.request.method == "POST"):
         product_status.select_option("not_applicable")
     page.locator("#product-controls-panel").get_by_text("Product override").first.wait_for(
         state="visible", timeout=10_000
     )
-    pace(page, 1500)
+    settle(page)
 
     page.goto(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
     page.wait_for_load_state("networkidle")
     frameworks = page.locator("#frameworks")
     frameworks.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, frameworks, 800)
+    pace(page, 300)
     narrate(page, "active_frameworks_also")
-    settle(page)
-    pace(page, 800)
+    smooth_scroll(page, frameworks, 800)

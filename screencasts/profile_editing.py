@@ -36,16 +36,16 @@ def profile_editing(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
     mock_vuln_trends(page)
-    start_on_dashboard(page)
+    # The opening line plays over the splash, the dashboard and the way into
+    # Settings, so the video does not open on silence.
     narrate(page, "intro")
-    settle(page)
-
+    start_on_dashboard(page, pause_ms=300)
     navigate_to_settings(page)
+
+    narrate(page, "parties_live_under")
     navigate_to_settings_tab(page, "contact-profiles")
     content = page.locator("#contact-profiles-content")
     content.get_by_text("No parties yet").wait_for(state="visible", timeout=15_000)
-    narrate(page, "parties_live_under")
-    settle(page)
 
     add_party = page.get_by_role("button", name="Add party")
     hover_and_click(page, add_party)
@@ -119,4 +119,4 @@ def profile_editing(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 600)
     narrate(page, "party_saved_marked")
     settle(page)
-    pace(page, 800)
+    pace(page, 500)

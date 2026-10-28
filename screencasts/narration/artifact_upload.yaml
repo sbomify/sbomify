@@ -10,7 +10,7 @@ beats:
 
   open_search_control:
     text: >-
-      Open search with Control K and type upload.
+      Open search with Control K, type upload, and pick Upload SBOM.
 
   upload_page_lists:
     text: >-
@@ -37,7 +37,7 @@ beats:
 
   upload_succeeded:
     text: >-
-      The upload succeeded.
+      The upload succeeded, and the component page reloads with the new SBOM.
 
   sbom_stored_exactly:
     text: >-

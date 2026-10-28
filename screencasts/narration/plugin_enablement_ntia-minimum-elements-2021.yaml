@@ -19,7 +19,7 @@ beats:
 
   tick_save:
     text: >-
-      Tick the plugin, then save your changes.
+      Tick the plugin, then scroll down and save your changes.
 
   done:
     text: >-

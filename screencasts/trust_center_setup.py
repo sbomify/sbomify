@@ -23,7 +23,6 @@ from conftest import (
     pace,
     rewrite_localhost_inputs,
     rewrite_localhost_urls,
-    settle,
     smooth_scroll,
     start_on_dashboard,
     type_text,
@@ -60,9 +59,9 @@ def _settle(page: Page) -> None:
 def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circuit: None) -> None:
     page = recording_page
     auto_dismiss_toasts(page)
-    start_on_dashboard(page, pause_ms=600)
-
+    # The opening line plays over the dashboard and the walk to Settings.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. Settings → Trust Center ────────────────────────────────────────
     navigate_to_trust_center_tab(page)
@@ -75,12 +74,12 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
     _settle(page)
     page.locator("#trust-center-public-url").wait_for(state="visible", timeout=10_000)
     narrate(page, "trust_center_live")
-    settle(page)
+    page.locator("#trust-center-public-url").hover()
 
     # ── 2. Welcome message ────────────────────────────────────────────────
+    narrate(page, "add_welcome_message")
     description = page.locator("#trust_center_description")
     smooth_scroll(page, description, 500)
-    narrate(page, "add_welcome_message")
     hover_and_click(page, description)
     type_text(description, WELCOME, delay=25)
     with page.expect_navigation():
@@ -133,13 +132,13 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
     )
     _settle(page)
     narrate(page, "sbomify_verifies_domain")
-    settle(page)
+    page.locator("#team-custom-domain-wrapper").get_by_text("Pending verification").hover()
 
     # ── 6. Component visibility ───────────────────────────────────────────
+    narrate(page, "next_choose_what")
     navigate_to_components(page)
     link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
     link.wait_for(state="visible", timeout=15_000)
-    narrate(page, "next_choose_what")
     hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
 
@@ -170,14 +169,12 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
 
     # ── 7. The public Trust Center ────────────────────────────────────────
     team_key = public_product["product"].team.key
+    narrate(page, "what_customers_see")
     page.goto(f"/public/workspace/{team_key}/")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     page.get_by_text(WELCOME).first.wait_for(state="visible", timeout=15_000)
-    narrate(page, "what_customers_see")
-    settle(page)
+
+    narrate(page, "below_products_have")
     product_row = page.get_by_text(public_product["product"].name).last
     smooth_scroll(page, product_row, 300)
-    narrate(page, "below_products_have")
-    settle(page)
-    pace(page, 600)

@@ -20,7 +20,7 @@ beats:
   product_already_picked:
     text: >-
       The product is already picked. Give the release a name, a version and a
-      short description.
+      short description of what changed, then create it.
 
   release_starts_empty:
     text: >-

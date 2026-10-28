@@ -14,7 +14,12 @@ beats:
 
   first_organization_these:
     text: >-
-      First, your organization. These details become your default contact profile.
+      First, your organization, and the person responsible for your artifacts.
+      These details become your default contact profile.
+
+  contact_email_suggested:
+    text: >-
+      The contact email is suggested as your security contact on the next step.
 
   next_security_promises:
     text: >-

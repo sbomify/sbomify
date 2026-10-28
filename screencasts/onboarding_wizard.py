@@ -64,16 +64,15 @@ def fresh_workspace(recording_context: BrowserContext, deletable_team: Team, set
 def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
     page = recording_page
 
-    # A new workspace lands in the wizard instead of the dashboard.
+    # A new workspace lands in the wizard instead of the dashboard. The
+    # opening line plays over the splash while that redirect loads.
+    narrate(page, "intro")
     page.goto("/dashboard")
     page.wait_for_url(lambda url: "/onboarding/" in url, timeout=15_000)
     page.wait_for_load_state("networkidle")
     start = page.get_by_role("link", name="Start")
     start.wait_for(state="visible", timeout=10_000)
-    pace(page, 800)
 
-    narrate(page, "intro")
-    settle(page)
     narrate(page, "asks_three_things")
     settle(page)
     hover_and_click(page, start)
@@ -82,7 +81,6 @@ def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
     # ── Your organization ────────────────────────────────────────────────
     company = page.locator("#id_company_name")
     company.wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
     narrate(page, "first_organization_these")
     hover_and_click(page, company)
     company.fill("")
@@ -97,26 +95,26 @@ def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
 
     website = page.locator("#id_website")
     hover_and_click(page, website)
-    type_text(website, "https://piedpiper.example.com", delay=45)
+    type_text(website, "https://piedpiper.example.com", delay=25)
     pace(page, 300)
 
     email = page.locator("#id_email")
+    narrate(page, "contact_email_suggested")
     hover_and_click(page, email)
     email.fill("")
-    type_text(email, "richard@piedpiper.example.com", delay=45)
+    type_text(email, "richard@piedpiper.example.com", delay=25)
     pace(page, 500)
 
     hover_and_click(page, page.get_by_role("button", name="Continue"))
-    pace(page, 800)
 
     # ── Security promises ────────────────────────────────────────────────
     security_email = page.locator("#id_security_email")
     security_email.wait_for(state="visible", timeout=10_000)
     narrate(page, "next_security_promises")
-    settle(page)
+    pace(page, 800)
     hover_and_click(page, security_email)
     security_email.fill("")
-    type_text(security_email, "security@piedpiper.example.com", delay=45)
+    type_text(security_email, "security@piedpiper.example.com", delay=25)
     pace(page, 400)
 
     publish = page.get_by_text("Publish this email in my Trust Center's security.txt")
@@ -125,15 +123,15 @@ def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
     pace(page, 600)
 
     support = page.locator("#id_default_support_period_years")
-    smooth_scroll(page, support, 600)
+    save = page.get_by_role("button", name="Save and continue")
     narrate(page, "set_default_support")
+    smooth_scroll(page, support, 3000)
+    smooth_scroll(page, save, 400)
     settle(page)
 
-    save = page.get_by_role("button", name="Save and continue")
     hover_and_click(page, save)
     go = page.get_by_role("link", name="Go to dashboard")
     go.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
 
     narrate(page, "workspace_ready_checklist")
     settle(page)
@@ -143,19 +141,17 @@ def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
     # ── Set up your first repository ─────────────────────────────────────
     heading = page.get_by_role("heading", name="Set up your first repository")
     heading.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
+    pace(page, 300)
     narrate(page, "until_first_artifact")
-    settle(page)
-
     create_token = page.get_by_role("button", name="Create setup token")
+    smooth_scroll(page, create_token, 400)
     narrate(page, "coding_agent_tab")
     hover_and_click(page, create_token)
     page.get_by_role("button", name="Reset token").wait_for(state="visible", timeout=10_000)
     pace(page, 600)
     narrate(page, "token_part_prompt")
-    settle(page)
-
     copy_prompt = page.get_by_role("button", name="Copy prompt")
+    smooth_scroll(page, copy_prompt, 400)
     narrate(page, "copy_prompt_paste")
     hover_and_click(page, copy_prompt)
     pace(page, 1200)
@@ -181,8 +177,5 @@ def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
     hover_and_click(page, option)
     page.wait_for_url(lambda url: "/getting-started/" in url, timeout=10_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 800)
-
+    pace(page, 300)
     narrate(page, "commit_push_workflow")
-    settle(page)
-    pace(page, 800)

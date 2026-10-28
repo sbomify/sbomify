@@ -19,7 +19,6 @@ from conftest import (
     mock_vuln_trends,
     narrate,
     pace,
-    settle,
     start_on_dashboard,
     type_text,
 )
@@ -104,9 +103,9 @@ def artifact_upload(recording_page: Page, components_mostly_with_sboms: dict, s3
     page = recording_page
     mock_vuln_trends(page)
 
-    start_on_dashboard(page, pause_ms=800)
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=800)
 
     # ── Search → Upload SBOM ─────────────────────────────────────────────
     search = page.locator("#navbar-search-input")
@@ -117,33 +116,32 @@ def artifact_upload(recording_page: Page, components_mostly_with_sboms: dict, s3
     type_text(search, "upload sbom", delay=110)
     option = page.locator("#navbar-search-list").get_by_role("option", name="Upload SBOM", exact=True)
     option.wait_for(state="visible", timeout=10_000)
-    pace(page, 1000)
+    pace(page, 500)
+
+    # ── Pick the component ───────────────────────────────────────────────
+    narrate(page, "upload_page_lists")
     hover_and_click(page, option)
     page.wait_for_url(lambda url: "/upload/" in url, timeout=10_000)
     page.wait_for_load_state("networkidle")
-
-    # ── Pick the component ───────────────────────────────────────────────
     page.get_by_role("heading", name="Upload SBOM").wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
-    narrate(page, "upload_page_lists")
-    settle(page)
-    filter_input = page.locator("#upload-target-search")
+    page.locator("a[data-upload-target]").first.hover()
+
     narrate(page, "filter_name_pick")
+    filter_input = page.locator("#upload-target-search")
     hover_and_click(page, filter_input)
     type_text(filter_input, "web", delay=140)
-    pace(page, 900)
+    pace(page, 500)
     target = page.locator("a[data-upload-target]", has_text=TARGET_COMPONENT)
-    hover_and_click(page, target)
-    page.wait_for_load_state("networkidle")
 
     # ── Upload dialog opens on the component page ────────────────────────
+    narrate(page, "component_page_opens")
+    hover_and_click(page, target)
+    page.wait_for_load_state("networkidle")
     dialog = page.locator("#upload-sbom")
     dialog.get_by_text("Drop your SBOM file here").wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
-    narrate(page, "component_page_opens")
-    settle(page)
+
     narrate(page, "sbomify_takes_cyclonedx")
-    settle(page)
+    dialog.get_by_text("Recommended:").hover()
 
     narrate(page, "drop_file_click")
     dropzone = dialog.get_by_role("button", name="Upload artifact file by dropping or clicking")
@@ -171,15 +169,12 @@ def artifact_upload(recording_page: Page, components_mostly_with_sboms: dict, s3
     # reloaded page would open the dialog again.
     page.get_by_text("SBOM uploaded successfully").first.wait_for(state="visible", timeout=10_000)
     narrate(page, "upload_succeeded")
-    settle(page)
     page.goto(page.url.split("#")[0])
     page.wait_for_load_state("networkidle")
-    pace(page, 800)
 
     version = page.get_by_text("3.2.0").first
     version.wait_for(state="visible", timeout=15_000)
     narrate(page, "sbom_stored_exactly")
-    settle(page)
+    version.hover()
+
     narrate(page, "vulnerabilities_show_up")
-    settle(page)
-    pace(page, 600)

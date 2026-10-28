@@ -25,7 +25,7 @@ beats:
 
   upload_component_s:
     text: >-
-      Upload it from the component's actions menu, with Upload VEX.
+      Back on the component, upload it from the actions menu with Upload VEX.
 
   before_anything_stored:
     text: >-
@@ -48,7 +48,8 @@ beats:
 
   upload_same_way:
     text: >-
-      Upload it the same way. The preview now counts two.
+      Upload version 2 from the same actions menu. This time the preview counts
+      two suppressed vulnerabilities.
 
   sbomify_always_applies:
     text: >-

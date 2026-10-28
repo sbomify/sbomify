@@ -37,7 +37,6 @@ from conftest import (
     navigate_to_components,
     pace,
     rewrite_localhost_urls,
-    settle,
     smooth_scroll,
     start_on_dashboard,
 )
@@ -308,7 +307,7 @@ def _apply_upload(page: Page) -> None:
         timeout=15_000,
     ):
         hover_and_click(page, apply_btn)
-    pace(page, 800)
+    pace(page, 400)
 
 
 def _open_vulnerabilities(page: Page, component_url: str) -> None:
@@ -342,70 +341,66 @@ def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: Non
         kwargs={"product_id": product.id, "release_id": release.id},
     )
 
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the dashboard and the walk to the component.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. The vulnerability ──────────────────────────────────────────────
     navigate_to_components(page)
     link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
     link.wait_for(state="visible", timeout=15_000)
+    narrate(page, "latest_scan_component")
     hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
     critical_row = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
     critical_row.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, critical_row, 400)
-    narrate(page, "latest_scan_component")
-    settle(page)
+
     narrate(page, "team_checks_critical")
-    settle(page)
+    critical_row.hover()
 
     # ── 2. VEX v1 ─────────────────────────────────────────────────────────
-    _show_vex_file(page, VEX_V1, "CycloneDX VEX, version 1")
     narrate(page, "write_vex_statement")
-    settle(page)
+    _show_vex_file(page, VEX_V1, "CycloneDX VEX, version 1")
 
+    narrate(page, "upload_component_s")
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    narrate(page, "upload_component_s")
     _upload_vex(page, VEX_V1)
+
     narrate(page, "before_anything_stored")
-    settle(page)
+    page.get_by_role("button", name="Apply this VEX").hover()
+
+    # The line opens on the Apply click and lands on the list it changed.
+    narrate(page, "once_applied_critical")
     _apply_upload(page)
     _apply_vex(component, release)
-
     _open_vulnerabilities(page, component_url)
     page.locator(f"tr:has-text('{HIGH_CVE}')").first.wait_for(state="visible", timeout=15_000)
-    narrate(page, "once_applied_critical")
-    settle(page)
 
-    _show_trust_center(page, public_url)
     narrate(page, "trust_center_shows")
-    settle(page)
+    _show_trust_center(page, public_url)
 
     # ── 3. VEX v2 ─────────────────────────────────────────────────────────
-    _show_vex_file(page, VEX_V2, "CycloneDX VEX, version 2")
     narrate(page, "later_re_issue")
+    _show_vex_file(page, VEX_V2, "CycloneDX VEX, version 2")
     pace(page, 1800)
     page.locator("pre").evaluate("el => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })")
-    pace(page, 1500)
 
+    narrate(page, "upload_same_way")
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
     _upload_vex(page, VEX_V2)
-    narrate(page, "upload_same_way")
-    settle(page)
+
+    narrate(page, "sbomify_always_applies")
     _apply_upload(page)
     _apply_vex(component, release)
-
     _open_vulnerabilities(page, component_url)
     page.locator(f"tr:has-text('{HIGH_CVE}')").first.wait_for(state="hidden", timeout=15_000)
-    narrate(page, "sbomify_always_applies")
-    settle(page)
 
+    narrate(page, "trust_center_two")
     _show_trust_center(page, public_url)
     download = page.locator("a[title='Download latest VEX (CycloneDX)']").first
     download.wait_for(state="visible", timeout=10_000)
-    narrate(page, "trust_center_two")
     smooth_scroll(page, download, 300)
     download.hover()
-    pace(page, 800)

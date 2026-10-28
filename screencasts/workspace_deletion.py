@@ -30,10 +30,11 @@ def workspace_deletion(recording_page: Page) -> None:
         lambda route: route.fulfill(status=200, content_type="text/html", body="<div></div>"),
     )
 
-    start_on_dashboard(page)
+    # The opening line plays over the splash and the dashboard load.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=300)
 
+    narrate(page, "open_settings_danger")
     navigate_to_settings(page)
 
     # The workspace danger zone sits at the foot of the General tab. The band
@@ -41,14 +42,12 @@ def workspace_deletion(recording_page: Page) -> None:
     danger_band = page.get_by_role("button", name="Danger zone")
     danger_band.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, danger_band, 800)
-    narrate(page, "open_settings_danger")
-    settle(page)
+    narrate(page, "deleting_workspace_removes")
     hover_and_click(page, danger_band)
     pace(page, 800)
 
     delete_btn = page.locator("button[id^='del_']")
     delete_btn.wait_for(state="visible", timeout=5_000)
-    narrate(page, "deleting_workspace_removes")
     hover_and_click(page, delete_btn)
     pace(page, 800)
 
@@ -67,4 +66,4 @@ def workspace_deletion(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     narrate(page, "workspace_gone_back")
     settle(page)
-    pace(page, 1500)
+    pace(page, 600)
