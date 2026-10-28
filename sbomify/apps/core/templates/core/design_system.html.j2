@@ -114,6 +114,10 @@
         <c-tables.cell><c-overview.record href="{% url 'core:products_dashboard' %}" title="Retired release" detail="No longer monitored, so last_scanned dates its counts" /></c-tables.cell>
         <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :last_scanned="overview_demo_last_scanned" /></c-tables.cell>
         </c-tables.row>
+        <c-tables.row>
+        <c-tables.cell><c-overview.record href="{% url 'core:products_dashboard' %}" title="Retired, partly scanned" detail="retired: what it never scanned reads as never scanned" /></c-tables.cell>
+        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" noun="SBOM" :last_scanned="overview_demo_last_scanned" :retired="True" /></c-tables.cell>
+        </c-tables.row>
     </tbody>
     </c-overview.table>
     </c-cards.card>

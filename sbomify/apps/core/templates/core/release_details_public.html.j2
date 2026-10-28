@@ -97,10 +97,10 @@
                      x-init="init()">
                 <c-branded.section-header title="Vulnerability posture" subtitle="Known vulnerabilities across this release, with our VEX statements applied." />
                 {% if untracked %}
-                    <c-branded.notice icon="fas fa-clock-rotate-left" title="Not monitored since {{ untracked.since|date:'j M Y' }}">
-                    {{ untracked.reason }}
+                    <c-feedback.alert icon="fas fa-clock-rotate-left" title="No longer monitored">
+                    {{ untracked.reason }} on {{ untracked.on|date:"j M Y" }}.
                     These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
-                    </c-branded.notice>
+                    </c-feedback.alert>
                 {% endif %}
                 <c-branded.surface class="flex flex-col gap-5">
                 {# Severity breakdown (VEX applied) #}

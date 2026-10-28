@@ -247,6 +247,7 @@ def build_inventory_snapshot(
                     "lifecycle_state": lifecycle_state,
                     # A release sbomify no longer monitors is not scanned again:
                     # its counts are as old as its last scan, and the row says so.
+                    "untracked": lifecycle_state != "active" and release.id not in still_shipped,
                     "frozen_at": None
                     if lifecycle_state == "active" or release.id in still_shipped
                     else posture.get("last_scanned_at"),

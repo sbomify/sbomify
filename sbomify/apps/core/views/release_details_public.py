@@ -105,7 +105,7 @@ class ReleaseDetailsPublicView(View):
             "vuln_posture": vuln_posture,
             # A release sbomify no longer monitors keeps the posture of its last
             # scan, and the page says how old that is.
-            "untracked": untracked_notice(release_obj) if vuln_posture.get("has_data") else None,
+            "untracked": untracked_notice(release_obj, public_only=True) if vuln_posture.get("has_data") else None,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the
             # releases list and component pages. The current release isn't

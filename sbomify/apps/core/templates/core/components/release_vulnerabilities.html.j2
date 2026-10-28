@@ -23,8 +23,8 @@ old as its last scan. The notice says since when and why, and a zero reads as
 </c-tables.toolbar>
 {% if vulnerabilities.untracked %}
     <div class="px-4 pt-4">
-        <c-feedback.alert icon="fas fa-clock-rotate-left" title="Not monitored since {{ vulnerabilities.untracked.since|date:'j M Y' }}">
-        {{ vulnerabilities.untracked.reason }}
+        <c-feedback.alert icon="fas fa-clock-rotate-left" title="No longer monitored">
+        {{ vulnerabilities.untracked.reason }} on {{ vulnerabilities.untracked.on|date:"j M Y" }}.
         {% if vulnerabilities.last_scanned_at %}
             These counts are from its last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
         {% endif %}
