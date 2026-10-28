@@ -15,7 +15,6 @@ from sbomify.apps.core.cle_schemas import (
     CLESupportDefinitionCreateSchema,
     CLESupportDefinitionResponseSchema,
     ReleaseCLEEventCreateSchema,
-    ReleaseCLEEventResponseSchema,
 )
 from sbomify.apps.core.models import Component, ComponentRelease, Product, Release
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -403,7 +402,7 @@ def create_component_cle_support_definition_endpoint(
 
 @router.get(
     "/releases/{release_id}/cle/events",
-    response={200: list[ReleaseCLEEventResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[CLEEventResponseSchema], 403: ErrorResponse, 404: ErrorResponse},
 )
 def list_release_cle_events(
     request: HttpRequest,
@@ -424,11 +423,12 @@ def list_release_cle_events(
 @router.post(
     "/releases/{release_id}/cle/events",
     response={
-        200: ReleaseCLEEventResponseSchema,
-        201: ReleaseCLEEventResponseSchema,
+        200: CLEEventResponseSchema,
+        201: CLEEventResponseSchema,
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
     },
 )
 def create_release_cle_event_endpoint(
@@ -436,8 +436,9 @@ def create_release_cle_event_endpoint(
 ) -> Any:
     """Create a new CLE lifecycle event for a release.
 
-    Repeating a supersession with the same version, ``drop_in`` and date
-    returns the existing event with 200, since nothing was written.
+    A ``supersededBy`` event declares one successor; post one per successor.
+    Repeating a live one with the same ``drop_in`` and date returns its event
+    with 200, since nothing was written, and restating it differently is a 409.
     """
     result = _get_release_or_404(request, release_id)
     if not isinstance(result, Release):
@@ -471,7 +472,7 @@ def create_release_cle_event_endpoint(
 
 @router.get(
     "/releases/{release_id}/cle/events/{event_id}",
-    response={200: ReleaseCLEEventResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: CLEEventResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
 )
 def get_release_cle_event(request: HttpRequest, release_id: str, event_id: int) -> Any:
     """Get a single CLE event for a release by event_id."""

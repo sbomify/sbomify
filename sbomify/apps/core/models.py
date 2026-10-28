@@ -906,3 +906,76 @@ class ReleaseLink(models.Model):
 
     def __str__(self) -> str:
         return f"{self.release_id} -> {self.linked_release_id}"
+
+
+class ReleaseSupersessionQuerySet(models.QuerySet["ReleaseSupersession"]):
+    def live(self) -> ReleaseSupersessionQuerySet:
+        return self.filter(withdrawn_at__isnull=True)
+
+
+class ReleaseSupersession(models.Model):
+    """One edge of a product's supersession graph: ``from_release`` is superseded by ``to_release``.
+
+    A release can have many successors and many predecessors. 1.2.1 can be
+    replaced by 1.2.2 on its own line while 2.0 starts a new one, and two
+    releases can be replaced by one. Each successor is its own row, and
+    ``drop_in`` says whether it replaces the release (which then retires) or
+    starts a new line (both stay monitored).
+
+    sbomify never infers an edge: a person or an API caller asserts each one.
+    ``successor_label`` is what they named, so a successor outside sbomify, or
+    one deleted later, stays readable. Each edge is published as the
+    predecessor's ``supersededBy`` CLE event; withdrawing that event withdraws
+    the edge. Rows are never deleted while their predecessor exists.
+    """
+
+    class Meta:
+        db_table = "core_release_supersessions"
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(from_release=models.F("to_release")),
+                name="release_supersession_not_self",
+            ),
+            models.UniqueConstraint(
+                fields=["from_release", "successor_label"],
+                condition=models.Q(withdrawn_at__isnull=True),
+                name="unique_live_release_supersession",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    from_release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="successor_edges")
+    to_release = models.ForeignKey(
+        Release,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="predecessor_edges",
+        help_text="The successor in the same product, if sbomify has it",
+    )
+    successor_label = models.CharField(max_length=255, help_text="The successor's version as asserted")
+    drop_in = models.BooleanField(
+        default=False,
+        help_text="Whether the successor replaces this release, so this release stops being monitored",
+    )
+    reason = models.TextField(blank=True, default="")
+    effective = models.DateTimeField(help_text="When the successor takes over")
+    actor = models.ForeignKey("core.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cle_event = models.OneToOneField(
+        "sboms.ReleaseCLEEvent",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supersession",
+        help_text="The supersededBy CLE event this edge is published as",
+    )
+    withdrawn_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the edge was withdrawn; empty while live"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ReleaseSupersessionQuerySet.as_manager()
+
+    def __str__(self) -> str:
+        return f"{self.from_release_id} -> {self.to_release_id or self.successor_label}"

@@ -1,13 +1,15 @@
 """Where a product's releases stand: supersession, support dates, withdrawn and archived.
 
-The supersession edge is the predecessor's ``supersededBy`` CLE event, so the
-append-only event stream is the history and the ``Release`` lifecycle columns
-are derived from it. Withdrawn and archived have no CLE event and are set by a
+Supersession is a graph over a product's releases, one ``ReleaseSupersession``
+row per edge. A release can have many successors and many predecessors: 1.2.1
+replaced by 1.2.2 on its own line while 2.0 starts a new one. Each edge is
+published as the predecessor's ``supersededBy`` CLE event, and the support
+dates come from the CLE stream, so the ``Release`` lifecycle columns are
+derived from both. Withdrawn and archived have no CLE event and are set by a
 person through ``set_release_state``.
 
-Every write locks the product row before anything else. Supersession is a
-graph over the whole product, and a lock on one release would let two edges on
-different releases each pass their own cycle check.
+Every write locks the product row before anything else. A lock on one release
+would let two edges on different releases each pass their own cycle check.
 """
 
 from __future__ import annotations
@@ -19,18 +21,18 @@ from datetime import date, datetime
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Q, QuerySet
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from sbomify.apps.core.models import Release
+from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import CLEEventType, Product, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
-# A release may name at most this many successors. Fan-out is how ECMA-428
-# models a line splitting; more than a handful is a mistake, not a product.
+# A release may name at most this many live successors. A line splitting is
+# routine; more than a handful at once is a mistake, not a product.
 MAX_SUCCESSORS = 8
 
 _STATE_ACTIONS = ("withdraw", "archive", "reactivate")
@@ -66,24 +68,21 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
     )
 
 
-def surviving_supersessions() -> QuerySet[ReleaseCLEEvent]:
-    """``supersededBy`` events that no ``withdrawn`` event on the same release voids."""
-    voided = ReleaseCLEEvent.objects.filter(
-        release_id=OuterRef("release_id"),
-        event_type=CLEEventType.WITHDRAWN,
-        withdrawn_event_id=OuterRef("event_id"),
-    )
-    return ReleaseCLEEvent.objects.filter(event_type=CLEEventType.SUPERSEDED_BY).exclude(Exists(voided))
+def existing_supersession(
+    predecessor: Release, successor_label: str, drop_in: bool, effective: datetime
+) -> ServiceResult[ReleaseSupersession | None]:
+    """The live edge to ``successor_label`` a retry would repeat, or a conflict when it says something else.
 
-
-def identical_supersession(
-    predecessor: Release, superseded_by_version: str, drop_in: bool, effective: datetime
-) -> ReleaseCLEEvent | None:
-    """The surviving edge a retry of the same declaration would duplicate, if any."""
-    return (
-        surviving_supersessions()
-        .filter(release=predecessor, superseded_by_version=superseded_by_version, drop_in=drop_in, effective=effective)
-        .first()
+    One live edge per successor: changing ``drop_in`` or the date means
+    withdrawing the edge and declaring it again, so the history keeps both.
+    """
+    edge = ReleaseSupersession.objects.live().filter(from_release=predecessor, successor_label=successor_label).first()
+    if edge is None or (edge.drop_in == drop_in and edge.effective == effective):
+        return ServiceResult.success(edge)
+    return ServiceResult.failure(
+        f"Release {predecessor.name} already names {successor_label} as a successor. "
+        "Withdraw that supersession first to change it.",
+        status_code=409,
     )
 
 
@@ -97,7 +96,8 @@ def resolve_successor(predecessor: Release, superseded_by_version: str) -> Servi
     """Find the release ``superseded_by_version`` names in the predecessor's product, and check the edge.
 
     A version no release carries is a successor outside sbomify, which is
-    allowed: the value is ``None``. Call under the product lock.
+    allowed: the value is ``None``. A release may name several successors, up
+    to ``MAX_SUCCESSORS`` live ones. Call under the product lock.
     """
     if predecessor.is_latest:
         return ServiceResult.failure("The latest release is never superseded.", status_code=400)
@@ -115,7 +115,7 @@ def resolve_successor(predecessor: Release, superseded_by_version: str) -> Servi
                 status_code=400,
             )
 
-    if surviving_supersessions().filter(release=predecessor).count() >= MAX_SUCCESSORS:
+    if ReleaseSupersession.objects.live().filter(from_release=predecessor).count() >= MAX_SUCCESSORS:
         return ServiceResult.failure(
             f"Release {predecessor.name} already names {MAX_SUCCESSORS} successors, the most it can have.",
             status_code=400,
@@ -140,28 +140,28 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
 
     names = {name for name in (release.version, release.name) if name}
     pending = (
-        surviving_supersessions()
+        ReleaseSupersession.objects.live()
         .filter(
-            release__product_id=release.product_id,
-            release__is_latest=False,
-            superseded_by_release__isnull=True,
-            superseded_by_version__in=names,
+            from_release__product_id=release.product_id,
+            from_release__is_latest=False,
+            to_release__isnull=True,
+            successor_label__in=names,
         )
-        .exclude(release_id=release.pk)
-        .select_related("release")
+        .exclude(from_release_id=release.pk)
+        .select_related("from_release")
     )
     linked = 0
     for edge in pending:
-        target = _sibling_named(release.product_id, edge.superseded_by_version)
+        target = _sibling_named(release.product_id, edge.successor_label)
         if target is None or target.pk != release.pk:
             continue
-        if _leads_back(release, edge.release):
+        if _leads_back(release, edge.from_release):
             return ServiceResult.failure(
-                f"Release {edge.release.name} names {edge.superseded_by_version} as its successor, and "
-                f"{release.name} already leads back to {edge.release.name}, so this would make a cycle.",
+                f"Release {edge.from_release.name} names {edge.successor_label} as a successor, and "
+                f"{release.name} already leads back to {edge.from_release.name}, so this would make a cycle.",
                 status_code=400,
             )
-        ReleaseCLEEvent.objects.filter(pk=edge.pk).update(superseded_by_release=release)
+        ReleaseSupersession.objects.filter(pk=edge.pk).update(to_release=release)
         linked += 1
     if linked:
         recompute_release_lifecycle(product)
@@ -169,12 +169,16 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
 
 
 def _leads_back(successor: Release, predecessor: Release) -> bool:
-    """Whether surviving edges already run from ``successor`` to ``predecessor``."""
+    """Whether live edges already run from ``successor`` to ``predecessor``.
+
+    The graph can re-converge (two lines merging into one release), so the walk
+    keeps a visited set even though no cycle can be stored.
+    """
     edges: dict[str, list[str]] = defaultdict(list)
     for source, target in (
-        surviving_supersessions()
-        .filter(release__product_id=predecessor.product_id, superseded_by_release__isnull=False)
-        .values_list("release_id", "superseded_by_release_id")
+        ReleaseSupersession.objects.live()
+        .filter(from_release__product_id=predecessor.product_id, to_release__isnull=False)
+        .values_list("from_release_id", "to_release_id")
     ):
         edges[source].append(target)
 
@@ -190,16 +194,17 @@ def _leads_back(successor: Release, predecessor: Release) -> bool:
 
 
 def recompute_release_lifecycle(product: Product) -> None:
-    """Derive every release's lifecycle columns in ``product`` from its CLE events.
+    """Derive every release's lifecycle columns in ``product`` from its edges and CLE events.
 
     Product-wide, because withdrawing a successor changes its predecessors.
 
     - ``end_of_support``: per support policy, the latest surviving
       ``endOfSupport`` event; the column is the latest across policies.
     - ``end_of_life``: the latest surviving ``endOfLife`` event.
-    - ``superseded_at``: the earliest surviving drop-in ``supersededBy`` event
-      whose successor is outside sbomify or not withdrawn. A withdrawn
-      successor hands its predecessors their liveness back.
+    - ``superseded_at``: the earliest live drop-in edge whose successor is
+      outside sbomify or not withdrawn. A withdrawn successor hands its
+      predecessors their liveness back. Edges that start a new line never
+      retire anything, however many a release has.
 
     Writes only the rows that changed, and never through ``save()``.
     """
@@ -213,7 +218,6 @@ def recompute_release_lifecycle(product: Product) -> None:
 
     support_ends: dict[str, dict[str, date]] = defaultdict(dict)
     life_ends: dict[str, date] = {}
-    superseded: dict[str, datetime] = {}
     for event in events:
         if (event.release_id, event.event_id) in voided:
             continue
@@ -221,12 +225,14 @@ def recompute_release_lifecycle(product: Product) -> None:
             support_ends[event.release_id][event.support_id] = event.effective.date()
         elif event.event_type == CLEEventType.END_OF_LIFE:
             life_ends[event.release_id] = event.effective.date()
-        elif event.event_type == CLEEventType.SUPERSEDED_BY and event.drop_in:
-            # No resolved successor: outside sbomify, or deleted. It still counts.
-            successor = releases.get(event.superseded_by_release_id) if event.superseded_by_release_id else None
-            if successor is None or successor.withdrawn_at is None:
-                earliest = superseded.get(event.release_id)
-                superseded[event.release_id] = min(earliest, event.effective) if earliest else event.effective
+
+    superseded: dict[str, datetime] = {}
+    for edge in ReleaseSupersession.objects.live().filter(from_release__product_id=product.pk, drop_in=True):
+        # No successor in sbomify: outside it, or deleted. It still counts.
+        successor = releases.get(edge.to_release_id) if edge.to_release_id else None
+        if successor is None or successor.withdrawn_at is None:
+            earliest = superseded.get(edge.from_release_id)
+            superseded[edge.from_release_id] = min(earliest, edge.effective) if earliest else edge.effective
 
     fields = ("superseded_at", "end_of_support", "end_of_life")
     changed = []
