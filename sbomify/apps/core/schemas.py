@@ -701,6 +701,16 @@ class ReleasePatchSchema(BaseModel):
     released_at: datetime | None = None
 
 
+class ReleaseEdgeSchema(BaseModel):
+    """One supersession edge, described by the release at its other end."""
+
+    release_id: str | None = Field(description="The other release, or null for a successor outside sbomify")
+    name: str
+    version: str | None = None
+    drop_in: bool = Field(description="True on the same line, where the later release replaces the earlier one")
+    effective: datetime
+
+
 class ReleaseResponseSchema(BaseModel):
     """Schema for Release API responses."""
 
@@ -727,6 +737,12 @@ class ReleaseResponseSchema(BaseModel):
     withdrawn_at: datetime | None = None
     withdrawn_reason: str = ""
     archived_at: datetime | None = None
+    predecessors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release this one follows. On a single release only, not in lists."
+    )
+    successors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release that follows this one. On a single release only, not in lists."
+    )
 
 
 class ReleaseArtifactCreateSchema(BaseModel):
