@@ -33,7 +33,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
-from sbomify.apps.core.services.release_lifecycle import link_pending_supersessions, surviving_supersessions
+from sbomify.apps.core.services.release_lifecycle import link_pending_supersessions
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
@@ -45,7 +45,7 @@ from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Release, ReleaseArtifact, User
+from .models import Component, Product, Release, ReleaseArtifact, ReleaseSupersession, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -3614,9 +3614,9 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             # and the delete.
             Product.objects.select_for_update().filter(pk=release.product_id).first()
             superseded = (
-                surviving_supersessions()
-                .filter(superseded_by_release=release, drop_in=True)
-                .values("release_id")
+                ReleaseSupersession.objects.live()
+                .filter(to_release=release, drop_in=True)
+                .values("from_release_id")
                 .distinct()
                 .count()
             )
