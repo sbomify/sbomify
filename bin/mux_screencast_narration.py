@@ -25,6 +25,7 @@ import shutil
 import subprocess  # nosec B404
 import sys
 from pathlib import Path
+from typing import Any
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "screencasts" / "output"
 
@@ -37,7 +38,7 @@ def _timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}.{millis:03d}"
 
 
-def write_vtt(cues: list[dict], path: Path) -> None:
+def write_vtt(cues: list[dict[str, Any]], path: Path) -> None:
     lines = ["WEBVTT", ""]
     for index, cue in enumerate(cues, start=1):
         start = cue["at"]

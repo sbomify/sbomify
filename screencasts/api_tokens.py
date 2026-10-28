@@ -21,7 +21,7 @@ from conftest import (
     type_text,
 )
 
-TOKEN_NAME = "GitHub Actions upload"
+TOKEN_NAME = "GitHub Actions upload"  # nosec B105 - the token's label, not a secret
 
 
 # The recording browser reaches the app over plain http on a container IP,

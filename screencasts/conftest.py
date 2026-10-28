@@ -553,7 +553,7 @@ def _synthesize(text: str) -> Path:
         }
     ).encode()
     request = urllib.request.Request(TTS_URL, data=body, headers=headers, method="POST")  # noqa: S310
-    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
+    with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310  # nosec B310 - TTS_URL is configuration
         audio = response.read()
 
     # The WAV is streamed, so its header carries a placeholder length rather
