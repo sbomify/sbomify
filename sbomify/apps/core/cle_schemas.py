@@ -94,11 +94,6 @@ class CLEEventResponseSchema(BaseModel):
     references: list[str]
 
 
-class ReleaseCLEEventResponseSchema(CLEEventResponseSchema):
-    drop_in: bool
-    superseded_by_release_id: str | None
-
-
 class CLESupportDefinitionCreateSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
