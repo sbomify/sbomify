@@ -30,7 +30,6 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
@@ -288,25 +287,19 @@ def recently_retired_releases(days: int, now: datetime | None = None) -> QuerySe
     A support date, an end of life or a supersession dated ahead retires a
     release with no write to hang a reconcile on, so the daily sweep reads
     these. A withdrawal, an archive or a new edge reconciles as it is written.
-    Dates follow ``tracked_releases``: a release's own wins over its
-    product's, and a date is the last supported day.
+    Dates are the ``effective_*`` columns ``tracked_releases`` reads: a
+    release's own, else its product's for every version. A date is the last
+    supported day.
     """
     now = now or timezone.now()
     today = now.date()
     since = today - timedelta(days=days)
     passed = (
-        Q(lifecycle_eos__gte=since, lifecycle_eos__lt=today)
-        | Q(lifecycle_eol__gte=since, lifecycle_eol__lt=today)
+        Q(effective_end_of_support__gte=since, effective_end_of_support__lt=today)
+        | Q(effective_end_of_life__gte=since, effective_end_of_life__lt=today)
         | Q(superseded_at__gte=now - timedelta(days=days), superseded_at__lte=now)
     )
-    return (
-        Release.objects.filter(is_latest=False)
-        .alias(
-            lifecycle_eos=Coalesce("end_of_support", "product__end_of_support"),
-            lifecycle_eol=Coalesce("end_of_life", "product__end_of_life"),
-        )
-        .filter(passed)
-    )
+    return Release.objects.filter(passed, is_latest=False)
 
 
 def existing_supersession(
