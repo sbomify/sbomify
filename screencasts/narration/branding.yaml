@@ -5,7 +5,8 @@ speed: 1.0
 beats:
   intro:
     text: >-
-      Here is how to put your own brand on your Trust Center in sbomify.
+      Here is how to put your own brand on your Trust Center in sbomify. It
+      all starts in your workspace Settings.
 
   branding_tab_sets:
     text: >-

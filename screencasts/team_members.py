@@ -49,15 +49,13 @@ def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_
     page = recording_page
     mock_vuln_trends(page)
 
-    start_on_dashboard(page, pause_ms=800)
+    # The opening line plays over the splash and the trip to Settings.
     narrate(page, "intro")
-    settle(page)
-
+    start_on_dashboard(page, pause_ms=0)
     navigate_to_settings(page)
+    narrate(page, "members_tab_settings")
     navigate_to_settings_tab(page, "members")
     page.get_by_text("Workspace members").first.wait_for(state="visible", timeout=10_000)
-    narrate(page, "members_tab_settings")
-    settle(page)
 
     # ── Roles ────────────────────────────────────────────────────────────
     legend = page.locator("#role-legend summary").first
@@ -68,7 +66,6 @@ def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_
     narrate(page, "owners_admins_run")
     settle(page)
     hover_and_click(page, legend)
-    pace(page, 500)
 
     # ── Invite ───────────────────────────────────────────────────────────
     invite = page.get_by_role("link", name="Invite member")
@@ -86,9 +83,9 @@ def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_
     narrate(page, "pick_role_each")
     hover_and_click(page, role)
     role.select_option("operator")
-    pace(page, 1200)
+    pace(page, 600)
     narrate(page, "jared_joins_operator")
-    settle(page)
+    pace(page, 2000)
 
     hover_and_click(page, page.get_by_role("button", name="Invite to workspace"))
     page.wait_for_load_state("networkidle")
@@ -96,9 +93,8 @@ def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_
     # ── Pending invitation ───────────────────────────────────────────────
     pending = page.locator("tr", has_text=INVITEE)
     pending.wait_for(state="visible", timeout=10_000)
-    smooth_scroll(page, pending, 500)
     narrate(page, "sbomify_emails_invite")
-    settle(page)
+    smooth_scroll(page, pending, 500)
     narrate(page, "changed_mind_revoke")
     hover_and_click(page, pending.get_by_role("button", name=f"Revoke invitation for {INVITEE}"))
     # The confirmation dialog is teleported to <body>, out of its wrapper.
@@ -126,5 +122,3 @@ def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_
     page.locator("tr", has_text="Dinesh Chugtai").wait_for(state="detached", timeout=10_000)
     pace(page, 800)
     narrate(page, "there_no_role")
-    settle(page)
-    pace(page, 600)

@@ -42,27 +42,27 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
     mock_vuln_trends(page)
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the splash, the dashboard and the way to
+    # Products, so the video does not open on silence.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=300)
 
     # ── 1. The product and its rolling "latest" release ──────────────────
     navigate_to_products(page)
     product_link = page.get_by_role("link", name=PIED_PIPER_PRODUCT_NAME, exact=True).first
     product_link.wait_for(state="visible", timeout=15_000)
+    narrate(page, "every_product_has")
     hover_and_click(page, product_link)
     page.wait_for_load_state("networkidle")
 
     latest = page.get_by_role("link", name="latest", exact=True).first
     latest.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, latest, 600)
-    narrate(page, "every_product_has")
-    settle(page)
 
     # ── 2. Create a release from the product's actions menu ──────────────
+    narrate(page, "version_ship_create")
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 500)
-    narrate(page, "version_ship_create")
     hover_and_click(page, page.get_by_role("button", name="Product actions"))
     pace(page, 400)
     hover_and_click(page, page.get_by_role("menuitem", name="Create release"))
@@ -106,4 +106,4 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 1200)
     narrate(page, "release_holds_sbom")
     settle(page)
-    pace(page, 600)
+    pace(page, 400)

@@ -102,25 +102,27 @@ def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
 def product_creation(recording_page: Page) -> None:
     page = recording_page
 
+    # The opening line plays over the splash and the dashboard load, so the
+    # video does not open on silence.
+    narrate(page, "intro")
     start_on_dashboard(page, pause_ms=300)
     rewrite_localhost_urls(page)
-    narrate(page, "intro")
-    settle(page)
 
     # ── 1. Components ─────────────────────────────────────────────────────
-    navigate_to_components(page)
     narrate(page, "product_built_components")
+    navigate_to_components(page)
     _create_component(page, COMPONENTS[0])
     narrate(page, "name_all_component")
     navigate_to_components(page)
     _create_component(page, COMPONENTS[1])
 
     # ── 2. The product ────────────────────────────────────────────────────
-    navigate_to_products(page)
     narrate(page, "open_products_create")
+    navigate_to_products(page)
     hover_and_click(page, page.get_by_role("link", name="Create product").first)
     page.wait_for_url("**/products/new/**")
     page.wait_for_load_state("networkidle")
+    narrate(page, "product_name_description")
     _type_into(page, page.locator("input#name"), PRODUCT_NAME)
     _type_into(page, page.locator("textarea[name='description']"), PRODUCT_DESCRIPTION, delay=35)
     hover_and_click(page, page.get_by_role("button", name="Create product"))
@@ -148,8 +150,8 @@ def product_creation(recording_page: Page) -> None:
 
     # ── 4. Product details: lifecycle ─────────────────────────────────────
     details = page.locator("#product-details-heading")
-    smooth_scroll(page, details, 600)
     narrate(page, "product_details_holds")
+    smooth_scroll(page, details, 600)
     lifecycle = page.locator("#product-lifecycle-card")
     lifecycle.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, lifecycle.get_by_role("button", name="Set dates"))
@@ -174,10 +176,11 @@ def product_creation(recording_page: Page) -> None:
     # ── 6. Identifiers ────────────────────────────────────────────────────
     narrate(page, "identifiers_such_cpe")
     _open_detail_tab(page, "Identifiers", "product-identifiers-card")
-    for identifier in IDENTIFIERS:
-        _add_identifier(page, *identifier)
+    _add_identifier(page, *IDENTIFIERS[0])
+    narrate(page, "purl_names_package")
+    _add_identifier(page, *IDENTIFIERS[1])
 
-    smooth_scroll(page, page.locator("#product-identifiers-card"), 400)
     narrate(page, "product_set_up")
+    smooth_scroll(page, page.locator("#product-identifiers-card"), 400)
     settle(page)
-    pace(page, 600)
+    pace(page, 400)

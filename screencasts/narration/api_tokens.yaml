@@ -37,7 +37,8 @@ beats:
 
   see_where_goes:
     text: >-
-      To see where it goes, open a component's CI/CD integration.
+      To see where it goes, open a component and choose CI/CD integration from
+      its actions menu.
 
   sbomify_action_reads:
     text: >-

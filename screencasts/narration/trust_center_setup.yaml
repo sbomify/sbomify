@@ -18,7 +18,8 @@ beats:
 
   add_welcome_message:
     text: >-
-      Add a welcome message for visitors.
+      Add a welcome message for visitors. It is the first thing they read on
+      your Trust Center. Then save it.
 
   turn_security_txt:
     text: >-
@@ -39,7 +40,8 @@ beats:
 
   next_choose_what:
     text: >-
-      Next, choose what to share. Everything starts private.
+      Next, choose what to share, one component at a time. Everything starts
+      private.
 
   public_means_anyone:
     text: >-

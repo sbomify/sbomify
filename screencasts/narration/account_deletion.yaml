@@ -32,7 +32,7 @@ beats:
 
   confirm_type_delete:
     text: >-
-      To confirm, type delete.
+      To confirm, type delete, then click Delete my account.
 
   account_deleted_signed:
     text: >-

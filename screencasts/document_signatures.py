@@ -199,8 +199,9 @@ def document_signatures(recording_page: Page, signing_setup: dict, sample_user, 
     api = Client()
     setup_authenticated_client_session(api, deletable_team, sample_user)
 
-    start_on_dashboard(page, pause_ms=600)
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
     pace(page, 1500)
 
     # ── 1. The pipeline's two calls ──────────────────────────────────────
@@ -290,5 +291,3 @@ def document_signatures(recording_page: Page, signing_setup: dict, sample_user, 
     hover_and_click(page, show_met)
     pace(page, 600)
     narrate(page, "open_met_requirements")
-    settle(page)
-    pace(page, 800)

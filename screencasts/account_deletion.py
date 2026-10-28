@@ -23,6 +23,21 @@ from conftest import (
 )
 
 
+def _point_at(page: Page, locator) -> None:
+    """Glide the pointer onto a part of the page the voice is describing."""
+    locator.wait_for(state="visible", timeout=5_000)
+    box = locator.bounding_box()
+    if box is None:
+        raise AssertionError(f"nothing to point at: {locator}")
+    if box["y"] < 0 or box["y"] + box["height"] > page.evaluate("window.innerHeight"):
+        smooth_scroll(page, locator, 600)
+        box = locator.bounding_box()
+        if box is None:
+            raise AssertionError(f"nothing to point at: {locator}")
+    page.mouse.move(box["x"] + min(box["width"] / 2, 120), box["y"] + box["height"] / 2, steps=15)
+    pace(page, 300)
+
+
 @pytest.mark.django_db(transaction=True)
 def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
@@ -32,19 +47,18 @@ def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # blank white; show the branded splash in its place.
     page.route("**/login/**", lambda route: route.fulfill(status=200, content_type="text/html", body=SPLASH_HTML))
     mock_vuln_trends(page)
-    start_on_dashboard(page)
+    # The opening line plays over the splash and the dashboard load.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=300)
 
+    narrate(page, "open_settings_account")
     navigate_to_settings(page)
     navigate_to_settings_tab(page, "account")
-    narrate(page, "open_settings_account")
-    settle(page)
 
     danger_band = page.get_by_role("button", name="Danger zone")
     danger_band.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, danger_band, 600)
     narrate(page, "account_deletion_sits")
+    smooth_scroll(page, danger_band, 600)
     hover_and_click(page, danger_band)
     pace(page, 800)
 
@@ -56,12 +70,16 @@ def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     confirm_input = page.locator("#delete-account-confirm")
     confirm_input.wait_for(state="visible", timeout=5_000)
     pace(page, 400)
+    # The dialog is read out a part at a time, with the pointer on the part
+    # being spoken, so the picture follows the voice instead of holding still.
     narrate(page, "dialog_lists_what")
-    settle(page)
+    _point_at(page, modal.get_by_text("Account deactivated (cannot sign in)").first)
+    pace(page, 2200)
+    _point_at(page, modal.get_by_text("Personal access tokens revoked").first)
     narrate(page, "workspaces_where_only")
-    settle(page)
+    _point_at(page, modal.get_by_text("Workspaces where you are the sole member").first)
     narrate(page, "have_14_days")
-    settle(page)
+    _point_at(page, modal.get_by_text("Account deleted for good").first)
 
     narrate(page, "confirm_type_delete")
     hover_and_click(page, confirm_input)
@@ -79,4 +97,4 @@ def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     narrate(page, "account_deleted_signed")
     settle(page)
-    pace(page, 1000)
+    pace(page, 600)

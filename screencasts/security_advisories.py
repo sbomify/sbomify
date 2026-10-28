@@ -68,9 +68,9 @@ def seeded_advisories(pied_piper_product: dict) -> dict:
 def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     page = recording_page
     auto_dismiss_toasts(page)
-    start_on_dashboard(page, pause_ms=600)
-
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
     # ── 1. The advisories list ────────────────────────────────────────────
     hover_and_click(page, sidebar_link(page, "Security advisories"))
@@ -169,5 +169,3 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     rewrite_localhost_urls(page)
     page.locator(f"text={NEW_ADVISORY_TITLE}").first.wait_for(state="visible", timeout=15_000)
     narrate(page, "customers_see_public")
-    settle(page)
-    pace(page, 800)

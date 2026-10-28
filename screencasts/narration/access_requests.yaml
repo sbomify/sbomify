@@ -6,16 +6,16 @@ beats:
   intro:
     text: >-
       Here is how gated access works on a Trust Center. Some documents, like an
-      audit report, are shared only after you approve the request.
+      audit report, are shared only after you approve the request. First, the
+      visitor's side.
 
   first_visitor_s:
     text: >-
-      First, the visitor's side. Dana, a customer, opens Pied Piper's SOC 2
-      report.
+      Dana, a customer, opens Pied Piper's SOC 2 report.
 
   report_gated_dana:
     text: >-
-      The report is gated, so Dana requests access.
+      The report is gated, so Dana cannot open it yet. Dana requests access.
 
   workspace_asks_nda:
     text: >-
@@ -45,7 +45,7 @@ beats:
 
   approve_request:
     text: >-
-      Approve the request.
+      Approve the request, and Dana can open and download the report.
 
   dana_moves_approved:
     text: >-
@@ -53,4 +53,4 @@ beats:
 
   back_trust_center:
     text: >-
-      Back on the Trust Center, Dana can now open and download the report.
+      Back on the Trust Center, the report now reads Access granted for Dana.

@@ -23,7 +23,8 @@ beats:
 
   sbomify_open_component:
     text: >-
-      In sbomify, open the component, then the version you signed.
+      In sbomify, open the component, then the version you signed, to see what
+      the pipeline attached to it.
 
   sbom_carries_signed:
     text: >-

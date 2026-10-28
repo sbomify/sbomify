@@ -24,7 +24,7 @@ beats:
 
   add_someone_choose:
     text: >-
-      To add someone, choose Invite member.
+      To add someone, choose Invite member and enter their email address.
 
   pick_role_each:
     text: >-

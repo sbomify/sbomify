@@ -215,54 +215,45 @@ def crypto_workspace(sample_user: AbstractBaseUser, pied_piper_with_sboms: dict,
 def cryptography_cbom(crypto_workspace: dict, recording_page: Page) -> None:
     page = recording_page
 
-    start_on_dashboard(page, 800)
+    # The opening line plays over the dashboard loading, not after it.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, 800)
 
+    narrate(page, "cryptography_page_grades")
     hover_and_click(page, sidebar_link(page, "Cryptography"))
     page.wait_for_load_state("networkidle")
     page.get_by_text("Migrate first").wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
-    narrate(page, "cryptography_page_grades")
-    settle(page)
-    narrate(page, "glance_which_components")
-    settle(page)
 
+    narrate(page, "glance_which_components")
+    for label in ("At risk", "Needs review"):
+        page.get_by_text(label, exact=True).first.hover()
+        pace(page, 900)
+
+    narrate(page, "migrate_first_lists")
     migrate = page.get_by_text("Migrate first")
     smooth_scroll(page, migrate, 400)
-    narrate(page, "migrate_first_lists")
-    settle(page)
 
+    narrate(page, "each_component_shows")
     table = page.locator("table").last
     smooth_scroll(page, table, 400)
-    narrate(page, "each_component_shows")
-    settle(page)
 
+    narrate(page, "open_component_see")
     hover_and_click(page, page.get_by_role("link", name=CORE_COMPONENT))
     page.wait_for_load_state("networkidle")
     card = page.locator("#crypto-inventory-card")
     card.wait_for(state="visible", timeout=20_000)
-    smooth_scroll(page, card, 800)
-    narrate(page, "open_component_see")
-    settle(page)
+    smooth_scroll(page, card, 400)
 
     first_row = card.get_by_role("button", name="Show details for RSA-2048")
-    hover_and_click(page, first_row)
-    pace(page, 800)
     narrate(page, "expand_asset_see")
+    hover_and_click(page, first_row)
     settle(page)
     hover_and_click(page, first_row)
-    pace(page, 400)
 
     certs_tab = card.get_by_role("tab", name="Certificates")
-    hover_and_click(page, certs_tab)
-    pace(page, 800)
     narrate(page, "certificates_shows_each")
-    settle(page)
+    hover_and_click(page, certs_tab)
 
     protocols_tab = card.get_by_role("tab", name="Protocols")
-    hover_and_click(page, protocols_tab)
-    pace(page, 800)
     narrate(page, "protocols_lists_cipher")
-    settle(page)
-    pace(page, 600)
+    hover_and_click(page, protocols_tab)

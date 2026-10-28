@@ -33,9 +33,9 @@ def spotlight_search(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
     mock_vuln_trends(page)
 
-    start_on_dashboard(page, pause_ms=800)
+    # The opening line plays over the dashboard loading.
     narrate(page, "intro")
-    settle(page)
+    start_on_dashboard(page, pause_ms=800)
 
     # ── Open with the keyboard shortcut ──────────────────────────────────
     narrate(page, "press_control_k")
@@ -44,48 +44,48 @@ def spotlight_search(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     if search_box:
         page.mouse.move(search_box["x"] + search_box["width"] - 30, search_box["y"] + search_box["height"] / 2)
     pace(page, 1200)
-    _open_palette(page)
-    pace(page, 1000)
+
     narrate(page, "before_type_suggests")
-    settle(page)
+    _open_palette(page)
 
     # ── Jump with the arrow keys ─────────────────────────────────────────
     narrate(page, "use_arrow_keys")
     pace(page, 1200)
     page.keyboard.press("ArrowDown")
+
     narrate(page, "components_selected_enter")
-    settle(page)
+    pace(page, 1500)
     page.keyboard.press("Enter")
     page.wait_for_url(lambda url: "/components" in url, timeout=10_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 1200)
 
     # ── Search by what you mean ──────────────────────────────────────────
-    _open_palette(page)
     narrate(page, "search_also_knows")
+    _open_palette(page)
     type_text(search, "api key", delay=120)
     tokens = _option(page, "API tokens")
     tokens.wait_for(state="visible", timeout=10_000)
+
     narrate(page, "click_result_open")
     hover_and_click(page, tokens)
+
+    narrate(page, "opened_api_tokens")
     page.wait_for_load_state("networkidle")
     page.get_by_role("heading", name="API tokens").first.wait_for(state="visible", timeout=10_000)
     pace(page, 800)
-    narrate(page, "opened_api_tokens")
-    settle(page)
 
     # ── Find an asset by name ────────────────────────────────────────────
-    _open_palette(page)
     narrate(page, "also_finds_products")
+    _open_palette(page)
     type_text(search, "web dash", delay=120)
     asset = _option(page, "Web Dashboard")
     asset.wait_for(state="visible", timeout=10_000)
+
     narrate(page, "web_dashboard_shows")
+    asset.hover()
     settle(page)
+
+    narrate(page, "one_search_component")
     hover_and_click(page, asset)
     page.wait_for_load_state("networkidle")
     page.get_by_role("heading", name="Web Dashboard").first.wait_for(state="visible", timeout=10_000)
-    pace(page, 800)
-    narrate(page, "one_search_component")
-    settle(page)
-    pace(page, 600)
