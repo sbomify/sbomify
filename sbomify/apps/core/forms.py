@@ -181,6 +181,13 @@ class ReleaseCreateForm(forms.Form):
         cast(forms.ChoiceField, self.fields["product_id"]).choices = [("", "Choose a product"), *products]
         cast(forms.ChoiceField, self.fields["replaces"]).choices = [("", "None"), *(candidates or [])]
 
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        # Same line retires the release it replaces, so the form never guesses which one is meant.
+        if cleaned.get("replaces") and not cleaned.get("replaces_line"):
+            self.add_error("replaces_line", "Choose Same line or New line, or set Release it replaces to None.")
+        return cleaned
+
 
 class SupportContactForm(forms.Form):
     """Form for general support contact inquiries."""

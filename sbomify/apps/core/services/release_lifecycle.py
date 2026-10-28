@@ -74,6 +74,48 @@ def replacement_candidates(product_id: str) -> list[Release]:
     return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
 
 
+def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
+    """The release a ``supersedes`` item names: by ID within the workspace, or by version then name."""
+    if item.release_id:
+        predecessor = Release.objects.select_related("product").filter(pk=item.release_id).first()
+        if predecessor is None or predecessor.product.team_id != successor.product.team_id:
+            return ServiceResult.failure(f"Release {item.release_id} not found.", status_code=400)
+        if predecessor.product_id != successor.product_id:
+            return ServiceResult.failure(
+                f"Release {predecessor.name} belongs to another product. "
+                "A release can only supersede releases of its own product.",
+                status_code=400,
+            )
+        return ServiceResult.success(predecessor)
+    siblings = Release.objects.filter(product_id=successor.product_id)
+    predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
+    if predecessor is None:
+        return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
+    return ServiceResult.success(predecessor)
+
+
+def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceResult[list[str]]:
+    """The ``supersedes`` items that ``successor`` does not already replace with a live edge on the same line.
+
+    A create that finds the release already exists may only confirm what is
+    there. It never writes edges onto a release someone else made, so a name
+    typed by mistake cannot retire the release the form had preselected.
+    """
+    missing = []
+    for item in items:
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        predecessor = found.value
+        if (
+            not ReleaseSupersession.objects.live()
+            .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
+            .exists()
+        ):
+            missing.append(predecessor.name)
+    return ServiceResult.success(missing)
+
+
 def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:
     """Record that ``successor`` supersedes each release ``items`` names.
 
@@ -86,23 +128,12 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
     # cle.py imports this module for the edge rules.
     from sbomify.apps.core.services.cle import create_release_cle_event
 
-    siblings = Release.objects.filter(product_id=successor.product_id)
     successor_version = successor.version or successor.name
     for item in items:
-        if item.release_id:
-            predecessor = Release.objects.select_related("product").filter(pk=item.release_id).first()
-            if predecessor is None or predecessor.product.team_id != successor.product.team_id:
-                return ServiceResult.failure(f"Release {item.release_id} not found.", status_code=400)
-            if predecessor.product_id != successor.product_id:
-                return ServiceResult.failure(
-                    f"Release {predecessor.name} belongs to another product. "
-                    "A release can only supersede releases of its own product.",
-                    status_code=400,
-                )
-        else:
-            predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
-            if predecessor is None:
-                return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        predecessor = found.value
 
         # An edge declared before this release existed was linked to it on create. Its
         # date is when the caller said the successor takes over, so only drop_in must agree.
@@ -131,6 +162,37 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
                 status_code=400,
             )
     return ServiceResult.success(None)
+
+
+def remove_supersession(release_id: str, edge_id: str, *, actor_id: Any = None) -> ServiceResult[ReleaseSupersession]:
+    """Withdraw one live edge into or out of ``release_id``, so a mistaken Replaces can be undone.
+
+    It goes through the CLE ``withdrawn`` path, so the published lifecycle
+    records the correction and the history keeps the edge. The caller checks
+    that the person can manage the release.
+    """
+    # cle.py imports this module for the edge rules.
+    from sbomify.apps.core.services.cle import create_release_cle_event
+
+    edge = (
+        ReleaseSupersession.objects.live()
+        .select_related("from_release", "cle_event")
+        .filter(Q(from_release_id=release_id) | Q(to_release_id=release_id), pk=edge_id)
+        .first()
+    )
+    if edge is None or edge.cle_event is None:
+        return ServiceResult.failure("That link no longer exists.", status_code=404)
+    result = create_release_cle_event(
+        edge.from_release,
+        CLEEventType.WITHDRAWN,
+        timezone.now(),
+        withdrawn_event_id=edge.cle_event.event_id,
+        actor_id=actor_id,
+    )
+    if not result.ok:
+        return ServiceResult.failure(result.error or "The link could not be removed.", status_code=result.status_code)
+    edge.refresh_from_db()
+    return ServiceResult.success(edge)
 
 
 def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:

@@ -479,6 +479,20 @@ def create_release_cle_event(
             if not resolved.ok:
                 return ServiceResult.failure(resolved.error or "Invalid supersession", status_code=400)
             successor = resolved.value
+            # A release cannot take over a line from one that came out after it. Without this,
+            # a backdated entry would retire the current release the moment it was saved.
+            if (
+                drop_in
+                and successor is not None
+                and successor.released_at
+                and release.released_at
+                and successor.released_at < release.released_at
+            ):
+                return ServiceResult.failure(
+                    f"Release {release.name} was released after {successor.name}, so {successor.name} cannot "
+                    "replace it on the same line. Choose a new line, or check the release dates.",
+                    status_code=400,
+                )
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
             entity=release,

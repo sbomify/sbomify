@@ -36,7 +36,7 @@
                     <c-forms.input id="release-version" name="version" value="{{ form.version.value|default:'' }}" placeholder="e.g. v1.0.0" maxlength="255" state="{{ form.version.errors|yesno:'error,' }}" aria-invalid="{{ form.version.errors|yesno:'true,false' }}" />
                     </c-forms.field>
                 </div>
-                <c-forms.checkbox id="release-prerelease" name="is_prerelease" :checked="form.is_prerelease.value" @change="if ($event.target.checked && $refs.replaces) $refs.replaces.value = ''">Mark as prerelease</c-forms.checkbox>
+                <c-forms.checkbox id="release-prerelease" name="is_prerelease" :checked="form.is_prerelease.value" @change="if ($event.target.checked) { const replaces = document.getElementById('release-replaces-select'); if (replaces) replaces.value = '' }">Mark as prerelease</c-forms.checkbox>
             </div>
             </c-layout.form-section>
             <c-layout.form-section step="2" accent="neutral" title="Details" description="Optional. Add context and dates.">
@@ -58,14 +58,14 @@
                 <c-layout.form-section id="release-replaces" step="3" accent="neutral" title="Replaces" description="Optional. Stop monitoring a release this one takes over from.">
                 <div class="flex flex-col gap-5">
                     <c-forms.field label="Release it replaces" for="release-replaces-select" error="{{ form.replaces.errors|join:' ' }}">
-                    <c-forms.select id="release-replaces-select" name="replaces" x-ref="replaces" state="{{ form.replaces.errors|yesno:'error,' }}" aria-invalid="{{ form.replaces.errors|yesno:'true,false' }}">
+                    <c-forms.select id="release-replaces-select" name="replaces" state="{{ form.replaces.errors|yesno:'error,' }}" aria-invalid="{{ form.replaces.errors|yesno:'true,false' }}">
                     {% for value, label in form.fields.replaces.choices %}
                         <option value="{{ value }}"
                                 {% if value == form.replaces.value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                     </c-forms.select>
                     </c-forms.field>
-                    <c-layout.choice-group name="replaces_line" label="Line" hint="Same line stops monitoring the release it replaces. New line keeps monitoring it while you still support it." :options="line_options" selected="{{ form.replaces_line.value|default:'same' }}" />
+                    <c-layout.choice-group name="replaces_line" label="Line" hint="Same line stops monitoring the release it replaces. New line keeps monitoring it while you still support it." :options="line_options" selected="{{ form.replaces_line.value|default:'' }}" error="{{ form.replaces_line.errors|join:' ' }}" />
                 </div>
                 </c-layout.form-section>
             {% else %}
