@@ -4215,7 +4215,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, sbom.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4263,7 +4263,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            result = add_artifact_to_release(release, document=document, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):

@@ -1192,6 +1192,85 @@ def test_add_duplicate_sbom_format_to_release(
     assert response.status_code == 400
     assert "already contains an SBOM of format" in response.json()["detail"]
 
+    # The earlier SBOM is still the one in the release.
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom1.id]
+
+
+@pytest.mark.django_db
+def test_add_sbom_with_replace_supersedes_same_format_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """A re-run of a release publishes a new SBOM for the same version; replace=True swaps it in."""
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    sbom1 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1", version="1.0.0"
+    )
+    sbom2 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2", version="2.0.0"
+    )
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps({"sbom_id": sbom2.id, "replace": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["artifact_name"] == "SBOM 2"
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom2.id]
+
+
+@pytest.mark.django_db
+def test_add_document_with_replace_supersedes_same_type_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    doc1 = Document.objects.create(component=sample_component, name="Doc 1", version="1.0.0", document_type="other")
+    doc2 = Document.objects.create(component=sample_component, name="Doc 2", version="2.0.0", document_type="other")
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, document=doc1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    def add(document: Document, **extra: bool):
+        return client.post(
+            url,
+            json.dumps({"document_id": document.id, **extra}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+    assert add(doc2).status_code == 400
+    assert add(doc2, replace=True).status_code == 201
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("document_id", flat=True)) == [doc2.id]
+
 
 @pytest.mark.django_db
 def test_add_sbom_from_different_team_fails(
