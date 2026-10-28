@@ -317,6 +317,14 @@ class Release(models.Model):
         null=True, blank=True, help_text="Final end of support across support policies, derived from CLE events"
     )
     end_of_life = models.DateField(null=True, blank=True, help_text="End of life, derived from CLE events")
+    # What monitoring reads: the release's own date, else the product's when that
+    # date covers every version. Derived by recompute_release_lifecycle.
+    effective_end_of_support = models.DateField(
+        null=True, blank=True, help_text="End of support that applies: the release's own, else the product's"
+    )
+    effective_end_of_life = models.DateField(
+        null=True, blank=True, help_text="End of life that applies: the release's own, else the product's"
+    )
     # Set by a person. CLE has no event for a yanked or archived release.
     withdrawn_at = models.DateTimeField(null=True, blank=True, help_text="When the release was withdrawn")
     withdrawn_reason = models.CharField(
@@ -342,13 +350,11 @@ class Release(models.Model):
             return self.LifecycleState.ACTIVE
         now = timezone.now()
         today = now.date()
-        end_of_life = self.end_of_life or self.product.end_of_life
-        end_of_support = self.end_of_support or self.product.end_of_support
         if self.withdrawn_at is not None:
             return self.LifecycleState.WITHDRAWN
-        if end_of_life is not None and end_of_life < today:
+        if self.effective_end_of_life is not None and self.effective_end_of_life < today:
             return self.LifecycleState.END_OF_LIFE
-        if end_of_support is not None and end_of_support < today:
+        if self.effective_end_of_support is not None and self.effective_end_of_support < today:
             return self.LifecycleState.END_OF_SUPPORT
         if self.superseded_at is not None and self.superseded_at <= now:
             return self.LifecycleState.SUPERSEDED

@@ -23,6 +23,20 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name="release",
+            name="effective_end_of_life",
+            field=models.DateField(
+                blank=True, help_text="End of life that applies: the release's own, else the product's", null=True
+            ),
+        ),
+        migrations.AddField(
+            model_name="release",
+            name="effective_end_of_support",
+            field=models.DateField(
+                blank=True, help_text="End of support that applies: the release's own, else the product's", null=True
+            ),
+        ),
+        migrations.AddField(
+            model_name="release",
             name="end_of_support",
             field=models.DateField(
                 blank=True, help_text="Final end of support across support policies, derived from CLE events", null=True
