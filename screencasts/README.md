@@ -38,10 +38,14 @@ output/
 
 Each narrated recording also leaves `<name>.vtt` next to its `.webm`.
 
-CI (`.github/workflows/screencasts.yml`, manual dispatch) records the same
-targets and syncs `*.webm`, `*.vtt` and the screenshot tree to Cloudflare R2.
-sbomify.com reads the `.vtt` at build time and prints it under the video as a
-transcript.
+Narration is built locally: record with the voice configured (see below),
+then upload the `.webm` and `.vtt` files to the `screencasts/` prefix of the
+marketing-assets bucket. sbomify.com reads each `.vtt` at build time and prints
+it under the video as a transcript.
+
+CI (`.github/workflows/screencasts.yml`, manual dispatch) records without a
+voice, so its videos are silent and captioned. Running it syncs those over the
+narrated uploads.
 
 ## Narration
 
@@ -72,7 +76,7 @@ Narration needs one of:
 
 | Variable | Use |
 | --- | --- |
-| `XAI_API_KEY` | Call `https://api.x.ai/v1/tts` directly (what CI uses, from the `XAI_API_KEY` secret) |
+| `XAI_API_KEY` | Call `https://api.x.ai/v1/tts` directly |
 | `SCREENCAST_TTS_URL` (+ `SCREENCAST_TTS_TOKEN`) | Call a proxy that holds the key instead |
 | `SCREENCAST_TTS_VOICE` | Voice id, default `eve` |
 
