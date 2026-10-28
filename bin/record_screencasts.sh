@@ -17,8 +17,23 @@ fi
 
 SERVICES_STARTED=false
 
+# Set SCREENCAST_REMOTE_CDP to a GPU host's DevTools endpoint (reachable from
+# the tests container) and SCREENCAST_SERVER_HOST to this machine's address as
+# that host sees it. The app and the tests stay here; only the browser is
+# remote, so it renders on a real GPU. See screencasts/README.md.
+REMOTE_LIVESERVER_PORT=8099
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+REMOTE_ENV=()
+REMOTE_PYTEST=()
+if [ -n "${SCREENCAST_REMOTE_CDP:-}" ]; then
+    : "${SCREENCAST_SERVER_HOST:?set SCREENCAST_SERVER_HOST to the address the GPU host reaches this machine on}"
+    COMPOSE_ARGS+=(-f docker-compose.screencasts-remote.yml)
+    REMOTE_ENV=(-e "PLAYWRIGHT_CDP_ENDPOINT=$SCREENCAST_REMOTE_CDP" -e "PLAYWRIGHT_DJANGO_HOST=$SCREENCAST_SERVER_HOST")
+    REMOTE_PYTEST=(--liveserver "0.0.0.0:$REMOTE_LIVESERVER_PORT")
+fi
+
 compose() {
-    $RUNTIME compose -f "$COMPOSE_FILE" "$@"
+    $RUNTIME compose "${COMPOSE_ARGS[@]}" "$@"
 }
 
 build_frontend() {
@@ -63,9 +78,10 @@ run_screencast() {
     local basename
     basename=$(basename "$file" .py)
     echo "Recording: $file"
-    compose exec tests uv run pytest "$file" \
+    compose exec "${REMOTE_ENV[@]}" tests uv run pytest "$file" \
         --override-ini="python_files=*.py" \
         --override-ini="python_functions=$basename" \
+        "${REMOTE_PYTEST[@]}" \
         -s
 }
 
