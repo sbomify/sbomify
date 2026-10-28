@@ -216,6 +216,8 @@ class TestReleasePage:
         page = self._page(authenticated_web_client, release)
         assert "Scan results appear here once" not in page
         assert "sbomify stopped monitoring this release before its SBOMs were scanned" in page
+        assert "1 SBOM never scanned" in page
+        assert "not scanned yet" not in page
 
     def test_a_monitored_release_is_unchanged(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

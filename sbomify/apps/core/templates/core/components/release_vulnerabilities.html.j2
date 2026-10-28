@@ -6,8 +6,9 @@ ten rows show by default; the rest wait behind a toggle so a release carrying
 hundreds does not push its artifacts off the page.
 
 A release sbomify no longer monitors is not scanned again, so its counts are as
-old as its last scan. The notice says since when and why, and a zero reads as
-"at last scan", never as clean today.
+old as its last scan. The notice says why, with that reason's own date, and a
+zero reads as "at last scan", never as clean today. What it never scanned reads
+"never scanned", not "not scanned yet".
 {% endcomment %}
 <c-tables.shell id="release-vulnerabilities" x-data="{ expanded: false }">
 <c-tables.toolbar>
@@ -17,7 +18,13 @@ old as its last scan. The notice says since when and why, and a zero reads as
 </h4>
 {% if vulnerabilities.unassessed %}
     <c-slot name="right">
-    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }} not scanned yet</span>
+    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }}
+        {% if vulnerabilities.untracked %}
+            never scanned
+        {% else %}
+            not scanned yet
+        {% endif %}
+    </span>
     </c-slot>
 {% endif %}
 </c-tables.toolbar>
