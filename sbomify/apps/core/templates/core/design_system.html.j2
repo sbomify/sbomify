@@ -1130,6 +1130,12 @@ first-of-type rule that drops the leading hairline reads the section's position
         column has an edge to scan down instead of a break landing somewhere different on every row.
         The third row below carries a name long enough to show it.
     </p>
+    <p class="text-sm text-text-muted">
+        A badge, flag or icon link on the same line as the name goes in the
+        <c-code-inline>trail</c-code-inline> slot of <c-code-inline>&lt;c-tables.name&gt;</c-code-inline>,
+        never after the name in the cell. The name gives way and the trail keeps its width, so a long
+        name can never clip the badge. The second and third rows below carry one.
+    </p>
     <c-tables.shell x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
     <c-tables.toolbar>
     <c-forms.search-input size="sm" id="ds-table-search" label="Search components" placeholder="Search components…" />
@@ -1157,14 +1163,24 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">
+        <c-tables.name>
+        acme-vault-core
+        <c-slot name="trail"><c-badges.solid-danger size="sm">KEV</c-badges.solid-danger></c-slot>
+        </c-tables.name>
+        </c-tables.cell>
         <c-tables.cell><c-badges.format format="spdx">SPDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">
+        <c-tables.name>
+        <span title="acme-gateway-edge-proxy-transport-security-module">acme-gateway-edge-proxy-transport-security-module</span>
+        <c-slot name="trail"><c-badges.secondary>VEX</c-badges.secondary></c-slot>
+        </c-tables.name>
+        </c-tables.cell>
         <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
