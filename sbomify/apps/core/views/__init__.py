@@ -519,6 +519,12 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
             component.visibility = Component.Visibility.PUBLIC
         component.save()
 
+        # Its Dependency-Track collection belongs under the new workspace's now.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        moved_id = str(component.pk)
+        transaction.on_commit(lambda: reconcile_component_dt_scope.send(moved_id))
+
     messages.add_message(
         request,
         messages.INFO,
