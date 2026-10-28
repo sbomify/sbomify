@@ -14,11 +14,11 @@ from django.urls import reverse
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.authz import SCOPE_PRESETS
-from sbomify.apps.core.models import Release
+from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.services.cle import create_release_cle_event
 from sbomify.apps.core.services.release_lifecycle import set_release_state
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.models import Product, ReleaseCLEEvent
+from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Workspace
 
 pytestmark = pytest.mark.django_db
@@ -38,8 +38,8 @@ def _state(release: Release) -> str:
     return Release.objects.select_related("product").get(pk=release.pk).lifecycle_state
 
 
-def _edges(predecessor: Release) -> list[ReleaseCLEEvent]:
-    return list(ReleaseCLEEvent.objects.filter(release=predecessor, event_type="supersededBy"))
+def _edges(predecessor: Release) -> list[ReleaseSupersession]:
+    return list(ReleaseSupersession.objects.live().filter(from_release=predecessor))
 
 
 def _supersede(predecessor: Release, successor: Release) -> None:
@@ -74,7 +74,7 @@ class TestCreateWithSupersedes:
         new = Release.objects.get(pk=response.json()["id"])
 
         (edge,) = _edges(old)
-        assert edge.superseded_by_release_id == new.pk
+        assert edge.to_release == new
         assert edge.drop_in is True
         assert _state(old) == Release.LifecycleState.SUPERSEDED
         assert response.json()["lifecycle_state"] == "active"
@@ -160,22 +160,71 @@ class TestCreateWithSupersedes:
         assert len(_edges(old)) == 1
 
 
+    def test_a_release_lists_every_previous_and_next_release(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        maintained = _release(sample_product, "1.2.1")
+        assert self._create(
+            authenticated_api_client,
+            sample_product,
+            name="2.0",
+            version="2.0",
+            supersedes=[{"version": "1.2.1", "drop_in": False}],
+        ).status_code == 201
+        assert self._create(
+            authenticated_api_client, sample_product, name="1.2.2", version="1.2.2", supersedes=[{"version": "1.2.1"}]
+        ).status_code == 201
+
+        old = client.get(f"/api/v1/releases/{maintained.pk}", **get_api_headers(token)).json()
+        major = client.get(
+            f"/api/v1/releases/{Release.objects.get(product=sample_product, name='2.0').pk}", **get_api_headers(token)
+        ).json()
+
+        assert old["predecessors"] == []
+        assert {(edge["name"], edge["drop_in"]) for edge in old["successors"]} == {("2.0", False), ("1.2.2", True)}
+        assert [(edge["release_id"], edge["drop_in"]) for edge in major["predecessors"]] == [(maintained.pk, False)]
+        assert old["lifecycle_state"] == "superseded"
+        assert major["lifecycle_state"] == "active"
+
     def test_an_edge_declared_before_the_release_existed_is_linked_not_refused(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
         old = _release(sample_product, "1.2.3")
         # CI named the successor before it existed, so the edge was stored unlinked.
-        early = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4")
-        assert early.ok and early.value is not None and early.value.superseded_by_release_id is None
+        early = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True)
+        assert early.ok
+        assert [edge.to_release_id for edge in _edges(old)] == [None]
+
+        response = self._create(
+            authenticated_api_client,
+            sample_product,
+            name="1.2.4",
+            version="1.2.4",
+            created_at=PAST.isoformat(),
+            released_at=PAST.isoformat(),
+            supersedes=[{"version": "1.2.3"}],
+        )
+
+        assert response.status_code == 201, response.content
+        new = response.json()["id"]
+        assert [edge.to_release_id for edge in _edges(old)] == [new]
+        assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_restating_an_earlier_edge_differently_is_refused_with_a_way_out(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.2.3")
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4").ok
 
         response = self._create(
             authenticated_api_client, sample_product, name="1.2.4", version="1.2.4", supersedes=[{"version": "1.2.3"}]
         )
 
-        assert response.status_code == 201, response.content
-        new = response.json()["id"]
-        assert {edge.superseded_by_release_id for edge in _edges(old)} == {new}
-        assert _state(old) == Release.LifecycleState.SUPERSEDED
+        assert response.status_code == 400, response.content
+        assert "Withdraw that supersession first" in response.json()["detail"]
+        assert not Release.objects.filter(product=sample_product, name="1.2.4").exists()
+        assert [edge.drop_in for edge in _edges(old)] == [False]
 
     def test_a_publish_scoped_token_cannot_retire_releases(self, sample_product: Product, sample_user: Any) -> None:
         old = _release(sample_product, "1.0.0")
@@ -360,7 +409,7 @@ class TestNewReleasePage:
         assert response.status_code == 302, response.context and response.context["form"].errors
         (edge,) = _edges(old)
         assert edge.drop_in is drop_in
-        assert edge.superseded_by_release == Release.objects.get(product=product, name="1.0.1")
+        assert edge.to_release == Release.objects.get(product=product, name="1.0.1")
 
     def test_a_release_from_another_product_cannot_be_replaced(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -382,17 +431,19 @@ class TestWhereAReleaseStands:
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
         product = Product.objects.create(team=team_with_business_plan, name="Gateway")
-        old, new = _release(product, "1.0.0"), _release(product, "1.0.1")
+        old, new, major = _release(product, "1.0.0"), _release(product, "1.0.1"), _release(product, "2.0.0")
         _supersede(old, new)
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="2.0.0").ok
 
         content = authenticated_web_client.get(reverse("core:release_details", args=[product.id, old.id])).content
         page = content.decode()
         assert "Superseded" in page
-        assert "Replaced by" in page and "1.0.1" in page
+        assert "Next releases" in page
+        assert "Same line, replaces this release" in page and "New line, this release stays monitored" in page
         assert "Withdraw release" in page and "Archive release" in page
 
-        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, new.id])).content
-        assert "Replaces" in page.decode()
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, major.id])).content
+        assert "Previous releases" in page.decode() and "Older line, still monitored" in page.decode()
 
     def test_withdrawing_from_the_details_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

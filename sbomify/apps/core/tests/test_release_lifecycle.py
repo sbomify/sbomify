@@ -1,8 +1,9 @@
 """Where a release stands: supersession edges, support dates, withdrawn and archived.
 
-The edge is the predecessor's supersededBy CLE event and the Release columns are
-derived from the event stream, so most of these tests write events through the
-service and read the columns back.
+A supersession is a ReleaseSupersession row, published as the predecessor's
+supersededBy CLE event. A release can have many successors and many
+predecessors. Support dates still come from the CLE stream, so most of these
+tests write events through the service and read the columns back.
 """
 
 from __future__ import annotations
@@ -14,12 +15,17 @@ from datetime import timezone as dt_timezone
 
 import pytest
 from django.apps import apps as django_apps
+from django.db import IntegrityError, transaction
 from django.test import Client
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.core.models import Component, Release
-from sbomify.apps.core.services.cle import create_release_cle_event, create_release_support_definition
+from sbomify.apps.core.models import Component, Release, ReleaseSupersession
+from sbomify.apps.core.services.cle import (
+    create_release_cle_event,
+    create_release_support_definition,
+    get_release_cle_document,
+)
 from sbomify.apps.core.services.release_lifecycle import (
     MAX_SUCCESSORS,
     recompute_release_lifecycle,
@@ -53,6 +59,18 @@ def _supersede(predecessor: Release, successor: str, *, drop_in: bool = True, ef
 
 def _withdraw_event(event: ReleaseCLEEvent) -> None:
     _event(event.release, "withdrawn", withdrawn_event_id=event.event_id)
+
+
+def _edge(event: ReleaseCLEEvent) -> ReleaseSupersession:
+    return ReleaseSupersession.objects.get(cle_event=event)
+
+
+def _successors(release: Release) -> set[str]:
+    return set(ReleaseSupersession.objects.live().filter(from_release=release).values_list("successor_label", flat=True))
+
+
+def _tracked(product: Product) -> set[str]:
+    return set(tracked_releases(Release.objects.filter(product=product)).values_list("name", flat=True))
 
 
 def _fresh(release: Release) -> Release:
@@ -98,15 +116,18 @@ class TestDerivedDates:
 @pytest.mark.django_db
 class TestSupersededAt:
     def test_only_a_drop_in_edge_retires_its_source(self, sample_product: Product) -> None:
-        old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.1.0")
+        old, major = _release(sample_product, "1.0.0"), _release(sample_product, "2.0.0")
+        patch = _release(sample_product, "1.0.1")
 
-        upgrade_path = _supersede(old, "1.1.0", drop_in=False)
-        assert upgrade_path.ok and upgrade_path.value is not None
-        assert upgrade_path.value.superseded_by_release_id == new.pk
+        new_line = _supersede(old, "2.0.0", drop_in=False)
+        assert new_line.ok and new_line.value is not None
+        assert _edge(new_line.value).to_release == major
         assert _fresh(old).superseded_at is None
         assert _fresh(old).is_tracked
 
-        assert _supersede(old, "1.1.0", drop_in=True).ok
+        same_line = _supersede(old, "1.0.1", drop_in=True)
+        assert same_line.ok and same_line.value is not None
+        assert _edge(same_line.value).to_release == patch
         assert _fresh(old).superseded_at == PAST
         assert _fresh(old).lifecycle_state == Release.LifecycleState.SUPERSEDED
 
@@ -114,7 +135,8 @@ class TestSupersededAt:
         old = _release(sample_product, "1.0.0")
         result = _supersede(old, "2.0.0-from-elsewhere")
         assert result.ok and result.value is not None
-        assert result.value.superseded_by_release_id is None
+        edge = _edge(result.value)
+        assert edge.to_release is None and edge.successor_label == "2.0.0-from-elsewhere"
         assert not _fresh(old).is_tracked
 
     def test_a_withdrawn_successor_hands_its_predecessor_back(self, sample_product: Product) -> None:
@@ -135,6 +157,7 @@ class TestSupersededAt:
         assert edge.ok and edge.value is not None
 
         _withdraw_event(edge.value)
+        assert _edge(edge.value).withdrawn_at is not None
         assert _fresh(old).superseded_at is None
 
     def test_the_earliest_drop_in_edge_wins(self, sample_product: Product) -> None:
@@ -144,6 +167,80 @@ class TestSupersededAt:
         assert _supersede(old, "1.1.0", effective=datetime(2025, 3, 1, tzinfo=dt_timezone.utc)).ok
         assert _supersede(old, "1.0.1", effective=datetime(2025, 2, 1, tzinfo=dt_timezone.utc)).ok
         assert _fresh(old).superseded_at == datetime(2025, 2, 1, tzinfo=dt_timezone.utc)
+
+
+@pytest.mark.django_db
+class TestOneToMany:
+    """A release can have several successors and several predecessors."""
+
+    def test_two_maintained_lines(self, sample_product: Product) -> None:
+        # 1.0 to 1.2.1 each replaced by the next; 2.0 starts a new line from 1.2.1, and the
+        # 1.2 series carries on later with 1.2.2. Both lines stay monitored until 1.2.2 replaces 1.2.1.
+        releases = {name: _release(sample_product, name) for name in ("1.0", "1.1", "1.2", "1.2.1", "2.0")}
+        for old, new in (("1.0", "1.1"), ("1.1", "1.2"), ("1.2", "1.2.1")):
+            assert _supersede(releases[old], new).ok
+        assert _supersede(releases["1.2.1"], "2.0", drop_in=False).ok
+
+        assert _tracked(sample_product) == {"1.2.1", "2.0"}
+
+        releases["1.2.2"] = _release(sample_product, "1.2.2")
+        assert _supersede(releases["1.2.1"], "1.2.2").ok
+
+        assert _tracked(sample_product) == {"1.2.2", "2.0"}
+        assert _successors(releases["1.2.1"]) == {"2.0", "1.2.2"}
+        assert {edge.from_release.name for edge in releases["2.0"].predecessor_edges.all()} == {"1.2.1"}
+
+    def test_one_release_replaced_by_two(self, sample_product: Product) -> None:
+        old = _release(sample_product, "12.0")
+        _release(sample_product, "12.0.1")
+        _release(sample_product, "12.1")
+        first, second = _supersede(old, "12.0.1"), _supersede(old, "12.1")
+        assert first.ok and second.ok and first.value is not None and second.value is not None
+
+        assert _tracked(sample_product) == {"12.0.1", "12.1"}
+
+        # Withdrawing one of two drop-in edges leaves the other retiring it.
+        _withdraw_event(first.value)
+        assert _successors(old) == {"12.1"}
+        assert not _fresh(old).is_tracked
+
+        _withdraw_event(second.value)
+        assert _fresh(old).is_tracked
+
+    def test_two_releases_replaced_by_one(self, sample_product: Product) -> None:
+        a, b = _release(sample_product, "1.4"), _release(sample_product, "1.5")
+        merged = _release(sample_product, "2.0")
+        assert _supersede(a, "2.0").ok
+        assert _supersede(b, "2.0").ok
+
+        assert {edge.from_release.name for edge in merged.predecessor_edges.all()} == {"1.4", "1.5"}
+        assert _tracked(sample_product) == {"2.0"}
+
+    def test_each_edge_is_published_as_its_own_cle_event(self, sample_product: Product) -> None:
+        old = _release(sample_product, "12.0")
+        _release(sample_product, "12.0.1")
+        assert _supersede(old, "12.0.1").ok
+        assert _supersede(old, "13.0-elsewhere", drop_in=False).ok
+
+        document = get_release_cle_document(old)
+
+        assert document.ok and document.value is not None
+        published = {event.superseded_by_version for event in document.value.events if event.superseded_by_version}
+        assert published == {"12.0.1", "13.0-elsewhere"}
+
+    def test_the_database_refuses_a_self_edge_and_a_second_live_edge_to_one_successor(
+        self, sample_product: Product
+    ) -> None:
+        old, new = _release(sample_product, "1.0"), _release(sample_product, "1.1")
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ReleaseSupersession.objects.create(from_release=old, to_release=old, successor_label="1.0", effective=PAST)
+
+        ReleaseSupersession.objects.create(from_release=old, to_release=new, successor_label="1.1", effective=PAST)
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ReleaseSupersession.objects.create(from_release=old, to_release=new, successor_label="1.1", effective=PAST)
+
+        ReleaseSupersession.objects.filter(from_release=old).update(withdrawn_at=PAST)
+        ReleaseSupersession.objects.create(from_release=old, to_release=new, successor_label="1.1", effective=PAST)
 
 
 @pytest.mark.django_db
@@ -214,6 +311,7 @@ class TestEdgeValidation:
         assert not _supersede(latest, "1.0.0").ok
         assert not _supersede(named, "latest").ok
         assert not ReleaseCLEEvent.objects.exists()
+        assert not ReleaseSupersession.objects.exists()
 
     def test_a_cycle_is_refused(self, sample_product: Product) -> None:
         a, b, c = (_release(sample_product, name) for name in ("1.0.0", "1.1.0", "1.2.0"))
@@ -223,6 +321,7 @@ class TestEdgeValidation:
         result = _supersede(c, "1.0.0")
         assert not result.ok and "cycle" in (result.error or "")
         assert not ReleaseCLEEvent.objects.filter(release=c).exists()
+        assert not ReleaseSupersession.objects.filter(from_release=c).exists()
 
     def test_a_rollback_edge_is_refused_but_withdrawing_rolls_back(self, sample_product: Product) -> None:
         old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
@@ -259,7 +358,20 @@ class TestEdgeValidation:
 
         assert first.ok and again.ok and first.value is not None and again.value is not None
         assert first.value.pk == again.value.pk
+        assert again.status_code == 200
         assert ReleaseCLEEvent.objects.filter(release=old).count() == 1
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
+
+    def test_restating_a_live_edge_differently_is_refused(self, sample_product: Product) -> None:
+        old = _release(sample_product, "1.0.0")
+        _release(sample_product, "1.0.1")
+        assert _supersede(old, "1.0.1", drop_in=True).ok
+
+        for change in ({"drop_in": False}, {"effective": datetime(2025, 2, 1, tzinfo=dt_timezone.utc)}):
+            result = _supersede(old, "1.0.1", **change)  # type: ignore[arg-type]
+            assert not result.ok and result.status_code == 409
+            assert "withdraw" in (result.error or "").lower()
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
 
     def test_drop_in_belongs_to_supersession_only(self, sample_product: Product) -> None:
         release = _release(sample_product, "1.0.0")
@@ -291,13 +403,13 @@ class TestPendingEdges:
         client, token = authenticated_api_client
         old = _release(sample_product, "1.0")
         edge = _supersede(old, "2.0")
-        assert edge.ok and edge.value is not None and edge.value.superseded_by_release_id is None
+        assert edge.ok and edge.value is not None and _edge(edge.value).to_release is None
 
         response = self._create(client, token, sample_product, "2.0")
 
         assert response.status_code == 201, response.content
         new = Release.objects.get(pk=response.json()["id"])
-        assert ReleaseCLEEvent.objects.get(pk=edge.value.pk).superseded_by_release_id == new.pk
+        assert _edge(edge.value).to_release == new
         back = _supersede(new, "1.0")
         assert not back.ok and "cycle" in (back.error or "")
 
@@ -312,7 +424,7 @@ class TestPendingEdges:
         response = self._patch(client, token, other, {"version": "2.0"})
 
         assert response.status_code == 200, response.content
-        assert ReleaseCLEEvent.objects.get(pk=edge.value.pk).superseded_by_release_id == other.pk
+        assert _edge(edge.value).to_release == other
 
     def test_a_rename_that_would_close_a_cycle_is_refused(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -400,8 +512,10 @@ class TestReleaseCLEEndpoint:
         )
 
         assert response.status_code == 201, response.content
-        assert response.json()["drop_in"] is True
-        assert response.json()["superseded_by_release_id"] == new.pk
+        assert response.json()["superseded_by_version"] == "1.0.1"
+        edge = ReleaseSupersession.objects.get(from_release=old)
+        assert edge.drop_in is True and edge.to_release == new
+        assert edge.cle_event is not None and edge.cle_event.event_id == response.json()["event_id"]
         assert not _fresh(old).is_tracked
 
     def test_raw_supersession_defaults_to_upgrade_path(
@@ -419,10 +533,10 @@ class TestReleaseCLEEndpoint:
         )
 
         assert response.status_code == 201, response.content
-        assert response.json()["drop_in"] is False
+        assert ReleaseSupersession.objects.get(from_release=old).drop_in is False
         assert _fresh(old).is_tracked
 
-    def test_a_retry_returns_the_existing_edge_with_200_and_a_new_date_writes_a_new_one(
+    def test_a_retry_returns_the_existing_edge_with_200_and_a_new_date_is_a_conflict(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
         client, token = authenticated_api_client
@@ -437,9 +551,29 @@ class TestReleaseCLEEndpoint:
         assert first.status_code == 201, first.content
         assert retry.status_code == 200, retry.content
         assert retry.json()["event_id"] == first.json()["event_id"]
-        assert later.status_code == 201, later.content
-        assert later.json()["event_id"] != first.json()["event_id"]
-        assert ReleaseCLEEvent.objects.filter(release=old).count() == 2
+        assert later.status_code == 409, later.content
+        assert ReleaseCLEEvent.objects.filter(release=old).count() == 1
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
+
+    def test_a_withdrawn_event_withdraws_its_edge(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0.0")
+        _release(sample_product, "1.0.1")
+        edge = _supersede(old, "1.0.1")
+        assert edge.ok and edge.value is not None
+
+        response = self._post(
+            client,
+            token,
+            old,
+            {"event_type": "withdrawn", "effective": "2025-03-01T00:00:00Z", "withdrawn_event_id": edge.value.event_id},
+        )
+
+        assert response.status_code == 201, response.content
+        assert _edge(edge.value).withdrawn_at is not None
+        assert _fresh(old).is_tracked
 
     def test_supersession_of_latest_is_refused(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -527,20 +661,26 @@ class TestDeleteGuard:
 
         assert response.status_code == 204, response.content
         assert _fresh(old).is_tracked
+        # The edge outlives its successor and still says what the successor was.
+        edge = ReleaseSupersession.objects.get(from_release=old)
+        assert edge.to_release is None and edge.successor_label == "1.0.1"
 
 
 @pytest.mark.django_db
 class TestBackfillMigration:
-    def test_existing_edges_resolve_and_stay_upgrade_paths(self, sample_product: Product) -> None:
+    def test_existing_supersededby_events_become_upgrade_path_edges(self, sample_product: Product) -> None:
         old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
         latest = Release.objects.create(product=sample_product, name="latest", is_latest=True)
         named = Release.objects.create(product=sample_product, name="legacy")
-        # Rows as they exist before the migration: written straight to the table, unresolved.
+        # Rows as they exist before the migration: written straight to the table, with no edges.
         rows = [
+            (old, "supersededBy", {"superseded_by_version": "1.0.1"}),
+            (old, "supersededBy", {"superseded_by_version": "2.0-elsewhere"}),
             (old, "supersededBy", {"superseded_by_version": "1.0.1"}),
             (new, "supersededBy", {"superseded_by_version": "legacy"}),
             (named, "supersededBy", {"superseded_by_version": "latest"}),
-            (named, "supersededBy", {"superseded_by_version": "outside"}),
+            (named, "supersededBy", {"superseded_by_version": "voided"}),
+            (named, "withdrawn", {"withdrawn_event_id": 6}),
             (latest, "supersededBy", {"superseded_by_version": "1.0.0"}),
             (old, "endOfSupport", {"effective": datetime(2026, 6, 30, tzinfo=dt_timezone.utc), "support_id": "a"}),
             (old, "endOfSupport", {"effective": datetime(2027, 6, 30, tzinfo=dt_timezone.utc), "support_id": "b"}),
@@ -554,15 +694,23 @@ class TestBackfillMigration:
         backfill.backfill_release_lifecycle(django_apps, None)
 
         edges = {
-            event.superseded_by_version: event for event in ReleaseCLEEvent.objects.filter(event_type="supersededBy")
+            (edge.from_release.name, edge.successor_label): edge
+            for edge in ReleaseSupersession.objects.select_related("from_release", "cle_event")
         }
-        assert edges["1.0.1"].superseded_by_release_id == new.pk
-        assert edges["legacy"].superseded_by_release_id == named.pk
-        assert edges["latest"].superseded_by_release_id is None
-        assert edges["outside"].superseded_by_release_id is None
-        # The live service refuses an edge from latest, so the backfill links none either.
-        assert edges["1.0.0"].superseded_by_release_id is None
-        assert not any(event.drop_in for event in edges.values())
+        # One live edge per successor: the repeated 1.0.1 event adds none.
+        assert set(edges) == {
+            ("1.0.0", "1.0.1"),
+            ("1.0.0", "2.0-elsewhere"),
+            ("1.0.1", "legacy"),
+            ("legacy", "latest"),
+        }
+        assert edges[("1.0.0", "1.0.1")].to_release == new
+        assert edges[("1.0.0", "1.0.1")].cle_event.event_id == 1
+        assert edges[("1.0.1", "legacy")].to_release == named
+        # A successor outside sbomify, or one the live service refuses, keeps its label only.
+        assert edges[("1.0.0", "2.0-elsewhere")].to_release is None
+        assert edges[("legacy", "latest")].to_release is None
+        assert not any(edge.drop_in or edge.withdrawn_at for edge in edges.values())
 
         migrated = {r.pk: (r.superseded_at, r.end_of_support, r.end_of_life) for r in Release.objects.all()}
         assert migrated[old.pk] == (None, date(2027, 6, 30), None)
