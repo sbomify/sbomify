@@ -50,10 +50,10 @@ depends on its scope:
   workspace (``user:account_deleted`` after the user has soft-deleted,
   ``billing:enterprise_contact_submitted`` from a visitor with no
   workspace). ``distinct_id`` is the user PK or session-derived.
-  Note: ``user:signed_up`` is intentionally ``"workspace"`` — by the
-  time the signal fires we already have the default workspace key
-  (the post_save handler creates one), and attributing the signup to
-  the workspace keeps the funnel consistent with the rest of Tier 2.
+  ``user:signed_up`` is ``"user"`` and is sent by the browser, not the
+  server (see ``posthog_service.queue_client_event``): it has to land on
+  the person ``posthog.identify`` merges the visitor's anonymous
+  history into, or no funnel can say which pages led to the signup.
 * ``"system"`` — for events fired from background context with no
   workspace (rare). ``distinct_id`` is the literal string ``"system"``.
 """
@@ -605,9 +605,9 @@ SEARCH_PERFORMED = _register(
 USER_SIGNED_UP = _register(
     EventSpec(
         name="user:signed_up",
-        description="A new user signed up.",
-        distinct_id_kind="workspace",
-        properties={"signup_method": "Auth provider used (e.g. 'keycloak')."},
+        description="A new user signed up. Sent from the browser after identify.",
+        distinct_id_kind="user",
+        properties={"signup_method": "Auth provider used (e.g. 'keycloak'), or 'email'."},
     )
 )
 
