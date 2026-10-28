@@ -604,9 +604,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
                         exc_info=True,
                     )
 
-                # A release gaining or losing this SBOM can bring a version of the
-                # component into what sbomify tracks, or take one out of it.
-                reconcile_component_safely(component, version_row.dt_server)
+                # A release gaining or losing this SBOM can bring its version into
+                # what sbomify tracks, or take it out. Only that version, and the
+                # latest flag, can move: the rest wait for the backfill and the sweep.
+                reconcile_component_safely(component, version_row.dt_server, only={version_row.sbom_id})
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.

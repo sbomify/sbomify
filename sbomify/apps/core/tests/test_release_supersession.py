@@ -15,7 +15,8 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.models import Release, ReleaseSupersession
-from sbomify.apps.core.services.cle import create_release_cle_event
+from sbomify.apps.core.schemas import ReleaseResponseSchema
+from sbomify.apps.core.services.cle import create_cle_event, create_release_cle_event
 from sbomify.apps.core.services.release_lifecycle import set_release_state
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.models import Product
@@ -223,7 +224,7 @@ class TestCreateWithSupersedes:
 
         assert response.status_code == 409, response.content
         assert response.json()["error_code"] == "CONFLICT"
-        assert "Withdraw that supersession first" in response.json()["detail"]
+        assert "Remove that link first" in response.json()["detail"]
         assert not Release.objects.filter(product=sample_product, name="1.2.4").exists()
         assert [edge.drop_in for edge in _edges(old)] == [False]
 
@@ -231,7 +232,7 @@ class TestCreateWithSupersedes:
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
         client, token = authenticated_api_client
-        old = _release(sample_product, "1.2.3")
+        old = _release(sample_product, "1.2.3", **_on(datetime(2024, 12, 1, tzinfo=dt_timezone.utc)))
         new = _release(sample_product, "1.2.4", **_on(PAST))
         assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True).ok
 
@@ -485,11 +486,14 @@ class TestWhereAReleaseStands:
         page = content.decode()
         assert "Superseded" in page
         assert "Next releases" in page
-        assert "Same line, replaces this release" in page and "New line, this release stays monitored" in page
+        assert "Same line, replaces this release" in page and "New line" in page
+        # The state badge says whether a release is monitored; the links only say how releases relate.
+        assert "stays monitored" not in page and "still monitored" not in page
         assert "Withdraw release" in page and "Archive release" in page
 
         page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, major.id])).content
-        assert "Previous releases" in page.decode() and "Older line, still monitored" in page.decode()
+        assert "Previous releases" in page.decode() and "New line" in page.decode()
+        assert "still monitored" not in page.decode()
 
     def test_withdrawing_from_the_details_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -528,3 +532,253 @@ class TestWhereAReleaseStands:
             assert "Superseded" in page, name
         page = Client().get(reverse("core:release_details_public", args=[product.id, old.id])).content.decode()
         assert "Superseded" in page
+
+
+class TestNameCollision:
+    """Creating a release under a name the product already uses writes nothing new onto that release."""
+
+    def test_the_api_refuses_to_add_edges_to_an_existing_release(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        _release(sample_product, "1.0", **_on(datetime(2026, 1, 1, tzinfo=dt_timezone.utc)))
+        newest = _release(sample_product, "1.1", **_on(datetime(2026, 2, 1, tzinfo=dt_timezone.utc)))
+
+        response = client.post(
+            "/api/v1/releases",
+            data={"product_id": sample_product.pk, "name": "1.0", "supersedes": [{"release_id": newest.pk}]},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 409, response.content
+        assert "1.0 already exists" in response.json()["detail"]
+        assert _edges(newest) == []
+        assert _state(newest) == Release.LifecycleState.ACTIVE
+
+    def test_the_form_reports_the_name_and_writes_no_edge(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        _release(product, "1.0", **_on(datetime(2026, 1, 1, tzinfo=dt_timezone.utc)))
+        newest = _release(product, "1.1", **_on(datetime(2026, 2, 1, tzinfo=dt_timezone.utc)))
+
+        response = authenticated_web_client.post(
+            reverse("core:release_new"),
+            {"product_id": product.id, "name": "1.0", "replaces": newest.pk, "replaces_line": "same"},
+        )
+
+        assert response.status_code == 200
+        assert "already exists" in " ".join(response.context["form"].non_field_errors())
+        assert _edges(newest) == []
+
+
+class TestChoosingTheLine:
+    """Replacing a release is a decision: the form never picks same line or new line for you."""
+
+    def test_no_line_is_chosen_for_you(self, authenticated_web_client: Client, team_with_business_plan: Workspace) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        stable = _release(product, "1.2.4")
+
+        form = authenticated_web_client.get(reverse("core:release_new"), {"product": product.id}).context["form"]
+
+        assert form["replaces"].value() == stable.pk
+        assert not form["replaces_line"].value()
+
+    def test_a_backport_without_a_line_is_not_created(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        _release(product, "1.2.4", **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc)))
+        major = _release(product, "2.0.0", **_on(datetime(2026, 9, 1, tzinfo=dt_timezone.utc)))
+
+        response = authenticated_web_client.post(
+            reverse("core:release_new"), {"product_id": product.id, "name": "1.2.5", "replaces": major.pk}
+        )
+
+        assert response.status_code == 200
+        assert response.context["form"].errors["replaces_line"]
+        assert not Release.objects.filter(product=product, name="1.2.5").exists()
+        assert _state(major) == Release.LifecycleState.ACTIVE
+
+    def test_a_backport_on_a_new_line_keeps_the_major_monitored(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        major = _release(product, "2.0.0", **_on(datetime(2026, 9, 1, tzinfo=dt_timezone.utc)))
+
+        response = authenticated_web_client.post(
+            reverse("core:release_new"),
+            {"product_id": product.id, "name": "1.2.5", "replaces": major.pk, "replaces_line": "new"},
+        )
+
+        assert response.status_code == 302
+        assert _state(major) == Release.LifecycleState.ACTIVE
+
+    def test_a_release_cannot_replace_one_released_after_it_on_the_same_line(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        major = _release(sample_product, "2.0.0", **_on(datetime(2026, 9, 1, tzinfo=dt_timezone.utc)))
+        historical = {"product_id": sample_product.pk, "name": "0.9", **{k: v.isoformat() for k, v in _on(PAST).items()}}
+
+        refused = client.post(
+            "/api/v1/releases",
+            data={**historical, "supersedes": [{"release_id": major.pk}]},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        upgrade_path = client.post(
+            "/api/v1/releases",
+            data={**historical, "supersedes": [{"release_id": major.pk, "drop_in": False}]},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert refused.status_code == 400, refused.content
+        assert "released after" in refused.json()["detail"]
+        assert upgrade_path.status_code == 201, upgrade_path.content
+        assert _state(major) == Release.LifecycleState.ACTIVE
+
+    def test_the_prerelease_box_clears_replaces_without_a_cached_ref(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # Alpine caches $refs on first read, so a select HTMX swaps in later is invisible to it.
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        _release(product, "1.0.0")
+        page = authenticated_web_client.get(reverse("core:release_new"), {"product": product.id}).content.decode()
+        assert "$refs.replaces" not in page and 'x-ref="replaces"' not in page
+        assert "getElementById('release-replaces-select')" in page
+
+
+class TestWithdrawnReason:
+    """Why a release was withdrawn is internal. The Trust Center only says that it was."""
+
+    def _public_withdrawn(self) -> Release:
+        workspace = Workspace.objects.create(name="Public Test Team", is_public=True)
+        product = Product.objects.create(name="Public product", team=workspace, is_public=True)
+        release = _release(product, "2.3.1")
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+        return release
+
+    @pytest.mark.parametrize("prefix", ["v1", "v2"])
+    def test_anonymous_readers_do_not_see_it(self, prefix: str) -> None:
+        release = self._public_withdrawn()
+        single = Client().get(f"/api/{prefix}/releases/{release.pk}")
+        listed = Client().get(f"/api/{prefix}/releases", {"product_id": release.product_id})
+
+        assert single.status_code == 200, single.content
+        assert single.json()["withdrawn_reason"] is None
+        assert single.json()["lifecycle_state"] == "withdrawn"
+        assert listed.status_code == 200, listed.content
+        assert [item["withdrawn_reason"] for item in listed.json()["items"] if item["id"] == release.pk] == [None]
+
+    def test_the_workspace_sees_it(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        release = _release(sample_product, "2.3.1")
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+
+        data = client.get(f"/api/v1/releases/{release.pk}", **get_api_headers(token)).json()
+
+        assert data["withdrawn_reason"] == "compromised"
+
+
+class TestRemoveLink:
+    """A mistaken Replaces can be undone from the Lifecycle card."""
+
+    def test_removing_a_link_brings_the_release_back_and_frees_the_delete(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new = _release(product, "1.0.0"), _release(product, "2.0.0")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, new.id])).content.decode()
+        assert "Remove link" in page
+
+        response = authenticated_web_client.post(
+            reverse("core:release_lifecycle", args=[product.id, new.id]), {"action": "remove_link", "edge_id": edge.pk}
+        )
+
+        assert response.status_code == 302
+        assert _edges(old) == []
+        assert ReleaseSupersession.objects.get(pk=edge.pk).cle_event.release.cle_events.filter(
+            event_type="withdrawn"
+        ).exists()
+        assert _state(old) == Release.LifecycleState.ACTIVE
+
+    def test_a_link_of_another_release_is_not_removed_from_this_page(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new, bystander = _release(product, "1.0.0"), _release(product, "2.0.0"), _release(product, "3.0.0")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        authenticated_web_client.post(
+            reverse("core:release_lifecycle", args=[product.id, bystander.id]),
+            {"action": "remove_link", "edge_id": edge.pk},
+        )
+
+        assert _edges(old) == [edge]
+
+    def test_the_trust_center_never_offers_it(self) -> None:
+        workspace = Workspace.objects.create(name="Public Test Team", is_public=True)
+        product = Product.objects.create(name="Public product", team=workspace, is_public=True)
+        old, new = _release(product, "1.0.0"), _release(product, "1.0.1")
+        _supersede(old, new)
+
+        page = Client().get(reverse("core:release_details_public", args=[product.id, old.id])).content.decode()
+
+        assert "Remove link" not in page
+
+
+class TestTrustCenterWithdrawn:
+    def test_a_withdrawn_release_wears_the_outline_badge(self) -> None:
+        workspace = Workspace.objects.create(name="Public Test Team", is_public=True)
+        product = Product.objects.create(name="Public product", team=workspace, is_public=True)
+        release = _release(product, "2.3.1")
+        assert set_release_state(release, "withdraw", reason="defective").ok
+
+        page = Client().get(reverse("core:release_details_public", args=[product.id, release.id])).content.decode()
+
+        badge = page[page.index("Withdrawn") - 600 : page.index("Withdrawn")]
+        assert "border-dashed" in badge
+
+
+class TestEffectiveDates:
+    def test_the_response_and_the_card_show_the_dates_that_apply(
+        self,
+        authenticated_api_client: tuple[Client, AccessToken],
+        authenticated_web_client: Client,
+        sample_product: Product,
+    ) -> None:
+        client, token = authenticated_api_client
+        release = _release(sample_product, "1.0.0")
+        every = create_cle_event(sample_product, "endOfSupport", PAST, versions=[{"range": "vers:generic/*"}])
+        assert every.ok
+
+        data = client.get(f"/api/v1/releases/{release.pk}", **get_api_headers(token)).json()
+
+        assert data["end_of_support"] is None
+        assert data["effective_end_of_support"] == "2025-01-01"
+        assert data["lifecycle_state"] == "end_of_support"
+
+    def test_a_product_date_for_some_versions_is_not_shown_as_the_release_date(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "2.0.0")
+        scoped = create_cle_event(product, "endOfSupport", PAST, versions=[{"range": "vers:semver/<2.0.0"}])
+        assert scoped.ok
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id]))
+
+        assert "End of support" not in page.content.decode()
+
+    def test_is_tracked_says_what_it_covers(self) -> None:
+        description = ReleaseResponseSchema.model_fields["is_tracked"].description or ""
+        assert "links" in description

@@ -593,6 +593,7 @@ first-of-type rule that drops the leading hairline reads the section's position
     <div class="space-y-5 max-w-2xl">
         <c-layout.choice-group name="ds-severity" label="Severity" :options="demo_severity_choices" selected="medium" />
         <c-layout.choice-group name="ds-status" label="Status" :options="demo_status_choices" selected="fix_in_progress" hint="Helper text sits under the group." />
+        <c-layout.choice-group name="ds-status-refused" label="Status, refused by the server" :options="demo_status_choices" error="Choose a status before saving." />
         <c-layout.choice-group name="ds-scope" label="Written by hand">
         <c-layout.choice name="ds-scope" value="workspace" accent="primary" icon="fas fa-people-group" checked>Workspace</c-layout.choice>
         <c-layout.choice name="ds-scope" value="product" accent="violet" icon="fas fa-cube">Product</c-layout.choice>
