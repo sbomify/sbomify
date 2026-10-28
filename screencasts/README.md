@@ -35,8 +35,8 @@ output/
     frame_001.png                         # incidental timer frames
 ```
 
-Narrated takes are built locally, on the GPU host below, from the local clip
-cache, and their `.webm` and `.vtt` are uploaded to the bucket from there.
+Narrated takes are built locally, with a GPU browser as below, from the local
+clip cache, and their `.webm` and `.vtt` are uploaded to the bucket from there.
 
 CI (`.github/workflows/screencasts.yml`, manual dispatch) records the same
 targets and syncs `*.webm` and the screenshot tree to Cloudflare R2. It is
@@ -44,7 +44,37 @@ given no `XAI_API_KEY` and has no clip cache, so it cannot narrate: a run there
 fails on the first `narrate()` and must not overwrite published narrated
 takes.
 
-### Record on a machine with a GPU
+### Record with a GPU browser (preferred)
+
+Keep the app and the tests here, and borrow only the browser from a machine
+with a GPU. Chrome there renders through its GPU; Playwright drives it over the
+DevTools protocol and records the video on this side.
+
+On the GPU host, start Chrome with the GPU flags and DevTools on loopback, and
+install the fonts described below:
+
+```bash
+google-chrome --headless=new --no-sandbox --disable-dev-shm-usage \
+    --use-gl=angle --use-angle=gl-egl --enable-gpu --ozone-platform=headless \
+    --remote-debugging-port=9222 --user-data-dir=/tmp/cdp-profile
+```
+
+Here, tunnel to it and record. The tunnel listens on every interface so the
+tests container can reach it, and the GPU host has to reach this machine on
+port 8099, where the live server is published:
+
+```bash
+ssh -N -L 0.0.0.0:9223:127.0.0.1:9222 <user>@<gpu-host> &
+export SCREENCAST_REMOTE_CDP=http://<this-host-ip>:9223
+export SCREENCAST_SERVER_HOST=<this-host-ip>
+./bin/record_screencasts.sh all
+```
+
+Check the browser really is on the GPU before a long run: a WebGL page's
+`UNMASKED_RENDERER_WEBGL` should name the GPU, not SwiftShader. Recordings run
+one at a time in this mode, because they share the published port.
+
+### Record everything on a machine with a GPU
 
 **Anything being published should be recorded on a host with a GPU**, not in
 Docker.
