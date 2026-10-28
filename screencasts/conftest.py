@@ -140,7 +140,10 @@ def _maybe_capture_screenshot(page: Page) -> None:
     _screenshot_state["counter"] += 1
     path = out_dir / f"frame_{_screenshot_state['counter']:03d}.png"
     try:
-        page.screenshot(path=str(path), full_page=False)
+        # Short timeout: these frames are incidental, and over a remote
+        # DevTools connection a capture taken mid-navigation hung for the full
+        # 30 s default, freezing the recording.
+        page.screenshot(path=str(path), full_page=False, timeout=5_000)
     except PlaywrightError as exc:
         print(f"[screencasts] screenshot capture failed: {exc}", file=sys.stderr)
         return
