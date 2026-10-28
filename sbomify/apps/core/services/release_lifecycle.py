@@ -219,6 +219,14 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
             if predecessor is None:
                 return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
 
+        # An edge declared before this release existed was linked to it on create. Its
+        # date is when the caller said the successor takes over, so only drop_in must agree.
+        if (
+            ReleaseSupersession.objects.live()
+            .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
+            .exists()
+        ):
+            continue
         result = create_release_cle_event(
             predecessor,
             CLEEventType.SUPERSEDED_BY,
@@ -230,7 +238,8 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
             queue_reconcile=False,
         )
         if not result.ok or result.value is None:
-            return ServiceResult.failure(result.error or "Invalid supersession", status_code=400)
+            status = 409 if result.status_code == 409 else 400
+            return ServiceResult.failure(result.error or "Invalid supersession", status_code=status)
         edge = ReleaseSupersession.objects.filter(cle_event=result.value).first()
         if edge is None or edge.to_release_id != successor.pk:
             return ServiceResult.failure(

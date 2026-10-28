@@ -40,6 +40,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     set_release_state,
     supersession_links,
 )
+from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
@@ -3258,6 +3259,13 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     return names_the_columns or details_the_columns
 
 
+def _supersedes_error(result: ServiceResult[None]) -> tuple[int, dict[str, Any]]:
+    """A refused ``supersedes``: 409 when it contradicts a live edge, as the CLE endpoint answers, else 400."""
+    if result.status_code == 409:
+        return 409, {"detail": result.error, "error_code": ErrorCode.CONFLICT}
+    return 400, {"detail": result.error, "error_code": ErrorCode.VALIDATION_ERROR}
+
+
 @router.post(
     "/releases",
     # 200 means the release already existed and is returned as-is; see the
@@ -3268,6 +3276,7 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
         500: ErrorResponse,
     },
     tags=["Releases"],
@@ -3357,7 +3366,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             declared = declare_supersedes(release, payload.supersedes, actor_id=request.user.pk)
             if not declared.ok:
                 transaction.set_rollback(True)
-                return 400, {"detail": declared.error, "error_code": ErrorCode.VALIDATION_ERROR}
+                return _supersedes_error(declared)
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if product.team.key:
@@ -3419,7 +3428,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 declared = declare_supersedes(existing, payload.supersedes, actor_id=request.user.pk)
                 if not declared.ok:
                     transaction.set_rollback(True)
-                    return 400, {"detail": declared.error, "error_code": ErrorCode.VALIDATION_ERROR}
+                    return _supersedes_error(declared)
             return 200, _build_release_response(request, existing, include_artifacts=True)
         return 400, {
             "detail": "A release with this name already exists for this product",
