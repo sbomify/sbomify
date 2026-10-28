@@ -351,6 +351,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     smooth_scroll(page, vdp_link, 600)
 
     narrate(page, "vulnerability_disclosure_policy")
+    product_page = page.url
     hover_and_click(page, vdp_link)
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
@@ -358,7 +359,9 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.mouse.wheel(0, 600)
     settle(page)
 
-    page.go_back()
+    # Back to the product page by address: over a remote DevTools connection
+    # the history step reported no navigation at all and timed out.
+    page.goto(product_page)
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     doc_link = page.get_by_role("link", name="View declaration")
