@@ -437,8 +437,9 @@ def create_release_cle_event_endpoint(
     """Create a new CLE lifecycle event for a release.
 
     A ``supersededBy`` event declares one successor; post one per successor.
-    Repeating a live one with the same ``drop_in`` and date returns its event
-    with 200, since nothing was written, and restating it differently is a 409.
+    Repeating a live one with the same ``drop_in`` returns its event with 200,
+    whatever the date, since nothing was written; restating it on the other
+    line is a 409.
     """
     result = _get_release_or_404(request, release_id)
     if not isinstance(result, Release):
