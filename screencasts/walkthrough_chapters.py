@@ -568,28 +568,28 @@ def chapter_supply_chain(page: Page) -> None:
     products, a product holds components, and the product carries the
     identifiers and lifecycle dates a customer or a regulator asks for.
     """
-    start_on_dashboard(page, pause_ms=600)
     narrate(page, "supply_chain_intro")
+    start_on_dashboard(page, pause_ms=600)
     settle(page)
     shot(page, "01-dashboard")
 
-    _nav(page, "Products")
     narrate(page, "supply_chain_products_group_components")
+    _nav(page, "Products")
     settle(page)
     shot(page, "02-products-list")
 
-    _open_product(page)
     narrate(page, "supply_chain_pied_piper_s")
+    _open_product(page)
     settle(page)
     shot(page, "03-product-overview")
 
-    _product_detail_tab(page, "Identifiers", "#product-identifiers-card")
     narrate(page, "supply_chain_cpe_purl_sku")
+    _product_detail_tab(page, "Identifiers", "#product-identifiers-card")
     settle(page)
     shot(page, "04-product-identifiers")
 
-    _product_detail_tab(page, "Lifecycle", "#product-lifecycle-card")
     narrate(page, "supply_chain_lifecycle_dates_set")
+    _product_detail_tab(page, "Lifecycle", "#product-lifecycle-card")
     settle(page)
     shot(page, "05-product-lifecycle")
 
@@ -601,33 +601,30 @@ def chapter_supply_chain(page: Page) -> None:
 
 def chapter_inventory(page: Page) -> None:
     """Components → a component's versions → the release that ships them."""
-    _nav(page, "Components")
     narrate(page, "inventory_intro")
+    _nav(page, "Components")
     settle(page)
     shot(page, "06-component-inventory")
 
+    narrate(page, "inventory_artifacts_stored_exactly")
     link = page.get_by_role("link", name=CORE_COMPONENT, exact=True).first
     hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
-    pace(page, 400)
-    narrate(page, "inventory_artifacts_stored_exactly")
     settle(page)
     shot(page, "07-component-artifacts")
 
+    narrate(page, "inventory_releases_pin_exact")
     _open_product(page)
     releases = page.get_by_role("heading", name="Releases", exact=True)
     smooth_scroll(page, releases, 500)
-    narrate(page, "inventory_releases_pin_exact")
-    pace(page, 600)
+    settle(page)
     shot(page, "08-releases")
 
     release_link = page.locator("a[href*='/release/']").first
     release_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
+    narrate(page, "inventory_years_later_release")
     hover_and_click(page, release_link)
     page.wait_for_load_state("networkidle")
-    pace(page, 700)
-    narrate(page, "inventory_years_later_release")
     settle(page)
     shot(page, "09-release-artifacts")
 
@@ -644,24 +641,23 @@ def chapter_vulnerabilities(page: Page) -> None:
     open list, and is still there, with its reason, under "Closed by a
     decision" (ADR-004: nothing is deleted).
     """
-    _nav(page, "Vulnerabilities")
     narrate(page, "vulnerabilities_intro")
+    _nav(page, "Vulnerabilities")
     settle(page)
     shot(page, "10-vulnerability-posture")
 
+    narrate(page, "vulnerabilities_trends_show_exposure")
     _nav(page, "Overview")
     trends = page.get_by_role("link", name="Trends", exact=True)
     hover_and_click(page, trends)
     page.wait_for_load_state("networkidle")
-    pace(page, 800)
-    narrate(page, "vulnerabilities_trends_show_exposure")
     settle(page)
     shot(page, "11-vulnerability-trends")
 
+    narrate(page, "vulnerabilities_component_each_vulnerability")
     _open_core_component(page)
     vulns = page.get_by_role("button", name="Vulnerabilities", exact=True).first
     smooth_scroll(page, vulns, 500)
-    narrate(page, "vulnerabilities_component_each_vulnerability")
     settle(page)
     shot(page, "12-vulnerability-drilldown")
 
@@ -694,6 +690,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     settle(page)
     shot(page, "13-vex-preview")
 
+    narrate(page, "vulnerabilities_applied_drops_out")
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
         timeout=25_000,
@@ -710,10 +707,10 @@ def chapter_vulnerabilities(page: Page) -> None:
     suppressed_badge.wait_for(state="visible", timeout=15_000)
     table = page.locator("#component-vulnerabilities-status")
     smooth_scroll(page, table, 500)
-    narrate(page, "vulnerabilities_applied_drops_out")
     settle(page)
     shot(page, "14-vex-suppressed-hidden")
 
+    narrate(page, "vulnerabilities_nothing_deleted_vulnerability")
     hover_and_click(page, table)
     table.select_option("decided")
     page.wait_for_load_state("networkidle")
@@ -721,7 +718,6 @@ def chapter_vulnerabilities(page: Page) -> None:
     suppressed.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, suppressed, 400)
     suppressed.hover()
-    narrate(page, "vulnerabilities_nothing_deleted_vulnerability")
     settle(page)
     shot(page, "15-vex-suppression")
 
@@ -733,22 +729,21 @@ def chapter_vulnerabilities(page: Page) -> None:
 
 def chapter_compliance(page: Page) -> None:
     """Compliance list → the assessment's review step → mark it complete."""
-    _nav(page, "Compliance")
     narrate(page, "compliance_intro")
+    _nav(page, "Compliance")
     settle(page)
     shot(page, "18-cra-assessments")
 
+    narrate(page, "compliance_scope_screening_sbom")
     hover_and_click(page, page.get_by_role("link", name="Continue").first)
     page.wait_for_url("**/step/5/**", timeout=15_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 900)
-    narrate(page, "compliance_scope_screening_sbom")
     settle(page)
     shot(page, "19-cra-summary")
 
     documents = page.get_by_role("heading", name="Documents", exact=True)
-    smooth_scroll(page, documents, 500)
     narrate(page, "compliance_sbomify_writes_documents")
+    smooth_scroll(page, documents, 500)
     settle(page)
 
     complete_btn = page.get_by_role("button", name="Mark Assessment Complete")
@@ -759,11 +754,10 @@ def chapter_compliance(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 600)
 
+    narrate(page, "compliance_back_list_assessment")
     hover_and_click(page, sidebar_link(page, "Compliance"))
     page.wait_for_load_state("networkidle")
     page.get_by_text("Complete", exact=True).first.wait_for(state="visible", timeout=10_000)
-    pace(page, 400)
-    narrate(page, "compliance_back_list_assessment")
     settle(page)
 
 
@@ -774,13 +768,13 @@ def chapter_compliance(page: Page) -> None:
 
 def chapter_trust_center(page: Page) -> None:
     """Advisories → turn on the Trust Center → publish → the public page."""
-    _nav(page, "Security advisories")
     narrate(page, "trust_center_intro")
+    _nav(page, "Security advisories")
     settle(page)
     shot(page, "20-security-advisories")
 
-    navigate_to_trust_center_tab(page)
     narrate(page, "trust_center_turn_trust_center")
+    navigate_to_trust_center_tab(page)
     enable_and_configure_trust_center(page)
     rewrite_localhost_urls(page)
     rewrite_localhost_inputs(page)
@@ -788,8 +782,8 @@ def chapter_trust_center(page: Page) -> None:
     settle(page)
     shot(page, "16-trust-center-config")
 
-    _open_product(page)
     narrate(page, "trust_center_decide_what_goes")
+    _open_product(page)
     visibility = page.get_by_role("button", name="Product visibility")
     hover_and_click(page, visibility)
     pace(page, 500)
@@ -798,11 +792,10 @@ def chapter_trust_center(page: Page) -> None:
     dismiss_toasts(page)
     pace(page, 1200)
 
+    narrate(page, "trust_center_what_customers_see")
     page.goto("/public/workspace/")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
-    pace(page, 900)
-    narrate(page, "trust_center_what_customers_see")
     settle(page)
     shot(page, "17-trust-center-public")
     page.mouse.wheel(0, 700)

@@ -15,7 +15,8 @@ beats:
 
   inventory_releases_pin_exact:
     text: >-
-      Releases pin the exact artifacts that shipped in a version.
+      Releases pin the exact artifacts that shipped in a version, so the answer
+      for an old version never changes underneath you.
 
   inventory_years_later_release:
     text: >-

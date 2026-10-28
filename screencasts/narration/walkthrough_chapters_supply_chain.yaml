@@ -10,7 +10,8 @@ beats:
 
   supply_chain_products_group_components:
     text: >-
-      Products group the components you ship together.
+      Products group the components you ship together, so every question about a
+      release starts from one place.
 
   supply_chain_pied_piper_s:
     text: >-
@@ -23,4 +24,5 @@ beats:
 
   supply_chain_lifecycle_dates_set:
     text: >-
-      Lifecycle dates set the support period you declare under the CRA.
+      Lifecycle dates set the support period you declare under the CRA, and tell
+      customers how long fixes will keep coming.
