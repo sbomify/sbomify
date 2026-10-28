@@ -37,7 +37,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     declare_supersedes,
     link_pending_supersessions,
     set_release_state,
-    surviving_supersessions,
+    supersession_links,
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.url_utils import get_component_public_slug
@@ -50,7 +50,7 @@ from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Release, ReleaseArtifact, User
+from .models import Component, Product, Release, ReleaseArtifact, ReleaseSupersession, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -3037,6 +3037,33 @@ def _release_lifecycle_fields(release: Release) -> dict[str, Any]:
     }
 
 
+def _release_edges(release: Release) -> dict[str, list[dict[str, Any]]]:
+    """Every live supersession edge into and out of the release. A release can have several of each."""
+    links = supersession_links(release.pk)
+    return {
+        "predecessors": [
+            {
+                "release_id": edge.from_release_id,
+                "name": edge.from_release.name,
+                "version": edge.from_release.version or None,
+                "drop_in": edge.drop_in,
+                "effective": edge.effective,
+            }
+            for edge in links["predecessors"]
+        ],
+        "successors": [
+            {
+                "release_id": edge.to_release_id,
+                "name": edge.to_release.name if edge.to_release else edge.successor_label,
+                "version": (edge.to_release.version or None) if edge.to_release else edge.successor_label,
+                "drop_in": edge.drop_in,
+                "effective": edge.effective,
+            }
+            for edge in links["successors"]
+        ],
+    }
+
+
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
     """Build a standardized response for releases."""
     from sbomify.apps.core.models import Component
@@ -3093,6 +3120,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
         },
         "has_crud_permissions": has_crud_permissions,
         **_release_lifecycle_fields(release),
+        **_release_edges(release),
     }
 
     if include_artifacts:
@@ -3688,9 +3716,9 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             # and the delete.
             Product.objects.select_for_update().filter(pk=release.product_id).first()
             superseded = (
-                surviving_supersessions()
-                .filter(superseded_by_release=release, drop_in=True)
-                .values("release_id")
+                ReleaseSupersession.objects.live()
+                .filter(to_release=release, drop_in=True)
+                .values("from_release_id")
                 .distinct()
                 .count()
             )
