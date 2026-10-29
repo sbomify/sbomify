@@ -23,7 +23,7 @@ git-ignored):
 
 ```text
 output/
-  marketplace_walkthrough.webm            # the ~7 min hero video
+  marketplace_walkthrough.webm            # the ~4 min hero video
   walkthrough_chapters_supply_chain.webm  # the same chapters, as short clips
   walkthrough_chapters_inventory.webm
   walkthrough_chapters_vulnerabilities.webm
@@ -130,6 +130,16 @@ the five `chapter_*` step functions (supply chain, inventory, vulnerabilities, C
 each chapter as its own clip. `marketplace_walkthrough.py` imports the same
 step functions and plays them back-to-back with title cards, so the long cut
 and the short cuts cannot drift apart.
+
+The tour is agent-first with a person in the loop: AI agents do the legwork, a
+person makes every call that reaches a customer. Chapters 3 and 5 drive the
+real API with a token made with the "For an AI agent" preset and draw what the
+agent sent in a terminal overlay. In chapter 3 the agent rules libwebp not
+affected, is refused when it tries to apply the ruling itself, and sends it for
+review; a person approves it on the Review tab and the finding closes with its
+reason. In chapter 5 the agent drafts the advisory and is refused publishing
+it; a person publishes it and the Trust Center shows it. The refusals are the
+API's own answers, from the preset's scopes in `core/authz.py`, not staged.
 
 **For a listing, take the `hero/` stills.** They are named and numbered in
 narrative order and stay stable across re-records, so an embedded

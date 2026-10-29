@@ -5,14 +5,29 @@ speed: 1.0
 beats:
   trust_center_intro:
     text: >-
-      When a vulnerability does affect you, publish a security advisory with a
-      tracking ID.
+      The zlib vulnerability does affect you, so your agent drafts the security
+      advisory.
+
+  trust_center_agent_cannot_publish:
+    text: >-
+      Then it tries to publish, and sbomify says no. Publishing stays with a
+      person.
+
+  trust_center_draft_waits:
+    text: >-
+      The draft waits, marked as written by an AI agent. Only your workspace can
+      see it.
+
+  trust_center_person_publishes:
+    text: >-
+      You read it through and publish it. It gets a permanent tracking ID, and
+      from now on, every change an agent sends waits for your approval.
 
   trust_center_turn_trust_center:
     text: >-
       Then turn on the Trust Center, your public security page. It lives in
       Settings, and one switch puts it online, with a public address you can
-      share.
+      share with every customer who asks.
 
   trust_center_serve_own_domain:
     text: >-
@@ -25,5 +40,5 @@ beats:
 
   trust_center_what_customers_see:
     text: >-
-      This is what customers see: your products, their artifacts, and your
-      advisories, always current.
+      This is what customers see: your products, their artifacts, and the
+      advisory you just published, always current.

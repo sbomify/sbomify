@@ -16,8 +16,7 @@ beats:
   compliance_sbomify_writes_documents:
     text: >-
       sbomify writes the documents the CRA asks for, from the disclosure policy to
-      the Declaration of Conformity, and flags one stale when the evidence behind
-      it changes.
+      the Declaration of Conformity.
 
   compliance_every_control_answered:
     text: >-
