@@ -658,6 +658,32 @@ class TestChoosingTheLine:
         assert not ReleaseSupersession.objects.filter(to_release=candidate).exists()
         assert _state(stable) == Release.LifecycleState.ACTIVE
 
+    def test_a_prerelease_keeps_a_predecessor_chosen_with_a_line(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # Only the race leaves a release without a line, so a chosen line means the user picked it.
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        first_candidate = _release(
+            product, "2.0.0-rc.1", is_prerelease=True, **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc))
+        )
+
+        response = authenticated_web_client.post(
+            reverse("core:release_new"),
+            {
+                "product_id": product.id,
+                "name": "2.0.0-rc.2",
+                "is_prerelease": "on",
+                "replaces": first_candidate.pk,
+                "replaces_line": "same",
+            },
+        )
+
+        assert response.status_code == 302
+        second_candidate = Release.objects.get(product=product, name="2.0.0-rc.2")
+        edge = ReleaseSupersession.objects.get(from_release=first_candidate, to_release=second_candidate)
+        assert edge.drop_in
+        assert _state(first_candidate) == Release.LifecycleState.SUPERSEDED
+
     def test_the_prerelease_box_clears_replaces_without_a_cached_ref(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
