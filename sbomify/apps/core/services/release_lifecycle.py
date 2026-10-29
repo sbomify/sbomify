@@ -446,8 +446,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     written, from the locked row, so an edit never puts back a withdrawal or
     a derived date committed after the caller first read the release.
 
-    Moving the release date moves the live edges that took their date from it,
-    and a new name or version links the edges declared before it existed.
+    Moving the release date moves the live edges that took their date from it;
+    clearing it leaves them where they are. A new name or version links the
+    edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -471,7 +472,7 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
         setattr(release, field, changes[field])
     release.save(update_fields=changed)
 
-    if "released_at" in changed and previous_release_date is not None:
+    if "released_at" in changed and previous_release_date is not None and release.released_at is not None:
         moved = (
             ReleaseSupersession.objects.live()
             .filter(to_release=release, effective=previous_release_date)

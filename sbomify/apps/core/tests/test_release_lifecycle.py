@@ -954,6 +954,58 @@ class TestReleaseEdits:
         assert _fresh(old).superseded_at == corrected
         assert _edge(own_date.value).effective == PAST
 
+    def test_clearing_the_release_date_leaves_its_edges_alone(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
+        old = _release(sample_product, "1.9")
+        new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
+        edge = _supersede(old, "2.0", effective=first_date)
+        assert edge.ok and edge.value
+
+        response = self._send(client, token, "patch", new, {"released_at": None})
+
+        assert response.status_code == 200, response.content
+        assert _fresh(new).released_at is None
+        assert _edge(edge.value).effective == first_date
+
+    @pytest.mark.parametrize("method", ["put", "patch"])
+    def test_an_integrity_error_that_is_not_a_duplicate_is_a_server_error(
+        self,
+        authenticated_api_client: tuple[Client, AccessToken],
+        sample_product: Product,
+        mocker,
+        method: str,
+    ) -> None:
+        client, token = authenticated_api_client
+        release = _release(sample_product, "1.0.0")
+        mocker.patch(
+            "sbomify.apps.core.apis.save_release_changes",
+            side_effect=IntegrityError('null value in column "effective" violates not-null constraint'),
+        )
+        payload: dict[str, object] = {"description": "Notes"}
+        if method == "put":
+            payload.update({"name": "1.0.0", "version": "1.0.0", "is_prerelease": False})
+
+        response = self._send(client, token, method, release, payload)
+
+        assert response.status_code == 500, response.content
+        assert response.json()["error_code"] != "DUPLICATE_NAME"
+
+    def test_a_duplicate_name_is_still_reported_as_one(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        _release(sample_product, "1.0.0")
+        other = _release(sample_product, "1.1.0")
+
+        response = self._send(client, token, "patch", other, {"name": "1.0.0"})
+
+        assert response.status_code == 400, response.content
+        assert response.json()["error_code"] == "DUPLICATE_NAME"
+        assert "name" in response.json()["detail"]
+
 
 @pytest.mark.django_db
 class TestBackfillReruns:
