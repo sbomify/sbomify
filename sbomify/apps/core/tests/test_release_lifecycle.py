@@ -1034,3 +1034,35 @@ class TestBackfillReruns:
         backfill.backfill_release_lifecycle(django_apps, None)
         assert ReleaseSupersession.objects.count() == 1
         assert _fresh(old).effective_end_of_life == date(2027, 1, 1)
+
+
+refold = importlib.import_module("sbomify.apps.core.migrations.0036_refold_product_lifecycle_dates")
+
+
+@pytest.mark.django_db
+class TestRefoldProductDates:
+    def test_existing_products_take_the_fold_their_releases_inherit(self, sample_product: Product) -> None:
+        # What master left: the columns hold the last surviving event, whatever its policy or range.
+        events = [
+            ("endOfSupport", datetime(2027, 6, 30, tzinfo=dt_timezone.utc), EVERY_VERSION, "extended"),
+            ("endOfSupport", datetime(2026, 6, 30, tzinfo=dt_timezone.utc), EVERY_VERSION, "standard"),
+            ("endOfLife", datetime(2025, 6, 1, tzinfo=dt_timezone.utc), [{"range": "vers:semver/<2.0.0"}], ""),
+        ]
+        for event_id, (event_type, effective, versions, support_id) in enumerate(events, start=1):
+            ProductCLEEvent.objects.create(
+                product=sample_product,
+                event_id=event_id,
+                event_type=event_type,
+                effective=effective,
+                versions=versions,
+                support_id=support_id,
+            )
+        Product.objects.filter(pk=sample_product.pk).update(
+            end_of_support=date(2026, 6, 30), end_of_life=date(2025, 6, 1)
+        )
+
+        refold.refold_product_lifecycle_dates(django_apps, None)
+
+        sample_product.refresh_from_db()
+        assert sample_product.end_of_support == date(2027, 6, 30)
+        assert sample_product.end_of_life is None
