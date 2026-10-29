@@ -18,13 +18,7 @@ zero reads as "at last scan", never as clean today. What it never scanned reads
 </h4>
 {% if vulnerabilities.unassessed %}
     <c-slot name="right">
-    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }}
-        {% if vulnerabilities.untracked %}
-            never scanned
-        {% else %}
-            not scanned yet
-        {% endif %}
-    </span>
+    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }} {{ vulnerabilities.untracked|yesno:"never scanned,not scanned yet" }}</span>
     </c-slot>
 {% endif %}
 </c-tables.toolbar>

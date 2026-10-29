@@ -8,6 +8,7 @@ from django.urls import reverse
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.core.services.release_lifecycle import set_release_state
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import AssessmentRun
@@ -103,6 +104,23 @@ def test_release_page_lists_vulnerabilities(
     assert "CVE-1" in content and "CVE-2" in content
     assert "1 SBOM not scanned yet" in content
     assert 'id="release-artifact-vulnerabilities"' in content
+
+
+def test_a_retired_release_page_says_its_unscanned_sboms_were_never_scanned(
+    client: Client, sample_team_with_owner_member: Member, release: Release, mocker: MockerFixture
+) -> None:
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    component = ReleaseArtifact.objects.filter(release=release).first().sbom.component
+    _sbom(component, "next", [])  # newer, so nothing the release ships is scanned any more
+    assert set_release_state(release, "withdraw", reason="defective").ok
+
+    response = client.get(reverse("core:release_details", args=[release.product_id, release.id]))
+
+    content = response.content.decode()
+    assert "1 SBOM never scanned" in content
+    assert "not scanned yet" not in content
 
 
 def test_release_without_sboms_has_no_vulnerabilities_section(
