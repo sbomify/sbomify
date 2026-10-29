@@ -115,8 +115,10 @@ the scanner's full result, which the page itself never loads.
             {% endfor %}
         </tbody>
         </c-tables.table>
+    {% elif data.details_unavailable and data.totals_only_indexing %}
+        <c-feedback.empty-state icon="fas fa-hourglass-half" title="Loading vulnerability details" message="The details for {% for item in data.totals_only_indexing %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% endfor %} are still loading. {{ data.totals_only_indexing|length|pluralize:'Its,Their' }} counts are already in the summary, and the list fills in once ready." />
     {% elif data.details_unavailable %}
-        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scan reports totals only, so there are no vulnerabilities to list. Its counts are in the summary." />
+        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scans of {% for item in data.totals_only_reported %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% endfor %} report totals only, so there are no vulnerabilities to list. Their counts are in the summary. Rescan to list them." />
     {% elif data.scoped_components and data.unassessed_components == data.scoped_components %}
         {% if data.single_component %}
             <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities in this version appear here once it is scanned." />

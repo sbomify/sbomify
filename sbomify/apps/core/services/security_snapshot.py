@@ -117,6 +117,8 @@ def build_component_security_picture(
     counts_by_component: dict[str, dict[str, int]] = {}
     unassessed: set[str] = set(component_ids)
     summary_only: set[str] = set()
+    # The SBOMs behind them, which are what a re-index reads.
+    summary_only_sboms: dict[str, set[str]] = {}
     # A component counts as totals-only when none of its SBOMs read here lists findings.
     itemised: set[str] = set()
     # A component counts as failed when its scans errored and none of them succeeded.
@@ -171,6 +173,7 @@ def build_component_security_picture(
             itemised.add(component_id)
         elif any(extract_severity_counts(result)["total"] for result in provider_results):
             summary_only.add(component_id)
+            summary_only_sboms.setdefault(component_id, set()).add(sbom_id)
         counts = (
             severity_counts_from_rows(rows)
             if rows
@@ -229,6 +232,7 @@ def build_component_security_picture(
         "findings": findings,
         "counts": counts_by_component,
         "summary_only": summary_only - itemised,
+        "summary_only_sboms": {cid: sboms for cid, sboms in summary_only_sboms.items() if cid not in itemised},
         "unassessed": unassessed,
         "failed": errored - scanned,
         "latest_sboms": {row["component_id"]: row for row in sbom_meta.values()},
