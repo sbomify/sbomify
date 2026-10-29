@@ -3515,6 +3515,22 @@ def _release_edit_refused(status_code: int | None, error: str | None) -> tuple[i
     return 400, {"detail": error or "Invalid release", "error_code": ErrorCode.VALIDATION_ERROR}
 
 
+def _release_integrity_error(error: IntegrityError, release_id: str) -> tuple[int, dict[str, Any]]:
+    """A name or version taken by another release is the caller's mistake; any other constraint is ours."""
+    if _is_release_version_conflict(error):
+        return 400, {
+            "detail": "A release with this version already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    if _is_release_name_conflict(error):
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    log.exception(f"Error saving release {release_id}")
+    return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
 @router.put(
     "/releases/{release_id}",
     response={
@@ -3584,14 +3600,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        return _release_integrity_error(e, release_id)
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except Exception:
@@ -3665,14 +3674,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        return _release_integrity_error(e, release_id)
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except Exception:
