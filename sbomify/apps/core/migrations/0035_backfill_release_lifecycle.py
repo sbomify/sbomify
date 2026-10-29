@@ -14,7 +14,11 @@ A frozen copy of the dates half of recompute_release_lifecycle; superseded_at
 needs no backfill, since only a drop-in edge sets it.
 
 Running it again adds nothing, and the reverse removes what it wrote, so the
-migration can be unapplied and applied again.
+migration can be unapplied and applied again. The reverse is for development:
+it removes every edge with a CLE event, no actor and drop_in=False, which is
+what the backfill writes, so an edge with the same shape that a caller without
+a user declared after the migration ran goes with it. Reversing to core 0033
+drops the table in any case.
 """
 
 from collections import defaultdict
