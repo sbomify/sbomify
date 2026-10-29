@@ -1,10 +1,10 @@
 # Base Python version
 ARG PYTHON_VERSION=3.14-slim-trixie@sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.3.8
+ARG OSV_SCANNER_VERSION=v2.7.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
-ARG COSIGN_VERSION=v3.1.3
+ARG COSIGN_VERSION=v3.1.4
 # Chainguard distroless Python for production, pinned by digest for reproducibility.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
