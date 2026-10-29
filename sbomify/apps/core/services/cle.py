@@ -32,6 +32,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     audit,
     existing_supersession,
+    product_dates,
     recompute_release_lifecycle,
     resolve_successor,
 )
@@ -690,10 +691,13 @@ def create_component_release_support_definition(
 def recompute_lifecycle_dates(product: Product) -> None:
     """Recompute cached lifecycle date fields on the product from CLE events.
 
-    Iterates all events in event_id order, skips withdrawn events, and sets
-    ``release_date``, ``end_of_support``, and ``end_of_life`` on the product.
-    Then rederives the releases' dates, since a release without its own takes
-    the product's.
+    Iterates all events in event_id order and skips withdrawn events.
+    ``release_date`` is the latest ``released`` event. ``end_of_support`` and
+    ``end_of_life`` come from ``product_dates``: events for every version
+    only, the latest per support policy, then the latest across policies. A
+    product event for some versions still publishes over TEA, but sets
+    neither column. Then rederives the releases' dates, since a release
+    without its own takes the product's.
 
     Should be called within a ``transaction.atomic()`` block when used alongside
     event creation to ensure consistency.
@@ -708,23 +712,13 @@ def recompute_lifecycle_dates(product: Product) -> None:
     }
 
     release_date: date | None = None
-    end_of_support: date | None = None
-    end_of_life: date | None = None
-
     for event in events:
-        if event.event_id in withdrawn_ids:
-            continue
-
-        if event.event_type == ProductCLEEvent.EventType.RELEASED:
+        if event.event_id not in withdrawn_ids and event.event_type == ProductCLEEvent.EventType.RELEASED:
             release_date = event.effective.date()
-        elif event.event_type == ProductCLEEvent.EventType.END_OF_SUPPORT:
-            end_of_support = event.effective.date()
-        elif event.event_type == ProductCLEEvent.EventType.END_OF_LIFE:
-            end_of_life = event.effective.date()
 
     product.release_date = release_date
-    product.end_of_support = end_of_support
-    product.end_of_life = end_of_life
+    # The same fold the releases inherit, so the product never reads one date while its releases keep another.
+    product.end_of_support, product.end_of_life = product_dates(events)
     product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
     recompute_release_lifecycle(product)
 

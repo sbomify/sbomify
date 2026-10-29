@@ -466,6 +466,15 @@ def _surviving(events: list[Any]) -> list[Any]:
     return [event for event in events if event.event_id not in voided]
 
 
+def product_dates(events: list[ProductCLEEvent]) -> tuple[date | None, date | None]:
+    """A product's end of support and end of life: its surviving events for every version, folded by ``fold_dates``.
+
+    The product columns and what its releases inherit both come from here, so
+    the two always agree. ``events`` are one product's, in event order.
+    """
+    return fold_dates(event for event in _surviving(events) if covers_every_version(event.versions))
+
+
 def recompute_release_lifecycle(product: Product) -> None:
     """Derive every release's lifecycle columns in ``product`` from its edges and CLE events.
 
@@ -494,9 +503,8 @@ def recompute_release_lifecycle(product: Product) -> None:
         by_release[event.release_id].append(event)
     own = {pk: fold_dates(_surviving(by_release[pk])) for pk in releases}
 
-    product_events = _surviving(list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id")))
-    product_support, product_life = fold_dates(
-        event for event in product_events if covers_every_version(event.versions)
+    product_support, product_life = product_dates(
+        list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id"))
     )
 
     drop_ins: dict[str, list[ReleaseSupersession]] = defaultdict(list)
