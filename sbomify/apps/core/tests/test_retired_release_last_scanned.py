@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from typing import Any
@@ -23,6 +24,16 @@ pytestmark = pytest.mark.django_db
 OLDEST = datetime(2025, 3, 2, 12, tzinfo=dt_timezone.utc)
 NEWER = datetime(2025, 3, 9, 12, tzinfo=dt_timezone.utc)
 WITHDRAWN = datetime(2025, 3, 3, 12, tzinfo=dt_timezone.utc)
+
+
+def _notice_role(page: str) -> str:
+    """The role of the alert holding the retired-release notice: a standing note is not announced on load."""
+    text = page.index("No longer monitored")
+    root = page.rindex("data-alert", 0, text)
+    tag = page[page.rindex("<", 0, root) : page.index(">", root)]
+    match = re.search(r'role="([a-z]+)"', tag)
+    assert match, tag
+    return match.group(1)
 
 
 def _scan(release: Release, name: str, completed_at: datetime, findings: list[dict[str, Any]]) -> SBOM:
@@ -191,6 +202,7 @@ class TestReleasePage:
         assert "No longer monitored" in page
         assert "It was withdrawn on 3 Mar 2025. These counts are from its last scan, on 2 Mar 2025." in page
         assert "Not monitored since" not in page
+        assert _notice_role(page) == "note"
 
     def test_a_retired_release_with_no_findings_is_not_called_clean(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -269,6 +281,7 @@ class TestTrustCenter:
         page = self._page(release)
         assert "No longer monitored" in page
         assert "It was withdrawn on 3 Mar 2025. These counts are from its last scan, on 2 Mar 2025." in page
+        assert _notice_role(page) == "note"
 
     def test_a_retired_release_with_no_findings_is_not_called_clean(self) -> None:
         release = self._release()
