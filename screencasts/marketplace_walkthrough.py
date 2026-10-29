@@ -10,19 +10,25 @@ instead, which cuts the same chapters into standalone clips from the same step
 functions.
 
 sbomify is a CRA product security lifecycle platform, from SBOM to security
-disclosure. The story arc, in order:
+disclosure, and it is agent-first with a person in the loop: AI agents do the
+legwork, a person makes every call that reaches a customer. The tour shows
+both halves for real. Chapters 3 and 5 drive the actual API with a token made
+with the "For an AI agent" preset, draw what the agent sent in a terminal
+overlay, and show the calls the preset refuses. The story arc, in order:
 
 1. **Know what you ship**: workspace, products, components, and the
    identifiers and lifecycle dates that make a product record answerable.
 2. **Every SBOM, versioned**: artifacts stored immutably per component, pinned
    to releases.
-3. **Triage vulnerabilities with VEX**: the workspace vulnerability list,
-   trends, the per-component drill-down, and clearing a false positive with a
-   VEX document.
+3. **Triage with an AI agent**: the workspace vulnerability list, trends, the
+   per-component drill-down; an agent rules libwebp not affected, is refused
+   when it tries to apply the ruling itself, and sends it for review; a person
+   approves it on the Review tab, and the finding closes with its reason.
 4. **Prove CRA compliance**: the CRA assessment's summary and generated
    documents, marked complete.
-5. **Disclose it to customers**: security advisories, the Trust Center on a
-   custom domain, and the public page it serves.
+5. **Disclose it to customers**: an agent drafts a security advisory and is
+   refused publishing it; a person publishes it, turns on the Trust Center on
+   a custom domain, and the public page shows the advisory.
 
 Each chapter opens from the sidebar, so it does not depend on where the
 previous one left the page.
@@ -97,7 +103,7 @@ def marketplace_walkthrough(recording_page: Page) -> None:
     title_card(
         page,
         "sbomify",
-        "From SBOM to security disclosure",
+        "Agents do the legwork. You make the call.",
         hold_ms=3000,
     )
 

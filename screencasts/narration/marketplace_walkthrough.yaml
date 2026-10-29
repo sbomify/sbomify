@@ -45,15 +45,17 @@ beats:
   # dropped. Naming the question up front gives every chapter a reason to
   # exist beyond being next, and gives the close something to land on.
   #
-  # The vulnerability is the one the tour actually clears with a VEX in
-  # chapter 3 (walkthrough_chapters.VEX_TARGET_CVE), so the story and the
-  # seeded data are the same story.
+  # The vulnerability is the one an AI agent rules on in chapter 3
+  # (walkthrough_chapters.VEX_TARGET_CVE), so the story and the seeded data are
+  # the same story. The frame is agent-first with a person in the loop: agents
+  # do the legwork, a person makes every call that reaches a customer. That is
+  # what the product enforces (core/authz.py, the "agent" scope preset), so the
+  # copy may say it plainly.
   tour_intro:
     text: >-
       It's Friday afternoon, and a customer wants to know whether you're
-      affected by a vulnerability in libwebp.  Answering that
-      usually costs a spreadsheet, a deadline, and somebody's weekend.
-      [long-pause] It doesn't have to.
+      affected by a vulnerability in libwebp. In sbomify, your AI agents do the
+      legwork. [long-pause] You make every call that reaches a customer.
 
   # One bridge per chapter, spoken *over* the chapter's title card and into the
   # first surface behind it. These exist because the card used to play in
@@ -70,16 +72,18 @@ beats:
   # being visited rather than a story getting harder.
   chapter_supply_chain:
     text: >-
-      Answering starts with knowing exactly what you ship. Most teams cannot
-      say, precisely.
+      An agent can only answer from what it can read. So it starts with knowing
+      exactly what you ship.
 
   chapter_inventory:
     text: >-
-      And the answer is only as good as the evidence behind it.
+      And any answer, yours or an agent's, is only as good as the evidence
+      behind it.
 
   chapter_vulnerabilities:
     text: >-
-      Now the actual question. Is that library in here, and does it matter?
+      Now the actual question. Is that library in here, and does it matter? Your
+      agent finds out. You decide.
 
   chapter_compliance:
     text: >-
@@ -94,22 +98,15 @@ beats:
   # Write the domain out as words. A replace key may not contain punctuation
   # (the API rejects it), and "sbomify.com" left bare is read as a URL —
   # "s-bomba.fi slash dot-com" — rather than spoken.
-  # The recap runs shortest-to-longest and the payoff gets its own sentence.
-  # It used to be a four-item list with "hand your customers a link instead of
-  # an apology" buried third — the best line in the script, landing in the
-  # middle of an inventory of features at the exact moment the close needs to
-  # carry weight.
   # Closes the loop the first line opened, rather than reciting the features
-  # again. The recap this replaced ended on a four-item list with the best
-  # line buried third.
+  # again, and names the division of labour once more: the agent did the
+  # digging, a person made the call. The payoff gets its own sentence.
   tour_outro:
     text: >-
       So, the question was whether you're affected. [long-pause] The answer is
-      no, here's why, and here's the evidence. On a page that was already
-      current before the email arrived.  No spreadsheet. Nobody's
-      weekend. [long-pause] Start free, at sbomify dot com.
+      no, here's why, and here's the evidence. Your agent did the digging. You
+      made the call. [long-pause] Start free, at sbomify dot com.
     caption: >-
       So, the question was whether you're affected. The answer is no, here's
-      why, and here's the evidence. On a page that was already current before
-      the email arrived. No spreadsheet. Nobody's weekend.
-      Start free at sbomify.com.
+      why, and here's the evidence. Your agent did the digging. You made the
+      call. Start free at sbomify.com.

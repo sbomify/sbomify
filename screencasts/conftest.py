@@ -576,6 +576,32 @@ PLATFORM_DOMAIN = "app.sbomify.com"
 CUSTOM_TRUST_DOMAIN = "trust.piedpiper.com"
 
 
+LOCAL_ADDRESS_REWRITE_JS = """
+(() => {
+    const pattern = /https?:\\/\\/(?:localhost|127\\.0\\.0\\.1|\\d{1,3}(?:\\.\\d{1,3}){3})(?::\\d+)?/g;
+    const fix = (text) => text.replace(pattern, 'https://app.sbomify.com');
+    const walk = (root) => {
+        const nodes = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let n = nodes.nextNode(); n; n = nodes.nextNode()) {
+            if (pattern.test(n.textContent)) n.textContent = fix(n.textContent);
+            pattern.lastIndex = 0;
+        }
+        root.querySelectorAll?.('input, textarea').forEach((el) => {
+            if (pattern.test(el.value)) el.value = fix(el.value);
+            pattern.lastIndex = 0;
+        });
+    };
+    const start = () => {
+        walk(document.body);
+        new MutationObserver(() => walk(document.body))
+            .observe(document.body, { childList: true, subtree: true, characterData: true });
+    };
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+})();
+"""
+
+
 def rewrite_localhost_urls(page: Page, domain: str = PLATFORM_DOMAIN) -> None:
     """Replace localhost URLs in the visible DOM with a real-looking host.
 
@@ -822,6 +848,93 @@ def caption(page: Page, text: str) -> None:
 def clear_caption(page: Page) -> None:
     """Remove the lower-third caption if one is showing."""
     page.evaluate(f"document.getElementById({CAPTION_ID!r})?.remove()")
+
+
+# ---------------------------------------------------------------------------
+# Agent console: what an AI agent sent, over the page a person is looking at
+#
+# The agent's side of a workflow is API calls, which have no UI of their own.
+# The recordings make those calls for real (an agent-preset token, the real
+# endpoints) and draw them here, terminal style, so the viewer sees the call
+# and the answer sbomify gave, refusals included. Text goes in through
+# ``textContent`` only, like the overlays above.
+# ---------------------------------------------------------------------------
+
+AGENT_CONSOLE_ID = "__agent-console"
+
+
+def agent_console(page: Page, title: str, lines: list[str]) -> None:
+    """Open (or reset) the agent console with ``title`` and ``lines``."""
+    page.evaluate(
+        """(p) => {
+            document.getElementById(p.id)?.remove();
+            const win = document.createElement('div');
+            win.id = p.id;
+            win.style.cssText = `
+                position: fixed; right: 28px; bottom: 28px; z-index: 2147483000;
+                width: 900px; max-width: calc(100vw - 56px);
+                background: #14142e; border: 1px solid #2b2b52; border-radius: 12px;
+                box-shadow: 0 24px 60px rgba(0,0,0,.45); overflow: hidden;
+                font-family: ui-monospace, "SF Mono", Menlo, monospace;
+                opacity: 0; transform: translateY(12px);
+                transition: opacity 260ms ease, transform 260ms ease;
+            `;
+            const bar = document.createElement('div');
+            bar.style.cssText = 'display:flex; gap:8px; align-items:center; padding:10px 14px;' +
+                ' background:#1c1c3d; border-bottom:1px solid #2b2b52; color:#e6e6f0; font-size:14px;';
+            for (const c of ['#ff5f57', '#febc2e', '#28c840']) {
+                const dot = document.createElement('span');
+                dot.style.cssText = `width:12px; height:12px; border-radius:50%; background:${c};`;
+                bar.appendChild(dot);
+            }
+            const label = document.createElement('span');
+            label.style.cssText = 'margin-left:8px;';
+            label.textContent = p.title;
+            bar.appendChild(label);
+            const pre = document.createElement('pre');
+            pre.id = p.id + '-body';
+            pre.style.cssText = 'margin:0; padding:16px 20px; color:#c8c8e0; font-size:16px;' +
+                ' line-height:1.55; white-space:pre-wrap; word-break:break-word; max-height:52vh; overflow:hidden;';
+            win.appendChild(bar);
+            win.appendChild(pre);
+            document.body.appendChild(win);
+            requestAnimationFrame(() => { win.style.opacity = '1'; win.style.transform = 'none'; });
+            window.__agentConsoleLine = (text, tone) => {
+                const row = document.createElement('div');
+                const colors = { ok: '#5eead4', refused: '#fca5a5', cmd: '#f8fafc', note: '#8b8bb0' };
+                row.style.color = colors[tone] || '#c8c8e0';
+                row.textContent = text || '\\u00a0';
+                pre.appendChild(row);
+                pre.scrollTop = pre.scrollHeight;
+            };
+            for (const line of p.lines) window.__agentConsoleLine(line[0], line[1]);
+        }""",
+        {"id": AGENT_CONSOLE_ID, "title": title, "lines": [_console_line(line) for line in lines]},
+    )
+
+
+def _console_line(line: str) -> list[str]:
+    """A console line and its tone, read off its first characters."""
+    if line.startswith("$"):
+        return [line, "cmd"]
+    if line.startswith("#"):
+        return [line, "note"]
+    if line.startswith(("HTTP/1.1 2", "202", "201", "200")):
+        return [line, "ok"]
+    if line.startswith(("HTTP/1.1 4", "403", "409")):
+        return [line, "refused"]
+    return [line, ""]
+
+
+def agent_console_append(page: Page, *lines: str) -> None:
+    """Add lines to the open agent console."""
+    for line in lines:
+        page.evaluate("([t, tone]) => window.__agentConsoleLine(t, tone)", _console_line(line))
+
+
+def close_agent_console(page: Page) -> None:
+    """Remove the agent console if it is showing."""
+    page.evaluate(f"document.getElementById({AGENT_CONSOLE_ID!r})?.remove()")
 
 
 # ---------------------------------------------------------------------------
@@ -1609,6 +1722,12 @@ def recording_context(
     # them.
     context.add_init_script(SMOOTH_SCROLL_JS.read_text())
 
+    # The test server's own address must never be on screen, but pages print it
+    # in rows that arrive after any one-off rewrite has run (the Trust Center's
+    # public URL swaps in over HTMX). Rewrite visible text and field values as
+    # they appear, for the life of every document. Links keep their real href.
+    context.add_init_script(LOCAL_ADDRESS_REWRITE_JS)
+
     session_cookie = setup_browser_session(browser_base_url, sample_user, deletable_team)
     context.add_cookies([session_cookie])
 
@@ -1736,12 +1855,28 @@ def _normalise_capture(raw: Path, destination: Path) -> None:
     """
     subprocess.run(  # nosec B607 - ffmpeg by name from PATH, fixed argv, shell=False
         [
-            "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "error", "-y",
-            "-i", str(raw),
-            "-vf", f"scale={RECORDING_WIDTH}:{RECORDING_HEIGHT}:flags=lanczos",
-            "-fps_mode", "passthrough",
-            "-c:v", "libvpx-vp9", "-crf", "24", "-b:v", "0",
-            "-row-mt", "1", "-cpu-used", "4",
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(raw),
+            "-vf",
+            f"scale={RECORDING_WIDTH}:{RECORDING_HEIGHT}:flags=lanczos",
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "libvpx-vp9",
+            "-crf",
+            "24",
+            "-b:v",
+            "0",
+            "-row-mt",
+            "1",
+            "-cpu-used",
+            "4",
             "-an",
             str(destination),
         ],

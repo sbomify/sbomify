@@ -5,51 +5,65 @@ speed: 1.0
 beats:
   intro:
     text: >-
-      Here is how to publish a security advisory in sbomify, from first report to
-      your Trust Center.
+      In sbomify, an AI agent can draft and maintain your security advisories.
+      Here is how, and why a person still decides what your customers read.
 
   security_advisories_lists:
     text: >-
-      Security advisories lists every advisory in the workspace, with its severity
-      and status.
+      Security advisories lists every advisory in the workspace, with its
+      severity and status.
 
-  start_title_all:
+  agent_drafts:
     text: >-
-      Start with a title. That is all a draft needs.
+      Your coding agent has reproduced a bug. With a token made for an AI agent,
+      it drafts the advisory: the CVE, the score, and the release it affects.
 
-  set_severity_where:
+  agent_cannot_publish:
     text: >-
-      Set the severity, and where the work stands right now.
+      Then it tries to publish. sbomify refuses. An agent cannot publish,
+      withdraw or delete an advisory.
 
-  next_pick_what:
+  draft_waits_for_you:
     text: >-
-      Next, pick what it affects. Open a product to choose specific releases.
+      The draft waits for you, marked as written by an AI agent. Only your
+      workspace can see it.
 
-  add_cve_cvss:
+  read_it_through:
     text: >-
-      Add the CVE, a CVSS score and a short description if you have them.
+      Read it through. When it is right, publish it and choose who can read it.
+      Publishing is the review, and only a person can do it.
 
-  advisory_opens_draft:
+  agent_changes_published:
     text: >-
-      The advisory opens as a draft. Only your workspace can see it.
+      Once it is published, the agent keeps working. It raises the severity and
+      marks the advisory resolved. Neither change is applied. sbomify holds both
+      for a person.
 
-  timeline_records_every:
+  waiting_for_review:
     text: >-
-      The timeline records every change. Post updates as the fix moves along.
+      They wait on the advisory under Waiting for review, each marked as from an
+      AI agent.
 
-  update_lands_timeline:
+  diff_shows_change:
     text: >-
-      The update lands on the timeline, and the status moves to fix in progress.
+      Each shows the agent's reasoning, and the change itself as a diff: high to
+      critical, and a new score.
 
-  when_ready_publish:
+  approve_edit:
     text: >-
-      When you are ready, publish it. Choose who can read it, then confirm.
+      The evidence holds up, so approve it. Only now does the advisory change.
 
-  has_permanent_tracking:
+  reject_update:
     text: >-
-      It now has a permanent tracking ID and appears on your Trust Center.
+      Resolved is too early: the fix has not shipped. Reject it, and say what to
+      do differently.
+
+  agent_reads_reason:
+    text: >-
+      Nothing on the advisory changes, and the agent reads your reason back the
+      next time it runs.
 
   customers_see_public:
     text: >-
-      Customers see it on your public advisories page, next to every advisory you
-      have published.
+      Your Trust Center shows only what a person approved. An agent proposes, and
+      a person decides.

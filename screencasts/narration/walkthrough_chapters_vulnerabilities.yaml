@@ -14,25 +14,36 @@ beats:
 
   vulnerabilities_component_each_vulnerability:
     text: >-
-      On a component, each vulnerability shows the package, the fix version, and
+      On the core library, libwebp is open and critical, with its fix version and
       its triage state.
 
-  vulnerabilities_not_every_vulnerability:
+  # The agent's calls are drawn in a terminal overlay; they hit the real API
+  # with a token made with the "For an AI agent" preset.
+  vulnerabilities_agent_rules:
     text: >-
-      Not every vulnerability is exploitable. A VEX document says so, in a
-      standard format.
+      Your AI agent does the legwork. It traces the code and rules libwebp not
+      affected.
 
-  vulnerabilities_sbomify_shows_dry:
+  vulnerabilities_agent_refused:
     text: >-
-      sbomify shows a dry run first: one vulnerability would be suppressed,
-      nothing is stored yet.
+      But it cannot apply that ruling itself. sbomify refuses, and the ruling
+      goes to a person for review.
+
+  vulnerabilities_review_tab:
+    text: >-
+      It waits on the Review tab, marked as from an AI agent, with its reasoning
+      and what approving it would hide.
+
+  vulnerabilities_person_approves:
+    text: >-
+      A person reads it and approves. An agent can propose. Only a person decides.
 
   vulnerabilities_applied_drops_out:
     text: >-
-      Applied, it drops out of the open list, and the header counts it as
+      Approved, libwebp drops out of the open list, and the header counts it as
       suppressed.
 
   vulnerabilities_nothing_deleted_vulnerability:
     text: >-
-      Nothing is deleted. The vulnerability is still there, with the reason
-      attached.
+      Nothing is deleted. The vulnerability is still there, closed as not
+      affected, with the reason attached.

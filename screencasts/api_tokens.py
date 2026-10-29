@@ -1,8 +1,9 @@
-"""Record the API tokens screencast.
+"""Record the API tokens screencast: a token for an AI agent.
 
-Drives: Dashboard → Settings → API tokens tab → Generate token (name, scope,
-expiry) → copy the new token → a component's CI/CD integration dialog shows
-where SBOMIFY_TOKEN goes → back to API tokens → delete the token.
+Drives: Dashboard → Settings → API tokens tab → Generate token: name it, step
+through the access presets and pick "AI agent", whose explanation says what
+the agent can and cannot do → expiry → copy the new token → the token in the
+list → delete it.
 """
 
 import pytest
@@ -12,7 +13,6 @@ from conftest import (
     hover_and_click,
     mock_vuln_trends,
     narrate,
-    navigate_to_components,
     navigate_to_settings,
     navigate_to_settings_tab,
     pace,
@@ -21,7 +21,7 @@ from conftest import (
     type_text,
 )
 
-TOKEN_NAME = "GitHub Actions upload"  # nosec B105 - the token's label, not a secret
+TOKEN_NAME = "Claude Code"  # nosec B105 - the token's label, not a secret
 
 
 # The recording browser reaches the app over plain http on a container IP,
@@ -36,6 +36,14 @@ if (!navigator.clipboard) {
     });
 }
 """
+
+
+def _trace_line(page: Page, box: dict[str, float], line_height: float, line: int) -> None:
+    """Move the pointer along one line of a paragraph, the way a reader's eye goes."""
+    y = box["y"] + line_height * (line + 0.5)
+    page.mouse.move(box["x"] + 10, y, steps=8)
+    page.mouse.move(box["x"] + box["width"] - 20, y, steps=60)
+    pace(page, 900)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -64,10 +72,31 @@ def api_tokens(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 300)
 
     scope = page.locator("#tokenGenerationForm select[name='scope']")
-    narrate(page, "pick_narrowest_scope")
+    narrate(page, "presets")
     hover_and_click(page, scope)
     scope.select_option("publish")
-    pace(page, 600)
+    pace(page, 1800)
+    scope.select_option("read_only")
+    pace(page, 1800)
+
+    narrate(page, "pick_ai_agent")
+    scope.select_option("agent")
+    explanation = modal.get_by_text("This token can read fix prompts")
+    explanation.wait_for(state="visible", timeout=5_000)
+    pace(page, 800)
+    explanation.hover()
+
+    # Follow the explanation line by line while it is read out.
+    box = explanation.bounding_box()
+    assert box is not None
+    line_height = box["height"] / 5
+    narrate(page, "agent_cannot_apply")
+    for line in range(3):
+        _trace_line(page, box, line_height, line)
+    narrate(page, "agent_cannot_publish")
+    for line in range(2, 5):
+        _trace_line(page, box, line_height, line)
+    settle(page)
 
     expiry = page.locator("#tokenGenerationForm select[name='expires_in_hours']")
     narrate(page, "give_short_life")
@@ -85,32 +114,10 @@ def api_tokens(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 1500)
     hover_and_click(page, page.get_by_role("button", name="Copy token"))
     page.get_by_role("button", name="Copied").wait_for(state="visible", timeout=5_000)
-    narrate(page, "clipboard_store_secret")
-    pace(page, 2000)
+    pace(page, 1500)
     hover_and_click(page, page.get_by_role("button", name="Hide token"))
 
-    # ── Use it ───────────────────────────────────────────────────────────
-    narrate(page, "see_where_goes")
-    navigate_to_components(page)
-    component_link = page.locator("main").get_by_role("link", name="Web Dashboard", exact=True).first
-    hover_and_click(page, component_link)
-    page.wait_for_load_state("networkidle")
-    menu = page.get_by_role("button", name="Component actions")
-    menu.wait_for(state="visible", timeout=10_000)
-    hover_and_click(page, menu)
-    pace(page, 600)
-    hover_and_click(page, page.get_by_role("menuitem", name="CI/CD integration"))
-    command = page.locator("#ci-cd-command-" + pied_piper_with_sboms["components"]["Web Dashboard"].id)
-    command.wait_for(state="visible", timeout=10_000)
-    narrate(page, "sbomify_action_reads")
-    settle(page)
-    page.keyboard.press("Escape")
-    pace(page, 400)
-
     # ── Revoke ───────────────────────────────────────────────────────────
-    narrate(page, "back_settings_token")
-    navigate_to_settings(page)
-    navigate_to_settings_tab(page, "tokens")
     row = page.locator("tr", has_text=TOKEN_NAME)
     row.wait_for(state="visible", timeout=10_000)
     narrate(page, "shows_when_token")
