@@ -640,6 +640,24 @@ class TestChoosingTheLine:
         assert upgrade_path.status_code == 201, upgrade_path.content
         assert _state(major) == Release.LifecycleState.ACTIVE
 
+    def test_a_prerelease_replaces_nothing_even_if_the_page_script_never_ran(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # The box clears Replaces in the browser, but a submit that beats Alpine still carries the preselection.
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        stable = _release(product, "1.2.4", **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc)))
+
+        response = authenticated_web_client.post(
+            reverse("core:release_new"),
+            {"product_id": product.id, "name": "2.0.0-rc.1", "is_prerelease": "on", "replaces": stable.pk},
+        )
+
+        assert response.status_code == 302
+        candidate = Release.objects.get(product=product, name="2.0.0-rc.1")
+        assert candidate.is_prerelease
+        assert not ReleaseSupersession.objects.filter(to_release=candidate).exists()
+        assert _state(stable) == Release.LifecycleState.ACTIVE
+
     def test_the_prerelease_box_clears_replaces_without_a_cached_ref(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
