@@ -513,6 +513,18 @@ class TestWhereAReleaseStands:
         authenticated_web_client.post(url, {"action": "reactivate"})
         assert _state(release) == Release.LifecycleState.ACTIVE
 
+    def test_the_card_dates_an_archived_release(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "1.0.0")
+        set_release_state(release, "archive")
+        Release.objects.filter(pk=release.pk).update(archived_at=datetime(2026, 1, 5, tzinfo=dt_timezone.utc))
+
+        # The state badge already says Archived; the card's own line is the one that carries the date.
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id])).content
+        assert b"5 Jan 2026" in page
+
     def test_the_releases_list_marks_a_retired_release(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:

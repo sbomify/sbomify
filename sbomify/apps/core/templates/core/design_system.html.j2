@@ -1697,6 +1697,9 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
         <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
         <c-feedback.alert variant="info">10 components have not been scanned yet. The counts above leave them out.</c-feedback.alert>
+        <c-feedback.alert standing icon="fas fa-clock-rotate-left" title="No longer monitored">
+        Add standing to a notice that describes the page rather than an event. It renders as a note, so screen readers do not announce it on every load.
+        </c-feedback.alert>
         <c-feedback.alert variant="success" title="security.txt">
         Served at <c-code-inline>/.well-known/security.txt</c-code-inline>. Fill the named action slot with the
         control that resolves the notice and it sits at the end of the row.

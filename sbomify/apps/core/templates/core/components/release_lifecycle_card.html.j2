@@ -6,10 +6,10 @@ releases relate; whether this one is monitored is the state badge's job, so the 
 Each action is its own form posting to ReleaseLifecycleView. A manager can remove a link, through one
 confirm dialog the rows open with the link they name. The dialog sits beside the card, not in it, so
 the card's last row keeps its divider and corners; the contents wrapper holds the shared state without
-adding a box to the page's layout. A release with no edges, no dates and no withdrawal shows the card
+adding a box to the page's layout. A release with no edges, no dates, no withdrawal and no archiving shows the card
 only to managers, for the actions.
 {% endcomment %}
-{% if lifecycle.can_manage or lifecycle.predecessors or lifecycle.successors or lifecycle.end_of_support or lifecycle.end_of_life or release.withdrawn_at %}
+{% if lifecycle.can_manage or lifecycle.predecessors or lifecycle.successors or lifecycle.end_of_support or lifecycle.end_of_life or release.withdrawn_at or release.archived_at %}
     {% url 'core:release_lifecycle' release.product.id release.id as lifecycle_url %}
     <div class="contents" x-data="{ removeLink: null }">
         <c-cards.card flush>
@@ -70,6 +70,11 @@ only to managers, for the actions.
         {% if release.withdrawn_at %}
             <c-forms.field horizontal label="Withdrawn">
             <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            </c-forms.field>
+        {% endif %}
+        {% if release.archived_at %}
+            <c-forms.field horizontal label="Archived">
+            <c-forms.static>{{ release.archived_at|date:"j M Y" }}</c-forms.static>
             </c-forms.field>
         {% endif %}
         {% if lifecycle.can_manage %}

@@ -24,7 +24,7 @@ zero reads as "at last scan", never as clean today. What it never scanned reads
 </c-tables.toolbar>
 {% if vulnerabilities.untracked %}
     <div class="px-4 pt-4">
-        <c-feedback.alert icon="fas fa-clock-rotate-left" title="No longer monitored">
+        <c-feedback.alert standing icon="fas fa-clock-rotate-left" title="No longer monitored">
         {{ vulnerabilities.untracked.reason }} on {{ vulnerabilities.untracked.on|date:"j M Y" }}.
         {% if vulnerabilities.last_scanned_at %}
             These counts are from its last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
