@@ -204,19 +204,21 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 ),
             )
 
-        # Guard: DT scanning requires product membership. Check via the direct
-        # Product↔Component M2M (stable at SBOM creation time) rather than
-        # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
-        # and release association in separate API calls, so the ReleaseArtifact
-        # may not exist yet when the upload-triggered scan fires).
-        has_product = sbom.component.products.filter(team=team).exists()
-        if not has_product:
+        # Dependency Track scans what sbomify tracks: each component's newest
+        # SBOM, product or not, and the SBOMs its live releases ship. An upload
+        # already made keeps polling, so a newer SBOM arriving mid-scan does
+        # not throw away results Dependency Track is already producing.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        uploaded = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists()
+        if not uploaded and not tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists():
             return self.create_skipped_result(
-                finding_id="dependency-track:no-product",
-                title="Component Not in a Product",
+                finding_id="dependency-track:not-tracked",
+                title="Not Monitored",
                 description=(
-                    "Dependency Track only scans components that belong to a product. "
-                    "Add this component to a product so Dependency Track can scan it."
+                    "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
+                    "This SBOM is neither, so Dependency Track did not scan it."
                 ),
             )
 
@@ -233,10 +235,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return self._create_error_result(str(e))
 
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
-        from sbomify.apps.vulnerability_scanning.models import (
-            ComponentDependencyTrackMapping,
-            SbomDependencyTrackProjectVersion,
-        )
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
 
         # Project name is component-scoped (not product-scoped). Multi-product
         # components end up with a single DT project that aggregates all their

@@ -88,6 +88,21 @@ class TestUploadLandsInTheTree:
             str(collection.dt_project_uuid),
         )
 
+    def test_a_component_in_no_product_lands_in_the_same_tree(self, env, tmp_path):
+        team, _, _, server = env
+        loose = Component.objects.create(name="loose", team=team)
+        sbom = _sbom(loose, "s1")
+        client = _client()
+
+        _first_scan(DependencyTrackPlugin(), sbom, server, client, tmp_path)
+
+        collection = DependencyTrackCollection.objects.get(dt_server=server, component=loose)
+        upload = client.upload_sbom_with_project_creation.call_args.kwargs
+        assert upload["parent_uuid"] == str(collection.dt_project_uuid)
+        assert upload["is_latest"] is True
+        row = SbomDependencyTrackProjectVersion.objects.get(sbom=sbom, dt_server=server)
+        assert (row.dt_active, row.dt_is_latest) == (True, True)
+
     def test_the_version_it_replaces_is_retired(self, env, tmp_path):
         _, _, component, server = env
         old = _sbom(component, "old")
@@ -277,7 +292,8 @@ class TestOrderDoesNotBreakTheScope:
         assert dt.projects[old_uuid]["tags"] == []
         assert dt.projects[old_uuid]["active"] is False
 
-    def test_an_older_sbom_scanned_after_a_newer_one_leaves_latest_on_the_newer(self, env, tmp_path):
+    def test_an_older_sbom_scanned_after_a_newer_one_never_reaches_dependency_track(self, env, tmp_path):
+        """Its queued scan runs once a newer SBOM exists, so sbomify no longer tracks it."""
         _, _, component, server = env
         older = _sbom(component, "older")
         newer = _sbom(component, "newer")
@@ -285,13 +301,19 @@ class TestOrderDoesNotBreakTheScope:
         plugin = DependencyTrackPlugin()
 
         _first_scan(plugin, newer, server, dt, tmp_path)
-        _first_scan(plugin, older, server, dt, tmp_path)
+        path = tmp_path / "sbom.json"
+        with (
+            patch(CLIENT, return_value=dt),
+            patch.object(plugin, "_select_dt_server", return_value=server),
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+        ):
+            result = plugin.assess(sbom_id=older.id, sbom_path=path, context=None)
 
+        assert result.findings[0].id == "dependency-track:not-tracked"
         by_version = {p["version"]: p for p in dt.projects.values()}
+        assert str(older.id) not in by_version
         assert by_version[str(newer.id)]["isLatest"] is True
         assert by_version[str(newer.id)]["active"] is True
-        assert by_version[str(older.id)]["isLatest"] is False
-        assert by_version[str(older.id)]["active"] is False
 
 
 @pytest.mark.django_db
