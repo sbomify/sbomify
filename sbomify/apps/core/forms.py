@@ -183,6 +183,9 @@ class ReleaseCreateForm(forms.Form):
 
     def clean(self) -> dict[str, Any]:
         cleaned = super().clean() or {}
+        # The prerelease box clears Replaces in the browser; a submit that beats the page script must not keep it.
+        if cleaned.get("is_prerelease"):
+            cleaned["replaces"] = cleaned["replaces_line"] = ""
         # Same line retires the release it replaces, so the form never guesses which one is meant.
         if cleaned.get("replaces") and not cleaned.get("replaces_line"):
             self.add_error("replaces_line", "Choose Same line or New line, or set Release it replaces to None.")
