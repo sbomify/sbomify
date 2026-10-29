@@ -523,7 +523,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
 
         moved_id = str(component.pk)
-        transaction.on_commit(lambda: reconcile_component_dt_scope.send(moved_id))
+        transaction.on_commit(lambda: reconcile_component_dt_scope.send(moved_id), robust=True)
 
     messages.add_message(
         request,

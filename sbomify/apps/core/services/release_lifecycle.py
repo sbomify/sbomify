@@ -542,6 +542,15 @@ def _surviving(events: list[Any]) -> list[Any]:
     return [event for event in events if event.event_id not in voided]
 
 
+def product_dates(events: list[ProductCLEEvent]) -> tuple[date | None, date | None]:
+    """A product's end of support and end of life: its surviving events for every version, folded by ``fold_dates``.
+
+    The product columns and what its releases inherit both come from here, so
+    the two always agree. ``events`` are one product's, in event order.
+    """
+    return fold_dates(event for event in _surviving(events) if covers_every_version(event.versions))
+
+
 def recompute_release_lifecycle(product: Product) -> None:
     """Derive every release's lifecycle columns in ``product`` from its edges and CLE events.
 
@@ -570,9 +579,8 @@ def recompute_release_lifecycle(product: Product) -> None:
         by_release[event.release_id].append(event)
     own = {pk: fold_dates(_surviving(by_release[pk])) for pk in releases}
 
-    product_events = _surviving(list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id")))
-    product_support, product_life = fold_dates(
-        event for event in product_events if covers_every_version(event.versions)
+    product_support, product_life = product_dates(
+        list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id"))
     )
 
     drop_ins: dict[str, list[ReleaseSupersession]] = defaultdict(list)
@@ -647,8 +655,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     written, from the locked row, so an edit never puts back a withdrawal or
     a derived date committed after the caller first read the release.
 
-    Moving the release date moves the live edges that took their date from it,
-    and a new name or version links the edges declared before it existed.
+    Moving the release date moves the live edges that took their date from it;
+    clearing it leaves them where they are. A new name or version links the
+    edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -672,7 +681,7 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
         setattr(release, field, changes[field])
     release.save(update_fields=changed)
 
-    if "released_at" in changed and previous_release_date is not None:
+    if "released_at" in changed and previous_release_date is not None and release.released_at is not None:
         moved = (
             ReleaseSupersession.objects.live()
             .filter(to_release=release, effective=previous_release_date)
