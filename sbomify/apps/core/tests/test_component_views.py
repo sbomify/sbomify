@@ -463,7 +463,7 @@ class TestComponentItemLargeVex:
         assert rows[0]["id"] == "CVE-2024-00000"
         assert rows[0]["url"] == "https://www.cve.org/CVERecord?id=CVE-2024-00000"
         assert rows[0]["package"] == "All packages"
-        assert "10,000-statement limit" not in many
+        assert "-statement limit" not in many
 
     def test_a_vex_at_the_statement_limit_says_the_rest_are_ignored(
         self, sample_team_with_owner_member, sample_user, mocker
@@ -476,7 +476,7 @@ class TestComponentItemLargeVex:
 
         assert response.status_code == 200
         assert len(response.context["vex_suppressions"]) == MAX_VEX_STATEMENTS
-        assert "This VEX hits the 10,000-statement limit." in response.content.decode()
+        assert f"This VEX hits the {MAX_VEX_STATEMENTS:,}-statement limit." in response.content.decode()
 
 
 @pytest.mark.django_db

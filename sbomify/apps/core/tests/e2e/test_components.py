@@ -248,8 +248,8 @@ def test_a_vex_at_the_statement_limit_stays_responsive(
 
     authenticated_page.goto(f"/components/{sbom_component_details.id}/vex/{vex.id}/")
 
-    expect(authenticated_page.get_by_text("This VEX hits the 10,000-statement limit.")).to_be_visible()
-    expect(authenticated_page.get_by_text("Showing 1 to 10 of 10,000")).to_be_visible()
+    expect(authenticated_page.get_by_text(f"This VEX hits the {MAX_VEX_STATEMENTS:,}-statement limit.")).to_be_visible()
+    expect(authenticated_page.get_by_text(f"Showing 1 to 10 of {MAX_VEX_STATEMENTS:,}")).to_be_visible()
     rows = authenticated_page.locator("tbody tr").filter(has_text="CVE-2024-")
     expect(rows).to_have_count(10)
     expect(rows.first.get_by_role("link", name="CVE-2024-00000")).to_have_attribute(
@@ -262,7 +262,7 @@ def test_a_vex_at_the_statement_limit_stays_responsive(
 
     authenticated_page.get_by_label("Search suppressed vulnerabilities").fill("")
     authenticated_page.get_by_role("button", name="Next page").click()
-    expect(authenticated_page.get_by_text("Showing 11 to 20 of 10,000")).to_be_visible()
+    expect(authenticated_page.get_by_text(f"Showing 11 to 20 of {MAX_VEX_STATEMENTS:,}")).to_be_visible()
     expect(rows.first).to_contain_text("CVE-2024-00010")
 
 
