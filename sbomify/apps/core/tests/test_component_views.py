@@ -394,6 +394,92 @@ class TestComponentItemVexAliasEnrichment:
 
 
 @pytest.mark.django_db
+class TestComponentItemLargeVex:
+    """A Yocto VEX carries tens of thousands of statements. The page sends them to the
+    browser once as data and builds only the visible rows: a table row per statement,
+    each re-filtering the whole list to decide whether it shows, froze the tab for over a
+    minute at 10,000. A document that reaches the statement limit says so."""
+
+    def setup_method(self):
+        self.client = Client()
+
+    def _vex_page(self, team, user, mocker, statements: int):
+        import json
+
+        from sbomify.apps.sboms.models import SBOM
+
+        component = Component.objects.create(
+            name=f"Yocto image {statements}", team=team, component_type=Component.ComponentType.BOM
+        )
+        vex = SBOM.objects.create(
+            name="image-vex",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="vex.json",
+            bom_type=SBOM.BomType.VEX,
+            source="manual_upload",
+        )
+        # Yocto's shape: BOM-Links into the image SBOM, no components[], so every
+        # statement covers all packages.
+        document = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "vulnerabilities": [
+                {
+                    "id": f"CVE-2024-{n:05d}",
+                    "analysis": {"state": "not_affected", "justification": "code_not_present"},
+                    "affects": [{"ref": f"urn:cdx:3e671687-395b-41f5-a30f-a58921a69b79/1#{n}"}],
+                }
+                for n in range(statements)
+            ],
+        }
+        mocker.patch(
+            "sbomify.apps.core.object_store.StorageClient"
+        ).return_value.get_sbom_data.return_value = json.dumps(document).encode()
+        self.client.login(username=user.username, password="test")
+        setup_test_session(self.client, team, user)
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "vex", "item_id": vex.id}
+        )
+        return self.client.get(url)
+
+    def test_the_table_does_not_grow_a_row_per_statement(self, sample_team_with_owner_member, sample_user, mocker):
+        import json
+        import re
+
+        team = sample_team_with_owner_member.team
+        one = self._vex_page(team, sample_user, mocker, statements=1).content.decode()
+        response = self._vex_page(team, sample_user, mocker, statements=50)
+        many = response.content.decode()
+
+        assert response.status_code == 200
+        assert many.count("<tr") == one.count("<tr")
+        script = re.search(r'<script id="vex-suppression-rows" type="application/json">(.*?)</script>', many)
+        rows = json.loads(script[1])
+        assert len(rows) == 50
+        assert rows[0]["id"] == "CVE-2024-00000"
+        assert rows[0]["url"] == "https://www.cve.org/CVERecord?id=CVE-2024-00000"
+        assert rows[0]["package"] == "All packages"
+        assert "10,000-statement limit" not in many
+
+    def test_a_vex_at_the_statement_limit_says_the_rest_are_ignored(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
+
+        response = self._vex_page(
+            sample_team_with_owner_member.team, sample_user, mocker, statements=MAX_VEX_STATEMENTS + 1
+        )
+
+        assert response.status_code == 200
+        assert len(response.context["vex_suppressions"]) == MAX_VEX_STATEMENTS
+        assert "This VEX hits the 10,000-statement limit." in response.content.decode()
+
+
+@pytest.mark.django_db
 class TestComponentVulnFilterContext:
     """The component page's vulnerability counts: the header excludes VEX-suppressed
     findings so it reconciles with the Trust Center posture, and the panel lists
