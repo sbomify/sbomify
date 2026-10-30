@@ -14,12 +14,12 @@
                     so the link is only offered once it is, and the same URL is
                     what the copy action puts on the clipboard.
 
-                    advisory.pk, not advisory.id: id is the display identifier
-                    and the view accepts both, but the trust centre's own list
-                    links by pk, and one page should have one URL.
+                    advisory.id, the tracking id, not advisory.pk: the view
+                    redirects a pk to the tracking id, so that is the one URL
+                    the trust centre's own list links to as well.
     {% endcomment %}
     {% if advisory.publication_status != 'draft' %}
-        <c-buttons.secondary size="sm" href="{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}" target="_blank" rel="noopener">
+        <c-buttons.secondary size="sm" href="{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.id %}" target="_blank" rel="noopener">
         <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
         <span class="hidden sm:inline">View in Trust Center</span>
         </c-buttons.secondary>
@@ -45,7 +45,7 @@
                             returns a path on the app domain or an absolute URL
                             on a custom one.
             {% endcomment %}
-            <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}', window.location.origin).href)">
+            <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.id %}', window.location.origin).href)">
             Copy public link
             </c-dropdowns.item>
         {% endif %}
