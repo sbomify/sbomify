@@ -15,13 +15,14 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponsePermanentRedirect
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
     custom_domain_redirect,
+    get_public_path,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
@@ -136,6 +137,24 @@ class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
         result = get_public_advisory(request, team, advisory_id)
         if not result.ok or result.value is None:
             return error_response(request, HttpResponseNotFound("Advisory not found"))
+
+        # The tracking id (ACME-SA-2026-0001) is the advisory's public address.
+        # The view still answers to the primary key so links shared before that
+        # was true keep working, but it sends them on rather than serving a
+        # second URL for the same page. Only reached for an advisory the reader
+        # may see, so the redirect confirms nothing a 404 was hiding. The target
+        # is built from the resolved workspace's key, not the raw URL segment, so
+        # nothing request-supplied ends up in the Location header.
+        canonical_id = result.value["id"]
+        if advisory_id != canonical_id:
+            return HttpResponsePermanentRedirect(
+                get_public_path(
+                    "advisory",
+                    quote(canonical_id, safe=""),
+                    is_custom_domain=getattr(request, "is_custom_domain", False),
+                    workspace_key=team.key if workspace_key else None,
+                )
+            )
 
         return render(
             request,
