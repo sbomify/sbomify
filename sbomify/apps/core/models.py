@@ -296,8 +296,75 @@ class Release(models.Model):
         default=CollectionUpdateReason.INITIAL_RELEASE,
     )
 
+    class WithdrawnReason(models.TextChoices):
+        DEFECTIVE = "defective", "Defective"
+        COMPROMISED = "compromised", "Compromised"
+        PUBLISHED_IN_ERROR = "published_in_error", "Published in error"
+
+    class LifecycleState(models.TextChoices):
+        ACTIVE = "active", "Active"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        END_OF_LIFE = "end_of_life", "End of life"
+        END_OF_SUPPORT = "end_of_support", "End of support"
+        SUPERSEDED = "superseded", "Superseded"
+        ARCHIVED = "archived", "Archived"
+
+    # Derived from the release's CLE events by recompute_release_lifecycle; never written directly.
+    superseded_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the earliest drop-in successor took over, derived from CLE events"
+    )
+    end_of_support = models.DateField(
+        null=True, blank=True, help_text="Final end of support across support policies, derived from CLE events"
+    )
+    end_of_life = models.DateField(null=True, blank=True, help_text="End of life, derived from CLE events")
+    # What monitoring reads: the release's own date, else the product's when that
+    # date covers every version. Derived by recompute_release_lifecycle.
+    effective_end_of_support = models.DateField(
+        null=True, blank=True, help_text="End of support that applies: the release's own, else the product's"
+    )
+    effective_end_of_life = models.DateField(
+        null=True, blank=True, help_text="End of life that applies: the release's own, else the product's"
+    )
+    # Set by a person. CLE has no event for a yanked or archived release.
+    withdrawn_at = models.DateTimeField(null=True, blank=True, help_text="When the release was withdrawn")
+    withdrawn_reason = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        choices=WithdrawnReason.choices,
+        help_text="Why the release was withdrawn",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True, help_text="When the release was archived")
+
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
+
+    @property
+    def lifecycle_state(self) -> str:
+        """Where the release stands, by the rules of ``release_lifecycle.tracked_releases()``.
+
+        First match wins: withdrawn, end of life, end of support, superseded,
+        archived, active. ``latest`` is always active.
+        """
+        if self.is_latest:
+            return self.LifecycleState.ACTIVE
+        now = timezone.now()
+        today = now.date()
+        if self.withdrawn_at is not None:
+            return self.LifecycleState.WITHDRAWN
+        if self.effective_end_of_life is not None and self.effective_end_of_life < today:
+            return self.LifecycleState.END_OF_LIFE
+        if self.effective_end_of_support is not None and self.effective_end_of_support < today:
+            return self.LifecycleState.END_OF_SUPPORT
+        if self.superseded_at is not None and self.superseded_at <= now:
+            return self.LifecycleState.SUPERSEDED
+        if self.archived_at is not None:
+            return self.LifecycleState.ARCHIVED
+        return self.LifecycleState.ACTIVE
+
+    @property
+    def is_tracked(self) -> bool:
+        return self.lifecycle_state == self.LifecycleState.ACTIVE
 
     @property
     def slug(self) -> str:
@@ -845,3 +912,76 @@ class ReleaseLink(models.Model):
 
     def __str__(self) -> str:
         return f"{self.release_id} -> {self.linked_release_id}"
+
+
+class ReleaseSupersessionQuerySet(models.QuerySet["ReleaseSupersession"]):
+    def live(self) -> ReleaseSupersessionQuerySet:
+        return self.filter(withdrawn_at__isnull=True)
+
+
+class ReleaseSupersession(models.Model):
+    """One edge of a product's supersession graph: ``from_release`` is superseded by ``to_release``.
+
+    A release can have many successors and many predecessors. 1.2.1 can be
+    replaced by 1.2.2 on its own line while 2.0 starts a new one, and two
+    releases can be replaced by one. Each successor is its own row, and
+    ``drop_in`` says whether it replaces the release (which then retires) or
+    starts a new line (both stay monitored).
+
+    sbomify never infers an edge: a person or an API caller asserts each one.
+    ``successor_label`` is what they named, so a successor outside sbomify, or
+    one deleted later, stays readable. Each edge is published as the
+    predecessor's ``supersededBy`` CLE event; withdrawing that event withdraws
+    the edge. Rows are never deleted while their predecessor exists.
+    """
+
+    class Meta:
+        db_table = "core_release_supersessions"
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(from_release=models.F("to_release")),
+                name="release_supersession_not_self",
+            ),
+            models.UniqueConstraint(
+                fields=["from_release", "successor_label"],
+                condition=models.Q(withdrawn_at__isnull=True),
+                name="unique_live_release_supersession",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    from_release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="successor_edges")
+    to_release = models.ForeignKey(
+        Release,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="predecessor_edges",
+        help_text="The successor in the same product, if sbomify has it",
+    )
+    successor_label = models.CharField(max_length=255, help_text="The successor's version as asserted")
+    drop_in = models.BooleanField(
+        default=False,
+        help_text="Whether the successor replaces this release, so this release stops being monitored",
+    )
+    reason = models.TextField(blank=True, default="")
+    effective = models.DateTimeField(help_text="When the successor takes over")
+    actor = models.ForeignKey("core.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cle_event = models.OneToOneField(
+        "sboms.ReleaseCLEEvent",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supersession",
+        help_text="The supersededBy CLE event this edge is published as",
+    )
+    withdrawn_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the edge was withdrawn; empty while live"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ReleaseSupersessionQuerySet.as_manager()
+
+    def __str__(self) -> str:
+        return f"{self.from_release_id} -> {self.to_release_id or self.successor_label}"
