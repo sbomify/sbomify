@@ -22,6 +22,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
+    AdvisoryReference,
     AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
@@ -916,3 +917,27 @@ def test_a_zero_cvss_score_renders_rather_than_reading_as_unscored(team, public_
 
     assert re.search(r"tabular-nums[^>]*>\s*0\.0\s*<", index.content.decode())
     assert re.search(r"CVSS.{0,400}?>\s*0\.0\s*<", detail.content.decode(), re.S)
+
+
+def test_cve_ids_and_references_link_to_insights_on_the_trust_center(team, public_product, client):
+    """A CVE on the page links to its Insights page, and so does a reference whose id Insights
+    publishes, even when it stored another URL. A reference Insights does not cover keeps its own."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30020")
+    AdvisoryReference.objects.create(
+        advisory=advisory, external_id="GHSA-6q48-6c7w-9gw2", url="https://github.com/advisories/GHSA-6q48-6c7w-9gw2"
+    )
+    AdvisoryReference.objects.create(advisory=advisory, external_id="CVE-2026-30021")
+    AdvisoryReference.objects.create(advisory=advisory, external_id="DSA-5020-1", url="https://example.com/dsa-5020-1")
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    ).content.decode()
+
+    assert 'href="https://insights.sbomify.com/CVE-2026-30020/"' in content
+    assert 'href="https://insights.sbomify.com/GHSA-6q48-6c7w-9gw2/"' in content
+    assert 'href="https://insights.sbomify.com/CVE-2026-30021/"' in content
+    assert 'href="https://example.com/dsa-5020-1"' in content
+    assert "github.com/advisories" not in content

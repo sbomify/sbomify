@@ -2,10 +2,19 @@
 
 The scheme vocabulary lives in :mod:`~sbomify.apps.security_advisories.models`
 (:class:`ReferenceType`, :func:`detect_reference_type`); this maps the schemes we
-can resolve onto their authoritative page, so a finding id renders as a link
-instead of an opaque string.
+can resolve onto a page, so a finding id renders as a link instead of an opaque
+string.
 
-Every entry below was checked against a live id **and** a deliberately invalid
+sbomify Insights comes first. It publishes one page per vulnerability at a URL
+built from the id alone (``https://insights.sbomify.com/<ID>/``), and folds every
+advisory naming the same flaw into the CVE's page when there is one. So a finding
+whose aliases include a CVE links to that CVE, and an id with no CVE behind it
+links to its own page. Insights answers 404 for an id it does not hold, which is
+what made each scheme in ``_INSIGHTS_SCHEMES`` checkable.
+
+The distro and CERT schemes have no page of their own on Insights, only an alias
+entry on the CVE's, so on their own they keep the external host below. Every
+external entry was checked against a live id **and** a deliberately invalid
 one, because two of the candidate hosts serve their pages client-side and answer
 200 for any path, which makes a naive reachability check meaningless. A scheme
 whose URL could not be confirmed that way is deliberately absent: an
@@ -19,20 +28,35 @@ the check rather than answering it.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+
 from .models import ReferenceType, detect_reference_type
+
+INSIGHTS_BASE_URL = "https://insights.sbomify.com"
+
+# A prefix and at least one more dash-separated part, nothing that would need
+# escaping in a path. A bare "CVE-" or a sentence that starts with one is not an id.
+_ID_SHAPE = re.compile(r"[A-Z0-9]+(?:-[A-Z0-9:._]+)+", re.IGNORECASE)
+
+# The schemes Insights publishes a page for under the id itself.
+_INSIGHTS_SCHEMES: frozenset[str] = frozenset(
+    {
+        ReferenceType.CVE,
+        ReferenceType.GHSA,
+        ReferenceType.OSV,
+        ReferenceType.MAL,
+        ReferenceType.PYSEC,
+        ReferenceType.RUSTSEC,
+        ReferenceType.GO,
+    }
+)
 
 # OSV serves the ecosystem and distro schemes under one path, so they share a row
 # rather than each carrying a near-identical URL.
 _OSV = "https://osv.dev/vulnerability/{id}"
 
 _ADVISORY_URLS: dict[str, str] = {
-    ReferenceType.CVE: "https://www.cve.org/CVERecord?id={id}",
-    ReferenceType.GHSA: "https://github.com/advisories/{id}",
-    ReferenceType.OSV: _OSV,
-    ReferenceType.MAL: _OSV,
-    ReferenceType.PYSEC: _OSV,
-    ReferenceType.RUSTSEC: _OSV,
-    ReferenceType.GO: _OSV,
     ReferenceType.DSA: _OSV,
     ReferenceType.USN: _OSV,
     # CERT/CC keys its notes on the bare number, so "VU#930724" is trimmed below.
@@ -42,8 +66,30 @@ _ADVISORY_URLS: dict[str, str] = {
 _ID_PREFIX_TO_TRIM: dict[str, str] = {ReferenceType.CERT_VU: "VU#"}
 
 
-def advisory_url(identifier: str | None) -> str:
-    """The authoritative page for an advisory id, or "" when we cannot resolve it.
+def insights_url(identifier: str | None) -> str:
+    """The Insights page for an advisory id, or "" for a scheme Insights does not publish.
+
+    The path is the id as Insights spells it: upper case, except a GHSA's body,
+    which GitHub writes in lower case. A colon becomes a hyphen, as it does in
+    every Insights path.
+    """
+    identifier = (identifier or "").strip()
+    reference_type = detect_reference_type(identifier)
+    if reference_type not in _INSIGHTS_SCHEMES or not _ID_SHAPE.fullmatch(identifier):
+        return ""
+    if reference_type == ReferenceType.GHSA:
+        path = "GHSA-" + identifier[len("GHSA-") :].lower()
+    else:
+        path = identifier.upper()
+    return f"{INSIGHTS_BASE_URL}/{path.replace(':', '-')}/"
+
+
+def advisory_url(identifier: str | None, aliases: Iterable[str] | None = None) -> str:
+    """The page for an advisory id, or "" when we cannot resolve it.
+
+    ``aliases`` are the other ids the same finding is known by, as a list or a
+    comma-separated string. When one of them is a CVE, that is the page Insights files the vulnerability under, so it
+    wins over the id itself.
 
     Returning a string rather than raising keeps the call sites free of
     branching: a template asks for the URL and falls back to plain text when it
@@ -54,6 +100,17 @@ def advisory_url(identifier: str | None) -> str:
     identifier = identifier.strip()
     if not identifier:
         return ""
+
+    if isinstance(aliases, str):
+        aliases = aliases.split(",")
+    if detect_reference_type(identifier) != ReferenceType.CVE:
+        for alias in aliases or ():
+            if isinstance(alias, str) and detect_reference_type(alias) == ReferenceType.CVE:
+                if url := insights_url(alias):
+                    return url
+
+    if url := insights_url(identifier):
+        return url
 
     reference_type = detect_reference_type(identifier)
     template = _ADVISORY_URLS.get(reference_type)
