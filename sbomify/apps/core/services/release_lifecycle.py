@@ -24,17 +24,18 @@ from __future__ import annotations
 import json
 import logging
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Q, QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import Release, ReleaseSupersession
+from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
+from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -67,6 +68,79 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
         & (Q(effective_end_of_life__isnull=True) | Q(effective_end_of_life__gte=today))
     )
     return (Release.objects.all() if releases is None else releases).filter(Q(is_latest=True) | live)
+
+
+def releases_linked_from(release_ids: Any) -> set[str]:
+    """Every release reachable through links from these releases, not counting them. Links cannot form a cycle."""
+    reached: set[str] = set()
+    frontier = set(ReleaseLink.objects.filter(release_id__in=release_ids).values_list("linked_release_id", flat=True))
+    while frontier:
+        reached |= frontier
+        frontier = (
+            set(ReleaseLink.objects.filter(release_id__in=frontier).values_list("linked_release_id", flat=True))
+            - reached
+        )
+    return reached
+
+
+def shipping_releases(now: datetime | None = None, team_id: Any = None) -> QuerySet[Release]:
+    """The releases whose SBOMs sbomify tracks: the tracked releases and every release they link to.
+
+    A linked release's SBOMs are part of the linking release's aggregate SBOM,
+    so a live release keeps them tracked even when the linked release is itself
+    retired. A retired release's links keep nothing alive. Links never cross
+    workspaces, so ``team_id`` limits the walk to one without changing the answer.
+    """
+    releases = Release.objects.all() if team_id is None else Release.objects.filter(product__team_id=team_id)
+    tracked = tracked_releases(releases, now=now).values("pk")
+    return Release.objects.filter(Q(pk__in=tracked) | Q(pk__in=releases_linked_from(tracked)))
+
+
+def tracked_sboms(sboms: QuerySet[SBOM] | None = None, team_id: Any = None) -> QuerySet[SBOM]:
+    """The SBOMs sbomify still scans and keeps active in Dependency-Track.
+
+    The newest of each format per component, and every one a live release ships
+    (``shipping_releases``). The scheduled scans, the VEX live pass, the
+    Dependency-Track reconcile and the retired-release notice all read this, so
+    they cannot disagree about an SBOM. Ties on ``created_at`` go to the higher
+    id. ``team_id`` limits the release walk to one workspace.
+    """
+    newer = SBOM.objects.filter(
+        Q(created_at__gt=OuterRef("created_at")) | Q(created_at=OuterRef("created_at"), id__gt=OuterRef("id")),
+        component_id=OuterRef("component_id"),
+        format=OuterRef("format"),
+        bom_type=SBOM.BomType.SBOM,
+    )
+    shipped = ReleaseArtifact.objects.filter(
+        sbom_id=OuterRef("pk"),
+        # Defense in depth: links never cross workspaces, and neither may this.
+        release__product__team_id=OuterRef("component__team_id"),
+        release__in=shipping_releases(team_id=team_id),
+    )
+    sboms = SBOM.objects.all() if sboms is None else sboms
+    return sboms.filter(bom_type=SBOM.BomType.SBOM).filter(~Exists(newer) | Exists(shipped))
+
+
+def reconcile_after_removal(release_ids: Iterable[Any]) -> None:
+    """Queue, for once a delete of these releases commits, the reconciles its cascade does not.
+
+    Their components may be shipped by nothing once they go, and the releases
+    they link to lose a reason to stay tracked. Call before the delete, while
+    the artifacts and links still exist.
+    """
+    from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+    ids = list(release_ids)
+    component_ids = set(
+        ReleaseArtifact.objects.filter(release_id__in=ids, sbom__isnull=False).values_list(
+            "sbom__component_id", flat=True
+        )
+    )
+    linked = set(Release.objects.filter(pk__in=releases_linked_from(ids)).values_list("product_id", flat=True))
+    for product_id in linked:
+        after_lifecycle_change(product_id)
+    for component_id in component_ids:
+        _after_commit(reconcile_component_dt_scope.send, str(component_id))
 
 
 def replacement_candidates(product_id: str) -> list[Release]:
@@ -151,6 +225,7 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
             superseded_by_version=successor_version,
             drop_in=item.drop_in,
             actor_id=actor_id,
+            queue_reconcile=False,
         )
         if not result.ok or result.value is None:
             status = 409 if result.status_code == 409 else 400
@@ -161,6 +236,8 @@ def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: An
                 f"{successor_version} names more than one release of this product. Give this release a version.",
                 status_code=400,
             )
+    if items:
+        after_lifecycle_change(successor.product_id)
     return ServiceResult.success(None)
 
 
@@ -303,6 +380,8 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
         linked += 1
     if linked:
         recompute_release_lifecycle(product)
+        # Linking can revive a predecessor: its successor was a label, and is now a withdrawn release.
+        after_lifecycle_change(product.pk)
     return ServiceResult.success(linked)
 
 
@@ -436,6 +515,31 @@ def recompute_release_lifecycle(product: Product) -> None:
             changed.append(release)
     if changed:
         Release.objects.bulk_update(changed, fields)
+        _announce(product, [release.pk for release in changed])
+
+
+def _announce(product: Product, release_ids: list[str]) -> None:
+    """Tell the workspace these releases moved once the write commits, so their open pages repaint."""
+    workspace_key = Product.objects.filter(pk=product.pk).values_list("team__key", flat=True).first()
+    if not workspace_key:
+        return
+    product_id = str(product.pk)
+    for release_id in release_ids:
+        _after_commit(
+            broadcast_to_workspace,
+            workspace_key=workspace_key,
+            message_type="release_updated",
+            data={"release_id": str(release_id), "product_id": product_id},
+        )
+
+
+def _after_commit(func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+    """Call ``func`` once the transaction commits. An error there is logged: the write already stands."""
+
+    def call() -> None:
+        func(*args, **kwargs)
+
+    transaction.on_commit(call, robust=True)
 
 
 def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
@@ -480,6 +584,7 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
         )
         if moved:
             recompute_release_lifecycle(product)
+            after_lifecycle_change(product.pk)
     if {"name", "version"} & set(changed):
         linked = link_pending_supersessions(release)
         if not linked.ok:
@@ -523,9 +628,21 @@ def set_release_state(
         Release.objects.filter(pk=locked.pk).update(**updates)
         recompute_release_lifecycle(product)
         audit(action, locked, actor_id, reason=reason)
+        after_lifecycle_change(product.pk)
 
     locked.refresh_from_db()
     return ServiceResult.success(locked)
+
+
+def after_lifecycle_change(product_id: Any) -> None:
+    """Once the write commits, bring Dependency-Track in line with where the product's releases now stand.
+
+    A broker error after the commit is logged, not raised: the write stands,
+    and ``dt_tracked_scope`` repairs what the lost message would have done.
+    """
+    from sbomify.apps.vulnerability_scanning.tasks import reconcile_product_dt_scope
+
+    transaction.on_commit(lambda: reconcile_product_dt_scope.send(str(product_id)), robust=True)
 
 
 def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:

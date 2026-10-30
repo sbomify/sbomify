@@ -29,6 +29,7 @@ from libtea.models import (
 
 from sbomify.apps.core.models import ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
+    after_lifecycle_change,
     audit,
     existing_supersession,
     recompute_release_lifecycle,
@@ -319,9 +320,11 @@ def create_cle_event(
     """Create a new CLE lifecycle event for a product.
 
     Validates required fields per event type, auto-assigns the next event_id,
-    and recomputes cached lifecycle dates on the product.
+    and recomputes cached lifecycle dates on the product. A product's support
+    dates apply to every release without its own, so Dependency-Track is
+    brought in line once the event commits.
     """
-    return create_cle_event_generic(
+    result: ServiceResult[ProductCLEEvent] = create_cle_event_generic(
         entity=product,
         entity_fk_field="product",
         event_model=ProductCLEEvent,
@@ -341,6 +344,9 @@ def create_cle_event(
         description=description,
         references=references,
     )
+    if result.ok:
+        after_lifecycle_change(product.pk)
+    return result
 
 
 def create_support_definition(
@@ -444,6 +450,7 @@ def create_release_cle_event(
     references: list[str] | None = None,
     drop_in: bool = False,
     actor_id: Any = None,
+    queue_reconcile: bool = True,
 ) -> ServiceResult[ReleaseCLEEvent]:
     """Create a new CLE lifecycle event for a release, and rederive where the product's releases stand.
 
@@ -457,6 +464,10 @@ def create_release_cle_event(
     ``drop_in`` marks a successor that replaces this release, which stops it
     being monitored. A ``withdrawn`` event naming a ``supersededBy`` event
     withdraws its edge.
+
+    Once the event commits, Dependency-Track is brought in line with the
+    product's releases. ``queue_reconcile=False`` leaves that to a caller that
+    writes several events in one go.
     """
     is_supersession = event_type == CLEEventType.SUPERSEDED_BY
     if drop_in and not is_supersession:
@@ -545,6 +556,8 @@ def create_release_cle_event(
             if withdrawn:
                 audit("withdraw_supersession", release, actor_id, event_id=event.event_id)
         recompute_release_lifecycle(product)
+        if queue_reconcile:
+            after_lifecycle_change(product.pk)
     return result
 
 

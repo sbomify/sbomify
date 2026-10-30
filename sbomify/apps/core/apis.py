@@ -36,6 +36,7 @@ from sbomify.apps.core.queries import (
 from sbomify.apps.core.services.release_lifecycle import (
     declare_supersedes,
     link_pending_supersessions,
+    reconcile_after_removal,
     save_release_changes,
     set_release_state,
     supersession_links,
@@ -1081,7 +1082,9 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
     product_name = product.name
 
     try:
-        product.delete()
+        with transaction.atomic():
+            reconcile_after_removal(product.releases.values_list("pk", flat=True))
+            product.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
@@ -3756,6 +3759,7 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
                     "detail": f"Release {release.name} replaces {names}. Remove {links} on its Lifecycle card first.",
                     "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
                 }
+            reconcile_after_removal([release.pk])
             release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)

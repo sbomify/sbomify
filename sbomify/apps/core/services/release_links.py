@@ -13,6 +13,7 @@ from collections.abc import Callable, Collection
 from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink
+from sbomify.apps.core.services.release_lifecycle import after_lifecycle_change
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Workspace
 
@@ -61,15 +62,21 @@ def link_release(release: Release, linked_release: Release) -> ServiceResult[Rel
             link = ReleaseLink.objects.create(release=release, linked_release=linked_release)
     except IntegrityError:
         return ServiceResult.failure("This release is already linked", status_code=409)
+    # The linked release's SBOMs now ship with this one, so they may be tracked again.
+    after_lifecycle_change(release.product_id)
     return ServiceResult.success(link)
 
 
 def unlink_release(release: Release, linked_release_id: str) -> ServiceResult[None]:
     if release.is_latest:
         return ServiceResult.failure("Cannot unlink releases from the 'latest' release", status_code=400)
-    deleted, _ = ReleaseLink.objects.filter(release=release, linked_release_id=linked_release_id).delete()
+    link = ReleaseLink.objects.filter(release=release, linked_release_id=linked_release_id)
+    linked_product_id = link.values_list("linked_release__product_id", flat=True).first()
+    deleted, _ = link.delete()
     if not deleted:
         return ServiceResult.failure("Linked release not found", status_code=404)
+    # This product no longer reaches the linked release, so its own product reconciles what it ships.
+    after_lifecycle_change(linked_product_id)
     return ServiceResult.success(None)
 
 

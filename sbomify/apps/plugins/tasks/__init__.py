@@ -1595,33 +1595,19 @@ def _run_scheduled_security_scans(
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
-        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
-        # with at least one ReleaseArtifact link is eligible — the scan will
-        # cover all of its current releases via the M2M populated at run
-        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
-        # accessor join to keep the query small and avoid name-coupling.
-        from django.db.models import Exists, OuterRef
-
-        from sbomify.apps.core.models import ReleaseArtifact
+        # Stream eligible SBOMs directly. The scans cover what sbomify tracks:
+        # each component's newest SBOM of a format, and every SBOM a release it
+        # still monitors ships, or one such a release links to. The same set
+        # Dependency-Track keeps active, so the two cannot drift apart.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
 
         sbom_qs = (
-            SBOM.objects.filter(
-                bom_type=SBOM.BomType.SBOM,
-                component__team_id__in=team_ids,
+            tracked_sboms(
+                SBOM.objects.filter(component__team_id__in=team_ids)
+                # A row with no stored artifact can never be assessed; failed runs
+                # do not count as recent, so without this it re-fails every sweep.
+                .exclude(sbom_filename="")
             )
-            # A row with no stored artifact can never be assessed; failed runs
-            # do not count as recent, so without this it re-fails every sweep.
-            .exclude(sbom_filename="")
-            .annotate(
-                has_release_artifact=Exists(
-                    ReleaseArtifact.objects.filter(
-                        sbom_id=OuterRef("pk"),
-                        # Defense-in-depth: only count same-team release artifacts
-                        release__product__team_id=OuterRef("component__team_id"),
-                    )
-                )
-            )
-            .filter(has_release_artifact=True)
             .values("id", "component__team_id", "format")
             .distinct()
         )
