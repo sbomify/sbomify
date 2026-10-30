@@ -28,16 +28,32 @@ the check rather than answering it.
 
 from __future__ import annotations
 
-import re
+import string
 from collections.abc import Iterable
 
 from .models import ReferenceType, detect_reference_type
 
 INSIGHTS_BASE_URL = "https://insights.sbomify.com"
 
-# A prefix and at least one more dash-separated part, nothing that would need
-# escaping in a path. A bare "CVE-" or a sentence that starts with one is not an id.
-_ID_SHAPE = re.compile(r"[A-Z0-9]+(?:-[A-Z0-9:._]+)+", re.IGNORECASE)
+_ALNUM = frozenset(string.ascii_letters + string.digits)
+_ID_BODY_CHARS = _ALNUM | frozenset(":._")
+
+
+def _is_id_shaped(identifier: str) -> bool:
+    """A prefix and at least one more dash-separated part, nothing that would need
+    escaping in a path. A bare "CVE-" or a sentence that starts with one is not an id.
+
+    Checked part by part rather than with a regex: the id comes from uploaded SBOMs,
+    and a nested quantifier over it backtracks polynomially on a long malformed one.
+    """
+    prefix, *parts = identifier.split("-")
+    return (
+        bool(prefix)
+        and set(prefix) <= _ALNUM
+        and bool(parts)
+        and all(part and set(part) <= _ID_BODY_CHARS for part in parts)
+    )
+
 
 # The schemes Insights publishes a page for under the id itself.
 _INSIGHTS_SCHEMES: frozenset[str] = frozenset(
@@ -75,7 +91,7 @@ def insights_url(identifier: str | None) -> str:
     """
     identifier = (identifier or "").strip()
     reference_type = detect_reference_type(identifier)
-    if reference_type not in _INSIGHTS_SCHEMES or not _ID_SHAPE.fullmatch(identifier):
+    if reference_type not in _INSIGHTS_SCHEMES or not _is_id_shaped(identifier):
         return ""
     if reference_type == ReferenceType.GHSA:
         path = "GHSA-" + identifier[len("GHSA-") :].lower()
