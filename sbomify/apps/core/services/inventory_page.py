@@ -13,6 +13,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Component, Product, Release
+from sbomify.apps.core.services.release_lifecycle import still_scanned_release_ids
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.security_snapshot import build_component_security_picture
 from sbomify.apps.sboms.freshness import freshness_state
@@ -209,9 +210,13 @@ def build_inventory_snapshot(
             .order_by("name", "id")
         )
         postures = build_release_vuln_postures(releases)
+        # A retired release is still scanned while a live release ships its SBOMs or links to it.
+        retired = [release.id for release in releases if release.lifecycle_state != "active"]
+        still_shipped = still_scanned_release_ids(retired, workspace.id)
         for release in releases:
             posture = postures[release.id]
             counts = _counts(posture.get("counts"))
+            lifecycle_state = release.lifecycle_state
             rows.append(
                 {
                     "id": release.id,
@@ -239,7 +244,13 @@ def build_inventory_snapshot(
                     else "Prerelease"
                     if release.is_prerelease
                     else "Release",
-                    "lifecycle_state": release.lifecycle_state,
+                    "lifecycle_state": lifecycle_state,
+                    # A release sbomify no longer monitors is not scanned again:
+                    # its counts are as old as its last scan, and the row says so.
+                    "untracked": lifecycle_state != "active" and release.id not in still_shipped,
+                    "frozen_at": None
+                    if lifecycle_state == "active" or release.id in still_shipped
+                    else posture.get("last_scanned_at"),
                     "url": reverse("core:release_details", args=[release.product_id, release.id]),
                 }
             )
