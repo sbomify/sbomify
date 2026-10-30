@@ -12,8 +12,9 @@ whose aliases include a CVE links to that CVE, and an id with no CVE behind it
 links to its own page. Insights answers 404 for an id it does not hold, which is
 what made each scheme in ``_INSIGHTS_SCHEMES`` checkable.
 
-The distro and CERT schemes have no page of their own on Insights, only an alias
-entry on the CVE's, so on their own they keep the external host below. Every
+SUSE and openSUSE updates have a page of their own there. The Debian, Ubuntu
+and CERT schemes have only an alias entry on the CVE's, so on their own they keep
+the external host below. Every
 external entry was checked against a live id **and** a deliberately invalid
 one, because two of the candidate hosts serve their pages client-side and answer
 200 for any path, which makes a naive reachability check meaningless. A scheme
@@ -21,7 +22,7 @@ whose URL could not be confirmed that way is deliberately absent: an
 unrecognised id renders as plain text, which is the honest outcome, and adding
 one later is a single row here.
 
-Absent for that reason: EUVD, RHSA, ALSA, ALAS, SUSE, ZDI, EDB, MSRC, JVNDB.
+Absent for that reason: EUVD, RHSA, ALSA, ALAS, ZDI, EDB, MSRC, JVNDB.
 OSV has no record for the vendor-errata schemes, and the remaining hosts refused
 the check rather than answering it.
 """
@@ -65,8 +66,12 @@ _INSIGHTS_SCHEMES: frozenset[str] = frozenset(
         ReferenceType.PYSEC,
         ReferenceType.RUSTSEC,
         ReferenceType.GO,
+        ReferenceType.SUSE,
     }
 )
+
+# Insights paths are case-sensitive, and openSUSE keeps its own spelling in them.
+_INSIGHTS_PREFIX_SPELLING: dict[str, str] = {"OPENSUSE-": "openSUSE-"}
 
 # OSV serves the ecosystem and distro schemes under one path, so they share a row
 # rather than each carrying a near-identical URL.
@@ -86,8 +91,8 @@ def insights_url(identifier: str | None) -> str:
     """The Insights page for an advisory id, or "" for a scheme Insights does not publish.
 
     The path is the id as Insights spells it: upper case, except a GHSA's body,
-    which GitHub writes in lower case. A colon becomes a hyphen, as it does in
-    every Insights path.
+    which GitHub writes in lower case, and openSUSE's prefix. A colon becomes a
+    hyphen, as it does in every Insights path.
     """
     identifier = (identifier or "").strip()
     reference_type = detect_reference_type(identifier)
@@ -97,6 +102,9 @@ def insights_url(identifier: str | None) -> str:
         path = "GHSA-" + identifier[len("GHSA-") :].lower()
     else:
         path = identifier.upper()
+        for prefix, spelling in _INSIGHTS_PREFIX_SPELLING.items():
+            if path.startswith(prefix):
+                path = spelling + path[len(prefix) :]
     return f"{INSIGHTS_BASE_URL}/{path.replace(':', '-')}/"
 
 

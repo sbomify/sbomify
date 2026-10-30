@@ -116,6 +116,7 @@ _REFERENCE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("ALSA-", ReferenceType.ALSA),
     ("ALAS-", ReferenceType.ALAS),
     ("SUSE-SU-", ReferenceType.SUSE),
+    ("OPENSUSE-SU-", ReferenceType.SUSE),
     ("VU#", ReferenceType.CERT_VU),
     ("ZDI-", ReferenceType.ZDI),
     ("EDB-", ReferenceType.EDB),

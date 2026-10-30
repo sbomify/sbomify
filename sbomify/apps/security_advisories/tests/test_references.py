@@ -25,6 +25,8 @@ class TestResolvedSchemes:
             ("GO-2021-0113", "https://insights.sbomify.com/GO-2021-0113/"),
             ("MAL-2024-9506", "https://insights.sbomify.com/MAL-2024-9506/"),
             ("OSV-2021-1234", "https://insights.sbomify.com/OSV-2021-1234/"),
+            ("SUSE-SU-2015:0803-1", "https://insights.sbomify.com/SUSE-SU-2015-0803-1/"),
+            ("openSUSE-SU-2016:2484-1", "https://insights.sbomify.com/openSUSE-SU-2016-2484-1/"),
             ("DSA-5020-1", "https://osv.dev/vulnerability/DSA-5020-1"),
             ("USN-5192-1", "https://osv.dev/vulnerability/USN-5192-1"),
         ],
@@ -38,6 +40,8 @@ class TestResolvedSchemes:
             ("cve-2021-44228", "https://insights.sbomify.com/CVE-2021-44228/"),
             ("ghsa-6Q48-6C7W-9GW2", "https://insights.sbomify.com/GHSA-6q48-6c7w-9gw2/"),
             ("mal-2024-9506", "https://insights.sbomify.com/MAL-2024-9506/"),
+            ("OPENSUSE-SU-2016-2484-1", "https://insights.sbomify.com/openSUSE-SU-2016-2484-1/"),
+            ("suse-su-2015-0803-1", "https://insights.sbomify.com/SUSE-SU-2015-0803-1/"),
         ],
     )
     def test_insights_path_is_the_id_as_insights_spells_it(self, identifier, expected):
