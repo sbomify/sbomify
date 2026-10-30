@@ -142,7 +142,9 @@ class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
         # The view still answers to the primary key so links shared before that
         # was true keep working, but it sends them on rather than serving a
         # second URL for the same page. Only reached for an advisory the reader
-        # may see, so the redirect confirms nothing a 404 was hiding.
+        # may see, so the redirect confirms nothing a 404 was hiding. The target
+        # is built from the resolved workspace's key, not the raw URL segment, so
+        # nothing request-supplied ends up in the Location header.
         canonical_id = result.value["id"]
         if advisory_id != canonical_id:
             return HttpResponsePermanentRedirect(
@@ -150,7 +152,7 @@ class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
                     "advisory",
                     quote(canonical_id, safe=""),
                     is_custom_domain=getattr(request, "is_custom_domain", False),
-                    workspace_key=workspace_key,
+                    workspace_key=team.key if workspace_key else None,
                 )
             )
 
