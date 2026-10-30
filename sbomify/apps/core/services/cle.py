@@ -7,7 +7,7 @@ recomputation, and conversion to libtea CLE documents for TEA API export.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Any
 
 from django.db import IntegrityError, transaction
@@ -32,6 +32,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     audit,
     existing_supersession,
+    product_dates,
     recompute_release_lifecycle,
     resolve_successor,
 )
@@ -349,6 +350,53 @@ def create_cle_event(
     return result
 
 
+_PRODUCT_DATE_EVENTS = {
+    "release_date": CLEEventType.RELEASED,
+    "end_of_support": CLEEventType.END_OF_SUPPORT,
+    "end_of_life": CLEEventType.END_OF_LIFE,
+}
+
+
+def set_product_dates(product: Product, dates: dict[str, date | None]) -> ServiceResult[bool]:
+    """Write a product's release date, end of support or end of life as the CLE events they are.
+
+    The product columns are rebuilt from the events on every product CLE write,
+    so a date written to a column alone would be undone by the next event of
+    any type. A new date is recorded as an event for every version, as the
+    lifecycle card records it; clearing one withdraws its surviving events.
+    ``dates`` holds only the fields the caller sets. The value is whether
+    anything changed. Call inside a transaction.
+    """
+    changed = False
+    for field, value in dates.items():
+        if value == getattr(product, field):
+            continue
+        event_type = _PRODUCT_DATE_EVENTS[field]
+        if value is None:
+            events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
+            withdrawn = {e.withdrawn_event_id for e in events if e.event_type == CLEEventType.WITHDRAWN}
+            surviving = [e for e in events if e.event_type == event_type and e.event_id not in withdrawn]
+            for event in surviving:
+                result = create_cle_event(
+                    product, CLEEventType.WITHDRAWN, timezone.now(), withdrawn_event_id=event.event_id
+                )
+                if not result.ok:
+                    return ServiceResult.failure(result.error or "Could not clear the date", result.status_code)
+            if not surviving:
+                # A date written to the column before it was an event has nothing to withdraw.
+                Product.objects.filter(pk=product.pk).update(**{field: None})
+        else:
+            effective = datetime.combine(value, time.min, tzinfo=UTC)
+            versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
+            result = create_cle_event(product, event_type, effective, versions=versions)
+            if not result.ok:
+                return ServiceResult.failure(result.error or "Could not set the date", result.status_code)
+        changed = True
+    if changed:
+        product.refresh_from_db(fields=list(_PRODUCT_DATE_EVENTS))
+    return ServiceResult.success(changed)
+
+
 def create_support_definition(
     product: Product,
     support_id: str,
@@ -643,10 +691,13 @@ def create_component_release_support_definition(
 def recompute_lifecycle_dates(product: Product) -> None:
     """Recompute cached lifecycle date fields on the product from CLE events.
 
-    Iterates all events in event_id order, skips withdrawn events, and sets
-    ``release_date``, ``end_of_support``, and ``end_of_life`` on the product.
-    Then rederives the releases' dates, since a release without its own takes
-    the product's.
+    Iterates all events in event_id order and skips withdrawn events.
+    ``release_date`` is the latest ``released`` event. ``end_of_support`` and
+    ``end_of_life`` come from ``product_dates``: events for every version
+    only, the latest per support policy, then the latest across policies. A
+    product event for some versions still publishes over TEA, but sets
+    neither column. Then rederives the releases' dates, since a release
+    without its own takes the product's.
 
     Should be called within a ``transaction.atomic()`` block when used alongside
     event creation to ensure consistency.
@@ -661,23 +712,13 @@ def recompute_lifecycle_dates(product: Product) -> None:
     }
 
     release_date: date | None = None
-    end_of_support: date | None = None
-    end_of_life: date | None = None
-
     for event in events:
-        if event.event_id in withdrawn_ids:
-            continue
-
-        if event.event_type == ProductCLEEvent.EventType.RELEASED:
+        if event.event_id not in withdrawn_ids and event.event_type == ProductCLEEvent.EventType.RELEASED:
             release_date = event.effective.date()
-        elif event.event_type == ProductCLEEvent.EventType.END_OF_SUPPORT:
-            end_of_support = event.effective.date()
-        elif event.event_type == ProductCLEEvent.EventType.END_OF_LIFE:
-            end_of_life = event.effective.date()
 
     product.release_date = release_date
-    product.end_of_support = end_of_support
-    product.end_of_life = end_of_life
+    # The same fold the releases inherit, so the product never reads one date while its releases keep another.
+    product.end_of_support, product.end_of_life = product_dates(events)
     product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
     recompute_release_lifecycle(product)
 

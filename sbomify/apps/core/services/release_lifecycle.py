@@ -25,7 +25,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from django.db import transaction
@@ -281,6 +281,27 @@ def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:
     }
 
 
+def recently_retired_releases(days: int, now: datetime | None = None) -> QuerySet[Release]:
+    """Named releases a date retired within the last ``days`` days.
+
+    A support date, an end of life or a supersession dated ahead retires a
+    release with no write to hang a reconcile on, so the daily sweep reads
+    these. A withdrawal, an archive or a new edge reconciles as it is written.
+    Dates are the ``effective_*`` columns ``tracked_releases`` reads: a
+    release's own, else its product's for every version. A date is the last
+    supported day.
+    """
+    now = now or timezone.now()
+    today = now.date()
+    since = today - timedelta(days=days)
+    passed = (
+        Q(effective_end_of_support__gte=since, effective_end_of_support__lt=today)
+        | Q(effective_end_of_life__gte=since, effective_end_of_life__lt=today)
+        | Q(superseded_at__gte=now - timedelta(days=days), superseded_at__lte=now)
+    )
+    return Release.objects.filter(passed, is_latest=False)
+
+
 def existing_supersession(
     predecessor: Release, successor_label: str, drop_in: bool
 ) -> ServiceResult[ReleaseSupersession | None]:
@@ -445,6 +466,15 @@ def _surviving(events: list[Any]) -> list[Any]:
     return [event for event in events if event.event_id not in voided]
 
 
+def product_dates(events: list[ProductCLEEvent]) -> tuple[date | None, date | None]:
+    """A product's end of support and end of life: its surviving events for every version, folded by ``fold_dates``.
+
+    The product columns and what its releases inherit both come from here, so
+    the two always agree. ``events`` are one product's, in event order.
+    """
+    return fold_dates(event for event in _surviving(events) if covers_every_version(event.versions))
+
+
 def recompute_release_lifecycle(product: Product) -> None:
     """Derive every release's lifecycle columns in ``product`` from its edges and CLE events.
 
@@ -473,9 +503,8 @@ def recompute_release_lifecycle(product: Product) -> None:
         by_release[event.release_id].append(event)
     own = {pk: fold_dates(_surviving(by_release[pk])) for pk in releases}
 
-    product_events = _surviving(list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id")))
-    product_support, product_life = fold_dates(
-        event for event in product_events if covers_every_version(event.versions)
+    product_support, product_life = product_dates(
+        list(ProductCLEEvent.objects.filter(product_id=product.pk).order_by("event_id"))
     )
 
     drop_ins: dict[str, list[ReleaseSupersession]] = defaultdict(list)
