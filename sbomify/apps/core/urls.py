@@ -206,6 +206,11 @@ urlpatterns = [
         name="release_details",
     ),
     path(
+        "product/<str:product_id>/release/<str:release_id>/lifecycle/",
+        views.ReleaseLifecycleView.as_view(),
+        name="release_lifecycle",
+    ),
+    path(
         "public/product/<str:product_id>/release/<str:release_id>/",
         views.ReleaseDetailsPublicView.as_view(),
         name="release_details_public",

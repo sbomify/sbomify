@@ -14,6 +14,10 @@
         <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>Latest release
         </c-badges.success>
         </c-slot>
+    {% elif release.lifecycle_state != 'active' %}
+        <c-slot name="meta">
+        <c-badges.release-state state="{{ release.lifecycle_state }}" />
+        </c-slot>
     {% endif %}
     {# Download Buttons - Desktop; the mobile card below repeats them #}
     {% if release.has_sboms or release.has_vex or release.has_cbom %}
@@ -173,6 +177,9 @@
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
     </div>
+    {% if not release.is_latest %}
+        {% include 'core/components/release_lifecycle_card.html.j2' %}
+    {% endif %}
     {# Danger Zone #}
     {% if can_delete_release %}
         <div>

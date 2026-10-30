@@ -68,6 +68,8 @@
                 <c-tables.cell>
                 {% if release.is_latest %}
                     <c-branded.badge tone="success">Latest</c-branded.badge>
+                {% elif release.lifecycle_state != 'active' %}
+                    <c-branded.release-state state="{{ release.lifecycle_state }}" />
                 {% elif release.is_prerelease %}
                     <c-branded.badge tone="medium">Pre-release</c-branded.badge>
                 {% else %}
