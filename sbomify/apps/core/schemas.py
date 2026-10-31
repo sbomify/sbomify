@@ -686,6 +686,15 @@ class ReleaseArtifactCreateSchema(BaseModel):
 
     sbom_id: str | None = None
     document_id: str | None = None
+    replace: bool = Field(
+        False,
+        description=(
+            "Replace an artifact of the same kind from the same component that is already in the "
+            "release, instead of rejecting the add. A CI re-run of a release publishes a new SBOM "
+            "for the same version; without this it is refused because the earlier run's SBOM is "
+            "still pinned."
+        ),
+    )
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
