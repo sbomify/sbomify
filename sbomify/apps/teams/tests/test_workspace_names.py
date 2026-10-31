@@ -1,17 +1,33 @@
-"""The workspace names are canonical, and the team names still answer.
+"""The workspace names are the only names.
 
-Branches written before the rename keep reversing ``teams:`` and reading
-``settings.TEAMS_*`` until they re-run ``bin/rename_to_workspace.py``.
+The team names answered for a while after the rename. A branch that still uses
+one fails here, and ``bin/rename_to_workspace.py`` rewrites it.
 """
+
+import ast
+from pathlib import Path
 
 import pytest
 from django.conf import settings
-from django.urls import resolve, reverse
+from django.urls import NoReverseMatch, resolve, reverse
 
 
-def test_the_role_settings_answer_to_both_names():
-    assert settings.TEAMS_SUPPORTED_ROLES is settings.WORKSPACE_SUPPORTED_ROLES  # rename-to-workspace: keep
-    assert settings.TEAMS_INVITABLE_ROLES is settings.WORKSPACE_INVITABLE_ROLES  # rename-to-workspace: keep
+def test_the_role_settings_have_only_the_workspace_names():
+    assert settings.WORKSPACE_SUPPORTED_ROLES
+    assert not hasattr(settings, "TEAMS_SUPPORTED_ROLES")  # rename-to-workspace: keep
+    assert not hasattr(settings, "TEAMS_INVITABLE_ROLES")  # rename-to-workspace: keep
+
+
+def test_the_screencasts_import_no_team_name():
+    """pytest never collects ``screencasts/``, so an old name there breaks only a recording."""
+    imported: set[str] = set()
+    for path in (Path(settings.BASE_DIR) / "screencasts").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.module == "sbomify.apps.teams.models":
+                imported |= {alias.name for alias in node.names}
+
+    assert imported, "no screencast imports the teams models, so this test checks nothing"
+    assert "Team" not in imported  # rename-to-workspace: keep
 
 
 def test_a_workspace_page_resolves_under_the_workspaces_namespace():
@@ -21,21 +37,21 @@ def test_a_workspace_page_resolves_under_the_workspaces_namespace():
     assert resolve(url).view_name == "workspaces:team_settings_tab"
 
 
-def test_the_teams_namespace_still_reverses_to_the_same_page():
+def test_the_teams_namespace_is_gone():
     kwargs = {"workspace_key": "abc", "tab": "general"}
-    old = reverse("teams:team_settings_tab", kwargs=kwargs)  # rename-to-workspace: keep
-
-    assert old == reverse("workspaces:team_settings_tab", kwargs=kwargs)
+    with pytest.raises(NoReverseMatch):
+        reverse("teams:team_settings_tab", kwargs=kwargs)  # rename-to-workspace: keep
 
 
 def test_the_singular_mount_still_serves_old_links():
     assert resolve("/workspace/abc/settings/general").view_name == "teams-legacy:team_settings_tab"
 
 
-def test_the_team_model_name_still_imports_as_the_workspace_model():
-    from sbomify.apps.teams.models import Team, Workspace  # rename-to-workspace: keep
+def test_the_workspace_model_has_no_team_alias():
+    from sbomify.apps.teams import models
+    from sbomify.apps.teams.models import Workspace
 
-    assert Team is Workspace  # rename-to-workspace: keep
+    assert not hasattr(models, "Team")  # rename-to-workspace: keep
     assert Workspace._meta.label == "teams.Workspace"
     assert Workspace._meta.db_table == "workspaces_workspaces"
 

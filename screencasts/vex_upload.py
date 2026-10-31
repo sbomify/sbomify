@@ -28,7 +28,7 @@ from conftest import (
 )
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 COMPONENT_NAME = "Pied Piper Compression Core"
 
@@ -70,7 +70,7 @@ VEX_FILE_BYTES = json.dumps(
 
 
 @pytest.fixture
-def component_with_sbom(deletable_team: Team) -> dict:
+def component_with_sbom(deletable_team: Workspace) -> dict:
     """Seed a component with one CycloneDX SBOM but no VEX yet.
 
     The screencast uploads the VEX through the UI, so the starting
