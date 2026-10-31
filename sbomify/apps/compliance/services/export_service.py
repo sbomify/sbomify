@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings as django_settings
 from django.utils.text import slugify
 
+from sbomify.apps.compliance import audit
 from sbomify.apps.compliance.models import (
     CRAExportPackage,
     CRAGeneratedDocument,
@@ -148,13 +149,29 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "since export. The `jq` `sub` expression strips the "
         "`cra-package-<slug>/` prefix so `sha256sum` resolves paths "
         "against the current working directory (the bundle root).\n\n"
-        "## 3. About signatures\n\n"
-        "sbomify does not sign the bundle itself. Operators who need a "
-        "stronger integrity / provenance guarantee for regulatory filings "
-        "should sign the whole ZIP downstream with `cosign sign-blob` "
-        "or `gpg --detach-sign` and distribute the detached signature "
-        "alongside the bundle. The self-hash above bounds the manifest's "
-        "integrity; a downstream signature bounds the whole package.\n\n"
+        "## 3. Signing the bundle\n\n"
+        "sbomify does not sign the bundle and holds no signing key. Sign "
+        "the ZIP yourself, keyless, with cosign 3 or later and your own "
+        "identity: a person signing in with GitHub, Google or Microsoft, "
+        "or a CI workflow signing with its own identity token. Run it "
+        "against the ZIP as exported, not the extracted folder:\n\n"
+        "```sh\n"
+        "cosign sign-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json\n"
+        "```\n\n"
+        "cosign records the signer's identity and the ZIP's SHA-256 in "
+        "Sigstore's public transparency log. The bundle's contents stay "
+        "private. Upload the `.sigstore.json` file to sbomify on the "
+        "export step so it is kept beside this ZIP.\n\n"
+        "A recipient verifies the signature with the identity and OIDC "
+        "issuer it was made under:\n\n"
+        "```sh\n"
+        "cosign verify-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json \\\n"
+        "  --certificate-identity <signer> \\\n"
+        "  --certificate-oidc-issuer <issuer>\n"
+        "```\n\n"
+        "It prints `Verified OK`. Get the expected signer and issuer from "
+        "the manufacturer, not from these files: whoever can replace the "
+        "ZIP can also replace the signature beside it.\n\n"
         "## 4. Retention obligation\n\n"
         "Article 13(15) of Regulation (EU) 2024/2847 requires this evidence "
         "to be kept for ten years from placing the product on the market, or "
@@ -460,6 +477,13 @@ def build_export_package(
         # changes to the product's declared support period.
         retain_until=retain_until,
     )
+    audit.log_export_created(
+        user=user,
+        assessment_id=assessment.id,
+        team_id=assessment.team_id,
+        package_id=package.id,
+        content_hash=content_hash,
+    )
 
     return ServiceResult.success(package)
 
@@ -520,6 +544,25 @@ def _write_md_with_pdf(
 _PRESIGNED_URL_EXPIRY_SECONDS = 900
 
 
+def export_file_name(package: CRAExportPackage) -> str:
+    """``cra-package-<product-slug>-<hash12>.zip``, so auditors can tell bundles apart on disk."""
+    product_slug = slugify(package.assessment.product.name) or package.assessment.product.id
+    return f"cra-package-{product_slug}-{package.content_hash[:12]}.zip"
+
+
+def _presigned_url(package: CRAExportPackage, storage_key: str, suffix: str, content_type: str) -> str:
+    """A short-lived URL that downloads ``storage_key`` as the bundle's file name plus ``suffix``."""
+    return StorageClient("DOCUMENTS").generate_presigned_url(
+        django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
+        storage_key,
+        expires_in=_PRESIGNED_URL_EXPIRY_SECONDS,
+        response_headers={
+            "ResponseContentDisposition": f'attachment; filename="{export_file_name(package)}{suffix}"',
+            "ResponseContentType": content_type,
+        },
+    )
+
+
 def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
     """Generate a presigned URL for the CRA bundle ZIP.
 
@@ -531,18 +574,25 @@ def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
     name + short hash so auditors can tell bundles apart on disk.
     """
     try:
-        product_slug = slugify(package.assessment.product.name) or package.assessment.product.id
-        filename = f"cra-package-{product_slug}-{package.content_hash[:12]}.zip"
-        url = StorageClient("DOCUMENTS").generate_presigned_url(
-            django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
-            package.storage_key,
-            expires_in=_PRESIGNED_URL_EXPIRY_SECONDS,
-            response_headers={
-                "ResponseContentDisposition": f'attachment; filename="{filename}"',
-                "ResponseContentType": "application/zip",
-            },
-        )
-        return ServiceResult.success(url)
+        return ServiceResult.success(_presigned_url(package, package.storage_key, "", "application/zip"))
     except Exception:
         logger.exception("Failed to generate presigned URL")
         return ServiceResult.failure("Failed to generate download URL", status_code=500)
+
+
+def get_signature_url(package: CRAExportPackage) -> ServiceResult[str | None]:
+    """A presigned URL for the manufacturer's Sigstore bundle, or None while the ZIP is unsigned."""
+    if not package.signed_by:
+        return ServiceResult.success(None)
+    try:
+        return ServiceResult.success(
+            _presigned_url(package, signature_storage_key(package), ".sigstore.json", "application/json")
+        )
+    except Exception:
+        logger.exception("Failed to generate presigned signature URL")
+        return ServiceResult.failure("Failed to generate signature download URL", status_code=500)
+
+
+def signature_storage_key(package: CRAExportPackage) -> str:
+    """Where the manufacturer's Sigstore bundle is kept, beside the ZIP it signs."""
+    return f"{package.storage_key}.sigstore.json"
