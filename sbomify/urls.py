@@ -96,7 +96,7 @@ urlpatterns = [
     path("", include("sbomify.apps.oidc.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path("api/v2/", api_v2.urls, name="api-2"),
-    path(r"UuPha8mu/", include("health_check.urls")),  # Random string
+    path(settings.HEALTH_CHECK_PATH.lstrip("/"), include("health_check.urls")),
 ]
 
 if settings.DEBUG:

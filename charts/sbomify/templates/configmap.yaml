@@ -10,6 +10,7 @@ DEBUG: {{ .Values.app.debug | ternary "True" "False" | quote }}
 LOG_LEVEL: {{ .Values.app.logLevel | quote }}
 BILLING: {{ .Values.app.billing | ternary "True" "False" | quote }}
 TRUST_CENTER_DOMAIN: {{ .Values.app.trustCenterDomain | quote }}
+HEALTH_CHECK_PATH: {{ .Values.caddy.healthPath | quote }}
 
 # Object storage
 AWS_ENDPOINT_URL_S3: {{ include "sbomify.s3Endpoint" . | quote }}
