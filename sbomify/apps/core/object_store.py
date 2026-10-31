@@ -53,6 +53,9 @@ class ObjectStoreClient(ABC):
     def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
 
     @abstractmethod
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None: ...
+
+    @abstractmethod
     def delete_object(self, bucket_name: str, key: str) -> None: ...
 
     @abstractmethod
@@ -63,6 +66,9 @@ class ObjectStoreClient(ABC):
 
     @abstractmethod
     def object_exists(self, bucket_name: str, key: str) -> bool: ...
+
+    @abstractmethod
+    def object_size(self, bucket_name: str, key: str) -> int | None: ...
 
     @abstractmethod
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
@@ -157,6 +163,24 @@ class S3ObjectStoreClient(ObjectStoreClient):
                 return None
             raise
 
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of the object, or ``None`` if it is not there.
+
+        A ranged GET, so a caller with a size ceiling gets a bounded read from a
+        store that answers GetObject but not HEAD.
+        """
+        try:
+            response = self._resource.Bucket(bucket_name).Object(key).get(Range=f"bytes=0-{length - 1}")
+            return response["Body"].read()  # type: ignore[no-any-return]
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in ("NoSuchKey", "404"):
+                return None
+            # A range starting at 0 is unsatisfiable only for an empty object.
+            if code in ("InvalidRange", "416"):
+                return b""
+            raise
+
     def delete_object(self, bucket_name: str, key: str) -> None:
         self._resource.Object(bucket_name, key).delete()
 
@@ -178,6 +202,19 @@ class S3ObjectStoreClient(ObjectStoreClient):
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
                 return False
+            raise
+
+    def object_size(self, bucket_name: str, key: str) -> int | None:
+        """The stored object's size in bytes, or ``None`` if it is not there.
+
+        A HEAD, like ``object_exists``, so a caller with a size ceiling can
+        refuse an object before paying to download it.
+        """
+        try:
+            return int(self._resource.Object(bucket_name, key).content_length)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
             raise
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
@@ -278,6 +315,20 @@ class StorageClient:
             raise ValueError("This method is only for SBOMS bucket")
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
+    def get_sbom_data_prefix(self, object_name: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of a stored SBOM, or ``None`` if it is missing."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.get_object_prefix(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, length)
+
+    def get_sbom_size(self, object_name: str) -> int | None:
+        """Size of a stored SBOM in bytes, without downloading it."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.object_size(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
     def get_cached_aggregate(self, object_name: str) -> bytes | None:
         """Return a cached aggregated-SBOM blob by key, or None if absent (#998).

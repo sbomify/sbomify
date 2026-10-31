@@ -1,0 +1,446 @@
+"""Bearer personal-access-token authentication for the MCP server.
+
+The MCP server is a Starlette ASGI app mounted alongside Django (see
+``sbomify/asgi.py``), so it never passes through Django's middleware or ninja's
+``PersonalAccessTokenAuth``. This module bridges the gap: it resolves the bearer
+token with the same low-level helper ninja's auth uses
+(``get_user_and_token_record``) and then builds a stub ``HttpRequest`` carrying
+``user``, ``access_token_record`` and ``token_team``.
+
+That stub is the whole point. ``can()`` reads ``access_token_record`` to enforce
+the token's action scopes *before* the role check
+(``sbomify/apps/core/authz.py``), and ``verify_item_access`` reads ``user`` and
+``token_team`` for workspace scoping. Handing it a faithful stub means MCP tools
+get byte-identical authorization to the REST API without a second permission
+model.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest
+from mcp.server.fastmcp.exceptions import ToolError
+
+from sbomify.apps.access_tokens.throttling import (
+    AccessTokenHeavyRateThrottle,
+    AccessTokenRateThrottle,
+    AnonymousIPRateThrottle,
+)
+from sbomify.apps.access_tokens.utils import get_user_and_token_record
+from sbomify.apps.core.utils import get_client_ip
+
+from .limits import audit
+
+if TYPE_CHECKING:
+    from django.contrib.auth.base_user import AbstractBaseUser
+    from starlette.requests import Request
+
+    from sbomify.apps.access_tokens.models import AccessToken
+
+
+class MCPAuthError(ToolError):
+    """Raised when the caller presents no token, or a bad/expired one.
+
+    Subclasses ``ToolError`` so FastMCP surfaces it to the agent as a tool error
+    with our message intact, rather than an opaque 500.
+    """
+
+
+class MCPRateLimitedError(MCPAuthError):
+    """Raised when a *valid* token is over its rate limit.
+
+    Distinct from a credential failure so ``tools/list`` can tell the two
+    apart: a bad token means advertise nothing, but a throttled one must get
+    an error it can retry — an empty catalogue would be cached by the client
+    as "this server has no tools".
+
+    ``retry_after`` is the wait in seconds, for the router's ``Retry-After``.
+    """
+
+    def __init__(self, message: str, *, retry_after: int = 1) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+PRINCIPAL_STATE = "mcp_principal"
+REFUSAL_STATE = "mcp_refusal"
+"""Where the router leaves its answer in the ASGI scope's ``state``: the caller, or why it was refused.
+
+The router authenticates every ``/mcp`` request before the MCP app reads it
+(see ``authenticate_request``). FastMCP parses the body and validates a call's
+arguments before any tool code runs, so a check living only in the tool
+wrapper never saw a malformed call; and the SDK runs ``tools/list`` inside
+every ``tools/call``, so authenticating in both places charged one call twice.
+"""
+
+TOOL_AUDITED_STATE = "mcp_tool_audited"
+"""Set by the tool wrapper once it owns this request's audit event, so the router writes none."""
+
+UPLOAD_TOOLS = ("upload_artifact", "upload_vex")
+"""The tools whose arguments carry a whole artifact, the only reason for a body larger than an envelope."""
+
+
+WORKSPACE_ATTR = "mcp_workspace"
+"""Where ``resolve_workspace`` caches the workspace it resolved for this call.
+
+On the stub request, alongside ``access_token_record`` and ``token_team``,
+because that object is built fresh per call and thrown away after it."""
+
+
+@dataclass(frozen=True)
+class Principal:
+    """An authenticated MCP caller.
+
+    ``request`` is the stub ``HttpRequest`` to pass to ``can()`` — it is not a
+    real request and must never be used for rendering or redirects.
+    """
+
+    user: AbstractBaseUser
+    token: AccessToken
+    request: HttpRequest
+
+    @property
+    def scopes(self) -> list[str] | None:
+        """The token's action scopes; ``None`` means unscoped (full capability)."""
+        return self.token.scopes
+
+    @property
+    def resolved_workspace(self) -> Any:
+        """The workspace a tool resolved for this call, or ``None`` if none has.
+
+        ``resolve_workspace`` stashes its answer on the stub request, which is
+        built fresh per call. Reading it here rather than resolving again keeps
+        the audit line off the database and out of the refusals that
+        ``resolve_workspace`` itself raises.
+        """
+        return getattr(self.request, WORKSPACE_ATTR, None)
+
+
+def current_request(mcp: Any) -> Any:
+    """The Starlette request for the in-flight tool call, or ``None``.
+
+    The streamable-HTTP transport threads the request through
+    ``ServerMessageMetadata`` and the low-level server re-exposes it as
+    ``RequestContext.request``. One accessor, because the two callers that need
+    it fail differently when the SDK moves it: the tool wrapper raises, while
+    ``list_tools`` would quietly advertise everything.
+    """
+    try:
+        return mcp.get_context().request_context.request
+    except (LookupError, AttributeError, ValueError):
+        return None
+
+
+def _bearer_token(request: Request) -> str:
+    """Extract the bearer token, or raise ``MCPAuthError``.
+
+    The auth scheme is case-insensitive per RFC 7235, matching
+    ``access_tokens.auth._reject_invalid_bearer`` so a lowercased scheme cannot
+    slip past a check that the REST API would have applied.
+    """
+    scheme, _, raw = request.headers.get("authorization", "").partition(" ")
+    if scheme.casefold() != "bearer" or not raw.strip():
+        raise MCPAuthError(
+            "Missing bearer token. Configure this MCP server with an sbomify "
+            "personal access token: Authorization: Bearer <token>."
+        )
+    return raw.strip()
+
+
+def _stub_request(starlette_request: Request) -> HttpRequest:
+    """A Django ``HttpRequest`` carrying just enough for ``can()`` to decide.
+
+    Mirrors ``authz._stub_request_for_user`` (empty session, so nothing is
+    granted by session state) but additionally populates ``META`` from the real
+    connection. That lets ``get_client_ip`` apply its trusted-proxy rules
+    unchanged, so audit records and IP-derived logic see the true client IP
+    rather than Caddy's.
+    """
+    stub = HttpRequest()
+    stub.user = AnonymousUser()
+    stub.session = {}  # type: ignore[assignment]
+    stub.method = "POST"
+    stub.path = starlette_request.url.path
+    # A real request always has a readable body. Django's ``HttpRequest.body``
+    # reads ``_body`` if set and otherwise consumes ``_stream``, which a bare
+    # HttpRequest() does not have — so any view that so much as logs
+    # ``request.body`` (``core.apis.patch_component_metadata`` does, in an
+    # eagerly-evaluated f-string) raises AttributeError. Seed it here so every
+    # delegating tool is safe; ``publish._with_body`` overwrites it with the
+    # artifact it is uploading.
+    stub._body = b""
+
+    client = starlette_request.client
+    if client is not None:
+        stub.META["REMOTE_ADDR"] = client.host
+    # X-Real-IP only. get_client_ip reads REMOTE_ADDR and HTTP_X_REAL_IP and
+    # nothing else — X-Forwarded-For is deliberately never honoured anywhere in
+    # the tree, so copying it here would only make the stub look like it were
+    # trusted.
+    if (real_ip := starlette_request.headers.get("x-real-ip")) is not None:
+        stub.META["HTTP_X_REAL_IP"] = real_ip
+
+    return stub
+
+
+async def authenticate(starlette_request: Request, *, attempted_action: str) -> Principal:
+    """Resolve the bearer token into a ``Principal``.
+
+    ``attempted_action`` is recorded on the token-auth audit event so a rejected
+    MCP call is attributable to the tool that made it.
+
+    Raises ``MCPAuthError`` when the token is absent, invalid, expired, or over
+    its rate limit.
+    """
+    stub = _stub_request(starlette_request)
+    try:
+        token = _bearer_token(starlette_request)
+    except MCPAuthError:
+        await _charge_refusal(stub, tool=attempted_action, reason="no bearer token")
+        raise
+
+    # database_sync_to_async, not a bare sync_to_async: this is the first DB
+    # access of every MCP request — and the only one on the tools/list path —
+    # and /mcp never fires the request signals that normally run
+    # close_old_connections (see run_db in tools/_base.py). A bare wrapper here
+    # would leave the per-request executor's connection to die of old age and
+    # make a Postgres restart surface as an error auth can't recover from.
+    user, record = await database_sync_to_async(get_user_and_token_record)(
+        token,
+        source_ip=get_client_ip(stub),
+        attempted_action=f"mcp {attempted_action}",
+    )
+    if user is None or record is None:
+        await _charge_refusal(stub, tool=attempted_action, reason="invalid or expired token")
+        raise MCPAuthError("Invalid or expired access token.")
+
+    stub.user = user  # type: ignore[assignment]
+    setattr(stub, "access_token_record", record)
+    setattr(stub, "token_team", record.team)
+
+    # The MCP app bypasses NinjaAPI, so its global throttle never runs here.
+    # Re-apply it against the same sliding window: an agent and a CI job using
+    # the same token share one budget, which is what an operator would expect.
+    #
+    # A fresh instance per check, never a shared module-level one: ninja's
+    # SimpleRateThrottle keeps per-request scratch (self.key/history/now) on
+    # the instance, and MCP requests each run in their own executor thread, so
+    # concurrent calls on a shared instance would write one token's window
+    # under another token's key. The budget itself is unaffected — the sliding
+    # window lives in the cache, keyed on the token pk.
+    principal = Principal(user=user, token=record, request=stub)
+
+    throttle = AccessTokenRateThrottle()
+    if not await sync_to_async(throttle.allow_request)(stub):
+        # Audited here rather than left to the tool wrapper, which only audits
+        # what happens after this function returns. A token being hammered is
+        # exactly what the audit stream exists to surface, and it is the one
+        # refusal that reaches an authenticated, identifiable caller.
+        message = f"Rate limit exceeded for this access token.{_retry_hint(stub)}"
+        audit(attempted_action, principal, outcome="denied", detail=message)
+        raise MCPRateLimitedError(message, retry_after=_retry_seconds(stub) or 1)
+
+    return principal
+
+
+async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
+    """Authenticate an ``/mcp`` request once, from its headers, before its body is read.
+
+    Every request is charged and audited here, whatever it goes on to call.
+    The answer is left in ``scope["state"]`` for ``principal_for``. A caller
+    over its budget is returned so the router can refuse it without reading
+    the body; any other refusal is left for the call to report, so a client
+    without a usable token still sees an empty ``tools/list`` rather than an
+    HTTP error.
+    """
+    from starlette.requests import Request
+
+    state = scope.setdefault("state", {})
+    try:
+        state[PRINCIPAL_STATE] = await authenticate(Request(scope), attempted_action="request")
+    except MCPRateLimitedError as exc:
+        return exc
+    except MCPAuthError as exc:
+        state[REFUSAL_STATE] = exc
+    return None
+
+
+async def principal_for(starlette_request: Request, *, attempted_action: str) -> Principal:
+    """The caller as the router authenticated it, or that refusal again.
+
+    Authenticates here only when nothing upstream did, which is the case for an
+    app driven without the router, as the tests drive it.
+    """
+    state = starlette_request.scope.get("state") or {}
+    principal: Principal | None = state.get(PRINCIPAL_STATE)
+    if principal is not None:
+        return principal
+    if (refusal := state.get(REFUSAL_STATE)) is not None:
+        raise type(refusal)(*refusal.args)
+    return await authenticate(starlette_request, attempted_action=attempted_action)
+
+
+def mark_tool_audited(starlette_request: Request) -> None:
+    """Note that the tool wrapper audits this call: every path past ``principal_for`` writes one event."""
+    starlette_request.scope.setdefault("state", {})[TOOL_AUDITED_STATE] = True
+
+
+_IS_ERROR_TAIL = re.compile(rb'"isError"\s*:\s*true\s*}\s*}\s*$')
+
+
+def _rejection(status: int, answer: bytes | None, tail: bytes) -> str | None:
+    """Why the MCP app rejected a request, from its answer, or None when it did not.
+
+    ``answer`` is the whole response when it was small enough to keep, which a
+    rejection always is; ``tail`` is its last bytes, enough to see a tool
+    result's ``isError`` at the end of a long one.
+    """
+    if answer is None:
+        return "tool call rejected" if _IS_ERROR_TAIL.search(tail) else None
+    try:
+        payload = json.loads(answer)
+    except ValueError:
+        return f"HTTP {status}" if status >= 400 else None
+    for message in payload if isinstance(payload, list) else [payload]:
+        if not isinstance(message, dict):
+            continue
+        if isinstance(message.get("error"), dict):
+            return f"JSON-RPC error {message['error'].get('code')}"
+        result = message.get("result")
+        if isinstance(result, dict) and result.get("isError") is True:
+            return "tool call rejected"
+    return f"HTTP {status}" if status >= 400 else None
+
+
+def audit_rejected(scope: Any, status: int, answer: bytes | None, tail: bytes) -> None:
+    """Audit an authenticated request the MCP app rejected before any tool ran.
+
+    FastMCP answers a parse error, an unknown tool or arguments that fail the
+    tool's schema itself, so the tool wrapper never sees them. Without this
+    they were charged to the token but missing from the ``mcp_tool_call``
+    stream. A request the wrapper reached is left alone: it wrote its own
+    event. The detail is the error's code, never the caller's input.
+    """
+    if (reason := _rejection(status, answer, tail)) is not None:
+        audit_invalid_request(scope, reason)
+
+
+def audit_invalid_request(scope: Any, reason: str) -> None:
+    """Write the one ``invalid_request`` event for an authenticated request no tool answered.
+
+    Used for calls FastMCP rejects and for bodies the router refuses as too
+    large. A request without a principal was already audited when it was
+    refused at the door, and one the tool wrapper reached wrote its own event.
+    """
+    state = scope.get("state") or {}
+    principal = state.get(PRINCIPAL_STATE)
+    if principal is None or state.get(TOOL_AUDITED_STATE):
+        return
+    audit("request", principal, outcome="invalid_request", detail=reason)
+
+
+def may_send_large_body(scope: Any) -> bool:
+    """Whether this request's caller may call a tool whose arguments carry an artifact."""
+    from . import registry
+
+    principal = (scope.get("state") or {}).get(PRINCIPAL_STATE)
+    return principal is not None and bool(set(UPLOAD_TOOLS) & registry.permitted_by(principal.scopes))
+
+
+async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
+    """Charge a refused request to its address and audit it, or refuse it as over budget.
+
+    A request with no usable token, or a token that does not resolve, never
+    reaches the per-token throttle, so it is charged to the per-IP window the
+    REST API keeps for tokenless surfaces instead. Each one still costs a parse,
+    and for a token a JWT decode plus an audit-log line, so without a budget a
+    loop of them amplifies both for free. Only refusals are charged: valid
+    tokens stay on their own, larger, budget.
+
+    Audited here because these refusals happen before the tool wrapper's audit
+    block, and unauthenticated probing is what the stream exists to show. One
+    line per refusal, with the address and a fixed reason, never the header.
+    """
+    from django.core.cache import cache
+
+    throttle = AnonymousIPRateThrottle()
+    over_budget = not await sync_to_async(throttle.allow_request)(stub)
+    client_ip = get_client_ip(stub)
+    # Past the budget, one line a window says the address is being refused. A line a request
+    # would hand a loop of bad requests the stream the budget exists to protect.
+    first_this_window = False
+    if over_budget:
+        try:
+            first_this_window = await cache.aadd(f"mcp:refusal-audited:{client_ip}", True, timeout=throttle.duration)
+        except Exception:
+            # The marker lives in the Redis the throttle reads, and the throttle has already
+            # refused this request and logged the outage once. Without the marker a first
+            # refusal looks like a repeat, so write nothing rather than a line a request.
+            first_this_window = False
+    if not over_budget or first_this_window:
+        audit(tool, None, outcome="rate_limited" if over_budget else "denied", detail=reason, client_ip=client_ip)
+    if over_budget:
+        raise MCPRateLimitedError(
+            "Too many failed authentication attempts from this address. Retry later.",
+            retry_after=max(1, int(throttle.wait() or 1)),
+        )
+
+
+def _retry_seconds(stub: HttpRequest) -> int | None:
+    """Seconds until the token's window resets, from the budget the throttle stashed on the request."""
+    import time
+
+    budget = getattr(stub, "_access_token_ratelimit", None)
+    if budget is None:
+        return None
+    _, _, reset = budget
+    return max(1, int(reset - time.time()))
+
+
+def _retry_hint(stub: HttpRequest) -> str:
+    """When to retry, from the budget the throttle stashed on the request.
+
+    The REST API surfaces this as ``Retry-After``/``X-RateLimit-*`` headers via
+    middleware /mcp never passes through; folding it into the error message is
+    the only channel an MCP client has, and without it the natural agent
+    behaviour is an immediate retry loop that keeps the window saturated.
+    """
+    seconds = _retry_seconds(stub)
+    return " Retry shortly." if seconds is None else f" Retry in {seconds} seconds."
+
+
+async def throttle_write(principal: Principal, *, tool: str) -> None:
+    """Apply the stricter write budget, on top of the global per-token one.
+
+    Mirrors the REST API, where artifact uploads carry
+    ``AccessTokenHeavyRateThrottle`` alongside the global throttle. The separate
+    ``cache_key_prefix`` keeps the two sliding windows independent, so they do
+    not double-count each other. Fresh instance per check for the same reason
+    as in ``authenticate``.
+    """
+    throttle = AccessTokenHeavyRateThrottle()
+    if not await sync_to_async(throttle.allow_request)(principal.request):
+        raise MCPRateLimitedError(
+            f"Write rate limit exceeded for this access token ({tool}).{_retry_hint(principal.request)}"
+        )
+
+
+def require(principal: Principal, action: str, resource: Any) -> None:
+    """Authorize ``action`` on ``resource``, or raise ``MCPAuthError``.
+
+    Thin wrapper over ``can()`` that turns a denial into an agent-legible error.
+    The denial reason is included so an agent holding an under-scoped token is
+    told to widen the token rather than retrying the same call.
+    """
+    from sbomify.apps.core.authz import can
+
+    decision = can(principal.request, action, resource)
+    if not decision:
+        raise MCPAuthError(f"Not permitted ({action}): {decision.reason}")
