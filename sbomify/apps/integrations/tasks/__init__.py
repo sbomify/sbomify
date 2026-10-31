@@ -14,6 +14,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from sbomify.apps.integrations.models import Integration
+from sbomify.apps.integrations.providers import PROVIDERS
 from sbomify.apps.integrations.services.sync import run_sync
 from sbomify.apps.teams.broadcasts import broadcast_on_commit
 from sbomify.logging import getLogger
@@ -109,9 +110,13 @@ def sync_due_integrations() -> None:
 
     Connections needing a reconnect are skipped: there is no credential to
     try, so queueing them would only refill the failure log every six hours.
+    So are providers with nothing to sync: sbomify only writes to Slack.
     """
     cutoff = timezone.now() - SYNC_INTERVAL
-    due = Integration.objects.filter(status=Integration.Status.CONNECTED).exclude(last_sync_at__gt=cutoff)
+    syncing = [provider.key for provider in PROVIDERS if provider.syncs]
+    due = Integration.objects.filter(status=Integration.Status.CONNECTED, provider__in=syncing).exclude(
+        last_sync_at__gt=cutoff
+    )
 
     queued = 0
     for integration_id in due.values_list("id", flat=True):
