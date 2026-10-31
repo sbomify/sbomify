@@ -1,0 +1,29 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}CRA report deadline{% endblock %}
+{% block content %}
+    <h1>
+        CRA {{ stage_label|lower }}
+        {% if overdue %}
+            overdue
+        {% else %}
+            due soon
+        {% endif %}
+    </h1>
+    <p>
+        The {{ stage_label|lower }} for <strong>{{ report.product.name }}</strong>
+        {% if overdue %}
+            was due on <strong>{{ due|date:"j M Y, H:i" }} UTC</strong>.
+        {% else %}
+            is due on <strong>{{ due|date:"j M Y, H:i" }} UTC</strong>.
+        {% endif %}
+    </p>
+    <p>File it in ENISA's Single Reporting Platform, then record the filing in sbomify so the next deadline is tracked.</p>
+    <p>
+        <a href="{{ base_url }}{% url 'workspaces:switch_team' report.team.key %}?next={% url 'compliance:cra_report_detail' report.id %}">Open the report</a>
+    </p>
+    <p>
+        Cheers,
+        <br>
+        The sbomify Team
+    </p>
+{% endblock %}

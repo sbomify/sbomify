@@ -1068,6 +1068,7 @@ class AdvisoryEvent(models.Model):
         # CRA Article 14 leaves a reporting trail the advisory has to evidence.
         CRA_EARLY_WARNING = "cra_early_warning", "CRA early warning submitted"
         CRA_NOTIFICATION = "cra_notification", "CRA notification submitted"
+        CRA_INTERMEDIATE_REPORT = "cra_intermediate_report", "CRA intermediate report submitted"
         CRA_FINAL_REPORT = "cra_final_report", "CRA final report submitted"
         USERS_NOTIFIED = "users_notified", "Impacted users notified"
         # A new body for an earlier message. The timeline is append-only, so an

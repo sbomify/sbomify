@@ -101,6 +101,7 @@ EVENT_META: dict[str, dict[str, str]] = {
     "product_removed": {"label": "Product removed", "variant": "secondary", "icon": "fas fa-cube"},
     "cra_early_warning": {"label": "CRA early warning", "variant": "warning", "icon": "fas fa-flag"},
     "cra_notification": {"label": "CRA notification", "variant": "warning", "icon": "fas fa-flag"},
+    "cra_intermediate_report": {"label": "CRA intermediate report", "variant": "warning", "icon": "fas fa-flag"},
     "cra_final_report": {"label": "CRA final report", "variant": "warning", "icon": "fas fa-flag-checkered"},
     "users_notified": {"label": "Users notified", "variant": "info", "icon": "fas fa-envelope"},
     "message_edited": {"label": "Edited", "variant": "secondary", "icon": "fas fa-pen"},

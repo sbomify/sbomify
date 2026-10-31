@@ -1,0 +1,198 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% block title %}CRA report for {{ report.product.name }} · sbomify{% endblock %}
+{% block dashboard_content %}
+    <c-layout.frame>
+    <c-layout.page-header title="CRA report for {{ report.product.name }}" subtitle="{{ report.get_kind_display }}">
+    <c-buttons.ghost size="sm" href="{% url 'compliance:cra_reports' %}">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>All reports
+    </c-buttons.ghost>
+    {% if report.advisory %}
+        <c-buttons.secondary size="sm" href="{% url 'core:security_advisory_detail' report.advisory.id %}">Open advisory</c-buttons.secondary>
+    {% endif %}
+    </c-layout.page-header>
+    {% include "compliance/components/cra_tabs.html.j2" %}
+    {% if report.is_closed %}
+        <c-feedback.alert variant="success" icon="fas fa-circle-check" title="Final report filed">
+        This report is complete and can no longer change. Record users being informed below if you have not yet.
+        </c-feedback.alert>
+    {% endif %}
+    <c-cards.card title="Deadlines" subtitle="From Article 14 of the Cyber Resilience Act. Times are UTC." flush>
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell nowrap>Stage</c-tables.header-cell>
+    <c-tables.header-cell date>Due</c-tables.header-cell>
+    <c-tables.header-cell>Status</c-tables.header-cell>
+    </c-tables.head>
+    <tbody>
+        {% for row in stage_rows %}
+            <c-tables.row>
+            <c-tables.cell nowrap class="font-medium">{{ row.label }}</c-tables.cell>
+            <c-tables.cell date>
+            {% if row.due %}
+                {{ row.due|date:"j M Y, H:i" }}
+            {% elif report.kind == 'vulnerability' %}
+                14 days after a fix is available
+            {% else %}
+                A month after the notification
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if row.filing %}
+                <c-badges.success>Filed {{ row.filing.filed_at|date:"j M Y" }}</c-badges.success>
+            {% elif row.overdue %}
+                <c-badges.danger>Overdue</c-badges.danger>
+            {% else %}
+                <c-badges.secondary>Not filed</c-badges.secondary>
+            {% endif %}
+            </c-tables.cell>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+    </c-cards.card>
+    <c-cards.card title="For the ENISA portal" subtitle="Each field as the Single Reporting Platform asks for it. Copy it into the portal, then record the filing below.">
+    <div class="flex flex-col gap-4">
+        <c-navigation.tabs links aria-label="Stage to file">
+        {% for option in copy_stages %}
+            {% if option.value == copy_stage %}
+                <c-navigation.tab href="?stage={{ option.value }}" active>{{ option.label }}</c-navigation.tab>
+            {% else %}
+                <c-navigation.tab href="?stage={{ option.value }}">{{ option.label }}</c-navigation.tab>
+            {% endif %}
+        {% endfor %}
+        </c-navigation.tabs>
+        {% if missing %}
+            <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation" title="The portal needs {{ missing|length }} more field{{ missing|length|pluralize }} for this stage">
+            {{ missing|join:", " }}
+            </c-feedback.alert>
+        {% endif %}
+        {% for row in layout %}
+            {% if row.value or row.required %}
+                {% if row.missing %}
+                    <c-forms.field label="{{ row.label }}" for="copy-{{ row.id }}" error="Needed for this stage">
+                    <c-copy-field id="copy-{{ row.id }}" value="" label="{{ row.label }}" />
+                    </c-forms.field>
+                {% elif row.kind == 'longtext' %}
+                    <c-forms.field label="{{ row.label }}" for="copy-{{ row.id }}">
+                    <div class="flex items-start gap-2">
+                        <c-forms.textarea id="copy-{{ row.id }}" rows="3" value="{{ row.value }}" readonly class="flex-1" />
+                        <c-copy-button value="{{ row.value }}" label="Copy" copy_label="Copy {{ row.label }}" />
+                    </div>
+                    </c-forms.field>
+                {% else %}
+                    <c-forms.field label="{{ row.label }}" for="copy-{{ row.id }}">
+                    <c-copy-field id="copy-{{ row.id }}" value="{{ row.value }}" label="{{ row.label }}" />
+                    </c-forms.field>
+                {% endif %}
+            {% endif %}
+        {% endfor %}
+    </div>
+    </c-cards.card>
+    {% if can_manage_cra_reports %}
+        {% if filing_stages %}
+            <c-cards.card title="Record filing" subtitle="After you submit a stage in the ENISA portal, record it here with the reference the portal gave you.">
+            <form method="post"
+                  action="{% url 'compliance:cra_report_detail' report.id %}"
+                  class="grid gap-4 sm:grid-cols-3 items-end">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="file" />
+                <input type="hidden" name="revision" value="{{ report.revision }}" />
+                <c-forms.field label="Stage" for="filingStage" required>
+                <c-forms.select id="filingStage" name="stage" :options="filing_stages" :selected="filing_stage" required />
+                </c-forms.field>
+                <c-forms.field label="ENISA reference" for="filingReference">
+                <c-forms.input id="filingReference" name="srp_reference" maxlength="100" />
+                </c-forms.field>
+                <c-forms.field label="Filed at (UTC)" for="filingAt" hint="Leave empty for now.">
+                <c-forms.input id="filingAt" name="filed_at" type="datetime-local" />
+                </c-forms.field>
+                <div class="sm:col-span-3">
+                    <c-buttons.primary type="submit" size="sm">Record filing</c-buttons.primary>
+                </div>
+            </form>
+            </c-cards.card>
+        {% endif %}
+        {% if not report.is_closed %}
+            <c-cards.card title="Edit report" subtitle="What sbomify fills in for you comes from the advisory, the product and its CRA assessment.">
+            <form method="post"
+                  action="{% url 'compliance:cra_report_detail' report.id %}"
+                  class="flex flex-col gap-4">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save" />
+                <input type="hidden" name="revision" value="{{ report.revision }}" />
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <c-forms.field label="When you became aware (UTC)" for="reportAwareAt" required>
+                    <c-forms.input id="reportAwareAt" name="aware_at" type="datetime-local" value="{{ report.aware_at|date:'Y-m-d\TH:i' }}" required />
+                    </c-forms.field>
+                    <c-forms.field label="When it occurred (UTC)" for="reportOccurredAt">
+                    <c-forms.input id="reportOccurredAt" name="occurred_at" type="datetime-local" value="{{ report.occurred_at|date:'Y-m-d\TH:i' }}" />
+                    </c-forms.field>
+                    {% if report.kind == 'vulnerability' %}
+                        <c-forms.field label="When a fix became available (UTC)" for="reportFixAt" hint="Starts the 14 days to the final report.">
+                        <c-forms.input id="reportFixAt" name="measure_available_at" type="datetime-local" value="{{ report.measure_available_at|date:'Y-m-d\TH:i' }}" />
+                        </c-forms.field>
+                    {% endif %}
+                </div>
+                {% for row in edit_rows %}
+                    <c-forms.field label="{{ row.label }}" for="edit-{{ row.id }}" hint="
+                    {% if row.max_length %}Up to {{ row.max_length }} characters.{% endif %}
+                    ">
+                    {% if row.choices %}
+                        <c-forms.select id="edit-{{ row.id }}" name="{{ row.id }}">
+                        <option value="">Not set</option>
+                        {% for choice in row.choices %}
+                            <option value="{{ choice }}" {% if choice == row.value %}selected{% endif %}>{{ choice }}</option>
+                        {% endfor %}
+                        </c-forms.select>
+                    {% elif row.kind == 'longtext' %}
+                        <c-forms.textarea id="edit-{{ row.id }}" name="{{ row.id }}" rows="3" value="{{ row.value }}" maxlength="{{ row.max_length|default:'' }}" />
+                    {% else %}
+                        <c-forms.input id="edit-{{ row.id }}" name="{{ row.id }}" value="{{ row.value }}" maxlength="{{ row.max_length|default:'' }}" />
+                    {% endif %}
+                    </c-forms.field>
+                {% endfor %}
+                <div>
+                    <c-buttons.primary type="submit" size="sm">Save report</c-buttons.primary>
+                </div>
+            </form>
+            </c-cards.card>
+        {% endif %}
+        {% if not filings %}
+            <form method="post"
+                  action="{% url 'compliance:cra_report_detail' report.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete" />
+                <c-buttons.ghost-danger type="submit" size="sm">Delete report</c-buttons.ghost-danger>
+            </form>
+        {% endif %}
+    {% endif %}
+    {% if filings %}
+        <c-cards.card title="Filings" subtitle="What was recorded as filed with ENISA. Kept as evidence and never changed." flush>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Stage</c-tables.header-cell>
+        <c-tables.header-cell>ENISA reference</c-tables.header-cell>
+        <c-tables.header-cell date>Filed</c-tables.header-cell>
+        <c-tables.header-cell>Filed by</c-tables.header-cell>
+        <c-tables.actions-cell as="th" label="Actions" />
+        </c-tables.head>
+        <tbody>
+            {% for filing in filings %}
+                <c-tables.row>
+                <c-tables.cell nowrap>{{ filing.get_stage_display }}</c-tables.cell>
+                <c-tables.cell>{{ filing.srp_reference|default:"Not recorded" }}</c-tables.cell>
+                <c-tables.cell date>{{ filing.filed_at|date:"j M Y, H:i" }} UTC</c-tables.cell>
+                <c-tables.cell>{{ filing.filer|default:"Account removed" }}</c-tables.cell>
+                <c-tables.cell end>
+                <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_filing' report_id=report.id filing_id=filing.id %}">
+                Open <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                </c-buttons.ghost>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-cards.card>
+    {% endif %}
+    </c-layout.frame>
+{% endblock dashboard_content %}
