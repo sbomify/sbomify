@@ -1,0 +1,32 @@
+# Narration for screencasts/tea_enabling.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to turn on the Transparency Exchange API, or TEA, so tools can
+      fetch your SBOMs automatically.
+
+  tea_served_trust:
+    text: >-
+      TEA is served from your Trust Center. First, switch the Trust Center on and
+      add a custom domain.
+
+  once_dns_records:
+    text: >-
+      Once your DNS records are in place, sbomify verifies the domain.
+
+  switch_transparency_exchange:
+    text: >-
+      Now switch on Transparency Exchange API in the Sharing section.
+
+  discovery_endpoint_appears:
+    text: >-
+      The discovery endpoint appears. Share it with customers and their TEA
+      clients.
+
+  client_follows_public:
+    text: >-
+      A client follows it to your public products, and from there to each release
+      and its artifacts.

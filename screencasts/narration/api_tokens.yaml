@@ -1,0 +1,61 @@
+# Narration for screencasts/api_tokens.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      API tokens connect sbomify to your tools, including the AI agents you work
+      with. Here is how to make a token for a coding agent.
+
+  api_tokens_live:
+    text: >-
+      API tokens live in Settings. They are personal, so other members cannot see
+      or manage yours.
+
+  give_token_name:
+    text: >-
+      Name it after the agent that will use it.
+
+  presets:
+    text: >-
+      Besides full access, there are three presets. Publish only is made for CI
+      uploads. Read-only reads and changes nothing.
+
+  pick_ai_agent:
+    text: >-
+      For a coding agent like Claude Code or Cursor, pick AI agent, and read what
+      it allows.
+
+  agent_cannot_apply:
+    text: >-
+      The agent can read fix prompts and send VEX rulings. Nothing it sends
+      changes your vulnerabilities until someone approves it, and its rulings are
+      marked as coming from an AI agent.
+
+  agent_cannot_publish:
+    text: >-
+      It can draft and edit security advisories, but it cannot publish, withdraw
+      or delete them. Nothing it writes reaches your Trust Center until a person
+      publishes it.
+
+  give_short_life:
+    text: >-
+      Give it a short life. This one expires in 30 days.
+
+  sbomify_shows_token:
+    text: >-
+      sbomify shows the token only once. Copy it, and hand it to your agent as a
+      secret, never in your code.
+
+  shows_when_token:
+    text: >-
+      The token is listed with when it was last used, and when it expires.
+
+  when_no_longer:
+    text: >-
+      When the work is done, delete it. The agent loses access right away.
+
+  token_gone_anything:
+    text: >-
+      The agent works within what you allow, and a person stays in charge.

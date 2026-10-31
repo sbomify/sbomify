@@ -1,0 +1,69 @@
+# Narration for screencasts/security_advisories.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      In sbomify, an AI agent can draft and maintain your security advisories.
+      Here is how, and why a person still decides what your customers read.
+
+  security_advisories_lists:
+    text: >-
+      Security advisories lists every advisory in the workspace, with its
+      severity and status.
+
+  agent_drafts:
+    text: >-
+      Your coding agent has reproduced a bug. With a token made for an AI agent,
+      it drafts the advisory: the CVE, the score, and the release it affects.
+
+  agent_cannot_publish:
+    text: >-
+      Then it tries to publish. sbomify refuses. An agent cannot publish,
+      withdraw or delete an advisory.
+
+  draft_waits_for_you:
+    text: >-
+      The draft waits for you, marked as written by an AI agent. Only your
+      workspace can see it.
+
+  read_it_through:
+    text: >-
+      Read it through. When it is right, publish it and choose who can read it.
+      Publishing is the review, and only a person can do it.
+
+  agent_changes_published:
+    text: >-
+      Once it is published, the agent keeps working. It raises the severity and
+      marks the advisory resolved. Neither change is applied. sbomify holds both
+      for a person.
+
+  waiting_for_review:
+    text: >-
+      They wait on the advisory under Waiting for review, each marked as from an
+      AI agent.
+
+  diff_shows_change:
+    text: >-
+      Each shows the agent's reasoning, and the change itself as a diff: high to
+      critical, and a new score.
+
+  approve_edit:
+    text: >-
+      The evidence holds up, so approve it. Only now does the advisory change.
+
+  reject_update:
+    text: >-
+      Resolved is too early: the fix has not shipped. Reject it, and say what to
+      do differently.
+
+  agent_reads_reason:
+    text: >-
+      Nothing on the advisory changes, and the agent reads your reason back the
+      next time it runs.
+
+  customers_see_public:
+    text: >-
+      Your Trust Center shows only what a person approved. An agent proposes, and
+      a person decides.

@@ -1,0 +1,50 @@
+# Narration for screencasts/spotlight_search.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to get around sbomify with search. It finds pages, actions and
+      your own products.
+
+  press_control_k:
+    text: >-
+      Press Control K, or Command K on a Mac, to open search from any page.
+
+  before_type_suggests:
+    text: >-
+      Before you type, it suggests common pages and example searches.
+
+  use_arrow_keys:
+    text: >-
+      Use the arrow keys to pick one, and Enter to open it.
+
+  components_selected_enter:
+    text: >-
+      Components is selected, so Enter opens the component list.
+
+  search_also_knows:
+    text: >-
+      Search also knows other words for things. Type api key, and it finds API
+      tokens.
+
+  click_result_open:
+    text: >-
+      Click a result to open it.
+
+  opened_api_tokens:
+    text: >-
+      That opened the API tokens tab in Settings.
+
+  also_finds_products:
+    text: >-
+      It also finds your products and components by name.
+
+  web_dashboard_shows:
+    text: >-
+      Web Dashboard shows up under Products and components.
+
+  one_search_component:
+    text: >-
+      One search and one click, and you are on the Web Dashboard component page.

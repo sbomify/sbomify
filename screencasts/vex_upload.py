@@ -1,37 +1,41 @@
-"""Record the VEX usage screencast.
+"""Record the VEX upload screencast.
 
-Drives: Dashboard → Components → click into a component that has an
-SBOM already attached → open Upload artifact from the header's ⋮ menu →
-pick the VEX artifact type → drop a CycloneDX VEX file → watch the
-dry-run preview → apply it → reload → see the row land in the
-component's VEX Documents card.
+Drives: Dashboard → Components → a component whose scan found a critical →
+actions menu → Upload VEX → drop a CycloneDX VEX → the dry-run preview →
+Apply this VEX → the critical leaves the open vulnerabilities, the version row
+lists the VEX → filter to "Closed by a decision" to see it with its reason.
 
-Infrastructure note: the screencast compose stack does not run an S3
-service, so a real upload would fail at the ``put_object`` call. We
-monkeypatch ``StorageClient.upload_data_as_file`` to a no-op for the
-duration of the recording so the upload-file endpoint succeeds
-end-to-end and writes the SBOM record; the recording then reloads
-explicitly to land on the post-upload state.
+Infrastructure notes: the stack runs no S3, so ``upload_data_as_file`` and
+``get_file_data`` are backed by a dict. The upload enqueues a re-annotation job
+in production; here ``reannotate_component_runs``, the function that job calls,
+runs right after the upload. The seeded scan's finding rows are projected with
+``sync_findings`` as scan completion would.
 """
 
 import json
 
 import pytest
+from django.urls import reverse
 from playwright.sync_api import Page
 
 from conftest import (
-    click_into_row,
+    auto_dismiss_toasts,
     hover_and_click,
+    narrate,
     navigate_to_components,
     pace,
+    settle,
+    smooth_scroll,
     start_on_dashboard,
 )
 from sbomify.apps.core.object_store import StorageClient
+from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team
 
 COMPONENT_NAME = "Pied Piper Compression Core"
-
+CVE = "CVE-2024-12345"
+OTHER_CVE = "CVE-2024-33210"
 
 VEX_FILE_BYTES = json.dumps(
     {
@@ -41,25 +45,20 @@ VEX_FILE_BYTES = json.dumps(
         "version": 1,
         "metadata": {
             "timestamp": "2026-04-29T00:00:00Z",
-            "component": {
-                "type": "application",
-                "name": "com.piedpiper/compression-core",
-                "version": "2.1.0",
-            },
+            "component": {"type": "application", "name": "com.piedpiper/compression-core", "version": "2.1.0"},
         },
         "vulnerabilities": [
             {
-                "id": "CVE-2024-12345",
+                "id": CVE,
                 "source": {"name": "NVD"},
-                "ratings": [{"severity": "high"}],
+                "ratings": [{"severity": "critical"}],
                 "affects": [{"ref": "pkg:pypi/requests@2.32.3"}],
                 "analysis": {
                     "state": "not_affected",
                     "justification": "code_not_reachable",
                     "detail": (
-                        "We use requests only for outbound HTTPS to a fixed "
-                        "allowlist of internal hosts. The vulnerable XML "
-                        "parser path is never exercised."
+                        "We use requests only for outbound HTTPS to a fixed allowlist of internal hosts. "
+                        "The vulnerable path is never exercised."
                     ),
                 },
             }
@@ -71,14 +70,10 @@ VEX_FILE_BYTES = json.dumps(
 
 @pytest.fixture
 def component_with_sbom(deletable_team: Team) -> dict:
-    """Seed a component with one CycloneDX SBOM but no VEX yet.
+    """A component with one scanned SBOM: one critical, one medium, no VEX yet."""
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
-    The screencast uploads the VEX through the UI, so the starting
-    state is one BOM (the SBOM). After the upload + auto-reload, the
-    BOMs table renders both rows.
-    """
     component = Component.objects.create(team=deletable_team, name=COMPONENT_NAME)
-
     sbom = SBOM.objects.create(
         name="com.piedpiper/compression-core",
         version="2.1.0",
@@ -86,63 +81,94 @@ def component_with_sbom(deletable_team: Team) -> dict:
         format_version="1.6",
         sbom_filename="compression-core-2.1.0.cdx.json",
         source="api",
-        bom_type="sbom",
+        bom_type=SBOM.BomType.SBOM,
         component=component,
     )
-
+    run = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        plugin_version="1.0.0",
+        plugin_config_hash="",
+        category="security",
+        run_reason="on_upload",
+        status="completed",
+        result={
+            "findings": [
+                {
+                    "id": CVE,
+                    "severity": "critical",
+                    "title": "Server-side request forgery in requests",
+                    "component": {"name": "requests", "version": "2.32.3", "purl": "pkg:pypi/requests@2.32.3"},
+                },
+                {
+                    "id": OTHER_CVE,
+                    "severity": "medium",
+                    "title": "Prototype pollution in lodash",
+                    "component": {"name": "lodash", "version": "4.17.20", "purl": "pkg:npm/lodash@4.17.20"},
+                },
+            ],
+            "summary": {
+                "by_severity": {"critical": 1, "high": 0, "medium": 1, "low": 0},
+                "total_findings": 2,
+                "suppressed_count": 0,
+            },
+        },
+    )
+    sync_findings(run, fresh=True)
     return {"component": component, "sbom": sbom}
 
 
 @pytest.fixture
 def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No-op the S3 put so the upload-file endpoint can succeed end-to-end.
+    """Back S3 with a dict so the VEX can be stored and read back."""
+    store: dict[tuple[str, str], bytes] = {}
 
-    The test compose stack does not run an S3 service. Real uploads
-    fail at the boto put_object call, the endpoint returns 400, and
-    the page never reloads. Patching the upload sink lets the SBOM
-    record write succeed and the front-end ``sbom-uploaded`` event
-    fire, which is what the screencast needs to show.
-    """
-    monkeypatch.setattr(StorageClient, "upload_data_as_file", lambda *args, **kwargs: None)
+    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
+        store[(bucket_name, object_name)] = data
+
+    def _get(self: StorageClient, bucket_name: str, file_path: str) -> bytes | None:
+        return store.get((bucket_name, file_path))
+
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
+    monkeypatch.setattr(StorageClient, "get_file_data", _get)
 
 
 @pytest.mark.django_db(transaction=True)
 def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit: None) -> None:
+    from sbomify.apps.vulnerability_scanning.vex import reannotate_component_runs
+
     page = recording_page
+    auto_dismiss_toasts(page)
+    component = component_with_sbom["component"]
+    component_url = reverse("core:component_details", kwargs={"component_id": component.id})
 
-    start_on_dashboard(page)
+    # The opening line plays over the dashboard loading.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
 
-    # ── 1. Navigate to Components ────────────────────────────────────────
+    # ── 1. The component and its scan ─────────────────────────────────────
     navigate_to_components(page)
+    link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
+    row = page.locator(f"tr:has-text('{CVE}')").first
+    row.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, row, 400)
+    narrate(page, "component_s_scan")
+    settle(page)
 
-    # ── 2. Click into the seeded component ───────────────────────────────
-    click_into_row(page, COMPONENT_NAME)
-
-    # ── 3. Open the upload modal from the header's ⋮ menu ────────────────
-    # Uploading moved off the page body into a modal behind the component
-    # header's meatball menu, so the dropzone does not exist on screen
-    # until "Upload artifact…" is picked.
-    more_actions = page.get_by_role("button", name="More actions")
-    more_actions.wait_for(state="visible", timeout=15_000)
-    pace(page, 800)
-    hover_and_click(page, more_actions)
-    pace(page, 600)
-    hover_and_click(page, page.get_by_role("menuitem", name="Upload artifact"))
-    pace(page, 1000)
-
-    # ── 4. Pick the VEX artifact type ────────────────────────────────────
-    type_select = page.locator("#upload-bom-type")
-    type_select.wait_for(state="visible", timeout=10_000)
-    pace(page, 1000)
-    type_select.select_option("vex")
-    pace(page, 1200)
-
-    # ── 5. Drop the VEX file; a dry-run preview shows what would change ──
-    # The dropzone proxies to a hidden <input type="file"> via $refs.
-    # Setting files on the input directly mirrors what a real drop does.
-    # A VEX file gets a dry-run preview before anything is stored — the
-    # counts card is the feature the FAQ wants on screen.
+    # ── 2. Upload VEX ─────────────────────────────────────────────────────
+    actions = page.get_by_role("button", name="Component actions")
+    narrate(page, "open_component_s")
+    hover_and_click(page, actions)
+    pace(page, 400)
+    hover_and_click(page, page.get_by_role("menuitem", name="Upload VEX"))
     file_input = page.locator("#upload-sbom input[type='file']")
+    file_input.wait_for(state="attached", timeout=10_000)
+    page.get_by_text("Drop your VEX file here").first.wait_for(state="visible", timeout=10_000)
+    narrate(page, "drop_cyclonedx_vex")
+    pace(page, 800)
     with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
         file_input.set_input_files(
             files=[
@@ -153,40 +179,39 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
                 }
             ]
         )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
-    pace(page, 3000)
+    preview = page.get_by_text("Preview: nothing stored yet").first
+    preview.wait_for(state="visible", timeout=10_000)
+    narrate(page, "nothing_stored_yet")
+    settle(page)
 
-    # ── 5b. Apply it for real ────────────────────────────────────────────
-    apply_btn = page.locator("button:has-text('Apply this VEX')")
+    # ── 3. Apply ──────────────────────────────────────────────────────────
+    apply_btn = page.get_by_role("button", name="Apply this VEX")
+    narrate(page, "if_looks_right")
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
         timeout=15_000,
     ):
         hover_and_click(page, apply_btn)
+    reannotate_component_runs(component.id)
+    pace(page, 800)
 
-    # ── 6. Reload to show the new VEX document ───────────────────────────
-    # An explicit reload lands on the post-upload state without depending
-    # on the toast → setTimeout → reload chain.
-    pace(page, 1500)
-    page.reload()
+    page.goto(component_url)
     page.wait_for_load_state("networkidle")
-    pace(page, 2500)
+    other_row = page.locator(f"tr:has-text('{OTHER_CVE}')").first
+    other_row.wait_for(state="visible", timeout=15_000)
+    page.locator(f"tr:has-text('{CVE}')").first.wait_for(state="hidden", timeout=10_000)
+    narrate(page, "critical_has_left")
+    settle(page)
 
-    # ── 7. Show the VEX row in the Artifacts & security table ────────────
-    # VEX artifacts are rows of the unified artifacts table (Type column,
-    # violet badge), latest-per-type on the component card.
-    heading = page.locator("h4:has-text('artifacts')").first
-    heading.wait_for(state="visible", timeout=15_000)
-    heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 1500)
-
-    vex_badge = page.locator("span.tw-badge-violet:text-is('VEX')").first
-    vex_badge.wait_for(state="visible", timeout=15_000)
-    vex_badge.hover()
-    pace(page, 2000)
-
-    # ── 8. Click through to the VEX artifact page ────────────────────────
-    vex_row_link = page.locator("tr:has(span.tw-badge-violet) a").first
-    hover_and_click(page, vex_row_link)
+    # ── 4. Closed by a decision ───────────────────────────────────────────
+    status = page.locator("main select[name='status']").first
+    smooth_scroll(page, status, 300)
+    narrate(page, "nothing_deleted_filter")
+    hover_and_click(page, status)
+    status.select_option("decided")
     page.wait_for_load_state("networkidle")
-    pace(page, 3000)
+    closed = page.locator(f"tr:has-text('{CVE}')").first
+    closed.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, closed, 300)
+    closed.hover()
+    pace(page, 1200)

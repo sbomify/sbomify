@@ -1,0 +1,105 @@
+# Narration for screencasts/ai_agents.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      sbomify is built for AI agents to do the legwork of vulnerability triage
+      and security advisories, while a person keeps every decision.
+
+  token_first:
+    text: >-
+      Start with a token for your agent. In Settings, open API tokens, generate
+      a token, and name it after the agent that will use it.
+
+  choose_agent_preset:
+    text: >-
+      For the scope, choose For an AI agent.
+
+  preset_can_cannot:
+    text: >-
+      The form spells out the limits. The agent can read fix prompts, send VEX
+      rulings for approval, and draft advisories. It cannot apply a ruling, or
+      publish, withdraw or delete an advisory.
+
+  generate_hand_over:
+    text: >-
+      Generate it, and hand the token to your agent.
+
+  agent_reads_prompt:
+    text: >-
+      Here the agent takes on the libwebp vulnerability. It reads the triage
+      prompt through the API, then checks the code, and finds the vulnerable
+      decoder is never called.
+
+  agent_sends_ruling:
+    text: >-
+      It sends a Not affected ruling with its reasoning. sbomify accepts it, and
+      holds it for review.
+
+  ruling_waits_review:
+    text: >-
+      In the app, the ruling waits on the Review tab, marked as from an AI agent,
+      with its reasoning and what it would close. Nothing has changed yet.
+
+  agent_tries_apply:
+    text: >-
+      Now the agent tries to apply its ruling without review. sbomify refuses.
+      An agent can propose a ruling, but it cannot approve its own work.
+
+  person_approves_ruling:
+    text: >-
+      You read the reasoning, and approve it.
+
+  vulnerability_closes:
+    text: >-
+      The vulnerability closes, and it is listed with the reason the agent gave.
+
+  agent_drafts_advisory:
+    text: >-
+      Advisories work the same way. The agent drafts one for the zlib
+      vulnerability, and it is saved as a draft.
+
+  draft_only_workspace:
+    text: >-
+      The page says an AI agent drafted it. Only your workspace can see it.
+
+  agent_tries_publish:
+    text: >-
+      The agent tries to publish it, and is refused. Publishing stays with a
+      person.
+
+  person_publishes:
+    text: >-
+      You read it through, and publish it to your Trust Center.
+
+  agent_changes_published:
+    text: >-
+      Later, the agent posts an update and lowers the severity. The advisory is
+      published now, so neither change goes live. Each one is held as a
+      proposal.
+
+  proposals_with_diff:
+    text: >-
+      Both wait for review on the advisory, with who sent them, why, and exactly
+      what would change.
+
+  approve_update:
+    text: >-
+      The update is right, so approve it, and it is posted to the timeline.
+
+  reject_severity:
+    text: >-
+      The severity change is wrong. Reject it, pick a reason, and tell the agent
+      what to do differently.
+
+  agent_reads_reason:
+    text: >-
+      The agent reads your reason and its next step back through the API, so it
+      learns instead of sending the same change again.
+
+  close:
+    text: >-
+      The agent does the legwork and proposes. A person decides. Nothing reaches
+      your customers or your Trust Center without one.

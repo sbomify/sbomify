@@ -1,0 +1,30 @@
+# Narration for screencasts/plugin_enablement.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to turn on the OSV Vulnerability Scanner in sbomify.
+
+  open_plugins:
+    text: >-
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
+
+  about:
+    text: >-
+      OSV checks each SBOM against the Open Source Vulnerabilities database. It
+      works with CycloneDX and SPDX.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then scroll down and save your changes.
+
+  done:
+    text: >-
+      OSV is on. Every new SBOM upload is now scanned for known vulnerabilities.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

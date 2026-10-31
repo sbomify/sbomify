@@ -1,0 +1,26 @@
+# Narration for screencasts/workspace_deletion.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to delete a workspace in sbomify. Only the workspace owner can
+      do this.
+
+  open_settings_danger:
+    text: >-
+      Open Settings. The danger zone is at the bottom of the General tab.
+
+  deleting_workspace_removes:
+    text: >-
+      Deleting a workspace removes every product, component and artifact in it.
+
+  confirm_type_delete:
+    text: >-
+      To confirm, type delete, then click Delete workspace.
+
+  workspace_gone_back:
+    text: >-
+      The workspace is gone, and you are back on the dashboard of your default
+      workspace.

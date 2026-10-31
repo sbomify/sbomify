@@ -1,0 +1,23 @@
+# Narration for screencasts/walkthrough_chapters.py
+voice: carina
+speed: 1.0
+
+beats:
+  inventory_intro:
+    text: >-
+      Each component keeps its own SBOMs, VEX, and documents, uploaded from CI or
+      by hand.
+
+  inventory_artifacts_stored_exactly:
+    text: >-
+      Artifacts are stored exactly as received, never rewritten. Each upload is a
+      new version.
+
+  inventory_releases_pin_exact:
+    text: >-
+      Releases pin the exact artifacts that shipped in a version, so the answer
+      for an old version never changes underneath you.
+
+  inventory_years_later_release:
+    text: >-
+      Years later, the release still resolves to the same SBOMs.

@@ -1,0 +1,28 @@
+# Narration for screencasts/walkthrough_chapters.py
+voice: carina
+speed: 1.0
+
+beats:
+  supply_chain_intro:
+    text: >-
+      sbomify takes a product from SBOM to security disclosure. It starts with
+      knowing what you ship.
+
+  supply_chain_products_group_components:
+    text: >-
+      Products group the components you ship together, so every question about a
+      release starts from one place.
+
+  supply_chain_pied_piper_s:
+    text: >-
+      Pied Piper's compression engine: four components, their SBOMs, and their
+      open vulnerabilities.
+
+  supply_chain_cpe_purl_sku:
+    text: >-
+      CPE, PURL and SKU identifiers let scanners and customers match the product.
+
+  supply_chain_lifecycle_dates_set:
+    text: >-
+      Lifecycle dates set the support period you declare under the CRA, and tell
+      customers how long fixes will keep coming.

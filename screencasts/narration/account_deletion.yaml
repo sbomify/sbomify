@@ -1,0 +1,39 @@
+# Narration for screencasts/account_deletion.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to delete your sbomify account.
+
+  open_settings_account:
+    text: >-
+      Open Settings, then the Account tab. It shows your sign-in details and
+      preferences.
+
+  account_deletion_sits:
+    text: >-
+      Account deletion sits in the danger zone at the bottom.
+
+  dialog_lists_what:
+    text: >-
+      The dialog lists what happens. Your account is deactivated right away, and
+      your access tokens are revoked.
+
+  workspaces_where_only:
+    text: >-
+      Workspaces where you are the only member are deleted too.
+
+  have_14_days:
+    text: >-
+      You have 14 days to change your mind. After that, the account is deleted for
+      good.
+
+  confirm_type_delete:
+    text: >-
+      To confirm, type delete, then click Delete my account.
+
+  account_deleted_signed:
+    text: >-
+      Your account is deleted, and you are signed out.
