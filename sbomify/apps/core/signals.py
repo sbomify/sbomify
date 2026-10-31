@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from allauth.account.signals import user_signed_up
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.signals import m2m_changed, post_delete, post_save
@@ -28,6 +29,17 @@ def _schedule_latest_release_updated(release: Any, product: Any) -> None:
     transaction.on_commit(
         lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="release_updated", data=data)
     )
+
+
+@receiver(user_signed_up)
+def queue_signed_up_event(sender: Any, request: Any, user: Any, **kwargs: Any) -> None:
+    """Have the browser send ``user:signed_up`` once it has identified the new user."""
+    from sbomify.apps.core.analytics import events
+    from sbomify.apps.core.posthog_service import queue_client_event
+
+    sociallogin = kwargs.get("sociallogin")
+    signup_method = sociallogin.account.provider if sociallogin else "email"
+    queue_client_event(request, events.USER_SIGNED_UP, {"signup_method": signup_method})
 
 
 @receiver(post_save, sender="sboms.SBOM")
