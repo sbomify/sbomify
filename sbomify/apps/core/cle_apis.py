@@ -14,6 +14,7 @@ from sbomify.apps.core.cle_schemas import (
     CLEEventResponseSchema,
     CLESupportDefinitionCreateSchema,
     CLESupportDefinitionResponseSchema,
+    ReleaseCLEEventCreateSchema,
 )
 from sbomify.apps.core.models import Component, ComponentRelease, Product, Release
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -421,10 +422,25 @@ def list_release_cle_events(
 
 @router.post(
     "/releases/{release_id}/cle/events",
-    response={201: CLEEventResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: CLEEventResponseSchema,
+        201: CLEEventResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
 )
-def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, payload: CLEEventCreateSchema) -> Any:
-    """Create a new CLE lifecycle event for a release."""
+def create_release_cle_event_endpoint(
+    request: HttpRequest, release_id: str, payload: ReleaseCLEEventCreateSchema
+) -> Any:
+    """Create a new CLE lifecycle event for a release.
+
+    A ``supersededBy`` event declares one successor; post one per successor.
+    Repeating a live one with the same ``drop_in`` returns its event with 200,
+    whatever the date, since nothing was written; restating it on the other
+    line is a 409.
+    """
     result = _get_release_or_404(request, release_id)
     if not isinstance(result, Release):
         return result
@@ -443,6 +459,8 @@ def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, pay
         reason=payload.reason,
         description=payload.description,
         references=payload.references,
+        drop_in=payload.drop_in,
+        actor_id=request.user.pk,
     )
 
     if not svc_result.ok:
@@ -450,7 +468,7 @@ def create_release_cle_event_endpoint(request: HttpRequest, release_id: str, pay
         error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
         return status, {"detail": svc_result.error, "error_code": error_code}
 
-    return 201, svc_result.value
+    return svc_result.status_code or 201, svc_result.value
 
 
 @router.get(
