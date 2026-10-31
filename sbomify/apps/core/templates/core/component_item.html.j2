@@ -1,7 +1,6 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load humanize %}
 {% load django_vite %}
-{% load advisory_tags %}
 {% block title %}{{ component.get_component_type_display }}: {{ item.name }}{% endblock %}
 {% block content %}
     {% comment %}The download title names the format and the kind of document. Both are settled here rather than inline in the attribute, which djlint is free to break across lines.{% endcomment %}
@@ -162,9 +161,14 @@
         {% endif %}
         {# VEX suppressions — the vulnerabilities this VEX artifact clears #}
         {% if vex_suppressions is not None %}
+            {% if vex_statement_limit %}
+                <c-feedback.alert variant="warning">This VEX hits the {{ vex_statement_limit|intcomma }}-statement limit. Statements after the first {{ vex_statement_limit|intcomma }} are ignored and suppress nothing.</c-feedback.alert>
+            {% endif %}
             {{ vex_suppression_terms|json_script:"vex-suppression-terms" }}
             {{ vex_suppression_states|json_script:"vex-suppression-states" }}
-            <div x-data="{ search: '', statusFilter: 'all', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('vex-suppression-terms') || []), states: (window.parseJsonScript('vex-suppression-states') || []), get statusOptions() { return [...new Set(this.states)].filter(Boolean).sort(); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.states[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
+            {{ vex_suppressions|json_script:"vex-suppression-rows" }}
+            {% comment %}Rows arrive as data and only the page on screen is built. A rendered row per statement, each re-filtering the whole list to decide whether it showed, froze the tab for over a minute on a 10,000-statement VEX.{% endcomment %}
+            <div x-data="{ search: '', statusFilter: 'all', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('vex-suppression-terms') || []), states: (window.parseJsonScript('vex-suppression-states') || []), rows: (window.parseJsonScript('vex-suppression-rows') || []), get statusOptions() { return [...new Set(this.states)].filter(Boolean).sort(); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.states[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageIdx() { return this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
                  x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })">
                 <c-cards.card flush>
                 <c-cards.header>
@@ -194,40 +198,37 @@
                     <c-tables.header-cell class="w-1/4">Justification</c-tables.header-cell>
                     </c-tables.head>
                     <tbody>
-                        {% for s in vex_suppressions %}
-                            <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
+                        <template x-for="i in pageIdx" :key="i">
+                            <c-tables.row>
                             <c-tables.cell nowrap>
-                            {% with suppression_url=s.id|advisory_url %}
-                                {% if suppression_url %}
-                                    <a href="{{ suppression_url }}"
-                                       target="_blank"
-                                       rel="noopener"
-                                       class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                        {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                    </a>
-                                {% else %}
-                                    <span class="font-medium text-text-muted">{{ s.id }}</span>
-                                {% endif %}
-                            {% endwith %}
-                            {% if s.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ s.aliases|join:", " }}</div>{% endif %}
+                            <a x-show="rows[i].url"
+                               :href="rows[i].url"
+                               target="_blank"
+                               rel="noopener"
+                               class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                                <span x-text="rows[i].id"></span><i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                            </a>
+                            <span x-show="!rows[i].url"
+                                  class="font-medium text-text-muted"
+                                  x-text="rows[i].id"></span>
+                            <div x-show="rows[i].aliases.length"
+                                 class="text-xs text-text-muted mt-1"
+                                 x-text="'Aliases: ' + rows[i].aliases.join(', ')"></div>
                             </c-tables.cell>
-                            <c-tables.cell>{{ s.package }}</c-tables.cell>
                             <c-tables.cell>
-                            <span class="text-info">{{ s.state }}</span>
+                            <span x-text="rows[i].package"></span>
+                            </c-tables.cell>
+                            <c-tables.cell>
+                            <span class="text-info" x-text="rows[i].state"></span>
                             </c-tables.cell>
                             {% comment %}The muted ink sits on the value rather than the cell: the cell already states the table's own text colour, and two colour utilities on one element resolve by stylesheet order, not by the order they are written.{% endcomment %}
                             <c-tables.cell>
-                            {% if s.justification %}
-                                <span class="text-text-muted"
-                                      {% if s.detail %}title="{{ s.detail }}"{% endif %}>{{ s.justification }}</span>
-                            {% elif s.detail %}
-                                <span class="text-text-muted">{{ s.detail|truncatechars:60 }}</span>
-                            {% else %}
-                                <span class="text-text-muted">—</span>
-                            {% endif %}
+                            <span class="text-text-muted"
+                                  :title="(rows[i].justification && rows[i].detail) || null"
+                                  x-text="rows[i].note || '—'"></span>
                             </c-tables.cell>
                             </c-tables.row>
-                        {% endfor %}
+                        </template>
                         <tr x-show="total === 0">
                             <td colspan="4" class="px-6 py-8 text-center text-text-muted">No vulnerabilities match your search.</td>
                         </tr>

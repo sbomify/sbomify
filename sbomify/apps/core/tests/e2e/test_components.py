@@ -208,6 +208,65 @@ class TestComponentVexDetailsSnapshot:
 
 
 @pytest.mark.django_db
+def test_a_vex_at_the_statement_limit_stays_responsive(
+    authenticated_page: Page, sbom_component_details, mocker
+) -> None:
+    """A Yocto VEX holds tens of thousands of statements. Building a row per statement,
+    each re-filtering the whole list, held the main thread for over a minute; the page
+    now builds only the rows on screen, and says when statements past the limit are lost."""
+    import json
+
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
+
+    document = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "vulnerabilities": [
+            {
+                "id": f"CVE-2024-{n:05d}",
+                "analysis": {"state": "not_affected", "justification": "code_not_present"},
+                "affects": [{"ref": f"urn:cdx:3e671687-395b-41f5-a30f-a58921a69b79/1#{n}"}],
+            }
+            for n in range(MAX_VEX_STATEMENTS + 1)
+        ],
+    }
+    mocker.patch(
+        "sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=json.dumps(document).encode()
+    )
+    vex = SBOM.objects.create(
+        name="image-vex.json",
+        component=sbom_component_details,
+        format="cyclonedx",
+        format_version="1.6",
+        version="1.0",
+        sbom_filename="image-vex.json",
+        source="manual_upload",
+        bom_type=SBOM.BomType.VEX,
+    )
+
+    authenticated_page.goto(f"/components/{sbom_component_details.id}/vex/{vex.id}/")
+
+    expect(authenticated_page.get_by_text(f"This VEX hits the {MAX_VEX_STATEMENTS:,}-statement limit.")).to_be_visible()
+    expect(authenticated_page.get_by_text(f"Showing 1 to 10 of {MAX_VEX_STATEMENTS:,}")).to_be_visible()
+    rows = authenticated_page.locator("tbody tr").filter(has_text="CVE-2024-")
+    expect(rows).to_have_count(10)
+    expect(rows.first.get_by_role("link", name="CVE-2024-00000")).to_have_attribute(
+        "href", "https://www.cve.org/CVERecord?id=CVE-2024-00000"
+    )
+
+    authenticated_page.get_by_label("Search suppressed vulnerabilities").fill("cve-2024-04242")
+    expect(authenticated_page.get_by_text("Showing 1 to 1 of 1")).to_be_visible()
+    expect(rows).to_have_count(1)
+
+    authenticated_page.get_by_label("Search suppressed vulnerabilities").fill("")
+    authenticated_page.get_by_role("button", name="Next page").click()
+    expect(authenticated_page.get_by_text(f"Showing 11 to 20 of {MAX_VEX_STATEMENTS:,}")).to_be_visible()
+    expect(rows.first).to_contain_text("CVE-2024-00010")
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestComponentCbomDetailsSnapshot:
     """The canonical /cbom/ artifact page (crypto inventory collapses when empty)."""
