@@ -17,7 +17,7 @@ from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.schemas import ReleaseResponseSchema
 from sbomify.apps.core.services.cle import create_cle_event, create_release_cle_event
-from sbomify.apps.core.services.release_lifecycle import set_release_state
+from sbomify.apps.core.services.release_lifecycle import remove_supersession, set_release_state
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Workspace
@@ -191,7 +191,7 @@ class TestCreateWithSupersedes:
     def test_an_edge_declared_before_the_release_existed_is_linked_not_refused(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
-        old = _release(sample_product, "1.2.3")
+        old = _release(sample_product, "1.2.3", **_on(datetime(2024, 12, 1, tzinfo=dt_timezone.utc)))
         # CI named the successor before it existed, so the edge was stored unlinked.
         early = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True)
         assert early.ok
@@ -211,6 +211,40 @@ class TestCreateWithSupersedes:
         new = response.json()["id"]
         assert [edge.to_release_id for edge in _edges(old)] == [new]
         assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_an_edge_declared_early_is_held_to_the_release_dates_too(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # 1.2.3 came out now and CI named 1.2.4 before it existed. A 1.2.4 dated before 1.2.3 cannot
+        # take over its line, whether the edge is declared on create or was declared early.
+        old = _release(sample_product, "1.2.3")
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True).ok
+
+        response = self._create(
+            authenticated_api_client,
+            sample_product,
+            name="1.2.4",
+            version="1.2.4",
+            created_at=PAST.isoformat(),
+            released_at=PAST.isoformat(),
+        )
+
+        assert response.status_code == 400, response.content
+        assert "was released after 1.2.4" in response.json()["detail"]
+        assert not Release.objects.filter(product=sample_product, name="1.2.4").exists()
+
+    def test_the_response_says_where_the_new_release_stands(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        """The lifecycle is worked out on other copies of the release, so the response reads it back."""
+        assert create_cle_event(sample_product, "endOfSupport", PAST, versions=[{"range": "vers:generic/*"}]).ok
+
+        response = self._create(authenticated_api_client, sample_product, name="3.0", version="3.0")
+
+        assert response.status_code == 201, response.content
+        assert response.json()["lifecycle_state"] == "end_of_support"
+        assert response.json()["is_tracked"] is False
+        assert response.json()["effective_end_of_support"] == PAST.date().isoformat()
 
     def test_restating_an_earlier_edge_differently_is_refused_with_a_way_out(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -495,6 +529,22 @@ class TestWhereAReleaseStands:
         assert "Previous releases" in page.decode() and "New line" in page.decode()
         assert "still monitored" not in page.decode()
 
+    def test_the_lifecycle_card_follows_updates_to_its_release(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        """Withdrawn through the API or in another tab, the card repaints with the header."""
+        import re
+
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "1.0.0")
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id]))
+
+        region = re.search(r'<div id="release-lifecycle"[^>]*>', page.content.decode(), re.S)
+        assert region is not None
+        assert "liveRegion(" in region[0] and "release_updated" in region[0] and release.pk in region[0]
+        assert 'hx-select="#release-lifecycle"' in region[0]
+
     def test_withdrawing_from_the_details_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
@@ -739,6 +789,55 @@ class TestWithdrawnReason:
         data = client.get(f"/api/v1/releases/{release.pk}", **get_api_headers(token)).json()
 
         assert data["withdrawn_reason"] == "compromised"
+
+
+class TestOtherReleasesHear:
+    """A write to one release can move others. Each page listens for release_updated on its own ID."""
+
+    @pytest.fixture
+    def told(self, mocker: Any, django_capture_on_commit_callbacks: Any) -> Any:
+        sent = mocker.patch("sbomify.apps.core.services.release_lifecycle.broadcast_to_workspace")
+
+        def run(act: Any) -> set[str]:
+            with django_capture_on_commit_callbacks(execute=True):
+                act()
+            return {
+                call.kwargs["data"]["release_id"]
+                for call in sent.call_args_list
+                if call.kwargs["message_type"] == "release_updated"
+            }
+
+        return run
+
+    def test_withdrawing_a_successor_tells_its_predecessor(self, sample_product: Product, told: Any) -> None:
+        old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
+        _supersede(old, new)
+
+        assert old.pk in told(lambda: set_release_state(new, "withdraw", reason="defective"))
+
+    def test_creating_a_release_that_replaces_another_tells_it(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, told: Any
+    ) -> None:
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0.0")
+
+        heard = told(
+            lambda: client.post(
+                "/api/v1/releases",
+                data={"product_id": sample_product.pk, "name": "1.0.1", "supersedes": [{"release_id": old.pk}]},
+                content_type="application/json",
+                **get_api_headers(token),
+            )
+        )
+
+        assert old.pk in heard
+
+    def test_removing_a_link_tells_both_releases(self, sample_product: Product, told: Any) -> None:
+        old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        assert {old.pk, new.pk} <= told(lambda: remove_supersession(new.pk, edge.pk))
 
 
 class TestRemoveLink:
