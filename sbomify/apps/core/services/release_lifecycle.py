@@ -166,8 +166,12 @@ def backdated_takeover(predecessor: Release, successor: Release) -> str | None:
 
     A release cannot replace one that came out after it on the same line:
     a backdated entry would retire the current release the moment it was saved.
+    Either date can still be the bare timestamp an edit sent, which ``save()``
+    has not made aware yet, so both are read the way it will read them.
     """
-    if successor.released_at and predecessor.released_at and successor.released_at < predecessor.released_at:
+    successor_date = Release._as_aware(successor.released_at)
+    predecessor_date = Release._as_aware(predecessor.released_at)
+    if successor_date and predecessor_date and successor_date < predecessor_date:
         return (
             f"Release {predecessor.name} was released after {successor.name}, so {successor.name} cannot "
             "replace it on the same line. Choose a new line, or check the release dates."
@@ -542,23 +546,45 @@ def recompute_release_lifecycle(product: Product) -> None:
     # release: walked per path, a web of them doubled the work with every layer.
     onward_from: dict[str, datetime | None] = {}
 
+    def withdrawn_successor(edge: ReleaseSupersession) -> Release | None:
+        # No successor in sbomify, outside it or deleted, counts like a live one.
+        successor = releases.get(edge.to_release_id) if edge.to_release_id else None
+        return successor if successor is not None and successor.withdrawn_at is not None else None
+
     def moves_on(edge: ReleaseSupersession) -> datetime | None:
         """When the line through ``edge`` goes on, or None when nothing live carries it."""
-        successor = releases.get(edge.to_release_id) if edge.to_release_id else None
-        # No successor in sbomify: outside it, or deleted. It still counts.
-        if successor is None or successor.withdrawn_at is None:
+        successor = withdrawn_successor(edge)
+        if successor is None:
             return edge.effective
-        if successor.pk not in onward_from:
-            # None while it is being worked out, so a cycle the edge checks let
-            # through ends here rather than recursing.
-            onward_from[successor.pk] = None
-            onward = [when for after in drop_ins.get(successor.pk, ()) if (when := moves_on(after)) is not None]
-            onward_from[successor.pk] = min(onward) if onward else None
-        later = onward_from[successor.pk]
+        later = onward_from.get(successor.pk)
         return max(edge.effective, later) if later is not None else None
+
+    def work_out(start: str) -> None:
+        """Fill ``onward_from`` for ``start`` and every withdrawn release past it, deepest first.
+
+        A stack rather than recursion: a long line of withdrawn releases passed
+        Python's recursion limit. A release still being worked out reads as
+        None, so a cycle the edge checks let through ends there.
+        """
+        stack, entered = [start], set()
+        while stack:
+            pk = stack[-1]
+            if pk in entered:
+                stack.pop()
+                onward = [when for after in drop_ins.get(pk, ()) if (when := moves_on(after)) is not None]
+                onward_from[pk] = min(onward) if onward else None
+                continue
+            entered.add(pk)
+            for after in drop_ins.get(pk, ()):
+                successor = withdrawn_successor(after)
+                if successor is not None and successor.pk not in onward_from and successor.pk not in entered:
+                    stack.append(successor.pk)
 
     superseded: dict[str, datetime] = {}
     for source, edges in drop_ins.items():
+        for edge in edges:
+            if (successor := withdrawn_successor(edge)) is not None and successor.pk not in onward_from:
+                work_out(successor.pk)
         moved_on = [when for edge in edges if (when := moves_on(edge)) is not None]
         if moved_on:
             superseded[source] = min(moved_on)

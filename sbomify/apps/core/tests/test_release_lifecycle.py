@@ -240,6 +240,23 @@ class TestSupersededAt:
         assert time.perf_counter() - started < 1
         assert _fresh(layers[0][0]).superseded_at == PAST
 
+    def test_a_long_chain_of_withdrawn_releases_is_walked_without_recursing(self, sample_product: Product) -> None:
+        """A walk that recursed once per withdrawn release hit Python's recursion limit on a long line."""
+        chain = Release.objects.bulk_create(
+            Release(product=sample_product, name=f"0.{n}", version=f"0.{n}") for n in range(1502)
+        )
+        ReleaseSupersession.objects.bulk_create(
+            ReleaseSupersession(from_release=a, to_release=b, successor_label=b.version, drop_in=True, effective=PAST)
+            for a, b in zip(chain, chain[1:], strict=False)
+        )
+        Release.objects.filter(pk__in=[r.pk for r in chain[1:-1]]).update(withdrawn_at=timezone.now())
+
+        recompute_release_lifecycle(sample_product)
+
+        assert _fresh(chain[0]).superseded_at == PAST
+        assert _fresh(chain[-2]).superseded_at == PAST
+        assert _fresh(chain[-1]).superseded_at is None
+
 
 @pytest.mark.django_db
 class TestOneToMany:
