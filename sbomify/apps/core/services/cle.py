@@ -33,6 +33,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     audit,
     backdated_takeover,
     broadcast_releases_updated,
+    covers_every_version,
     existing_supersession,
     product_dates,
     recompute_release_lifecycle,
@@ -365,7 +366,9 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
     The product columns are rebuilt from the events on every product CLE write,
     so a date written to a column alone would be undone by the next event of
     any type. A new date is recorded as an event for every version, as the
-    lifecycle card records it; clearing one withdraws its surviving events.
+    lifecycle card records it; clearing one withdraws its surviving events for
+    every version, the ones ``product_dates`` folds into the column. A date for
+    some versions is a separate declaration and stays.
     ``dates`` holds only the fields the caller sets. The value is whether
     anything changed. Call inside a transaction.
     """
@@ -377,7 +380,11 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
         if value is None:
             events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
             withdrawn = {e.withdrawn_event_id for e in events if e.event_type == CLEEventType.WITHDRAWN}
-            surviving = [e for e in events if e.event_type == event_type and e.event_id not in withdrawn]
+            surviving = [
+                e
+                for e in events
+                if e.event_type == event_type and e.event_id not in withdrawn and covers_every_version(e.versions)
+            ]
             for event in surviving:
                 result = create_cle_event(
                     product, CLEEventType.WITHDRAWN, timezone.now(), withdrawn_event_id=event.event_id

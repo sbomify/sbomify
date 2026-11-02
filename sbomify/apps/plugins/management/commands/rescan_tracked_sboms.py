@@ -3,9 +3,10 @@
 Where no scheduler runs, the hourly Dependency-Track scan and the daily and
 weekly OSV scans never fire. This runs those three sweeps once, with the same
 workspaces, plan rules and skip windows, so an SBOM scanned recently is left
-alone and a second run queues nothing new. Only SBOMs a live release ships are
-scanned. Run it from a host cron, after a deploy, or after pointing sbomify at a
-new Dependency-Track server.
+alone. A queued scan only counts once a worker starts it, so running this again
+before the workers drain the first run queues those scans again, as the
+scheduled sweeps do. Only tracked SBOMs are scanned. Run it from a host cron,
+after a deploy, or after pointing sbomify at a new Dependency-Track server.
 """
 
 from __future__ import annotations
