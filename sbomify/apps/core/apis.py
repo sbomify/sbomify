@@ -150,6 +150,19 @@ def _broadcast_release_updated(release: Release) -> None:
     )
 
 
+def _broadcast_linked_releases_updated(linked: Release) -> None:
+    """Tell the workspace a link to ``linked`` was added or removed.
+
+    A linked release stays monitored while a live release links to it, and so
+    do the releases it links on, so their pages repaint as well.
+    """
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    _broadcast_release_updated(linked)
+    for further in Release.objects.select_related("product__team").filter(pk__in=releases_linked_from([linked.pk])):
+        _broadcast_release_updated(further)
+
+
 def _broadcast_product_updated(product: Product) -> None:
     """Tell the workspace a product was edited, so open inventories repaint it."""
     if product.team.key:
@@ -4638,6 +4651,7 @@ def link_release_to_release(request: HttpRequest, release_id: str, payload: Rele
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
     _broadcast_release_updated(release)
+    _broadcast_linked_releases_updated(linked)
     return 201, _release_link_response(result.value)
 
 
@@ -4669,6 +4683,9 @@ def unlink_release_from_release(request: HttpRequest, release_id: str, linked_re
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
     _broadcast_release_updated(release)
+    linked = Release.objects.select_related("product__team").filter(pk=linked_release_id).first()
+    if linked is not None:
+        _broadcast_linked_releases_updated(linked)
     return 204, None
 
 

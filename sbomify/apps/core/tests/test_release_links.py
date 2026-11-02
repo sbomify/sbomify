@@ -125,6 +125,25 @@ class TestLinkingApi:
         assert client.delete(url, **get_api_headers(token)).status_code == 204
         assert client.delete(url, **get_api_headers(token)).status_code == 404
 
+    def test_linking_and_unlinking_tell_the_linked_releases_too(self, authenticated_api_client, app, toolchain, mocker):
+        """Whether a linked release is still monitored depends on the releases linking to it,
+        so its open page, and those of the releases it links on, repaint too."""
+        runtime = _release(app.product.team, "Runtime")
+        ReleaseLink.objects.create(release=toolchain, linked_release=runtime)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+
+        assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 201
+        assert (
+            client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token)).status_code
+            == 204
+        )
+
+        told = [c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"]
+        assert told.count(str(app.id)) == 2
+        assert told.count(str(toolchain.id)) == 2
+        assert told.count(str(runtime.id)) == 2
+
     def test_a_guest_cannot_link(self, guest_api_client, app, toolchain):
         client, token = guest_api_client
         assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 403
