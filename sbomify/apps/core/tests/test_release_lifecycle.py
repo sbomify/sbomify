@@ -219,6 +219,27 @@ class TestSupersededAt:
         assert _fresh(releases["1.0"]).superseded_at == tomorrow
         assert "1.0" in _tracked(sample_product)
 
+    def test_a_web_of_withdrawn_releases_is_walked_once_per_release(self, sample_product: Product) -> None:
+        """Each path through withdrawn releases was its own walk, so two releases per layer, each
+        replaced by both in the next, doubled the work with every layer."""
+        import time
+
+        layers = [[_release(sample_product, f"{depth}.{side}") for side in (0, 1)] for depth in range(20)]
+        live = _release(sample_product, "live")
+        ReleaseSupersession.objects.bulk_create(
+            ReleaseSupersession(from_release=a, to_release=b, successor_label=b.version, drop_in=True, effective=PAST)
+            for upper, lower in zip(layers, [*layers[1:], [live]], strict=True)
+            for a in upper
+            for b in lower
+        )
+        Release.objects.filter(pk__in=[r.pk for layer in layers[1:] for r in layer]).update(withdrawn_at=timezone.now())
+
+        started = time.perf_counter()
+        recompute_release_lifecycle(sample_product)
+
+        assert time.perf_counter() - started < 1
+        assert _fresh(layers[0][0]).superseded_at == PAST
+
 
 @pytest.mark.django_db
 class TestOneToMany:

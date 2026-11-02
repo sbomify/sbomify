@@ -280,24 +280,28 @@ def recompute_release_lifecycle(product: Product) -> None:
     for edge in ReleaseSupersession.objects.live().filter(from_release__product_id=product.pk, drop_in=True):
         drop_ins[edge.from_release_id].append(edge)
 
-    def moves_on(edge: ReleaseSupersession, seen: frozenset[str]) -> datetime | None:
+    # When the line goes on past each withdrawn release, worked out once per
+    # release: walked per path, a web of them doubled the work with every layer.
+    onward_from: dict[str, datetime | None] = {}
+
+    def moves_on(edge: ReleaseSupersession) -> datetime | None:
         """When the line through ``edge`` goes on, or None when nothing live carries it."""
         successor = releases.get(edge.to_release_id) if edge.to_release_id else None
         # No successor in sbomify: outside it, or deleted. It still counts.
         if successor is None or successor.withdrawn_at is None:
             return edge.effective
-        if successor.pk in seen:
-            return None
-        onward = [
-            when
-            for after in drop_ins.get(successor.pk, ())
-            if (when := moves_on(after, seen | {successor.pk})) is not None
-        ]
-        return max(edge.effective, min(onward)) if onward else None
+        if successor.pk not in onward_from:
+            # None while it is being worked out, so a cycle the edge checks let
+            # through ends here rather than recursing.
+            onward_from[successor.pk] = None
+            onward = [when for after in drop_ins.get(successor.pk, ()) if (when := moves_on(after)) is not None]
+            onward_from[successor.pk] = min(onward) if onward else None
+        later = onward_from[successor.pk]
+        return max(edge.effective, later) if later is not None else None
 
     superseded: dict[str, datetime] = {}
     for source, edges in drop_ins.items():
-        moved_on = [when for edge in edges if (when := moves_on(edge, frozenset())) is not None]
+        moved_on = [when for edge in edges if (when := moves_on(edge)) is not None]
         if moved_on:
             superseded[source] = min(moved_on)
 
