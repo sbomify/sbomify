@@ -253,7 +253,7 @@ def test_a_vex_at_the_statement_limit_stays_responsive(
     rows = authenticated_page.locator("tbody tr").filter(has_text="CVE-2024-")
     expect(rows).to_have_count(10)
     expect(rows.first.get_by_role("link", name="CVE-2024-00000")).to_have_attribute(
-        "href", "https://www.cve.org/CVERecord?id=CVE-2024-00000"
+        "href", "https://insights.sbomify.com/CVE-2024-00000/"
     )
 
     authenticated_page.get_by_label("Search suppressed vulnerabilities").fill("cve-2024-04242")

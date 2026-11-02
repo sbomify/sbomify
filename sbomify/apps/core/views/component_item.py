@@ -343,7 +343,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 # The browser gets the rows as data and builds only the page on
                 # screen, so the link and the shortened note are worked out here.
                 for row in vex_suppressions:
-                    row["url"] = advisory_url(row["id"])
+                    row["url"] = advisory_url(row["id"], row["aliases"])
                     row["note"] = row["justification"] or Truncator(row["detail"]).chars(60)
 
                 from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS

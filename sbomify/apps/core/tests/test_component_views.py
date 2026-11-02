@@ -461,7 +461,7 @@ class TestComponentItemLargeVex:
         rows = json.loads(script[1])
         assert len(rows) == 50
         assert rows[0]["id"] == "CVE-2024-00000"
-        assert rows[0]["url"] == "https://www.cve.org/CVERecord?id=CVE-2024-00000"
+        assert rows[0]["url"] == "https://insights.sbomify.com/CVE-2024-00000/"
         assert rows[0]["package"] == "All packages"
         assert "-statement limit" not in many
 
