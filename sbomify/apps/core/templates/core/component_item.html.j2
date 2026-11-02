@@ -197,7 +197,7 @@
                         {% for s in vex_suppressions %}
                             <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
                             <c-tables.cell nowrap>
-                            {% with suppression_url=s.id|advisory_url %}
+                            {% with suppression_url=s.id|advisory_url:s.aliases %}
                                 {% if suppression_url %}
                                     <a href="{{ suppression_url }}"
                                        target="_blank"
