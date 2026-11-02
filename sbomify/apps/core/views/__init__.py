@@ -159,7 +159,12 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        {
+            "id": str(token.id),
+            "description": token.description,
+            "scope_label": token.scope_label,
+            "created_at": token.created_at.isoformat(),
+        }
         for token in access_tokens_qs
     ]
 
