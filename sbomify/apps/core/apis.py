@@ -56,7 +56,7 @@ from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Release, ReleaseArtifact, ReleaseSupersession, User
+from .models import Component, Product, Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -155,13 +155,16 @@ def _broadcast_linked_releases_updated(linked: Release) -> None:
     """Tell the workspace a link to ``linked`` was added or removed.
 
     A linked release stays monitored while a live release links to it, and so
-    do the releases it links on, so their pages repaint as well.
+    do the releases it links on and the releases shipping their SBOMs, so their
+    pages repaint as well.
     """
     from sbomify.apps.core.services.release_lifecycle import releases_linked_from
 
-    _broadcast_release_updated(linked)
-    for further in Release.objects.select_related("product__team").filter(pk__in=releases_linked_from([linked.pk])):
-        _broadcast_release_updated(further)
+    reached = {linked.pk, *releases_linked_from([linked.pk])}
+    shipped = ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values("sbom_id")
+    moved = Release.objects.filter(Q(pk__in=reached) | Q(artifacts__sbom_id__in=shipped)).distinct()
+    for release in moved.select_related("product__team"):
+        _broadcast_release_updated(release)
 
 
 def _broadcast_product_updated(product: Product) -> None:
@@ -3544,6 +3547,11 @@ def set_release_lifecycle(request: HttpRequest, release_id: str, payload: Releas
         return status, {"detail": result.error, "error_code": code}
 
     _broadcast_release_updated(release)
+    # The releases it links to may have been monitored only through it.
+    for linked in Release.objects.filter(
+        pk__in=ReleaseLink.objects.filter(release=release).values("linked_release_id")
+    ):
+        _broadcast_linked_releases_updated(linked)
     return 200, _build_release_response(request, result.value)
 
 

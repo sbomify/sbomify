@@ -144,6 +144,44 @@ class TestLinkingApi:
         assert told.count(str(toolchain.id)) == 2
         assert told.count(str(runtime.id)) == 2
 
+    def test_unlinking_tells_the_releases_that_ship_the_linked_sboms(
+        self, authenticated_api_client, app, toolchain, mocker
+    ):
+        """A retired release sharing the linked release's SBOM can stop being monitored with it."""
+        bundle = _sbom(toolchain, "bundle")
+        sibling = _release(app.product.team, "Sibling")
+        ReleaseArtifact.objects.create(release=sibling, sbom=bundle)
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+
+        response = client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token))
+
+        assert response.status_code == 204
+        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
+        assert str(sibling.id) in told
+
+    @pytest.mark.parametrize("action", ["withdraw", "archive"])
+    def test_retiring_a_release_tells_the_releases_it_links_to(
+        self, authenticated_api_client, app, toolchain, mocker, action
+    ):
+        """The linked release may have been monitored only because this one linked to it."""
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+        body = {"action": action, "reason": "defective"} if action == "withdraw" else {"action": action}
+
+        response = client.post(
+            f"/api/v1/releases/{app.id}/lifecycle",
+            data=json.dumps(body),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 200
+        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
+        assert str(toolchain.id) in told
+
     def test_a_guest_cannot_link(self, guest_api_client, app, toolchain):
         client, token = guest_api_client
         assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 403
