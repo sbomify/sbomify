@@ -56,7 +56,7 @@ from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession, User
+from .models import Component, Product, Release, ReleaseArtifact, ReleaseSupersession, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -3546,12 +3546,9 @@ def set_release_lifecycle(request: HttpRequest, release_id: str, payload: Releas
         code = ErrorCode.RELEASE_NOT_FOUND if status == 404 else ErrorCode.VALIDATION_ERROR
         return status, {"detail": result.error, "error_code": code}
 
-    _broadcast_release_updated(release)
-    # The releases it links to may have been monitored only through it.
-    for linked in Release.objects.filter(
-        pk__in=ReleaseLink.objects.filter(release=release).values("linked_release_id")
-    ):
-        _broadcast_linked_releases_updated(linked)
+    # The releases it links to, and those shipping the same SBOMs, may have
+    # been monitored only through it.
+    _broadcast_linked_releases_updated(release)
     return 200, _build_release_response(request, result.value)
 
 
