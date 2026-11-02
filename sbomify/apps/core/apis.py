@@ -3273,6 +3273,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
 
     try:
         with transaction.atomic():
+            # The product lock comes first, as for every lifecycle writer: an edit holding it can be waiting
+            # on this release's name, so taking it after the insert would deadlock against that edit.
+            Product.objects.select_for_update().filter(pk=product.pk).first()
             created_at = payload.created_at or timezone.now()
             released_at = payload.released_at or created_at
             release = Release.objects.create(
