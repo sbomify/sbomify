@@ -732,6 +732,43 @@ class TestChoosingTheLine:
         assert "released after" in response.json()["detail"]
         assert Release.objects.get(pk=release.pk).released_at == release.released_at
 
+    def test_a_declaration_reads_the_predecessor_date_under_the_lock(self, sample_product: Product) -> None:
+        # The endpoint loads the predecessor before the product lock is taken. A date edit that
+        # commits in between must still count, or a backdated drop-in edge gets through.
+        old = _release(sample_product, "1.0", **_on(PAST))
+        _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        stale = Release.objects.get(pk=old.pk)
+        Release.objects.filter(pk=old.pk).update(released_at=datetime(2025, 9, 1, tzinfo=dt_timezone.utc))
+
+        result = create_release_cle_event(stale, "supersededBy", PAST, superseded_by_version="2.0", drop_in=True)
+
+        assert result.status_code == 400, result.error
+        assert "released after" in (result.error or "")
+        assert _edges(old) == []
+
+    def test_an_edit_with_a_bare_timestamp_meets_the_same_line_rule_rather_than_failing(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # A timestamp without an offset is read as local time, as the release model reads it, and is
+        # held to the same rule: comparing it with an aware date raised a TypeError and answered 500.
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0", **_on(PAST))
+        new = _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        _supersede(old, new)
+
+        def move_to(released_at: str) -> Any:
+            return client.patch(
+                f"/api/v1/releases/{new.pk}",
+                data={"released_at": released_at},
+                content_type="application/json",
+                **get_api_headers(token),
+            )
+
+        assert move_to("2025-07-01T12:00:00").status_code == 200
+        refused = move_to("2024-06-01T12:00:00")
+        assert refused.status_code == 400, refused.content
+        assert "released after" in refused.json()["detail"]
+
     def test_a_prerelease_replaces_nothing_even_if_the_page_script_never_ran(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
