@@ -179,9 +179,17 @@
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
     </div>
-    {% if not release.is_latest %}
+    {% comment %}Its own live region, there even while the card is empty: withdrawn through the API or in another tab, the card repaints with the header.{% endcomment %}
+    <div id="release-lifecycle"
+         x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
+         hx-get="{{ request.get_full_path }}"
+         hx-select="#release-lifecycle"
+         hx-trigger="live-refresh"
+         hx-swap="morph"
+         hx-disinherit="*"
+         {% if not lifecycle.shown %}hidden{% endif %}>
         {% include 'core/components/release_lifecycle_card.html.j2' %}
-    {% endif %}
+    </div>
     {# Danger Zone #}
     {% if can_delete_release %}
         <div>

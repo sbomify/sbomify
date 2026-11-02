@@ -71,6 +71,19 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             "withdrawn_reasons": Release.WithdrawnReason.choices,
             "can_manage": can_edit_release,
         }
+        # A release with no links, no dates, no withdrawal and no archiving shows the card only to managers.
+        lifecycle["shown"] = bool(
+            not release["is_latest"]
+            and (
+                lifecycle["can_manage"]
+                or lifecycle["predecessors"]
+                or lifecycle["successors"]
+                or lifecycle["end_of_support"]
+                or lifecycle["end_of_life"]
+                or release["withdrawn_at"]
+                or release["archived_at"]
+            )
+        )
         release_links = build_release_links_context(request, release["id"])
 
         return render(
