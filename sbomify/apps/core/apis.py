@@ -3372,7 +3372,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             linked = link_pending_supersessions(release)
             if not linked.ok:
                 transaction.set_rollback(True)
-                return 400, {"detail": linked.error, "error_code": ErrorCode.VALIDATION_ERROR}
+                return _release_edit_refused(linked.status_code, linked.error)
             declared = declare_supersedes(release, payload.supersedes, actor_id=request.user.pk)
             if not declared.ok:
                 transaction.set_rollback(True)
@@ -3517,6 +3517,8 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
 def _release_edit_refused(status_code: int | None, error: str | None) -> tuple[int, dict[str, Any]]:
     if status_code == 404:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+    if status_code == 409:
+        return 409, {"detail": error or "Conflicting supersession", "error_code": ErrorCode.CONFLICT}
     return 400, {"detail": error or "Invalid release", "error_code": ErrorCode.VALIDATION_ERROR}
 
 
@@ -3543,6 +3545,7 @@ def _release_integrity_error(error: IntegrityError, release_id: str) -> tuple[in
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
         500: ErrorResponse,
     },
     tags=["Releases"],
@@ -3620,6 +3623,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
         500: ErrorResponse,
     },
     tags=["Releases"],
