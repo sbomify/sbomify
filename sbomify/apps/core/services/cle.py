@@ -368,7 +368,8 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
     any type. A new date is recorded as an event for every version, as the
     lifecycle card records it; clearing one withdraws its surviving events for
     every version, the ones ``product_dates`` folds into the column. A date for
-    some versions is a separate declaration and stays.
+    some versions is a separate declaration and stays, except a release date:
+    every ``released`` event feeds that column, so clearing it withdraws them all.
     ``dates`` holds only the fields the caller sets. The value is whether
     anything changed. Call inside a transaction.
     """
@@ -383,7 +384,9 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
             surviving = [
                 e
                 for e in events
-                if e.event_type == event_type and e.event_id not in withdrawn and covers_every_version(e.versions)
+                if e.event_type == event_type
+                and e.event_id not in withdrawn
+                and (event_type == CLEEventType.RELEASED or covers_every_version(e.versions))
             ]
             for event in surviving:
                 result = create_cle_event(
