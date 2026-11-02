@@ -555,6 +555,40 @@ class TestPendingEdges:
         assert "itself" in response.json()["detail"]
         assert _fresh(old).version == "1.0"
 
+    def test_a_successor_named_two_ways_while_pending_gets_one_edge(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # 1.0 names 2.0 on its line and v2 on a new line, then one release turns out to carry both names.
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0")
+        assert _supersede(old, "2.0").ok
+        assert _supersede(old, "v2", drop_in=False).ok
+
+        response = client.post(
+            "/api/v1/releases",
+            data={"product_id": sample_product.pk, "name": "v2", "version": "2.0"},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 409, response.content
+        assert not Release.objects.filter(product=sample_product, version="2.0").exists()
+        assert not ReleaseSupersession.objects.live().filter(from_release=old, to_release__isnull=False).exists()
+
+    def test_a_rename_cannot_give_a_successor_a_second_edge(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        old, successor = _release(sample_product, "1.0"), _release(sample_product, "2.0")
+        assert _supersede(old, "2.0").ok
+        assert _supersede(old, "v2", drop_in=False).ok
+
+        response = self._patch(client, token, successor, {"name": "v2"})
+
+        assert response.status_code == 409, response.content
+        assert _fresh(successor).name == "2.0"
+        assert ReleaseSupersession.objects.live().filter(from_release=old, to_release=successor).count() == 1
+
     def test_creating_a_release_locks_the_product_before_inserting_it(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
@@ -1056,7 +1090,15 @@ class TestReleaseEdits:
         first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
         old = _release(sample_product, "1.9")
         new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
-        declared = _supersede(old, "2.0", effective=first_date)
+        declared = create_release_cle_event(
+            old,
+            "supersededBy",
+            first_date,
+            superseded_by_version="2.0",
+            drop_in=True,
+            version="1.9",
+            versions=[{"version": "1.9"}],
+        )
         assert declared.ok and declared.value is not None
         edge = _edge(declared.value)
 
@@ -1067,6 +1109,8 @@ class TestReleaseEdits:
         republished = ReleaseSupersession.objects.select_related("cle_event").get(pk=edge.pk).cle_event
         assert republished is not None and republished.pk != declared.value.pk
         assert republished.effective == corrected and republished.superseded_by_version == "2.0"
+        # Only the date changed, so the scope the event was published with carries over.
+        assert (republished.version, republished.versions) == ("1.9", [{"version": "1.9"}])
         assert ReleaseCLEEvent.objects.filter(
             release=old, event_type="withdrawn", withdrawn_event_id=declared.value.event_id
         ).exists()
@@ -1129,6 +1173,19 @@ class TestReleaseEdits:
 
 @pytest.mark.django_db
 class TestBackfillReruns:
+    def test_one_successor_named_by_its_version_and_by_its_name_gets_one_edge(self, sample_product: Product) -> None:
+        old = _release(sample_product, "1.0")
+        Release.objects.create(product=sample_product, name="v2", version="2.0")
+        for n, label in enumerate(("2.0", "v2"), start=1):
+            ReleaseCLEEvent.objects.create(
+                release=old, event_id=n, event_type="supersededBy", effective=PAST, superseded_by_version=label
+            )
+
+        backfill.backfill_release_lifecycle(django_apps, None)
+        backfill.backfill_release_lifecycle(django_apps, None)
+
+        assert [edge.successor_label for edge in ReleaseSupersession.objects.all()] == ["2.0"]
+
     def test_the_backfill_can_be_reversed_and_applied_again(self, sample_product: Product) -> None:
         old, _new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
         ReleaseCLEEvent.objects.create(

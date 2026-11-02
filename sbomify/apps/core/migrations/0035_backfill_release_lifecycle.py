@@ -65,11 +65,10 @@ def backfill_release_lifecycle(apps, schema_editor):
         releases = {release.pk: release for release in Release.objects.filter(product_id=product_id)}
         by_version = {release.version: release for release in releases.values() if release.version}
         by_name = {release.name: release for release in releases.values()}
-        named = set(
-            ReleaseSupersession.objects.filter(from_release__product_id=product_id, withdrawn_at=None).values_list(
-                "from_release_id", "successor_label"
-            )
-        )
+        live = ReleaseSupersession.objects.filter(from_release__product_id=product_id, withdrawn_at=None)
+        named = set(live.values_list("from_release_id", "successor_label"))
+        # One successor named by its version and by its name is still one edge.
+        targets = set(live.exclude(to_release=None).values_list("from_release_id", "to_release_id"))
 
         by_release = defaultdict(list)
         for event in ReleaseCLEEvent.objects.filter(release__product_id=product_id).order_by("release_id", "event_id"):
@@ -88,6 +87,10 @@ def backfill_release_lifecycle(apps, schema_editor):
                 successor = by_version.get(label) or by_name.get(label)
                 if successor is not None and (successor.pk == predecessor.pk or successor.is_latest):
                     successor = None
+                if successor is not None:
+                    if (predecessor.pk, successor.pk) in targets:
+                        continue
+                    targets.add((predecessor.pk, successor.pk))
                 edges.append(
                     ReleaseSupersession(
                         from_release_id=predecessor.pk,
