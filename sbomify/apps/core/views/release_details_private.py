@@ -16,7 +16,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Release
 from sbomify.apps.core.schemas import ReleaseLifecycleSchema
 from sbomify.apps.core.services.release_lifecycle import remove_supersession, supersession_links
-from sbomify.apps.core.services.release_links import release_link_rows
+from sbomify.apps.core.services.release_links_card import build_release_links_context
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -71,11 +71,7 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             "withdrawn_reasons": Release.WithdrawnReason.choices,
             "can_manage": can_edit_release,
         }
-        linked_releases = release_link_rows(
-            Release.objects.select_related("product").get(pk=release["id"]),
-            include_private=True,
-            url_for=lambda linked: reverse("core:release_details", args=[linked.product_id, linked.id]),
-        )
+        release_links = build_release_links_context(request, release["id"])
 
         return render(
             request,
@@ -90,7 +86,7 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "breadcrumb_items": breadcrumb_items,
                 "vulnerabilities": vulnerabilities.value if vulnerabilities.ok else None,
                 "lifecycle": lifecycle,
-                "linked_releases": linked_releases,
+                **(release_links.value if release_links.ok and release_links.value else {}),
             },
         )
 

@@ -87,6 +87,7 @@ def release_link_rows(
     """What a release page lists for each linked release, with the URL the reader can open."""
     return [
         {
+            "id": link.linked_release.id,
             "product_name": link.linked_release.product.name,
             "name": link.linked_release.name,
             "version": link.linked_release.version,
