@@ -547,8 +547,11 @@ def create_release_cle_event(
             if not resolved.ok:
                 return ServiceResult.failure(resolved.error or "Invalid supersession", status_code=400)
             successor = resolved.value
-            if drop_in and successor is not None and (backdated := backdated_takeover(release, successor)):
-                return ServiceResult.failure(backdated, status_code=400)
+            if drop_in and successor is not None:
+                # The caller read this release before the lock, so a date edit committed since would be missed.
+                release.refresh_from_db(fields=["released_at"])
+                if backdated := backdated_takeover(release, successor):
+                    return ServiceResult.failure(backdated, status_code=400)
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
             entity=release,
