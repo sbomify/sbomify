@@ -3374,6 +3374,8 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             if not declared.ok:
                 transaction.set_rollback(True)
                 return _supersedes_error(declared)
+            # Its lifecycle columns were derived on other copies of the row.
+            release.refresh_from_db()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if product.team.key:

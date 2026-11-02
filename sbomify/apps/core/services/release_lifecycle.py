@@ -26,6 +26,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
+from functools import partial
 from typing import Any
 
 from django.db import transaction
@@ -34,6 +35,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
@@ -67,6 +69,37 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
         & (Q(effective_end_of_life__isnull=True) | Q(effective_end_of_life__gte=today))
     )
     return (Release.objects.all() if releases is None else releases).filter(Q(is_latest=True) | live)
+
+
+def broadcast_releases_updated(product: Product, releases: Iterable[Release]) -> None:
+    """Tell the workspace, once the transaction commits, that these releases moved.
+
+    A write to one release can move others: withdrawing a successor hands its
+    predecessor back, and a link shows on the pages of both its releases. Each
+    page and list showing a release listens for ``release_updated`` on its ID.
+    """
+    workspace_key = product.team.key
+    if not workspace_key:
+        return
+    for release in releases:
+        data = {"release_id": str(release.pk), "product_id": str(product.pk), "name": release.name}
+        transaction.on_commit(
+            partial(broadcast_to_workspace, workspace_key=workspace_key, message_type="release_updated", data=data)
+        )
+
+
+def backdated_takeover(predecessor: Release, successor: Release) -> str | None:
+    """Why ``successor`` cannot take over ``predecessor``'s line, or None when the dates allow it.
+
+    A release cannot replace one that came out after it on the same line:
+    a backdated entry would retire the current release the moment it was saved.
+    """
+    if successor.released_at and predecessor.released_at and successor.released_at < predecessor.released_at:
+        return (
+            f"Release {predecessor.name} was released after {successor.name}, so {successor.name} cannot "
+            "replace it on the same line. Choose a new line, or check the release dates."
+        )
+    return None
 
 
 def replacement_candidates(product_id: str) -> list[Release]:
@@ -294,7 +327,7 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
         )
         .select_related("from_release")
     )
-    linked = 0
+    linked = []
     for edge in pending:
         target = _sibling_named(release.product_id, edge.successor_label)
         if target is None or target.pk != release.pk:
@@ -311,10 +344,13 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
                 f"{release.name} already leads back to {edge.from_release.name}, so this would make a cycle.",
                 status_code=400,
             )
+        if edge.drop_in and (backdated := backdated_takeover(edge.from_release, release)):
+            return ServiceResult.failure(backdated, status_code=400)
         ReleaseSupersession.objects.filter(pk=edge.pk).update(to_release=release)
-        linked += 1
+        linked.append(edge.from_release)
     recompute_release_lifecycle(product)
-    return ServiceResult.success(linked)
+    broadcast_releases_updated(product, linked)
+    return ServiceResult.success(len(linked))
 
 
 def _leads_back(successor: Release, predecessor: Release) -> bool:
@@ -457,6 +493,7 @@ def recompute_release_lifecycle(product: Product) -> None:
             changed.append(release)
     if changed:
         Release.objects.bulk_update(changed, fields)
+        broadcast_releases_updated(product, changed)
 
 
 def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
