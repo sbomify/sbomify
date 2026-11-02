@@ -941,6 +941,9 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
+            # Locked and read again: saving the copy loaded above would put back
+            # dates an edit committed since, while their events kept the new ones.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             if payload.is_public is False and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
@@ -1001,6 +1004,8 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
     try:
         with transaction.atomic():
+            # Locked and read again, as in the PUT above.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
             component_ids = update_data.pop("component_ids", None)
