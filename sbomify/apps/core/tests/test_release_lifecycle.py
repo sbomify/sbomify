@@ -204,6 +204,42 @@ class TestSupersededAt:
         assert _supersede(old, "1.0.1", effective=datetime(2025, 2, 1, tzinfo=dt_timezone.utc)).ok
         assert _fresh(old).superseded_at == datetime(2025, 2, 1, tzinfo=dt_timezone.utc)
 
+    def test_a_line_carried_past_a_withdrawn_release_moves_on_when_its_successor_takes_over(
+        self, sample_product: Product
+    ) -> None:
+        # 1.0 -> 1.1 took effect yesterday, 1.1 was pulled, and 1.2 replaces it tomorrow. Until then nothing
+        # live has replaced 1.0, so it stays monitored.
+        releases = {name: _release(sample_product, name) for name in ("1.0", "1.1", "1.2")}
+        yesterday, tomorrow = timezone.now() - timedelta(days=1), timezone.now() + timedelta(days=1)
+        assert _supersede(releases["1.0"], "1.1", effective=yesterday).ok
+        assert _supersede(releases["1.1"], "1.2", effective=tomorrow).ok
+
+        assert set_release_state(releases["1.1"], "withdraw", reason="defective").ok
+
+        assert _fresh(releases["1.0"]).superseded_at == tomorrow
+        assert "1.0" in _tracked(sample_product)
+
+    def test_a_web_of_withdrawn_releases_is_walked_once_per_release(self, sample_product: Product) -> None:
+        """Each path through withdrawn releases was its own walk, so two releases per layer, each
+        replaced by both in the next, doubled the work with every layer."""
+        import time
+
+        layers = [[_release(sample_product, f"{depth}.{side}") for side in (0, 1)] for depth in range(20)]
+        live = _release(sample_product, "live")
+        ReleaseSupersession.objects.bulk_create(
+            ReleaseSupersession(from_release=a, to_release=b, successor_label=b.version, drop_in=True, effective=PAST)
+            for upper, lower in zip(layers, [*layers[1:], [live]], strict=True)
+            for a in upper
+            for b in lower
+        )
+        Release.objects.filter(pk__in=[r.pk for layer in layers[1:] for r in layer]).update(withdrawn_at=timezone.now())
+
+        started = time.perf_counter()
+        recompute_release_lifecycle(sample_product)
+
+        assert time.perf_counter() - started < 1
+        assert _fresh(layers[0][0]).superseded_at == PAST
+
 
 @pytest.mark.django_db
 class TestOneToMany:
@@ -426,6 +462,20 @@ class TestEdgeValidation:
         assert again.status_code == 200 and again.value.pk == first.value.pk
         assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
 
+    def test_naming_a_successor_by_its_name_after_its_version_is_the_same_edge(self, sample_product: Product) -> None:
+        old = _release(sample_product, "1.0")
+        Release.objects.create(product=sample_product, name="v2", version="2.0")
+        first = _supersede(old, "2.0")
+        assert first.ok and first.value is not None
+
+        again = _supersede(old, "v2")
+        other_line = _supersede(old, "v2", drop_in=False)
+
+        assert again.ok and again.status_code == 200 and again.value is not None
+        assert again.value.pk == first.value.pk
+        assert not other_line.ok and other_line.status_code == 409
+        assert ReleaseSupersession.objects.filter(from_release=old).count() == 1
+
     def test_drop_in_belongs_to_supersession_only(self, sample_product: Product) -> None:
         release = _release(sample_product, "1.0.0")
         result = create_release_cle_event(release, "released", PAST, drop_in=True)
@@ -493,6 +543,52 @@ class TestPendingEdges:
         assert response.status_code == 400, response.content
         assert "cycle" in response.json()["detail"]
         assert _fresh(other).version == "2.1"
+
+    def test_renaming_a_release_to_its_own_successor_is_refused(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0")
+        assert _supersede(old, "2.0").ok
+
+        response = self._patch(client, token, old, {"version": "2.0"})
+
+        assert response.status_code == 400, response.content
+        assert "itself" in response.json()["detail"]
+        assert _fresh(old).version == "1.0"
+
+    def test_creating_a_release_locks_the_product_before_inserting_it(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # An edit locks the product, then waits on the new release's name. Inserting first would deadlock with it.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        client, token = authenticated_api_client
+        with CaptureQueriesContext(connection) as queries:
+            response = self._create(client, token, sample_product, "2.0")
+
+        assert response.status_code == 201, response.content
+        sql = [query["sql"] for query in queries.captured_queries]
+        product_lock = next(
+            i for i, s in enumerate(sql) if "FOR UPDATE" in s and f'FROM "{Product._meta.db_table}"' in s
+        )
+        insert = next(i for i, s in enumerate(sql) if s.startswith(f'INSERT INTO "{Release._meta.db_table}"'))
+        assert product_lock < insert, sql
+
+    def test_a_new_release_takes_the_product_date_it_was_created_under(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        client, token = authenticated_api_client
+        ended = timezone.now() - timedelta(days=5)
+        _product_event(sample_product, "endOfSupport", ended)
+
+        response = self._create(client, token, sample_product, "3.0")
+
+        assert response.status_code == 201, response.content
+        release = Release.objects.get(pk=response.json()["id"])
+        assert release.effective_end_of_support == ended.date()
+        assert "3.0" not in _tracked(sample_product)
 
 
 @pytest.mark.django_db
@@ -945,14 +1041,41 @@ class TestReleaseEdits:
         took_its_date = _supersede(old, "2.0", effective=first_date)
         own_date = _supersede(other, "2.0", effective=PAST)
         assert took_its_date.ok and own_date.ok and took_its_date.value and own_date.value
+        moved = _edge(took_its_date.value)
 
         corrected = datetime(2025, 4, 1, 9, 30, tzinfo=dt_timezone.utc)
         response = self._send(client, token, "patch", new, {"released_at": corrected.isoformat()})
 
         assert response.status_code == 200, response.content
-        assert _edge(took_its_date.value).effective == corrected
+        assert ReleaseSupersession.objects.get(pk=moved.pk).effective == corrected
         assert _fresh(old).superseded_at == corrected
         assert _edge(own_date.value).effective == PAST
+
+    def test_moving_the_release_date_republishes_the_supersession_at_the_new_date(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # A published event is never edited: the old one is withdrawn and the edge is published again.
+        client, token = authenticated_api_client
+        first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
+        old = _release(sample_product, "1.9")
+        new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
+        declared = _supersede(old, "2.0", effective=first_date)
+        assert declared.ok and declared.value is not None
+        edge = _edge(declared.value)
+
+        corrected = datetime(2025, 4, 1, 9, 30, tzinfo=dt_timezone.utc)
+        response = self._send(client, token, "patch", new, {"released_at": corrected.isoformat()})
+
+        assert response.status_code == 200, response.content
+        republished = ReleaseSupersession.objects.select_related("cle_event").get(pk=edge.pk).cle_event
+        assert republished is not None and republished.pk != declared.value.pk
+        assert republished.effective == corrected and republished.superseded_by_version == "2.0"
+        assert ReleaseCLEEvent.objects.filter(
+            release=old, event_type="withdrawn", withdrawn_event_id=declared.value.event_id
+        ).exists()
+        document = get_release_cle_document(old)
+        assert document.ok and document.value is not None
+        assert {event.id: event.effective for event in document.value.events}[republished.event_id] == corrected
 
     def test_clearing_the_release_date_leaves_its_edges_alone(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
