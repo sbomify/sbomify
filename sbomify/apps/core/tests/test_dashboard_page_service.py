@@ -556,3 +556,39 @@ def test_a_product_the_vex_cleared_does_not_read_as_never_affected(sample_team_w
     html = render_to_string("components/overview/products.html", {"products": result.value["products"]})
     assert "No open vulnerabilities" in html
     assert "1 suppressed by VEX" in html
+
+
+def test_a_run_past_the_projection_cap_counts_from_its_summary(
+    sample_team_with_owner_member: Member, mocker: MockerFixture
+) -> None:
+    """The finding rows stop at the cap, open and suppressed alike. The stored
+    summary counted every finding, so past the cap it is the honest number."""
+    from sbomify.apps.vulnerability_scanning import findings as findings_module
+    from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+    mocker.patch.object(findings_module, "MAX_FINDINGS_PER_RUN", 2)
+    team = sample_team_with_owner_member.team
+    component = Component.objects.create(name="api", team=team)
+    sbom = SBOM.objects.create(name="s", component=component, version="1.0", format="cyclonedx")
+    run = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result={
+            "findings": [
+                _finding("CVE-A", "high"),
+                _finding("CVE-B", "high"),
+                _finding("CVE-C", "high"),
+                _finding("CVE-D", "low", state="not_affected"),
+            ],
+            "summary": {"total_findings": 3, "by_severity": {"high": 3}, "suppressed_count": 1},
+        },
+    )
+    sync_findings(run)
+    cache.clear()
+
+    metrics = build_dashboard_context(team.id).value["metrics"]
+
+    assert metrics["open"] == 3
+    assert metrics["suppressed"] == 1
