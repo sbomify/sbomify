@@ -403,7 +403,7 @@ class TestComponentItemLargeVex:
     def setup_method(self):
         self.client = Client()
 
-    def _vex_page(self, team, user, mocker, statements: int):
+    def _vex_page(self, team, user, mocker, statements: int, analysis: dict | None = None):
         import json
 
         from sbomify.apps.sboms.models import SBOM
@@ -430,7 +430,7 @@ class TestComponentItemLargeVex:
             "vulnerabilities": [
                 {
                     "id": f"CVE-2024-{n:05d}",
-                    "analysis": {"state": "not_affected", "justification": "code_not_present"},
+                    "analysis": analysis or {"state": "not_affected", "justification": "code_not_present"},
                     "affects": [{"ref": f"urn:cdx:3e671687-395b-41f5-a30f-a58921a69b79/1#{n}"}],
                 }
                 for n in range(statements)
@@ -464,6 +464,29 @@ class TestComponentItemLargeVex:
         assert rows[0]["url"] == "https://insights.sbomify.com/CVE-2024-00000/"
         assert rows[0]["package"] == "All packages"
         assert "-statement limit" not in many
+
+    def test_a_row_without_a_justification_sends_only_its_short_note(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        """The full detail rides along only where the justification's tooltip shows it."""
+        import json
+        import re
+
+        response = self._vex_page(
+            sample_team_with_owner_member.team,
+            sample_user,
+            mocker,
+            statements=1,
+            analysis={"state": "false_positive", "detail": "Not reachable. " * 100},
+        )
+
+        script = re.search(
+            r'<script id="vex-suppression-rows" type="application/json">(.*?)</script>', response.content.decode()
+        )
+        row = json.loads(script[1])[0]
+        assert row["note"].startswith("Not reachable.")
+        assert len(row["note"]) <= 60
+        assert row["detail"] == ""
 
     def test_a_vex_at_the_statement_limit_says_the_rest_are_ignored(
         self, sample_team_with_owner_member, sample_user, mocker

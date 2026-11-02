@@ -345,6 +345,8 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 for row in vex_suppressions:
                     row["url"] = advisory_url(row["id"], row["aliases"])
                     row["note"] = row["justification"] or Truncator(row["detail"]).chars(60)
+                    if not row["justification"]:
+                        row["detail"] = ""
 
                 from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
 

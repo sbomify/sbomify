@@ -267,6 +267,57 @@ def test_a_vex_at_the_statement_limit_stays_responsive(
 
 
 @pytest.mark.django_db
+def test_a_refreshed_vex_page_shows_the_new_rows_and_keeps_the_search(
+    authenticated_page: Page, sbom_component_details, mocker
+) -> None:
+    """A finished scan or a re-applied VEX morphs the page in place, and the morph keeps
+    the table's state. The rows live in that state, so the page reads them again after it."""
+    import json
+
+    from sbomify.apps.sboms.models import SBOM
+
+    def document(count: int) -> bytes:
+        return json.dumps(
+            {
+                "bomFormat": "CycloneDX",
+                "specVersion": "1.6",
+                "version": 1,
+                "vulnerabilities": [
+                    {
+                        "id": f"CVE-2024-{n:05d}",
+                        "analysis": {"state": "not_affected", "justification": "code_not_present"},
+                        "affects": [{"ref": f"urn:cdx:3e671687-395b-41f5-a30f-a58921a69b79/1#{n}"}],
+                    }
+                    for n in range(count)
+                ],
+            }
+        ).encode()
+
+    storage = mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=document(2))
+    vex = SBOM.objects.create(
+        name="image-vex.json",
+        component=sbom_component_details,
+        format="cyclonedx",
+        format_version="1.6",
+        version="1.0",
+        sbom_filename="image-vex.json",
+        source="manual_upload",
+        bom_type=SBOM.BomType.VEX,
+    )
+    authenticated_page.goto(f"/components/{sbom_component_details.id}/vex/{vex.id}/")
+    search = authenticated_page.get_by_label("Search suppressed vulnerabilities")
+    search.fill("cve-2024-0000")
+    expect(authenticated_page.get_by_text("Showing 1 to 2 of 2")).to_be_visible()
+
+    storage.return_value = document(3)
+    authenticated_page.evaluate("document.body.dispatchEvent(new CustomEvent('refresh-assessments'))")
+
+    expect(authenticated_page.get_by_text("Showing 1 to 3 of 3")).to_be_visible()
+    expect(authenticated_page.locator("tbody tr").filter(has_text="CVE-2024-00002")).to_have_count(1)
+    expect(search).to_have_value("cve-2024-0000")
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestComponentCbomDetailsSnapshot:
     """The canonical /cbom/ artifact page (crypto inventory collapses when empty)."""

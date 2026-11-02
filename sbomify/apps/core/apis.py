@@ -3796,6 +3796,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     from django.core.cache import cache
 
     from sbomify.apps.vulnerability_scanning import vex as vex_module
+    from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
 
     # A member reading a public product's release gets the whole VEX, gated and
     # private components included. Everyone else gets the public view, matching
@@ -3815,7 +3816,8 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     # audiences' documents do: should the build ever read the audience beyond its
     # rows, one shared entry would hand a member's document to the public.
     scope = "all" if include_non_public else "public"
-    cache_key = f"release-vex:{release.id}:{scope}:{fingerprint}"
+    # Formats other than CycloneDX are derived under the statement limit, so it is in the key too.
+    cache_key = f"release-vex:{release.id}:{scope}:{MAX_VEX_STATEMENTS}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
         document = vex_module.build_release_vex(release, include_non_public=include_non_public, rows=rows) or {
