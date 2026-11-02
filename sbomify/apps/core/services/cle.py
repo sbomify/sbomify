@@ -534,6 +534,49 @@ def create_release_cle_event(
     return result
 
 
+def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCLEEvent | None]:
+    """Publish ``edge`` again at its current date, withdrawing the event it was published as.
+
+    A published event is never edited, since a consumer may already hold it,
+    so a moved date is a correction: a ``withdrawn`` event naming the old one,
+    then a new ``supersededBy`` event. The edge stays live and points at the
+    new event. An edge with no event is left as it is. Call under the product
+    lock.
+    """
+    old = edge.cle_event
+    if old is None:
+        return ServiceResult.success(None)
+    publish: dict[str, Any] = {
+        "entity": edge.from_release,
+        "entity_fk_field": "release",
+        "event_model": ReleaseCLEEvent,
+        "support_def_model": ReleaseCLESupportDefinition,
+        "entity_label": "release",
+    }
+    withdrawn = create_cle_event_generic(
+        **publish,
+        event_type=CLEEventType.WITHDRAWN,
+        effective=timezone.now(),
+        withdrawn_event_id=old.event_id,
+        reason="The successor's release date moved.",
+    )
+    if not withdrawn.ok:
+        return withdrawn
+    result: ServiceResult[ReleaseCLEEvent | None] = create_cle_event_generic(
+        **publish,
+        event_type=CLEEventType.SUPERSEDED_BY,
+        effective=edge.effective,
+        superseded_by_version=old.superseded_by_version,
+        identifiers=old.identifiers,
+        reason=old.reason,
+        description=old.description,
+        references=old.references,
+    )
+    if result.ok:
+        ReleaseSupersession.objects.filter(pk=edge.pk).update(cle_event=result.value)
+    return result
+
+
 def create_release_support_definition(
     release: Release,
     support_id: str,

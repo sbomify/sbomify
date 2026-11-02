@@ -74,17 +74,22 @@ def existing_supersession(
 ) -> ServiceResult[ReleaseSupersession | None]:
     """The live edge to ``successor_label`` a retry would repeat, or a conflict when it is on the other line.
 
-    One live edge per successor. A retry with another date is the same edge, so
-    a pipeline re-run or a corrected release date never fails a build that
-    changed nothing. Moving it to the other line means removing the link and
-    declaring it again, so the history keeps both.
+    One live edge per successor, whether it was named by its version or by its
+    name. A retry with another date is the same edge, so a pipeline re-run or a
+    corrected release date never fails a build that changed nothing. Moving it
+    to the other line means removing the link and declaring it again, so the
+    history keeps both.
     """
-    edge = ReleaseSupersession.objects.live().filter(from_release=predecessor, successor_label=successor_label).first()
+    same = Q(successor_label=successor_label)
+    if (target := _sibling_named(predecessor.product_id, successor_label)) is not None:
+        same |= Q(to_release=target)
+    edge = ReleaseSupersession.objects.live().filter(same, from_release=predecessor).first()
     if edge is None or edge.drop_in == drop_in:
         return ServiceResult.success(edge)
     line = "the same line" if edge.drop_in else "a new line"
     return ServiceResult.failure(
-        f"Release {predecessor.name} already names {successor_label} as {line}. Remove that link first to change it.",
+        f"Release {predecessor.name} already names {edge.successor_label} as {line}. "
+        "Remove that link first to change it.",
         status_code=409,
     )
 
@@ -132,8 +137,10 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
     Such an edge is stored with no successor, so the cycle check cannot see it
     until it is linked. Call inside the transaction that creates or renames
     ``release``; it takes the product lock. Refuses a link that would close a
-    cycle, so the caller rolls the rename back. Linked edges stay linked when
-    a release is renamed again: the edge resolved to that release.
+    cycle, or a rename onto a successor the release names itself, so the
+    caller rolls the rename back. Linked edges stay linked when a release is
+    renamed again: the edge resolved to that release. Rederives the product's
+    lifecycle columns either way, so a new release takes the product's dates.
     """
     if release.is_latest:
         return ServiceResult.success(0)
@@ -150,7 +157,6 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
             to_release__isnull=True,
             successor_label__in=names,
         )
-        .exclude(from_release_id=release.pk)
         .select_related("from_release")
     )
     linked = 0
@@ -158,6 +164,12 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
         target = _sibling_named(release.product_id, edge.successor_label)
         if target is None or target.pk != release.pk:
             continue
+        if edge.from_release_id == release.pk:
+            return ServiceResult.failure(
+                f"Release {release.name} names {edge.successor_label} as its successor, "
+                "so it cannot take that name itself. A release cannot supersede itself.",
+                status_code=400,
+            )
         if _leads_back(release, edge.from_release):
             return ServiceResult.failure(
                 f"Release {edge.from_release.name} names {edge.successor_label} as a successor, and "
@@ -166,8 +178,7 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
             )
         ReleaseSupersession.objects.filter(pk=edge.pk).update(to_release=release)
         linked += 1
-    if linked:
-        recompute_release_lifecycle(product)
+    recompute_release_lifecycle(product)
     return ServiceResult.success(linked)
 
 
@@ -244,11 +255,12 @@ def recompute_release_lifecycle(product: Product) -> None:
       version. Read from events, never from the product columns, so the order
       events were posted in, or a column written another way, cannot change
       what is monitored.
-    - ``superseded_at``: the earliest live drop-in edge whose line still goes
+    - ``superseded_at``: the earliest time a live drop-in edge's line goes
       on: its successor is outside sbomify, not withdrawn, or itself replaced
-      by a release that carries the line on. Withdrawing every release after
-      one rolls the line back to it. Edges that start a new line never retire
-      anything, however many a release has.
+      by a release that carries the line on. Past a withdrawn release the line
+      moves on only once every edge on the way has taken effect. Withdrawing
+      every release after one rolls the line back to it. Edges that start a
+      new line never retire anything, however many a release has.
 
     Writes only the rows that changed, and never through ``save()``.
     """
@@ -268,19 +280,24 @@ def recompute_release_lifecycle(product: Product) -> None:
     for edge in ReleaseSupersession.objects.live().filter(from_release__product_id=product.pk, drop_in=True):
         drop_ins[edge.from_release_id].append(edge)
 
-    def carries_on(release_id: str | None, seen: set[str]) -> bool:
-        successor = releases.get(release_id) if release_id else None
+    def moves_on(edge: ReleaseSupersession, seen: frozenset[str]) -> datetime | None:
+        """When the line through ``edge`` goes on, or None when nothing live carries it."""
+        successor = releases.get(edge.to_release_id) if edge.to_release_id else None
         # No successor in sbomify: outside it, or deleted. It still counts.
         if successor is None or successor.withdrawn_at is None:
-            return True
+            return edge.effective
         if successor.pk in seen:
-            return False
-        seen.add(successor.pk)
-        return any(carries_on(edge.to_release_id, seen) for edge in drop_ins.get(successor.pk, ()))
+            return None
+        onward = [
+            when
+            for after in drop_ins.get(successor.pk, ())
+            if (when := moves_on(after, seen | {successor.pk})) is not None
+        ]
+        return max(edge.effective, min(onward)) if onward else None
 
     superseded: dict[str, datetime] = {}
     for source, edges in drop_ins.items():
-        moved_on = [edge.effective for edge in edges if carries_on(edge.to_release_id, set())]
+        moved_on = [when for edge in edges if (when := moves_on(edge, frozenset())) is not None]
         if moved_on:
             superseded[source] = min(moved_on)
 
@@ -311,9 +328,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     written, from the locked row, so an edit never puts back a withdrawal or
     a derived date committed after the caller first read the release.
 
-    Moving the release date moves the live edges that took their date from it;
-    clearing it leaves them where they are. A new name or version links the
-    edges declared before it existed.
+    Moving the release date moves the live edges that took their date from it,
+    and publishes each again at the new date; clearing it leaves them where
+    they are. A new name or version links the edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -338,11 +355,19 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     release.save(update_fields=changed)
 
     if "released_at" in changed and previous_release_date is not None and release.released_at is not None:
-        moved = (
+        from sbomify.apps.core.services.cle import republish_supersession
+
+        moved = list(
             ReleaseSupersession.objects.live()
             .filter(to_release=release, effective=previous_release_date)
-            .update(effective=release.released_at)
+            .select_related("cle_event", "from_release")
         )
+        for edge in moved:
+            edge.effective = release.released_at
+            edge.save(update_fields=["effective"])
+            republished = republish_supersession(edge)
+            if not republished.ok:
+                return ServiceResult.failure(republished.error or "Invalid supersession", republished.status_code)
         if moved:
             recompute_release_lifecycle(product)
     if {"name", "version"} & set(changed):
