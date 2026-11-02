@@ -78,6 +78,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         "components": len(rows),
         "artifacts": sum(row["artifact_count"] for row in rows),
         "open": open_findings,
+        "suppressed": sum(row["counts"].get("suppressed", 0) for row in security_rows),
         "past_sla": past_sla,
         "unassessed": unassessed,
         # A zero we cannot stand behind. These counts read the newest SBOM per

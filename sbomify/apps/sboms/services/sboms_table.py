@@ -184,6 +184,13 @@ def build_sboms_table_context(
 
     if not is_public_view and versions is None:
         _attach_vulnerability_counts(sbom_items, component_id, merged=not full_view)
+    if is_public_view:
+        # The public table renders no assessment, but the rows reach the page
+        # whole as JSON, and each one carries every plugin's status: a security
+        # scan's "fail" and findings count included. Public pages never reflect
+        # a security scan in any way (public_assessment_utils), and a failing
+        # check is never shown there either, so none of it is sent.
+        sbom_items = [{key: value for key, value in item.items() if key != "assessments"} for item in sbom_items]
 
     shown = sum(len(row["downloads"]) for row in versions) if versions is not None else len(sbom_items)
     context = {

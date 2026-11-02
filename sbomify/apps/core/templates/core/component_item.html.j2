@@ -145,7 +145,10 @@
         {% if vulnerability_summary %}
             <div class="flex flex-col gap-4">
                 <c-layout.section-header level="2" title="Vulnerability scan">
-                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider }}</c-slot>
+                {# djlint:off #}
+                {# One line, so no template whitespace lands before a separator. #}
+                <c-slot name="subtitle">{{ vulnerability_summary.total|intcomma }} vulnerabilit{{ vulnerability_summary.total|pluralize:"y,ies" }}{% if vulnerability_summary.suppressed %} · {{ vulnerability_summary.suppressed|intcomma }} suppressed by VEX{% endif %} · {{ vulnerability_summary.scan_date|date:'j M Y' }} · {{ vulnerability_summary.provider }}</c-slot>
+                {# djlint:on #}
                 <c-slot name="actions">
                 <c-buttons.secondary size="sm" href="{% url 'vulnerability_scanning:vulnerability_scans' team_key %}?component={{ item.component_id }}&version={{ item.id }}">
                 Vulnerabilities<i class="fas fa-arrow-right" aria-hidden="true"></i>

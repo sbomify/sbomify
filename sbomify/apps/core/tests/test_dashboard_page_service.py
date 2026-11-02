@@ -489,3 +489,70 @@ def test_exposure_reports_whether_its_rows_can_be_added_up(sample_team_with_owne
     assert both.ok and both.value is not None
     assert both.value["shares_components"] is True
     assert both.value["omits_components"] is True
+
+
+def test_vex_suppressed_findings_are_counted_apart_not_dropped(sample_team_with_owner_member: Member) -> None:
+    """A VEX takes a finding out of the open count, and the overview says so.
+
+    Without the suppressed figure, a product whose findings a VEX ruled out
+    reads exactly like one nothing was ever found in, and a reader checking
+    whether their VEX took effect cannot tell from the dashboard.
+    """
+    from django.template.loader import render_to_string
+
+    from sbomify.apps.core.models import Product
+
+    workspace = sample_team_with_owner_member.team
+    component = Component.objects.create(name="api", team=workspace)
+    product = Product.objects.create(name="Shipped", team=workspace)
+    product.components.add(component)
+    sbom = SBOM.objects.create(name="s", component=component, version="1.0", format="cyclonedx")
+    _make_scan(
+        sbom,
+        [
+            _finding("CVE-OPEN", "high"),
+            _finding("CVE-RULED-OUT", "critical", state="not_affected"),
+            _finding("CVE-FALSE", "medium", state="false_positive"),
+        ],
+    )
+    cache.clear()
+
+    result = build_dashboard_context(workspace.id)
+    assert result.ok and result.value is not None
+    assert result.value["metrics"]["open"] == 1
+    assert result.value["metrics"]["suppressed"] == 2
+    (row,) = result.value["products"]
+    assert row["counts"]["total"] == 1
+    assert row["counts"]["critical"] == 0
+    assert row["counts"]["suppressed"] == 2
+
+    html = render_to_string(
+        "components/overview/products.html",
+        {"products": result.value["products"], "product_count": 1},
+    )
+    assert "2 suppressed by VEX" in html
+
+
+def test_a_product_the_vex_cleared_does_not_read_as_never_affected(sample_team_with_owner_member: Member) -> None:
+    from django.template.loader import render_to_string
+
+    from sbomify.apps.core.models import Product
+
+    workspace = sample_team_with_owner_member.team
+    component = Component.objects.create(name="api", team=workspace)
+    product = Product.objects.create(name="Cleared", team=workspace)
+    product.components.add(component)
+    sbom = SBOM.objects.create(name="s", component=component, version="1.0", format="cyclonedx")
+    _make_scan(sbom, [_finding("CVE-RULED-OUT", "critical", state="not_affected")])
+    cache.clear()
+
+    result = build_dashboard_context(workspace.id)
+    assert result.ok and result.value is not None
+    assert result.value["metrics"]["open"] == 0
+    (row,) = result.value["products"]
+    assert row["counts"]["total"] == 0
+    assert row["counts"]["suppressed"] == 1
+
+    html = render_to_string("components/overview/products.html", {"products": result.value["products"]})
+    assert "No open vulnerabilities" in html
+    assert "1 suppressed by VEX" in html

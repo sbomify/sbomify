@@ -149,7 +149,7 @@ class TestBuildSbomsTableContext:
 
         mock_get_component.return_value = (
             200,
-            {"id": "comp123", "has_crud_permissions": True},
+            {"id": "comp123", "has_crud_permissions": True, "team_id": 1},
         )
         assessments_payload = {
             "sbom_id": "1",
@@ -179,7 +179,14 @@ class TestBuildSbomsTableContext:
             },
         )
 
-        result = build_sboms_table_context(mock_request, "comp123", is_public_view=True)
+        # The private full listing: the public one sends no assessments at all.
+        full_request = RequestFactory().get("/?full=1")
+        full_request.session = {}
+        with patch(
+            "sbomify.apps.sboms.services.sboms_table.get_team",
+            return_value=(200, MagicMock(billing_plan="community")),
+        ):
+            result = build_sboms_table_context(full_request, "comp123", is_public_view=False)
 
         assert result.ok is True
         assert result.value["sboms"][0]["assessments"] == assessments_payload
@@ -387,3 +394,23 @@ class TestSummaryArtifacts:
         )
 
         assert [item["sbom"]["name"] for item in summary] == ["current"]
+
+
+@pytest.mark.django_db
+@patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
+@patch("sbomify.apps.sboms.services.sboms_table.get_component")
+def test_the_public_table_sends_no_assessment_results(mock_get_component, mock_list_sboms, mock_request):
+    """The rows are embedded in the public page as JSON. A security scan's
+    verdict must not ride along in them, rendered or not."""
+    mock_get_component.return_value = (200, {"id": "comp123", "has_crud_permissions": False, "team_id": 1})
+    item = {
+        "sbom": {"id": "s1", "name": "app", "created_at": None, "bom_type": "sbom", "version": "1.0"},
+        "assessments": {"plugins": [{"name": "osv", "category": "security", "status": "fail", "findings_count": 9}]},
+    }
+    mock_list_sboms.return_value = (200, {"items": [item]})
+
+    public = build_sboms_table_context(mock_request, "comp123", is_public_view=True)
+
+    assert public.ok
+    assert [row["sbom"]["id"] for row in public.value["sboms"]] == ["s1"]
+    assert all("assessments" not in row for row in public.value["sboms"])

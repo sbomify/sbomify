@@ -69,6 +69,8 @@ interface ArtifactVulnerabilities {
     high: number;
     medium: number;
     low: number;
+    // Closed by a VEX: never part of the counts above, shown beside them.
+    suppressed?: number;
     scanned_nothing: boolean;
     url: string;
 }
