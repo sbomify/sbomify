@@ -606,9 +606,9 @@ def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCL
 
     A published event is never edited, since a consumer may already hold it,
     so a moved date is a correction: a ``withdrawn`` event naming the old one,
-    then a new ``supersededBy`` event. The edge stays live and points at the
-    new event. An edge with no event is left as it is. Call under the product
-    lock.
+    then a new ``supersededBy`` event carrying everything the old one did but
+    the date. The edge stays live and points at the new event. An edge with no
+    event is left as it is. Call under the product lock.
     """
     old = edge.cle_event
     if old is None:
@@ -633,6 +633,10 @@ def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCL
         **publish,
         event_type=CLEEventType.SUPERSEDED_BY,
         effective=edge.effective,
+        version=old.version,
+        versions=old.versions,
+        support_id=old.support_id,
+        license=old.license,
         superseded_by_version=old.superseded_by_version,
         identifiers=old.identifiers,
         reason=old.reason,

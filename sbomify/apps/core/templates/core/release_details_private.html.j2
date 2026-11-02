@@ -179,9 +179,9 @@
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
     </div>
-    {% comment %}Its own live region, there even while the card is empty: withdrawn through the API or in another tab, the card repaints with the header.{% endcomment %}
+    {% comment %}Its own live region, there even while the card is empty: withdrawn through the API or in another tab, the card repaints with the header. It names the releases around this one, so any release in the product changing or going repaints it.{% endcomment %}
     <div id="release-lifecycle"
-         x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
+         x-data="liveRegion({ refresh: ['release_updated', 'release_deleted'], key: 'product_id', id: '{{ release.product.id|escapejs }}' })"
          hx-get="{{ request.get_full_path }}"
          hx-select="#release-lifecycle"
          hx-trigger="live-refresh"
