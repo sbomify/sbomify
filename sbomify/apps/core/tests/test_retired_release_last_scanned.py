@@ -83,6 +83,24 @@ class TestLastScanned:
         assert build_release_vuln_postures([release])[release.id]["last_scanned_at"] == OLDEST
         assert build_release_vuln_posture(release)["last_scanned_at"] == OLDEST
 
+    def test_a_run_that_only_reported_an_error_does_not_date_the_release(
+        self, team_with_business_plan: Workspace
+    ) -> None:
+        # The posture leaves out a scan that only reported its own failure, so its date must not count either.
+        release = Release.objects.create(product=_product(team_with_business_plan, is_public=True), name="1.0.0")
+        sbom = _scan(release, "lib", NEWER, [_finding("CVE-1")])
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="dependency-track",
+            category="security",
+            status="completed",
+            completed_at=OLDEST,
+            result={"findings": [{"id": "dependency-track:error", "severity": "high", "status": "error"}]},
+        )
+
+        assert build_release_vuln_postures([release])[release.id]["last_scanned_at"] == NEWER
+        assert build_release_vuln_posture(release)["last_scanned_at"] == NEWER
+
 
 class TestUntrackedNotice:
     def _release(self, team: Workspace, **fields: Any) -> Release:
@@ -190,6 +208,21 @@ class TestReleasePage:
         response = client.get(reverse("core:release_details", args=[release.product_id, release.id]))
         assert response.status_code == 200
         return " ".join(response.content.decode().split())
+
+    def test_the_vulnerabilities_panel_follows_updates_to_its_release(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        """Withdrawn or reactivated through the API or in another tab, the notice comes and goes with the header."""
+        release = Release.objects.create(product=_product(team_with_business_plan), name="1.0.0")
+        _scan(release, "lib", OLDEST, [_finding("CVE-1")])
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[release.product_id, release.id]))
+
+        region = re.search(r'<div id="release-vulnerabilities-region"[^>]*>', page.content.decode(), re.S)
+        assert region is not None
+        assert "liveRegion(" in region[0] and 'hx-select="#release-vulnerabilities-region"' in region[0]
+        assert "release_updated" in region[0] and "key: 'release_id'" in region[0]
+        assert release.pk in region[0]
 
     def test_a_retired_release_dates_its_counts(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
