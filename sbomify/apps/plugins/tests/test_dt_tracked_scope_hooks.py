@@ -121,36 +121,63 @@ class TestUploadLandsInTheTree:
         assert SbomDependencyTrackProjectVersion.objects.filter(sbom=sbom).exists()
 
 
+def _old_sbom_shipped_again(env):
+    """An old, retired SBOM a new release ships, with its scan and version row."""
+    _, product, component, server = env
+    old = _sbom(component, "old")
+    _sbom(component, "new")
+    old_row = SbomDependencyTrackProjectVersion.objects.create(
+        sbom=old,
+        dt_server=server,
+        dt_project_version=str(old.id),
+        dt_project_version_uuid=uuid.uuid4(),
+        dt_active=False,
+    )
+    run = AssessmentRun.objects.create(
+        sbom=old,
+        plugin_name="dependency-track",
+        plugin_version="1.1.0",
+        plugin_config_hash="h",
+        category=AssessmentCategory.SECURITY.value,
+        run_reason="on_upload",
+        status=RunStatus.COMPLETED.value,
+        result={"summary": {"total_findings": 0}},
+    )
+    release = Release.objects.create(product=product, name="11.5")
+    ReleaseArtifact.objects.create(release=release, sbom=old)
+    return old, old_row, run, release
+
+
 @pytest.mark.django_db
 class TestReleaseChangesMoveTheScope:
     def test_shipping_an_old_sbom_in_a_release_brings_it_back(self, env):
-        _, product, component, server = env
-        old = _sbom(component, "old")
-        _sbom(component, "new")
-        old_row = SbomDependencyTrackProjectVersion.objects.create(
-            sbom=old,
-            dt_server=server,
-            dt_project_version=str(old.id),
-            dt_project_version_uuid=uuid.uuid4(),
-            dt_active=False,
-        )
-        run = AssessmentRun.objects.create(
-            sbom=old,
-            plugin_name="dependency-track",
-            plugin_version="1.1.0",
-            plugin_config_hash="h",
-            category=AssessmentCategory.SECURITY.value,
-            run_reason="on_upload",
-            status=RunStatus.COMPLETED.value,
-            result={"summary": {"total_findings": 0}},
-        )
-        release = Release.objects.create(product=product, name="11.5")
-        ReleaseArtifact.objects.create(release=release, sbom=old)
+        old, old_row, run, release = _old_sbom_shipped_again(env)
         client = _client()
 
         with patch(CLIENT, return_value=client):
             DependencyTrackPlugin().sync_release_tags(sbom_id=str(old.id), run_id=str(run.id), release=release)
 
+        states = {c.args[0]: c.kwargs for c in client.set_project_state.call_args_list}
+        assert states[str(old_row.dt_project_version_uuid)]["active"] is True
+
+    def test_a_scope_write_an_outage_drops_is_queued_to_retry(self, env):
+        # The attach and detach tasks never retry a plugin hook, so without this
+        # the version keeps its old state until a backfill finds it.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        _, _, component, _ = env
+        old, old_row, run, release = _old_sbom_shipped_again(env)
+        client = _client()
+        client.set_project_state.side_effect = DependencyTrackAPIError("Service unavailable", status_code=503)
+
+        with patch(CLIENT, return_value=client), patch.object(reconcile_component_dt_scope, "send") as send:
+            DependencyTrackPlugin().sync_release_tags(sbom_id=str(old.id), run_id=str(run.id), release=release)
+
+        send.assert_called_once_with(str(component.id), [str(old.id)])
+        client.set_project_state.side_effect = None
+        client.set_project_state.reset_mock()
+        with patch(CLIENT, return_value=client):
+            reconcile_component_dt_scope.fn(str(component.id), [str(old.id)])
         states = {c.args[0]: c.kwargs for c in client.set_project_state.call_args_list}
         assert states[str(old_row.dt_project_version_uuid)]["active"] is True
 
