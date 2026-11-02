@@ -514,7 +514,8 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
 
     Moving the release date moves the live edges that took their date from it,
     and publishes each again at the new date; clearing it leaves them where
-    they are. A new name or version links the edges declared before it existed.
+    they are. A date that would put a drop-in successor before its predecessor
+    is refused, as declaring that edge would be. A new name or version links the edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -536,6 +537,13 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     previous_release_date = release.released_at
     for field in changed:
         setattr(release, field, changes[field])
+    if "released_at" in changed:
+        drop_ins = ReleaseSupersession.objects.live().filter(drop_in=True).select_related("from_release", "to_release")
+        for edge in drop_ins.filter(Q(to_release=release) | Q(from_release=release, to_release__isnull=False)):
+            predecessor = release if edge.from_release_id == release.pk else edge.from_release
+            successor = release if edge.to_release_id == release.pk else edge.to_release
+            if successor is not None and (backdated := backdated_takeover(predecessor, successor)):
+                return ServiceResult.failure(backdated, status_code=400)
     release.save(update_fields=changed)
 
     if "released_at" in changed and previous_release_date is not None and release.released_at is not None:
