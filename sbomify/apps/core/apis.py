@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -2596,6 +2597,7 @@ def list_component_releases(
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
 
         response_data = []
+        reads_internal = _release_internal_readers(request)
         for release in paginated_releases:
             # Count artifacts for this release
             artifact_count = release.artifacts.count()
@@ -2621,7 +2623,7 @@ def list_component_releases(
                         "id": str(release.product.id),
                         "name": release.product.name,
                     },
-                    **_release_lifecycle_fields(release, internal=has_workspace_access),
+                    **_release_lifecycle_fields(release, internal=reads_internal(release.product)),
                 }
             )
 
@@ -2982,7 +2984,7 @@ def list_all_releases(
 
         # Build response items
         response_data = []
-        internal_by_product: dict[str, bool] = {}
+        reads_internal = _release_internal_readers(request)
         for release in paginated_releases:
             try:
                 # Count artifacts for this release
@@ -2995,8 +2997,6 @@ def list_all_releases(
                 if not release.product:
                     log.error(f"Release {release.id} has no product - skipping")
                     continue
-                if release.product_id not in internal_by_product:
-                    internal_by_product[release.product_id] = can(request, "release:read", release.product).allowed
 
                 response_data.append(
                     {
@@ -3017,7 +3017,7 @@ def list_all_releases(
                             "id": str(release.product.id),
                             "name": release.product.name,
                         },
-                        **_release_lifecycle_fields(release, internal=internal_by_product[release.product_id]),
+                        **_release_lifecycle_fields(release, internal=reads_internal(release.product)),
                     }
                 )
             except Exception as e:
@@ -3029,6 +3029,28 @@ def list_all_releases(
     except Exception:
         log.exception("Error listing all releases")
         return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+def _release_internal_readers(request: HttpRequest) -> Callable[[Product], bool]:
+    """Whether this request may read a release's internal fields, product by product.
+
+    The workspace decision is the same for every product in it, so a page asks
+    it once per workspace. An OIDC bot is also held to the products it
+    publishes to, as ``_can_read_release`` holds it.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    by_workspace: dict[Any, bool] = {}
+    by_product: dict[Any, bool] = {}
+
+    def reads(product: Product) -> bool:
+        if product.pk not in by_product:
+            if product.team_id not in by_workspace:
+                by_workspace[product.team_id] = can(request, "release:read", product).allowed
+            by_product[product.pk] = by_workspace[product.team_id] and is_authorised_for_product(request, product)
+        return by_product[product.pk]
+
+    return reads
 
 
 def _release_lifecycle_fields(release: Release, *, internal: bool) -> dict[str, Any]:
@@ -3134,7 +3156,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
             "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
-        **_release_lifecycle_fields(release, internal=can(request, "release:read", release.product).allowed),
+        **_release_lifecycle_fields(release, internal=_can_read_release(request, release.product)),
         **_release_edges(release),
     }
 

@@ -39,7 +39,11 @@ withdrawal and no archiving shows the card only to managers, for the actions.
                 <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
                         {% if not edge.to_release %}
-                            <c-overview.record title="{{ edge.successor_label }}" detail="Outside sbomify" />
+                            {% if edge.drop_in %}
+                                <c-overview.record title="{{ edge.successor_label }}" detail="Same line, replaces this release, outside sbomify" />
+                            {% else %}
+                                <c-overview.record title="{{ edge.successor_label }}" detail="New line, outside sbomify" />
+                            {% endif %}
                         {% else %}
                             {% url 'core:release_details' release.product.id edge.to_release_id as successor_url %}
                             {% if edge.drop_in %}

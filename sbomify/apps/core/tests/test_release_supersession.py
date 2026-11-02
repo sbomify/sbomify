@@ -529,6 +529,20 @@ class TestWhereAReleaseStands:
         assert "Previous releases" in page.decode() and "New line" in page.decode()
         assert "still monitored" not in page.decode()
 
+    def test_an_outside_successor_says_which_line_it_is_on(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "1.0.0")
+        assert create_release_cle_event(release, "supersededBy", PAST, superseded_by_version="1.0.1", drop_in=True).ok
+        assert create_release_cle_event(release, "supersededBy", PAST, superseded_by_version="2.0.0").ok
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id])).content
+        page = page.decode()
+
+        assert "Same line, replaces this release, outside sbomify" in page
+        assert "New line, outside sbomify" in page
+
     def test_the_lifecycle_card_follows_updates_to_its_release(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
@@ -856,6 +870,29 @@ class TestWithdrawnReason:
         data = client.get(f"/api/v1/releases/{release.pk}", **get_api_headers(token)).json()
 
         assert data["withdrawn_reason"] == "compromised"
+
+    def test_a_page_of_several_products_asks_about_the_workspace_once(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        """The read decision is the same for every product in one workspace, so a page does not
+        look the caller's membership up again for each product on it."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        client, token = authenticated_api_client
+
+        def member_reads() -> int:
+            with CaptureQueriesContext(connection) as queries:
+                response = client.get("/api/v1/releases", **get_api_headers(token))
+            assert response.status_code == 200, response.content
+            return sum('"workspaces_members"' in query["sql"] for query in queries.captured_queries)
+
+        _release(sample_product, "1.0.0")
+        one_product = member_reads()
+        for n in range(3):
+            _release(Product.objects.create(team=sample_product.team, name=f"Product {n}"), "1.0.0")
+
+        assert member_reads() == one_product
 
 
 class TestOtherReleasesHear:
