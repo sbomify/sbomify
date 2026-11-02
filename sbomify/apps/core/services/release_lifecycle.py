@@ -404,8 +404,10 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
     ``release``; it takes the product lock. Refuses a link that would close a
     cycle, or a rename onto a successor the release names itself, so the
     caller rolls the rename back. Linked edges stay linked when a release is
-    renamed again: the edge resolved to that release. Rederives the product's
-    lifecycle columns either way, so a new release takes the product's dates.
+    renamed again: the edge resolved to that release. A predecessor keeps one
+    live edge per successor, so a second name for the same release is a 409.
+    Rederives the product's lifecycle columns either way, so a new release
+    takes the product's dates.
     """
     if release.is_latest:
         return ServiceResult.success(0)
@@ -443,6 +445,12 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
             )
         if edge.drop_in and (backdated := backdated_takeover(edge.from_release, release)):
             return ServiceResult.failure(backdated, status_code=400)
+        if ReleaseSupersession.objects.live().filter(from_release_id=edge.from_release_id, to_release=release).exists():
+            return ServiceResult.failure(
+                f"Release {edge.from_release.name} already names {release.name} as a successor, so "
+                f"{edge.successor_label} cannot point at it too. Remove one of the links first.",
+                status_code=409,
+            )
         ReleaseSupersession.objects.filter(pk=edge.pk).update(to_release=release)
         linked.append(edge.from_release)
     recompute_release_lifecycle(product)
@@ -623,7 +631,8 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
 
     Moving the release date moves the live edges that took their date from it,
     and publishes each again at the new date; clearing it leaves them where
-    they are. A new name or version links the edges declared before it existed.
+    they are. A date that would put a drop-in successor before its predecessor
+    is refused, as declaring that edge would be. A new name or version links the edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -645,6 +654,13 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     previous_release_date = release.released_at
     for field in changed:
         setattr(release, field, changes[field])
+    if "released_at" in changed:
+        drop_ins = ReleaseSupersession.objects.live().filter(drop_in=True).select_related("from_release", "to_release")
+        for edge in drop_ins.filter(Q(to_release=release) | Q(from_release=release, to_release__isnull=False)):
+            predecessor = release if edge.from_release_id == release.pk else edge.from_release
+            successor = release if edge.to_release_id == release.pk else edge.to_release
+            if successor is not None and (backdated := backdated_takeover(predecessor, successor)):
+                return ServiceResult.failure(backdated, status_code=400)
     release.save(update_fields=changed)
 
     if "released_at" in changed and previous_release_date is not None and release.released_at is not None:

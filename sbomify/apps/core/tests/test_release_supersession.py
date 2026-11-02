@@ -532,7 +532,8 @@ class TestWhereAReleaseStands:
     def test_the_lifecycle_card_follows_updates_to_its_release(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
-        """Withdrawn through the API or in another tab, the card repaints with the header."""
+        """Withdrawn through the API or in another tab, the card repaints with the header. It names
+        its neighbours too, so a renamed or deleted release in the same product repaints it as well."""
         import re
 
         product = Product.objects.create(team=team_with_business_plan, name="Gateway")
@@ -542,8 +543,10 @@ class TestWhereAReleaseStands:
 
         region = re.search(r'<div id="release-lifecycle"[^>]*>', page.content.decode(), re.S)
         assert region is not None
-        assert "liveRegion(" in region[0] and "release_updated" in region[0] and release.pk in region[0]
-        assert 'hx-select="#release-lifecycle"' in region[0]
+        assert "liveRegion(" in region[0] and 'hx-select="#release-lifecycle"' in region[0]
+        assert "release_updated" in region[0] and "release_deleted" in region[0]
+        assert "key: 'product_id'" in region[0]
+        assert product.pk in region[0]
 
     def test_withdrawing_from_the_details_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -701,6 +704,33 @@ class TestChoosingTheLine:
         assert "released after" in refused.json()["detail"]
         assert upgrade_path.status_code == 201, upgrade_path.content
         assert _state(major) == Release.LifecycleState.ACTIVE
+
+    @pytest.mark.parametrize("edited", ["predecessor", "successor"])
+    def test_an_edit_cannot_move_a_date_past_the_same_line_rule(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, edited: str
+    ) -> None:
+        # 2.0 replaces 1.0. Moving either date so 2.0 predates 1.0 is the backdated takeover a
+        # declaration is refused for, so the edit is refused and rolled back.
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0", **_on(PAST))
+        new = _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        _supersede(old, new)
+        release, moved_to = (
+            (old, datetime(2025, 9, 1, tzinfo=dt_timezone.utc))
+            if edited == "predecessor"
+            else (new, datetime(2024, 6, 1, tzinfo=dt_timezone.utc))
+        )
+
+        response = client.patch(
+            f"/api/v1/releases/{release.pk}",
+            data={k: v.isoformat() for k, v in _on(moved_to).items()},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 400, response.content
+        assert "released after" in response.json()["detail"]
+        assert Release.objects.get(pk=release.pk).released_at == release.released_at
 
     def test_a_prerelease_replaces_nothing_even_if_the_page_script_never_ran(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
