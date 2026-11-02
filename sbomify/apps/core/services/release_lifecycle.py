@@ -93,8 +93,12 @@ def backdated_takeover(predecessor: Release, successor: Release) -> str | None:
 
     A release cannot replace one that came out after it on the same line:
     a backdated entry would retire the current release the moment it was saved.
+    Either date can still be the bare timestamp an edit sent, which ``save()``
+    has not made aware yet, so both are read the way it will read them.
     """
-    if successor.released_at and predecessor.released_at and successor.released_at < predecessor.released_at:
+    successor_date = Release._as_aware(successor.released_at)
+    predecessor_date = Release._as_aware(predecessor.released_at)
+    if successor_date and predecessor_date and successor_date < predecessor_date:
         return (
             f"Release {predecessor.name} was released after {successor.name}, so {successor.name} cannot "
             "replace it on the same line. Choose a new line, or check the release dates."
