@@ -573,9 +573,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
             return
 
-        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component_safely
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
 
         component = version_rows[0].sbom.component
+        unsettled = 0
         for version_row in version_rows:
             # The tag write and the reconcile under one lock, so no reconcile
             # elsewhere writes the project between this read and this write.
@@ -607,7 +609,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 # A release gaining or losing this SBOM can bring its version into
                 # what sbomify tracks, or take it out. Only that version, and the
                 # latest flag, can move: the rest wait for the backfill and the sweep.
-                reconcile_component_safely(component, version_row.dt_server, only={version_row.sbom_id})
+                try:
+                    counts = reconcile_component(component, version_row.dt_server, only={version_row.sbom_id})
+                    unsettled += counts["failed"] - counts["refused"]
+                except Exception:
+                    logger.warning("[DT] Could not reconcile component %s", component.id, exc_info=True)
+                    unsettled += 1
+        if unsettled:
+            # The attach and detach tasks never retry a hook, so an outage here
+            # would leave the version as it was until a backfill. A task that
+            # retries carries the same bounded write on.
+            reconcile_component_dt_scope.send(str(component.id), [str(sbom_id)])
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
