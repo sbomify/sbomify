@@ -168,7 +168,9 @@
          hx-trigger="live-refresh"
          hx-swap="morph"
          hx-disinherit="*"
-         {% if not linked_releases %}hidden{% endif %}>{% include 'core/components/release_links.html.j2' %}</div>
+         {% if not linked_releases and not can_manage_links %}hidden{% endif %}>
+        {% include 'core/components/release_links_card.html.j2' %}
+    </div>
     {# Release Artifacts #}
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}

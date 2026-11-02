@@ -47,7 +47,7 @@ the scanner's full result, which the page itself never loads.
                 </c-tables.cell>
                 <c-tables.cell compact>
                 <div class="flex flex-wrap items-center gap-1.5">
-                    {% with advisory=row.id|advisory_url %}
+                    {% with advisory=row.id|advisory_url:row.aliases %}
                         {% if advisory %}
                             <a href="{{ advisory }}"
                                target="_blank"

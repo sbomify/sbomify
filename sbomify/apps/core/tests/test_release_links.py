@@ -195,10 +195,12 @@ class TestTheReleasePages:
         assert "Ships with" in html
         assert reverse("core:release_details", args=[toolchain.product_id, toolchain.id]) in html
 
-    def test_a_release_without_links_shows_no_section(self, client, sample_user, app):
+    def test_a_release_without_links_offers_a_manager_the_add_control(self, client, sample_user, app):
         setup_authenticated_client_session(client, app.product.team, sample_user)
         page = client.get(reverse("core:release_details", args=[app.product_id, app.id]))
-        assert "Ships with" not in page.content.decode()
+        html = page.content.decode()
+        assert "Ships with no other release" in html
+        assert "Add release" in html
 
     def test_the_trust_center_lists_only_public_products(self, app, toolchain):
         hidden = _release(app.product.team, "Internal", is_public=False)
