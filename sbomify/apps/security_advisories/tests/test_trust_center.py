@@ -985,7 +985,7 @@ def test_cve_ids_and_references_link_to_insights_on_the_trust_center(team, publi
     AdvisoryReference.objects.create(advisory=advisory, external_id="DSA-5020-1", url="https://example.com/dsa-5020-1")
 
     content = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     ).content.decode()
 
     assert 'href="https://insights.sbomify.com/CVE-2026-30020/"' in content
