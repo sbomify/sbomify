@@ -263,6 +263,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         vex_suppressions = None
         vex_suppression_terms: list[str] = []
         vex_suppression_states: list[str] = []
+        vex_suppression_scopes: list[str] = []
         vex_statement_limit = None
 
         # VEX and CBOM artifacts are SBOM-backed rows served under their own paths.
@@ -340,6 +341,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     for r in vex_suppressions
                 ]
                 vex_suppression_states = [r["state"] for r in vex_suppressions]
+                # A row's full package list goes out once per list, however many
+                # rows share it, and the row points at it.
+                scope_index: dict[str, int] = {}
+                for row in vex_suppressions:
+                    scope = row["scope"]
+                    row["scope"] = scope_index.setdefault(scope, len(scope_index)) if scope else -1
+                vex_suppression_scopes = list(scope_index)
                 # The browser gets the rows as data and builds only the page on
                 # screen, so the link and the shortened note are worked out here.
                 for row in vex_suppressions:
@@ -520,6 +528,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "vex_suppressions": vex_suppressions,
                 "vex_suppression_terms": vex_suppression_terms,
                 "vex_suppression_states": vex_suppression_states,
+                "vex_suppression_scopes": vex_suppression_scopes,
                 "vex_statement_limit": vex_statement_limit,
                 "is_vex": is_vex,
                 "is_cbom": is_cbom,

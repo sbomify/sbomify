@@ -267,6 +267,54 @@ def test_a_vex_at_the_statement_limit_stays_responsive(
 
 
 @pytest.mark.django_db
+def test_a_package_past_the_first_ten_still_finds_its_vex_rows(
+    authenticated_page: Page, sbom_component_details, mocker
+) -> None:
+    """A row names the first ten packages it covers; search still reaches the rest."""
+    import json
+
+    from sbomify.apps.sboms.models import SBOM
+
+    document = {
+        "@context": "https://openvex.dev/ns/v0.2.0",
+        "@id": "https://example.com/vex/image",
+        "author": "Example",
+        "timestamp": "2026-11-01T00:00:00Z",
+        "version": 1,
+        "products": [f"pkg:npm/lib{n:04d}@1.0.0" for n in range(20)],
+        "statements": [
+            {
+                "vulnerability": {"name": f"CVE-2026-{n:05d}"},
+                "status": "not_affected",
+                "justification": "component_not_present",
+            }
+            for n in range(3)
+        ],
+    }
+    mocker.patch(
+        "sbomify.apps.core.object_store.StorageClient.get_sbom_data", return_value=json.dumps(document).encode()
+    )
+    vex = SBOM.objects.create(
+        name="image.openvex.json",
+        component=sbom_component_details,
+        format="openvex",
+        format_version="0.2.0",
+        version="1.0",
+        sbom_filename="image.openvex.json",
+        source="manual_upload",
+        bom_type=SBOM.BomType.VEX,
+    )
+    authenticated_page.goto(f"/components/{sbom_component_details.id}/vex/{vex.id}/")
+    rows = authenticated_page.locator("tbody tr").filter(has_text="CVE-2026-")
+    expect(rows.first).to_contain_text("and 10 more")
+
+    authenticated_page.get_by_label("Search suppressed vulnerabilities").fill("lib0015")
+
+    expect(authenticated_page.get_by_text("Showing 1 to 3 of 3")).to_be_visible()
+    expect(rows).to_have_count(3)
+
+
+@pytest.mark.django_db
 def test_a_refreshed_vex_page_shows_the_new_rows_and_keeps_the_search(
     authenticated_page: Page, sbom_component_details, mocker
 ) -> None:
