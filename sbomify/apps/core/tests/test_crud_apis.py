@@ -2982,6 +2982,60 @@ def test_patch_product_lifecycle_events(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("method", ["put", "patch"])
+def test_a_product_edit_reads_the_dates_an_edit_committed_after_it_loaded(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    mocker: MockerFixture,
+    method: str,
+):
+    """Saving the copy it loaded put the other edit's date back on the column, while the
+    events kept it, so the next lifecycle write brought the other date back."""
+    from datetime import date, datetime, timezone
+
+    from django.db import transaction
+
+    from sbomify.apps.core import apis
+    from sbomify.apps.core.services.cle import create_cle_event, set_product_dates
+
+    with transaction.atomic():
+        assert set_product_dates(sample_product, {"end_of_support": date(2025, 1, 1)}).ok
+    can = apis.can
+    landed: list[bool] = []
+
+    def another_edit_lands_first(*args, **kwargs):
+        if not landed:
+            landed.append(True)
+            with transaction.atomic():
+                assert set_product_dates(
+                    Product.objects.get(pk=sample_product.pk), {"end_of_support": date(2026, 1, 1)}
+                ).ok
+        return can(*args, **kwargs)
+
+    mocker.patch.object(apis, "can", side_effect=another_edit_lands_first)
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+    payload = {"end_of_support": "2025-01-01"}
+    if method == "put":
+        payload |= {"name": sample_product.name, "description": "", "is_public": sample_product.is_public}
+
+    response = getattr(client, method)(
+        f"/api/v1/products/{sample_product.id}",
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    assert create_cle_event(
+        sample_product, "endOfLife", datetime(2030, 1, 1, tzinfo=timezone.utc), versions=[{"range": "vers:generic/*"}]
+    ).ok
+    sample_product.refresh_from_db()
+    assert sample_product.end_of_support == date(2025, 1, 1)
+
+
+@pytest.mark.django_db
 def test_product_lifecycle_events_clear_values(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
