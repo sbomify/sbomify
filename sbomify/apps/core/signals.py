@@ -580,3 +580,20 @@ def tell_releases_shipping_the_replaced_newest(sender: Any, instance: Any, creat
     )
     if replaced:
         _tell_releases_shipping([replaced])
+
+
+@receiver(post_delete, sender="sboms.SBOM")
+def tell_releases_shipping_the_new_newest(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Deleting a component's newest SBOM of a format makes the one before it the newest, scanned again."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    newest = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .order_by("-created_at", "-id")
+        .values_list("pk", "created_at")
+        .first()
+    )
+    if newest and newest[1] <= instance.created_at:
+        _tell_releases_shipping([newest[0]])

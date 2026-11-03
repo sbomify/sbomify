@@ -341,6 +341,39 @@ class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
 
         assert str(app.id) in self._told(sent)
 
+    def test_withdrawing_a_successor_tells_what_its_predecessor_links_to(
+        self, app, toolchain, mocker, django_capture_on_commit_callbacks
+    ):
+        # Withdrawing the successor makes the predecessor live again, and a live
+        # release keeps the releases it links on monitored.
+        from sbomify.apps.core.schemas import SupersedesItem
+        from sbomify.apps.core.services.release_lifecycle import declare_supersedes, set_release_state
+
+        successor = Release.objects.create(product=app.product, name="v3", version="v3.0.0")
+        with django_capture_on_commit_callbacks(execute=True):
+            assert declare_supersedes(successor, [SupersedesItem(release_id=app.pk, drop_in=True)]).ok
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            assert set_release_state(successor, "withdraw", reason="defective").ok
+
+        assert str(toolchain.id) in self._told(sent)
+
+    def test_deleting_the_newest_sbom_tells_the_releases_shipping_the_one_before(
+        self, app, mocker, django_capture_on_commit_callbacks
+    ):
+        shipped = _sbom(app, "kernel")
+        newer = SBOM.objects.create(
+            name="kernel", version="2", component=shipped.component, format="cyclonedx", format_version="1.6"
+        )
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            newer.delete()
+
+        assert str(app.id) in self._told(sent)
+
     def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
         shipped = _sbom(app, "kernel")
         sent = mocker.patch(BROADCAST)

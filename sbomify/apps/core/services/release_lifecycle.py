@@ -727,6 +727,31 @@ def recompute_release_lifecycle(product: Product) -> None:
     if changed:
         Release.objects.bulk_update(changed, fields)
         broadcast_releases_updated(product, changed)
+        broadcast_dependents([release.pk for release in changed])
+
+
+def broadcast_dependents(release_ids: list[Any]) -> None:
+    """Once this commits, tell the releases whose monitoring these releases decide.
+
+    A live release keeps the releases it links on monitored, and with them the
+    releases shipping their SBOMs, so moving a release in or out of its
+    lifecycle moves what their pages say. The releases themselves are not
+    told again.
+    """
+
+    def send() -> None:
+        reached = {*release_ids, *releases_linked_from(release_ids)}
+        shipped = ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values("sbom_id")
+        moved = (
+            Release.objects.filter(Q(pk__in=reached) | Q(artifacts__sbom_id__in=shipped))
+            .exclude(pk__in=release_ids)
+            .select_related("product__team")
+            .distinct()
+        )
+        for release in moved:
+            broadcast_releases_updated(release.product, [release])
+
+    transaction.on_commit(send, robust=True)
 
 
 def _after_commit(func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
