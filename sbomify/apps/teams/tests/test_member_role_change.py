@@ -304,6 +304,23 @@ class TestMembersTab:
         assert "Make admin" in content
         assert "Make owner" in content
 
+    def test_only_owner_is_not_offered_a_role_change(self, team, make_member):
+        owner = make_member("owner", "owner")
+
+        url = reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "members"})
+        content = _settings_client(owner).get(url).content.decode()
+
+        assert 'name="member_role_action"' not in content
+
+    def test_owner_is_offered_stepping_down_when_another_owner_remains(self, team, make_member):
+        owner = make_member("owner", "owner")
+        make_member("second", "owner")
+
+        url = reverse("workspaces:team_settings_tab", kwargs={"workspace_key": team.key, "tab": "members"})
+        content = _settings_client(owner).get(url).content.decode()
+
+        assert "Make admin" in content
+
     def test_admin_is_not_offered_owner_or_admin_rows(self, team, make_member):
         make_member("owner", "owner")
         admin = make_member("admin", "admin")
