@@ -215,6 +215,9 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "advisory:manage": ADMINISTER,
     "advisory:publish": ADMINISTER,
     "advisory:delete": ADMINISTER,
+    # CRA Article 14 reports go to ENISA and the national CSIRTs, so recording
+    # one is the same outward act as publishing an advisory.
+    "cra_report:manage": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -267,6 +270,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "component:read_internal": READ_INTERNAL,
     "product:read": READ_INTERNAL,
     "advisory:read": READ_INTERNAL,
+    "cra_report:read": READ_INTERNAL,
     "release:read": READ_INTERNAL_OR_BOT,
     "document:read": READ_INTERNAL,
     "sbom:read": READ_INTERNAL,
