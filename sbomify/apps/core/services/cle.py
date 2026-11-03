@@ -774,7 +774,13 @@ def recompute_lifecycle_dates(product: Product) -> None:
 
     # The same fold the releases inherit, so the product never reads one date while its releases keep another.
     end_of_support, end_of_life = product_dates(events)
-    written = {event.event_type for event in events}
+    # Only an event that can feed the column counts as having written it: a
+    # version-scoped end of support or end of life never does.
+    written = {
+        event.event_type
+        for event in events
+        if event.event_type == ProductCLEEvent.EventType.RELEASED or covers_every_version(event.versions)
+    }
     folded = [
         (field, value)
         for field, event_type, value in (

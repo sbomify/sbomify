@@ -1281,6 +1281,42 @@ refold = importlib.import_module("sbomify.apps.core.migrations.0036_refold_produ
 
 
 @pytest.mark.django_db
+class TestColumnOnlyDatesAtRuntime:
+    @pytest.mark.parametrize(("field", "event_type"), [("end_of_support", "endOfSupport"), ("end_of_life", "endOfLife")])
+    def test_a_version_scoped_event_leaves_a_column_only_date_alone(
+        self, sample_product: Product, field: str, event_type: str
+    ) -> None:
+        # A scoped event never feeds the column, so it must not count as having written it.
+        Product.objects.filter(pk=sample_product.pk).update(**{field: date(2030, 1, 1)})
+
+        with transaction.atomic():
+            assert create_cle_event(
+                sample_product,
+                event_type,
+                datetime(2026, 6, 1, tzinfo=dt_timezone.utc),
+                versions=[{"range": "vers:semver/<2.0.0"}],
+            ).ok
+
+        sample_product.refresh_from_db()
+        assert getattr(sample_product, field) == date(2030, 1, 1)
+
+
+@pytest.mark.django_db
+class TestRecentlyRetired:
+    def test_a_supersession_survives_a_missed_run_and_a_late_one(self, sample_product: Product) -> None:
+        # Last run 03:20 on day D, the edge took effect at 03:25, D+1 was missed, D+2 ran at 03:26.
+        from sbomify.apps.core.services.release_lifecycle import recently_retired_releases
+
+        day = datetime(2026, 3, 10, tzinfo=dt_timezone.utc)
+        release = _release(sample_product, "1.0.0")
+        Release.objects.filter(pk=release.pk).update(superseded_at=day.replace(hour=3, minute=25))
+
+        found = recently_retired_releases(2, now=day + timedelta(days=2, hours=3, minutes=26))
+
+        assert release.pk in set(found.values_list("pk", flat=True))
+
+
+@pytest.mark.django_db
 class TestRefoldProductDates:
     def test_existing_products_take_the_fold_their_releases_inherit(self, sample_product: Product) -> None:
         # What master left: the columns hold the last surviving event, whatever its policy or range.

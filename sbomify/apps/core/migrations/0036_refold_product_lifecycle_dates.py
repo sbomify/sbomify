@@ -55,6 +55,9 @@ def refold_product_lifecycle_dates(apps, schema_editor):
     for product_id in product_ids:
         events = list(ProductCLEEvent.objects.filter(product_id=product_id).order_by("event_id"))
         end_of_support, end_of_life = _product_dates(events)
+        # Every event counts here, scoped ones too, unlike the runtime rule: the
+        # old fold wrote a scoped date into the column, so a column beside a
+        # scoped event of its type came from that event and refolds.
         types = {event.event_type for event in events}
         refolded = {
             field: value
