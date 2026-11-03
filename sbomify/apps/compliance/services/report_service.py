@@ -404,14 +404,19 @@ def delete_with_reports(parents: list[Any], key: str, refused: str) -> ServiceRe
 
     A report without a filing goes with them, as it always did. A filed report
     is evidence, so nothing is deleted and the answer is a 409 saying ``refused``.
+    The reports are locked first, as ``_lock`` does, so a filing cannot land
+    between the check and the delete, where the cascade would take it unseen.
+    A report started meanwhile is not locked, and RESTRICT fails the delete.
     """
     with transaction.atomic():
-        reports = CRAReport.objects.filter(**{f"{key}__in": parents})
-        if reports.filter(filings__isnull=False).exists():
+        report_ids = list(
+            CRAReport.objects.select_for_update().filter(**{f"{key}__in": parents}).values_list("pk", flat=True)
+        )
+        if CRAReportFiling.objects.filter(report_id__in=report_ids).exists():
             return ServiceResult.failure(refused, status_code=409)
-        for report_id in reports.values_list("pk", flat=True):
+        for report_id in report_ids:
             broadcast_on_commit(parents[0].team.key, "cra_report_deleted", {"report_id": report_id})
-        reports.delete()
+        CRAReport.objects.filter(pk__in=report_ids).delete()
         for parent in parents:
             parent.delete()
     return ServiceResult.success(None)

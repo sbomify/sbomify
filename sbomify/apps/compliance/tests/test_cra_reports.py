@@ -1654,6 +1654,17 @@ class TestFiledEvidenceOutlivesItsParents:
         assert response.status_code == 204
         assert not CRAReport.objects.filter(pk=report.pk).exists()
 
+    def test_the_reports_are_locked_before_their_filings_are_checked(self, team, report, advisory):
+        # record_filing takes the same row lock, so a filing cannot land between
+        # the check and the delete, where the cascade would take it unseen.
+        with CaptureQueriesContext(connection) as queries:
+            assert advisory_service.delete_advisory(team, advisory.id).ok
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and "compliance_cra_reports" in text)
+        checked = next(i for i, text in enumerate(sql) if "compliance_cra_report_filings" in text)
+        assert locked < checked
+
     def test_deleting_the_workspace_takes_its_filed_reports_with_it(self, team, owner, report):
         # Deleting the workspace is its owner erasing everything in it, account
         # deletion included. Refusing would leave an account that filed one CRA
