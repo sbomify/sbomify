@@ -501,6 +501,20 @@ class TestEdgeValidation:
 
 
 @pytest.mark.django_db
+class TestTheLatestNameIsReserved:
+    def test_latest_is_refused_as_a_successor_before_the_latest_release_exists(self, sample_product: Product) -> None:
+        # Created lazily, so a pending edge to "latest" would never link, and
+        # pending-edge linking skips the latest release anyway.
+        release = _release(sample_product, "1.0.0")
+        Release.objects.filter(product=sample_product, is_latest=True).delete()
+
+        result = _supersede(release, "latest")
+
+        assert not result.ok and result.status_code == 400
+        assert not ReleaseSupersession.objects.filter(from_release=release).exists()
+
+
+@pytest.mark.django_db
 class TestPendingEdges:
     """An edge declared before its successor existed links once a release carries the name it gave."""
 
