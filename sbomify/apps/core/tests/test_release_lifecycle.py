@@ -886,6 +886,30 @@ class TestDeleteGuard:
 
 
 @pytest.mark.django_db
+class TestWorkspaceDeleteLockOrder:
+    def test_a_workspace_delete_locks_its_products_before_their_releases_go(self) -> None:
+        # A release edit locks its product and then the release; a cascade that
+        # reached the releases first could deadlock against it.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.teams.models import Workspace
+
+        workspace = Workspace.objects.create(name="Closing down")
+        product = Product.objects.create(name="Gateway", team=workspace)
+        Release.objects.create(product=product, name="1.0.0")
+
+        with CaptureQueriesContext(connection) as queries:
+            workspace.delete()
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        products = Product._meta.db_table
+        locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{products}"' in text)
+        deleted = next(i for i, text in enumerate(sql) if text.startswith(f'DELETE FROM "{Release._meta.db_table}"'))
+        assert locked < deleted
+
+
+@pytest.mark.django_db
 class TestBackfillMigration:
     def test_existing_supersededby_events_become_upgrade_path_edges(self, sample_product: Product) -> None:
         old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")

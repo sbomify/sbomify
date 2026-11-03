@@ -5,7 +5,7 @@ from typing import Any
 from allauth.account.signals import user_signed_up
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models.signals import m2m_changed, post_delete, post_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from sbomify.logging import getLogger
@@ -511,3 +511,15 @@ def reject_cross_tenant_product_component_links(
                     f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
                     f"product team={product_team_id}"
                 )
+
+
+@receiver(pre_delete, sender="teams.Workspace")
+def lock_products_before_a_workspace_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Lock the workspace's products, in key order, before its cascade deletes their releases.
+
+    A release edit locks its product and then the release. Every workspace
+    delete reaches here before its first DELETE, so it takes the same order.
+    """
+    from sbomify.apps.core.models import Product
+
+    list(Product.objects.select_for_update().filter(team=instance).order_by("pk").values_list("pk"))
