@@ -1,25 +1,23 @@
 # Base Python version
-ARG PYTHON_VERSION=3.14-slim-trixie@sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1
+ARG PYTHON_VERSION=3.15-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
 ARG BUILD_ENV=production # Default to production
 ARG OSV_SCANNER_VERSION=v2.7.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
 ARG COSIGN_VERSION=v3.1.4
-# Chainguard distroless Python for production, pinned by digest for reproducibility.
+# Chainguard images track :latest on purpose and are never pinned by digest.
+# They are rebuilt daily with security fixes, and a pinned digest freezes the
+# whole base, its apk database included, so scanners keep reporting packages
+# that newer builds have already fixed.
+# Chainguard distroless Python for production.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
-# To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
-# Since 2026-10-10 :latest is Python 3.15, so this pins the last 3.14 build
-# (2026-10-10, Python 3.14.8, glibc 2.44-r8) until PYTHON_VERSION moves to 3.15.
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:3f411b4aac1ed9cd6c9dec1486f92a8898737d9d6f95488dd727ca7d6f5254ee
-# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
-# digest so the builder image itself is reproducible. The actual .so
-# versions still come from `apk add` against the live Wolfi repo at build
-# time — Wolfi ships no repo-snapshot mechanism, but its package updates
-# are ABI-stable security patches, so the copied libraries stay binary-
-# compatible across rebuilds. Bump the digest below when you want to pick
-# up newer patches.
-# To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:bc76fa39ddd1482dd56a761b3331e03ba8f0e093ebb525618a56d014b480da88
+# When :latest moves to a new Python minor, move PYTHON_VERSION with it.
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python:latest
+# Chainguard Wolfi base for the weasyprint-libs builder stage.
+# The .so versions come from `apk add` against the live Wolfi repo at build
+# time. Wolfi package updates are ABI-stable security patches, so the copied
+# libraries stay binary-compatible with the runtime image.
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base:latest
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -340,12 +338,7 @@ FROM ${CHAINGUARD_WOLFI_BASE_IMAGE} AS weasyprint-libs
 # ~3 MB. font-noto's full multi-script set is ~470 MB — needlessly
 # bloats the prod image since the DoC is Latin / Latin-extended /
 # Cyrillic / Greek only and Liberation covers all four.
-# The libexpat.so* staged below replaces the copy in CHAINGUARD_PYTHON_IMAGE,
-# so it is the expat that pyexpat and fontconfig load in production. The
-# version floor keeps it at or above the CVE-2026-115506 fix, and changing it
-# invalidates a cached layer still holding an older expat.
 RUN apk add --no-cache \
-        'libexpat1>=2.10.0' \
         pango \
         harfbuzz \
         openjpeg \
@@ -353,16 +346,16 @@ RUN apk add --no-cache \
         fontconfig \
         freetype \
         glib \
-        font-liberation \
-        ca-certificates-bundle
+        font-liberation
 
 # Stage just the .so files WeasyPrint actually dlopen()s plus their transitive
 # deps (verified with ld-linux --list against libpango / libpangoft2 / libharfbuzz
 # / libfreetype / libfontconfig / libopenjp2 / libjpeg) and the Liberation Sans
 # weights + Liberation Mono Regular the print CSS targets. Copying these
 # specific files instead of /usr/lib + /usr/share/fonts wholesale shrinks the
-# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux are
-# already in the prod image — re-copying them would risk a glibc skew, so
+# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux and
+# libexpat are already in the prod image. Re-copying glibc would risk a skew,
+# and the image's own libexpat is what its apk database and SBOM report, so
 # they're intentionally omitted.
 #
 # Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
@@ -392,7 +385,7 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
         libfontconfig.so* \
         libopenjp2.so* libjpeg.so* \
         libbrotlicommon.so* libbrotlidec.so* \
-        libbz2.so* libexpat.so* libfribidi.so* libgraphite2.so* \
+        libbz2.so* libfribidi.so* libgraphite2.so* \
         libgio-2.0.so* libglib-2.0.so* libgmodule-2.0.so* libgobject-2.0.so* \
         libpcre2-8.so* libpng16.so* libz.so* \
         libblkid.so* libmount.so* libselinux.so* \
@@ -404,14 +397,6 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
           /staged/usr/share/fonts/font-liberation/ && \
     cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
     cp -a /etc/fonts/. /staged/etc/fonts/
-
-# Stage the CA bundle from the live Wolfi repo so the prod image's system trust
-# store tracks upstream distrust decisions (e.g. the 2026 emSign removal) on
-# every rebuild, instead of being frozen at the CHAINGUARD_PYTHON_IMAGE digest.
-# OpenSSL (Python's ssl defaults) and the Go binaries (cosign, osv-scanner)
-# all read this file.
-RUN mkdir -p /staged/etc/ssl/certs && \
-    cp -L /etc/ssl/certs/ca-certificates.crt /staged/etc/ssl/certs/ca-certificates.crt
 
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
