@@ -25,6 +25,7 @@ from sbomify.apps.compliance.reporting import (
     validate_values,
 )
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.teams.broadcasts import broadcast_on_commit
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -62,6 +63,15 @@ def _schedule(report: CRAReport) -> None:
     CRAReport.objects.filter(pk=report.pk).update(reminders_pending=True)
     report_id = report.pk
     transaction.on_commit(lambda: schedule_pending(report_id))
+
+
+def _announce(report: CRAReport, action: str) -> None:
+    """Tell the workspace a report changed, so open report pages repaint.
+
+    Every member hears this, so it names the report and the action and nothing
+    from its content.
+    """
+    broadcast_on_commit(report.team.key, "cra_report_updated", {"report_id": report.pk, "action": action})
 
 
 def _lock(report: CRAReport) -> CRAReport:
@@ -202,6 +212,7 @@ def create_report(
         report_id=report.pk,
         detail={"kind": kind, "product_id": product.pk, "advisory_id": getattr(advisory, "pk", None)},
     )
+    _announce(report, "created")
     _schedule(report)
     return ServiceResult.success(report)
 
@@ -260,6 +271,7 @@ def update_report(
             report_id=report.pk,
             detail={"fields": sorted(changed)},
         )
+        _announce(report, "updated")
     _schedule(report)
     return ServiceResult.success(report)
 
@@ -352,6 +364,12 @@ def record_filing(
                         "filed_at": filing.filed_at.isoformat(),
                     },
                 )
+                # The advisory list's Updated column reads this event.
+                broadcast_on_commit(
+                    report.team.key,
+                    "advisory_updated",
+                    {"advisory_id": str(report.advisory_id), "action": event_type},
+                )
     except IntegrityError:
         return ServiceResult.failure(f"The {STAGE_LABELS[stage].lower()} is already recorded.", 409)
 
@@ -362,6 +380,7 @@ def record_filing(
         report_id=report.pk,
         detail={"stage": stage, "srp_reference": filing.srp_reference, "filed_at": filing.filed_at},
     )
+    _announce(report, "filed")
     _schedule(report)
     return ServiceResult.success(filing)
 
@@ -373,6 +392,7 @@ def delete_report(report: CRAReport, user: Any) -> ServiceResult[None]:
             return ServiceResult.failure("A report with a recorded filing is kept as evidence.", 409)
         report_id = report.pk  # delete() clears it
         report.delete()
+        broadcast_on_commit(report.team.key, "cra_report_deleted", {"report_id": report_id})
     log_cra_report_event(
         "cra.report.deleted", user=user, team_id=report.team_id, report_id=report_id, detail={"kind": report.kind}
     )

@@ -16,52 +16,61 @@
     rel="noopener noreferrer"
     class="underline">portal.cra-srp.enisa.europa.eu</a>.
     </c-feedback.alert>
-    {% if reports %}
-        <c-cards.card flush>
-        <c-tables.table>
-        <c-tables.head>
-        <c-tables.header-cell nowrap>Product</c-tables.header-cell>
-        <c-tables.header-cell>Report</c-tables.header-cell>
-        <c-tables.header-cell>Next deadline</c-tables.header-cell>
-        <c-tables.header-cell date>Due</c-tables.header-cell>
-        <c-tables.actions-cell as="th" label="Actions" />
-        </c-tables.head>
-        <tbody>
-            {% for row in reports %}
-                <c-tables.row>
-                <c-tables.cell nowrap class="font-medium">{{ row.report.product.name }}</c-tables.cell>
-                <c-tables.cell>{{ row.report.get_kind_display }}</c-tables.cell>
-                <c-tables.cell>
-                {% if not row.next_due %}
-                    <c-badges.success>Final report filed</c-badges.success>
-                {% elif row.next_due.overdue %}
-                    <c-badges.danger>{{ row.next_due.label }} overdue</c-badges.danger>
-                {% else %}
-                    <c-badges.warning>{{ row.next_due.label }}</c-badges.warning>
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell date>
-                {% if row.next_due.due %}
-                    {{ row.next_due.due|date:"j M Y, H:i" }} UTC
-                {% elif row.next_due %}
-                    After a fix is available
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell end>
-                <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_detail' report_id=row.report.id %}">
-                Open <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
-                </c-buttons.ghost>
-                </c-tables.cell>
-                </c-tables.row>
-            {% endfor %}
-        </tbody>
-        </c-tables.table>
-        </c-cards.card>
-    {% else %}
-        <c-cards.card flush>
-        <c-feedback.empty-state icon="fas fa-tower-broadcast" title="No CRA reports" message="Start one from an advisory with a known exploited vulnerability, or record a severe incident here." />
-        </c-cards.card>
-    {% endif %}
+    {% comment %}Any report in the workspace can change this list, so it follows every report message rather than one report's.{% endcomment %}
+    <div id="cra-reports-list"
+         class="contents"
+         hx-get="{% url 'compliance:cra_reports' %}"
+         hx-select="#cra-reports-list"
+         hx-trigger="live-refresh"
+         hx-swap="morph"
+         @ws:message.window="if (['cra_report_updated', 'cra_report_deleted', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => $el.dispatchEvent(new CustomEvent('live-refresh')), 500); }">
+        {% if reports %}
+            <c-cards.card flush>
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell nowrap>Product</c-tables.header-cell>
+            <c-tables.header-cell>Report</c-tables.header-cell>
+            <c-tables.header-cell>Next deadline</c-tables.header-cell>
+            <c-tables.header-cell date>Due</c-tables.header-cell>
+            <c-tables.actions-cell as="th" label="Actions" />
+            </c-tables.head>
+            <tbody>
+                {% for row in reports %}
+                    <c-tables.row>
+                    <c-tables.cell nowrap class="font-medium">{{ row.report.product.name }}</c-tables.cell>
+                    <c-tables.cell>{{ row.report.get_kind_display }}</c-tables.cell>
+                    <c-tables.cell>
+                    {% if not row.next_due %}
+                        <c-badges.success>Final report filed</c-badges.success>
+                    {% elif row.next_due.overdue %}
+                        <c-badges.danger>{{ row.next_due.label }} overdue</c-badges.danger>
+                    {% else %}
+                        <c-badges.warning>{{ row.next_due.label }}</c-badges.warning>
+                    {% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell date>
+                    {% if row.next_due.due %}
+                        {{ row.next_due.due|date:"j M Y, H:i" }} UTC
+                    {% elif row.next_due %}
+                        After a fix is available
+                    {% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell end>
+                    <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_detail' report_id=row.report.id %}">
+                    Open <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                    </c-buttons.ghost>
+                    </c-tables.cell>
+                    </c-tables.row>
+                {% endfor %}
+            </tbody>
+            </c-tables.table>
+            </c-cards.card>
+        {% else %}
+            <c-cards.card flush>
+            <c-feedback.empty-state icon="fas fa-tower-broadcast" title="No CRA reports" message="Start one from an advisory with a known exploited vulnerability, or record a severe incident here." />
+            </c-cards.card>
+        {% endif %}
+    </div>
     {% if can_manage_cra_reports %}
         <div class="contents"
              x-data="{ open: false }"

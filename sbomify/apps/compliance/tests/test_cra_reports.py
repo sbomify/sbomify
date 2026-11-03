@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime, timedelta
+from html.parser import HTMLParser
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -1446,3 +1448,142 @@ class TestTabRowsHoldOnlyTheirOwnLinks:
         page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
 
         assert _nav_links(page, "Stage to file") == [f"?stage={stage}" for stage in DEADLINE_STAGES]
+
+
+BROADCAST = "sbomify.apps.teams.broadcasts.broadcast_to_workspace"
+
+
+def _sent(mock_broadcast) -> list[tuple[str, dict]]:
+    return [(call.kwargs["message_type"], call.kwargs["data"]) for call in mock_broadcast.call_args_list]
+
+
+@pytest.mark.django_db
+class TestBroadcasts:
+    """Every report write tells the workspace once it commits, so open report and advisory pages repaint.
+
+    Every member hears these, so they carry ids and an action, nothing from the report.
+    """
+
+    def test_create(self, team, owner, product, advisory, django_capture_on_commit_callbacks):
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            report = report_service.create_report(
+                team, owner, kind="vulnerability", product_id=product.id, advisory_id=advisory.id, aware_at=AWARE
+            ).value
+
+        assert _sent(mock_broadcast) == [("cra_report_updated", {"report_id": report.pk, "action": "created"})]
+
+    def test_update(self, report, owner, django_capture_on_commit_callbacks):
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert report_service.update_report(report, owner, values={"title": "New title"}).ok
+
+        assert _sent(mock_broadcast) == [("cra_report_updated", {"report_id": report.pk, "action": "updated"})]
+
+    def test_a_filing_also_tells_the_advisory_lists(self, report, owner, django_capture_on_commit_callbacks):
+        # The advisory list's Updated column reads the event the filing adds.
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).ok
+
+        assert _sent(mock_broadcast) == [
+            ("advisory_updated", {"advisory_id": str(report.advisory_id), "action": "cra_early_warning"}),
+            ("cra_report_updated", {"report_id": report.pk, "action": "filed"}),
+        ]
+
+    def test_an_incident_filing_has_no_advisory_to_tell(self, team, owner, product, django_capture_on_commit_callbacks):
+        report = report_service.create_report(team, owner, kind="incident", product_id=product.id, aware_at=AWARE).value
+
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).ok
+
+        assert _sent(mock_broadcast) == [("cra_report_updated", {"report_id": report.pk, "action": "filed"})]
+
+    def test_delete(self, report, owner, django_capture_on_commit_callbacks):
+        report_id = report.pk
+
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert report_service.delete_report(report, owner).ok
+
+        assert _sent(mock_broadcast) == [("cra_report_deleted", {"report_id": report_id})]
+
+    def test_a_refused_write_tells_nobody(self, report, owner, django_capture_on_commit_callbacks):
+        report_service.record_filing(report, owner, stage=Stage.FINAL_REPORT)
+
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert not report_service.update_report(report, owner, values={"title": "New title"}).ok
+            assert not report_service.delete_report(report, owner).ok
+
+        assert _sent(mock_broadcast) == []
+
+
+_VOID = {"input", "br", "img", "meta", "link", "hr", "source"}
+
+
+class _Regions(HTMLParser):
+    """The live regions of a page and the form fields inside each, by the region's id."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.regions: dict[str, dict[str, Any]] = {}
+        self._open: list[tuple[str, int]] = []
+        self._depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag not in _VOID:
+            self._depth += 1
+        if "live-refresh" in (attributes.get("hx-trigger") or ""):
+            region_id = attributes.get("id") or ""
+            self.regions[region_id] = {"attrs": attributes, "fields": []}
+            self._open.append((region_id, self._depth))
+        if tag in {"input", "textarea", "select"}:
+            for region_id, _ in self._open:
+                self.regions[region_id]["fields"].append(attributes.get("name"))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _VOID:
+            return
+        if self._open and self._open[-1][1] == self._depth:
+            self._open.pop()
+        self._depth -= 1
+
+
+def _regions(page: str) -> dict[str, dict[str, Any]]:
+    parser = _Regions()
+    parser.feed(page)
+    return parser.regions
+
+
+@pytest.mark.django_db
+class TestLivePages:
+    def test_the_list_follows_every_report_change(self, team, owner, report):
+        page = _client_for(team, owner).get(reverse("compliance:cra_reports")).content.decode()
+
+        listener = _regions(page)["cra-reports-list"]["attrs"]
+
+        assert listener["hx-get"] == reverse("compliance:cra_reports")
+        assert listener["hx-select"] == "#cra-reports-list"
+        for message in ("cra_report_updated", "cra_report_deleted", "resync"):
+            assert f"'{message}'" in listener["@ws:message.window"]
+
+    def test_the_report_page_follows_its_report_and_leaves_when_it_is_deleted(self, team, owner, report):
+        url = reverse("compliance:cra_report_detail", args=[report.id])
+        page = _client_for(team, owner).get(f"{url}?stage=notification").content.decode()
+
+        regions = _regions(page)
+
+        assert set(regions) == {"cra-report-status", "cra-report-filings"}
+        for region_id, region in regions.items():
+            assert region["attrs"]["hx-get"] == f"{url}?stage=notification"
+            assert region["attrs"]["hx-select"] == f"#{region_id}"
+            assert "refresh: ['cra_report_updated']" in region["attrs"]["x-data"]
+            assert f"id: '{report.id}'" in region["attrs"]["x-data"]
+        assert f"leaveTo: '{reverse('compliance:cra_reports')}'" in regions["cra-report-status"]["attrs"]["x-data"]
+
+    def test_the_forms_stay_out_of_the_refresh(self, team, owner, report):
+        # A refresh would hand the forms the new revision, so a filing recorded
+        # after values were copied into the portal would snapshot values never
+        # filed. Left alone, a stale form gets the 409 that says to reload.
+        page = _client_for(team, owner).get(reverse("compliance:cra_report_detail", args=[report.id])).content.decode()
+
+        assert 'name="revision"' in page
+        for region in _regions(page).values():
+            assert "revision" not in region["fields"]
