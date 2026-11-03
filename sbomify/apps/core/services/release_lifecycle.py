@@ -33,7 +33,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
@@ -378,6 +378,10 @@ def resolve_successor(predecessor: Release, superseded_by_version: str) -> Servi
     """
     if predecessor.is_latest:
         return ServiceResult.failure("The latest release is never superseded.", status_code=400)
+    # Checked by name, not by lookup: the latest release is made the first time
+    # it is needed, so before then "latest" would pass as a successor outside sbomify.
+    if superseded_by_version == LATEST_RELEASE_NAME:
+        return ServiceResult.failure("The latest release cannot supersede another release.", status_code=400)
 
     successor = _sibling_named(predecessor.product_id, superseded_by_version)
     if successor is not None:
