@@ -435,10 +435,13 @@ def recently_retired_releases(days: int, now: datetime | None = None) -> QuerySe
     now = now or timezone.now()
     today = now.date()
     since = today - timedelta(days=days)
+    # From midnight, as the dates count: a rolling cutoff would lose an edge
+    # that took effect minutes after a run once the next day's run is missed.
+    since_midnight = datetime.combine(since, datetime.min.time(), tzinfo=now.tzinfo)
     passed = (
         Q(effective_end_of_support__gte=since, effective_end_of_support__lt=today)
         | Q(effective_end_of_life__gte=since, effective_end_of_life__lt=today)
-        | Q(superseded_at__gte=now - timedelta(days=days), superseded_at__lte=now)
+        | Q(superseded_at__gte=since_midnight, superseded_at__lte=now)
     )
     return Release.objects.filter(passed, is_latest=False)
 
