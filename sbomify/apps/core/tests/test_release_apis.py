@@ -1204,7 +1204,7 @@ def test_add_sbom_with_replace_supersedes_same_format_from_same_component(
     sample_component: Component,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """A re-run of a release publishes a new SBOM for the same version; replace=True swaps it in."""
+    """Only an explicit replace=True swaps in a new SBOM for a component already in the release."""
     client = Client()
 
     sample_component.team = sample_product.team

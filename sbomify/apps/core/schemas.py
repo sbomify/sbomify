@@ -689,10 +689,9 @@ class ReleaseArtifactCreateSchema(BaseModel):
     replace: bool = Field(
         False,
         description=(
-            "Replace an artifact of the same kind from the same component that is already in the "
-            "release, instead of rejecting the add. A CI re-run of a release publishes a new SBOM "
-            "for the same version; without this it is refused because the earlier run's SBOM is "
-            "still pinned."
+            "Explicitly replace an artifact of the same kind from the same component that is already "
+            "in the release. By default such an add is refused, so a release is never overwritten "
+            "unless the caller asks for it."
         ),
     )
 
