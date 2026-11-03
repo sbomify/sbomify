@@ -1,5 +1,6 @@
 {% load humanize %}
 {% load teams %}
+{% load utils %}
 <div class="flex flex-col gap-5">
     <c-layout.section-header level="2" title="Members" subtitle="Who has access to this workspace.">
     <c-slot name="actions">
@@ -62,11 +63,28 @@
                 <c-badges.role role="{{ member.role }}">{{ member.role|title }}</c-badges.role>
                 </c-tables.cell>
                 <c-tables.actions-cell>
-                {% if can_administer and member.role != 'owner' %}
-                    <c-actions-menu label="Member actions">
-                    <c-dropdowns.item-danger icon="fas fa-user-minus" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name|escapejs }} {{ member.user.last_name|escapejs }}', formData: { member_id: '{{ member.id }}' } })">Remove member</c-dropdowns.item-danger>
-                    </c-actions-menu>
-                {% endif %}
+                {% with actions=member_actions|get_item:member.id %}
+                    {% if actions.roles or actions.removable %}
+                        <c-actions-menu label="Member actions">
+                        {% if actions.roles %}
+                            <form method="post" action="{{ request.path }}" hx-boost="false">
+                                {% csrf_token %}
+                                <input type="hidden" name="member_role_action" value="update">
+                                <input type="hidden" name="member_id" value="{{ member.id }}">
+                                <input type="hidden" name="active_tab" value="members">
+                                <c-dropdowns.header>Change role</c-dropdowns.header>
+                                {% for role_key, role_label in actions.roles %}
+                                    <c-dropdowns.item type="submit" name="role" value="{{ role_key }}" icon="fas fa-user-tag">Make {{ role_label|lower }}</c-dropdowns.item>
+                                {% endfor %}
+                            </form>
+                        {% endif %}
+                        {% if actions.removable %}
+                            {% if actions.roles %}<c-dropdowns.divider />{% endif %}
+                            <c-dropdowns.item-danger icon="fas fa-user-minus" @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name|escapejs }} {{ member.user.last_name|escapejs }}', formData: { member_id: '{{ member.id }}' } })">Remove member</c-dropdowns.item-danger>
+                        {% endif %}
+                        </c-actions-menu>
+                    {% endif %}
+                {% endwith %}
                 </c-tables.actions-cell>
                 </c-tables.row>
             {% endfor %}
