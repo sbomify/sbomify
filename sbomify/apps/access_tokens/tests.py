@@ -1389,3 +1389,22 @@ class TestThrottleRefusesCleanlyWhenRedisIsDown:
         # Second refusal lands inside the first refusal window, so it must not
         # log again: one alert per window, not one per rejected request.
         assert mock_logger.exception.call_count == 1
+
+
+@pytest.mark.django_db
+def test_a_malformed_token_is_one_warning(mocker):
+    """A bad token was three log lines: the decode failure and a restatement of
+    it, both WARNING, then the audit event. A CI job with a broken secret
+    retries on every run, so each rejection is now the audit WARNING alone,
+    with the decode cause at INFO beside it."""
+    from sbomify.apps.access_tokens import utils
+
+    log = mocker.patch.object(utils, "log")
+    audit_log = mocker.patch.object(utils, "audit_log")
+
+    assert get_user_and_token_record("not-a-jwt") == (None, None)
+
+    log.warning.assert_not_called()
+    assert "Not enough segments" in str(log.info.call_args)
+    audit_log.warning.assert_called_once()
+    assert '"reason": "decode"' in audit_log.warning.call_args.args[1]
