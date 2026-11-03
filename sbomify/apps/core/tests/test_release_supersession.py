@@ -969,6 +969,26 @@ class TestRemoveLink:
         ).exists()
         assert _state(old) == Release.LifecycleState.ACTIVE
 
+    def test_the_edge_is_read_under_the_product_lock(self, team_with_business_plan: Workspace) -> None:
+        # A release-date edit republishes the edge under the product lock, so an
+        # edge read before it would withdraw an event that is no longer its own.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new = _release(product, "1.0.0"), _release(product, "2.0.0")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        with CaptureQueriesContext(connection) as queries:
+            assert remove_supersession(new.pk, edge.pk).ok
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        products = Product._meta.db_table
+        locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{products}"' in text)
+        read = next(i for i, text in enumerate(sql) if f'FROM "{ReleaseSupersession._meta.db_table}"' in text)
+        assert locked < read
+
     def test_a_link_of_another_release_is_not_removed_from_this_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:

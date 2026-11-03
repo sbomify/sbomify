@@ -287,24 +287,31 @@ def remove_supersession(release_id: str, edge_id: str, *, actor_id: Any = None) 
     # cle.py imports this module for the edge rules.
     from sbomify.apps.core.services.cle import create_release_cle_event
 
-    edge = (
-        ReleaseSupersession.objects.live()
-        .select_related("from_release", "cle_event")
-        .filter(Q(from_release_id=release_id) | Q(to_release_id=release_id), pk=edge_id)
-        .first()
-    )
-    if edge is None or edge.cle_event is None:
-        return ServiceResult.failure("That link no longer exists.", status_code=404)
-    result = create_release_cle_event(
-        edge.from_release,
-        CLEEventType.WITHDRAWN,
-        timezone.now(),
-        withdrawn_event_id=edge.cle_event.event_id,
-        actor_id=actor_id,
-    )
-    if not result.ok:
-        return ServiceResult.failure(result.error or "The link could not be removed.", status_code=result.status_code)
-    edge.refresh_from_db()
+    # Read under the product lock: a release-date edit republishes the edge
+    # under it, and an edge read first would withdraw its old event.
+    with transaction.atomic():
+        product_id = Release.objects.filter(pk=release_id).values_list("product_id", flat=True).first()
+        Product.objects.select_for_update().filter(pk=product_id).first()
+        edge = (
+            ReleaseSupersession.objects.live()
+            .select_related("from_release", "cle_event")
+            .filter(Q(from_release_id=release_id) | Q(to_release_id=release_id), pk=edge_id)
+            .first()
+        )
+        if edge is None or edge.cle_event is None:
+            return ServiceResult.failure("That link no longer exists.", status_code=404)
+        result = create_release_cle_event(
+            edge.from_release,
+            CLEEventType.WITHDRAWN,
+            timezone.now(),
+            withdrawn_event_id=edge.cle_event.event_id,
+            actor_id=actor_id,
+        )
+        if not result.ok:
+            return ServiceResult.failure(
+                result.error or "The link could not be removed.", status_code=result.status_code
+            )
+        edge.refresh_from_db()
     return ServiceResult.success(edge)
 
 
