@@ -12,7 +12,7 @@ from typing import Any
 from django.core.cache import cache
 from django.db import transaction
 
-from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST, ROLE_OWNER
+from sbomify.apps.core.authz import ROLE_BOT, ROLE_GUEST
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import check_role_change
@@ -28,10 +28,9 @@ def change_member_role(actor: Any, team: Workspace, member_id: int, role: str) -
     nothing.
     """
     with transaction.atomic():
-        # Lock the owner rows before deciding: two owners demoting each other at
-        # once would otherwise both count two owners and leave the workspace
-        # with none.
-        list(Member.objects.select_for_update().filter(team=team, role=ROLE_OWNER).values_list("pk", flat=True))
+        # Removals take this same lock before checking permissions and deleting.
+        # Lock the workspace first so every path uses the same lock order.
+        team = Workspace.objects.select_for_update().get(pk=team.pk)
         target = (
             Member.objects.select_for_update()
             .select_related("team")

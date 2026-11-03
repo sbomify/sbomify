@@ -848,17 +848,39 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     4. Updates session data accordingly.
     5. Returns a redirect to the appropriate next page.
     """
-    removed_user: User = membership.user
-    removed_team_name = membership.team.display_name
-    removed_team_key = membership.team.key or ""
-    removed_role = membership.role
-    current_user = cast(User, request.user)
-    is_self_removal = membership.user_id == current_user.id
+    from django.http import HttpResponseForbidden
 
-    # Check if this is the user's last workspace BEFORE deleting
-    is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
+    from sbomify.apps.core.errors import error_response
+    from sbomify.apps.teams.permissions import check_member_removal
 
-    membership.delete()
+    with transaction.atomic():
+        # Role changes take the same workspace lock. Re-read the membership
+        # after acquiring it: the caller's copy may predate a role change.
+        team = Workspace.objects.select_for_update().get(pk=membership.team_id)
+        locked_membership = Member.objects.select_for_update().filter(pk=membership.pk, team=team).first()
+        if locked_membership is None:
+            messages.error(request, "Membership not found")
+            return redirect_to_team_settings(team.key or "", active_tab or "members")
+        membership = locked_membership
+
+        denial = check_member_removal(request.user, membership)
+        if denial:
+            if denial.forbidden:
+                return error_response(request, HttpResponseForbidden(denial.message))
+            messages.add_message(request, denial.level, denial.message)
+            return redirect_to_team_settings(team.key or "", active_tab or "members")
+
+        removed_user: User = membership.user
+        removed_team_name = team.display_name
+        removed_team_key = team.key or ""
+        removed_role = membership.role
+        current_user = cast(User, request.user)
+        is_self_removal = membership.user_id == current_user.id
+
+        # Check if this is the user's last workspace BEFORE deleting
+        is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
+
+        membership.delete()
 
     # Fires for both delete_member() and TeamSettingsView._delete_member()
     # entry points; tests cover both paths. Deferred via ``on_commit`` so a
