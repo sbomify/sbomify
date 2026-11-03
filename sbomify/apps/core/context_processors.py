@@ -391,10 +391,17 @@ def posthog_context(request: Any) -> dict[str, Any]:
             "workspace_key": workspace_key,
         }
 
+    from functools import cache, partial
+
+    from sbomify.apps.core.posthog_service import take_client_events
+
     return {
         "posthog_api_key": api_key,
         "posthog_host": host,
         "posthog_dns_host": dns_host,
         "posthog_assets_host": assets_host,
         "posthog_identify": identify,
+        # Called only by the template that sends them, so an HTMX partial
+        # rendered in between cannot take the events off the session.
+        "posthog_client_events": cache(partial(take_client_events, request)),
     }

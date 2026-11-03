@@ -123,7 +123,14 @@ def test_formats_of_one_version_merge_into_one_answer(component: Component) -> N
 
     (row,) = build_version_rows(component.id, items)
 
-    assert row["vulnerabilities"] == {"state": "open", "critical": 1, "high": 1, "other": 0, "new": None}
+    assert row["vulnerabilities"] == {
+        "state": "open",
+        "critical": 1,
+        "high": 1,
+        "other": 0,
+        "new": None,
+        "suppressed": 0,
+    }
 
 
 def test_new_counts_only_what_the_previous_version_did_not_have(component: Component) -> None:
@@ -146,7 +153,14 @@ def test_new_counts_only_what_the_previous_version_did_not_have(component: Compo
 
     newest, oldest = build_version_rows(component.id, items)
 
-    assert newest["vulnerabilities"] == {"state": "open", "critical": 1, "high": 1, "other": 1, "new": 2}
+    assert newest["vulnerabilities"] == {
+        "state": "open",
+        "critical": 1,
+        "high": 1,
+        "other": 1,
+        "new": 2,
+        "suppressed": 0,
+    }
     assert oldest["vulnerabilities"]["new"] is None
 
 
@@ -184,6 +198,8 @@ def test_a_vex_suppressed_finding_is_not_open(component: Component) -> None:
 
     assert row["vulnerabilities"]["critical"] == 0
     assert row["vulnerabilities"]["high"] == 1
+    # Left out of the open figures, but stated, so it does not simply vanish.
+    assert row["vulnerabilities"]["suppressed"] == 1
 
 
 @pytest.mark.parametrize(
