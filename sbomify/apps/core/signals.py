@@ -513,30 +513,51 @@ def reject_cross_tenant_product_component_links(
                 )
 
 
-def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None, also: list[Any] | None = None) -> None:
-    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
+class _ReleasesToTell:
+    """The SBOMs and releases one transaction moved, told once it commits: one query, one message per release."""
 
-    Whether a retired release's SBOMs are still scanned is decided by the
-    other releases shipping them, by the live releases linking to it and by
-    the newest SBOM of each component, so a change to any of them moves what
-    its open page says.
-    """
-    from django.db.models import Q
+    def __init__(self) -> None:
+        self.sbom_ids: set[Any] = set()
+        self.release_ids: set[Any] = set()
 
-    from sbomify.apps.core.models import Release
-    from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
+    def __call__(self) -> None:
+        from django.db.models import Q
 
-    def send() -> None:
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
+
         releases = (
-            Release.objects.filter(Q(artifacts__sbom_id__in=sbom_ids) | Q(pk__in=also or []))
-            .exclude(pk=exclude)
+            Release.objects.filter(Q(artifacts__sbom_id__in=self.sbom_ids) | Q(pk__in=self.release_ids))
             .select_related("product__team")
             .distinct()
         )
         for release in releases:
             broadcast_releases_updated(release.product, [release])
 
-    transaction.on_commit(send, robust=True)
+
+def _tell_releases_shipping(sbom_ids: list[Any], also: list[Any] | None = None, origin: Any = None) -> None:
+    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
+
+    Whether a retired release's SBOMs are still scanned is decided by the
+    other releases shipping them, by the live releases linking to it and by
+    the newest SBOM of each component, so a change to any of them moves what
+    its open page says. ``origin`` is the delete the change came from: every
+    call one cascade makes adds to the one notice it queued, so a delete
+    taking many shared SBOMs with it tells each release once. A notice no
+    longer queued, because it ran or rolled back, is never added to.
+    """
+    pending = getattr(origin, "_releases_to_tell", None)
+    queued = transaction.get_connection().run_on_commit
+    if pending is not None and any(func is pending for _, func, _ in queued):
+        pending.sbom_ids.update(sbom_ids)
+        pending.release_ids.update(also or [])
+        return
+    pending = _ReleasesToTell()
+    pending.sbom_ids.update(sbom_ids)
+    pending.release_ids.update(also or [])
+    if origin is not None:
+        origin._releases_to_tell = pending
+    transaction.on_commit(pending, robust=True)
 
 
 @receiver(post_save, sender="core.ReleaseArtifact")
@@ -549,7 +570,7 @@ def tell_releases_sharing_an_sbom(sender: Any, instance: Any, **kwargs: Any) -> 
     only ``sbom_deleted``.
     """
     if instance.sbom_id and kwargs.get("created", True):
-        _tell_releases_shipping([instance.sbom_id], also=[instance.release_id])
+        _tell_releases_shipping([instance.sbom_id], also=[instance.release_id], origin=kwargs.get("origin"))
 
 
 @receiver(post_delete, sender="core.ReleaseLink")
@@ -566,7 +587,7 @@ def tell_releases_a_removed_link_kept_scanned(sender: Any, instance: Any, **kwar
     shipped = list(
         ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values_list("sbom_id", flat=True)
     )
-    _tell_releases_shipping(shipped, exclude=instance.release_id, also=reached)
+    _tell_releases_shipping(shipped, also=reached, origin=kwargs.get("origin"))
 
 
 @receiver(post_save, sender="sboms.SBOM")

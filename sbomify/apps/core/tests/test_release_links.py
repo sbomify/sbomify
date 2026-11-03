@@ -384,6 +384,22 @@ class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
 
         assert str(app.id) in self._told(sent)
 
+    def test_a_bulk_delete_tells_each_release_once(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        # One delete taking many shared SBOMs with it would otherwise query and
+        # broadcast once per artifact.
+        for name in ("a", "b", "c"):
+            ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, name))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            toolchain.delete()
+
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
+        assert told.count(str(app.id)) == 1
+        assert sum(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks) == 1
+
     def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
         shipped = _sbom(app, "kernel")
         sent = mocker.patch(BROADCAST)
