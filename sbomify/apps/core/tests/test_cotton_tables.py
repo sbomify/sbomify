@@ -582,6 +582,9 @@ class _Tree(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         node = _Node(tag, (dict(attrs).get("class") or "").split())
         self.stack[-1].children.append(node)
+        # Alpine fills an x-text element in the browser: it shows text all the same.
+        if "x-text" in dict(attrs):
+            node.children.append(_Node("#text", text=dict(attrs)["x-text"] or ""))
         if tag not in self.VOID:
             self.stack.append(node)
 
@@ -671,6 +674,7 @@ def test_the_nowrap_guard_catches_a_badge_after_the_name() -> None:
     for body in (
         '<a x-text="name"></a><div class="hidden sm:block mt-1"><c-badges.warning>Doc</c-badges.warning></div>',
         "<c-badges.primary>Product override</c-badges.primary>",
+        '<a :href="url"><span x-text="id"></span><i class="fas fa-external-link-alt"></i></a><span x-text="id"></span>',
     ):
         parser = _Tree()
         parser.feed(body)
