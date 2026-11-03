@@ -235,6 +235,17 @@ _UNTRACKED_REASONS = {
 }
 
 
+def _shipped_sboms(release_ids: list[Any], *, public_only: bool) -> dict[Any, set[str]]:
+    """Each release's SBOMs, or only those of public components for a Trust Center posture."""
+    artifacts = ReleaseArtifact.objects.filter(release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM)
+    if public_only:
+        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    shipped: dict[Any, set[str]] = defaultdict(set)
+    for release_id, sbom_id in artifacts.values_list("release_id", "sbom_id"):
+        shipped[release_id].add(sbom_id)
+    return shipped
+
+
 def still_scanned_release_ids(release_ids: Iterable[str], team_id: Any, *, public_only: bool = False) -> set[str]:
     """Of these releases, those whose counts sbomify still keeps current, whatever their own state.
 
@@ -249,12 +260,7 @@ def still_scanned_release_ids(release_ids: Iterable[str], team_id: Any, *, publi
         return set()
     still = set(shipping_releases(team_id=team_id).filter(pk__in=release_ids).values_list("pk", flat=True))
 
-    artifacts = ReleaseArtifact.objects.filter(release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM)
-    if public_only:
-        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
-    shipped: dict[str, set[str]] = defaultdict(set)
-    for release_id, sbom_id in artifacts.values_list("release_id", "sbom_id"):
-        shipped[release_id].add(sbom_id)
+    shipped = _shipped_sboms(release_ids, public_only=public_only)
     candidates = set().union(*shipped.values())
     if candidates:
         tracked = set(
@@ -273,6 +279,10 @@ def untracked_notice(release: Release, *, public_only: bool = False) -> dict[str
     went in June. The date belongs to the reason, never to when the scans
     stopped: a support date already past on the day it took effect would say
     the scans stopped before the last scan ran.
+
+    When some of its SBOMs are still scanned, as another release's or as
+    their component's newest, ``stopped`` and ``sboms`` say how many of them
+    did stop, so the page does not call every count frozen.
     """
     if release.lifecycle_state == Release.LifecycleState.ACTIVE:
         return None
@@ -299,7 +309,12 @@ def untracked_notice(release: Release, *, public_only: bool = False) -> dict[str
     if not passed:
         return None
     on, state = min(passed, key=lambda item: item[0])
-    return {"on": on, "reason": _UNTRACKED_REASONS[state]}
+    notice: dict[str, Any] = {"on": on, "reason": _UNTRACKED_REASONS[state]}
+    shipped = _shipped_sboms([release.pk], public_only=public_only)[release.pk]
+    scanned = tracked_sboms(SBOM.objects.filter(pk__in=shipped), team_id=release.product.team_id).count()
+    if scanned:
+        notice.update(stopped=len(shipped) - scanned, sboms=len(shipped))
+    return notice
 
 
 def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:

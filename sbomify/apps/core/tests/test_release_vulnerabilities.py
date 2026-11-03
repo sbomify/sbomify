@@ -119,7 +119,7 @@ def test_a_retired_release_page_says_its_unscanned_sboms_were_never_scanned(
     response = client.get(reverse("core:release_details", args=[release.product_id, release.id]))
 
     content = response.content.decode()
-    assert "1 SBOM never scanned" in content
+    assert "1 SBOM without scan results" in content
     assert "not scanned yet" not in content
 
 

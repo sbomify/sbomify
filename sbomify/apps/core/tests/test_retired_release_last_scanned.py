@@ -169,9 +169,15 @@ class TestUntrackedNotice:
         retired = Release.objects.select_related("product").get(pk=retired.pk)
         assert untracked_notice(retired) is None
 
-        # One SBOM it alone ships is enough for its counts to go stale.
+        # One SBOM it alone ships is enough for its counts to go stale, and the
+        # notice says how many of them stopped.
         _scan(retired, "tool", OLDEST, [])
-        assert untracked_notice(retired) == {"on": WITHDRAWN.date(), "reason": "It was withdrawn"}
+        assert untracked_notice(retired) == {
+            "on": WITHDRAWN.date(),
+            "reason": "It was withdrawn",
+            "stopped": 1,
+            "sboms": 2,
+        }
 
     def test_a_retired_release_shipping_its_components_newest_sbom_is_still_monitored(
         self, team_with_business_plan: Workspace
@@ -199,7 +205,12 @@ class TestUntrackedNotice:
         _withdraw(retired)
         retired = Release.objects.select_related("product").get(pk=retired.pk)
 
-        assert untracked_notice(retired) == {"on": WITHDRAWN.date(), "reason": "It was withdrawn"}
+        assert untracked_notice(retired) == {
+            "on": WITHDRAWN.date(),
+            "reason": "It was withdrawn",
+            "stopped": 1,
+            "sboms": 2,
+        }
         assert untracked_notice(retired, public_only=True) is None
 
 
@@ -260,9 +271,29 @@ class TestReleasePage:
 
         page = self._page(authenticated_web_client, release)
         assert "Scan results appear here once" not in page
-        assert "sbomify stopped monitoring this release before its SBOMs were scanned" in page
-        assert "1 SBOM never scanned" in page
+        assert "sbomify stopped monitoring this release before its SBOMs had scan results" in page
+        assert "1 SBOM without scan results" in page
         assert "not scanned yet" not in page
+
+    def test_a_partly_scanned_release_names_only_the_sboms_that_stopped(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # A live release still ships one of its two SBOMs, so new vulnerabilities in that one keep showing.
+        product = _product(team_with_business_plan)
+        release = Release.objects.create(product=product, name="1.0.0")
+        shared = _scan(release, "lib", OLDEST, [])
+        _scan(release, "tool", OLDEST, [])
+        _withdraw(release)
+        ReleaseArtifact.objects.create(release=Release.objects.create(product=product, name="1.1.0"), sbom=shared)
+
+        page = self._page(authenticated_web_client, release)
+        assert (
+            "It was withdrawn on 3 Mar 2025. 1 of its 2 SBOMs is no longer scanned. "
+            "Its counts are from the last scan, on 2 Mar 2025."
+        ) in page
+        assert "sbomify no longer scans 1 of the 2 SBOMs in this release." in page
+        assert "These counts are from its last scan" not in page
+        assert "sbomify no longer scans this release." not in page
 
     def test_a_monitored_release_is_unchanged(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -366,7 +397,7 @@ class TestReleasesList:
         page = " ".join(
             authenticated_web_client.get(reverse("core:product_releases", args=[product.id])).content.decode().split()
         )
-        assert "1 SBOM never scanned" in page
+        assert "1 SBOM without scan results" in page
         assert "not scanned yet" not in page
 
     def test_a_retired_release_a_live_release_links_to_is_not_frozen(
