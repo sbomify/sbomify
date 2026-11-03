@@ -340,7 +340,12 @@ FROM ${CHAINGUARD_WOLFI_BASE_IMAGE} AS weasyprint-libs
 # ~3 MB. font-noto's full multi-script set is ~470 MB — needlessly
 # bloats the prod image since the DoC is Latin / Latin-extended /
 # Cyrillic / Greek only and Liberation covers all four.
+# The libexpat.so* staged below replaces the copy in CHAINGUARD_PYTHON_IMAGE,
+# so it is the expat that pyexpat and fontconfig load in production. The
+# version floor keeps it at or above the CVE-2026-115506 fix, and changing it
+# invalidates a cached layer still holding an older expat.
 RUN apk add --no-cache \
+        'libexpat1>=2.10.0' \
         pango \
         harfbuzz \
         openjpeg \
