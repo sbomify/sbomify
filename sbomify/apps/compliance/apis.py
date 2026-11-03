@@ -18,6 +18,13 @@ from .models import CRAAssessment, CRAExportPackage, OSCALFinding, OSCALObservat
 from .permissions import check_cra_access
 from .schemas import (
     CRAAssessmentSchema,
+    CRAFilingCreateSchema,
+    CRAFilingDetailSchema,
+    CRAFilingSchema,
+    CRANextDueSchema,
+    CRAReportCreateSchema,
+    CRAReportSchema,
+    CRAReportUpdateSchema,
     DocumentSchema,
     ErrorResponse,
     ExportPackageSchema,
@@ -30,6 +37,8 @@ from .schemas import (
     SBOMStatusSchema,
     SignatureResponseSchema,
     SignatureSchema,
+    SRPFieldSchema,
+    SRPLayoutSchema,
     StalenessSchema,
     StepContextSchema,
     StepDataSchema,
@@ -897,3 +906,191 @@ def refresh_stale(request: HttpRequest, assessment_id: str) -> _Response:
         return refreshed.status_code or 400, ErrorResponse(error=refreshed.error or "Unknown error")
 
     return 200, {"refreshed_count": refreshed.value}
+
+
+# CRA Article 14 reports. Under ``/cra-reports`` rather than ``/cra/reports``,
+# which ``/cra/{assessment_id}`` would capture. Not plan-gated: Article 14
+# binds every manufacturer, whatever the workspace pays.
+
+
+def _report_workspace(request: HttpRequest) -> Any:
+    from sbomify.apps.core.apis import _get_user_team_id
+    from sbomify.apps.teams.models import Workspace
+
+    team_id = _get_user_team_id(request)
+    return Workspace.objects.filter(pk=team_id).first() if team_id else None
+
+
+def _report_or_error(request: HttpRequest, report_id: str, action: str) -> Any:
+    from .services.report_service import get_report
+
+    team = _report_workspace(request)
+    report = get_report(team, report_id) if team else None
+    allowed = report is not None and can(request, action, report)
+    # A report outside the caller's workspaces reads as absent. The action asked
+    # for also makes it visible: a token scoped to manage need not also read.
+    if report is None or not (allowed or can(request, "cra_report:read", report)):
+        return 404, ErrorResponse(error="Report not found", error_code="not_found")
+    if not allowed:
+        return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
+    return report
+
+
+def _report_to_schema(report: Any) -> CRAReportSchema:
+    nxt = report.next_due()
+    return CRAReportSchema(
+        id=report.id,
+        kind=report.kind,
+        product_id=report.product_id,
+        product_name=report.product.name,
+        advisory_id=report.advisory_id,
+        aware_at=report.aware_at,
+        occurred_at=report.occurred_at,
+        measure_available_at=report.measure_available_at,
+        values=report.srp_fields,
+        filings=[_filing_to_schema(f) for f in report.filings.all()],
+        next_due=CRANextDueSchema(stage=nxt.stage, label=nxt.label, due=nxt.due, overdue=nxt.overdue) if nxt else None,
+        revision=report.revision,
+    )
+
+
+def _filing_to_schema(filing: Any) -> CRAFilingSchema:
+    return CRAFilingSchema(
+        id=filing.id,
+        stage=filing.stage,
+        srp_reference=filing.srp_reference,
+        filed_at=filing.filed_at,
+        filed_by=filing.filer,
+    )
+
+
+@router.get("/cra-reports", response={200: list[CRAReportSchema], 403: ErrorResponse})
+def list_cra_reports(request: HttpRequest) -> _Response:
+    """Every CRA Article 14 report in the workspace, soonest deadline first."""
+    from .services.report_service import reports_for_team
+
+    team = _report_workspace(request)
+    if team is None or not can(request, "cra_report:read", team):
+        return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
+    return 200, [_report_to_schema(report) for report in reports_for_team(team)]
+
+
+@router.post(
+    "/cra-reports",
+    response={201: CRAReportSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
+def create_cra_report(request: HttpRequest, payload: CRAReportCreateSchema) -> _Response:
+    """Start a report for an actively exploited vulnerability (from an advisory) or a severe incident."""
+    from .services.report_service import create_report
+
+    team = _report_workspace(request)
+    if team is None or not can(request, "cra_report:manage", team):
+        return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
+    result = create_report(
+        team,
+        request.user,
+        kind=payload.kind,
+        product_id=payload.product_id,
+        advisory_id=payload.advisory_id,
+        aware_at=payload.aware_at,
+        occurred_at=payload.occurred_at,
+        measure_available_at=payload.measure_available_at,
+    )
+    if not result.ok or result.value is None:
+        return result.status_code or 400, ErrorResponse(error=result.error or "Could not create the report")
+    return 201, _report_to_schema(result.value)
+
+
+@router.get("/cra-reports/{report_id}", response={200: CRAReportSchema, 404: ErrorResponse})
+def get_cra_report(request: HttpRequest, report_id: str) -> _Response:
+    report = _report_or_error(request, report_id, "cra_report:read")
+    if isinstance(report, tuple):
+        return report
+    return 200, _report_to_schema(report)
+
+
+@router.patch(
+    "/cra-reports/{report_id}",
+    response={200: CRAReportSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
+def update_cra_report(request: HttpRequest, report_id: str, payload: CRAReportUpdateSchema) -> _Response:
+    from .services.report_service import update_report
+
+    report = _report_or_error(request, report_id, "cra_report:manage")
+    if isinstance(report, tuple):
+        return report
+    sent = payload.model_dump(exclude_unset=True)
+    dates = {name: sent[name] for name in ("aware_at", "occurred_at", "measure_available_at") if name in sent}
+    result = update_report(report, request.user, values=sent.get("values"), dates=dates, revision=payload.revision)
+    if not result.ok or result.value is None:
+        return result.status_code or 400, ErrorResponse(error=result.error or "Could not update the report")
+    return 200, _report_to_schema(result.value)
+
+
+@router.delete(
+    "/cra-reports/{report_id}", response={204: None, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse}
+)
+def delete_cra_report(request: HttpRequest, report_id: str) -> _Response:
+    from .services.report_service import delete_report
+
+    report = _report_or_error(request, report_id, "cra_report:manage")
+    if isinstance(report, tuple):
+        return report
+    result = delete_report(report, request.user)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(error=result.error or "Could not delete the report")
+    return 204, None
+
+
+@router.post(
+    "/cra-reports/{report_id}/filings",
+    response={201: CRAFilingSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
+def record_cra_filing(request: HttpRequest, report_id: str, payload: CRAFilingCreateSchema) -> _Response:
+    """Record a notification submitted in ENISA's Single Reporting Platform."""
+    from .services.report_service import record_filing
+
+    report = _report_or_error(request, report_id, "cra_report:manage")
+    if isinstance(report, tuple):
+        return report
+    result = record_filing(
+        report,
+        request.user,
+        stage=payload.stage,
+        srp_reference=payload.srp_reference,
+        filed_at=payload.filed_at,
+        revision=payload.revision,
+    )
+    if not result.ok or result.value is None:
+        return result.status_code or 400, ErrorResponse(error=result.error or "Could not record the filing")
+    return 201, _filing_to_schema(result.value)
+
+
+@router.get("/cra-reports/{report_id}/filings/{filing_id}", response={200: CRAFilingDetailSchema, 404: ErrorResponse})
+def get_cra_filing(request: HttpRequest, report_id: str, filing_id: str) -> _Response:
+    """One filing with the report as it stood when the filing was recorded."""
+    report = _report_or_error(request, report_id, "cra_report:read")
+    if isinstance(report, tuple):
+        return report
+    filing = next((f for f in report.filings.all() if f.id == filing_id), None)
+    if filing is None:
+        return 404, ErrorResponse(error="Filing not found", error_code="not_found")
+    return 200, CRAFilingDetailSchema(**_filing_to_schema(filing).model_dump(), snapshot=filing.snapshot)
+
+
+@router.get("/cra-reports/{report_id}/srp", response={200: SRPLayoutSchema, 400: ErrorResponse, 404: ErrorResponse})
+def get_cra_report_srp(request: HttpRequest, report_id: str, stage: str = "") -> _Response:
+    """The report laid out field by field as ENISA's portal asks for it."""
+    from .reporting import DEADLINE_STAGES
+    from .services.report_service import srp_layout
+
+    if stage and stage not in DEADLINE_STAGES:
+        return 400, ErrorResponse(error=f"stage must be one of: {', '.join(DEADLINE_STAGES)}")
+    report = _report_or_error(request, report_id, "cra_report:read")
+    if isinstance(report, tuple):
+        return report
+    nxt = report.next_due()
+    chosen = stage or (nxt.stage if nxt else "final_report")
+    return 200, SRPLayoutSchema(
+        stage=chosen, fields=[SRPFieldSchema(**row) for row in srp_layout(report, chosen)], revision=report.revision
+    )
