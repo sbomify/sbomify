@@ -321,6 +321,26 @@ class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
 
         assert str(app.id) in self._told(sent)
 
+    def test_adding_the_sbom_to_another_release(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        shared = _sbom(app, "shared")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            ReleaseArtifact.objects.create(release=toolchain, sbom=shared)
+
+        assert str(app.id) in self._told(sent)
+
+    def test_deleting_a_release_that_linked_to_it(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        # The linking release ships no SBOM of its own, so no artifact goes with it.
+        _sbom(app, "historical")
+        ReleaseLink.objects.create(release=toolchain, linked_release=app)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            toolchain.delete()
+
+        assert str(app.id) in self._told(sent)
+
     def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
         shipped = _sbom(app, "kernel")
         sent = mocker.patch(BROADCAST)

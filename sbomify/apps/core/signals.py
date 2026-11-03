@@ -513,19 +513,22 @@ def reject_cross_tenant_product_component_links(
                 )
 
 
-def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None) -> None:
-    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs.
+def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None, also: list[Any] | None = None) -> None:
+    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
 
     Whether a retired release's SBOMs are still scanned is decided by the
-    other releases shipping them and by the newest SBOM of each component, so
-    a change to either moves what its open page says.
+    other releases shipping them, by the live releases linking to it and by
+    the newest SBOM of each component, so a change to any of them moves what
+    its open page says.
     """
+    from django.db.models import Q
+
     from sbomify.apps.core.models import Release
     from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
 
     def send() -> None:
         releases = (
-            Release.objects.filter(artifacts__sbom_id__in=sbom_ids)
+            Release.objects.filter(Q(artifacts__sbom_id__in=sbom_ids) | Q(pk__in=also or []))
             .exclude(pk=exclude)
             .select_related("product__team")
             .distinct()
@@ -536,11 +539,29 @@ def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None) -> None:
     transaction.on_commit(send, robust=True)
 
 
+@receiver(post_save, sender="core.ReleaseArtifact")
 @receiver(post_delete, sender="core.ReleaseArtifact")
-def tell_releases_sharing_a_removed_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
-    """A release losing an SBOM, or being deleted, can stop that SBOM being scanned for the others."""
-    if instance.sbom_id:
+def tell_releases_sharing_an_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A release gaining or losing an SBOM, or being deleted, can start or stop it being scanned for the others."""
+    if instance.sbom_id and kwargs.get("created", True):
         _tell_releases_shipping([instance.sbom_id], exclude=instance.release_id)
+
+
+@receiver(post_delete, sender="core.ReleaseLink")
+def tell_releases_a_removed_link_kept_scanned(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A live release linking to another kept it scanned, and the releases it links on, and those sharing their SBOMs.
+
+    Deleting the linking release takes the link with it, even when it ships no
+    SBOM of its own.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    reached = [instance.linked_release_id, *releases_linked_from([instance.linked_release_id])]
+    shipped = list(
+        ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values_list("sbom_id", flat=True)
+    )
+    _tell_releases_shipping(shipped, exclude=instance.release_id, also=reached)
 
 
 @receiver(post_save, sender="sboms.SBOM")
