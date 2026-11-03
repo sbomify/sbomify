@@ -40,7 +40,12 @@ class Command(BaseCommand):
         for plugin, label, sweep in SWEEPS:
             if options["plugin"] not in (None, plugin):
                 continue
-            stats = sweep(team_key=options["workspace"], dry_run=options["dry_run"])
+            try:
+                stats = sweep(team_key=options["workspace"], dry_run=options["dry_run"])
+            except Exception as exc:
+                # Its retries ran out, or the database was gone before it started.
+                failed.append(f"{label}: {exc}")
+                continue
             if stats["status"] != "completed":
                 # One scanner down must not keep the others from running.
                 failed.append(f"{label}: {stats.get('error', 'failed')}")

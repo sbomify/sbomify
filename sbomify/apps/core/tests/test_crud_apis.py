@@ -3036,6 +3036,45 @@ def test_a_product_edit_reads_the_dates_an_edit_committed_after_it_loaded(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("method", ["patch", "put"])
+def test_a_date_only_in_the_column_survives_an_edit_of_another(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+    method: str,
+):
+    """A product dated before its dates were events keeps them only in the column, and
+    rebuilding the columns from the events after another date's edit cleared them."""
+    from datetime import date
+
+    Product.objects.filter(pk=sample_product.pk).update(end_of_support=date(2027, 1, 1), end_of_life=date(2028, 1, 1))
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+    payload = {"release_date": "2024-03-01"}
+    if method == "put":
+        # PUT resends the unchanged dates, which skipped the write that would record them.
+        payload |= {
+            "name": sample_product.name,
+            "description": "",
+            "is_public": sample_product.is_public,
+            "end_of_support": "2027-01-01",
+            "end_of_life": "2028-01-01",
+        }
+
+    response = getattr(client, method)(
+        f"/api/v1/products/{sample_product.id}",
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    assert (response.json()["end_of_support"], response.json()["end_of_life"]) == ("2027-01-01", "2028-01-01")
+    sample_product.refresh_from_db()
+    assert (sample_product.end_of_support, sample_product.end_of_life) == (date(2027, 1, 1), date(2028, 1, 1))
+
+
+@pytest.mark.django_db
 def test_product_lifecycle_events_clear_values(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811

@@ -372,8 +372,27 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
     every ``released`` event feeds that column, so clearing it withdraws them all.
     ``dates`` holds only the fields the caller sets. The value is whether
     anything changed. Call inside a transaction.
+
+    A date the product holds only in its column, with no surviving event of
+    its type, was set before dates were events. Rebuilding the columns from the
+    events would clear it, so it is recorded as an event first, before the
+    unchanged-value check, which would otherwise skip a resubmitted one.
     """
     changed = False
+    if dates:
+        events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
+        withdrawn = {e.withdrawn_event_id for e in events if e.event_type == CLEEventType.WITHDRAWN}
+        backed = {e.event_type for e in events if e.event_id not in withdrawn}
+        for field, event_type in _PRODUCT_DATE_EVENTS.items():
+            value = getattr(product, field)
+            if value is None or event_type in backed or dates.get(field, value) != value:
+                continue
+            adopted = _record_product_date(product, field, value)
+            if not adopted.ok:
+                return adopted
+            changed = True
+        if changed:
+            product.refresh_from_db(fields=list(_PRODUCT_DATE_EVENTS))
     for field, value in dates.items():
         if value == getattr(product, field):
             continue
@@ -398,15 +417,24 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
                 # A date written to the column before it was an event has nothing to withdraw.
                 Product.objects.filter(pk=product.pk).update(**{field: None})
         else:
-            effective = datetime.combine(value, time.min, tzinfo=UTC)
-            versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
-            result = create_cle_event(product, event_type, effective, versions=versions)
-            if not result.ok:
-                return ServiceResult.failure(result.error or "Could not set the date", result.status_code)
+            recorded = _record_product_date(product, field, value)
+            if not recorded.ok:
+                return recorded
         changed = True
     if changed:
         product.refresh_from_db(fields=list(_PRODUCT_DATE_EVENTS))
     return ServiceResult.success(changed)
+
+
+def _record_product_date(product: Product, field: str, value: date) -> ServiceResult[bool]:
+    """Record a product date as the event for every version that the lifecycle card writes."""
+    event_type = _PRODUCT_DATE_EVENTS[field]
+    effective = datetime.combine(value, time.min, tzinfo=UTC)
+    versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
+    result = create_cle_event(product, event_type, effective, versions=versions)
+    if not result.ok:
+        return ServiceResult.failure(result.error or "Could not set the date", result.status_code)
+    return ServiceResult.success(True)
 
 
 def create_support_definition(

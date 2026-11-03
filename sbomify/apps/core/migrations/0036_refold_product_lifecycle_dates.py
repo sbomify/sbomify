@@ -7,6 +7,9 @@ policies, and new product writes fold the columns the same way. Products that
 already had events kept the old fold until their next write, so the API showed
 one date while their releases followed another.
 
+A date with no surviving event of its type was written to the column before
+dates were events, and refolding would clear it, so it is left alone.
+
 A frozen copy of release_lifecycle.product_dates. Running it again changes
 nothing; the reverse leaves the columns as they are, since the next product
 write refolds them anyway.
@@ -51,7 +54,17 @@ def refold_product_lifecycle_dates(apps, schema_editor):
     for product_id in product_ids:
         events = list(ProductCLEEvent.objects.filter(product_id=product_id).order_by("event_id"))
         end_of_support, end_of_life = _product_dates(events)
-        Product.objects.filter(pk=product_id).update(end_of_support=end_of_support, end_of_life=end_of_life)
+        types = {event.event_type for event in _surviving(events)}
+        refolded = {
+            field: value
+            for field, event_type, value in (
+                ("end_of_support", "endOfSupport", end_of_support),
+                ("end_of_life", "endOfLife", end_of_life),
+            )
+            if event_type in types
+        }
+        if refolded:
+            Product.objects.filter(pk=product_id).update(**refolded)
 
 
 class Migration(migrations.Migration):

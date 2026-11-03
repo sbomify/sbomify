@@ -1263,3 +1263,19 @@ class TestRefoldProductDates:
         sample_product.refresh_from_db()
         assert sample_product.end_of_support == date(2027, 6, 30)
         assert sample_product.end_of_life is None
+
+    def test_a_date_with_no_event_of_its_type_is_left_alone(self, sample_product: Product) -> None:
+        # Set through the API's old column write after the product's one event.
+        ProductCLEEvent.objects.create(
+            product=sample_product,
+            event_id=1,
+            event_type="released",
+            effective=datetime(2024, 3, 1, tzinfo=dt_timezone.utc),
+            versions=[],
+        )
+        Product.objects.filter(pk=sample_product.pk).update(end_of_support=date(2027, 1, 1))
+
+        refold.refold_product_lifecycle_dates(django_apps, None)
+
+        sample_product.refresh_from_db()
+        assert sample_product.end_of_support == date(2027, 1, 1)
