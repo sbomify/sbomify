@@ -5,11 +5,14 @@ changes the bar dimensions. The panel uses the existing floating dropdown and
 positioning controller so a scrolling table never clips it. No scan never reads
 as clean. noun names what unassessed counts (component, SBOM); without it the
 row is the one thing not scanned.
+counts.suppressed is what a VEX closed. It never joins the total, and it is
+stated rather than dropped, so a row the VEX cleared reads differently from
+one nothing was ever found in.
 
 last_scanned dates the counts of a release sbomify no longer monitors. Its scans
 stopped, so the summary says how old they are and a zero reads as "at last scan",
-never as clean today. retired marks such a release: what it never scanned will
-not be scanned now, so it reads "never scanned", not "not scanned yet".
+never as clean today. retired marks such a release: an SBOM with no scan results
+will not be scanned now, so it reads "without scan results", not "not scanned yet".
 {% endcomment %}
 <c-vars counts unassessed compact noun last_scanned retired />
 {% if counts.total %}
@@ -58,6 +61,12 @@ not be scanned now, so it reads "never scanned", not "not scanned yet".
                             {{ counts.unknown|intcomma }}
                         </dd>
                     {% endif %}
+                    {% if counts.suppressed %}
+                        <dt class="border-t border-solid border-border pt-2">Suppressed by VEX</dt>
+                        <dd class="m-0 border-t border-solid border-border pt-2 text-right tabular-nums text-text">
+                            {{ counts.suppressed|intcomma }}
+                        </dd>
+                    {% endif %}
                 </dl>
             </div>
             </c-dropdowns.dropdown>
@@ -66,5 +75,6 @@ not be scanned now, so it reads "never scanned", not "not scanned yet".
 {% elif not unassessed %}
     <span class="text-xs text-text-muted">{% if last_scanned %}None at last scan{% else %}No open vulnerabilities{% endif %}</span>
 {% endif %}
+{% if counts.suppressed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ counts.suppressed|intcomma }} suppressed by VEX</p>{% endif %}
 {% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{% if noun %}{{ unassessed|intcomma }} {{ noun }}{{ unassessed|pluralize }} {% if retired %}without scan results{% else %}not scanned yet{% endif %}{% elif retired %}No scan results{% else %}Not scanned yet{% endif %}</p>{% endif %}
 {% if last_scanned %}<p class="mt-1 mb-0 text-xs text-text-muted">Last scanned {{ last_scanned|date:"j M Y" }}</p>{% endif %}

@@ -73,6 +73,8 @@ COLUMNS = {
 
 def _counts(counts: dict[str, int] | None = None) -> dict[str, int]:
     result = {key: (counts or {}).get(key, 0) for key in SEVERITIES}
+    # Outside the total: what a VEX closed, so the row can say so.
+    result["suppressed"] = (counts or {}).get("suppressed", 0)
     result["unknown"] = result["total"] - sum(result[key] for key in ("critical", "high", "medium", "low"))
     result["other"] = result["total"] - result["critical"] - result["high"]
     return result
@@ -215,7 +217,7 @@ def build_inventory_snapshot(
         still_shipped = still_scanned_release_ids(retired, workspace.id)
         for release in releases:
             posture = postures[release.id]
-            counts = _counts(posture.get("counts"))
+            counts = _counts({**posture.get("counts", {}), "suppressed": posture.get("suppressed_count", 0)})
             lifecycle_state = release.lifecycle_state
             rows.append(
                 {
@@ -321,7 +323,9 @@ def build_inventory_snapshot(
         for product in products:
             assigned = [component_rows[c.id] for c in product.components.all()]
             security_rows = [row for row in assigned if row["component_type"] != Component.ComponentType.DOCUMENT]
-            counts = _counts({key: sum(row["counts"][key] for row in security_rows) for key in SEVERITIES})
+            counts = _counts(
+                {key: sum(row["counts"][key] for row in security_rows) for key in (*SEVERITIES, "suppressed")}
+            )
             rows.append(
                 {
                     "id": product.id,

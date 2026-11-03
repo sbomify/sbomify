@@ -15,7 +15,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.models import Component, Product, User
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
+from sbomify.apps.sboms.models import ProductCLEEvent, ProductIdentifier, ProductLink
 from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
     sample_access_token,
     sample_billing_plan,
@@ -3072,6 +3072,9 @@ def test_a_date_only_in_the_column_survives_an_edit_of_another(
     assert (response.json()["end_of_support"], response.json()["end_of_life"]) == ("2027-01-01", "2028-01-01")
     sample_product.refresh_from_db()
     assert (sample_product.end_of_support, sample_product.end_of_life) == (date(2027, 1, 1), date(2028, 1, 1))
+    # Kept, not turned into events: releases inheriting them is a separate decision.
+    dated = ProductCLEEvent.objects.filter(product=sample_product, event_type__in=["endOfSupport", "endOfLife"])
+    assert not dated.exists()
 
 
 @pytest.mark.django_db
