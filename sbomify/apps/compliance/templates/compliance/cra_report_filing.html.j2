@@ -1,0 +1,30 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% block title %}{{ filing.get_stage_display }} for {{ report.product.name }} · sbomify{% endblock %}
+{% block dashboard_content %}
+    <c-layout.frame>
+    <c-layout.page-header title="{{ filing.get_stage_display }} as filed" subtitle="CRA report for {{ report.product.name }}">
+    <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_detail' report.id %}">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to the report
+    </c-buttons.ghost>
+    </c-layout.page-header>
+    {% include "compliance/components/cra_tabs.html.j2" %}
+    <c-cards.card title="Filing" subtitle="Recorded in sbomify after it was submitted in the ENISA portal.">
+    <dl class="flex flex-col gap-3 m-0">
+        <c-layout.description-row label="ENISA reference">{{ filing.srp_reference|default:"Not recorded" }}</c-layout.description-row>
+        <c-layout.description-row label="Filed">{{ filing.filed_at|date:"j M Y, H:i" }} UTC</c-layout.description-row>
+        <c-layout.description-row label="Recorded by">{{ filing.filer|default:"Account removed" }}</c-layout.description-row>
+    </dl>
+    </c-cards.card>
+    <c-cards.card title="What the report said" subtitle="The report's values when this filing was recorded. Kept as evidence and never changed, even when the report is edited later.">
+    {% if rows %}
+        <dl class="flex flex-col gap-3 m-0">
+            {% for row in rows %}
+                <c-layout.description-row label="{{ row.label }}">{{ row.value|linebreaksbr }}</c-layout.description-row>
+            {% endfor %}
+        </dl>
+    {% else %}
+        <c-typography.description>The report had no values when this filing was recorded.</c-typography.description>
+    {% endif %}
+    </c-cards.card>
+    </c-layout.frame>
+{% endblock dashboard_content %}
