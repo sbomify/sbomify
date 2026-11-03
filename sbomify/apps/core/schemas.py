@@ -804,3 +804,11 @@ class ReleaseArtifactAddResponseSchema(BaseModel):
     document_type: str | None = None
     document_version: str | None = None
     component_slug: str | None = None
+    replaced: bool = Field(
+        False,
+        description=(
+            "True when the add superseded an artifact of the same kind from the same component that "
+            "was already in the release (only possible with replace=True)."
+        ),
+    )
+    replaced_artifact_name: str | None = Field(None, description="Name of the artifact that was superseded.")

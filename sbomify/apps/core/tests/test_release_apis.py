@@ -824,6 +824,8 @@ def test_add_sbom_to_release(
     data = response.json()
     assert data["artifact_type"] == "sbom"
     assert data["artifact_name"] == sample_sbom.name
+    assert data["replaced"] is False
+    assert data["replaced_artifact_name"] is None
 
     # Verify artifact was added to database
     assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom, document=None).exists()
@@ -1233,6 +1235,9 @@ def test_add_sbom_with_replace_supersedes_same_format_from_same_component(
 
     assert response.status_code == 201
     assert response.json()["artifact_name"] == "SBOM 2"
+    # The client is told what it superseded, so a matrix build overwriting itself is not silent.
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "SBOM 1"
     assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom2.id]
 
 
@@ -1268,7 +1273,10 @@ def test_add_document_with_replace_supersedes_same_type_from_same_component(
         )
 
     assert add(doc2).status_code == 400
-    assert add(doc2, replace=True).status_code == 201
+    response = add(doc2, replace=True)
+    assert response.status_code == 201
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "Doc 1"
     assert list(ReleaseArtifact.objects.filter(release=release).values_list("document_id", flat=True)) == [doc2.id]
 
 

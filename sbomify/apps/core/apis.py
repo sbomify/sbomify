@@ -4238,6 +4238,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": None,
                 "document_version": None,
                 "component_slug": get_component_public_slug(artifact.sbom.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
         except Exception:
             log.exception("Error processing SBOM")
@@ -4285,6 +4287,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
                 "component_slug": get_component_public_slug(artifact.document.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
         except Exception:
             log.exception("Error processing document")
