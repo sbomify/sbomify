@@ -427,6 +427,7 @@
                     {% endfor %}
                 </div>
             </div>
+            {% include "compliance/components/advisory_cra_reporting.html.j2" %}
             {% comment %}An id Insights publishes links to its Insights page; anything else keeps the url stored on the reference, so EUVD and vendor advisories still appear.{% endcomment %}
             {% if advisory.references %}
                 <div class="space-y-3 border-t border-border/60 pt-6">
