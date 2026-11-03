@@ -31,7 +31,7 @@ notice counts only the ones that stopped.
         {% if vulnerabilities.untracked.sboms %}
             {{ vulnerabilities.untracked.stopped }} of its {{ vulnerabilities.untracked.sboms }} SBOMs {{ vulnerabilities.untracked.stopped|pluralize:"is,are" }} no longer scanned.
             {% if vulnerabilities.last_scanned_at %}
-                {{ vulnerabilities.untracked.stopped|pluralize:"Its,Their" }} counts are from the last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
+                The oldest scan in these counts ran on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
             {% endif %}
         {% elif vulnerabilities.last_scanned_at %}
             These counts are from its last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
@@ -90,6 +90,8 @@ notice counts only the ones that stopped.
     {% else %}
         <c-feedback.empty-state size="sm" icon="fas fa-check" title="No vulnerabilities found" message="The latest scans found no known vulnerabilities in this release." />
     {% endif %}
+{% elif vulnerabilities.untracked.sboms %}
+    <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No scan results" message="None of the {{ vulnerabilities.untracked.sboms }} SBOMs in this release has scan results yet, and sbomify no longer scans {{ vulnerabilities.untracked.stopped }} of them." />
 {% elif vulnerabilities.untracked %}
     <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No scan results" message="sbomify stopped monitoring this release before its SBOMs had scan results." />
 {% else %}

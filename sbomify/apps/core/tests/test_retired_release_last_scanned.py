@@ -289,11 +289,32 @@ class TestReleasePage:
         page = self._page(authenticated_web_client, release)
         assert (
             "It was withdrawn on 3 Mar 2025. 1 of its 2 SBOMs is no longer scanned. "
-            "Its counts are from the last scan, on 2 Mar 2025."
+            "The oldest scan in these counts ran on 2 Mar 2025."
         ) in page
         assert "sbomify no longer scans 1 of the 2 SBOMs in this release." in page
         assert "These counts are from its last scan" not in page
         assert "sbomify no longer scans this release." not in page
+
+    def test_a_partly_scanned_release_with_no_results_yet_says_some_are_still_scanned(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = _product(team_with_business_plan)
+        release = Release.objects.create(product=product, name="1.0.0")
+        live = Release.objects.create(product=product, name="1.1.0")
+        for name in ("lib", "tool"):
+            component = Component.objects.create(team=release.product.team, name=name)
+            sbom = SBOM.objects.create(name=name, component=component, version="1.0", format="cyclonedx")
+            SBOM.objects.create(name=name, component=component, version="2.0", format="cyclonedx")
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+            if name == "lib":
+                ReleaseArtifact.objects.create(release=live, sbom=sbom)
+        _withdraw(release)
+
+        page = self._page(authenticated_web_client, release)
+        assert (
+            "None of the 2 SBOMs in this release has scan results yet, and sbomify no longer scans 1 of them."
+        ) in page
+        assert "before its SBOMs had scan results" not in page
 
     def test_a_monitored_release_is_unchanged(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

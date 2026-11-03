@@ -102,7 +102,7 @@
                     {% if untracked.sboms %}
                         {{ untracked.stopped }} of its {{ untracked.sboms }} SBOMs {{ untracked.stopped|pluralize:"is,are" }} no longer scanned.
                         {% if vuln_posture.last_scanned_at %}
-                            {{ untracked.stopped|pluralize:"Its,Their" }} counts are from the last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                            The oldest scan in these counts ran on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
                         {% endif %}
                     {% elif vuln_posture.last_scanned_at %}
                         These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
