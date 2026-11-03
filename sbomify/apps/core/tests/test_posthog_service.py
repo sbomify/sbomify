@@ -169,18 +169,20 @@ class TestCapture:
 class TestConsent:
     """Tests for GDPR consent checking."""
 
+    @override_settings(POSTHOG_API_KEY="phc_test_key")
     def test_has_opted_out_returns_true_when_cookie_is_0(self) -> None:
         from sbomify.apps.core.posthog_service import has_opted_out
 
         request = MagicMock()
-        request.COOKIES = {"ph_phc_test_opt_in_out": "0"}
+        request.COOKIES = {"__ph_opt_in_out_phc_test_key": "0"}
         assert has_opted_out(request) is True
 
+    @override_settings(POSTHOG_API_KEY="phc_test_key")
     def test_has_opted_out_returns_false_when_cookie_is_1(self) -> None:
         from sbomify.apps.core.posthog_service import has_opted_out
 
         request = MagicMock()
-        request.COOKIES = {"ph_phc_test_opt_in_out": "1"}
+        request.COOKIES = {"__ph_opt_in_out_phc_test_key": "1"}
         assert has_opted_out(request) is False
 
     def test_has_opted_out_returns_true_when_no_cookie(self) -> None:
@@ -206,7 +208,7 @@ class TestConsent:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {"ph_phc_test_opt_in_out": "0"}
+        request.COOKIES = {"__ph_opt_in_out_phc_test_key": "0"}
 
         posthog_service.capture("user_42", "test:event", request=request)
 
@@ -237,7 +239,7 @@ class TestConsent:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {"ph_phc_test_opt_in_out": "1", "ph_session_id": "sess123"}
+        request.COOKIES = {"__ph_opt_in_out_phc_test_key": "1", "ph_session_id": "sess123"}
 
         posthog_service.capture("user_42", "test:event", {"key": "val"}, request=request)
 
@@ -291,7 +293,7 @@ class TestSessionCorrelation:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {"ph_session_id": "sess_xyz", "ph_phc_test_opt_in_out": "1"}
+        request.COOKIES = {"ph_session_id": "sess_xyz", "__ph_opt_in_out_phc_test_key": "1"}
 
         posthog_service.capture("user_42", "sbom:downloaded", {"sbom_id": "s1"}, request=request)
 
@@ -308,7 +310,7 @@ class TestSessionCorrelation:
         posthog_service._initialized = True
 
         request = MagicMock()
-        request.COOKIES = {"ph_phc_test_opt_in_out": "1"}
+        request.COOKIES = {"__ph_opt_in_out_phc_test_key": "1"}
 
         posthog_service.capture("user_42", "sbom:downloaded", request=request)
 

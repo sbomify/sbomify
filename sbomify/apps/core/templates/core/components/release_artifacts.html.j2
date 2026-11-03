@@ -165,6 +165,9 @@
                         <template x-if="getArtifactVulnerabilities(artifact).low > 0">
                             <c-badges.severity level="low" x-text="$number(getArtifactVulnerabilities(artifact).low) + ' Low'" />
                         </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).suppressed > 0">
+                            <c-forms.hint compact x-text="$number(getArtifactVulnerabilities(artifact).suppressed) + ' suppressed by VEX'" />
+                        </template>
                     </a>
                 </template>
                 </c-tables.cell>
