@@ -16,15 +16,15 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import QuotaDisplay, TeamPricingService
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_DESCRIPTIONS
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_ADMIN, ROLE_DESCRIPTIONS, ROLE_OWNER
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
-from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
+from sbomify.apps.teams.forms import ChangeMemberRoleForm, DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Workspace
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
+from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, assignable_roles_for, check_member_removal
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
 from sbomify.apps.teams.utils import refresh_current_team_session
@@ -275,6 +275,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # re-querying only asked the database a question it had already
             # answered.
             "is_admin_or_owner": role in ADMINISTER,
+            # Members tab — what this user may do to each row.
+            "member_actions": self._member_actions(team_data, role, user.id) if active_tab.key == "members" else {},
         }
         panel = build_panel_context(request, workspace_key, active_tab.key)
         if not panel.ok:
@@ -315,6 +317,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("slug_action") == "update":
             return self._update_slug(request, workspace_key)
+
+        if request.POST.get("member_role_action") == "update":
+            return self._change_member_role(request, workspace_key)
 
         if request.POST.get("_method") == "DELETE":
             if "member_id" in request.POST:
@@ -358,6 +363,57 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         active_tab = request.POST.get("active_tab", "")
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
+
+    @staticmethod
+    def _member_actions(team_data: Any, role: str | None, user_id: Any) -> dict[int, dict[str, Any]]:
+        """The role changes and removal each members-tab row offers this user.
+
+        Display only: the POST handlers re-check through ``check_role_change``
+        and ``check_member_removal``. Owner rows offer no removal, as before;
+        admin rows offer it only to owners and to the admin themselves.
+        """
+        labels = dict(settings.WORKSPACE_SUPPORTED_ROLES)
+        members = team_data.get("members", []) if isinstance(team_data, dict) else team_data.members
+        actions = {}
+        for member in members:
+            member = member if isinstance(member, dict) else member.model_dump()
+            target_role, target_user_id = member["role"], member["user"]["id"]
+            offered = assignable_roles_for(role, user_id, target_role, target_user_id)
+            removable = (
+                role in ADMINISTER
+                and target_role != ROLE_OWNER
+                and (role == ROLE_OWNER or target_role != ROLE_ADMIN or target_user_id == user_id)
+            )
+            actions[member["id"]] = {"roles": [(key, labels[key]) for key in offered], "removable": removable}
+        return actions
+
+    def _change_member_role(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        from sbomify.apps.teams.services.members import change_member_role
+
+        form = ChangeMemberRoleForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, form.errors.as_text())
+            return self._redirect_with_tab(request, workspace_key)
+
+        team = Workspace.objects.filter(key=workspace_key).first()
+        if team is None:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, workspace_key)
+
+        role = form.cleaned_data["role"]
+        result = change_member_role(request.user, team, form.cleaned_data["member_id"], role)
+        if not result.ok or result.value is None:
+            # Same split as _delete_member: an authorization refusal is a 403,
+            # a refusal the user can act on goes back to the tab as a message.
+            if result.status_code == 403:
+                return error_response(request, HttpResponseForbidden(result.error or "Forbidden"))
+            messages.error(request, result.error or "The role was not changed")
+            return self._redirect_with_tab(request, workspace_key)
+
+        member_user = result.value.user
+        name = f"{member_user.first_name} {member_user.last_name}".strip() or member_user.email
+        messages.success(request, f"Changed {name}'s role to {dict(settings.WORKSPACE_SUPPORTED_ROLES)[role]}.")
+        return self._redirect_with_tab(request, workspace_key)
 
     def _delete_invitation(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         # Managing invitations is ADMINISTER, but the class gate is READ_INTERNAL so

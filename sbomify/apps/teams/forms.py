@@ -276,6 +276,17 @@ class DeleteMemberForm(forms.Form):
     )
 
 
+class ChangeMemberRoleForm(forms.Form):
+    member_id = forms.IntegerField(required=True, widget=forms.HiddenInput())
+    # Who may grant which role is decided by check_role_change, not here.
+    role = forms.ChoiceField(
+        required=True,
+        choices=[
+            (role, label) for role, label in settings.WORKSPACE_SUPPORTED_ROLES if role not in (ROLE_GUEST, ROLE_BOT)
+        ],
+    )
+
+
 class DeleteInvitationForm(forms.Form):
     invitation_id = forms.IntegerField(
         required=True,
