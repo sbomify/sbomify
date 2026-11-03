@@ -24,7 +24,7 @@ from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import ChangeMemberRoleForm, DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Workspace
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, assignable_roles_for, check_member_removal
+from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, assignable_roles_for
 from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.services.settings_page import build_panel_context, profiles_context
 from sbomify.apps.teams.utils import refresh_current_team_session
@@ -333,7 +333,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _delete_member(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import remove_member_safely
 
-        user = cast(User, request.user)
         form = DeleteMemberForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())
@@ -344,21 +343,6 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             membership = Member.objects.get(pk=member_id, team__key=workspace_key)
         except Member.DoesNotExist:
             messages.error(request, "Member not found")
-            return self._redirect_with_tab(request, workspace_key)
-
-        # Same rules as the bare-PK ``teams.views.delete_member`` path; kept in
-        # one helper so the two can't drift (they already had, this one was
-        # missing the admin self-removal rule).
-        denial = check_member_removal(actor=user, target=membership)
-        if denial:
-            # Honour ``forbidden`` exactly as the bare-PK path does. Both are
-            # plain form posts, so there is no rendering reason for the two to
-            # answer an authorization refusal differently — and downgrading a
-            # 403 to a redirect here is precisely the drift the shared helper
-            # exists to prevent.
-            if denial.forbidden:
-                return error_response(request, HttpResponseForbidden(denial.message))
-            messages.add_message(request, denial.level, denial.message)
             return self._redirect_with_tab(request, workspace_key)
 
         active_tab = request.POST.get("active_tab", "")

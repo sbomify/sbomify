@@ -136,7 +136,7 @@ def check_role_change(actor: Any, target: Member, new_role: str) -> MemberRemova
     * Guest and bot memberships are never changed here.
 
     The last-owner check counts owners at call time; callers that write the
-    change must hold a lock on the workspace's owner rows while they do.
+    change must hold a lock on the workspace row while they do.
     """
     actor_membership = Member.objects.filter(user=actor, team=target.team).first()
     if actor_membership is None or actor_membership.role not in ADMINISTER:

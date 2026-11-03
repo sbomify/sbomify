@@ -6,8 +6,12 @@ admin, and cannot make anyone an owner. Guests and trusted-publisher bots are
 never changed here, and a workspace always keeps an owner.
 """
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
 import pytest
 from django.core.cache import cache
+from django.db import OperationalError, connection, connections, transaction
 from django.test import Client
 from django.urls import reverse
 
@@ -327,3 +331,78 @@ class TestMembersTab:
     )
     def test_offered_roles(self, actor_role, target_role, is_self, expected):
         assert assignable_roles_for(actor_role, 1, target_role, 1 if is_self else 2) == expected
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("removal_path", ["settings", "direct"])
+@pytest.mark.parametrize("first_operation", ["remove", "demote"])
+def test_removal_and_demotion_share_workspace_lock(team, make_member, monkeypatch, removal_path, first_operation):
+    """Neither operation may pass its owner check while the other is in flight."""
+    if connection.vendor != "postgresql":
+        pytest.skip("Requires PostgreSQL row locks")
+
+    from sbomify.apps.teams import permissions
+    from sbomify.apps.teams.services import members
+
+    owner = make_member("owner", "owner")
+    other = make_member("other", "owner")
+    # Avoid personal-workspace provisioning when the other owner is removed.
+    elsewhere = Workspace.objects.create(name="Other workspace")
+    Member.objects.create(team=elsewhere, user=other.user, role="owner")
+    client = _settings_client(owner)
+    if removal_path == "settings":
+        url = reverse("workspaces:team_settings", kwargs={"workspace_key": team.key})
+    else:
+        url = reverse("workspaces:team_membership_delete", kwargs={"membership_id": other.id})
+
+    def remove():
+        return client.post(url, {"_method": "DELETE", "member_id": other.id})
+
+    def demote():
+        return members.change_member_role(owner.user, team, owner.id, "admin")
+
+    checked, release = Event(), Event()
+    module, name = (
+        (permissions, "check_member_removal") if first_operation == "remove" else (members, "check_role_change")
+    )
+    original_check = getattr(module, name)
+
+    def pause_after_check(*args, **kwargs):
+        denial = original_check(*args, **kwargs)
+        assert denial is None
+        checked.set()
+        assert release.wait(10), "Timed out waiting to finish the first operation"
+        return denial
+
+    monkeypatch.setattr(module, name, pause_after_check)
+    first, second = (remove, demote) if first_operation == "remove" else (demote, remove)
+
+    def run_first():
+        try:
+            return first()
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(run_first)
+        try:
+            assert checked.wait(10), "The first operation did not reach its permission check"
+            with pytest.raises(OperationalError, match="lock timeout"):
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET LOCAL lock_timeout = '200ms'")
+                    second()
+        finally:
+            release.set()
+        pending.result(timeout=10)
+
+    # Once the first operation commits, the other must recheck and refuse.
+    monkeypatch.setattr(module, name, original_check)
+    second()
+    assert Member.objects.filter(team=team, role="owner").count() == 1
+    if first_operation == "remove":
+        assert _role(owner) == "owner"
+        assert not Member.objects.filter(pk=other.pk).exists()
+    else:
+        assert _role(owner) == "admin"
+        assert _role(other) == "owner"
