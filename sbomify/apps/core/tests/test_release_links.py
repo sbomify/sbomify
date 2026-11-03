@@ -374,6 +374,16 @@ class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
 
         assert str(app.id) in self._told(sent)
 
+    def test_deleting_an_sbom_tells_the_release_that_shipped_it(self, app, mocker, django_capture_on_commit_callbacks):
+        # Its last untracked SBOM gone, the rest of a retired release may be fully monitored again.
+        shipped = _sbom(app, "historical")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            shipped.delete()
+
+        assert str(app.id) in self._told(sent)
+
     def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
         shipped = _sbom(app, "kernel")
         sent = mocker.patch(BROADCAST)

@@ -542,9 +542,14 @@ def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None, also: list
 @receiver(post_save, sender="core.ReleaseArtifact")
 @receiver(post_delete, sender="core.ReleaseArtifact")
 def tell_releases_sharing_an_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
-    """A release gaining or losing an SBOM, or being deleted, can start or stop it being scanned for the others."""
+    """A release gaining or losing an SBOM, or being deleted, can start or stop it being scanned for the others.
+
+    The release itself is told too: losing its one untracked SBOM can leave the
+    rest of a retired release fully monitored, and an SBOM's own delete sends
+    only ``sbom_deleted``.
+    """
     if instance.sbom_id and kwargs.get("created", True):
-        _tell_releases_shipping([instance.sbom_id], exclude=instance.release_id)
+        _tell_releases_shipping([instance.sbom_id], also=[instance.release_id])
 
 
 @receiver(post_delete, sender="core.ReleaseLink")
