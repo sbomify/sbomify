@@ -701,7 +701,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         except Exception:
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
-        if not metrics:
+        if not metrics and not self._analysis_finished(client, version_uuid):
             raise RetryLaterError("Dependency Track still processing SBOM")
 
         vulnerabilities_response = client.get_project_vulnerabilities(version_uuid)
@@ -782,6 +782,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 **conversion_note,
             },
         )
+
+    @staticmethod
+    def _analysis_finished(client: Any, version_uuid: str) -> bool:
+        """Whether Dependency Track has finished analysing this project version.
+
+        DT stamps ``lastVulnerabilityAnalysis`` on the project when its analysis
+        ends, then queues the metrics update as a separate event, which can wait
+        behind every other project's metrics. The findings are readable from the
+        stamp on, so a scan that waited for metrics alone could run out of retries
+        with its results already there. A failed read counts as not finished.
+        """
+        try:
+            project = client.get_project(version_uuid)
+        except Exception:
+            logger.debug("[DT] Could not read the analysis state of project %s", version_uuid, exc_info=True)
+            return False
+        return bool(project.get("lastVulnerabilityAnalysis"))
 
     @staticmethod
     def _imported_spec_version(client: Any, version_uuid: str, declared_spec: str) -> str | None:
