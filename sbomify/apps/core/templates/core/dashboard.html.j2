@@ -28,7 +28,7 @@
              class="grid grid-cols-2 xl:grid-cols-4 gap-3"
              aria-label="Key metrics">
             {# djlint:off #}
-            <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+            <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" note="{% if dashboard.metrics.suppressed %}{{ dashboard.metrics.suppressed|intcomma }} more suppressed by VEX{% endif %}" />
             <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
             <c-layout.stat-card :value="dashboard.metrics.known_exploited" :unmeasured="dashboard.metrics.unmeasured_known_exploited" unmeasured_label="Not scanned yet" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
             {% if vex_review %}

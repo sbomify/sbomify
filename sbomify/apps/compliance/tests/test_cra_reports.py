@@ -1681,6 +1681,18 @@ class TestFiledEvidenceOutlivesItsParents:
         deleted = next(i for i, text in enumerate(sql) if text.startswith("DELETE") and Release._meta.db_table in text)
         assert locked < deleted
 
+    def test_an_advisory_delete_locks_its_reports_before_the_advisory(self, team, report, advisory):
+        # record_filing locks the report and then checks the advisory key of its
+        # timeline event, so taking the advisory first could deadlock with it.
+        with CaptureQueriesContext(connection) as queries:
+            assert advisory_service.delete_advisory(team, advisory.id).ok
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        reports = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and "compliance_cra_reports" in text)
+        table = SecurityAdvisory._meta.db_table
+        advisory_locks = [i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{table}"' in text]
+        assert all(i > reports for i in advisory_locks)
+
     def test_deleting_the_workspace_takes_its_filed_reports_with_it(self, team, owner, report):
         # Deleting the workspace is its owner erasing everything in it, account
         # deletion included. Refusing would leave an account that filed one CRA

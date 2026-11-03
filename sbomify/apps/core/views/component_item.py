@@ -430,7 +430,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     counts = max(
                         (extract_severity_counts(result) for _, result, _ in provider_runs),
                         key=lambda c: c["total"],
-                        default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+                        default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "suppressed": 0},
                     )
                 if provider_runs:
                     # Dated from the runs the card is actually reporting. Taking
