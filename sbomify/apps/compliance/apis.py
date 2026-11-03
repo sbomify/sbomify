@@ -7,7 +7,7 @@ import binascii
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
-from ninja import Router
+from ninja import File, Form, Router, UploadedFile
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
@@ -21,6 +21,8 @@ from .schemas import (
     DocumentSchema,
     ErrorResponse,
     ExportPackageSchema,
+    ExportSignatureSchema,
+    ExportSignatureUploadSchema,
     FindingSchema,
     FindingUpdateSchema,
     ObservationCreateSchema,
@@ -703,7 +705,36 @@ def create_export(request: HttpRequest, assessment_id: str) -> _Response:
         content_hash=pkg.content_hash,
         manifest=pkg.manifest,
         created_at=pkg.created_at,
+        signed=bool(pkg.signed_by),
+        signed_by=pkg.signed_by,
+        signed_by_issuer=pkg.signed_by_issuer,
+        signed_at=pkg.signed_at,
     )
+
+
+@router.get(
+    "/cra/{assessment_id}/export/{package_id}",
+    response={200: dict, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_export(request: HttpRequest, assessment_id: str, package_id: str) -> _Response:
+    """One export package as step 5 shows it.
+
+    A page that just exported reads its own package here rather than the
+    assessment's newest, which another export may already have replaced, so
+    the signing form names the ZIP that was downloaded.
+    """
+    result = _get_assessment_or_error(request, assessment_id)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    try:
+        package = CRAExportPackage.objects.get(pk=package_id, assessment=result)
+    except CRAExportPackage.DoesNotExist:
+        return 404, ErrorResponse(error="Export package not found", error_code="not_found")
+
+    from .services.wizard_service import export_summary
+
+    return 200, export_summary(package)
 
 
 @router.get(
@@ -716,6 +747,8 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     Response shape (200):
 
     - ``download_url``: presigned URL for the ZIP.
+    - ``signature_url``: presigned URL for the manufacturer's Sigstore
+      bundle (``.sigstore.json``), or ``null`` while the ZIP is unsigned.
 
     The response carries ``Cache-Control: no-store`` and
     ``Pragma: no-cache`` so intermediate caches (Caddy, corporate
@@ -739,13 +772,67 @@ def download_export(request: HttpRequest, response: HttpResponse, assessment_id:
     except CRAExportPackage.DoesNotExist:
         return 404, ErrorResponse(error="Export package not found", error_code="not_found")
 
-    from .services.export_service import get_download_url
+    from .services.export_service import get_download_url, get_signature_url
 
     url = get_download_url(package)
     if not url.ok:
         return url.status_code or 500, ErrorResponse(error=url.error or "Unknown error")
+    signature_url = get_signature_url(package)
+    if not signature_url.ok:
+        return signature_url.status_code or 500, ErrorResponse(error=signature_url.error or "Unknown error")
 
-    return 200, {"download_url": url.value}
+    return 200, {"download_url": url.value, "signature_url": signature_url.value}
+
+
+@router.post(
+    "/cra/{assessment_id}/export/{package_id}/signature",
+    response={
+        201: ExportSignatureSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        502: ErrorResponse,
+    },
+)
+def sign_export(
+    request: HttpRequest,
+    assessment_id: str,
+    package_id: str,
+    payload: Form[ExportSignatureUploadSchema],
+    bundle: File[UploadedFile],
+) -> _Response:
+    """Attach the manufacturer's keyless Sigstore signature to an export package.
+
+    Sign the ZIP with ``cosign sign-blob <zip> --bundle <zip>.sigstore.json``
+    and send that file as the multipart ``bundle`` part, with the certificate
+    ``identity`` and OIDC ``issuer`` it was signed under as form fields.
+    sbomify verifies it as ``cosign verify-blob`` would and keeps the file
+    beside the ZIP exactly as sent. A package takes one signature.
+    """
+    result = _get_assessment_or_error(request, assessment_id, require_mutable=True)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    try:
+        package = CRAExportPackage.objects.get(pk=package_id, assessment=result)
+    except CRAExportPackage.DoesNotExist:
+        return 404, ErrorResponse(error="Export package not found", error_code="not_found")
+
+    from .services.export_signature import MAX_BUNDLE_BYTES
+    from .services.export_signature import sign_export as _sign
+
+    user: User = request.user  # type: ignore[assignment]
+    # One byte past the cap is enough for the service to refuse an oversized file.
+    raw = bundle.read(MAX_BUNDLE_BYTES + 1)
+    signed = _sign(package, bundle=raw, identity=payload.identity, issuer=payload.issuer, user=user)
+    if not signed.ok:
+        return signed.status_code or 400, ErrorResponse(error=signed.error or "Unknown error")
+
+    assert signed.value is not None and signed.value.signed_at is not None
+    return 201, ExportSignatureSchema(
+        signed_by=signed.value.signed_by, issuer=signed.value.signed_by_issuer, signed_at=signed.value.signed_at
+    )
 
 
 @router.get(
