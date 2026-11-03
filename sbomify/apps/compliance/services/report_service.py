@@ -399,6 +399,24 @@ def delete_report(report: CRAReport, user: Any) -> ServiceResult[None]:
     return ServiceResult.success(None)
 
 
+def delete_with_reports(parents: list[Any], key: str, refused: str) -> ServiceResult[None]:
+    """Delete advisories or products (``key`` says which) with the CRA reports that name them.
+
+    A report without a filing goes with them, as it always did. A filed report
+    is evidence, so nothing is deleted and the answer is a 409 saying ``refused``.
+    """
+    with transaction.atomic():
+        reports = CRAReport.objects.filter(**{f"{key}__in": parents})
+        if reports.filter(filings__isnull=False).exists():
+            return ServiceResult.failure(refused, status_code=409)
+        for report_id in reports.values_list("pk", flat=True):
+            broadcast_on_commit(parents[0].team.key, "cra_report_deleted", {"report_id": report_id})
+        reports.delete()
+        for parent in parents:
+            parent.delete()
+    return ServiceResult.success(None)
+
+
 def get_report(team: Any, report_id: str) -> CRAReport | None:
     return (
         CRAReport.objects.select_related("product", "advisory")

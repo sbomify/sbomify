@@ -1705,8 +1705,14 @@ def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:
     advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
     deleted_id = advisory.id
-    advisory.delete()
+    deleted = delete_with_reports(
+        [advisory], "advisory", "This advisory has a filed CRA report, kept as evidence, so it cannot be deleted."
+    )
+    if not deleted.ok:
+        return ServiceResult.failure(deleted.error or "Advisory not deleted.", status_code=deleted.status_code)
     _announce(team, deleted_id, "deleted")
     return ServiceResult.success(advisory_id)
 
@@ -1735,9 +1741,17 @@ def delete_advisories(team: Any, advisory_ids: list[str]) -> ServiceResult[int]:
     advisories = list(SecurityAdvisory.objects.filter(team=team).filter(Q(id__in=ids) | Q(tracking_id__in=ids)))
     if not advisories:
         return ServiceResult.failure("Advisories not found", status_code=404)
-    for advisory in advisories:
-        deleted_id = advisory.id
-        advisory.delete()
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
+    deleted_ids = [advisory.id for advisory in advisories]
+    deleted = delete_with_reports(
+        advisories,
+        "advisory",
+        "One of these advisories has a filed CRA report, kept as evidence, so none were deleted.",
+    )
+    if not deleted.ok:
+        return ServiceResult.failure(deleted.error or "Advisories not deleted.", status_code=deleted.status_code)
+    for deleted_id in deleted_ids:
         _announce(team, deleted_id, "deleted")
     return ServiceResult.success(len(advisories))
 

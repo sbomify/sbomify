@@ -13,6 +13,7 @@ import pytest
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.db.models import RestrictedError
 from django.test import Client, RequestFactory
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
@@ -28,6 +29,7 @@ from sbomify.apps.compliance.services import report_service
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+from sbomify.apps.security_advisories.services import advisories as advisory_service
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
@@ -1587,3 +1589,87 @@ class TestLivePages:
         assert 'name="revision"' in page
         for region in _regions(page).values():
             assert "revision" not in region["fields"]
+
+
+@pytest.mark.django_db
+class TestFiledEvidenceOutlivesItsParents:
+    """A filed report is evidence, so deleting its advisory or product is refused rather than taking it along."""
+
+    def _file(self, report, owner):
+        assert report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING, srp_reference="SRP-1").ok
+
+    def _kept(self, report) -> bool:
+        return CRAReport.objects.filter(pk=report.pk).exists() and CRAReportFiling.objects.filter(report=report).exists()
+
+    def test_deleting_the_advisory_is_refused(self, team, owner, report, advisory):
+        self._file(report, owner)
+
+        result = advisory_service.delete_advisory(team, advisory.id)
+
+        assert not result.ok and result.status_code == 409
+        assert "CRA report" in result.error
+        assert SecurityAdvisory.objects.filter(pk=advisory.pk).exists() and self._kept(report)
+
+    def test_the_advisory_api_says_why(self, team, owner, report, advisory):
+        self._file(report, owner)
+
+        response = _client_for(team, owner).delete(f"/api/v1/advisories/{advisory.id}")
+
+        assert response.status_code == 409
+        assert "CRA report" in response.json()["detail"]
+        assert self._kept(report)
+
+    def test_a_bulk_delete_naming_a_filed_advisory_deletes_none(self, team, owner, report, advisory):
+        self._file(report, owner)
+        other = SecurityAdvisory.objects.create(team=team, title="Unrelated")
+
+        result = advisory_service.delete_advisories(team, [other.id, advisory.id])
+
+        assert not result.ok and result.status_code == 409
+        assert SecurityAdvisory.objects.filter(pk__in=[other.pk, advisory.pk]).count() == 2 and self._kept(report)
+
+    def test_deleting_the_product_is_refused(self, team, owner, report, product):
+        self._file(report, owner)
+
+        response = _client_for(team, owner).delete(reverse("api-1:delete_product", kwargs={"product_id": product.id}))
+
+        assert response.status_code == 409
+        assert "CRA report" in response.json()["detail"]
+        assert Product.objects.filter(pk=product.pk).exists() and self._kept(report)
+
+    def test_an_unfiled_report_goes_with_its_advisory(
+        self, team, owner, report, advisory, django_capture_on_commit_callbacks
+    ):
+        report_id = report.pk
+
+        with patch(BROADCAST) as mock_broadcast, django_capture_on_commit_callbacks(execute=True):
+            assert advisory_service.delete_advisory(team, advisory.id).ok
+
+        assert not CRAReport.objects.filter(pk=report_id).exists()
+        assert ("cra_report_deleted", {"report_id": report_id}) in _sent(mock_broadcast)
+
+    def test_an_unfiled_report_goes_with_its_product(self, team, owner, report, product):
+        response = _client_for(team, owner).delete(reverse("api-1:delete_product", kwargs={"product_id": product.id}))
+
+        assert response.status_code == 204
+        assert not CRAReport.objects.filter(pk=report.pk).exists()
+
+    def test_deleting_the_workspace_takes_its_filed_reports_with_it(self, team, owner, report):
+        # Deleting the workspace is its owner erasing everything in it, account
+        # deletion included. Refusing would leave an account that filed one CRA
+        # report impossible to delete.
+        self._file(report, owner)
+
+        Workspace.objects.get(pk=team.pk).delete()
+
+        assert not CRAReport.objects.filter(pk=report.pk).exists()
+        assert not CRAReportFiling.objects.filter(report_id=report.pk).exists()
+
+    def test_any_other_path_fails_rather_than_taking_the_evidence(self, owner, report, advisory, product):
+        self._file(report, owner)
+
+        with pytest.raises(RestrictedError):
+            SecurityAdvisory.objects.get(pk=advisory.pk).delete()
+        with pytest.raises(RestrictedError):
+            Product.objects.get(pk=product.pk).delete()
+        assert self._kept(report)

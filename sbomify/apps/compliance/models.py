@@ -717,14 +717,18 @@ class CRAReport(models.Model):
         "teams.Workspace", on_delete=models.CASCADE, related_name="cra_reports", db_column="workspace_id"
     )
     kind = models.CharField(max_length=20, choices=Kind.choices)
+    # RESTRICT, not CASCADE: a cascade deletes the filings with a raw delete that
+    # no append-only guard sees. Deleting the advisory or the product alone is
+    # refused while a report names it, so it goes through delete_with_reports.
+    # Deleting the workspace still takes the report, which it cascades to as well.
     advisory = models.ForeignKey(
         "security_advisories.SecurityAdvisory",
-        on_delete=models.CASCADE,
+        on_delete=models.RESTRICT,
         null=True,
         blank=True,
         related_name="cra_reports",
     )
-    product = models.ForeignKey("core.Product", on_delete=models.CASCADE, related_name="cra_reports")
+    product = models.ForeignKey("core.Product", on_delete=models.RESTRICT, related_name="cra_reports")
     aware_at = models.DateTimeField()
     occurred_at = models.DateTimeField(null=True, blank=True)
     measure_available_at = models.DateTimeField(null=True, blank=True)
