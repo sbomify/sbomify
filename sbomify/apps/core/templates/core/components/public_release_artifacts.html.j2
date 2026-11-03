@@ -37,11 +37,16 @@
                     </span>
                     </c-tables.cell>
                     <c-tables.cell nowrap>
+                    <c-tables.name>
                     <span class="font-medium text-text"
+                          :title="artifact.artifact_name || 'Unnamed artifact'"
                           x-text="artifact.artifact_name || 'Unnamed artifact'"></span>
-                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] text-xs font-semibold uppercase tracking-wide"
+                    <c-slot name="trail">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-[var(--radius-sm)] text-xs font-semibold uppercase tracking-wide"
                           :class="typeBadgeClass(artifact)"
                           x-text="effType(artifact)"></span>
+                    </c-slot>
+                    </c-tables.name>
                     {% comment %}
                     Mobile-only meta — duplicates the columns hidden under md / lg
                     (Component + Format under md, Version + Created under lg).

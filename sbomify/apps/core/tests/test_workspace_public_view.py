@@ -311,8 +311,26 @@ def test_workspace_public_hides_artifacts_section_when_empty():
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Section header should not be shown when there are no global artifacts
-    assert "Organization Compliance Artifacts" not in content
+    # Neither the section nor an empty state should be shown when there are no global artifacts
+    assert 'id="compliance"' not in content
+    assert "No compliance artifacts" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_shows_artifacts_section_when_present():
+    team = _public_workspace("Artifact Workspace")
+    Component.objects.create(
+        name="SOC 2 Report",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+
+    content = _visit(team)
+
+    assert 'id="compliance"' in content
+    assert "SOC 2 Report" in content
 
 
 @pytest.mark.django_db

@@ -73,10 +73,8 @@ def _open_findings(component_id: str, versions: list[tuple[str, list[dict[str, A
         )
         for run in latest:
             results.setdefault(str(run["sbom_id"]), []).append(run["result"])
-    vex_statements = load_vex_suppressions(component_id) if results else []
-
     summaries: list[dict[str, Any]] = []
-    for _, items in versions:
+    for version, items in versions:
         version_results = [
             result for item in items if _bom_type(item) == "sbom" for result in results.get(str(item["sbom"]["id"]), [])
         ]
@@ -90,7 +88,9 @@ def _open_findings(component_id: str, versions: list[tuple[str, list[dict[str, A
             continue
         rows = [
             row
-            for row in extract_finding_rows(merge_findings_by_alias(version_results), vex_statements)
+            for row in extract_finding_rows(
+                merge_findings_by_alias(version_results), load_vex_suppressions(component_id, version)
+            )
             if not row["vex_suppressed"]
         ]
         if rows:

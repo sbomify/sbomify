@@ -47,7 +47,7 @@
         {% if dashboard.unassessed or dashboard.metrics.sla_unknown %}
             <c-feedback.alert variant="info">
             {% if dashboard.unassessed %}
-                {{ dashboard.unassessed|intcomma }} component{{ dashboard.unassessed|pluralize }} still need{{ dashboard.unassessed|pluralize:'s,' }} a completed security assessment.
+                {{ dashboard.unassessed|intcomma }} component{{ dashboard.unassessed|pluralize }} {{ dashboard.unassessed|pluralize:'has,have' }} not been scanned yet. The counts above leave {{ dashboard.unassessed|pluralize:'it,them' }} out.
             {% endif %}
             {% if dashboard.metrics.sla_unknown %}
                 Patch SLA is unavailable for {{ dashboard.metrics.sla_unknown|intcomma }} occurrence{{ dashboard.metrics.sla_unknown|pluralize }} without scan history.

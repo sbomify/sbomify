@@ -1,0 +1,23 @@
+{% comment %}
+The row's name with what rides beside it: a type badge, a KEV flag, an icon
+link out. The name goes in the default slot and those go in the named trail
+slot, and the two never share a box.
+
+A nowrap cell clips its whole content as one box, so anything written after
+the name on the same line is the first thing a long name pushes out of view:
+half a badge, or none. Here the name alone ends in an ellipsis and the trail
+keeps its natural width, so the badge stays whole and the name gives way.
+Put a title on the name element, since the ellipsis hides the end of it.
+
+It is a line, not a cell. Lines that belong under the name, a description or
+the aliases, stay in the cell after it, so one component serves a cell that
+holds only the name row and one that stacks detail beneath it.
+
+The trail renders only when it holds something, so a cell whose badges are all
+conditional leaves no gap after the name when none of them apply.
+{% endcomment %}
+<c-vars />
+<div class="flex items-center gap-2 min-w-0" {{ attrs }}>
+    <div class="truncate min-w-0">{{ slot }}</div>
+    {% if trail.strip %}<div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">{{ trail }}</div>{% endif %}
+</div>

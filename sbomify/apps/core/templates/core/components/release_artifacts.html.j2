@@ -97,14 +97,17 @@
                 </div>
                 </c-tables.cell>
                 <c-tables.cell nowrap>
-                <div class="flex items-center gap-2">
-                    <a :href="getArtifactUrl(artifact)"
-                       class="text-primary font-medium hover:underline"
-                       x-text="getArtifactName(artifact)"></a>
-                    <span class="px-2 py-0.5 text-xs font-medium rounded-full"
-                          :class="getArtifactBadgeClass(artifact)"
-                          x-text="getArtifactType(artifact).toUpperCase()"></span>
-                </div>
+                <c-tables.name>
+                <a :href="getArtifactUrl(artifact)"
+                   class="text-primary font-medium hover:underline"
+                   :title="getArtifactName(artifact)"
+                   x-text="getArtifactName(artifact)"></a>
+                <c-slot name="trail">
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="getArtifactBadgeClass(artifact)"
+                      x-text="getArtifactType(artifact).toUpperCase()"></span>
+                </c-slot>
+                </c-tables.name>
                 </c-tables.cell>
                 <c-tables.cell>
                 <a :href="getComponentUrl(artifact)"

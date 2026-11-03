@@ -45,7 +45,7 @@
     {# djlint:on #}
 </div>
 {% if metrics.unassessed %}
-    <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} still need{{ metrics.unassessed|pluralize:'s,' }} a completed security assessment.</c-feedback.alert>
+    <c-feedback.alert variant="warning">{{ metrics.unassessed|intcomma }} component{{ metrics.unassessed|pluralize }} {{ metrics.unassessed|pluralize:'has,have' }} not been scanned yet. The counts above leave {{ metrics.unassessed|pluralize:'it,them' }} out.</c-feedback.alert>
 {% endif %}
 {% include 'core/product_components.html.j2' %}
 <div class="flex flex-col gap-4">

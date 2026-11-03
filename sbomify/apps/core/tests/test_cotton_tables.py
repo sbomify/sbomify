@@ -6,6 +6,9 @@ the Alpine state names the sortable header and the pager rely on, so a page can
 nest the set without ever writing a class itself.
 """
 
+import re
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -13,6 +16,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 
 TABLES_DIR = Path(settings.BASE_DIR) / "sbomify" / "templates" / "components" / "tables"
+APP_ROOT = Path(settings.BASE_DIR) / "sbomify"
 
 
 @pytest.fixture(scope="module")
@@ -254,6 +258,24 @@ def test_nowrap_cell_holds_the_name_on_one_line_and_caps_it(rendered: str) -> No
     cell = _element_holding(rendered, "td", "Nowrap body cell")
     assert '<div class="truncate max-w-[24rem]">Nowrap body cell</div>' in cell
     assert "whitespace-nowrap" not in cell
+
+
+def test_name_line_lets_the_name_give_way_and_keeps_the_trail_whole(rendered: str) -> None:
+    """The name ellipsises in its own box and the trail sits beside it, outside that box."""
+    line = _element_holding(rendered, "td", 'data-probe="name-with-trail"')
+    assert '<div class="flex items-center gap-2 min-w-0" data-probe="name-with-trail">' in line
+    name, trail = line.split('<div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">')
+    assert '<div class="truncate min-w-0">' in name
+    assert "Named body cell" in name
+    assert "trail-badge" not in name
+    assert 'data-probe="trail-badge"' in trail
+
+
+def test_name_line_drops_an_empty_trail(rendered: str) -> None:
+    """A trail whose badges are all conditional leaves no gap when none apply."""
+    line = _element_holding(rendered, "td", 'data-probe="name-with-empty-trail"')
+    assert "Bare named cell" in line
+    assert "shrink-0" not in line
 
 
 def test_a_cell_without_nowrap_gets_no_wrapper(rendered: str) -> None:
@@ -539,3 +561,117 @@ def test_row_boxes_stop_the_click_at_the_box(rendered: str) -> None:
         assert "@click.stop=" in cell
         assert "@keydown.enter.stop" in cell
     assert '@click.stop="toggleAll()"' in _element_holding(rendered, "th", "data-row-select-all")
+
+
+@dataclass
+class _Node:
+    tag: str
+    classes: list[str] = field(default_factory=list)
+    children: list["_Node"] = field(default_factory=list)
+    text: str = ""
+
+
+class _Tree(HTMLParser):
+    VOID = {"br", "hr", "img", "input", "meta", "link", "source", "wbr"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.root = _Node("root")
+        self.stack = [self.root]
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        node = _Node(tag, (dict(attrs).get("class") or "").split())
+        self.stack[-1].children.append(node)
+        if tag not in self.VOID:
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.stack[-1].children.append(_Node(tag, (dict(attrs).get("class") or "").split()))
+
+    def handle_endtag(self, tag: str) -> None:
+        for depth in range(len(self.stack) - 1, 0, -1):
+            if self.stack[depth].tag == tag:
+                del self.stack[depth:]
+                return
+
+    def handle_data(self, data: str) -> None:
+        if data.strip():
+            self.stack[-1].children.append(_Node("#text", text=data.strip()))
+
+
+def _has_text(node: _Node) -> bool:
+    return node.tag == "#text" or any(_has_text(child) for child in node.children)
+
+
+def _is_adornment(node: _Node) -> bool:
+    """A badge, or a link or button that is only an icon."""
+    if node.tag.startswith("c-badges."):
+        return True
+    if node.tag == "span" and any(c == "rounded-full" or c.startswith("rounded-[var(--radius") for c in node.classes):
+        return True
+    return node.tag in {"a", "button"} and not _has_text(node) and any(c.tag == "i" for c in node.children)
+
+
+def _is_same_line_row(node: _Node) -> bool:
+    """A flex row that lays its children out on the name's line, rather than a line of its own below it."""
+    if node.tag != "div" or not {"flex", "inline-flex"} & set(node.classes):
+        return False
+    return not any(c in {"flex-wrap", "flex-col"} or re.match(r"(mt|pt)-", c) for c in node.classes)
+
+
+def _clipped_adornments(nodes: list[_Node]) -> bool:
+    inline: list[_Node] = []
+    for node in nodes:
+        if _is_same_line_row(node):
+            if _clipped_adornments(node.children):
+                return True
+        elif node.tag not in {"div", "details", "p", "form"}:
+            inline.append(node)
+    return any(map(_is_adornment, inline)) and not all(map(_is_adornment, inline))
+
+
+_NOWRAP_CELL = re.compile(r"<c-tables\.cell\b[^>]*\bnowrap\b[^>]*>(.*?)</c-tables\.cell>", re.S)
+_NAME_LINE = re.compile(r"<c-tables\.name\b.*?</c-tables\.name>", re.S)
+_TEMPLATE_NOISE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}|{#.*?#}|{%.*?%}", re.S)
+
+
+def _templates_with_clipped_adornments() -> list[str]:
+    offenders = []
+    for path in sorted([*APP_ROOT.rglob("*.html"), *APP_ROOT.rglob("*.j2")]):
+        if "node_modules" in path.parts or "static" in path.parts:
+            continue
+        source = path.read_text()
+        for cell in _NOWRAP_CELL.finditer(source):
+            parser = _Tree()
+            parser.feed(_NAME_LINE.sub("", _TEMPLATE_NOISE.sub("", cell.group(1))))
+            if _clipped_adornments(parser.root.children):
+                offenders.append(f"{path.relative_to(APP_ROOT)}:{source.count(chr(10), 0, cell.start()) + 1}")
+    return offenders
+
+
+def test_no_nowrap_cell_puts_a_badge_after_the_name_on_its_line() -> None:
+    """A nowrap cell clips its content as one box, so a badge after a long name is cut off or hidden.
+
+    The badge, flag or icon link belongs in the trail slot of <c-tables.name>,
+    which lets the name ellipsise and keeps the trail whole. A cell holding only
+    badges, or badges on a line of their own below the name, is fine.
+    """
+    assert _templates_with_clipped_adornments() == []
+
+
+def test_the_nowrap_guard_catches_a_badge_after_the_name() -> None:
+    for body in (
+        '<div class="flex items-center gap-2"><a x-text="name"></a><span class="rounded-full">SBOM</span></div>',
+        "<span>{{ doc.name }}</span><c-badges.violet>unreadable</c-badges.violet>",
+        '<code>{{ repo }}</code><a href="#" title="Open"><i class="fas fa-link"></i></a>',
+    ):
+        parser = _Tree()
+        parser.feed(body)
+        assert _clipped_adornments(parser.root.children), body
+    for body in (
+        '<a x-text="name"></a><div class="hidden sm:block mt-1"><c-badges.warning>Doc</c-badges.warning></div>',
+        "<c-badges.primary>Product override</c-badges.primary>",
+    ):
+        parser = _Tree()
+        parser.feed(body)
+        assert not _clipped_adornments(parser.root.children), body

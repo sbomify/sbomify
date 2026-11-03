@@ -299,6 +299,14 @@ def test_logout_unauthenticated_user_redirects_to_login(client: Client) -> None:
 
 
 @pytest.mark.django_db
+def test_login_required_redirect_lands_on_the_login_route_directly(client: Client) -> None:
+    """LOGIN_URL carries the trailing slash, so APPEND_SLASH adds no extra hop."""
+    response = client.get(reverse("core:support_contact"), follow=False)
+    assert response.status_code == 302
+    assert response["Location"].startswith(f"{reverse('core:keycloak_login')}?next=")
+
+
+@pytest.mark.django_db
 def test_keycloak_login_rejects_malicious_next_parameter(client: Client) -> None:
     """Malicious 'next' parameters with external hosts should be rejected.
 

@@ -188,7 +188,7 @@
         {% render_field form.cf_turnstile_response %}
     {% endif %}
     <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">
-        <c-buttons.secondary href="{{ back_url|default:'/' }}">
+        <c-buttons.secondary href="{{ back_url|default:'/' }}" rel="nofollow">
         <i class="fas fa-arrow-left" aria-hidden="true"></i>{{ back_text|default:'Back to Home' }}
         </c-buttons.secondary>
         <c-buttons.primary type="submit">

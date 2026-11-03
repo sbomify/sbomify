@@ -1,10 +1,10 @@
 # Base Python version
 ARG PYTHON_VERSION=3.14-slim-trixie@sha256:0514bc76712d64f8bb48adcb95b1ab0d88c69fee95d62fe4c18ee948bee9b1e1
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.3.8
+ARG OSV_SCANNER_VERSION=v2.7.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
-ARG COSIGN_VERSION=v3.1.3
+ARG COSIGN_VERSION=v3.1.4
 # Chainguard distroless Python for production, pinned by digest for reproducibility.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
@@ -30,7 +30,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 0: Keycloak Theme Build (Fully Independent)
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS keycloak-build
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS keycloak-build
 
 WORKDIR /keycloak-build
 
@@ -44,7 +44,7 @@ COPY keycloak/themes/ ./themes/
 RUN bun install --frozen-lockfile && bun run build
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS js-build-prod
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS js-build-prod
 
 WORKDIR /js-build
 
@@ -99,8 +99,13 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 # Build main frontend assets (Keycloak is built separately in Stage 0)
 RUN bun run copy-deps && bun x vite build
 
+# Vite only minifies what it bundles; the hand-written sheets in static/css
+# are minified here, on this stage's copy, before collectstatic picks them up.
+COPY bin/minify-static-css.ts ./bin/
+RUN bun bin/minify-static-css.ts sbomify/static/css
+
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS frontend-dev-server
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS frontend-dev-server
 
 WORKDIR /app-frontend
 

@@ -7,6 +7,10 @@
 
     The close button is pulled back by half the body's gutter so it lands where
     it always has, an even 1rem inside the panel.
+
+    Cotton cannot take a template tag between a component's attributes: it
+    splits a conditional @click into junk attributes and the handler
+    never binds. Each button variant is therefore its own branch.
 {% endcomment %}
 {% firstof dialog_id modal_id as confirmation_id %}
 <c-modal show="{{ modal_id }}" size="sm" role="alertdialog" x-ref="modalOverlay" tabindex="-1" aria-labelledby="delete-modal-title-{{ confirmation_id }}" aria-describedby="delete-modal-desc-{{ confirmation_id }}">
@@ -42,8 +46,12 @@
 <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
 <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
 </c-buttons.danger>
+{% elif confirm_callback %}
+<c-buttons.danger x-ref="deleteButton" @click="{{ confirm_callback }}">
+<i class="fas fa-trash mr-2" aria-hidden="true"></i>{{ confirm_text|default:'Delete' }}
+</c-buttons.danger>
 {% else %}
-<c-buttons.danger x-ref="deleteButton" {% if confirm_callback %}@click="{{ confirm_callback }}"{% endif %}>
+<c-buttons.danger x-ref="deleteButton">
 <i class="fas fa-trash mr-2" aria-hidden="true"></i>{{ confirm_text|default:'Delete' }}
 </c-buttons.danger>
 {% endif %}

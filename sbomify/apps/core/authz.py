@@ -354,6 +354,33 @@ def is_agent_scope(scopes: list[str] | None) -> bool:
     return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
 
 
+# Every scope list the publish preset has ever stored, for the same reason.
+_PUBLISH_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
+    frozenset({"artifact:publish"}),
+    frozenset(SCOPE_PRESETS["publish"] or []),
+)
+
+
+def scope_label(scopes: list[str] | None) -> str:
+    """The token type a person picked when creating a token, read back off its stored scopes.
+
+    Matches the preset labels in the token-creation form. A token whose scopes
+    match no preset, past or present, is ``Custom``.
+    """
+    if scopes is None:
+        return "Full access"
+    scope_set = frozenset(scopes)
+    if scope_set in _AGENT_SCOPE_HISTORY:
+        return "AI agent"
+    if scope_set in _PUBLISH_SCOPE_HISTORY:
+        return "Publish only"
+    # Keyed on the verb like the preset itself, so a read-only token made before
+    # a read action was added still reads as read-only.
+    if scope_set and all(s.split(":", 1)[-1].startswith("read") or s in _ABAC_ACTIONS for s in scope_set):
+        return "Read-only"
+    return "Custom"
+
+
 def credential_channel(request: Any) -> str:
     """How an API request was sent, read off its credential: ``ci``, ``agent`` or ``api``.
 
