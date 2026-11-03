@@ -5,6 +5,9 @@ changes the bar dimensions. The panel uses the existing floating dropdown and
 positioning controller so a scrolling table never clips it. No scan never reads
 as clean. noun names what unassessed counts (component, SBOM); without it the
 row is the one thing not scanned.
+counts.suppressed is what a VEX closed. It never joins the total, and it is
+stated rather than dropped, so a row the VEX cleared reads differently from
+one nothing was ever found in.
 {% endcomment %}
 <c-vars counts unassessed compact noun />
 {% if counts.total %}
@@ -50,6 +53,12 @@ row is the one thing not scanned.
                             {{ counts.unknown|intcomma }}
                         </dd>
                     {% endif %}
+                    {% if counts.suppressed %}
+                        <dt class="border-t border-solid border-border pt-2">Suppressed by VEX</dt>
+                        <dd class="m-0 border-t border-solid border-border pt-2 text-right tabular-nums text-text">
+                            {{ counts.suppressed|intcomma }}
+                        </dd>
+                    {% endif %}
                 </dl>
             </div>
             </c-dropdowns.dropdown>
@@ -58,4 +67,5 @@ row is the one thing not scanned.
 {% elif not unassessed %}
     <span class="text-xs text-text-muted">No open vulnerabilities</span>
 {% endif %}
+{% if counts.suppressed %}<p class="mt-1 mb-0 text-xs text-text-muted">{{ counts.suppressed|intcomma }} suppressed by VEX</p>{% endif %}
 {% if unassessed %}<p class="mt-1 mb-0 text-xs text-text-muted">{% if noun %}{{ unassessed|intcomma }} {{ noun }}{{ unassessed|pluralize }} not scanned yet{% else %}Not scanned yet{% endif %}</p>{% endif %}
