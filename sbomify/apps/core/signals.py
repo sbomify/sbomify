@@ -499,3 +499,51 @@ def reject_cross_tenant_product_component_links(
                     f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
                     f"product team={product_team_id}"
                 )
+
+
+def _tell_releases_shipping(sbom_ids: list[Any], exclude: Any = None) -> None:
+    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs.
+
+    Whether a retired release's SBOMs are still scanned is decided by the
+    other releases shipping them and by the newest SBOM of each component, so
+    a change to either moves what its open page says.
+    """
+    from sbomify.apps.core.models import Release
+    from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
+
+    def send() -> None:
+        releases = (
+            Release.objects.filter(artifacts__sbom_id__in=sbom_ids)
+            .exclude(pk=exclude)
+            .select_related("product__team")
+            .distinct()
+        )
+        for release in releases:
+            broadcast_releases_updated(release.product, [release])
+
+    transaction.on_commit(send, robust=True)
+
+
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def tell_releases_sharing_a_removed_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A release losing an SBOM, or being deleted, can stop that SBOM being scanned for the others."""
+    if instance.sbom_id:
+        _tell_releases_shipping([instance.sbom_id], exclude=instance.release_id)
+
+
+@receiver(post_save, sender="sboms.SBOM")
+def tell_releases_shipping_the_replaced_newest(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
+    """A new SBOM takes over as its component's newest of that format, which kept the one before it scanned."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if not created or instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    replaced = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .exclude(pk=instance.pk)
+        .order_by("-created_at", "-id")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    if replaced:
+        _tell_releases_shipping([replaced])

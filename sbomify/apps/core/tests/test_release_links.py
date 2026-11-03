@@ -290,3 +290,44 @@ class TestTheReleasePages:
         html = page.content.decode()
         assert f"/public/product/{toolchain.product_id}/release/{toolchain.id}/" in html
         assert "Internal" not in html
+
+
+BROADCAST = "sbomify.apps.core.services.release_lifecycle.broadcast_to_workspace"
+
+
+class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
+    """A retired release's panel says whether its SBOMs are still scanned, and other releases decide that."""
+
+    def _told(self, sent) -> set[str]:
+        return {
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        }
+
+    def test_removing_the_sbom_from_another_release(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        pin = ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, "shared"))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            pin.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_deleting_another_release_that_shipped_it(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, "shared"))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            toolchain.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
+        shipped = _sbom(app, "kernel")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            SBOM.objects.create(
+                name="kernel", version="2", component=shipped.component, format="cyclonedx", format_version="1.6"
+            )
+
+        assert str(app.id) in self._told(sent)
