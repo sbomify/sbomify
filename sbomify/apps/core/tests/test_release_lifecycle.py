@@ -911,9 +911,14 @@ class TestWorkspaceDeleteLockOrder:
 
         from sbomify.apps.teams.models import Workspace
 
+        from sbomify.apps.security_advisories.models import AdvisoryProduct, SecurityAdvisory
+
         workspace = Workspace.objects.create(name="Closing down")
         product = Product.objects.create(name="Gateway", team=workspace)
         Release.objects.create(product=product, name="1.0.0")
+        # The product's own pre_delete handler reads and writes the advisory links.
+        advisory = SecurityAdvisory.objects.create(team=workspace, title="Gateway flaw")
+        AdvisoryProduct.objects.create(advisory=advisory, product=product)
 
         with CaptureQueriesContext(connection) as queries:
             workspace.delete()
@@ -921,8 +926,9 @@ class TestWorkspaceDeleteLockOrder:
         sql = [query["sql"] for query in queries.captured_queries]
         products = Product._meta.db_table
         locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{products}"' in text)
-        deleted = next(i for i, text in enumerate(sql) if text.startswith(f'DELETE FROM "{Release._meta.db_table}"'))
-        assert locked < deleted
+        links = AdvisoryProduct._meta.db_table
+        assert all(i > locked for i, text in enumerate(sql) if links in text)
+        assert all(i > locked for i, text in enumerate(sql) if text.startswith(f'DELETE FROM "{Release._meta.db_table}"'))
 
 
 @pytest.mark.django_db
