@@ -79,3 +79,12 @@ def test_the_overview_listens_and_keeps_the_triage_host_outside_what_it_replaces
     # empty, so the host has to sit after it to keep an open dialog.
     assert html.count('id="overview-content"') == 1
     assert html.count('id="priority-triage-host"') <= 1
+
+
+def test_a_vex_decision_repaints_sooner_than_a_scan_burst(workspace, sample_user) -> None:
+    """A reviewer who approves a VEX and comes back is waiting for those rows
+    to leave. A scan burst still gets the longer wait, so it repaints once."""
+    html = _get(workspace, sample_user).content.decode()
+
+    frame = html[html.index('id="overview-content"') :]
+    assert "['vex_reapplied', 'vex_submission_updated'].includes($event.detail.type) ? 500 : 2000" in frame
