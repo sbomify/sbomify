@@ -115,7 +115,7 @@ withdrawal and no archiving shows the card only to managers, for the actions.
         </c-cards.card>
         {% if lifecycle.can_manage and lifecycle.predecessors or lifecycle.can_manage and lifecycle.successors %}
             <c-modal id="release-remove-link" title="Remove link" show="removeLink !== null" close="removeLink = null" role="alertdialog" size="sm">
-            <c-feedback.alert variant="warning">Remove the link between {{ release.name }} and <span x-text="removeLink?.name"></span>? A release this link retired is monitored again.</c-feedback.alert>
+            <c-feedback.alert variant="warning">Remove the link between {{ release.name }} and <span x-text="removeLink?.name"></span>? If nothing else retires that release, sbomify monitors it again.</c-feedback.alert>
             <c-slot name="footer">
             <c-buttons.ghost @click="removeLink = null">Cancel</c-buttons.ghost>
             <form method="post" action="{{ lifecycle_url }}">
