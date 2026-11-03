@@ -1097,7 +1097,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
 @router.delete(
     "/products/{product_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product(request: HttpRequest, product_id: str) -> Any:
     """Delete a product."""
@@ -1120,10 +1120,19 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
     workspace_key = product.team.key
     product_name = product.name
 
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
     try:
         with transaction.atomic():
             reconcile_after_removal(product.releases.values_list("pk", flat=True))
-            product.delete()
+            deleted = delete_with_reports(
+                [product], "product", "This product has a filed CRA report, kept as evidence, so it cannot be deleted."
+            )
+            if not deleted.ok:
+                # Drops the reconciles queued above: nothing was removed.
+                transaction.set_rollback(True)
+        if not deleted.ok:
+            return deleted.status_code, {"detail": deleted.error, "error_code": ErrorCode.CONFLICT}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
