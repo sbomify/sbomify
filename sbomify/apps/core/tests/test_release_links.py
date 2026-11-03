@@ -400,6 +400,37 @@ class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
         assert told.count(str(app.id)) == 1
         assert sum(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks) == 1
 
+    def test_refreshing_a_latest_release_tells_each_release_once(self, app, mocker, django_capture_on_commit_callbacks):
+        # A refresh deletes every pin and creates each one again, and a create
+        # has no delete to share a notice with.
+        for name in ("a", "b", "c"):
+            _sbom(app, name)
+        latest = Release.get_or_create_latest_release(app.product)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            latest.refresh_latest_artifacts()
+
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
+        assert told.count(str(app.id)) == 1
+        assert told.count(str(latest.id)) == 1
+        assert sum(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks) == 1
+
+    def test_a_refresh_that_rolls_back_tells_nobody(self, app, django_capture_on_commit_callbacks):
+        from django.db import transaction
+
+        _sbom(app, "a")
+        latest = Release.get_or_create_latest_release(app.product)
+
+        with django_capture_on_commit_callbacks() as callbacks:
+            with pytest.raises(RuntimeError), transaction.atomic():
+                latest.refresh_latest_artifacts()
+                raise RuntimeError
+
+        assert not any(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks)
+
     def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
         shipped = _sbom(app, "kernel")
         sent = mocker.patch(BROADCAST)

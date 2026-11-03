@@ -497,20 +497,23 @@ class Release(models.Model):
         if not self.is_latest:
             raise ValueError("refresh_latest_artifacts() can only be called on latest releases")
 
+        from sbomify.apps.core.signals import releases_told_together
+
         token = _suppress_collection_signals.set(True)
         try:
-            # Clear existing artifacts
-            self.artifacts.all().delete()
+            with releases_told_together():
+                # Clear existing artifacts
+                self.artifacts.all().delete()
 
-            # Get all components that belong to this product. Query via the
-            # core.Component proxy (rather than self.product.components, which
-            # returns sboms.Component) so methods like
-            # get_latest_sboms_by_format remain accessible.
-            components = Component.objects.filter(products=self.product).order_by("id").distinct()
+                # Get all components that belong to this product. Query via the
+                # core.Component proxy (rather than self.product.components, which
+                # returns sboms.Component) so methods like
+                # get_latest_sboms_by_format remain accessible.
+                components = Component.objects.filter(products=self.product).order_by("id").distinct()
 
-            for component in components:
-                # Add latest artifacts from each component
-                self._add_latest_artifacts_from_component(component)
+                for component in components:
+                    # Add latest artifacts from each component
+                    self._add_latest_artifacts_from_component(component)
         finally:
             _suppress_collection_signals.reset(token)
 

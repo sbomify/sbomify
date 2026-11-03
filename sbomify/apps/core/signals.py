@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextvars
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from allauth.account.signals import user_signed_up
@@ -520,6 +523,10 @@ class _ReleasesToTell:
         self.sbom_ids: set[Any] = set()
         self.release_ids: set[Any] = set()
 
+    def add(self, sbom_ids: list[Any], release_ids: list[Any] | None) -> None:
+        self.sbom_ids.update(sbom_ids)
+        self.release_ids.update(release_ids or [])
+
     def __call__(self) -> None:
         from django.db.models import Q
 
@@ -535,6 +542,33 @@ class _ReleasesToTell:
             broadcast_releases_updated(release.product, [release])
 
 
+_releases_told_together: contextvars.ContextVar[_ReleasesToTell | None] = contextvars.ContextVar(
+    "_releases_told_together", default=None
+)
+
+
+@contextmanager
+def releases_told_together() -> Iterator[None]:
+    """Tell each release once for everything this block changes.
+
+    A create has no delete to share a notice with, so a block that rewrites
+    many pins one row at a time, like a latest release's refresh, would query
+    and broadcast once per row. The notice is queued as the block ends, in
+    whatever transaction is open, so it goes if that transaction rolls back.
+    """
+    if _releases_told_together.get() is not None:
+        yield
+        return
+    pending = _ReleasesToTell()
+    token = _releases_told_together.set(pending)
+    try:
+        yield
+    finally:
+        _releases_told_together.reset(token)
+        if pending.sbom_ids or pending.release_ids:
+            transaction.on_commit(pending, robust=True)
+
+
 def _tell_releases_shipping(sbom_ids: list[Any], also: list[Any] | None = None, origin: Any = None) -> None:
     """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
 
@@ -544,17 +578,20 @@ def _tell_releases_shipping(sbom_ids: list[Any], also: list[Any] | None = None, 
     its open page says. ``origin`` is the delete the change came from: every
     call one cascade makes adds to the one notice it queued, so a delete
     taking many shared SBOMs with it tells each release once. A notice no
-    longer queued, because it ran or rolled back, is never added to.
+    longer queued, because it ran or rolled back, is never added to. Inside
+    ``releases_told_together`` every call adds to that block's notice.
     """
+    together = _releases_told_together.get()
+    if together is not None:
+        together.add(sbom_ids, also)
+        return
     pending = getattr(origin, "_releases_to_tell", None)
     queued = transaction.get_connection().run_on_commit
     if pending is not None and any(func is pending for _, func, _ in queued):
-        pending.sbom_ids.update(sbom_ids)
-        pending.release_ids.update(also or [])
+        pending.add(sbom_ids, also)
         return
     pending = _ReleasesToTell()
-    pending.sbom_ids.update(sbom_ids)
-    pending.release_ids.update(also or [])
+    pending.add(sbom_ids, also)
     if origin is not None:
         origin._releases_to_tell = pending
     transaction.on_commit(pending, robust=True)
