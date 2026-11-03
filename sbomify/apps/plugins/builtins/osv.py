@@ -92,6 +92,24 @@ _UNSUPPORTED_SPEC_VERSION_PHRASES = (
 )
 
 
+def _declared_spec_version(sbom_bytes: bytes) -> str:
+    """The spec version a document claims, for the log line that says it was refused.
+
+    osv-scanner names neither the version it read nor the ones it accepts, so
+    without this a refusal cannot be told apart from a blank or malformed field.
+    """
+    try:
+        document = json.loads(sbom_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return "not JSON"
+    if not isinstance(document, dict):
+        return "not a JSON object"
+    for field in ("specVersion", "spdxVersion"):
+        if field in document:
+            return f"{field}={document[field]!r}"
+    return "no specVersion or spdxVersion"
+
+
 def _is_unsupported_spec_version(stderr: str) -> bool:
     """Whether osv-scanner refused the document over its spec version.
 
@@ -258,8 +276,8 @@ class OSVPlugin(AssessmentPlugin):
             # documents. Checked before the abort guard so it keeps the skip.
             if returncode not in self.SUCCESS_EXIT_CODES and _is_unsupported_spec_version(stderr):
                 logger.info(
-                    f"[OSV] SBOM {sbom_id} uses a spec version this osv-scanner does not accept: "
-                    f"{_collapse_for_log(stderr)}"
+                    f"[OSV] SBOM {sbom_id} declares a spec version this osv-scanner does not accept "
+                    f"({_declared_spec_version(sbom_bytes)}): {_collapse_for_log(stderr)}"
                 )
                 return self._create_unsupported_spec_version_result()
 
@@ -506,13 +524,12 @@ class OSVPlugin(AssessmentPlugin):
         # scanner is too old to read is excluded for the same reason: assess()
         # skips it, and nobody should be paged because CycloneDX shipped a new
         # version.
+        # assess() logs the rejected spec version itself, with the SBOM and the
+        # version it declares, so it is not logged a second time here.
         if process.returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
             logger.warning(f"[OSV] Scanner found no package sources: {_collapse_for_log(process.stderr)}")
-        elif process.returncode not in self.SUCCESS_EXIT_CODES:
-            if _is_unsupported_spec_version(process.stderr):
-                logger.warning(f"[OSV] Scanner does not read this spec version: {_collapse_for_log(process.stderr)}")
-            else:
-                logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
+        elif process.returncode not in self.SUCCESS_EXIT_CODES and not _is_unsupported_spec_version(process.stderr):
+            logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
 

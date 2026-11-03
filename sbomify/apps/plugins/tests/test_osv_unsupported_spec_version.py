@@ -310,3 +310,52 @@ class TestTheSkipDoesNotPageAnyone:
             plugin.assess("test-sbom", sbom_file)
 
         assert [c for c in error.call_args_list if "Scanner returned code" in c.args[0]]
+
+
+class TestTheRejectionIsLoggedOnceWithTheVersion:
+    """It used to be logged twice, as a warning from the scanner wrapper and as
+    info from assess(), and neither said what version the document declared.
+    The bundled osv-scanner reads CycloneDX 1.0 to 1.7, so a refusal is usually
+    a blank, malformed or future value, and the log is where that shows."""
+
+    def _logged(self, plugin: OSVPlugin, sbom_file) -> tuple[list[str], list[str]]:
+        from sbomify.apps.plugins.builtins import osv as osv_module
+
+        with (
+            patch("subprocess.run", return_value=_scanner_exiting(127, stderr=REAL_REJECTION)),
+            patch.object(osv_module.logger, "warning") as warning,
+            patch.object(osv_module.logger, "info") as info,
+        ):
+            plugin.assess("test-sbom", sbom_file)
+        return [c.args[0] for c in warning.call_args_list], [c.args[0] for c in info.call_args_list]
+
+    def test_once(self, plugin: OSVPlugin, sbom_file) -> None:
+        warnings, infos = self._logged(plugin, sbom_file)
+
+        assert [w for w in warnings if "spec version" in w] == []
+        assert len([i for i in infos if "does not accept" in i]) == 1
+
+    def test_with_the_declared_version(self, plugin: OSVPlugin, sbom_file) -> None:
+        sbom_file.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6.1", "components": []}')
+
+        _, infos = self._logged(plugin, sbom_file)
+
+        (line,) = [i for i in infos if "does not accept" in i]
+        assert "test-sbom" in line
+        assert "specVersion='1.6.1'" in line
+
+
+@pytest.mark.parametrize(
+    "document,expected",
+    [
+        (b'{"bomFormat": "CycloneDX", "specVersion": ""}', "specVersion=''"),
+        (b'{"spdxVersion": "SPDX-2.4"}', "spdxVersion='SPDX-2.4'"),
+        (b'{"bomFormat": "CycloneDX"}', "no specVersion or spdxVersion"),
+        (b"[]", "not a JSON object"),
+        (b"<bom/>", "not JSON"),
+    ],
+)
+def test_the_declared_version_is_described_for_any_document(document: bytes, expected: str) -> None:
+    from sbomify.apps.plugins.builtins.osv import _declared_spec_version
+
+    assert _declared_spec_version(document) == expected
