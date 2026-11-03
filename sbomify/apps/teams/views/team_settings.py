@@ -354,15 +354,20 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         Display only: the POST handlers re-check through ``check_role_change``
         and ``check_member_removal``. Owner rows offer no removal, as before;
-        admin rows offer it only to owners and to the admin themselves.
+        admin rows offer it only to owners and to the admin themselves. The
+        only owner is offered no role change, since every one would be refused.
         """
         labels = dict(settings.WORKSPACE_SUPPORTED_ROLES)
         members = team_data.get("members", []) if isinstance(team_data, dict) else team_data.members
+        members = [member if isinstance(member, dict) else member.model_dump() for member in members]
+        only_owner = sum(member["role"] == ROLE_OWNER for member in members) <= 1
         actions = {}
         for member in members:
-            member = member if isinstance(member, dict) else member.model_dump()
             target_role, target_user_id = member["role"], member["user"]["id"]
-            offered = assignable_roles_for(role, user_id, target_role, target_user_id)
+            if target_role == ROLE_OWNER and only_owner:
+                offered = []
+            else:
+                offered = assignable_roles_for(role, user_id, target_role, target_user_id)
             removable = (
                 role in ADMINISTER
                 and target_role != ROLE_OWNER
