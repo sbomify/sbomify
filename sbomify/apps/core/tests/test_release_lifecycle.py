@@ -68,9 +68,7 @@ def _edge(event: ReleaseCLEEvent) -> ReleaseSupersession:
 
 
 def _successors(release: Release) -> set[str]:
-    return set(
-        ReleaseSupersession.objects.live().filter(from_release=release).values_list("successor_label", flat=True)
-    )
+    return set(ReleaseSupersession.objects.live().filter(from_release=release).values_list("successor_label", flat=True))
 
 
 def _tracked(product: Product) -> set[str]:
@@ -388,9 +386,9 @@ class TestTrackedPredicate:
         _release(sample_product, "1.0.0")
         _product_event(sample_product, "endOfLife", timezone.now() - timedelta(days=2))
 
-        assert list(
-            tracked_releases(Release.objects.filter(product=sample_product)).values_list("name", flat=True)
-        ) == ["latest"]
+        assert list(tracked_releases(Release.objects.filter(product=sample_product)).values_list("name", flat=True)) == [
+            "latest"
+        ]
 
 
 @pytest.mark.django_db
@@ -499,6 +497,7 @@ class TestEdgeValidation:
         release = _release(sample_product, "1.0.0")
         result = create_release_cle_event(release, "released", PAST, drop_in=True)
         assert not result.ok and "drop_in" in (result.error or "")
+
 
 
 @pytest.mark.django_db
@@ -863,14 +862,13 @@ class TestDeleteGuard:
 
         response = client.delete(f"/api/v1/releases/{new.pk}", **get_api_headers(token))
         assert response.status_code == 400
-        assert (
-            response.json()["detail"] == "Release 1.0.1 replaces 1.0.0. Remove that link on its Lifecycle card first."
-        )
+        assert response.json()["detail"] == "Release 1.0.1 replaces 1.0.0. Remove that link on its Lifecycle card first."
         assert Release.objects.filter(pk=new.pk).exists()
 
         _withdraw_event(edge.value)
         response = client.delete(f"/api/v1/releases/{new.pk}", **get_api_headers(token))
         assert response.status_code == 204, response.content
+
 
     def test_an_upgrade_path_edge_does_not_block_deleting_its_successor(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -945,13 +943,7 @@ class TestBackfillMigration:
 
         def derived() -> dict[str, tuple[object, ...]]:
             return {
-                r.pk: (
-                    r.superseded_at,
-                    r.end_of_support,
-                    r.end_of_life,
-                    r.effective_end_of_support,
-                    r.effective_end_of_life,
-                )
+                r.pk: (r.superseded_at, r.end_of_support, r.end_of_life, r.effective_end_of_support, r.effective_end_of_life)
                 for r in Release.objects.all()
             }
 
@@ -963,9 +955,7 @@ class TestBackfillMigration:
         assert migrated[latest.pk] == (None, None, None, None, date(2030, 1, 1))
 
         # The frozen copy and the app's recompute must not drift.
-        Release.objects.update(
-            end_of_support=None, end_of_life=None, effective_end_of_support=None, effective_end_of_life=None
-        )
+        Release.objects.update(end_of_support=None, end_of_life=None, effective_end_of_support=None, effective_end_of_life=None)
         recompute_release_lifecycle(sample_product)
         assert derived() == migrated
 
@@ -993,10 +983,7 @@ class TestProductDateInheritance:
         release = _release(sample_product, "2.0.0")
 
         _product_event(
-            sample_product,
-            "endOfSupport",
-            timezone.now() - timedelta(days=5),
-            versions=[{"range": "vers:semver/<2.0.0"}],
+            sample_product, "endOfSupport", timezone.now() - timedelta(days=5), versions=[{"range": "vers:semver/<2.0.0"}]
         )
 
         assert _fresh(release).effective_end_of_support is None
@@ -1007,10 +994,7 @@ class TestProductDateInheritance:
         self, sample_product: Product, order: tuple[str, str]
     ) -> None:
         release = _release(sample_product, "1.0.0")
-        days = {
-            "standard": datetime(2026, 6, 30, tzinfo=dt_timezone.utc),
-            "extended": datetime(2027, 6, 30, tzinfo=dt_timezone.utc),
-        }
+        days = {"standard": datetime(2026, 6, 30, tzinfo=dt_timezone.utc), "extended": datetime(2027, 6, 30, tzinfo=dt_timezone.utc)}
         for support_id in order:
             assert create_support_definition(sample_product, support_id, support_id).ok
         for support_id in order:
@@ -1063,9 +1047,7 @@ class TestReleaseEdits:
         def withdraw_meanwhile(*args, **kwargs):
             # Another member withdraws the release between this request's read and its write.
             if not withdrawn:
-                Release.objects.filter(pk=release.pk).update(
-                    withdrawn_at=timezone.now(), withdrawn_reason="compromised"
-                )
+                Release.objects.filter(pk=release.pk).update(withdrawn_at=timezone.now(), withdrawn_reason="compromised")
                 withdrawn.append(True)
             return real_can(*args, **kwargs)
 
@@ -1096,10 +1078,7 @@ class TestReleaseEdits:
         assert response.status_code == 200, response.content
         locks = [query["sql"] for query in queries.captured_queries if "FOR UPDATE" in query["sql"]]
         product_table, release_table = Product._meta.db_table, Release._meta.db_table
-        firsts = [
-            next(i for i, sql in enumerate(locks) if f'FROM "{table}"' in sql)
-            for table in (product_table, release_table)
-        ]
+        firsts = [next(i for i, sql in enumerate(locks) if f'FROM "{table}"' in sql) for table in (product_table, release_table)]
         assert firsts[0] < firsts[1], locks
 
     def test_moving_the_release_date_moves_the_edges_that_took_their_date_from_it(
