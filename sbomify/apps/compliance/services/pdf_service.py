@@ -29,8 +29,9 @@ of truth that auditors verify against the manifest hash.
 from __future__ import annotations
 
 import html
+import io
 import logging
-from typing import cast
+from typing import Any, cast
 
 from sbomify.apps.compliance.views._public_helpers import markdown_to_html
 
@@ -154,6 +155,38 @@ def _wrap_html(body_html: str, *, title: str) -> str:
     )
 
 
+_PDF_IMAGE_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "GIF": "image/gif", "WEBP": "image/webp"}
+
+
+def _raster_only_url_fetcher() -> Any:
+    """Build a WeasyPrint URL fetcher that only hands back raster images.
+
+    The markdown renderer allows ``http(s)`` image URLs, and WeasyPrint
+    parses any fetched body that Pillow cannot decode as SVG with the
+    stdlib ``ElementTree``. That is plain expat with DTDs and entities
+    enabled, so a document author could point an image at an XML file
+    and spend the worker's CPU on entity expansion. Decoding the body
+    with Pillow here, and labelling it with the raster type Pillow
+    found, means WeasyPrint never reaches its XML path. Anything else
+    is refused, and WeasyPrint logs it and leaves the image out.
+    """
+    from PIL import Image
+    from weasyprint.urls import URLFetcher, URLFetcherResponse  # type: ignore[import-untyped]
+
+    class RasterOnlyURLFetcher(URLFetcher):  # type: ignore[misc]
+        def fetch(self, url: str, headers: dict[str, str] | None = None) -> URLFetcherResponse:
+            response = super().fetch(url, headers)
+            try:
+                body = response.read()
+            finally:
+                response.close()
+            with Image.open(io.BytesIO(body), formats=list(_PDF_IMAGE_TYPES)) as image:
+                mime_type = _PDF_IMAGE_TYPES[image.format or ""]
+            return URLFetcherResponse(response.url, body, {"Content-Type": mime_type}, response.status)
+
+    return RasterOnlyURLFetcher(allowed_protocols={"http", "https", "data"})
+
+
 def markdown_to_pdf(md_text: str, *, title: str = "") -> bytes | None:
     """Render markdown to PDF bytes; return ``None`` on failure.
 
@@ -172,7 +205,7 @@ def markdown_to_pdf(md_text: str, *, title: str = "") -> bytes | None:
     try:
         body_html = markdown_to_html(md_text)
         full_html = _wrap_html(body_html, title=title or "Document")
-        return cast(bytes, HTML(string=full_html).write_pdf())
+        return cast(bytes, HTML(string=full_html, url_fetcher=_raster_only_url_fetcher()).write_pdf())
     except Exception:
         logger.exception("PDF rendering failed for %r", title)
         return None

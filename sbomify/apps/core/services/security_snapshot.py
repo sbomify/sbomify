@@ -35,7 +35,7 @@ def build_component_security_picture(
 
     from sbomify.apps.plugins.latest import release_run_ids
     from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.vulnerability_scanning.findings import finding_values
+    from sbomify.apps.vulnerability_scanning.findings import MAX_FINDINGS_PER_RUN, finding_values
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.utils import (
         extract_finding_rows,
@@ -117,6 +117,8 @@ def build_component_security_picture(
     counts_by_component: dict[str, dict[str, int]] = {}
     unassessed: set[str] = set(component_ids)
     summary_only: set[str] = set()
+    # The SBOMs behind them, which are what a re-index reads.
+    summary_only_sboms: dict[str, set[str]] = {}
     # A component counts as totals-only when none of its SBOMs read here lists findings.
     itemised: set[str] = set()
     # A component counts as failed when its scans errored and none of them succeeded.
@@ -171,13 +173,15 @@ def build_component_security_picture(
             itemised.add(component_id)
         elif any(extract_severity_counts(result)["total"] for result in provider_results):
             summary_only.add(component_id)
-        counts = (
-            severity_counts_from_rows(rows)
-            if rows
-            else max(
-                (extract_severity_counts(result) for result in provider_results), key=lambda counts: counts["total"]
-            )
-        )
+            summary_only_sboms.setdefault(component_id, set()).add(sbom_id)
+        summaries = [extract_severity_counts(result) for result in provider_results]
+        counts = severity_counts_from_rows(rows) if rows else max(summaries, key=lambda counts: counts["total"])
+        largest = max(summaries, key=lambda counts: counts["total"] + counts["suppressed"])
+        # The rows are capped at MAX_FINDINGS_PER_RUN per run, and the cut takes
+        # open and suppressed rows alike, so past it the rows under-count both.
+        # The stored summary of that run counted every finding.
+        if rows and largest["total"] + largest["suppressed"] > MAX_FINDINGS_PER_RUN:
+            counts = largest
         # A release can read several SBOMs of one component, usually one build in two
         # formats. Keep the largest report rather than whichever SBOM came last: adding
         # them would count one build twice, and order must not decide the number.
@@ -229,6 +233,7 @@ def build_component_security_picture(
         "findings": findings,
         "counts": counts_by_component,
         "summary_only": summary_only - itemised,
+        "summary_only_sboms": {cid: sboms for cid, sboms in summary_only_sboms.items() if cid not in itemised},
         "unassessed": unassessed,
         "failed": errored - scanned,
         "latest_sboms": {row["component_id"]: row for row in sbom_meta.values()},
@@ -257,6 +262,12 @@ def _attach_patch_sla(findings: list[dict[str, Any]], component_ids: list[str], 
     }
     now = timezone.now()
     for finding in findings:
+        if finding.get("suppressed"):
+            # A VEX closed it, so there is no fix deadline to be past. Without
+            # this the decided list ranked closed findings first as overdue.
+            finding["sla"] = {"label": "Closed", "overdue": False, "remaining_seconds": None}
+            finding["decision"] = state_label(finding["vex_state"]) or "Not reviewed"
+            continue
         days = sla_days_for_severity(matrix, finding["severity"])
         sightings = [
             first_seen[(finding["component_id"], alias.lower())]

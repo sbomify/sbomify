@@ -93,7 +93,7 @@ def test_vex_uploaded_after_the_scan_suppresses_the_finding(mcp_owner, monkeypat
     monkeypatch.setattr(
         vex,
         "load_vex_suppressions",
-        lambda component_id, cache=None: [
+        lambda component_id, sbom_version, cache=None: [
             # The shape derive_vex_suppressions produces: ids normalised to
             # lowercase, packages as a set, product_scoped statements matching
             # on id alone.
@@ -205,7 +205,7 @@ def test_a_clean_sbom_never_fetches_its_vex(mcp_owner, monkeypatch):
     calls: list[Any] = []
     monkeypatch.setattr(
         "sbomify.apps.vulnerability_scanning.vex.load_vex_suppressions",
-        lambda component_id, cache=None: calls.append(component_id) or [],
+        lambda component_id, sbom_version, cache=None: calls.append(component_id) or [],
     )
 
     rows, scanned, _ = risk._rows_for(risk._security_runs(bound))

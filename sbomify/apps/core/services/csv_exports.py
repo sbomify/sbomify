@@ -288,7 +288,7 @@ def export_vulnerabilities_csv(
         ]
         sbom = sbom_runs[0].sbom
         providers = "; ".join(sorted({run.plugin_name for run in sbom_runs}))
-        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache)
+        statements = load_vex_suppressions(sbom.component_id, sbom.version, cache=vex_cache)
         for row in extract_finding_rows(merged, statements):
             rows.append(
                 [

@@ -1,4 +1,4 @@
-"""DT triage → VEX sync, and automatic release VEX pinning."""
+"""DT triage → VEX sync, and pinning the VEX written for a release's version."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sbomify.apps.core.models import Component, Release, ReleaseArtifact
-from sbomify.apps.core.services.vex_pins import ensure_latest_vex_pinned, refresh_vex_pins_for_component
+from sbomify.apps.core.services.vex_pins import refresh_vex_pins_for_component, sync_vex_pins
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 from sbomify.apps.sboms.models import SBOM
 
@@ -125,6 +125,9 @@ class TestTriageVexSync:
         assert vex is not None
         assert vex.source == "dependency-track"
         assert vex.name == "demo-app"
+        # Stored under the version of the SBOM the DT project holds, so it
+        # applies to that version's scans and to no other.
+        assert vex.version == sbom.version
         assert vex.sbom_filename == "hash-of-payload.json"
         reapply.assert_called_once_with(str(component.id))
 
@@ -142,10 +145,11 @@ class TestTriageVexSync:
             component=component,
             bom_type=SBOM.BomType.VEX.value,
             name="demo-app",
-            version="dt-triage-0",
+            version=sbom.version,
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="existing-vex.json",
+            source="dependency-track",
         )
 
         # Same statements, different serialNumber/timestamp/doc-version — the
@@ -160,124 +164,130 @@ class TestTriageVexSync:
         assert SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX.value).count() == 1
         reapply.assert_not_called()
 
+    def test_the_same_triage_for_another_version_is_stored_for_that_version(self, sample_team_with_owner_member):
+        """Dedup is per version: identical statements on a new version still need a VEX of their own."""
+        component, sbom = _component_with_sbom(sample_team_with_owner_member.team)
+        SBOM.objects.create(
+            component=component,
+            bom_type=SBOM.BomType.VEX.value,
+            name="demo-app",
+            version="0.9.0",
+            format="cyclonedx",
+            format_version="1.5",
+            sbom_filename="existing-vex.json",
+            source="dependency-track",
+        )
+
+        reapply = self._run_sync(sbom, TRIAGED_VEX)
+
+        versions = set(
+            SBOM.objects.filter(component=component, bom_type=SBOM.BomType.VEX.value).values_list("version", flat=True)
+        )
+        assert versions == {"0.9.0", sbom.version}
+        reapply.assert_called_once_with(str(component.id))
+
+
+def _vex(component: Component, version: str, filename: str) -> SBOM:
+    return SBOM.objects.create(
+        component=component,
+        bom_type=SBOM.BomType.VEX.value,
+        name="app-vex",
+        version=version,
+        format="cyclonedx",
+        format_version="1.5",
+        sbom_filename=filename,
+    )
+
+
+def _release(team, name: str) -> Release:
+    from sbomify.apps.core.models import Product
+
+    product = Product.objects.create(name=name, team=team)
+    return Release.objects.create(product=product, name="r1")
+
+
+def _vex_pins(release: Release) -> list[str]:
+    return list(release.artifacts.filter(sbom__bom_type=SBOM.BomType.VEX.value).values_list("sbom_id", flat=True))
+
 
 @pytest.mark.django_db
 class TestReleaseVexAutopin:
-    def test_pinning_sbom_artifact_auto_pins_latest_vex(self, sample_team_with_owner_member):
+    def test_pinning_sbom_artifact_pins_the_vex_written_for_its_version(self, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
         component, sbom = _component_with_sbom(team)
-        vex = SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="v1",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="v.json",
-        )
-        from sbomify.apps.core.models import Product
-
-        product = Product.objects.create(name="dt-sync-p", team=team)
-        release = Release.objects.create(product=product, name="r1")
+        # "v1.0.0" and "1.0.0" are one version.
+        vex = _vex(component, "v1.0.0", "v.json")
+        release = _release(team, "dt-sync-p")
 
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
-        pinned = release.artifacts.filter(sbom__bom_type=SBOM.BomType.VEX.value)
-        assert list(pinned.values_list("sbom_id", flat=True)) == [vex.id]
+        assert _vex_pins(release) == [vex.id]
 
-    def test_refresh_repoints_pins_to_newest_vex(self, sample_team_with_owner_member):
+    def test_a_vex_for_another_version_is_never_pinned(self, sample_team_with_owner_member):
+        """A newer release must not inherit statements verified against an older build."""
         team = sample_team_with_owner_member.team
         component, sbom = _component_with_sbom(team)
-        old_vex = SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="v1",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="v1.json",
-        )
-        from sbomify.apps.core.models import Product
+        _vex(component, "0.9.0", "old.json")
+        release = _release(team, "dt-sync-other")
 
-        product = Product.objects.create(name="dt-sync-p2", team=team)
-        release = Release.objects.create(product=product, name="r1")
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
-        assert release.artifacts.filter(sbom=old_vex).exists()
 
-        new_vex = SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="v2",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="v2.json",
-        )
+        assert _vex_pins(release) == []
+
+    def test_refresh_repoints_pins_to_the_newest_vex_for_the_version(self, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        component, sbom = _component_with_sbom(team)
+        old_vex = _vex(component, "1.0.0", "v1.json")
+        release = _release(team, "dt-sync-p2")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        assert _vex_pins(release) == [old_vex.id]
+
+        new_vex = _vex(component, "1.0.0", "v1-reissued.json")
+        _vex(component, "2.0.0", "v2.json")
 
         changed = refresh_vex_pins_for_component(str(component.id))
 
         assert changed == 1
-        vex_pins = release.artifacts.filter(sbom__bom_type=SBOM.BomType.VEX.value)
-        assert list(vex_pins.values_list("sbom_id", flat=True)) == [new_vex.id]
-        # slot semantics: the old pin is gone, not duplicated
-        assert not release.artifacts.filter(sbom=old_vex).exists()
+        # slot semantics: the old pin is gone, not duplicated, and the VEX for
+        # the newer version stays out of this release
+        assert _vex_pins(release) == [new_vex.id]
+
+    def test_an_sbom_leaving_the_release_takes_its_vex_with_it(self, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        component, sbom = _component_with_sbom(team)
+        _vex(component, "1.0.0", "v1.json")
+        release = _release(team, "dt-sync-leave")
+        shipped = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+
+        shipped.delete()
+
+        assert _vex_pins(release) == []
 
     def test_manual_pin_is_authoritative(self, sample_team_with_owner_member):
         """A hand-pinned VEX evicts the auto pin and survives newer VEX arrivals."""
         team = sample_team_with_owner_member.team
         component, sbom = _component_with_sbom(team)
-        SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="v1",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="v1.json",
-        )
-        from sbomify.apps.core.models import Product
+        _vex(component, "1.0.0", "v1.json")
+        release = _release(team, "dt-sync-p4")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)  # auto-pins the 1.0.0 VEX
 
-        product = Product.objects.create(name="dt-sync-p4", team=team)
-        release = Release.objects.create(product=product, name="r1")
-        ReleaseArtifact.objects.create(release=release, sbom=sbom)  # auto-pins v1
-
-        chosen_vex = SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="chosen",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="chosen.json",
-        )
+        chosen_vex = _vex(component, "chosen", "chosen.json")
         ReleaseArtifact.objects.create(release=release, sbom=chosen_vex)  # manual pin
 
-        vex_pins = release.artifacts.filter(sbom__bom_type=SBOM.BomType.VEX.value)
-        assert list(vex_pins.values_list("sbom_id", flat=True)) == [chosen_vex.id]
+        assert _vex_pins(release) == [chosen_vex.id]
 
-        # An even newer VEX must NOT displace the manual pin.
-        SBOM.objects.create(
-            component=component,
-            bom_type=SBOM.BomType.VEX.value,
-            name="app-vex",
-            version="v3",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename="v3.json",
-        )
+        # An even newer VEX for the shipped version must NOT displace the manual pin.
+        _vex(component, "1.0.0", "v1-reissued.json")
         assert refresh_vex_pins_for_component(str(component.id)) == 0
-        assert list(vex_pins.values_list("sbom_id", flat=True)) == [chosen_vex.id]
+        assert _vex_pins(release) == [chosen_vex.id]
 
     def test_component_without_vex_is_untouched(self, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
         component, sbom = _component_with_sbom(team)
-        from sbomify.apps.core.models import Product
-
-        product = Product.objects.create(name="dt-sync-p3", team=team)
-        release = Release.objects.create(product=product, name="r1")
+        release = _release(team, "dt-sync-p3")
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
-        assert not ensure_latest_vex_pinned(release, component)
+        assert not sync_vex_pins(release, component)
         assert release.artifacts.count() == 1
 
 
@@ -322,3 +332,58 @@ def test_refresh_latest_artifacts_with_vex_component(sample_team_with_owner_memb
     # Maintenance-created pins are sbomify-managed: the VEX slot stays
     # re-pointable by refresh_vex_pins instead of reading as a manual snapshot.
     assert release.artifacts.filter(sbom__bom_type=SBOM.BomType.VEX.value, auto_pinned=True).exists()
+
+
+@pytest.mark.django_db
+def test_the_latest_release_never_carries_a_vex_for_an_older_version(sample_team_with_owner_member):
+    """The latest release ships the newest SBOM, so a VEX for an earlier version stays out of it."""
+    team = sample_team_with_owner_member.team
+    component = Component.objects.create(name="latest-old-vex-c", team=team)
+    from sbomify.apps.core.models import Product
+
+    product = Product.objects.create(name="latest-old-vex-p", team=team)
+    component.products.add(product)
+    SBOM.objects.create(
+        name="app-vex",
+        version="1",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="v.json",
+        component=component,
+        bom_type=SBOM.BomType.VEX.value,
+    )
+    SBOM.objects.create(
+        name="app",
+        version="2",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="a2.json",
+        component=component,
+    )
+    release = Release.get_or_create_latest_release(product)
+
+    release.refresh_latest_artifacts()
+    assert _vex_pins(release) == []
+
+    # The VEX for the shipped version arrives and lands on the latest release.
+    current = SBOM.objects.create(
+        name="app-vex",
+        version="2",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="v2.json",
+        component=component,
+        bom_type=SBOM.BomType.VEX.value,
+    )
+    assert _vex_pins(release) == [current.id]
+
+    # A newer SBOM version leaves that VEX behind.
+    SBOM.objects.create(
+        name="app",
+        version="3",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="a3.json",
+        component=component,
+    )
+    assert _vex_pins(release) == []

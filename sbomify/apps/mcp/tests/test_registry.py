@@ -26,6 +26,10 @@ WRITE_TOOLS = {
     "update_contact_profile",
     "assign_contact_profile",
     "create_advisory",
+    "update_advisory",
+    "set_advisory_product_status",
+    "add_advisory_product",
+    "post_advisory_update",
     "submit_vex_for_approval",
     "withdraw_vex_submission",
 }
@@ -43,7 +47,7 @@ def test_all_tools_are_registered():
     """Pins the surface: adding or removing a tool is a deliberate change."""
     specs = registry.all_specs()
 
-    assert len(specs) == 33
+    assert len(specs) == 38
     assert WRITE_TOOLS <= set(specs)
     assert {spec.name for spec in specs.values() if spec.writes} == WRITE_TOOLS
 
@@ -107,7 +111,7 @@ def test_advisory_scope_reaches_the_reads_but_not_a_publish_tool():
     extra, which is the check that would fail if one were added without the
     decision in advisories.py being revisited.
     """
-    assert registry.permitted_by(["advisory:read"]) == {"list_advisories", "get_advisory"}
+    assert registry.permitted_by(["advisory:read"]) == {"list_advisories", "get_advisory", "list_advisory_proposals"}
     assert registry.permitted_by(["advisory:publish"]) == set()
 
 

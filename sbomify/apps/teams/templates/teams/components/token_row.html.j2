@@ -6,6 +6,9 @@
 <c-overview.record title="{{ token.description }}" />
 {% if unscoped %}<c-badges.warning>Unscoped</c-badges.warning>{% endif %}
 </c-tables.cell>
+<c-tables.cell compact>
+<c-badges.secondary>{{ token.scope_label }}</c-badges.secondary>
+</c-tables.cell>
 <c-tables.cell compact date muted>
 {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
 </c-tables.cell>

@@ -144,6 +144,7 @@ class TestOrchestratorVexHook:
             sbom_filename="component.vex.json",
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.return_value = _vex_doc("CVE-2026-1111", "pkg:npm/foo@1.0.0")
@@ -166,6 +167,7 @@ class TestOrchestratorVexHook:
             sbom_filename="component.vex.json",
             component=sbom.component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
         s3.return_value.get_sbom_data.side_effect = RuntimeError("S3 unavailable")
@@ -187,6 +189,7 @@ class TestOrchestratorVexHook:
             sbom_filename="release.vex.json",
             component=component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         SBOM.objects.create(
             name="latest-vex",
@@ -195,6 +198,7 @@ class TestOrchestratorVexHook:
             sbom_filename="latest.vex.json",
             component=component,
             bom_type=SBOM.BomType.VEX,
+            version="1.0.0",
         )
         product = Product.objects.create(team=component.team, name="vex-hook-product")
         release = Release.objects.create(product=product, name="v1")

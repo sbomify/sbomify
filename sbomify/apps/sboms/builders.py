@@ -34,6 +34,7 @@ import importlib.metadata
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
@@ -144,7 +145,13 @@ class BaseSBOMBuilder(ABC):
     in different formats (CycloneDX, SPDX) and versions.
     """
 
-    def __init__(self, entity: Any = None, user: Any = None, include_non_public: bool = False):
+    def __init__(
+        self,
+        entity: Any = None,
+        user: Any = None,
+        include_non_public: bool = False,
+        readable_product_ids: Collection[str] | None = None,
+    ):
         """
         Initialize the builder.
 
@@ -154,10 +161,13 @@ class BaseSBOMBuilder(ABC):
             include_non_public: Include gated/private members in the aggregate.
                 Only set for a requester the view layer has already authorized;
                 such a build must never land in the public aggregate cache.
+            readable_product_ids: Products whose linked releases include_non_public
+                reaches. None means every product, the reader holding workspace read.
         """
         self.entity = entity
         self.user = user
         self.include_non_public = include_non_public
+        self.readable_product_ids = readable_product_ids
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
         # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
@@ -266,30 +276,17 @@ class BaseSBOMBuilder(ABC):
     def _members_with_files(self, release: Any) -> tuple[list[Any], dict[str, tuple[Path, str] | None]]:
         """Filtered release members paired with their concurrently-fetched files.
 
-        Centralizes the access-control filter (a public release hides non-public
-        members) and the parallel prefetch shared by every release builder, so the
-        rules can't drift between the CycloneDX and SPDX builders. Returns
+        Centralizes the members, linked releases' included, the access-control
+        filter (a public release hides non-public members) and the parallel prefetch
+        shared by every release builder, so the rules can't drift between the
+        CycloneDX and SPDX builders. Returns
         ``(members, {str(sbom.id): (path, id) | None})``.
         """
-        from sbomify.apps.core.models import Component
-        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
 
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
-            # select_related joins the whole sbom -> component -> team FK chain in
-            # one query; a prefetch_related on the same path would just add a
-            # redundant query.
-            .select_related("sbom__component", "sbom__component__team")
-            # Stable order so a content-addressed aggregate serializes identically
-            # across rebuilds (the cache key is the artifact-set fingerprint).
-            .order_by("sbom_id")
+        members = aggregate_sbom_artifacts(
+            release, include_non_public=self.include_non_public, readable_product_ids=self.readable_product_ids
         )
-        members = [
-            artifact
-            for artifact in sbom_artifacts
-            if self.include_non_public
-            or not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
-        ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
         return members, fetched
 
@@ -1142,6 +1139,7 @@ def get_sbom_builder(
     entity: Any = None,
     user: Any = None,
     include_non_public: bool = False,
+    readable_product_ids: Collection[str] | None = None,
 ) -> BaseSBOMBuilder:
     """
     Factory function to get the appropriate SBOM builder.
@@ -1187,7 +1185,9 @@ def get_sbom_builder(
             f"version={version.value}. Supported: {supported}"
         )
 
-    return builder_class(entity=entity, user=user, include_non_public=include_non_public)
+    return builder_class(
+        entity=entity, user=user, include_non_public=include_non_public, readable_product_ids=readable_product_ids
+    )
 
 
 def get_supported_output_formats() -> dict[str, list[str]]:

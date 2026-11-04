@@ -101,6 +101,7 @@ EVENT_META: dict[str, dict[str, str]] = {
     "product_removed": {"label": "Product removed", "variant": "secondary", "icon": "fas fa-cube"},
     "cra_early_warning": {"label": "CRA early warning", "variant": "warning", "icon": "fas fa-flag"},
     "cra_notification": {"label": "CRA notification", "variant": "warning", "icon": "fas fa-flag"},
+    "cra_intermediate_report": {"label": "CRA intermediate report", "variant": "warning", "icon": "fas fa-flag"},
     "cra_final_report": {"label": "CRA final report", "variant": "warning", "icon": "fas fa-flag-checkered"},
     "users_notified": {"label": "Users notified", "variant": "info", "icon": "fas fa-envelope"},
     "message_edited": {"label": "Edited", "variant": "secondary", "icon": "fas fa-pen"},
@@ -234,15 +235,36 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
 
 
 def _range_display(version_range: AdvisoryVersionRange) -> str:
-    """A range the way a chip reads it: the bare version for a single-release
-    pin, interval notation for a real span."""
+    """A range as the API returns it: the bare version for a single-release pin,
+    interval notation for a real span."""
     if version_range.introduced and version_range.introduced == version_range.last_affected:
         return version_range.introduced
     return str(version_range)
 
 
+def version_range_label(version_range: AdvisoryVersionRange) -> str:
+    """A range in words, for a page rather than an API: the bare version for a
+    pin, and a phrase rather than interval notation for a real span."""
+    introduced = version_range.introduced
+    fixed = version_range.fixed
+    last = version_range.last_affected
+    if introduced and introduced == last:
+        return introduced
+    if introduced and fixed:
+        return f"From {introduced}, fixed in {fixed}"
+    if introduced and last:
+        return f"{introduced} to {last}"
+    if fixed:
+        return f"Before {fixed}"
+    if last:
+        return f"{last} and earlier"
+    if introduced:
+        return f"{introduced} and later"
+    return "All versions"
+
+
 def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
-    """A product chip.
+    """One affected product and its affected versions, as the detail page lists them.
 
     ``product`` is nullable and ``product_name`` carries the name when the FK is
     absent, so an advisory can name a product this workspace does not track and
@@ -252,11 +274,13 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
     product = advisory_product.product
     name = product.name if product else advisory_product.product_name
     # Deduplicated but order-preserving: two vulnerabilities citing the same
-    # affected release should not print it twice on the chip.
+    # affected release should not list it twice.
     affected: dict[str, None] = {}
+    labels: dict[str, None] = {}
     for status in advisory_product.statuses.all():
         for version_range in status.version_ranges.all():
             affected.setdefault(_range_display(version_range))
+            labels.setdefault(version_range_label(version_range))
     return {
         # A stable non-null key for x-for. ``id`` is null for an unlinked
         # product, and Alpine rejects that as a key, so two unlinked products
@@ -265,6 +289,7 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
         "id": product.id if product else None,
         "name": name,
         "affected_ranges": list(affected),
+        "affected_versions": list(labels),
     }
 
 
@@ -1709,8 +1734,14 @@ def delete_advisory(team: Any, advisory_id: str) -> ServiceResult[str]:
     advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
     deleted_id = advisory.id
-    advisory.delete()
+    deleted = delete_with_reports(
+        [advisory], "advisory", "This advisory has a filed CRA report, kept as evidence, so it cannot be deleted."
+    )
+    if not deleted.ok:
+        return ServiceResult.failure(deleted.error or "Advisory not deleted.", status_code=deleted.status_code)
     _announce(team, deleted_id, "deleted")
     return ServiceResult.success(advisory_id)
 
@@ -1739,9 +1770,17 @@ def delete_advisories(team: Any, advisory_ids: list[str]) -> ServiceResult[int]:
     advisories = list(SecurityAdvisory.objects.filter(team=team).filter(Q(id__in=ids) | Q(tracking_id__in=ids)))
     if not advisories:
         return ServiceResult.failure("Advisories not found", status_code=404)
-    for advisory in advisories:
-        deleted_id = advisory.id
-        advisory.delete()
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
+    deleted_ids = [advisory.id for advisory in advisories]
+    deleted = delete_with_reports(
+        advisories,
+        "advisory",
+        "One of these advisories has a filed CRA report, kept as evidence, so none were deleted.",
+    )
+    if not deleted.ok:
+        return ServiceResult.failure(deleted.error or "Advisories not deleted.", status_code=deleted.status_code)
+    for deleted_id in deleted_ids:
         _announce(team, deleted_id, "deleted")
     return ServiceResult.success(len(advisories))
 

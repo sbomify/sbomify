@@ -320,7 +320,9 @@ class TestReleaseContextsAreBothCurrent:
             "product_scoped": False,
             "source": "manual",
         }
-        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
 
         bucket.objects.clear()
@@ -919,7 +921,9 @@ class TestVexReachesAnOffloadedRun:
             "product_scoped": False,
             "source": "manual",
         }
-        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
 
         vex.reannotate_component_runs(sbom.component_id)
@@ -939,7 +943,7 @@ class TestVexReachesAnOffloadedRun:
         superseded = _run(sbom, days_ago=800)
         assert offload_run(superseded)
         bucket.objects.clear()
-        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [])
+        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [])
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
 
         vex.reannotate_component_runs(sbom.component_id)
@@ -990,7 +994,9 @@ class TestVexReachesAnOffloadedRun:
             "product_scoped": False,
             "source": "manual",
         }
-        monkeypatch.setattr(vex, "_statements_for_release_context", lambda component_id, release_ids: [statement])
+        monkeypatch.setattr(
+            vex, "_statements_for_release_context", lambda component_id, release_ids, _version: [statement]
+        )
         monkeypatch.setattr(vex, "_embedded_statements", lambda sbom: [])
         locked = threading.Event()
 

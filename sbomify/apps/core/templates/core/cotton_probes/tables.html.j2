@@ -81,6 +81,26 @@ on the output; it is not routed anywhere.
 <c-tables.header-cell href="/probe?sort=name" sort="name">Server unsorted</c-tables.header-cell>
 </c-tables.head>
 </c-tables.table>
+<c-tables.table sized data-probe="name-line">
+<tbody>
+    <c-tables.row>
+    <c-tables.cell nowrap>
+    <c-tables.name data-probe="name-with-trail">
+    <span title="Named body cell">Named body cell</span>
+    <c-slot name="trail"><span data-probe="trail-badge">VEX</span></c-slot>
+    </c-tables.name>
+    </c-tables.cell>
+    <c-tables.cell nowrap>
+    <c-tables.name data-probe="name-with-empty-trail">
+    Bare named cell
+    <c-slot name="trail">
+    {% if False %}<span>Never</span>{% endif %}
+    </c-slot>
+    </c-tables.name>
+    </c-tables.cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
 <c-tables.table stack="false" aria-label="Side-by-side probe">
 <c-tables.head>
 <c-tables.header-cell>Matrix column</c-tables.header-cell>
