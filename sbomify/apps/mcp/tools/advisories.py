@@ -53,7 +53,12 @@ class ProductStatusChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str | None = Field(None, description="exploitable, not_affected, false_positive, in_triage or resolved.")
-    justification: str | None = Field(None, description="Why a not_affected product is not affected.")
+    justification: str | None = Field(
+        None,
+        description="Why a not_affected product is not affected: code_not_present, code_not_reachable, "
+        "requires_configuration, requires_dependency, requires_environment, protected_by_compiler, "
+        "protected_at_runtime, protected_at_perimeter or protected_by_mitigating_control.",
+    )
     response: str | None = Field(
         None, description="can_not_fix, will_not_fix, update, rollback or workaround_available."
     )
