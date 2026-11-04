@@ -6,6 +6,10 @@ import { showError, showWarning, showInfo, showConfirmation } from '../alerts';
 const FALLBACK_POLLING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (longer since WS should handle most cases)
 const MAX_POLLING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
+// Ongoing status, not news: the bell already lists it, and a modal has nothing
+// to add. VEX drift changes on every scan, so it would interrupt again each time.
+const BELL_ONLY_TYPES = new Set(['vex_drift']);
+
 interface Notification {
     id: string;
     type: string;
@@ -174,6 +178,7 @@ export function registerSiteNotifications() {
             newNotifications.forEach((notification: Notification) => {
                 if (this.processedNotifications.has(notification.id)) return;
                 this.processedNotifications.add(notification.id);
+                if (BELL_ONLY_TYPES.has(notification.type)) return;
 
                 const showAlert = (message: string) => {
                     switch (notification.severity) {

@@ -12,7 +12,7 @@ interface SetupCredential {
     expires_at: string;
 }
 
-const shellQuote = (value: string): string => `'${value.replace(/'/g, "'\"'\"'")}'`;
+export const shellQuote = (value: string): string => `'${value.replace(/'/g, "'\"'\"'")}'`;
 
 export function repositorySetup(config: Partial<SetupConfig> = {}) {
     const baseUrl = config.baseUrl || 'https://app.sbomify.com';

@@ -586,13 +586,14 @@ def add_advisory_product(request: HttpRequest, advisory_id: str, payload: AddAdv
 
 @router.delete(
     "/{advisory_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=AUTH,
     summary="Delete an advisory",
     description=(
         "Deletes the advisory and everything hanging off it: vulnerabilities, product statuses "
         "and the timeline. Nothing survives to say it existed, so a published advisory is "
-        "usually better withdrawn, which keeps its tracking id resolvable and records why."
+        "usually better withdrawn, which keeps its tracking id resolvable and records why. "
+        "An advisory with a filed CRA report is kept, with a 409, because the report is evidence."
     ),
 )
 def delete_advisory(request: HttpRequest, advisory_id: str) -> tuple[int, Any]:

@@ -26,7 +26,7 @@ submission and HTMX replacement; options and selected values come from its servi
 <option value="clear"
         {% if inventory.params.risk == 'clear' %}selected{% endif %}>No open vulnerabilities</option>
 <option value="unassessed"
-        {% if inventory.params.risk == 'unassessed' %}selected{% endif %}>Not fully assessed</option>
+        {% if inventory.params.risk == 'unassessed' %}selected{% endif %}>Not fully scanned</option>
 </c-forms.select>
 <c-forms.select size="md" name="visibility" id="{{ inventory.content_id|default:'inventory' }}-visibility" label="Filter by visibility">
 <option value="all">All visibility</option>

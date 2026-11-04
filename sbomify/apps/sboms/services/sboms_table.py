@@ -15,7 +15,9 @@ from sbomify.apps.sboms.services.version_rows import build_version_rows
 from sbomify.apps.teams.apis import get_team
 
 
-def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id: str, *, merged: bool = True) -> None:
+def _attach_vulnerability_counts(
+    sbom_items: list[dict[str, Any]], component_id: str, *, merged: bool = True, release_id: Any = None
+) -> None:
     """Attach each SBOM's severity counts as ``item['vuln']``.
 
     ``merged=True`` (the compact card, a handful of rows): the latest run per
@@ -25,6 +27,11 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     from the STORED ``result_summary`` generated columns — no result blob is
     ever de-TOASTed, at the cost of showing that single run's counts.
     Rows with no completed security run get ``vuln = None``.
+
+    ``release_id`` reads each SBOM at the newest run covering that release, as
+    the release's own rollup does (``plugins.latest.release_run_ids``): a run
+    carries its own releases' VEX, so the newest run overall can carry another
+    release's suppressions.
     """
     from sbomify.apps.vulnerability_scanning.utils import (
         RESULT_SUMMARY_COLUMNS,
@@ -42,7 +49,13 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         return
 
     # Each provider's newest run per SBOM, picked by id without reading the run history.
-    latest_ids = latest_run_ids(AssessmentRun.objects.filter(category="security", status="completed"), sbom_ids)
+    security_runs = AssessmentRun.objects.filter(category="security", status="completed")
+    if release_id:
+        from sbomify.apps.plugins.latest import release_run_ids
+
+        latest_ids, _ = release_run_ids(security_runs, sbom_ids, release_id)
+    else:
+        latest_ids = latest_run_ids(security_runs, sbom_ids)
 
     if not merged:
         # The newest of those per SBOM: a DISTINCT ON over the winners alone.
@@ -72,7 +85,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     for run in latest_runs:
         results_by_sbom.setdefault(str(run["sbom_id"]), []).append(run["result"])
 
-    vex_statements = load_vex_suppressions(component_id) if results_by_sbom else []
+    vex_cache: dict[Any, list[dict[str, Any]]] = {}
     for item in sbom_items:
         provider_results = results_by_sbom.get(str(item.get("sbom", {}).get("id", "")))
         if not provider_results:
@@ -82,6 +95,8 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         # scanned the same artifact still leaves a real verdict, and marking
         # that "Nothing scanned" would hide the scan that worked.
         scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
+        # The VEX written for this artifact's version, never one written for another.
+        vex_statements = load_vex_suppressions(component_id, item["sbom"].get("version"), cache=vex_cache)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
             item["vuln"] = severity_counts_from_rows(rows)
@@ -97,17 +112,31 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         item["vuln"]["scanned_nothing"] = scanned_nothing
 
 
-def sbom_vulnerability_counts(sbom_ids_by_component: dict[str, list[str]]) -> dict[str, dict[str, Any] | None]:
+def sbom_vulnerability_counts(
+    sbom_ids_by_component: dict[str, list[str]], *, release_id: Any = None
+) -> dict[str, dict[str, Any] | None]:
     """Each SBOM's merged, VEX-applied counts, for SBOMs spread over several components.
 
     VEX statements belong to a component, so the counts are read one component
     at a time, exactly as the component's own artifact table reads them. An SBOM
-    with no completed security run maps to ``None``.
+    with no completed security run maps to ``None``. ``release_id`` reads them as
+    that release shipped them; see ``_attach_vulnerability_counts``.
     """
+    from sbomify.apps.sboms.models import SBOM
+
+    # The version picks the VEX written for it. Without it only the in-app
+    # triage is read, and an imported VEX for this version is missed.
+    versions = dict(
+        SBOM.objects.filter(id__in=[sbom_id for ids in sbom_ids_by_component.values() for sbom_id in ids]).values_list(
+            "id", "version"
+        )
+    )
     counts: dict[str, dict[str, Any] | None] = {}
     for component_id, sbom_ids in sbom_ids_by_component.items():
-        items: list[dict[str, Any]] = [{"sbom": {"id": sbom_id}} for sbom_id in sbom_ids]
-        _attach_vulnerability_counts(items, component_id)
+        items: list[dict[str, Any]] = [
+            {"sbom": {"id": sbom_id, "version": versions.get(sbom_id)}} for sbom_id in sbom_ids
+        ]
+        _attach_vulnerability_counts(items, component_id, release_id=release_id)
         counts.update({item["sbom"]["id"]: item.get("vuln") for item in items})
     return counts
 
@@ -182,6 +211,13 @@ def build_sboms_table_context(
 
     if not is_public_view and versions is None:
         _attach_vulnerability_counts(sbom_items, component_id, merged=not full_view)
+    if is_public_view:
+        # The public table renders no assessment, but the rows reach the page
+        # whole as JSON, and each one carries every plugin's status: a security
+        # scan's "fail" and findings count included. Public pages never reflect
+        # a security scan in any way (public_assessment_utils), and a failing
+        # check is never shown there either, so none of it is sent.
+        sbom_items = [{key: value for key, value in item.items() if key != "assessments"} for item in sbom_items]
 
     shown = sum(len(row["downloads"]) for row in versions) if versions is not None else len(sbom_items)
     context = {

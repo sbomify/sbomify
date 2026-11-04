@@ -1,0 +1,20 @@
+<c-tables.table aria-label="Linked releases">
+<c-tables.head>
+<c-tables.header-cell nowrap>Product</c-tables.header-cell>
+<c-tables.header-cell nowrap>Release</c-tables.header-cell>
+<c-tables.header-cell class="hidden md:table-cell">Version</c-tables.header-cell>
+</c-tables.head>
+<tbody>
+    {% for linked in linked_releases %}
+        <c-tables.row>
+        <c-tables.cell nowrap>{{ linked.product_name }}</c-tables.cell>
+        <c-tables.cell nowrap>
+        <a class="font-medium text-text hover:text-text no-underline"
+           data-button
+           href="{{ linked.url }}">{{ linked.name }}</a>
+        </c-tables.cell>
+        <c-tables.cell class="hidden md:table-cell">{{ linked.version }}</c-tables.cell>
+        </c-tables.row>
+    {% endfor %}
+</tbody>
+</c-tables.table>

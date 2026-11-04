@@ -7,15 +7,19 @@ Shared by the landing page's recent-advisories panel and the full feed so the
 two cannot drift. Expects `advisory` (a trust_center projection) and
 `workspace` in context.
 {% endcomment %}
-<c-branded.list-row href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}" level="{{ advisory.severity|default:'none' }}">
+<c-branded.list-row href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.id %}" level="{{ advisory.severity|default:'none' }}">
 <c-slot name="eyebrow">
 {{ advisory.id }}
 {% if advisory.is_gated %}
-    <c-branded.badge brand title="Visible to you because you have access to the affected products">
+    <c-branded.badge title="Visible to you because you have access to the affected products">
     <i class="fas fa-lock" aria-hidden="true"></i>Restricted
     </c-branded.badge>
 {% endif %}
-{% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
+{% if advisory.is_withdrawn %}
+    <c-branded.badge dashed>
+    <i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn
+    </c-branded.badge>
+{% endif %}
 </c-slot>
 <c-slot name="heading">{{ advisory.title }}</c-slot>
 {% if advisory.summary %}<c-slot name="summary">{{ advisory.summary }}</c-slot>{% endif %}

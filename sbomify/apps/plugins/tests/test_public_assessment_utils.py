@@ -238,8 +238,8 @@ class TestGetSbomPassingAssessments:
 
         assert get_sbom_passing_assessments(str(sbom.id)) == []
 
-    def test_clean_security_run_is_passing(self, sbom, db):
-        """A security scan with zero findings is the genuine positive claim."""
+    def test_clean_security_run_is_never_public(self, sbom, db):
+        """A clean scan earns no badge, so a missing badge cannot reveal a dirty one."""
         RegisteredPlugin.objects.get_or_create(
             name="osv",
             defaults={
@@ -270,12 +270,7 @@ class TestGetSbomPassingAssessments:
             },
         )
 
-        result = get_sbom_passing_assessments(str(sbom.id))
-        assert [a.plugin_name for a in result] == ["osv"]
-        # Counts are withheld for security scans: the claim is "no known
-        # vulnerabilities", not "0/0 checks passed".
-        assert result[0].pass_count is None
-        assert result[0].total_findings is None
+        assert get_sbom_passing_assessments(str(sbom.id)) == []
 
     def test_warnings_only_compliance_run_is_not_passing(self, sbom, ntia_plugin):
         """A compliance run with no actual passes asserts nothing badge-worthy."""

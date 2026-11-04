@@ -1096,7 +1096,7 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -1425,6 +1425,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.compliance.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
@@ -1472,3 +1473,10 @@ VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
 VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Token for the GitHub API calls the SBOM Verification plugin makes to fetch
+# attestations. Optional: without it every lookup shares GitHub's unauthenticated
+# limit of 60 requests an hour, which one release uploading several SBOMs can
+# use up. A fine-grained token with no repository access is enough, because the
+# attestations it reads belong to public repositories.
+GITHUB_API_TOKEN = os.environ.get("GITHUB_API_TOKEN", "")

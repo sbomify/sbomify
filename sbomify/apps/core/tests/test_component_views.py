@@ -394,12 +394,121 @@ class TestComponentItemVexAliasEnrichment:
 
 
 @pytest.mark.django_db
+class TestComponentItemLargeVex:
+    """A Yocto VEX carries tens of thousands of statements. The page sends them to the
+    browser once as data and builds only the visible rows: a table row per statement,
+    each re-filtering the whole list to decide whether it shows, froze the tab for over a
+    minute at 10,000. A document that reaches the statement limit says so."""
+
+    def setup_method(self):
+        self.client = Client()
+
+    def _vex_page(self, team, user, mocker, statements: int, analysis: dict | None = None):
+        import json
+
+        from sbomify.apps.sboms.models import SBOM
+
+        component = Component.objects.create(
+            name=f"Yocto image {statements}", team=team, component_type=Component.ComponentType.BOM
+        )
+        vex = SBOM.objects.create(
+            name="image-vex",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="vex.json",
+            bom_type=SBOM.BomType.VEX,
+            source="manual_upload",
+        )
+        # Yocto's shape: BOM-Links into the image SBOM, no components[], so every
+        # statement covers all packages.
+        document = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "vulnerabilities": [
+                {
+                    "id": f"CVE-2024-{n:05d}",
+                    "analysis": analysis or {"state": "not_affected", "justification": "code_not_present"},
+                    "affects": [{"ref": f"urn:cdx:3e671687-395b-41f5-a30f-a58921a69b79/1#{n}"}],
+                }
+                for n in range(statements)
+            ],
+        }
+        mocker.patch(
+            "sbomify.apps.core.object_store.StorageClient"
+        ).return_value.get_sbom_data.return_value = json.dumps(document).encode()
+        self.client.login(username=user.username, password="test")
+        setup_test_session(self.client, team, user)
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "vex", "item_id": vex.id}
+        )
+        return self.client.get(url)
+
+    def test_the_table_does_not_grow_a_row_per_statement(self, sample_team_with_owner_member, sample_user, mocker):
+        import json
+        import re
+
+        team = sample_team_with_owner_member.team
+        one = self._vex_page(team, sample_user, mocker, statements=1).content.decode()
+        response = self._vex_page(team, sample_user, mocker, statements=50)
+        many = response.content.decode()
+
+        assert response.status_code == 200
+        assert many.count("<tr") == one.count("<tr")
+        script = re.search(r'<script id="vex-suppression-rows" type="application/json">(.*?)</script>', many)
+        rows = json.loads(script[1])
+        assert len(rows) == 50
+        assert rows[0]["id"] == "CVE-2024-00000"
+        assert rows[0]["url"] == "https://insights.sbomify.com/CVE-2024-00000/"
+        assert rows[0]["package"] == "All packages"
+        assert "-statement limit" not in many
+
+    def test_a_row_without_a_justification_sends_only_its_short_note(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        """The full detail rides along only where the justification's tooltip shows it."""
+        import json
+        import re
+
+        response = self._vex_page(
+            sample_team_with_owner_member.team,
+            sample_user,
+            mocker,
+            statements=1,
+            analysis={"state": "false_positive", "detail": "Not reachable. " * 100},
+        )
+
+        script = re.search(
+            r'<script id="vex-suppression-rows" type="application/json">(.*?)</script>', response.content.decode()
+        )
+        row = json.loads(script[1])[0]
+        assert row["note"].startswith("Not reachable.")
+        assert len(row["note"]) <= 60
+        assert row["detail"] == ""
+
+    def test_a_vex_at_the_statement_limit_says_the_rest_are_ignored(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
+
+        response = self._vex_page(
+            sample_team_with_owner_member.team, sample_user, mocker, statements=MAX_VEX_STATEMENTS + 1
+        )
+
+        assert response.status_code == 200
+        assert len(response.context["vex_suppressions"]) == MAX_VEX_STATEMENTS
+        assert f"This VEX hits the {MAX_VEX_STATEMENTS:,}-statement limit." in response.content.decode()
+
+
+@pytest.mark.django_db
 class TestComponentVulnFilterContext:
     """The component page's vulnerability counts: the header excludes VEX-suppressed
     findings so it reconciles with the Trust Center posture, and the panel lists
     the same open vulnerabilities the header counts, KEV flags included."""
 
-    def _component_with_vex(self, team):
+    def _component_with_vex(self, team, vex_version="2.0"):
 
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.sboms.models import SBOM
@@ -443,9 +552,11 @@ class TestComponentVulnFilterContext:
                 }
             ],
         }
+        # A VEX applies only to the SBOMs of the version it was written for,
+        # so by default it speaks for the scanned SBOM's version.
         SBOM.objects.create(
             name="app-vex",
-            version="1",
+            version=vex_version,
             component=component,
             format="cyclonedx",
             format_version="1.6",
@@ -455,7 +566,7 @@ class TestComponentVulnFilterContext:
         )
         return component, vex_doc, run
 
-    def test_summary_excludes_suppressed_and_the_panel_agrees(self, sample_team_with_owner_member, sample_user, mocker):
+    def _component_page_context(self, member, user, mocker, **vex_kwargs):
         import json
 
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -465,20 +576,22 @@ class TestComponentVulnFilterContext:
             "sbomify.apps.vulnerability_scanning.kev.kev_ids_for_serialization",
             return_value=frozenset({"cve-2026-1"}),
         )
-        member = sample_team_with_owner_member
-        component, vex_doc, run = self._component_with_vex(member.team)
+        component, vex_doc, run = self._component_with_vex(member.team, **vex_kwargs)
         mocker.patch(
             "sbomify.apps.core.object_store.StorageClient"
         ).return_value.get_sbom_data.return_value = json.dumps(vex_doc).encode()
         # The panel reads the projected findings, annotated with the VEX, as the workspace list does.
         sync_findings(run)
         client = Client()
-        setup_authenticated_client_session(client, member.team, sample_user)
+        setup_authenticated_client_session(client, member.team, user)
 
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
 
         assert response.status_code == 200
-        context = response.context
+        return response.context
+
+    def test_summary_excludes_suppressed_and_the_panel_agrees(self, sample_team_with_owner_member, sample_user, mocker):
+        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker)
         assert context["vuln_summary"] == {
             "total": 1,
             "critical": 1,
@@ -496,6 +609,26 @@ class TestComponentVulnFilterContext:
         assert vuln_data["summary"]["vulnerabilities"] == context["vuln_summary"]["total"] == 1
         assert vuln_data["summary"]["critical"] == 1
         assert vuln_data["summary"]["exploited"] == 1
+
+    def test_a_vex_for_another_version_suppresses_nothing_in_either(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        """A VEX written for version 1 does not speak for the 2.0 scan: the
+        header and the panel both still count its finding as open."""
+        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker, vex_version="1")
+
+        assert context["vuln_summary"] == {
+            "total": 2,
+            "critical": 1,
+            "high": 1,
+            "medium": 0,
+            "low": 0,
+            "suppressed": 0,
+        }
+        vuln_data = context["vuln_data"]
+        assert sorted(row["id"] for row in vuln_data["rows"]) == ["CVE-2026-1", "CVE-2026-2"]
+        assert vuln_data["summary"]["vulnerabilities"] == context["vuln_summary"]["total"] == 2
+        assert vuln_data["summary"]["high"] == 1
 
 
 @pytest.mark.django_db

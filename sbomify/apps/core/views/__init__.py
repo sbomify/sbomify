@@ -61,6 +61,7 @@ from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as 
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
+from sbomify.apps.core.views.release_links import ReleaseLinksView as ReleaseLinksView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
 from sbomify.apps.core.views.search import SearchView as SearchView
 from sbomify.apps.core.views.security_advisories import (
@@ -158,7 +159,12 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        {
+            "id": str(token.id),
+            "description": token.description,
+            "scope_label": token.scope_label,
+            "created_at": token.created_at.isoformat(),
+        }
         for token in access_tokens_qs
     ]
 

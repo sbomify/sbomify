@@ -19,9 +19,11 @@ from django.core.validators import validate_email
 
 from sbomify.apps.compliance.models import (
     CRAAssessment,
+    CRAExportPackage,
     CRAGeneratedDocument,
     OSCALFinding,
 )
+from sbomify.apps.compliance.services.export_service import export_file_name
 from sbomify.apps.compliance.services.oscal_service import (
     create_assessment_result,
     ensure_cra_catalog,
@@ -552,6 +554,37 @@ def _build_step_5_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
     return ServiceResult.success(summary)
 
 
+def export_summary(package: CRAExportPackage) -> dict[str, Any]:
+    """One export package as step 5 shows it: its file, signature and packaged manifest."""
+    manifest = package.manifest or {}
+    return {
+        "id": package.id,
+        "content_hash": package.content_hash,
+        "file_name": export_file_name(package),
+        "signature": (
+            {
+                "signed_by": package.signed_by,
+                "issuer": package.signed_by_issuer,
+                "signed_at": package.signed_at.isoformat() if package.signed_at else None,
+            }
+            if package.signed_by
+            else None
+        ),
+        "created_at": package.created_at.isoformat(),
+        "format_version": manifest.get("format_version"),
+        "manufacturer_is_placeholder": bool((manifest.get("manufacturer") or {}).get("is_placeholder", False)),
+        "integrity": manifest.get("integrity"),
+        "files": [
+            {
+                "path": f.get("path", "").split("/", 1)[-1] if "/" in f.get("path", "") else f.get("path", ""),
+                "sha256": f.get("sha256", ""),
+                "cra_reference": f.get("cra_reference", ""),
+            }
+            for f in manifest.get("files", [])
+        ],
+    }
+
+
 def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
     """Compute the full compliance summary for the assessment."""
     # Control assessment counts
@@ -572,25 +605,7 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
     # the verification-doc paths so the operator can cross-check the
     # bundle without reading our code.
     last_export = assessment.export_packages.order_by("-created_at").first()
-    export_data = None
-    if last_export:
-        manifest = last_export.manifest or {}
-        export_data = {
-            "id": last_export.id,
-            "content_hash": last_export.content_hash,
-            "created_at": last_export.created_at.isoformat(),
-            "format_version": manifest.get("format_version"),
-            "manufacturer_is_placeholder": bool((manifest.get("manufacturer") or {}).get("is_placeholder", False)),
-            "integrity": manifest.get("integrity"),
-            "files": [
-                {
-                    "path": f.get("path", "").split("/", 1)[-1] if "/" in f.get("path", "") else f.get("path", ""),
-                    "sha256": f.get("sha256", ""),
-                    "cra_reference": f.get("cra_reference", ""),
-                }
-                for f in manifest.get("files", [])
-            ],
-        }
+    export_data = export_summary(last_export) if last_export else None
 
     # The EU-establishment determination is evidence the declaration needs
     # (checklist 7.4.1), and an unanswered one is not an error the step refuses

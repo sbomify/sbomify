@@ -216,7 +216,7 @@ variants naming that id, so they keep working across a swap and need no script.
             <c-tables.header-cell compact date scope="col">Updated</c-tables.header-cell>
             </c-tables.head>
             {% for advisory in advisories %}
-                {% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk as advisory_url %}
+                {% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.id as advisory_url %}
                 <tbody>
                     {% for row in advisory.affected_rows %}
                         <tr>

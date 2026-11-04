@@ -141,6 +141,57 @@ def public_advisory(trust_center_product, sample_user):  # noqa: F811
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 375])
+def test_many_affected_versions_fold_in_the_public_table(
+    authenticated_page: Page,
+    trust_center_product,  # noqa: F811
+    sample_user,  # noqa: F811
+    width: int,
+) -> None:
+    """"Am I affected?" lists each affected version as a chip and folds past
+    eight, so a long list does not stretch the row. Typing a version answers
+    for it, and the chip that matches shows even while folded."""
+    from sbomify.apps.core.models import Release
+
+    team = trust_center_product.team
+    releases = [
+        Release.objects.create(product=trust_center_product, name=f"v9.{n}.0", version=f"9.{n}.0") for n in range(12)
+    ]
+    created = create_advisory(
+        team,
+        sample_user,
+        title="Many affected versions",
+        identifier="CVE-2026-0002",
+        products=[trust_center_product],
+        affected_releases=releases,
+    )
+    assert created.ok, created.error
+    assert publish_advisory(team, sample_user, created.value, visibility="public").ok
+
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/public/workspace/{team.key}/advisories/{created.value}/")
+
+    versions = page.get_by_role("list", name=f"Affected versions of {trust_center_product.name} for CVE-2026-0002")
+    items = versions.locator("li")
+    expect(items).to_have_count(12)
+    expect(items.first).to_have_text("9.0.0")
+    expect(items.nth(7)).to_be_visible()
+    expect(items.nth(8)).to_be_hidden()
+
+    page.get_by_label("Check your version").fill("v9.10.0")
+    expect(page.get_by_text("v9.10.0 is affected", exact=True)).to_be_visible()
+    expect(items.nth(10)).to_be_visible()
+    expect(items.nth(9)).to_be_hidden()
+
+    page.get_by_label("Check your version").fill("9.12.0")
+    expect(page.get_by_text("9.12.0 is not affected", exact=True)).to_be_visible()
+
+    page.get_by_text("Show all 12").click()
+    expect(items.nth(11)).to_be_visible()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestTrustCenterAdvisoriesPublicSnapshot:
     def test_trust_center_advisories_public_snapshot(

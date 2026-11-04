@@ -6,11 +6,13 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_release
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Product
+from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.services.release_links import release_link_rows
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     custom_domain_redirect,
     get_public_path,
+    get_release_public_slugs,
     get_workspace_public_url,
     resolve_product_identifier,
     resolve_release_identifier,
@@ -77,9 +79,28 @@ class ReleaseDetailsPublicView(View):
         else:
             vuln_posture = {"has_data": False}
 
+        is_custom_domain = bool(getattr(request, "is_custom_domain", False))
+
+        def public_url(linked: Release) -> str:
+            product_identifier = linked.product.slug or linked.product_id
+            if is_custom_domain:
+                slug_owner = resolve_product_identifier(request, product_identifier, require_public=True)
+                if slug_owner is None or slug_owner.id != linked.product_id:
+                    product_identifier = linked.product_id
+            return get_public_path(
+                "release",
+                linked.id,
+                is_custom_domain=is_custom_domain,
+                product_id=linked.product_id,
+                product_slug=product_identifier,
+                release_slug=get_release_public_slugs(linked.product).get(linked.id, linked.id),
+            )
+
         context = {
             "brand": brand,
             "release": release,
+            # The public page shows what the public sees, to members too.
+            "linked_releases": release_link_rows(release_obj, include_private=False, url_for=public_url),
             "vuln_posture": vuln_posture,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the
@@ -89,5 +110,23 @@ class ReleaseDetailsPublicView(View):
             "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
+
+        # Use slugs only where they resolve to the same product and release.
+        # Products whose slug is empty or resolves elsewhere retain their ID.
+        if getattr(request, "is_custom_domain", False):
+            product_slug = product_obj.slug
+            slug_owner = (
+                resolve_product_identifier(request, product_slug, require_public=True) if product_slug else None
+            )
+            product_identifier = product_slug if slug_owner and slug_owner.id == product_obj.id else product_obj.id
+            canonical_path = get_public_path(
+                "release",
+                resolved_release_id,
+                is_custom_domain=True,
+                product_id=product_obj.id,
+                product_slug=product_identifier,
+                release_slug=get_release_public_slugs(product_obj).get(resolved_release_id, resolved_release_id),
+            )
+            context["canonical_url"] = request.build_absolute_uri(canonical_path)
 
         return render(request, "core/release_details_public.html.j2", context)

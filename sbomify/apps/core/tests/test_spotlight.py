@@ -321,6 +321,48 @@ class TestEntitySearch:
 
         assert self._search(client, member, "CVE-2020-11111") == []
 
+    def test_a_finding_a_vex_ruled_out_is_not_offered(self, client, sample_team_with_owner_member):
+        """The section is "Affected components". The lifecycle row stays open
+        while the scanner keeps reporting the CVE, so the VEX has to be asked."""
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import AssessmentRun, VulnerabilityLifecycle
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+        member = sample_team_with_owner_member
+        component = Component.objects.create(team=member.team, name="Ruled-out Gateway")
+        sbom = SBOM.objects.create(name="gw", component=component, version="1.0", format="cyclonedx")
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {
+                        "id": "CVE-2021-45046",
+                        "severity": "critical",
+                        "component": {"name": "log4j-core", "version": "2.15.0", "ecosystem": "maven"},
+                        "analysis_state": "not_affected",
+                    }
+                ],
+                "summary": {"total_findings": 0, "suppressed_count": 1},
+            },
+        )
+        sync_findings(run)
+        now = timezone.now()
+        VulnerabilityLifecycle.objects.create(
+            component=component,
+            advisory_id="CVE-2021-45046",
+            severity="critical",
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+
+        assert self._search(client, member, "CVE-2021-45046") == []
+
     def test_a_release_version_is_findable(self, client, sample_team_with_owner_member):
         from sbomify.apps.core.models import Product, Release
 

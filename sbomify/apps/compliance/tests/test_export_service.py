@@ -646,14 +646,17 @@ class TestIntegrityReadmeFormatVersion:
         assert "`metadata/manifest.sha256`" in readme
         assert "`metadata/INTEGRITY.md`" in readme
 
-    def test_readme_references_downstream_signing(self):
-        """README carries the "About signatures" section pointing
-        operators at ``cosign sign-blob`` / ``gpg --detach-sign`` as
-        the downstream-signing path. Bundle signing itself is not
-        implemented in-tree."""
+    def test_readme_explains_keyless_signing_and_verification(self):
+        """sbomify holds no key: the manufacturer signs keyless with cosign,
+        and a recipient verifies against a signer they did not take from
+        the bundle."""
         readme = _integrity_readme("deadbeef" * 8, date(2036, 3, 1))
-        assert "About signatures" in readme
-        assert "cosign sign-blob" in readme
+        assert "holds no signing key" in readme
+        assert "cosign sign-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json" in readme
+        assert "cosign verify-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json" in readme
+        assert "--certificate-identity <signer>" in readme
+        assert "--certificate-oidc-issuer <issuer>" in readme
+        assert "public transparency log" in readme
 
 
 @pytest.mark.django_db

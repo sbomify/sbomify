@@ -89,6 +89,14 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "CRA reports",
+      "url_name": "compliance:cra_reports",
+      "section": "navigate",
+      "icon": "fa-tower-broadcast",
+      "keywords": ["enisa", "article 14", "incident report", "early warning", "vulnerability notification", "srp", "single reporting platform", "csirt", "actively exploited", "final report"],
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
       "title": "Vulnerability trends",
       "url_name": "core:dashboard_trends",
       "section": "navigate",

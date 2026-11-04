@@ -195,7 +195,9 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str], set[
         # Skipped entirely when the SBOM is clean, the way dashboard_page does
         # it: VEX lives in S3, and a workspace of mostly-clean components would
         # otherwise pay one round trip per component to overlay nothing.
-        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache) if merged["findings"] else []
+        statements = (
+            load_vex_suppressions(sbom.component_id, sbom.version, cache=vex_cache) if merged["findings"] else []
+        )
         for row in extract_finding_rows(merged, statements, kev_ids=kev_ids):
             row["sbom_id"] = sbom_id
             row["component_id"] = sbom.component_id
