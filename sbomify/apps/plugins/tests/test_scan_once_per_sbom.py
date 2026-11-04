@@ -480,6 +480,8 @@ class TestCronIteratesUniqueSboms:
         [
             (RunStatus.PENDING.value, timedelta(minutes=30), False),
             (RunStatus.COMPLETED.value, timedelta(hours=-3), True),
+            # A finished run counts from when it was created, as it always did.
+            (RunStatus.COMPLETED.value, timedelta(minutes=-30), True),
         ],
     )
     def test_cron_leaves_a_scan_waiting_out_its_retries(

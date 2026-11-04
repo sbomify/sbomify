@@ -1569,10 +1569,12 @@ def _run_scheduled_security_scans(
         cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
-                # A run's latest attempt is due at retry_at, so a scan waiting out
-                # its retries is recent however long ago it was created. Without
-                # this the hourly sweep starts a second scan of the same SBOM.
-                Q(created_at__gte=cutoff) | Q(retry_at__gte=cutoff),
+                # A scan waiting out its retries is in flight however long ago it
+                # was created: its next attempt is due at retry_at. Without this the
+                # hourly sweep starts a second scan of the same SBOM. Only pending
+                # and running runs are read by retry_at, so both branches stay on
+                # the (status, created_at) index.
+                Q(created_at__gte=cutoff) | Q(status__in=["pending", "running"], retry_at__gte=cutoff),
                 plugin_name=plugin_name,
                 status__in=["completed", "running", "pending"],
                 sbom__component__team_id__in=team_ids,
