@@ -160,3 +160,72 @@ class TestRerunIsGated:
 def test_component_and_sbom_models_are_importable():
     """Guards the fixture imports above from silently drifting."""
     assert SBOM is not None and Component is not None and reverse is not None
+
+
+class TestDependencyTrackRerunReimports:
+    """A Dependency Track run on record only polls DT, so a re-run must send the SBOM again."""
+
+    @pytest.fixture
+    def dt_version(self, sample_sbom):  # noqa: F811
+        import uuid
+
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer, SbomDependencyTrackProjectVersion
+
+        RegisteredPlugin.objects.update_or_create(
+            name="dependency-track",
+            defaults={
+                "display_name": "Dependency Track",
+                "category": "security",
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
+                "is_enabled": True,
+            },
+        )
+        server = DependencyTrackServer.objects.create(
+            name="DT Rerun Server", url="https://dt-rerun.example.com", api_key="key", health_status="healthy"
+        )
+        return SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sample_sbom,
+            dt_server=server,
+            dt_project_version=str(sample_sbom.id),
+            dt_project_version_uuid=uuid.uuid4(),
+        )
+
+    def test_a_dependency_track_rerun_uploads_the_sbom_again(
+        self, owner_client, sample_sbom, dt_version, mocker  # noqa: F811
+    ):
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        TeamPluginSettings.objects.filter(team=sample_sbom.component.team).update(enabled_plugins=["dependency-track"])
+        mocker.patch("sbomify.apps.plugins.apis.team_has_plugin_access", return_value=True)
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        response = owner_client.post(_url(sample_sbom.id, "dependency-track"))
+
+        assert response.status_code == 202
+        send.assert_called_once()
+        assert not SbomDependencyTrackProjectVersion.objects.filter(sbom=sample_sbom).exists()
+
+    def test_another_plugins_rerun_leaves_the_dt_record(
+        self, owner_client, sample_sbom, enabled_plugin, dt_version, mocker  # noqa: F811
+    ):
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        owner_client.post(_url(sample_sbom.id, "osv"))
+
+        assert SbomDependencyTrackProjectVersion.objects.filter(pk=dt_version.pk).exists()
+
+    def test_a_refused_rerun_keeps_the_dt_record(self, sample_sbom, dt_version, django_user_model, mocker):  # noqa: F811
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        outsider = django_user_model.objects.create_user(username="dt-outsider", password="x")  # noqa: S106
+        client = Client()
+        client.force_login(outsider)
+        mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        response = client.post(_url(sample_sbom.id, "dependency-track"))
+
+        assert response.status_code == 403
+        assert SbomDependencyTrackProjectVersion.objects.filter(pk=dt_version.pk).exists()
