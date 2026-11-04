@@ -1,26 +1,30 @@
-"""Security advisory tools: read the workspace's advisories, draft a new one.
-
-Three of the eight internal advisory endpoints are exposed, which is a decision
-rather than an oversight.
+"""Security advisory tools: read the workspace's advisories, draft one, and keep it up to date.
 
 Reads are unambiguous. Drafting is the workflow worth having: an agent that has
 just read `list_vulnerabilities` is exactly the thing that should be able to
 open an advisory about what it found, and a new advisory is a draft, internal
 and revisable, with no tracking id until someone publishes it.
 
-Publishing, withdrawing and posting timeline updates are not exposed. Each one
-changes what customers read on the trust center, and the authz model already
-treats outward-facing changes as a different class from routine work: visibility
-is carved up to ADMINISTER for the same reason. A person makes the public
-statement. `delete` is refused by the registry for every resource, so no
-decision was available there.
+The edits (fields, product statuses, products, timeline updates) follow from
+that: an agent keeps shaping its draft, and a published advisory needs the same
+work as the fix lands. A published advisory is what customers read on the trust
+center, though, and a person makes the public statement. The REST views already
+hold an AI agent token's write to one for a person to approve. Any other token
+would write it straight through, so these tools refuse that case and point to
+the agent token.
+
+Publishing and withdrawing are not exposed, and the registry refuses
+``advisory:publish`` and every ``delete`` outright.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp.exceptions import ToolError
+from pydantic import BaseModel, ConfigDict, Field
 
 from .. import serializers
 from ..auth import Principal, require
@@ -28,6 +32,38 @@ from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, not_found, res
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
+
+class AdvisoryChange(BaseModel):
+    """The advisory fields to change. A field left out keeps its value; `cvss_score` null clears the CVSS entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(None, min_length=1, max_length=255)
+    summary: str | None = Field(None, description="The one-paragraph summary the trust center leads with.")
+    description: str | None = None
+    severity: str | None = Field(None, description="critical, high, medium, low or none.")
+    cvss_score: float | None = None
+    cvss_vector: str | None = None
+
+
+class ProductStatusChange(BaseModel):
+    """One product's status on an advisory. Only the fields sent are written; null clears one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str | None = Field(None, description="exploitable, not_affected, false_positive, in_triage or resolved.")
+    justification: str | None = Field(None, description="Why a not_affected product is not affected.")
+    response: str | None = Field(
+        None, description="can_not_fix, will_not_fix, update, rollback or workaround_available."
+    )
+    impact_statement: str | None = None
+    action_statement: str | None = Field(None, description="What users should do. Shown to readers.")
+    recommended_version: str | None = None
+    recommended_release_id: str | None = Field(None, description="A release of this product.")
+    fixed_version: str | None = Field(None, description="The first version that carries the fix.")
+    fixed_release_id: str | None = Field(None, description="A release of this product that carries the fix.")
+
 
 #: Publication states, for the ``publication_status`` filter. Held here rather
 #: than imported so this module keeps its Django imports lazy, like every other
@@ -165,6 +201,169 @@ def register_tools(mcp: FastMCP) -> None:
             return serializers.advisory(result.value, detail_limit=DETAIL_COLLECTION_LIMIT)
 
         return await run_db(call)
+
+    @mcp_tool(mcp, "update_advisory", "advisory:manage", writes=True, idempotent=False)
+    async def update_advisory(
+        principal: Principal, advisory_id: str, changes: AdvisoryChange, context: str = ""
+    ) -> dict[str, Any]:
+        """Change an advisory's title, summary, description, severity or CVSS.
+
+        On a draft the change is written at once. On a published advisory it is
+        held for a person to approve, which needs an AI agent token: the result
+        has `held_for_approval` true and the `proposal`. Say in `context` what
+        you changed and why, for the person approving it.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.security_advisories import apis
+            from sbomify.apps.security_advisories.schemas import UpdateAdvisorySchema
+
+            payload = UpdateAdvisorySchema(**changes.model_dump(exclude_unset=True), context=context)
+            return _write(principal, advisory_id, lambda request: apis.update_advisory(request, advisory_id, payload))
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "set_advisory_product_status", "advisory:manage", writes=True, idempotent=False)
+    async def set_advisory_product_status(
+        principal: Principal, advisory_id: str, product_id: str, change: ProductStatusChange, context: str = ""
+    ) -> dict[str, Any]:
+        """Set how a product on the advisory is affected, and where its fix is.
+
+        Applies to every vulnerability the advisory lists for that product. A
+        resolved advisory refuses moving a product back to in_triage or
+        exploitable. On a published advisory the change is held for a person to
+        approve, as `update_advisory` describes.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.security_advisories import apis
+            from sbomify.apps.security_advisories.schemas import ProductStatusUpdateSchema
+
+            payload = ProductStatusUpdateSchema(**change.model_dump(exclude_unset=True), context=context)
+            return _write(
+                principal,
+                advisory_id,
+                lambda request: apis.update_product_statuses(request, advisory_id, product_id, payload),
+            )
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "add_advisory_product", "advisory:manage", writes=True, idempotent=False)
+    async def add_advisory_product(
+        principal: Principal,
+        advisory_id: str,
+        product_id: str,
+        affected_release_ids: list[str] | None = None,
+        change: ProductStatusChange | None = None,
+        context: str = "",
+    ) -> dict[str, Any]:
+        """Name another affected product on the advisory, or more of its affected releases.
+
+        `change` sets the new product's status; without it the product starts
+        under investigation, which a resolved advisory refuses. On a published
+        advisory the change is held for a person to approve, as
+        `update_advisory` describes.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.security_advisories import apis
+            from sbomify.apps.security_advisories.schemas import AddAdvisoryProductSchema
+
+            payload = AddAdvisoryProductSchema(
+                product_id=product_id,
+                affected_release_ids=list(affected_release_ids or []),
+                context=context,
+                **(change.model_dump(exclude_unset=True) if change else {}),
+            )
+            return _write(
+                principal, advisory_id, lambda request: apis.add_advisory_product(request, advisory_id, payload)
+            )
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "post_advisory_update", "advisory:manage", writes=True, idempotent=False)
+    async def post_advisory_update(
+        principal: Principal, advisory_id: str, kind: str, note: str = "", context: str = ""
+    ) -> dict[str, Any]:
+        """Add an entry to the advisory's timeline.
+
+        `kind` is "update" for a note that moves nothing, or the remediation
+        status it moves to: identified, investigating, fix_in_progress,
+        resolved or wont_fix. `note` is Markdown. On a published advisory the
+        entry is held for a person to approve, as `update_advisory` describes.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.security_advisories import apis
+            from sbomify.apps.security_advisories.schemas import AdvisoryUpdateSchema
+
+            payload = AdvisoryUpdateSchema(kind=kind, note=note, context=context)
+            return _write(
+                principal, advisory_id, lambda request: apis.post_advisory_update(request, advisory_id, payload)
+            )
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "list_advisory_proposals", "advisory:read")
+    async def list_advisory_proposals(principal: Principal, status: str = "", since: str = "") -> dict[str, Any]:
+        """The changes this token proposed to published advisories, and what a person decided.
+
+        Newest decision first, at most 100. A rejection carries
+        `rejection_reason`, `decision_note` and `next_step`: what was wrong and
+        what to do about it. `status` narrows to pending, approved, rejected or
+        superseded; `since` (ISO 8601) to what was decided, or sent, after it.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.security_advisories import apis
+
+            resolve_workspace(principal)
+            try:
+                after = datetime.fromisoformat(since) if since else None
+            except ValueError as exc:
+                raise ToolError(f"since must be an ISO 8601 date or time, not {since!r}.") from exc
+            rows = unwrap_view(apis.list_sent_proposals(principal.request, status, after), action="Listing proposals")
+            return {"items": rows["result"]}
+
+        return await run_db(call)
+
+
+def _write(principal: Principal, advisory_id: str, write: Callable[[Any], tuple[int, Any]]) -> dict[str, Any]:
+    """Run one advisory edit through its REST view, as MCP allows it, and answer in one shape.
+
+    The view itself holds an AI agent token's write to a published advisory
+    for approval. Any other token's would change what the trust center shows
+    with nobody reading it first, so that case is refused here. The advisory
+    stays locked from this check to the end of the write, so it cannot be
+    published in between.
+    """
+    from django.db import transaction
+
+    from sbomify.apps.core.authz import credential_channel
+    from sbomify.apps.security_advisories.models import SecurityAdvisory
+    from sbomify.apps.security_advisories.services import advisories as service
+
+    team = resolve_workspace(principal)
+    with transaction.atomic():
+        advisory = service._locked_advisory(team, advisory_id)
+        if advisory is None:
+            raise not_found("Advisory", advisory_id)
+        if advisory.status != SecurityAdvisory.Status.DRAFT and credential_channel(principal.request) != "agent":
+            raise ToolError(
+                "This advisory is published, so a change to it must be approved by a person first. Over MCP that "
+                "needs an API token made with the AI agent preset; otherwise make the change in sbomify."
+            )
+        status, body = write(principal.request)
+    if status == 202:
+        return {"held_for_approval": True, "proposal": unwrap_view((status, body), action="Proposing the change")}
+    unwrap_view((status, body), action="Updating the advisory")
+    result = service.get_advisory(team, advisory_id)
+    if not result.ok or result.value is None:
+        raise ToolError("The advisory was updated but could not be read back.")
+    return {
+        "held_for_approval": False,
+        "advisory": serializers.advisory(result.value, detail_limit=DETAIL_COLLECTION_LIMIT),
+    }
 
 
 def _publication_state(value: str | None) -> str | None:
