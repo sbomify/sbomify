@@ -105,7 +105,7 @@ async def test_an_agent_names_a_product_on_its_draft_and_rules_on_it(
             "set_advisory_product_status",
             advisory_id=draft["id"],
             product_id=product_in_bound_workspace.id,
-            change={"status": "not_affected", "justification": "vulnerable_code_not_present"},
+            change={"status": "not_affected", "justification": "code_not_present"},
         )
     )
 
