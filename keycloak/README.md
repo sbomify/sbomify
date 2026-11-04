@@ -59,7 +59,7 @@ themes/sbomify/
 │   └── resources/css/
 │       ├── sbomify.src.css       # Source (edit this)
 │       └── sbomify.css           # Compiled (committed, do not edit)
-└── email/                        # Email templates
+└── email/                        # Email templates, same layout as the app's mail
 ```
 
 ## Macros in `components.ftl`
@@ -86,10 +86,12 @@ and comes from the Frontend (UI) section of `AGENTS.md`:
 
 - Containers sit still. No hover lift, no ambient animation. Entrances are
   one-shot and motion respects `prefers-reduced-motion`.
-- Filled buttons use the primary recipe: a `135deg` gradient from `--btn-accent`
-  to `--btn-accent-dark`, a `0.5px` self-coloured border and an inset top
-  highlight. A variant sets those custom properties, it does not restate the
-  rules. The same pattern drives `--alert-accent`.
+- Filled buttons use the primary recipe: a `135deg` gradient from `--btn-fill`
+  to `--btn-fill-end` (the app's `--color-primary-fill` tokens, never
+  `--color-primary`, which fails contrast under white text), a `0.5px`
+  `--btn-accent` border and an inset top highlight. A variant sets those custom
+  properties, it does not restate the rules. The same pattern drives
+  `--alert-accent`.
 - Text on a tint mixes toward the theme text colour
   (`color-mix(in oklab, var(--accent) 60%, var(--color-text))`), never a raw
   accent on its own tint.
@@ -100,6 +102,15 @@ Nothing may go in the Keycloak fallback block at the bottom that also matches
 themed markup. A `.login-pf-page .form-control` rule there once matched every
 themed field at the same specificity while sitting later in the file, which
 silently disabled the error border everywhere.
+
+## Email
+
+`email/html/template.ftl` is the same layout as the app's own mail,
+`sbomify/apps/core/templates/core/emails/base.html.j2`: navy header with the
+PNG wordmark, white card, navy button. Mail clients cannot read custom
+properties, so both write the app's light-theme tokens out as hex, each named in
+a comment. `test_email_palette.py` fails on a hex that is not a token. Change
+the two layouts together.
 
 ## Copy
 
