@@ -10,7 +10,9 @@ from typing import Any
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
+from django.db import DatabaseError
 
+from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -104,6 +106,12 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
                 logger.debug("close after failed accept also failed", exc_info=True)
             return
 
+        # The session could not be read, so whether this client may connect is
+        # unknown: an outage, not a verdict about the client.
+        if self.scope.get(AUTH_UNAVAILABLE_SCOPE_KEY):
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
+            return
+
         # Check if user is authenticated
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
@@ -111,8 +119,14 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
-        # Verify the user may read this workspace's internal activity
-        is_member = await self._check_workspace_membership(user, self.workspace_key)
+        # Verify the user may read this workspace's internal activity. The
+        # database going away here is the same outage as above.
+        try:
+            is_member = await self._check_workspace_membership(user, self.workspace_key)
+        except DatabaseError as exc:
+            logger.warning(f"WebSocket membership check failed for workspace {self.workspace_key}: {exc!r}")
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
+            return
         if not is_member:
             user_id = user.id  # type: ignore[attr-defined]
             logger.warning(
