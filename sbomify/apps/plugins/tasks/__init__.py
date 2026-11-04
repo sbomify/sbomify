@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
+from django.db.models import Q
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -328,18 +329,12 @@ def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> se
     }
 
 
-# Retry delays for RetryLaterError (in milliseconds)
-# These delays give external systems time to process:
-# - 1st retry: 2 minutes
-# - 2nd retry: 5 minutes
-# - 3rd retry: 10 minutes
-# - 4th retry: 15 minutes
-RETRY_LATER_DELAYS_MS = [
-    2 * 60 * 1000,  # 2 minutes
-    5 * 60 * 1000,  # 5 minutes
-    10 * 60 * 1000,  # 10 minutes
-    15 * 60 * 1000,  # 15 minutes
-]
+# Retry delays for RetryLaterError (in milliseconds): doubling from 2 minutes up
+# to an hour, then hourly, about six hours in all. An external service under load,
+# such as a Dependency Track working through a backlog, can take far longer than
+# the half hour a shorter ladder gave it. Each wait is a delayed message, so no
+# worker is held while it runs down.
+RETRY_LATER_DELAYS_MS = [minutes * 60 * 1000 for minutes in (2, 4, 8, 16, 32, 60, 60, 60, 60, 60)]
 
 
 @dramatiq.actor(
@@ -374,7 +369,7 @@ def run_assessment_task(
 
     If a plugin raises RetryLaterError (e.g., attestation not yet available,
     external service still processing), the task will retry with increasing
-    delays: 2 min, 5 min, 10 min, 15 min, or longer when the service asks us to wait.
+    delays (``RETRY_LATER_DELAYS_MS``), or longer when the service asks us to wait.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -1574,8 +1569,11 @@ def _run_scheduled_security_scans(
         cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
+                # A run's latest attempt is due at retry_at, so a scan waiting out
+                # its retries is recent however long ago it was created. Without
+                # this the hourly sweep starts a second scan of the same SBOM.
+                Q(created_at__gte=cutoff) | Q(retry_at__gte=cutoff),
                 plugin_name=plugin_name,
-                created_at__gte=cutoff,
                 status__in=["completed", "running", "pending"],
                 sbom__component__team_id__in=team_ids,
             ).values_list("sbom_id", flat=True)
