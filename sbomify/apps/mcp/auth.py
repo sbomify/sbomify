@@ -68,6 +68,7 @@ from sbomify.apps.access_tokens.throttling import (
 from sbomify.apps.access_tokens.utils import get_user_and_token_record
 from sbomify.apps.core.utils import get_client_ip
 
+from . import oauth
 from .limits import audit
 
 if TYPE_CHECKING:
@@ -221,8 +222,8 @@ def _bearer_token(request: Request) -> str:
     scheme, _, raw = request.headers.get("authorization", "").partition(" ")
     if scheme.casefold() != "bearer" or not raw.strip():
         raise MCPAuthError(
-            "Missing bearer token. Configure this MCP server with an sbomify "
-            "personal access token: Authorization: Bearer <token>."
+            "Missing bearer token. Sign in to sbomify from your MCP client, or configure "
+            "an sbomify personal access token: Authorization: Bearer <token>."
         )
     return raw.strip()
 
@@ -285,18 +286,25 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # close_old_connections (see run_db in tools/_base.py). A bare wrapper here
     # would leave the per-request executor's connection to die of old age and
     # make a Postgres restart surface as an error auth can't recover from.
-    user, record = await database_sync_to_async(get_user_and_token_record)(
-        token,
-        source_ip=get_client_ip(stub),
-        attempted_action=f"mcp {attempted_action}",
-    )
+    record: Any
+    if oauth.is_keycloak_token(token):
+        user, record = await database_sync_to_async(oauth.resolve)(token)
+    else:
+        user, record = await database_sync_to_async(get_user_and_token_record)(
+            token,
+            source_ip=get_client_ip(stub),
+            attempted_action=f"mcp {attempted_action}",
+        )
     if user is None or record is None:
         await _charge_refusal(stub, tool=attempted_action, reason="invalid or expired token")
         raise MCPAuthError("Invalid or expired access token.")
 
+    # An OAuth token names a person, not a workspace: resolve_workspace picks
+    # theirs the way it does for a personal access token made without one.
+    workspace = getattr(record, "team", None)
     stub.user = user  # type: ignore[assignment]
     setattr(stub, "access_token_record", record)
-    setattr(stub, "token_team", record.team)
+    setattr(stub, "token_team", workspace)
 
     # The MCP app bypasses NinjaAPI, so its global throttle never runs here.
     # Re-apply it against the same sliding window: an agent and a CI job using
@@ -311,10 +319,10 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     principal = Principal(
         user=user,
         request=stub,
-        workspace=record.team,
+        workspace=workspace,
         scopes=record.scopes,
         credential_id=str(record.pk),
-        credential_kind=_credential_kind(stub),
+        credential_kind="oauth" if isinstance(record, oauth.OAuthCredential) else _credential_kind(stub),
     )
 
     throttle = AccessTokenRateThrottle()
@@ -330,15 +338,14 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     return principal
 
 
-async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
+async def authenticate_request(scope: Any) -> MCPAuthError | None:
     """Authenticate an ``/mcp`` request once, from its headers, before its body is read.
 
     Every request is charged and audited here, whatever it goes on to call.
-    The answer is left in ``scope["state"]`` for ``principal_for``. A caller
-    over its budget is returned so the router can refuse it without reading
-    the body; any other refusal is left for the call to report, so a client
-    without a usable token still sees an empty ``tools/list`` rather than an
-    HTTP error.
+    The answer is left in ``scope["state"]`` for ``principal_for``, and a
+    refusal is also returned so the router can answer it without reading the
+    body: a caller over its budget with a 429, and one without a usable token
+    with the 401 that starts an MCP client's OAuth sign-in.
     """
     from starlette.requests import Request
 
@@ -349,6 +356,7 @@ async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
         return exc
     except MCPAuthError as exc:
         state[REFUSAL_STATE] = exc
+        return exc
     return None
 
 

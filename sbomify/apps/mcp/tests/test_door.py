@@ -154,7 +154,7 @@ async def test_a_large_body_without_a_token_is_refused_unread():
     sent = await _drive(_router(recorder), _scope(None, length=LARGE))
 
     assert recorder.states == []
-    assert sent[0]["status"] == 413
+    assert sent[0]["status"] == 401
 
 
 @pytest.mark.asyncio
@@ -335,11 +335,11 @@ async def test_a_body_its_headers_call_too_large_is_audited_once(make_token, sta
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 async def test_a_large_body_without_a_token_keeps_its_one_door_event():
-    """The door already audited the missing token, so the 413 adds nothing."""
+    """The door already audited the missing token, so the 401 adds nothing."""
     with patch.object(limits, "log") as spy:
         sent = await _drive(_router(_Recorder()), _scope(None, length=LARGE))
 
-    assert sent[0]["status"] == 413
+    assert sent[0]["status"] == 401
     assert _tool_call_outcomes(spy) == ["denied"]
 
 

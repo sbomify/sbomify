@@ -140,6 +140,45 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
   done
 fi
 
+# MCP clients sign in with OAuth (sbomify/apps/mcp/oauth.py). The "mcp" client
+# scope puts this server's /mcp URL in the access token's audience, which is how
+# /mcp tells a token meant for it from one issued to the web app. As a realm
+# optional scope, a client registered on the fly may ask for it. The trusted
+# hosts policy lets such a client register from the host with a localhost
+# redirect, as Claude Code's does. Development only: a production realm's
+# registration policy is an operator's decision (docs/mcp.md).
+if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
+  MCP_RESOURCE="${APP_BASE_URL%/}/mcp"
+  if ! /opt/keycloak/bin/kcadm.sh get client-scopes -r "$REALM" --fields name --format csv --noquotes | grep -qx mcp; then
+    /opt/keycloak/bin/kcadm.sh create client-scopes -r "$REALM" \
+      -s name=mcp \
+      -s protocol=openid-connect \
+      -s 'attributes."include.in.token.scope"=true' \
+      -s 'attributes."display.on.consent.screen"=true' \
+      -s 'attributes."consent.screen.text"=Read your sbomify workspace from an AI assistant'
+  fi
+  MCP_SCOPE_ID=$(/opt/keycloak/bin/kcadm.sh get client-scopes -r "$REALM" --fields id,name --format csv --noquotes | grep ',mcp$' | cut -d, -f1)
+  if ! /opt/keycloak/bin/kcadm.sh get "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models" -r "$REALM" | grep -q '"mcp-audience"'; then
+    /opt/keycloak/bin/kcadm.sh create "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models" -r "$REALM" \
+      -s name=mcp-audience \
+      -s protocol=openid-connect \
+      -s protocolMapper=oidc-audience-mapper \
+      -s "config.\"included.custom.audience\"=$MCP_RESOURCE" \
+      -s 'config."access.token.claim"=true' \
+      -s 'config."id.token.claim"=false'
+  fi
+  if ! /opt/keycloak/bin/kcadm.sh get "realms/$REALM/default-optional-client-scopes" --fields name --format csv --noquotes | grep -qx mcp; then
+    /opt/keycloak/bin/kcadm.sh update "realms/$REALM/default-optional-client-scopes/$MCP_SCOPE_ID"
+  fi
+  # kcadm does not filter components by providerId, so pick the policy out of the listing.
+  TRUSTED_HOSTS_ID=$(/opt/keycloak/bin/kcadm.sh get components -r "$REALM" --fields id,providerId --format csv --noquotes | grep ',trusted-hosts$' | cut -d, -f1)
+  /opt/keycloak/bin/kcadm.sh update "components/$TRUSTED_HOSTS_ID" -r "$REALM" \
+    -s 'config."trusted-hosts"=["localhost","127.0.0.1"]' \
+    -s 'config."host-sending-registration-request-must-match"=["false"]' \
+    -s 'config."client-uris-must-match"=["true"]'
+  echo "MCP OAuth: client scope mcp grants audience $MCP_RESOURCE"
+fi
+
 echo "Keycloak client secret for $CLIENT_ID: $CLIENT_SECRET"
 
 if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
