@@ -206,24 +206,26 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
         uv sync --locked; \
     fi
 
-### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
-FROM alpine:3.24 AS binary-downloader
+### Stage 5a: Build OSV-Scanner from source with the current Go toolchain
+# A release binary carries the Go standard library it was built with, and
+# v2.7.0 was built with go1.27.0, so it misses every Go security release since.
+# Building the same tagged module with Chainguard's :latest Go picks those fixes
+# up on every image build. go install checks the module against the Go
+# checksum database, and v2.7.0 has no replace directives that would stop it.
+FROM cgr.dev/chainguard/go:latest AS osv-scanner-build
 ARG OSV_SCANNER_VERSION
+
+RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath -ldflags="-s -w" \
+        "github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION}"
+
+### Stage 5b: Download the pre-built Cosign binary
+FROM alpine:3.24 AS binary-downloader
 ARG COSIGN_VERSION
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
     ARCH="${TARGETARCH}" && \
-    # Download osv-scanner and verify checksum
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${ARCH}" \
-        -o /usr/local/bin/osv-scanner && \
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" \
-        -o /tmp/osv-scanner_SHA256SUMS && \
     cd /usr/local/bin && \
-    grep "osv-scanner_linux_${ARCH}$" /tmp/osv-scanner_SHA256SUMS > /tmp/osv-checksum.txt && \
-    sed -i "s|osv-scanner_linux_${ARCH}|osv-scanner|" /tmp/osv-checksum.txt && \
-    sha256sum -c /tmp/osv-checksum.txt && \
-    chmod +x /usr/local/bin/osv-scanner && \
     # Download cosign and verify checksum
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${ARCH}" \
         -o /usr/local/bin/cosign && \
@@ -233,7 +235,7 @@ RUN set -e && apk add --no-cache curl && \
     sed -i "s|cosign-linux-${ARCH}|cosign|" /tmp/cosign-checksum.txt && \
     sha256sum -c /tmp/cosign-checksum.txt && \
     chmod +x /usr/local/bin/cosign && \
-    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
+    rm -f /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev
@@ -246,8 +248,8 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the osv-scanner and cosign binaries from the binary-downloader stage
-COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
+# Copy the osv-scanner build and the cosign download
+COPY --from=osv-scanner-build /out/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
 # Create directories with proper permissions for non-root user
@@ -435,8 +437,8 @@ ENTRYPOINT []
 # Copy application code, .venv (with fixed symlinks), and collected static files
 COPY --from=collectstatic /code /code
 
-# Copy the osv-scanner and cosign binaries from the binary-downloader stage
-COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
+# Copy the osv-scanner build and the cosign download
+COPY --from=osv-scanner-build /out/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
 # Copy the slimmed /staged tree (pre-filtered to WeasyPrint's actual .so
