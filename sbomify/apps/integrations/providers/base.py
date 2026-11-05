@@ -2,7 +2,8 @@
 
 Everything provider-specific is data on one frozen dataclass, so the OAuth
 module, the views and the templates never branch on which provider they are
-looking at. Adding a second one is a new ``ProviderSpec`` and a sync function.
+looking at. A compliance provider is a ``ProviderSpec`` and a sync function; a
+notification provider is a ``ProviderSpec`` with ``kind="notifications"``.
 
 The four ``*_setting`` fields name settings rather than holding values,
 because a spec is built at import time and the settings it reads are
@@ -14,7 +15,8 @@ Two of those four are named around the usual words rather than using them.
 is the client secret. Both hold the *name* of a setting and never a value, but
 bandit reads "token" or "secret" in a keyword argument as a hardcoded password,
 so calling them what they are produces a B106 that is not a finding. Renaming
-them back reintroduces it.
+them back reintroduces it. ``exchange_encoding``, how the token endpoint wants
+its body, is named around the word for the same reason.
 """
 
 from __future__ import annotations
@@ -45,8 +47,32 @@ class ProviderSpec:
     client_credential_setting: str
     # Dotted path to ``sync(integration) -> ServiceResult[SyncSummary]``.
     # A path rather than the function, so a provider module is free to import
-    # this one.
-    sync_path: str
+    # this one. Empty for a provider sbomify only writes to, which has nothing
+    # to sync and is never queued for it.
+    sync_path: str = ""
+    # What a connection is for, which decides what the tile shows under it: a
+    # compliance tool lists the frameworks it synced, a notification tool the
+    # channels sbomify posts to.
+    kind: str = "compliance"
+    # The line above ``reads``. A notification provider is written to, so
+    # "reads, and never writes" would be untrue on its tile.
+    reads_intro: str = "sbomify reads, and never writes:"
+    # How the token endpoint wants its body. Vanta refuses form encoding and
+    # Slack refuses JSON, so this cannot be one answer for every provider.
+    exchange_encoding: str = "json"
+    # Slack's authorize URL takes a comma-separated list where the OAuth spec
+    # says space-separated.
+    scope_separator: str = " "
+    # Whether an access token runs out. Slack bot tokens do not, and arrive
+    # with neither an expiry nor a refresh token; read with the usual rule, a
+    # connection like that would be "stale" on its first use and revoked for
+    # lacking a refresh token to renew it with.
+    tokens_expire: bool = True
+    # Dotted path to ``account(token_response: dict) -> dict``: who the
+    # connection is to, in the provider's own words, shown on the tile so an
+    # admin can tell which of their accounts is connected. Empty when the token
+    # response does not say.
+    account_path: str = ""
 
     def _setting(self, name: str) -> str:
         return str(getattr(settings, name, "") or "")
@@ -66,6 +92,11 @@ class ProviderSpec:
     @property
     def client_secret(self) -> str:
         return self._setting(self.client_credential_setting)
+
+    @property
+    def syncs(self) -> bool:
+        """Whether this provider has anything to sync, and so a schedule."""
+        return bool(self.sync_path)
 
     @property
     def is_configured(self) -> bool:
