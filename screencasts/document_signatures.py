@@ -1,47 +1,39 @@
 """Record the document-signature screencast.
 
-Drives: Dashboard → Components → click into the Compression Core
-Library component → SBOM list with the new "Signed" + "Provenance"
-badges visible → linger on the badges → close on the SBOM
-Verification plugin's "All Passed" Assessment Results card. Pairs
-with the ``how-do-i-use-signature-files`` FAQ on sbomify.com.
+Pairs with the ``how-do-i-use-signature-files`` FAQ on sbomify.com.
 
-The recording does NOT call the signature upload API or run the
-real plugin pipeline — POSTing bundle bytes from inside Playwright
-or waiting on an asynchronous Dramatiq plugin run would couple the
-recording to S3 / signature-store / worker wiring that flakes in
-the test environment. Instead the fixture seeds the visible state
-directly via ORM:
+Drives: a terminal card with the two API calls a release pipeline makes
+(attach a cosign signature bundle, attach a SLSA provenance attestation) →
+those calls really run against the API → Components → the component → its
+1.0.0 version → the SBOM page with the Signed and Provenance badges and the
+SBOM Verification assessment passing.
 
-- ``signature_blob_key`` / ``signature_type`` / ``provenance_blob_key``
-  on the target SBOM — drive the Signed / Provenance badges.
-- A completed ``AssessmentRun`` for the ``sbom-verification`` plugin
-  with five granular passing findings (digest integrity, signature
-  presence + validity, provenance presence + digest match) plus the
-  rolled-up ``verification:attestation`` summary finding that BSI /
-  FDA / NTIA's ``requires_one_of: attestation`` clause consumes —
-  drives the Assessment Results card's "All Passed" badge so the
-  closing frame shows the same visible outcome a real signed-and-
-  attested SBOM would produce.
-
-The visible UX is indistinguishable from a real upload-then-scan
-flow, the recording stays deterministic, and we cover the worker
-wait state in the FAQ rather than baking a flaky polling loop into
-the screencast.
+The two uploads go through the real ``/api/v1/sboms/sbom/<id>/signature`` and
+``/provenance`` endpoints in-process, with the S3 writes stubbed (the stack runs
+no object store) and the verification enqueue stubbed. The verification result
+is seeded through the ORM: running the real plugin would need the SBOM bytes and
+a real Sigstore bundle from object storage, which this stack does not have. The
+seeded run carries the same findings a passing run produces.
 """
 
+import base64
+import html as html_lib
+import json
 import uuid
 from datetime import datetime, timezone
 
 import pytest
+from django.test import Client
 from playwright.sync_api import Page
 
 from conftest import (
     auto_dismiss_toasts,
-    click_into_row,
     hover_and_click,
-    navigate_to_components,
+    narrate,
     pace,
+    settle,
+    setup_authenticated_client_session,
+    smooth_scroll,
     start_on_dashboard,
 )
 from sbomify.apps.plugins.builtins.verification import SBOMVerificationPlugin
@@ -124,44 +116,32 @@ def _verification_result(plugin_name: str, plugin_version: str) -> dict:
     }
 
 
+SBOM_SHA256 = "9f2c4e7a1b3d5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
+
+
 @pytest.fixture
-def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
-    """Seed signature + provenance blobs and a passing verification run.
-
-    The component-detail template renders the ``Signed`` badge when
-    ``signature_blob_key`` is non-empty and the ``Provenance`` badge
-    when ``provenance_blob_key`` is non-empty. Setting both lets the
-    recording show the two-badge layout the FAQ talks about without
-    standing up actual S3 storage for the signature bytes.
-
-    The Assessment Results card on the SBOM detail page reads
-    completed ``AssessmentRun`` rows for the SBOM and renders the
-    "All Passed" badge when every run's summary reports zero
-    failures. We pre-create one for the ``sbom-verification``
-    plugin so the closing frame of the recording shows the
-    operator-visible payoff of attaching the artefacts.
-    """
+def signing_setup(pied_piper_with_sboms: dict, mocker) -> dict:
+    """Give the SBOM a hash to sign, stub the S3 writes and the verification enqueue."""
     sbom = pied_piper_with_sboms["sboms"][SIGNED_COMPONENT_NAME]
-    sbom.signature_blob_key = f"signatures/{sbom.id}/cosign-bundle.sig"
-    sbom.signature_type = "cosign-bundle"
-    sbom.provenance_blob_key = f"provenance/{sbom.id}/build-provenance.intoto.jsonl"
-    sbom.save(
-        update_fields=[
-            "signature_blob_key",
-            "signature_type",
-            "provenance_blob_key",
-        ]
-    )
+    sbom.sha256_hash = SBOM_SHA256
+    sbom.save(update_fields=["sha256_hash"])
 
-    # ``plugin_version`` is sourced from the live plugin so the
-    # Assessment Results card — and any follow-up tooling that
-    # pivots on (plugin_name, plugin_version) — sees the same
-    # identifier a real production run would emit; ``plugin_name``
-    # is a literal in the plugin's ``get_metadata()`` rather than a
-    # class attribute, so we mirror that here. ``RunReason.ON_UPLOAD``
-    # is the canonical enum value the UI's ``format_run_reason``
-    # helper translates to "Upload"; the previous ``"sbom_uploaded"``
-    # literal didn't round-trip through that mapping.
+    mocker.patch(
+        "sbomify.apps.sboms.apis.StorageClient.upload_sbom_signature",
+        side_effect=lambda self_id, digest, data: f"signatures/{digest}.sig",
+        autospec=False,
+    )
+    mocker.patch(
+        "sbomify.apps.sboms.apis.StorageClient.upload_sbom_provenance",
+        side_effect=lambda self_id, digest, data: f"provenance/{digest}.intoto.jsonl",
+        autospec=False,
+    )
+    mocker.patch("sbomify.apps.sboms.apis._trigger_verification")
+    return pied_piper_with_sboms
+
+
+def _seed_verification_run(sbom) -> None:
+    """The passing sbom-verification run the upload would trigger."""
     plugin_name = "sbom-verification"
     plugin_version = SBOMVerificationPlugin.VERSION
     now = datetime.now(tz=timezone.utc)
@@ -181,82 +161,133 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
         result_schema_version="1.0",
     )
 
-    return pied_piper_with_sboms
+
+def _terminal(page: Page, lines: list[str]) -> None:
+    """Draw a terminal window holding the pipeline's commands."""
+    body = "\n".join(html_lib.escape(line) for line in lines)
+    page.set_content(
+        f"""<!doctype html><html><head><meta charset="utf-8"><style>
+      body {{ margin: 0; min-height: 100vh; background: #0A0A23; display: flex;
+             align-items: center; justify-content: center;
+             font-family: ui-monospace, "SF Mono", Menlo, monospace; }}
+      .win {{ width: 1180px; background: #14142e; border: 1px solid #2b2b52;
+             border-radius: 12px; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,.5); }}
+      .bar {{ display: flex; gap: 8px; padding: 12px 16px; background: #1c1c3d;
+             border-bottom: 1px solid #2b2b52; color: #e6e6f0; font-size: 14px; align-items: center; }}
+      .dot {{ width: 12px; height: 12px; border-radius: 50%; }}
+      pre {{ margin: 0; padding: 22px 24px; color: #c8c8e0; font-size: 17px; line-height: 1.6;
+            white-space: pre-wrap; min-height: 420px; }}
+    </style></head><body><div class="win">
+      <div class="bar"><span class="dot" style="background:#ff5f57"></span>
+        <span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
+        <span style="margin-left:8px">release pipeline</span></div>
+      <pre id="term">{body}</pre>
+    </div></body></html>""",
+        wait_until="load",
+    )
+
+
+def _append(page: Page, line: str) -> None:
+    page.evaluate("(line) => { document.getElementById('term').textContent += '\\n' + line; }", line)
 
 
 @pytest.mark.django_db(transaction=True)
-def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict) -> None:
+def document_signatures(recording_page: Page, signing_setup: dict, sample_user, deletable_team) -> None:
     page = recording_page
-
-    # Component detail + SBOM detail pages lazy-load HTMX panels
-    # (release history, vulnerability summary, notification websocket)
-    # that fail in the screencast environment and pop "Failed to load
-    # …" toasts unrelated to the signature flow. The shared
-    # ``auto_dismiss_toasts`` helper attaches a MutationObserver that
-    # drains those toasts the moment they are appended — observers
-    # only fire on real DOM mutations, so there is no polling
-    # overhead and no interval to clean up.
     auto_dismiss_toasts(page)
-    start_on_dashboard(page)
+    sbom = signing_setup["sboms"][SIGNED_COMPONENT_NAME]
+    api = Client()
+    setup_authenticated_client_session(api, deletable_team, sample_user)
 
-    # ── 1. Components page ──────────────────────────────────────────────
-    # The Components sidebar entry leads to the table that lists every
-    # component in the workspace. We open it first so a viewer sees the
-    # path the FAQ prose describes ("Components → click into the
-    # component → SBOM list with badges").
-    navigate_to_components(page)
+    # The opening line plays over the dashboard loading.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=600)
     pace(page, 1500)
 
-    # ── 2. Click into the signed component ──────────────────────────────
-    click_into_row(page, SIGNED_COMPONENT_NAME)
+    # ── 1. The pipeline's two calls ──────────────────────────────────────
+    base = f"https://app.sbomify.com/api/v1/sboms/sbom/{sbom.id}"
+    _terminal(
+        page,
+        [
+            "$ cosign sign-blob --bundle sbom.cdx.json.bundle sbom.cdx.json",
+            "",
+            f"$ curl -X POST {base}/signature \\",
+            '    -H "Authorization: Bearer $SBOMIFY_TOKEN" \\',
+            '    -H "X-Signature-Type: cosign-bundle" \\',
+            "    --data-binary @sbom.cdx.json.bundle",
+        ],
+    )
+    narrate(page, "after_uploading_sbom")
+    settle(page)
+    narrate(page, "posts_signature_bundle")
+    response = api.post(
+        f"/api/v1/sboms/sbom/{sbom.id}/signature",
+        data=b"cosign-bundle-bytes",
+        content_type="application/octet-stream",
+        HTTP_X_SIGNATURE_TYPE="cosign-bundle",
+    )
+    assert response.status_code == 201, response.content
+    pace(page, 1200)
+    _append(page, '{"detail": "Signature uploaded"}')
+    pace(page, 600)
+
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [{"name": "sbom.cdx.json", "digest": {"sha256": SBOM_SHA256}}],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {"buildDefinition": {"buildType": "https://example.com/pied-piper/build"}},
+    }
+    envelope = {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": base64.b64encode(json.dumps(statement).encode()).decode(),
+        "signatures": [],
+    }
+    _append(page, "")
+    _append(page, f"$ curl -X POST {base}/provenance \\")
+    _append(page, '    -H "Authorization: Bearer $SBOMIFY_TOKEN" \\')
+    _append(page, "    --data-binary @provenance.intoto.jsonl")
+    narrate(page, "slsa_provenance_attestation")
+    pace(page, 2500)
+    response = api.post(
+        f"/api/v1/sboms/sbom/{sbom.id}/provenance",
+        data=json.dumps(envelope),
+        content_type="application/json",
+    )
+    assert response.status_code == 201, response.content
+    _append(page, '{"detail": "Provenance uploaded"}')
+    _seed_verification_run(sbom)
     pace(page, 1500)
 
-    # ── 3. Open the SBOM detail page ────────────────────────────────────
-    # The Signed / Provenance badges live on the *SBOM* detail page,
-    # not the component overview. The component overview shows a
-    # "BOMs" section that is HTMX-loaded; once the table arrives the
-    # SBOM filename is a link to ``/components/<id>/sboms/<sbom-id>/``.
-    # The SBOM names are slugified from the component name in the
-    # fixture (``com.piedpiper/<component-slug>``); ``Compression Core
-    # Library`` slugifies to ``compression-core-library``.
-    sbom_link = page.locator("a:has-text('com.piedpiper/compression-core-library')").first
-    sbom_link.wait_for(state="visible", timeout=15_000)
-    sbom_link.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 1500)
-    hover_and_click(page, sbom_link)
+    # ── 2. The SBOM in the app ───────────────────────────────────────────
+    page.goto("/components/")
     page.wait_for_load_state("networkidle")
+    link = page.locator("main").get_by_role("link", name=SIGNED_COMPONENT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    narrate(page, "sbomify_open_component")
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
+    version_link = page.locator("main").get_by_role("link", name="1.0.0").first
+    version_link.wait_for(state="visible", timeout=15_000)
+    pace(page, 500)
+    hover_and_click(page, version_link)
+    page.wait_for_load_state("networkidle")
+
+    signed = page.locator("main").get_by_text("Signed", exact=True).first
+    signed.wait_for(state="visible", timeout=15_000)
+    provenance = page.locator("main").get_by_text("Provenance", exact=True).first
+    signed.hover()
+    narrate(page, "sbom_carries_signed")
     pace(page, 1500)
+    provenance.hover()
+    pace(page, 800)
 
-    # ── 4. Linger on the badges ────────────────────────────────────────
-    # The "Signed" (green padlock) + "Provenance" (blue shield) badges
-    # render inline next to the SBOM metadata block. They show the
-    # moment the page loads — no interaction needed — so we just
-    # scroll the badge row into view and pause for the FAQ tie-in.
-    sbom_signed_badge = page.locator("span.text-success:has-text('Signed')").first
-    sbom_signed_badge.wait_for(state="visible", timeout=15_000)
-    sbom_signed_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
-
-    provenance_badge = page.locator("span.text-info:has-text('Provenance')").first
-    provenance_badge.wait_for(state="visible", timeout=10_000)
-    provenance_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
-
-    # ── 5. Wait for the SBOM Verification result to render ──────────────
-    # The Assessment Results card is HTMX-loaded after the page
-    # paint. ``All Passed`` is the headline pill that lights up when
-    # the seeded ``sbom-verification`` AssessmentRun's summary
-    # reports zero failures across every finding — the same outcome
-    # a real signed-and-attested SBOM produces once the worker
-    # finishes.
-    all_passed = page.locator("span:has-text('All Passed')").first
-    all_passed.wait_for(state="visible", timeout=20_000)
-    all_passed.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
-
-    # Hover the All Passed pill so the closing frame anchors on the
-    # operator-visible outcome the FAQ promises.
-    box = all_passed.bounding_box()
-    if box:
-        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    pace(page, 2500)
+    passed = page.locator("main").get_by_text("All passed").first
+    passed.wait_for(state="visible", timeout=20_000)
+    smooth_scroll(page, passed, 300)
+    passed.hover()
+    narrate(page, "sbom_verification_assessment")
+    show_met = page.get_by_role("button", name="Show 6 met requirements")
+    pace(page, 1500)
+    hover_and_click(page, show_met)
+    pace(page, 600)
+    narrate(page, "open_met_requirements")

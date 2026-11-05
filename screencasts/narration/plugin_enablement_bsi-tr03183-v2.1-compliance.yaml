@@ -1,0 +1,31 @@
+# Narration for screencasts/plugin_enablement.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to turn on the BSI TR-03183-2 check in sbomify.
+
+  open_plugins:
+    text: >-
+      Open Plugins from the sidebar. Plugins are grouped into compliance, security
+      and attestation.
+
+  about:
+    text: >-
+      It checks SBOMs against the German BSI guideline behind the EU Cyber
+      Resilience Act SBOM rules. It needs CycloneDX 1.6 or SPDX 3.0.1, or newer.
+
+  tick_save:
+    text: >-
+      Tick the plugin, then scroll down and save your changes.
+
+  done:
+    text: >-
+      The BSI check is on. Every new SBOM upload now gets a Cyber Resilience Act
+      compliance result.
+
+  changes_apply:
+    text: >-
+      Changes apply to new uploads. Results you already have are kept.

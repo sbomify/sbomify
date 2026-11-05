@@ -1,0 +1,46 @@
+# Narration for screencasts/cryptography_cbom.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how sbomify shows the cryptography in your software, and what to
+      migrate first.
+
+  cryptography_page_grades:
+    text: >-
+      The Cryptography page grades every component for quantum readiness, from the
+      CBOMs you upload or the crypto found in your SBOMs.
+
+  glance_which_components:
+    text: >-
+      At a glance: which components are at risk, which need review, and which are
+      already ready.
+
+  migrate_first_lists:
+    text: >-
+      Migrate first lists the quantum-vulnerable algorithms used across the most
+      components.
+
+  each_component_shows:
+    text: >-
+      Each component shows its readiness, its algorithm counts and its
+      certificates.
+
+  open_component_see:
+    text: >-
+      Open a component to see its CBOM's cryptographic assets, worst first.
+
+  expand_asset_see:
+    text: >-
+      Expand an asset to see why it was graded that way, and what to move to.
+
+  certificates_shows_each:
+    text: >-
+      Certificates shows each one's issuer and how long it has left.
+
+  protocols_lists_cipher:
+    text: >-
+      Protocols lists the cipher suites in use, flags weak ones, and exports them
+      as CSV.
