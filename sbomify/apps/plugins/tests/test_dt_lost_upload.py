@@ -59,13 +59,16 @@ class TestALostUploadIsSentAgain:
         return SimpleNamespace(sbom=sbom, path=path, server=server, row=row)
 
     @staticmethod
-    def _client(*, metrics: dict | Exception, project: dict) -> MagicMock:
+    def _client(*, metrics: dict | Exception, project: dict | Exception) -> MagicMock:
         client = MagicMock()
         if isinstance(metrics, Exception):
             client.get_project_metrics.side_effect = metrics
         else:
             client.get_project_metrics.return_value = metrics
-        client.get_project.return_value = project
+        if isinstance(project, Exception):
+            client.get_project.side_effect = project
+        else:
+            client.get_project.return_value = project
         client.get_project_vulnerabilities.return_value = {"content": []}
         return client
 
@@ -125,6 +128,17 @@ class TestALostUploadIsSentAgain:
         down = DependencyTrackAPIError("Dependency Track error (503): Service Unavailable", 503)
 
         upload, outcome = self._assess(scan, self._client(metrics=down, project=NOT_ANALYSED))
+
+        upload.assert_not_called()
+        assert isinstance(outcome, RetryLaterError)
+        assert self._row_kept(scan)
+
+    def test_a_failed_project_read_is_not_read_as_a_lost_upload(self, scan) -> None:
+        """The metrics answer empty, then the project read fails: DT has not said
+        whether it analysed the upload, so the version stays on record."""
+        down = DependencyTrackAPIError("Dependency Track error (503): Service Unavailable", 503)
+
+        upload, outcome = self._assess(scan, self._client(metrics={}, project=down))
 
         upload.assert_not_called()
         assert isinstance(outcome, RetryLaterError)

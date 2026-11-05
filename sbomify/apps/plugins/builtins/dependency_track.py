@@ -723,9 +723,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 raise _UploadLost("Dependency Track no longer has this project version") from e
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
-        if not metrics and not self._analysis_finished(client, version_uuid):
+        if not metrics and not (finished := self._analysis_finished(client, version_uuid)):
             uploaded = version_row.last_sbom_upload or version_row.created_at
-            if dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
+            if finished is False and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
                 raise _UploadLost(f"Dependency Track has not analysed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
             raise RetryLaterError("Dependency Track still processing SBOM")
 
@@ -809,20 +809,21 @@ class DependencyTrackPlugin(AssessmentPlugin):
         )
 
     @staticmethod
-    def _analysis_finished(client: Any, version_uuid: str) -> bool:
+    def _analysis_finished(client: Any, version_uuid: str) -> bool | None:
         """Whether Dependency Track has finished analysing this project version.
 
         DT stamps ``lastVulnerabilityAnalysis`` on the project when its analysis
         ends, then queues the metrics update as a separate event, which can wait
         behind every other project's metrics. The findings are readable from the
         stamp on, so a scan that waited for metrics alone could run out of retries
-        with its results already there. A failed read counts as not finished.
+        with its results already there. A failed read returns None: DT has not
+        said, which is not the same as an upload it never analysed.
         """
         try:
             project = client.get_project(version_uuid)
         except Exception:
             logger.debug("[DT] Could not read the analysis state of project %s", version_uuid, exc_info=True)
-            return False
+            return None
         return bool(project.get("lastVulnerabilityAnalysis"))
 
     @staticmethod
