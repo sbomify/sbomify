@@ -63,7 +63,13 @@
                         {% if unfinished %}
                             <ul class="m-0 divide-y divide-[color-mix(in_oklab,var(--color-border)_70%,transparent)] p-0{% if matrix.columns %} border-t border-solid border-border{% endif %}">
                                 {% for tile in unfinished %}
-                                    <c-assessments.row anchor="plugin-{{ tile.run.plugin_name }}" name="{{ tile.run.plugin_display_name|default:tile.run.plugin_name }}" tone="{{ tile.tone }}" label="{{ tile.label }}" caption="{{ tile.caption }}" :segments="tile.segments" bar_label="{{ tile.bar_label }}" :stale="tile.run.current_version" />
+                                    <c-assessments.row anchor="plugin-{{ tile.run.plugin_name }}" name="{{ tile.run.plugin_display_name|default:tile.run.plugin_name }}" tone="{{ tile.tone }}" label="{{ tile.label }}" caption="{{ tile.caption }}" :segments="tile.segments" bar_label="{{ tile.bar_label }}" :stale="tile.run.current_version">
+                                    {% if tile.run.plugin_name == 'dependency-track' %}
+                                        <c-slot name="action">
+                                        {% include 'plugins/components/_rerun_button.html.j2' with run=tile.run label="Re-import" hint="Send this SBOM to Dependency Track again" %}
+                                        </c-slot>
+                                    {% endif %}
+                                    </c-assessments.row>
                                 {% endfor %}
                             </ul>
                         {% endif %}

@@ -926,6 +926,15 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
             "error_code": ErrorCode.FORBIDDEN,
         }
 
+    if plugin_name == "dependency-track":
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        # A Dependency Track run with the SBOM's project version on record only
+        # polls it. Forgetting the record makes this run upload the SBOM again,
+        # so a scan DT lost or never finished analysing starts over. The upload
+        # lands on the same project version, which DT re-imports.
+        SbomDependencyTrackProjectVersion.objects.filter(sbom=sbom).delete()
+
     user = getattr(request, "user", None)
     run_assessment_task.send(
         sbom_id=sbom.id,
