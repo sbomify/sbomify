@@ -8,7 +8,14 @@ detail routes. No row is itself clickable, so menus and keyboard links stay inde
 <c-tables.row class="group">
 <c-tables.cell compact>
 <div class="min-w-40 max-w-72">
-    <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
+    {% if kind == 'releases' and row.lifecycle_state != 'active' %}
+        <div class="flex flex-wrap items-center gap-2">
+            <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
+            <c-badges.release-state state="{{ row.lifecycle_state }}" size="sm" />
+        </div>
+    {% else %}
+        <c-overview.record href="{{ row.url }}" title="{{ row.name }}" />
+    {% endif %}
     {% if not scope_product %}<p class="mt-1 mb-0 text-xs text-text-muted">
         {% if kind == 'products' %}
             {{ row.component_count|intcomma }} component{{ row.component_count|pluralize }}
