@@ -144,7 +144,7 @@ class TestMemberCannotOverstep:
         """Reaching the page is not the same as being able to act on it.
 
         Needs a paid plan and is_public=False to be a real test: the model default
-        is True, and Team.save() force-sets is_public back to True when the plan
+        is True, and Workspace.save() force-sets is_public back to True when the plan
         cannot be private — so on a community workspace this would assert on state
         the model controls rather than on the guard.
         """

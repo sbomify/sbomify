@@ -16,7 +16,7 @@ from conftest import (
     rewrite_localhost_urls,
     start_on_dashboard,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # ---------------------------------------------------------------------------
 # Main screencast
@@ -24,7 +24,7 @@ from sbomify.apps.teams.models import Team
 
 
 @pytest.mark.django_db(transaction=True)
-def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
+def tea_enabling(recording_page: Page, deletable_team: Workspace) -> None:
     page = recording_page
 
     start_on_dashboard(page)
@@ -39,7 +39,7 @@ def tea_enabling(recording_page: Page, deletable_team: Team) -> None:
     # In production the domain would be validated asynchronously via DNS.
     # We simulate this by updating the DB directly so the TEA discovery URL
     # appears after the next page reload.
-    Team.objects.filter(key=deletable_team.key).update(custom_domain_validated=True)
+    Workspace.objects.filter(key=deletable_team.key).update(custom_domain_validated=True)
 
     # Reload the trust center tab to pick up the validated domain
     page.reload()
