@@ -18,9 +18,11 @@ document-artifact guards) that still apply in the new model.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.plugins.models import (
@@ -472,6 +474,58 @@ class TestCronIteratesUniqueSboms:
         )
         assert len(captured_enqueue_calls) == 1
         assert captured_enqueue_calls[0]["sbom_id"] == str(sbom.id)
+
+    @pytest.mark.parametrize(
+        ("status", "retry_due_in", "rescanned"),
+        [
+            (RunStatus.PENDING.value, timedelta(minutes=30), False),
+            (RunStatus.COMPLETED.value, timedelta(hours=-3), True),
+            # A finished run counts from when it was created, as it always did.
+            (RunStatus.COMPLETED.value, timedelta(minutes=-30), True),
+        ],
+    )
+    def test_cron_leaves_a_scan_waiting_out_its_retries(
+        self, sample_team_with_owner_member, monkeypatch, status, retry_due_in, rescanned
+    ):
+        """A run created hours ago is still in flight while its next retry is due."""
+        from sbomify.apps.plugins.tasks import _is_paid_team, _run_scheduled_security_scans
+
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "business"
+        team.save()
+        _make_dt_plugin()
+        _enable_plugins(team, "dependency-track")
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        product.components.add(component)
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sbom_filename="s.json")
+        ReleaseArtifact.objects.get_or_create(release=Release.get_or_create_latest_release(product), sbom=sbom)
+
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason="on_upload",
+            status=status,
+        )
+        now = timezone.now()
+        AssessmentRun.objects.filter(pk=run.pk).update(created_at=now - timedelta(hours=4), retry_at=now + retry_due_in)
+
+        enqueued: list[dict] = []
+        monkeypatch.setattr("sbomify.apps.plugins.tasks.enqueue_assessment", lambda **kwargs: enqueued.append(kwargs))
+
+        _run_scheduled_security_scans(
+            plugin_name="dependency-track",
+            plan_filter=_is_paid_team,
+            skip_hours=1,
+            task_name="test_hourly_dt_scan",
+            only_cyclonedx=True,
+        )
+
+        assert [call["sbom_id"] for call in enqueued] == ([str(sbom.id)] if rescanned else [])
 
 
 @pytest.mark.django_db
