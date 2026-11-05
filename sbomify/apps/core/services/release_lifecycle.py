@@ -33,7 +33,14 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
+from sbomify.apps.core.models import (
+    LATEST_RELEASE_NAME,
+    Component,
+    Release,
+    ReleaseArtifact,
+    ReleaseLink,
+    ReleaseSupersession,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
@@ -224,6 +231,97 @@ def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceRe
         ):
             missing.append(predecessor.name)
     return ServiceResult.success(missing)
+
+
+_UNTRACKED_REASONS = {
+    Release.LifecycleState.WITHDRAWN: "It was withdrawn",
+    Release.LifecycleState.END_OF_LIFE: "It reached end of life",
+    Release.LifecycleState.END_OF_SUPPORT: "Its support ended",
+    Release.LifecycleState.SUPERSEDED: "A newer release replaced it",
+    Release.LifecycleState.ARCHIVED: "It was archived",
+}
+
+
+def _shipped_sboms(release_ids: list[Any], *, public_only: bool) -> dict[Any, set[str]]:
+    """Each release's SBOMs, or only those of public components for a Trust Center posture."""
+    artifacts = ReleaseArtifact.objects.filter(release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM)
+    if public_only:
+        artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    shipped: dict[Any, set[str]] = defaultdict(set)
+    for release_id, sbom_id in artifacts.values_list("release_id", "sbom_id"):
+        shipped[release_id].add(sbom_id)
+    return shipped
+
+
+def still_scanned_release_ids(release_ids: Iterable[str], team_id: Any, *, public_only: bool = False) -> set[str]:
+    """Of these releases, those whose counts sbomify still keeps current, whatever their own state.
+
+    A live release that ships or links to one keeps it scanned, and so does a
+    release every SBOM of which sbomify scans anyway (``tracked_sboms``, the
+    set the scheduled scans cover). One SBOM it alone ships is enough to leave
+    it out, since that SBOM's counts stop moving. ``public_only`` weighs only
+    the SBOMs of public components, the ones a Trust Center posture counts.
+    """
+    release_ids = list(release_ids)
+    if not release_ids:
+        return set()
+    still = set(shipping_releases(team_id=team_id).filter(pk__in=release_ids).values_list("pk", flat=True))
+
+    shipped = _shipped_sboms(release_ids, public_only=public_only)
+    candidates = set().union(*shipped.values())
+    if candidates:
+        tracked = set(
+            tracked_sboms(SBOM.objects.filter(pk__in=candidates), team_id=team_id).values_list("pk", flat=True)
+        )
+        still |= {release_id for release_id, sboms in shipped.items() if sboms <= tracked}
+    return still
+
+
+def untracked_notice(release: Release, *, public_only: bool = False) -> dict[str, Any] | None:
+    """Why sbomify stopped scanning a release, with that reason's own date, or ``None`` while it still does.
+
+    Its counts are as old as its last scan, which the page prints beside this.
+    Several things can retire a release, so this names the first that
+    happened: a release replaced in June whose support then ended in January
+    went in June. The date belongs to the reason, never to when the scans
+    stopped: a support date already past on the day it took effect would say
+    the scans stopped before the last scan ran.
+
+    When some of its SBOMs are still scanned, as another release's or as
+    their component's newest, ``stopped`` and ``sboms`` say how many of them
+    did stop, so the page does not call every count frozen.
+    """
+    if release.lifecycle_state == Release.LifecycleState.ACTIVE:
+        return None
+    if release.pk in still_scanned_release_ids([release.pk], release.product.team_id, public_only=public_only):
+        return None
+
+    now = timezone.now()
+    today = timezone.localdate(now)
+    end_of_life = release.effective_end_of_life
+    end_of_support = release.effective_end_of_support
+
+    def day(moment: datetime | None) -> date | None:
+        return timezone.localdate(moment) if moment and moment <= now else None
+
+    # Ties go to the first, the order lifecycle_state ranks them in.
+    stopped = [
+        (day(release.withdrawn_at), Release.LifecycleState.WITHDRAWN),
+        (end_of_life if end_of_life and end_of_life < today else None, Release.LifecycleState.END_OF_LIFE),
+        (end_of_support if end_of_support and end_of_support < today else None, Release.LifecycleState.END_OF_SUPPORT),
+        (day(release.superseded_at), Release.LifecycleState.SUPERSEDED),
+        (day(release.archived_at), Release.LifecycleState.ARCHIVED),
+    ]
+    passed = [(on, state) for on, state in stopped if on is not None]
+    if not passed:
+        return None
+    on, state = min(passed, key=lambda item: item[0])
+    notice: dict[str, Any] = {"on": on, "reason": _UNTRACKED_REASONS[state]}
+    shipped = _shipped_sboms([release.pk], public_only=public_only)[release.pk]
+    scanned = tracked_sboms(SBOM.objects.filter(pk__in=shipped), team_id=release.product.team_id).count()
+    if scanned:
+        notice.update(stopped=len(shipped) - scanned, sboms=len(shipped))
+    return notice
 
 
 def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:
@@ -650,6 +748,31 @@ def recompute_release_lifecycle(product: Product) -> None:
     if changed:
         Release.objects.bulk_update(changed, fields)
         broadcast_releases_updated(product, changed)
+        broadcast_dependents([release.pk for release in changed])
+
+
+def broadcast_dependents(release_ids: list[Any]) -> None:
+    """Once this commits, tell the releases whose monitoring these releases decide.
+
+    A live release keeps the releases it links on monitored, and with them the
+    releases shipping their SBOMs, so moving a release in or out of its
+    lifecycle moves what their pages say. The releases themselves are not
+    told again.
+    """
+
+    def send() -> None:
+        reached = {*release_ids, *releases_linked_from(release_ids)}
+        shipped = ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values("sbom_id")
+        moved = (
+            Release.objects.filter(Q(pk__in=reached) | Q(artifacts__sbom_id__in=shipped))
+            .exclude(pk__in=release_ids)
+            .select_related("product__team")
+            .distinct()
+        )
+        for release in moved:
+            broadcast_releases_updated(release.product, [release])
+
+    transaction.on_commit(send, robust=True)
 
 
 def _after_commit(func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:

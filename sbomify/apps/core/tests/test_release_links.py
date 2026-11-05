@@ -125,6 +125,84 @@ class TestLinkingApi:
         assert client.delete(url, **get_api_headers(token)).status_code == 204
         assert client.delete(url, **get_api_headers(token)).status_code == 404
 
+    def test_linking_and_unlinking_tell_the_linked_releases_too(self, authenticated_api_client, app, toolchain, mocker):
+        """Whether a linked release is still monitored depends on the releases linking to it,
+        so its open page, and those of the releases it links on, repaint too."""
+        runtime = _release(app.product.team, "Runtime")
+        ReleaseLink.objects.create(release=toolchain, linked_release=runtime)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+
+        assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 201
+        assert (
+            client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token)).status_code
+            == 204
+        )
+
+        told = [c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"]
+        assert told.count(str(app.id)) == 2
+        assert told.count(str(toolchain.id)) == 2
+        assert told.count(str(runtime.id)) == 2
+
+    def test_unlinking_tells_the_releases_that_ship_the_linked_sboms(
+        self, authenticated_api_client, app, toolchain, mocker
+    ):
+        """A retired release sharing the linked release's SBOM can stop being monitored with it."""
+        bundle = _sbom(toolchain, "bundle")
+        sibling = _release(app.product.team, "Sibling")
+        ReleaseArtifact.objects.create(release=sibling, sbom=bundle)
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+
+        response = client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token))
+
+        assert response.status_code == 204
+        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
+        assert str(sibling.id) in told
+
+    @pytest.mark.parametrize("action", ["withdraw", "archive"])
+    def test_retiring_a_release_tells_the_releases_it_links_to(
+        self, authenticated_api_client, app, toolchain, mocker, action
+    ):
+        """The linked release may have been monitored only because this one linked to it."""
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+        body = {"action": action, "reason": "defective"} if action == "withdraw" else {"action": action}
+
+        response = client.post(
+            f"/api/v1/releases/{app.id}/lifecycle",
+            data=json.dumps(body),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 200
+        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
+        assert str(toolchain.id) in told
+
+    @pytest.mark.parametrize("action", ["withdraw", "archive"])
+    def test_retiring_a_release_tells_the_releases_that_share_its_sboms(
+        self, authenticated_api_client, app, toolchain, mocker, action
+    ):
+        """With no link at all, a retired release shipping the same SBOM may have been monitored only through it."""
+        ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, "shared"))
+        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        client, token = authenticated_api_client
+        body = {"action": action, "reason": "defective"} if action == "withdraw" else {"action": action}
+
+        response = client.post(
+            f"/api/v1/releases/{app.id}/lifecycle",
+            data=json.dumps(body),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 200
+        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
+        assert str(toolchain.id) in told
+
     def test_a_guest_cannot_link(self, guest_api_client, app, toolchain):
         client, token = guest_api_client
         assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 403
@@ -212,3 +290,154 @@ class TestTheReleasePages:
         html = page.content.decode()
         assert f"/public/product/{toolchain.product_id}/release/{toolchain.id}/" in html
         assert "Internal" not in html
+
+
+BROADCAST = "sbomify.apps.core.services.release_lifecycle.broadcast_to_workspace"
+
+
+class TestReleasesSharingAnSbomHearWhenItsTrackingMoves:
+    """A retired release's panel says whether its SBOMs are still scanned, and other releases decide that."""
+
+    def _told(self, sent) -> set[str]:
+        return {
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        }
+
+    def test_removing_the_sbom_from_another_release(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        pin = ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, "shared"))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            pin.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_deleting_another_release_that_shipped_it(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, "shared"))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            toolchain.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_adding_the_sbom_to_another_release(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        shared = _sbom(app, "shared")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            ReleaseArtifact.objects.create(release=toolchain, sbom=shared)
+
+        assert str(app.id) in self._told(sent)
+
+    def test_deleting_a_release_that_linked_to_it(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        # The linking release ships no SBOM of its own, so no artifact goes with it.
+        _sbom(app, "historical")
+        ReleaseLink.objects.create(release=toolchain, linked_release=app)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            toolchain.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_withdrawing_a_successor_tells_what_its_predecessor_links_to(
+        self, app, toolchain, mocker, django_capture_on_commit_callbacks
+    ):
+        # Withdrawing the successor makes the predecessor live again, and a live
+        # release keeps the releases it links on monitored.
+        from sbomify.apps.core.schemas import SupersedesItem
+        from sbomify.apps.core.services.release_lifecycle import declare_supersedes, set_release_state
+
+        successor = Release.objects.create(product=app.product, name="v3", version="v3.0.0")
+        with django_capture_on_commit_callbacks(execute=True):
+            assert declare_supersedes(successor, [SupersedesItem(release_id=app.pk, drop_in=True)]).ok
+        ReleaseLink.objects.create(release=app, linked_release=toolchain)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            assert set_release_state(successor, "withdraw", reason="defective").ok
+
+        assert str(toolchain.id) in self._told(sent)
+
+    def test_deleting_the_newest_sbom_tells_the_releases_shipping_the_one_before(
+        self, app, mocker, django_capture_on_commit_callbacks
+    ):
+        shipped = _sbom(app, "kernel")
+        newer = SBOM.objects.create(
+            name="kernel", version="2", component=shipped.component, format="cyclonedx", format_version="1.6"
+        )
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            newer.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_deleting_an_sbom_tells_the_release_that_shipped_it(self, app, mocker, django_capture_on_commit_callbacks):
+        # Its last untracked SBOM gone, the rest of a retired release may be fully monitored again.
+        shipped = _sbom(app, "historical")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            shipped.delete()
+
+        assert str(app.id) in self._told(sent)
+
+    def test_a_bulk_delete_tells_each_release_once(self, app, toolchain, mocker, django_capture_on_commit_callbacks):
+        # One delete taking many shared SBOMs with it would otherwise query and
+        # broadcast once per artifact.
+        for name in ("a", "b", "c"):
+            ReleaseArtifact.objects.create(release=toolchain, sbom=_sbom(app, name))
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            toolchain.delete()
+
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
+        assert told.count(str(app.id)) == 1
+        assert sum(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks) == 1
+
+    def test_refreshing_a_latest_release_tells_each_release_once(self, app, mocker, django_capture_on_commit_callbacks):
+        # A refresh deletes every pin and creates each one again, and a create
+        # has no delete to share a notice with.
+        for name in ("a", "b", "c"):
+            _sbom(app, name)
+        latest = Release.get_or_create_latest_release(app.product)
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            latest.refresh_latest_artifacts()
+
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
+        assert told.count(str(app.id)) == 1
+        assert told.count(str(latest.id)) == 1
+        assert sum(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks) == 1
+
+    def test_a_refresh_that_rolls_back_tells_nobody(self, app, django_capture_on_commit_callbacks):
+        from django.db import transaction
+
+        _sbom(app, "a")
+        latest = Release.get_or_create_latest_release(app.product)
+
+        with django_capture_on_commit_callbacks() as callbacks:
+            with pytest.raises(RuntimeError), transaction.atomic():
+                latest.refresh_latest_artifacts()
+                raise RuntimeError
+
+        assert not any(type(callback).__name__ == "_ReleasesToTell" for callback in callbacks)
+
+    def test_a_newer_sbom_replacing_the_newest(self, app, mocker, django_capture_on_commit_callbacks):
+        shipped = _sbom(app, "kernel")
+        sent = mocker.patch(BROADCAST)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            SBOM.objects.create(
+                name="kernel", version="2", component=shipped.component, format="cyclonedx", format_version="1.6"
+            )
+
+        assert str(app.id) in self._told(sent)
