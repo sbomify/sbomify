@@ -1508,6 +1508,7 @@ def _run_scheduled_security_scans(
     skip_hours: int,
     task_name: str,
     only_cyclonedx: bool = False,
+    needs_product: bool = False,
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
@@ -1522,10 +1523,14 @@ def _run_scheduled_security_scans(
         skip_hours: Skip SBOMs scanned within this many hours.
         task_name: Short label used in log messages.
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
+        needs_product: If True, leave out components in no product of their
+            workspace, which the plugin would only skip (DT).
 
     Returns:
         Dictionary with scan statistics.
     """
+    from django.db.models import F
+
     from sbomify.apps.sboms.models import SBOM
 
     from ..models import AssessmentRun, TeamPluginSettings
@@ -1595,39 +1600,27 @@ def _run_scheduled_security_scans(
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
-        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
-        # with at least one ReleaseArtifact link is eligible — the scan will
-        # cover all of its current releases via the M2M populated at run
-        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
-        # accessor join to keep the query small and avoid name-coupling.
-        from django.db.models import Exists, OuterRef
-
-        from sbomify.apps.core.models import ReleaseArtifact
+        # Stream eligible SBOMs directly. The scans cover what sbomify tracks:
+        # each component's newest SBOM of a format, and every SBOM a release it
+        # still monitors ships, or one such a release links to. The same set
+        # Dependency-Track keeps active, so the two cannot drift apart.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
 
         sbom_qs = (
-            SBOM.objects.filter(
-                bom_type=SBOM.BomType.SBOM,
-                component__team_id__in=team_ids,
+            tracked_sboms(
+                SBOM.objects.filter(component__team_id__in=team_ids)
+                # A row with no stored artifact can never be assessed; failed runs
+                # do not count as recent, so without this it re-fails every sweep.
+                .exclude(sbom_filename="")
             )
-            # A row with no stored artifact can never be assessed; failed runs
-            # do not count as recent, so without this it re-fails every sweep.
-            .exclude(sbom_filename="")
-            .annotate(
-                has_release_artifact=Exists(
-                    ReleaseArtifact.objects.filter(
-                        sbom_id=OuterRef("pk"),
-                        # Defense-in-depth: only count same-team release artifacts
-                        release__product__team_id=OuterRef("component__team_id"),
-                    )
-                )
-            )
-            .filter(has_release_artifact=True)
             .values("id", "component__team_id", "format")
             .distinct()
         )
 
         if only_cyclonedx:
             sbom_qs = sbom_qs.filter(format="cyclonedx")
+        if needs_product:
+            sbom_qs = sbom_qs.filter(component__products__team_id=F("component__team_id"))
 
         # The failure backoff is applied per batch rather than precomputed over
         # the whole table, and only to what has already survived the skip window
@@ -1776,6 +1769,7 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         skip_hours=1,
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
+        needs_product=True,
     )
 
 
