@@ -34,6 +34,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.cle import set_product_dates
 from sbomify.apps.core.services.release_lifecycle import (
     declare_supersedes,
     link_pending_supersessions,
@@ -940,6 +941,9 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
+            # Locked and read again: saving the copy loaded above would put back
+            # dates an edit committed since, while their events kept the new ones.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             if payload.is_public is False and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
@@ -947,12 +951,19 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.description = payload.description
             product.is_public = payload.is_public
 
-            # Update lifecycle event fields (aligned with Common Lifecycle Enumeration)
-            product.release_date = payload.release_date
-            product.end_of_support = payload.end_of_support
-            product.end_of_life = payload.end_of_life
-
             product.save()
+            # Lifecycle dates are CLE events, the one place they are stored.
+            dated = set_product_dates(
+                product,
+                {
+                    "release_date": payload.release_date,
+                    "end_of_support": payload.end_of_support,
+                    "end_of_life": payload.end_of_life,
+                },
+            )
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
             _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
@@ -993,6 +1004,8 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
     try:
         with transaction.atomic():
+            # Locked and read again, as in the PUT above.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
             component_ids = update_data.pop("component_ids", None)
@@ -1039,10 +1052,19 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
                 product.components.set(components_qs)
 
-            # Update simple fields
+            # Update simple fields. Lifecycle dates are CLE events, the one place they are stored.
+            dates = {
+                field: update_data.pop(field)
+                for field in ("release_date", "end_of_support", "end_of_life")
+                if field in update_data
+            }
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
+            dated = set_product_dates(product, dates)
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
             _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
