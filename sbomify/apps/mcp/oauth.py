@@ -168,7 +168,8 @@ def verify(token: str) -> dict[str, Any] | None:
         logger.warning("[MCP] Could not read Keycloak's signing keys", exc_info=True)
         return None
     except jwt.PyJWTError as exc:
-        logger.info("[MCP] Refused an OAuth token: %s", exc)
+        # The argument is PyJWT's reason (expired, wrong audience), never the credential itself.
+        logger.info("[MCP] Refused an OAuth credential: %s", exc)
         return None
     # The metadata and the challenge both ask for the mcp scope, so a token
     # carrying the audience without it was not issued through that consent.
