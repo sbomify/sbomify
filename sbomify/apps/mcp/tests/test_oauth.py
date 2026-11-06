@@ -42,7 +42,7 @@ class _RealmKeys:
 def realm_keys(monkeypatch):
     from django.core.cache import cache
 
-    cache.delete(oauth._JWKS_REFRESH_MARKER)
+    cache.delete(oauth._refresh_marker())
     keys = _RealmKeys()
     monkeypatch.setattr(oauth, "_jwks_client", lambda: keys)
     return keys
@@ -181,3 +181,16 @@ def test_each_client_a_person_signs_in_with_keeps_its_own_budget(signed_in):
     assert desktop.pk == desktop_refreshed.pk == "oauth:kc-user-1:claude-desktop"
     assert code.pk != desktop.pk
 
+
+def test_each_worker_refreshes_for_a_rotated_key(realm_keys, monkeypatch):
+    """Key sets are cached per worker, so one worker's refresh must not spend another's window."""
+    from django.core.cache import cache
+
+    workers = (900101, 900102)
+    for worker in workers:
+        cache.delete(f"{oauth._JWKS_REFRESH_MARKER}:{worker}")
+    for worker in workers:
+        monkeypatch.setattr(oauth.os, "getpid", lambda worker=worker: worker)
+        oauth.verify(_token(kid="rotated-in"))
+
+    assert realm_keys.forced_fetches == 2
