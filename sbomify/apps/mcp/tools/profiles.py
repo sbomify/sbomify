@@ -1,0 +1,341 @@
+"""Workspace contact-profile tools.
+
+A contact profile is the reusable supplier/manufacturer/author record a
+workspace attaches to components; it is what populates the supplier and author
+fields of a generated CycloneDX document, and therefore what decides whether an
+SBOM satisfies NTIA minimum elements. Filling these in is tedious, repetitive,
+and exactly the kind of work worth handing to an agent.
+
+Like the publishing tools, these call the existing REST view functions rather
+than reimplementing them: the create/update path upserts entities and their
+contacts with non-obvious defaulting (owner email fallback, author derivation),
+and a second implementation would drift.
+
+The write tools require ``workspace:manage`` / ``component:manage``, neither of
+which is in the ``read_only`` or ``publish`` presets — a token must be scoped
+for profile management explicitly. Deletion is deliberately not exposed.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from django.db.models import Count, Prefetch, QuerySet
+from mcp.server.fastmcp.exceptions import ToolError
+
+from .. import serializers
+from ..auth import Principal, require
+from ._base import (
+    DETAIL_COLLECTION_LIMIT,
+    clamp_page,
+    mcp_tool,
+    not_found,
+    resolve_workspace,
+    run_db,
+    unwrap_view,
+    workspace_key,
+)
+from .catalog import _lookup_component
+
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import FastMCP
+
+
+def _bounded(queryset: QuerySet[Any]) -> QuerySet[Any]:
+    """Load at most a detail page of entities per profile, and of contacts per entity.
+
+    The summary cuts both lists, but cutting the answer after loading every row
+    still made the work grow with the profile. The counts give the true totals.
+    A sliced prefetch needs ``to_attr``, so the rows land in ``loaded_entities``
+    and ``loaded_contacts`` rather than behind ``.all()``.
+    """
+    from sbomify.apps.teams.models import ContactEntity, ContactProfileContact
+
+    entities = ContactEntity.objects.annotate(contact_total=Count("contacts")).order_by("name", "pk")
+    contacts = ContactProfileContact.objects.order_by("order", "name", "pk")
+    bounded: QuerySet[Any] = queryset.annotate(entity_total=Count("entities", distinct=True)).prefetch_related(
+        Prefetch("entities", queryset=entities[:DETAIL_COLLECTION_LIMIT], to_attr="loaded_entities"),
+        Prefetch("loaded_entities__contacts", queryset=contacts[:DETAIL_COLLECTION_LIMIT], to_attr="loaded_contacts"),
+    )
+    return bounded
+
+
+def _loaded_summary(profile: Any) -> dict[str, Any]:
+    """Summarise a profile loaded through ``_bounded``, with its true totals."""
+    payload = {
+        "id": profile.id,
+        "name": profile.name,
+        "is_default": profile.is_default,
+        "entities": [
+            {
+                "id": entity.id,
+                "name": entity.name or None,
+                "email": entity.email or None,
+                "phone": entity.phone or None,
+                "address": entity.address or None,
+                "website_urls": list(dict.fromkeys(url for url in entity.website_urls or [] if url)),
+                "is_manufacturer": entity.is_manufacturer,
+                "is_supplier": entity.is_supplier,
+                "contacts": [{"name": c.name, "email": c.email, "phone": c.phone} for c in entity.loaded_contacts],
+            }
+            for entity in profile.loaded_entities
+        ],
+    }
+    return _profile_summary(
+        payload,
+        entity_total=profile.entity_total,
+        contact_totals={entity.id: entity.contact_total for entity in profile.loaded_entities},
+    )
+
+
+def _profile_summary(
+    payload: Any, *, entity_total: int | None = None, contact_totals: dict[Any, int] | None = None
+) -> dict[str, Any]:
+    """Trim the REST serializer's output to what an agent needs.
+
+    The full schema carries entities, their contacts, and a parallel set of
+    legacy flat fields — three views of the same data. Emitting all of it
+    triples the token cost and invites the model to reason about the wrong copy.
+
+    The totals come from ``_bounded`` when the lists were cut at load time;
+    otherwise the payload holds every row and its length is the total.
+    """
+    data = payload if isinstance(payload, dict) else payload.dict()
+    # No tool pages a profile's entities or their contacts, so both are cut and
+    # say so, like a detail tool's collections.
+    all_entities = data.get("entities", []) or []
+    contact_totals = contact_totals or {}
+    entities = []
+    for entity in all_entities[:DETAIL_COLLECTION_LIMIT]:
+        contacts = entity.get("contacts", []) or []
+        entities.append(
+            serializers.cut(
+                serializers.compact(
+                    {
+                        "name": entity.get("name"),
+                        "email": entity.get("email"),
+                        "phone": entity.get("phone"),
+                        "address": entity.get("address"),
+                        "website_urls": entity.get("website_urls"),
+                        "is_manufacturer": entity.get("is_manufacturer"),
+                        "is_supplier": entity.get("is_supplier"),
+                        "contacts": serializers.capped(
+                            [
+                                serializers.compact(
+                                    {"name": c.get("name"), "email": c.get("email"), "phone": c.get("phone")}
+                                )
+                                for c in contacts[:DETAIL_COLLECTION_LIMIT]
+                            ],
+                            total=contact_totals.get(entity.get("id"), len(contacts)),
+                            limit=DETAIL_COLLECTION_LIMIT,
+                        )
+                        if contacts
+                        else None,
+                    }
+                ),
+                "website_urls",
+            )
+        )
+    return serializers.compact(
+        {
+            "id": data.get("id"),
+            "name": data.get("name"),
+            "is_default": data.get("is_default"),
+            "entities": serializers.capped(
+                entities,
+                total=len(all_entities) if entity_total is None else entity_total,
+                limit=DETAIL_COLLECTION_LIMIT,
+            )
+            if entities
+            else None,
+        }
+    )
+
+
+def register_tools(mcp: FastMCP) -> None:
+    @mcp_tool(mcp, "list_contact_profiles", "workspace:read")
+    async def list_contact_profiles(principal: Principal, page: int = 1, page_size: int = 25) -> dict[str, Any]:
+        """List the workspace's contact profiles.
+
+        Use this to find an existing profile before creating a new one. Most
+        workspaces want a handful of shared profiles, not one per component.
+        """
+
+        def query() -> dict[str, Any]:
+            from sbomify.apps.teams.models import ContactProfile
+
+            team = resolve_workspace(principal)
+            require(principal, "workspace:read", team)
+            # is_component_private=False like the REST list view: private
+            # profiles are per-component bookkeeping rows, and the assignment
+            # view refuses them — listing them here would advertise profiles
+            # that assign_contact_profile is certain to 404 on.
+            queryset = _bounded(ContactProfile.objects.filter(team=team, is_component_private=False)).order_by("name")
+
+            # Paginated like every other list. Returning the lot meant a
+            # workspace with enough profiles tripped the response cap and got a
+            # hard error telling it to narrow a query this tool took no
+            # arguments to narrow.
+            safe_page, safe_size = clamp_page(page, page_size)
+            rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
+            result = serializers.paginated(
+                [_loaded_summary(row) for row in rows],
+                page=safe_page,
+                page_size=safe_size,
+                total=total,
+            )
+            result["workspace"] = team.key
+            return result
+
+        return await run_db(query)
+
+    @mcp_tool(mcp, "get_contact_profile", "workspace:read")
+    async def get_contact_profile(principal: Principal, profile_id: str) -> dict[str, Any]:
+        """Full detail for one contact profile."""
+
+        def query() -> dict[str, Any]:
+            from sbomify.apps.teams.models import ContactProfile
+
+            team = resolve_workspace(principal)
+            require(principal, "workspace:read", team)
+            visible = ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False)
+            profile = _bounded(visible).first()
+            if profile is None:
+                raise not_found("contact profile", profile_id)
+            return _loaded_summary(profile)
+
+        return await run_db(query)
+
+    @mcp_tool(mcp, "create_contact_profile", "workspace:manage", writes=True, idempotent=False)
+    async def create_contact_profile(
+        principal: Principal,
+        name: str,
+        email: str,
+        supplier_name: str | None = None,
+        contact_name: str | None = None,
+        phone: str | None = None,
+        address: str | None = None,
+        website_url: str | None = None,
+        is_default: bool = False,
+    ) -> dict[str, Any]:
+        """Create a workspace contact profile.
+
+        `name` labels the profile inside sbomify; `supplier_name` is the
+        organisation that appears in generated SBOMs (defaults to `name`).
+        `email` is the contact address published with those SBOMs. It is
+        required, because a supplier entry with no reachable contact does not
+        satisfy the NTIA minimum elements these profiles exist to fill in.
+        `contact_name` names the person or team behind that address (defaults to
+        `supplier_name`). Setting `is_default` makes this the profile new
+        components inherit.
+
+        Check `list_contact_profiles` first: profiles are meant to be shared
+        across components, so a near-duplicate is usually a mistake.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.teams.apis import create_contact_profile as view
+            from sbomify.apps.teams.schemas import (
+                ContactEntityCreateSchema,
+                ContactProfileContactSchema,
+                ContactProfileCreateSchema,
+            )
+
+            team = resolve_workspace(principal)
+            organisation = supplier_name or name
+            # An entity with no contacts is rejected by the view, and a contact
+            # requires an email — hence email being a required argument rather
+            # than an optional one silently producing a 400.
+            entity = ContactEntityCreateSchema(
+                name=organisation,
+                email=email,
+                phone=phone,
+                address=address,
+                website_urls=[website_url] if website_url else [],
+                is_supplier=True,
+                is_manufacturer=True,
+                contacts=[
+                    ContactProfileContactSchema(
+                        name=contact_name or organisation,
+                        email=email,
+                        phone=phone,
+                    )
+                ],
+            )
+            payload = ContactProfileCreateSchema(name=name, entities=[entity], is_default=is_default)
+            created = unwrap_view(
+                view(principal.request, workspace_key(team), payload), action="Contact profile creation"
+            )
+            return _profile_summary(created)
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "update_contact_profile", "workspace:manage", writes=True, idempotent=True)
+    async def update_contact_profile(
+        principal: Principal,
+        profile_id: str,
+        name: str | None = None,
+        is_default: bool | None = None,
+    ) -> dict[str, Any]:
+        """Rename a contact profile or make it the workspace default.
+
+        Editing the entity details (supplier name, addresses, per-contact
+        emails) is not exposed over MCP. That data ends up in published SBOMs,
+        so it stays a deliberate action in the web UI.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.teams.apis import update_contact_profile as view
+            from sbomify.apps.teams.models import ContactProfile
+            from sbomify.apps.teams.schemas import ContactProfileUpdateSchema
+
+            team = resolve_workspace(principal)
+            if not ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False).exists():
+                raise not_found("contact profile", profile_id)
+
+            fields: dict[str, Any] = {}
+            if name is not None:
+                fields["name"] = name
+            if is_default is not None:
+                fields["is_default"] = is_default
+            if not fields:
+                raise ToolError("Nothing to update: pass name and/or is_default.")
+
+            payload = ContactProfileUpdateSchema(**fields)
+            updated = unwrap_view(
+                view(principal.request, workspace_key(team), profile_id, payload), action="Contact profile update"
+            )
+            return _profile_summary(updated)
+
+        return await run_db(call)
+
+    @mcp_tool(mcp, "assign_contact_profile", "component:manage", writes=True, idempotent=True)
+    async def assign_contact_profile(principal: Principal, component_id: str, profile_id: str) -> dict[str, Any]:
+        """Attach a contact profile to a component.
+
+        The component's generated SBOMs then carry that profile's supplier and
+        author details, which is what NTIA minimum-elements checks look for.
+        Use this to fix components flagged as missing supplier information.
+        """
+
+        def call() -> dict[str, Any]:
+            from sbomify.apps.core.apis import patch_component_metadata
+            from sbomify.apps.sboms.schemas import ComponentMetaDataPatch
+            from sbomify.apps.teams.models import ContactProfile
+
+            team = resolve_workspace(principal)
+            # Workspace-scoped lookup only. This tool is declared component:manage,
+            # which is what patch_component_metadata checks; requiring
+            # component:read_internal on top would refuse a correctly scoped token.
+            component = _lookup_component(principal, component_id)
+            if not ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False).exists():
+                raise not_found("contact profile", profile_id)
+
+            payload = ComponentMetaDataPatch(contact_profile_id=profile_id)
+            unwrap_view(
+                patch_component_metadata(principal.request, component_id, payload),
+                action="Contact profile assignment",
+            )
+            return {"component_id": component.id, "contact_profile_id": profile_id, "assigned": True}
+
+        return await run_db(call)

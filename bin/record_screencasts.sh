@@ -40,11 +40,13 @@ ensure_services() {
     compose up -d --build
     SERVICES_STARTED=true
     echo "Waiting for services to be healthy..."
+    # Same default as docker-compose.tests.yml; honour TEST_SUBNET_PREFIX so
+    # this works against a stack started on an alternate subnet.
     compose exec tests python -c "
 import socket, time
 while True:
     try:
-        s = socket.create_connection(('172.25.0.10', 5432), timeout=2)
+        s = socket.create_connection(('${TEST_SUBNET_PREFIX:-172.25.0}.10', 5432), timeout=2)
         s.close(); break
     except OSError:
         time.sleep(1)
