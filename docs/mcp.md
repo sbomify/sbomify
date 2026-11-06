@@ -51,7 +51,10 @@ Some writes stay with a person in sbomify, because they publish, attest or admin
 - recording lifecycle events and support definitions, which are permanent and public over TEA;
 - uploading an artifact's signature or provenance, which CI does once per artifact;
 - approving VEX submissions, advisory changes and access requests;
-- anything that needs the admin role, such as control statuses and plugin settings.
+- workspace administration: control statuses and evidence, catalog changes and plugin settings.
+
+Some tools that are offered still need an admin-tier scope (`workspace:manage`) and an owner or admin
+role: supplier writes, creating or editing a contact profile, and the CRA wizard writes.
 
 ### Signing in instead of using a token
 
