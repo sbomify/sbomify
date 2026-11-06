@@ -192,6 +192,25 @@ async def test_preview_vex_counts_what_it_would_suppress_and_stores_nothing(make
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_preview_vex_refuses_a_document_too_costly_to_parse(make_token, component_in_bound_workspace, monkeypatch):
+    """Under the upload cap is not enough: a document of many small values takes far more memory parsed."""
+    from sbomify.apps.mcp import limits
+
+    monkeypatch.setattr(limits, "MAX_ARTIFACT_PARSE_BYTES", 4096)
+    many_small_values = json.dumps({"bomFormat": "CycloneDX", "vulnerabilities": [0] * 1000})
+    assert len(many_small_values) < 4096
+    token = await sync_to_async(make_token)(["component:access"])
+
+    async with mcp_http() as client:
+        refused = await call_tool(
+            client, token, "preview_vex", {"component_id": component_in_bound_workspace.id, "content": many_small_values}
+        )
+
+    assert "too many small parts" in _error(refused)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_suppliers_are_created_listed_and_updated(make_token):
     from sbomify.apps.teams.models import Supplier
 
