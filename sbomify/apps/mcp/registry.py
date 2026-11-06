@@ -88,6 +88,9 @@ _FORBIDDEN_NAMED = frozenset(
         "access_request:decide",
         # Approving a VEX submission applies an agent's ruling; a person decides it in the app.
         "vex_submission:decide",
+        # A CRA Article 14 report goes to ENISA and the national CSIRTs; authz
+        # carves it up to ADMINISTER as the same outward act as publishing an advisory.
+        "cra_report:manage",
     }
 )
 
