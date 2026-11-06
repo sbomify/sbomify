@@ -56,6 +56,26 @@ Some writes stay with a person in sbomify, because they publish, attest or admin
 Some tools that are offered still need an admin-tier scope (`workspace:manage`) and an owner or admin
 role: supplier writes, creating or editing a contact profile, and the CRA wizard writes.
 
+### Signing in instead of using a token
+
+A client that speaks MCP OAuth, such as Claude Code, can connect with no token to copy. In Claude
+Code that is `claude mcp add --transport http sbomify https://<your sbomify host>/mcp`, then
+Authenticate in `/mcp`: a browser opens on the sbomify sign-in page, and the session is connected.
+
+The client calls `/mcp`, gets a `401` pointing at `/.well-known/oauth-protected-resource/mcp`, and
+signs the person in through the Keycloak realm. An OAuth session reads whatever the person's role
+lets them read and writes nothing. Writes still need a personal access token. The person must have
+signed in to sbomify in the browser once, so their account exists.
+
+The realm needs three things. The development bootstrap (`bin/keycloak-bootstrap.sh`) sets them; a
+production realm needs an operator to set them:
+
+| What | Why |
+| --- | --- |
+| A client scope `mcp`, with an audience mapper adding `<APP_BASE_URL>/mcp` to the access token | `/mcp` accepts only a token whose `aud` names it, so a token issued to the web app is refused |
+| `mcp` as a realm optional client scope | A client registered on the fly may only ask for the realm's default scopes |
+| A client registration policy that admits the clients to allow | Claude Code registers with an `http://localhost:<port>/callback` redirect |
+
 ## Settings
 
 | Setting | Purpose |

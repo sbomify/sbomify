@@ -798,8 +798,11 @@ def sent_proposals(
     decision on its changes, rejections with their reason and next step
     included, without knowing in advance which advisories it touched.
     """
+    from sbomify.apps.access_tokens.models import AccessToken
+
     rows = AdvisoryProposal.objects.filter(team=team).select_related("submitted_by", "decided_by", "advisory")
-    rows = rows.filter(submitted_token=token) if token is not None else rows.filter(submitted_by=user)
+    # A credential with no token row (an MCP OAuth session) reads its person's own, as a session does.
+    rows = rows.filter(submitted_token=token) if isinstance(token, AccessToken) else rows.filter(submitted_by=user)
     if status:
         rows = rows.filter(status=status)
     if since is not None:

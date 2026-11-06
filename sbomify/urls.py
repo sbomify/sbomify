@@ -27,6 +27,7 @@ from django.views.generic import RedirectView
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.mcp.views import ProtectedResourceMetadataView
 from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
 from sbomify.apps.security_advisories.wellknown import (
     ProviderMetadataView,
@@ -62,6 +63,14 @@ urlpatterns = [
     path("enterprise-contact/", PublicEnterpriseContactView.as_view(), name="public_enterprise_contact"),
     path(".well-known/security.txt", SecurityTxtView.as_view(), name="security_txt_wellknown"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
+    # RFC 9728 discovery for /mcp: the 401 there points at the first; a client
+    # that only knows the server's origin looks for the second.
+    path(
+        ".well-known/oauth-protected-resource/mcp",
+        ProtectedResourceMetadataView.as_view(),
+        name="mcp_protected_resource_metadata",
+    ),
+    path(".well-known/oauth-protected-resource", ProtectedResourceMetadataView.as_view()),
     # CSAF 2.0 discovery. provider-metadata.json is the entry point security.txt's
     # CSAF field points at; the white/ tree below it is the TLP:WHITE distribution.
     path(".well-known/csaf/provider-metadata.json", ProviderMetadataView.as_view(), name="csaf_provider_metadata"),

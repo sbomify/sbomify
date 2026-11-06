@@ -48,7 +48,8 @@ KEYCLOAK_CLIENT_SECRET=your-secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
-# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# (e.g. the app reaches Keycloak at an internal address). Used for logout, and
+# as the issuer /mcp expects in OAuth tokens, so it must match KC_HOSTNAME_URL.
 # KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3 Storage
@@ -136,7 +137,8 @@ KEYCLOAK_CLIENT_SECRET=secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
-# (e.g. the app reaches Keycloak at an internal address). Used for logout.
+# (e.g. the app reaches Keycloak at an internal address). Used for logout, and
+# as the issuer /mcp expects in OAuth tokens, so it must match KC_HOSTNAME_URL.
 # KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
 
 # S3
