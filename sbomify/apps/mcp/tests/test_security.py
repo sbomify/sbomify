@@ -17,6 +17,7 @@ Layered defences under test here:
 from __future__ import annotations
 
 import json
+from urllib.parse import urlparse
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -679,4 +680,4 @@ def test_a_schemeless_base_url_with_a_port_still_allows_its_https_origin(setting
     origins = _transport_security().allowed_origins
 
     assert "https://app.example.com:*" in origins
-    assert not [origin for origin in origins if origin.startswith("app.example.com")]
+    assert {urlparse(origin).scheme for origin in origins} == {"http", "https"}
