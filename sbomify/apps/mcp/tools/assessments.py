@@ -51,28 +51,24 @@ def register_tools(mcp: FastMCP) -> None:
         inventory.
         """
 
-        def query() -> dict[str, Any]:
-            from botocore.exceptions import BotoCoreError, ClientError
-
+        def load(filename: str) -> bytes | None:
+            """The stored file, bounded: the size first, so an oversized artifact is
+            refused before its transfer, then the bytes, so what is parsed fits in
+            memory too. The service calls this only when it has no cached inventory.
+            A storage error propagates to the service, which reports it."""
             from sbomify.apps.core.object_store import StorageClient
+
+            store = StorageClient("SBOMS")
+            enforce_stored_size(store.get_sbom_size(filename), artifact_id=artifact_id)
+            raw = store.get_sbom_data(filename)
+            enforce_parse_size(raw, artifact_id=artifact_id)
+            return raw
+
+        def query() -> dict[str, Any]:
             from sbomify.apps.sboms.services.sboms import get_crypto_inventory as inventory_for
 
-            obj = _get_artifact(principal, artifact_id)
-            raw: bytes | None = None
-            if obj.sbom_filename:
-                store = StorageClient("SBOMS")
-                try:
-                    # The size first, so an oversized artifact is refused before
-                    # its transfer; then the bytes, so what gets parsed is bounded
-                    # by memory as well as by size.
-                    enforce_stored_size(store.get_sbom_size(obj.sbom_filename), artifact_id=artifact_id)
-                    raw = store.get_sbom_data(obj.sbom_filename)
-                except (ClientError, BotoCoreError) as exc:
-                    raise ToolError(
-                        f"Artifact {artifact_id} could not be read from storage, so it was not inspected."
-                    ) from exc
-                enforce_parse_size(raw, artifact_id=artifact_id)
-            result = inventory_for(principal.request, artifact_id, raw=raw)
+            _get_artifact(principal, artifact_id)
+            result = inventory_for(principal.request, artifact_id, load=load)
             if not result.ok:
                 raise ToolError(f"Crypto inventory failed ({result.status_code or 400}): {result.error}")
             data = result.value or {}
