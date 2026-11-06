@@ -211,6 +211,27 @@ async def test_preview_vex_refuses_a_document_too_costly_to_parse(make_token, co
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_preview_vex_counts_xml_tags_against_the_budget(make_token, component_in_bound_workspace, monkeypatch):
+    """XML costs per tag, which the brace-and-comma estimate does not see."""
+    from sbomify.apps.mcp import limits
+
+    monkeypatch.setattr(limits, "MAX_ARTIFACT_PARSE_BYTES", 20_000)
+    many_tags = '<bom xmlns="http://cyclonedx.org/schema/bom/1.6"><vulnerabilities>' + "<a/>" * 3000
+    many_tags += "</vulnerabilities></bom>"
+    assert len(many_tags) < 20_000
+    assert limits.within_parse_budget(many_tags.encode(), 20_000)
+    token = await sync_to_async(make_token)(["component:access"])
+
+    async with mcp_http() as client:
+        refused = await call_tool(
+            client, token, "preview_vex", {"component_id": component_in_bound_workspace.id, "content": many_tags}
+        )
+
+    assert "too many small parts" in _error(refused)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_suppliers_are_created_listed_and_updated(make_token):
     from sbomify.apps.teams.models import Supplier
 

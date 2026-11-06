@@ -18,7 +18,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ValidationError
 
 from .. import serializers
-from ..auth import Principal
+from ..auth import Principal, require
 from ._base import mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
 from .catalog import _get_component, _lookup_component, _lookup_product, _lookup_release
 
@@ -157,6 +157,10 @@ def register_tools(mcp: FastMCP) -> None:
 
             product = _lookup_product(principal, product_id)
             component = _lookup_component(principal, component_id)
+            # Checked here as well as in the view, because a component already in
+            # the product never reaches the view, and its answer must not differ.
+            require(principal, "product:manage", product)
+            require(principal, "component:manage", component)
             # The view replaces the whole set, so send the current set plus the
             # new one. The product row stays locked from the read to the write,
             # so two adds at once cannot each drop the other's component.
@@ -373,8 +377,9 @@ def register_tools(mcp: FastMCP) -> None:
             # The full profile is one get_contact_profile call away; inlining it
             # here repeats the supplier and manufacturer already shown.
             data.pop("contact_profile", None)
-            for field in ("authors", "licenses"):
-                serializers.cut(data, field)
+            # Authors and licenses come back whole, not cut: update_component_metadata
+            # replaces each list, so an agent must be able to read every entry to keep
+            # it. A list too long to return is refused by the response cap instead.
             return serializers.compact(data)
 
         return await run_db(query)
