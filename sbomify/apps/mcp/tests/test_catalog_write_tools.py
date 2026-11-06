@@ -113,6 +113,65 @@ async def test_adding_a_component_keeps_the_products_others(
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_adding_a_component_already_there_still_checks_the_role(
+    mcp_owner, product_in_bound_workspace, component_in_bound_workspace, django_user_model
+):
+    """A component already in the product never reaches the view, so the tool checks the role itself."""
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.teams.models import Member
+
+    _, bound, _ = mcp_owner
+
+    def operator_token() -> AccessToken:
+        user = django_user_model.objects.create_user(username="mcpoperator", email="op@example.com", password="pw")
+        Member.objects.create(user=user, team=bound, role="operator", is_default_team=True)
+        product_in_bound_workspace.components.add(component_in_bound_workspace)
+        return AccessToken.objects.create(
+            user=user,
+            encoded_token=create_personal_access_token(user),
+            team=bound,
+            scopes=["product:manage", "component:manage"],
+            description="operator",
+        )
+
+    token = await sync_to_async(operator_token)()
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "add_component_to_product",
+            {"product_id": product_in_bound_workspace.id, "component_id": component_in_bound_workspace.id},
+        )
+
+    assert "Not permitted" in refusal(response)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_component_metadata_returns_every_author_and_license(make_token, component_in_bound_workspace):
+    """The update replaces these lists, so the read must not cut them."""
+
+    def many() -> None:
+        for n in range(60):
+            component_in_bound_workspace.authors.create(name=f"Author {n}", order=n)
+            component_in_bound_workspace.licenses.create(license_type="spdx", license_id=f"LicenseRef-{n}", order=n)
+
+    await sync_to_async(many)()
+    token = await sync_to_async(make_token)(["component:read_internal"])
+
+    async with mcp_http() as client:
+        metadata = structured(
+            await call_tool(client, token, "get_component_metadata", {"component_id": component_in_bound_workspace.id})
+        )
+
+    assert len(metadata["authors"]) == 60
+    assert len(metadata["licenses"]) == 60
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_identifiers_and_links_are_added_and_partly_updated(
     business_workspace, make_token, product_in_bound_workspace
 ):
