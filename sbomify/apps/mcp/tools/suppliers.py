@@ -17,6 +17,7 @@ from pydantic import ValidationError
 
 from .. import serializers
 from ..auth import Principal
+from ..limits import untrusted
 from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
 
 if TYPE_CHECKING:
@@ -31,7 +32,9 @@ def _supplier(row: dict[str, Any]) -> dict[str, Any]:
             "contact_name": row.get("contact_name"),
             "contact_email": row.get("contact_email"),
             "website": row.get("website"),
-            "notes": row.get("notes"),
+            # Notes have no length limit, and one long enough would make every
+            # page holding the supplier fail the response cap.
+            "notes": untrusted(row.get("notes")),
             "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
         }
     )

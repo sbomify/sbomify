@@ -319,3 +319,20 @@ async def test_preview_vex_cuts_the_scanner_text_it_samples(make_token, componen
     assert len(preview["matched"]) == 51
     assert len(preview["matched"][0]["package"]) < 1200
 
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_supplier_with_very_long_notes_is_still_listed(mcp_owner, make_token):
+    """Notes have no length limit, so the list cuts them rather than failing the page."""
+    from sbomify.apps.teams.models import Supplier
+
+    _, bound, _ = mcp_owner
+    await sync_to_async(Supplier.objects.create)(team=bound, name="Verbose Ltd", notes="n" * 2_000_000)
+    token = await sync_to_async(make_token)(["workspace:read"])
+
+    async with mcp_http() as client:
+        listed = structured(await call_tool(client, token, "list_suppliers", {}))
+
+    assert [row["name"] for row in listed["items"]] == ["Verbose Ltd"]
+    assert len(listed["items"][0]["notes"]) < 5000
+
