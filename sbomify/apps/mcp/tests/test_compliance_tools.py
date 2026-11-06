@@ -141,6 +141,40 @@ async def test_save_cra_step_saves_step_four_and_leaves_the_public_steps_to_a_pe
 
 
 @pytest.mark.asyncio
+async def test_saving_step_one_keeps_a_third_party_procedure(make_token, assessment):
+    """Step 1 resets an unsent procedure to the category default, which for Class I is self-assessment."""
+    from sbomify.apps.compliance.models import CRAAssessment
+    from sbomify.apps.teams.models import ContactEntity, ContactProfile
+
+    def manufacturer() -> None:
+        # Step 1 refuses to save without a real manufacturer (CRA Annex V item 2).
+        profile = ContactProfile.objects.create(name="Maker", team=assessment.team, is_default=True)
+        ContactEntity.objects.create(
+            profile=profile, name="Example Devices Ltd", email="x@example.com", is_manufacturer=True
+        )
+
+    await sync_to_async(manufacturer)()
+    await sync_to_async(CRAAssessment.objects.filter(pk=assessment.pk).update)(
+        product_category=CRAAssessment.ProductCategory.CLASS_I,
+        conformity_assessment_procedure=CRAAssessment.ConformityProcedure.MODULE_H,
+        harmonised_standard_applied=True,
+    )
+    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+
+    structured(
+        await _run(
+            token,
+            "save_cra_step",
+            {"assessment_id": assessment.id, "step": 1, "data": {"intended_use": "Home routers"}},
+        )
+    )
+
+    stored = await sync_to_async(CRAAssessment.objects.get)(pk=assessment.pk)
+    assert stored.intended_use == "Home routers"
+    assert stored.conformity_assessment_procedure == CRAAssessment.ConformityProcedure.MODULE_H
+
+
+@pytest.mark.asyncio
 async def test_update_cra_finding_keeps_the_notes_it_was_not_sent(make_token, assessment):
     from sbomify.apps.compliance.models import OSCALFinding
 
