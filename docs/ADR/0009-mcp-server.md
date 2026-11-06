@@ -68,7 +68,7 @@ client calling a tool it was never shown is refused exactly as the REST API
 would refuse it. Hiding impossible tools stops agents burning turns on calls
 that cannot succeed.
 
-### Hand-write 33 task-oriented tools rather than generating them
+### Hand-write task-oriented tools rather than generating them
 
 Generating one tool per REST endpoint would be nearly free and always in sync,
 but it produces ~140 low-level tools with verbose schemas, which measurably
