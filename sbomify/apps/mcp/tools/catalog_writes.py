@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
+from django.db import transaction
 from mcp.server.fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ValidationError
 
@@ -56,9 +57,19 @@ def _schema(schema: type[BaseModel], label: str, **fields: Any) -> Any:
         raise ToolError(f"Invalid {label}: {exc}") from exc
 
 
-def _given(**fields: Any) -> dict[str, Any]:
-    """The arguments the agent actually passed. A partial update must not send the rest as nulls."""
+def _given(clear: list[str] | None = None, *, clearable: tuple[str, ...] = (), **fields: Any) -> dict[str, Any]:
+    """The arguments the agent actually passed. A partial update must not send the rest as nulls.
+
+    An argument left out and one passed as null look the same here, so a field
+    is emptied by naming it in ``clear``, and only the ``clearable`` ones can be.
+    """
     given = {key: value for key, value in fields.items() if value is not None}
+    for name in clear or []:
+        if name not in clearable:
+            raise ToolError(f"{name!r} cannot be cleared; clear takes {', '.join(clearable) or 'nothing here'}.")
+        if name in given:
+            raise ToolError(f"{name!r} is both set and cleared; pass one or the other.")
+        given[name] = None
     if not given:
         raise ToolError(f"Nothing to update: pass at least one of {', '.join(fields)}.")
     return given
@@ -105,11 +116,13 @@ def register_tools(mcp: FastMCP) -> None:
         release_date: date | None = None,
         end_of_support: date | None = None,
         end_of_life: date | None = None,
+        clear: list[str] | None = None,
     ) -> dict[str, Any]:
         """Change a product's name, description or lifecycle dates.
 
         Only the arguments you pass change. Dates are ISO dates (YYYY-MM-DD).
-        Whether the product is public is changed in the app, not here.
+        To empty a date, name it in `clear`, such as ["end_of_life"]. Whether
+        the product is public is changed in the app, not here.
         """
 
         def call() -> dict[str, Any]:
@@ -118,6 +131,8 @@ def register_tools(mcp: FastMCP) -> None:
 
             _lookup_product(principal, product_id)
             fields = _given(
+                clear,
+                clearable=("release_date", "end_of_support", "end_of_life"),
                 name=name,
                 description=description,
                 release_date=release_date,
@@ -149,8 +164,6 @@ def register_tools(mcp: FastMCP) -> None:
         """
 
         def call() -> dict[str, Any]:
-            from django.db import transaction
-
             from sbomify.apps.core import apis
             from sbomify.apps.core.models import Product
             from sbomify.apps.core.schemas import ProductPatchSchema
@@ -220,22 +233,25 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.core.schemas import ProductIdentifierUpdateSchema
 
             product = _lookup_product(principal, product_id)
-            current = product.identifiers.filter(pk=identifier_id).first()
-            if current is None:
-                raise not_found("product identifier", identifier_id)
             fields = _given(identifier_type=identifier_type, value=value)
-            payload = _schema(
-                ProductIdentifierUpdateSchema,
-                "identifier",
-                identifier_type=fields.get("identifier_type", current.identifier_type),
-                value=fields.get("value", current.value),
-            )
-            return serializers.compact(
-                unwrap_view(
-                    apis.update_product_identifier(principal.request, product_id, identifier_id, payload),
-                    action="Updating the identifier",
+            # The view replaces both fields, so the one left out is read from the
+            # row locked until the write, or a concurrent edit to it is undone.
+            with transaction.atomic():
+                current = product.identifiers.select_for_update().filter(pk=identifier_id).first()
+                if current is None:
+                    raise not_found("product identifier", identifier_id)
+                payload = _schema(
+                    ProductIdentifierUpdateSchema,
+                    "identifier",
+                    identifier_type=fields.get("identifier_type", current.identifier_type),
+                    value=fields.get("value", current.value),
                 )
-            )
+                return serializers.compact(
+                    unwrap_view(
+                        apis.update_product_identifier(principal.request, product_id, identifier_id, payload),
+                        action="Updating the identifier",
+                    )
+                )
 
         return await run_db(call)
 
@@ -289,24 +305,27 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.core.schemas import ProductLinkUpdateSchema
 
             product = _lookup_product(principal, product_id)
-            current = product.links.filter(pk=link_id).first()
-            if current is None:
-                raise not_found("product link", link_id)
             fields = _given(link_type=link_type, title=title, url=url, description=description)
-            payload = _schema(
-                ProductLinkUpdateSchema,
-                "link",
-                link_type=fields.get("link_type", current.link_type),
-                title=fields.get("title", current.title),
-                url=fields.get("url", current.url),
-                description=fields.get("description", current.description),
-            )
-            return serializers.compact(
-                unwrap_view(
-                    apis.update_product_link(principal.request, product_id, link_id, payload),
-                    action="Updating the link",
+            # As for identifiers: the view replaces every field, so the ones left
+            # out come from the row locked until the write.
+            with transaction.atomic():
+                current = product.links.select_for_update().filter(pk=link_id).first()
+                if current is None:
+                    raise not_found("product link", link_id)
+                payload = _schema(
+                    ProductLinkUpdateSchema,
+                    "link",
+                    link_type=fields.get("link_type", current.link_type),
+                    title=fields.get("title", current.title),
+                    url=fields.get("url", current.url),
+                    description=fields.get("description", current.description),
                 )
-            )
+                return serializers.compact(
+                    unwrap_view(
+                        apis.update_product_link(principal.request, product_id, link_id, payload),
+                        action="Updating the link",
+                    )
+                )
 
         return await run_db(call)
 
@@ -398,6 +417,7 @@ def register_tools(mcp: FastMCP) -> None:
         release_date: date | None = None,
         end_of_support: date | None = None,
         end_of_life: date | None = None,
+        clear: list[str] | None = None,
     ) -> dict[str, Any]:
         """Change a component's supplier, authors, licenses or lifecycle details.
 
@@ -408,9 +428,10 @@ def register_tools(mcp: FastMCP) -> None:
 
         `licenses` are SPDX identifiers or expressions, such as "MIT" or
         "Apache-2.0 OR MIT", and custom licenses as `{"name", "url", "text"}`
-        objects, the way `get_component_metadata` returns them. `lifecycle_phase` is one of: design, pre-build,
-        build, post-build, operations, discovery, decommission. Dates are ISO
-        dates (YYYY-MM-DD).
+        objects, the way `get_component_metadata` returns them.
+        `lifecycle_phase` is one of: design, pre-build, build, post-build,
+        operations, discovery, decommission. Dates are ISO dates (YYYY-MM-DD);
+        to empty one, name it in `clear`, such as ["end_of_support"].
 
         A component with a contact profile takes its supplier from the profile,
         so the supplier arguments only show once it has none. Use
@@ -424,6 +445,8 @@ def register_tools(mcp: FastMCP) -> None:
 
             component = _lookup_component(principal, component_id)
             fields = _given(
+                clear,
+                clearable=("release_date", "end_of_support", "end_of_life"),
                 supplier_name=supplier_name,
                 supplier_urls=supplier_urls,
                 supplier_address=supplier_address,
@@ -441,43 +464,46 @@ def register_tools(mcp: FastMCP) -> None:
             if lifecycle_phase is not None and lifecycle_phase not in phases:
                 raise ToolError(f"Unknown lifecycle_phase {lifecycle_phase!r}; expected one of {', '.join(phases)}.")
 
-            patch: dict[str, Any] = {
-                key: fields[key]
-                for key in ("lifecycle_phase", "release_date", "end_of_support", "end_of_life")
-                if key in fields
-            }
-            if "licenses" in fields:
-                patch["licenses"] = [
-                    entry if isinstance(entry, str) else entry.model_dump(exclude_none=True)
-                    for entry in fields["licenses"]
-                ]
-            if "authors" in fields:
-                patch["authors"] = [author.model_dump(exclude_none=True) for author in fields["authors"]]
-            if {"supplier_name", "supplier_urls", "supplier_address", "supplier_contacts"} & fields.keys():
-                # The view writes the name, URLs and address together, so one
-                # left out would be blanked. Fill them from what is stored.
-                supplier: dict[str, Any] = {
-                    "name": fields.get("supplier_name", component.supplier_name),
-                    "url": fields.get("supplier_urls", component.supplier_url or []),
-                    "address": fields.get("supplier_address", component.supplier_address),
+            with transaction.atomic():
+                patch: dict[str, Any] = {
+                    key: fields[key]
+                    for key in ("lifecycle_phase", "release_date", "end_of_support", "end_of_life")
+                    if key in fields
                 }
-                # The view replaces the contacts whenever the supplier is sent, so
-                # contacts left out go back as stored. An empty list clears them.
-                if "supplier_contacts" in fields:
-                    contacts = fields["supplier_contacts"]
-                else:
-                    contacts = [
-                        Contact(name=c.name, email=c.email, phone=c.phone, bom_ref=c.bom_ref)
-                        for c in component.supplier_contacts.order_by("order", "pk")
+                if "licenses" in fields:
+                    patch["licenses"] = [
+                        entry if isinstance(entry, str) else entry.model_dump(exclude_none=True)
+                        for entry in fields["licenses"]
                     ]
-                supplier["contacts"] = [c.model_dump(exclude_none=True) for c in contacts]
-                patch["supplier"] = supplier
+                if "authors" in fields:
+                    patch["authors"] = [author.model_dump(exclude_none=True) for author in fields["authors"]]
+                if {"supplier_name", "supplier_urls", "supplier_address", "supplier_contacts"} & fields.keys():
+                    # The view writes the name, URLs and address together, so one
+                    # left out would be blanked. Fill them from the row as stored,
+                    # locked until the write so a concurrent edit is not undone.
+                    component = Component.objects.select_for_update().get(pk=component.pk)
+                    supplier: dict[str, Any] = {
+                        "name": fields.get("supplier_name", component.supplier_name),
+                        "url": fields.get("supplier_urls", component.supplier_url or []),
+                        "address": fields.get("supplier_address", component.supplier_address),
+                    }
+                    # The view replaces the contacts whenever the supplier is sent, so
+                    # contacts left out go back as stored. An empty list clears them.
+                    if "supplier_contacts" in fields:
+                        contacts = fields["supplier_contacts"]
+                    else:
+                        contacts = [
+                            Contact(name=c.name, email=c.email, phone=c.phone, bom_ref=c.bom_ref)
+                            for c in component.supplier_contacts.order_by("order", "pk")
+                        ]
+                    supplier["contacts"] = [c.model_dump(exclude_none=True) for c in contacts]
+                    patch["supplier"] = supplier
 
-            payload = _schema(ComponentMetaDataPatch, "metadata", **patch)
-            unwrap_view(
-                apis.patch_component_metadata(principal.request, component_id, payload),
-                action="Component metadata update",
-            )
+                payload = _schema(ComponentMetaDataPatch, "metadata", **patch)
+                unwrap_view(
+                    apis.patch_component_metadata(principal.request, component_id, payload),
+                    action="Component metadata update",
+                )
             return {"component_id": component.id, "updated": sorted(fields)}
 
         return await run_db(call)
@@ -491,10 +517,12 @@ def register_tools(mcp: FastMCP) -> None:
         description: str | None = None,
         is_prerelease: bool | None = None,
         released_at: datetime | None = None,
+        clear: list[str] | None = None,
     ) -> dict[str, Any]:
         """Change a release's name, version, description, pre-release flag or release date.
 
-        Only the arguments you pass change. `released_at` is an ISO date-time.
+        Only the arguments you pass change. `released_at` is an ISO date-time;
+        to empty it, pass clear=["released_at"].
         The automatic "latest" release cannot be changed.
         """
 
@@ -505,6 +533,8 @@ def register_tools(mcp: FastMCP) -> None:
 
             _lookup_release(principal, release_id)
             fields = _given(
+                clear,
+                clearable=("released_at",),
                 name=name,
                 version=version,
                 description=description,
