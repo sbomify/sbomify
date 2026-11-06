@@ -50,6 +50,10 @@ METADATA_PATH = "/.well-known/oauth-protected-resource/mcp"
 _JWKS_LIFESPAN_SECONDS = 300
 _JWKS_TIMEOUT_SECONDS = 5
 
+#: The least time between two fetches forced by a key the cached set lacks, across every worker.
+_JWKS_REFRESH_GAP_SECONDS = 60
+_JWKS_REFRESH_MARKER = "sbomify:mcp:oauth:jwks:forced_refresh"
+
 
 @dataclass(frozen=True)
 class OAuthCredential:
@@ -64,17 +68,26 @@ class OAuthCredential:
 
 
 def issuer() -> str:
-    """The realm's issuer, as Keycloak writes it into the tokens it signs."""
+    """The realm's issuer, as Keycloak writes it into the tokens it signs.
+
+    Keycloak writes its public URL (``KC_HOSTNAME_URL``) as ``iss``, and
+    ``KEYCLOAK_PUBLIC_URL`` is that URL, falling back to ``KEYCLOAK_SERVER_URL``
+    where the two are the same.
+    """
     return f"{settings.KEYCLOAK_PUBLIC_URL.rstrip('/')}/realms/{settings.KEYCLOAK_REALM}"
 
 
 def resource() -> str:
     """This server's MCP URL, which a token's ``aud`` must name."""
-    return f"{settings.APP_BASE_URL.rstrip('/')}/mcp"
+    from sbomify.apps.core.url_utils import get_base_url
+
+    return f"{get_base_url()}/mcp"
 
 
 def metadata_url() -> str:
-    return f"{settings.APP_BASE_URL.rstrip('/')}{METADATA_PATH}"
+    from sbomify.apps.core.url_utils import get_base_url
+
+    return f"{get_base_url()}{METADATA_PATH}"
 
 
 def protected_resource_metadata() -> dict[str, Any]:
@@ -114,10 +127,35 @@ def _jwks_client() -> jwt.PyJWKClient:
     return jwt.PyJWKClient(url, lifespan=_JWKS_LIFESPAN_SECONDS, timeout=_JWKS_TIMEOUT_SECONDS)
 
 
+def _signing_key(token: str) -> Any | None:
+    """The realm key that signed ``token``, or ``None`` when the realm has no such key.
+
+    ``PyJWKClient`` fetches the key set again whenever a token names a key it has
+    not cached, so tokens with made-up ``kid`` values would each cost a Keycloak
+    fetch. A key missing from the cached set forces one fetch per window across
+    every worker; inside the window it is refused, and a key Keycloak really
+    rotated in is found on the next window's fetch.
+    """
+    from django.core.cache import cache
+
+    kid = jwt.get_unverified_header(token).get("kid")
+    client = _jwks_client()
+    for refresh in (False, True):
+        if refresh and not cache.add(_JWKS_REFRESH_MARKER, True, timeout=_JWKS_REFRESH_GAP_SECONDS):
+            return None
+        for key in client.get_signing_keys(refresh=refresh):
+            if key.key_id == kid:
+                return key
+    return None
+
+
 def verify(token: str) -> dict[str, Any] | None:
-    """The token's claims when the realm signed it for this server, else ``None``."""
+    """The token's claims when the realm signed it for this server with the ``mcp`` scope, else ``None``."""
     try:
-        key = _jwks_client().get_signing_key_from_jwt(token)
+        key = _signing_key(token)
+        if key is None:
+            logger.info("[MCP] Refused an OAuth credential signed with a key the realm does not have")
+            return None
         claims: dict[str, Any] = jwt.decode(
             token,
             key.key,
@@ -132,6 +170,11 @@ def verify(token: str) -> dict[str, Any] | None:
     except jwt.PyJWTError as exc:
         logger.info("[MCP] Refused an OAuth token: %s", exc)
         return None
+    # The metadata and the challenge both ask for the mcp scope, so a token
+    # carrying the audience without it was not issued through that consent.
+    if SCOPE not in str(claims.get("scope") or "").split():
+        logger.info("[MCP] Refused an OAuth credential without the mcp scope")
+        return None
     return claims
 
 
@@ -145,6 +188,8 @@ def resolve(token: str) -> tuple[AbstractBaseUser, OAuthCredential] | tuple[None
     if claims is None:
         return None, None
     account = SocialAccount.objects.filter(provider="keycloak", uid=claims["sub"]).select_related("user").first()
-    if account is None or not account.user.is_active:
+    # The same liveness the token path checks: a soft-deleted account stays
+    # active until it is purged, and must not keep reading through Keycloak.
+    if account is None or not account.user.is_active or account.user.deleted_at is not None:
         return None, None
     return account.user, OAuthCredential(pk=f"oauth:{claims['sub']}", scopes=list(SCOPE_PRESETS["read_only"] or []))

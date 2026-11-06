@@ -27,17 +27,39 @@ from .test_protocol import call, mcp_http, parse
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
+class _RealmKeys:
+    """Keycloak's key set, as the one key these tests sign with, counting forced fetches."""
+
+    def __init__(self) -> None:
+        self.forced_fetches = 0
+
+    def get_signing_keys(self, refresh: bool = False) -> list[SimpleNamespace]:
+        self.forced_fetches += refresh
+        return [SimpleNamespace(key_id="test", key=KEY.public_key())]
+
+
 @pytest.fixture(autouse=True)
-def _realm_keys(monkeypatch):
-    """Keycloak's key set, as the one key these tests sign with."""
-    signing = SimpleNamespace(get_signing_key_from_jwt=lambda token: SimpleNamespace(key=KEY.public_key()))
-    monkeypatch.setattr(oauth, "_jwks_client", lambda: signing)
+def realm_keys(monkeypatch):
+    from django.core.cache import cache
+
+    cache.delete(oauth._JWKS_REFRESH_MARKER)
+    keys = _RealmKeys()
+    monkeypatch.setattr(oauth, "_jwks_client", lambda: keys)
+    return keys
 
 
-def _token(sub: str = "kc-user-1", **claims) -> str:
+def _token(sub: str = "kc-user-1", kid: str = "test", **claims) -> str:
     now = int(time.time())
-    payload = {"iss": oauth.issuer(), "aud": oauth.resource(), "sub": sub, "iat": now, "exp": now + 300, **claims}
-    return jwt.encode(payload, KEY, algorithm="RS256", headers={"kid": "test"})
+    payload = {
+        "iss": oauth.issuer(),
+        "aud": oauth.resource(),
+        "sub": sub,
+        "iat": now,
+        "exp": now + 300,
+        "scope": "openid email mcp",
+        **claims,
+    }
+    return jwt.encode(payload, KEY, algorithm="RS256", headers={"kid": kid})
 
 
 @pytest.fixture
@@ -103,6 +125,8 @@ async def test_an_oauth_session_reads_the_workspace(signed_in, mcp_owner):
         pytest.param(lambda: _token(aud="sbomify"), id="issued to the web app"),
         pytest.param(lambda: _token(exp=int(time.time()) - 60), id="expired"),
         pytest.param(lambda: _token(sub="kc-never-signed-in"), id="nobody in sbomify"),
+        pytest.param(lambda: _token(scope="openid email"), id="without the mcp scope"),
+        pytest.param(lambda: _token(kid="made-up"), id="signed with a key the realm lacks"),
     ],
 )
 async def test_a_realm_token_not_meant_for_this_server_is_refused(signed_in, token):
@@ -118,3 +142,31 @@ async def test_a_deactivated_person_is_refused(signed_in):
 
     with pytest.raises(MCPAuthError, match="Invalid or expired"):
         await authenticate(fake_request(f"Bearer {_token()}"), attempted_action="tools/list")
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_soft_deleted_person_is_refused(signed_in):
+    from django.utils import timezone
+
+    signed_in.deleted_at = timezone.now()
+    await sync_to_async(signed_in.save)()
+
+    with pytest.raises(MCPAuthError, match="Invalid or expired"):
+        await authenticate(fake_request(f"Bearer {_token()}"), attempted_action="tools/list")
+
+
+def test_made_up_key_ids_force_one_fetch_a_window(realm_keys):
+    """Without the window, every token naming an unknown key would cost a fetch from Keycloak."""
+    for n in range(5):
+        assert oauth.verify(_token(kid=f"made-up-{n}")) is None
+
+    assert realm_keys.forced_fetches == 1
+
+
+def test_a_schemeless_base_url_still_names_an_absolute_resource(settings):
+    settings.APP_BASE_URL = "app.example.com/"
+
+    assert oauth.resource() == "https://app.example.com/mcp"
+    assert oauth.metadata_url() == "https://app.example.com/.well-known/oauth-protected-resource/mcp"
+
