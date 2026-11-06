@@ -227,9 +227,16 @@ async def test_get_crypto_inventory_pages_the_assets(make_token, component_in_bo
         response = await call_tool(
             client, token, "get_crypto_inventory", {"artifact_id": sbom.id, "asset_type": "algorithm", "page_size": 2}
         )
+        second_page = await call_tool(
+            client,
+            token,
+            "get_crypto_inventory",
+            {"artifact_id": sbom.id, "asset_type": "algorithm", "page_size": 2, "page": 2},
+        )
 
     inventory = structured(response)
-    # Fetched once, by the tool that bounds it, not again by the inventory service.
+    assert [asset["name"] for asset in structured(second_page)["assets"]["items"]] == ["ChaCha20"]
+    # Fetched once, through the bounded loader; the second page is served from the inventory cache.
     assert len(fetches) == 1
     assert inventory["count"] == 3
     assert inventory["assets"]["total"] == 3
