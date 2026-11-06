@@ -74,6 +74,26 @@ async def test_an_agent_change_to_a_published_advisory_waits_for_a_person(mcp_ow
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_listed_proposals_carry_their_text_cut(mcp_owner, make_token):
+    """A proposal's context is free text an agent stored; a hundred of them must not each reach the model whole."""
+    _, bound, _ = mcp_owner
+    published = await sync_to_async(_advisory)(bound, "Heap overflow", status=SecurityAdvisory.Status.PUBLISHED)
+    token = await sync_to_async(make_token)(AGENT)
+    await _tool(
+        token,
+        "update_advisory",
+        advisory_id=published.id,
+        changes={"title": "Heap overflow in libexample"},
+        context="x" * 5000,
+    )
+
+    sent = structured(await _tool(token, "list_advisory_proposals", status="pending"))
+
+    assert len(sent["items"][0]["context"]) < 1200
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_another_token_cannot_change_a_published_advisory(mcp_owner, make_token):
     _, bound, _ = mcp_owner
     published = await sync_to_async(_advisory)(bound, "Heap overflow", status=SecurityAdvisory.Status.PUBLISHED)

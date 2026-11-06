@@ -327,8 +327,12 @@ def register_tools(mcp: FastMCP) -> None:
                 after = datetime.fromisoformat(since) if since else None
             except ValueError as exc:
                 raise ToolError(f"since must be an ISO 8601 date or time, not {since!r}.") from exc
+            from .artifacts import _bounded
+
             rows = unwrap_view(apis.list_sent_proposals(principal.request, status, after), action="Listing proposals")
-            return {"items": rows["result"]}
+            # The context, notes and changes are free text an agent stored, so
+            # each is cut before up to a hundred of them reach the model.
+            return {"items": [_bounded(row) for row in rows["result"]]}
 
         return await run_db(call)
 
