@@ -133,9 +133,10 @@ class ScopedFastMCP(FastMCP):
             return []
 
         allowed = registry.permitted_by(principal.scopes)
-        # A tool absent from the registry has not declared an action, so it
-        # cannot be scope-checked; surface it rather than hiding it silently.
-        return [tool for tool in tools if registry.get(tool.name) is None or tool.name in allowed]
+        # A tool absent from the registry declared no action and has no wrapper
+        # to check one, so it is never offered. build_app refuses to start with
+        # one; this keeps the listing closed even if one slips past.
+        return [tool for tool in tools if tool.name in allowed]
 
     def _current_http_request(self) -> Any:
         """The Starlette request for the in-flight call, if there is one."""
@@ -225,6 +226,18 @@ mcp: FastMCP = ScopedFastMCP(
 _app: Starlette | None = None
 
 
+def _refuse_unregistered_tools(server: FastMCP) -> None:
+    """Fail startup on a tool added without ``mcp_tool``.
+
+    ``FastMCP.add_tool`` is public, and a tool added through it directly has no
+    declared action, no scope check, no audit line and no response cap. Failing
+    here makes that a broken build rather than an open door.
+    """
+    unregistered = sorted(tool.name for tool in server._tool_manager.list_tools() if registry.get(tool.name) is None)
+    if unregistered:
+        raise RuntimeError(f"MCP tools registered without mcp_tool: {', '.join(unregistered)}")
+
+
 def build_app() -> Starlette:
     """Create the MCP ASGI app and register every tool.
 
@@ -255,5 +268,6 @@ def build_app() -> Starlette:
         module.register_tools(mcp)
 
     registry.validate()
+    _refuse_unregistered_tools(mcp)
     _app = mcp.streamable_http_app()
     return _app
