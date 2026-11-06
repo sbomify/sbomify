@@ -168,6 +168,7 @@ def _transport_security() -> TransportSecuritySettings:
 
     from django.conf import settings
 
+    from sbomify.apps.core.url_utils import get_base_url
     from sbomify.apps.teams.utils import get_app_hostname
 
     hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*", "127.0.0.1", "localhost"]
@@ -176,9 +177,10 @@ def _transport_security() -> TransportSecuritySettings:
     # get_app_hostname drops the scheme, and the SDK validates Host and Origin
     # independently, so hardcoding https here would 421 every client of an
     # http:// deployment: its Origin header is the one thing that still carries
-    # the scheme. Defaulted to https to match get_app_hostname's own default
-    # for a bare hostname.
-    scheme = urlparse(settings.APP_BASE_URL.strip()).scheme or "https"
+    # the scheme. Read through get_base_url, which defaults a bare hostname to
+    # https before parsing: urlparse alone reads "app.example.com:8443" as the
+    # scheme "app.example.com".
+    scheme = urlparse(get_base_url()).scheme or "https"
 
     if hostname := get_app_hostname():
         hosts += [hostname, f"{hostname}:*"]

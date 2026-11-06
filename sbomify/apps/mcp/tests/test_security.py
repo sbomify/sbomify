@@ -668,3 +668,15 @@ async def test_an_operator_token_reads_the_workspace_but_cannot_change_it(
     assert "Bound Product" in json.dumps(parse(listed))
     assert parse(created)["result"].get("isError") is True
     assert not await sync_to_async(Release.objects.filter(product=product_in_bound_workspace).exists)()
+
+
+def test_a_schemeless_base_url_with_a_port_still_allows_its_https_origin(settings):
+    """urlparse reads "app.example.com:8443" as scheme "app.example.com", which made every Origin a mismatch."""
+    from sbomify.apps.mcp.server import _transport_security
+
+    settings.APP_BASE_URL = "app.example.com:8443"
+
+    origins = _transport_security().allowed_origins
+
+    assert "https://app.example.com:*" in origins
+    assert not [origin for origin in origins if origin.startswith("app.example.com")]
