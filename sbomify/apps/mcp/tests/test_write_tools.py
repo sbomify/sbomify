@@ -231,7 +231,8 @@ async def test_upload_artifact_rejects_malformed_json(make_token, component_in_b
             },
         )
 
-    assert "not valid JSON" in json.dumps(parse(response))
+    # The upload view parses the body and answers it; the tool no longer parses a second copy.
+    assert "Artifact upload failed (400): Invalid JSON" in json.dumps(parse(response))
 
 
 @pytest.mark.asyncio

@@ -233,3 +233,38 @@ async def test_idempotency_is_only_claimed_where_a_repeat_is_a_no_op():
     # already in the release is a 409 too.
     assert hints["upload_artifact"] is False
     assert hints["tag_artifact_to_release"] is False
+
+
+def test_a_tool_added_without_mcp_tool_stops_the_server_from_starting():
+    """FastMCP.add_tool is public, and a tool added through it has no scope check, audit or cap."""
+    from types import SimpleNamespace
+
+    from sbomify.apps.mcp import server
+
+    rogue = SimpleNamespace(_tool_manager=SimpleNamespace(list_tools=lambda: [SimpleNamespace(name="rogue_tool")]))
+
+    with pytest.raises(RuntimeError, match="rogue_tool"):
+        server._refuse_unregistered_tools(rogue)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_tool_absent_from_the_registry_is_never_listed(make_token):
+    from asgiref.sync import sync_to_async
+
+    from sbomify.apps.mcp.server import mcp
+
+    from .test_protocol import call, mcp_http, parse
+
+    async def rogue_tool() -> str:
+        return "unchecked"
+
+    mcp.add_tool(rogue_tool, name="rogue_tool")
+    try:
+        token = await sync_to_async(make_token)(None)
+        async with mcp_http() as client:
+            listed = parse(await call(client, "tools/list", token=token.encoded_token))
+    finally:
+        mcp._tool_manager._tools.pop("rogue_tool", None)
+
+    assert "rogue_tool" not in {tool["name"] for tool in listed["result"]["tools"]}

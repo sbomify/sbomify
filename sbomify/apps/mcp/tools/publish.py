@@ -21,7 +21,6 @@ ADR-004 holds throughout: artifacts are stored byte-for-byte as supplied.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp.exceptions import ToolError
@@ -48,22 +47,19 @@ def _with_body(principal: Principal, raw: bytes) -> HttpRequest:
     return request
 
 
-def _parse_json(content: str, *, label: str) -> bytes:
-    """Validate ``content`` is JSON, size-check it, and return the bytes to store.
+def _upload_bytes(content: str, *, label: str) -> bytes:
+    """Size-check ``content`` and return the bytes to store.
 
-    Re-encoding is deliberately avoided — the stored artifact must be
+    Re-encoding is deliberately avoided: the stored artifact must be
     byte-identical to what the caller supplied (ADR-004), and the SHA-256 the
     upload path computes has to match what the caller can verify independently.
 
-    The size check runs before parsing so an oversized payload is refused
-    without first being deserialized into memory.
+    Not parsed here. The upload view parses the body and answers malformed JSON
+    itself, and a second parse here held two decoded copies of a document up to
+    the upload limit in one worker.
     """
     raw = content.encode("utf-8")
     enforce_upload_size(raw, label=label)
-    try:
-        json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ToolError(f"{label} is not valid JSON: {exc}") from exc
     return raw
 
 
@@ -127,7 +123,7 @@ def register_tools(mcp: FastMCP) -> None:
             # restriction, so an id from a sibling workspace would be writable
             # even though every read tool reports it as not found.
             _lookup_component(principal, component_id)
-            request = _with_body(principal, _parse_json(content, label="Artifact"))
+            request = _with_body(principal, _upload_bytes(content, label="Artifact"))
             if wanted is not None:
                 # The view distinguishes "caller said sbom" from "caller said
                 # nothing" by looking for bom_type in the query string, and
@@ -172,7 +168,7 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.sboms import apis
 
             _lookup_component(principal, component_id)
-            request = _with_body(principal, _parse_json(content, label="VEX document"))
+            request = _with_body(principal, _upload_bytes(content, label="VEX document"))
             return unwrap_view(apis.vex_artifact_upload(request, component_id), action="VEX upload")
 
         return await run_db(call)
