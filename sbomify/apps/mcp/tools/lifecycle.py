@@ -1,7 +1,9 @@
 """Lifecycle (CLE) and end-of-life readiness tools.
 
-Lifecycle events follow ECMA-428 and are append-only: nothing here edits or
-deletes one. A ``withdrawn`` event is how an earlier event is voided.
+Lifecycle events follow ECMA-428 and are append-only, so they are read here
+and recorded by a person in sbomify: an event can never be edited or deleted,
+a public product's events are served over TEA, and a product event rewrites the
+product's release, end of support and end of life dates.
 
 Events and support definitions hang off four kinds of thing: a product, a
 component, a product release and a component release. Each tool takes exactly
@@ -14,21 +16,12 @@ scope, because which one a call needs depends on the id it passes.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp.exceptions import ToolError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from sbomify.apps.core.cle_schemas import (
-    CLE_EVENT_TYPES,
-    CLEEventCreateSchema,
-    CLEEventResponseSchema,
-    CLEIdentifierSchema,
-    CLESupportDefinitionCreateSchema,
-    CLESupportDefinitionResponseSchema,
-    CLEVersionSpecifierSchema,
-)
+from sbomify.apps.core.cle_schemas import CLEEventResponseSchema, CLESupportDefinitionResponseSchema
 
 from .. import serializers
 from ..auth import Principal
@@ -38,41 +31,32 @@ from .catalog import _lookup_component, _lookup_product, _lookup_release
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-# The REST view names for each scope: list events, get one event, create an
-# event, list support definitions, create a support definition.
-_VIEWS: dict[str, tuple[str, str, str, str, str]] = {
+# The REST view names for each scope: list events, get one event, list support
+# definitions.
+_VIEWS: dict[str, tuple[str, str, str]] = {
     "product_id": (
         "list_cle_events",
         "get_cle_event",
-        "create_cle_event_endpoint",
         "list_cle_support_definitions",
-        "create_cle_support_definition_endpoint",
     ),
     "component_id": (
         "list_component_cle_events",
         "get_component_cle_event",
-        "create_component_cle_event_endpoint",
         "list_component_cle_support_definitions",
-        "create_component_cle_support_definition_endpoint",
     ),
     "release_id": (
         "list_release_cle_events",
         "get_release_cle_event",
-        "create_release_cle_event_endpoint",
         "list_release_cle_support_definitions",
-        "create_release_cle_support_definition_endpoint",
     ),
     "component_release_id": (
         "list_component_release_cle_events",
         "get_component_release_cle_event",
-        "create_component_release_cle_event_endpoint",
         "list_component_release_cle_support_definitions",
-        "create_component_release_cle_support_definition_endpoint",
     ),
 }
 
 _READS = ("product:read", ("component:read_internal", "release:read"))
-_WRITES = ("product:manage", ("component:manage", "release:manage"))
 
 
 def _scope(
@@ -196,94 +180,10 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             scope = (product_id, component_id, release_id, component_release_id)
             return _page(
-                principal, scope, 3, CLESupportDefinitionResponseSchema, page, page_size, action="Listing definitions"
+                principal, scope, 2, CLESupportDefinitionResponseSchema, page, page_size, action="Listing definitions"
             )
 
         return await run_db(query)
-
-    @mcp_tool(mcp, "create_lifecycle_event", _WRITES[0], also_requires=_WRITES[1], writes=True, idempotent=False)
-    async def create_lifecycle_event(
-        principal: Principal,
-        event_type: CLE_EVENT_TYPES,
-        effective: datetime,
-        product_id: str | None = None,
-        component_id: str | None = None,
-        release_id: str | None = None,
-        component_release_id: str | None = None,
-        version: str = "",
-        versions: list[CLEVersionSpecifierSchema] | None = None,
-        support_id: str = "",
-        license: str = "",
-        superseded_by_version: str = "",
-        identifiers: list[CLEIdentifierSchema] | None = None,
-        withdrawn_event_id: int | None = None,
-        reason: str = "",
-        description: str = "",
-        references: list[str] | None = None,
-    ) -> dict[str, Any]:
-        """Record a lifecycle event, such as a release or an end of support date.
-
-        Pass exactly one of `product_id`, `component_id`, `release_id` or
-        `component_release_id`. `effective` is when the event takes effect, with
-        a timezone (for example 2027-01-01T00:00:00Z). `versions` lists the
-        versions it covers, each a `version` or a `range`. Events cannot be
-        edited or deleted: to take one back, record a `withdrawn` event with its
-        `withdrawn_event_id`. Each event type needs its own fields, and the
-        error names any that are missing.
-        """
-
-        def call() -> dict[str, Any]:
-            kind, identifier = _scope(principal, product_id, component_id, release_id, component_release_id)
-            try:
-                payload = CLEEventCreateSchema(
-                    event_type=event_type,
-                    effective=effective,
-                    version=version,
-                    versions=versions or [],
-                    support_id=support_id,
-                    license=license,
-                    superseded_by_version=superseded_by_version,
-                    identifiers=identifiers or [],
-                    withdrawn_event_id=withdrawn_event_id,
-                    reason=reason,
-                    description=description,
-                    references=references or [],
-                )
-            except ValidationError as exc:
-                raise ToolError(f"Invalid event: {exc}") from exc
-            result = _view(kind, 2)(principal.request, identifier, payload)
-            return _json(_payload(result, action="Recording the event"), CLEEventResponseSchema)
-
-        return await run_db(call)
-
-    @mcp_tool(mcp, "create_support_definition", _WRITES[0], also_requires=_WRITES[1], writes=True, idempotent=False)
-    async def create_support_definition(
-        principal: Principal,
-        support_id: str,
-        description: str,
-        product_id: str | None = None,
-        component_id: str | None = None,
-        release_id: str | None = None,
-        component_release_id: str | None = None,
-        url: str = "",
-    ) -> dict[str, Any]:
-        """Define a support level, such as "standard" or "lts", that lifecycle events can name.
-
-        Pass exactly one of `product_id`, `component_id`, `release_id` or
-        `component_release_id`. `support_id` must be new in that scope. `url`,
-        if given, points at the published support policy.
-        """
-
-        def call() -> dict[str, Any]:
-            kind, identifier = _scope(principal, product_id, component_id, release_id, component_release_id)
-            try:
-                payload = CLESupportDefinitionCreateSchema(support_id=support_id, description=description, url=url)
-            except ValidationError as exc:
-                raise ToolError(f"Invalid support definition: {exc}") from exc
-            result = _view(kind, 4)(principal.request, identifier, payload)
-            return _json(_payload(result, action="Creating the definition"), CLESupportDefinitionResponseSchema)
-
-        return await run_db(call)
 
     @mcp_tool(mcp, "get_product_eol_readiness", "product:read")
     async def get_product_eol_readiness(principal: Principal, product_id: str) -> dict[str, Any]:

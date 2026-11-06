@@ -1,4 +1,4 @@
-"""Documents, signatures and provenance, crypto inventory, plugins and licensing over MCP."""
+"""Documents, crypto inventory, assessment re-runs, plugins and licensing over MCP."""
 
 from __future__ import annotations
 
@@ -177,56 +177,9 @@ async def test_update_document_refuses_another_workspaces_document(mcp_owner, ma
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_upload_artifact_signature_attaches_it(make_token, component_in_bound_workspace, stored):
-    from sbomify.apps.sboms.models import SBOM
-
-    sbom = await sync_to_async(_sbom)(component_in_bound_workspace)
-    token = await sync_to_async(make_token)(["sbom:manage"])
-
-    async with mcp_http() as client:
-        response = await call_tool(
-            client,
-            token,
-            "upload_artifact_signature",
-            {
-                "artifact_id": sbom.id,
-                "signature_type": "pgp-detached",
-                "content_base64": base64.b64encode(b"-----BEGIN PGP SIGNATURE-----").decode(),
-            },
-        )
-
-    assert structured(response)["uploaded"] is True
-    refreshed = await sync_to_async(SBOM.objects.get)(pk=sbom.id)
-    assert (refreshed.signature_blob_key, refreshed.signature_type) == ("upload_sbom_signature-key", "pgp-detached")
-    assert stored["upload_sbom_signature"] == b"-----BEGIN PGP SIGNATURE-----"
-
-
-@pytest.mark.asyncio
-@pytest.mark.django_db(transaction=True)
-async def test_upload_artifact_provenance_attaches_it(make_token, component_in_bound_workspace, stored):
-    from sbomify.apps.sboms.models import SBOM
-
-    sbom = await sync_to_async(_sbom)(component_in_bound_workspace)
-    token = await sync_to_async(make_token)(["sbom:manage"])
-    statement = {"_type": "https://in-toto.io/Statement/v1", "subject": [{"name": "sbom", "digest": {"sha256": SHA}}]}
-
-    async with mcp_http() as client:
-        response = await call_tool(
-            client, token, "upload_artifact_provenance", {"artifact_id": sbom.id, "content": json.dumps(statement)}
-        )
-
-    assert structured(response)["uploaded"] is True
-    refreshed = await sync_to_async(SBOM.objects.get)(pk=sbom.id)
-    assert refreshed.provenance_blob_key == "upload_sbom_provenance-key"
-
-
-@pytest.mark.asyncio
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize(
     "tool, arguments",
     [
-        ("upload_artifact_signature", {"signature_type": "pkcs7", "content_base64": "eA=="}),
-        ("upload_artifact_provenance", {"content": "{}"}),
         ("rerun_assessment", {"plugin_name": "anything"}),
     ],
 )
@@ -403,11 +356,13 @@ async def test_the_new_tools_follow_the_token_scopes(make_token):
     writes = {
         "create_document",
         "update_document",
-        "upload_artifact_signature",
-        "upload_artifact_provenance",
         "rerun_assessment",
     }
     assert read_only_tools & writes == set()
+    # Signatures and provenance are one-shot, publicly served attestations, uploaded by CI rather than an agent.
+    from sbomify.apps.mcp import registry
+
+    assert {"upload_artifact_signature", "upload_artifact_provenance"} & set(registry.all_specs()) == set()
     assert {"get_crypto_inventory", "list_plugins", "search_licenses", "validate_license_expression"} <= read_only_tools
     # The inventory service also checks component:access, which sbom:read alone does not grant.
     assert "get_crypto_inventory" not in sbom_read_tools

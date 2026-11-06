@@ -46,13 +46,9 @@ WRITE_TOOLS = {
     "link_release",
     "create_document",
     "update_document",
-    "upload_artifact_signature",
-    "upload_artifact_provenance",
     "rerun_assessment",
     "create_supplier",
     "update_supplier",
-    "create_lifecycle_event",
-    "create_support_definition",
     "start_cra_assessment",
     "save_cra_step",
     "update_cra_finding",
@@ -73,7 +69,7 @@ def test_all_tools_are_registered():
     """Pins the surface: adding or removing a tool is a deliberate change."""
     specs = registry.all_specs()
 
-    assert len(specs) == 85
+    assert len(specs) == 81
     assert WRITE_TOOLS <= set(specs)
     assert {spec.name for spec in specs.values() if spec.writes} == WRITE_TOOLS
 
@@ -127,14 +123,7 @@ def test_publish_preset_grants_upload_and_release_but_not_vex():
 def test_resource_wildcard_scope():
     allowed = registry.permitted_by(["sbom:*"])
 
-    assert {
-        "get_artifact",
-        "list_artifacts",
-        "get_artifact_packages",
-        "get_assessments",
-        "upload_artifact_signature",
-        "upload_artifact_provenance",
-    } == allowed
+    assert {"get_artifact", "list_artifacts", "get_artifact_packages", "get_assessments"} == allowed
 
 
 def test_advisory_scope_reaches_the_reads_but_not_a_publish_tool():

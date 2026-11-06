@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
 import pytest
 from asgiref.sync import sync_to_async
 
@@ -15,7 +18,7 @@ from .test_write_tools import call_tool
 build_app()
 
 LIFECYCLE_SCOPES = ["product:read", "component:read_internal", "release:read"]
-LIFECYCLE_WRITES = ["product:manage", "component:manage", "release:manage"]
+EFFECTIVE = datetime(2027, 1, 1, tzinfo=UTC)
 
 
 def refusal(response) -> str:
@@ -24,7 +27,7 @@ def refusal(response) -> str:
     return result["content"][0]["text"]
 
 
-def _scopes(mcp_owner, workspace: str) -> dict[str, str]:
+def _scopes(mcp_owner, workspace: str) -> dict[str, Any]:
     """One of each lifecycle scope in the bound or the other workspace, keyed by argument name."""
     from sbomify.apps.core.models import Component, ComponentRelease, Product, Release
 
@@ -33,14 +36,32 @@ def _scopes(mcp_owner, workspace: str) -> dict[str, str]:
     product = Product.objects.create(name=f"{workspace} product", team=team)
     component = Component.objects.create(name=f"{workspace} component", team=team)
     return {
-        "product_id": product.id,
-        "component_id": component.id,
-        "release_id": Release.objects.create(product=product, name="v1").id,
-        "component_release_id": ComponentRelease.objects.create(component=component, version="1.0").id,
+        "product_id": product,
+        "component_id": component,
+        "release_id": Release.objects.create(product=product, name="v1"),
+        "component_release_id": ComponentRelease.objects.create(component=component, version="1.0"),
     }
 
 
-def test_read_only_sees_the_reads_and_writes_need_every_scope():
+def _seed(scope: str, entity: Any, *, version: str = "1.0", effective: datetime = EFFECTIVE) -> None:
+    """An end-of-support event and the support level it names, recorded the way sbomify records them."""
+    from sbomify.apps.core.services import cle
+
+    event, definition = {
+        "product_id": (cle.create_cle_event, cle.create_support_definition),
+        "component_id": (cle.create_component_cle_event, cle.create_component_support_definition),
+        "release_id": (cle.create_release_cle_event, cle.create_release_support_definition),
+        "component_release_id": (
+            cle.create_component_release_cle_event,
+            cle.create_component_release_support_definition,
+        ),
+    }[scope]
+    assert definition(entity, "lts", "Long-term support", "https://example.com/lts").ok
+    assert event(entity, "endOfSupport", effective, versions=[{"version": version}], support_id="lts").ok
+
+
+def test_read_only_sees_the_reads_and_no_lifecycle_write_exists():
+    """Events are append-only, public over TEA and rewrite a product's dates, so a person records them."""
     read_only = registry.permitted_by(SCOPE_PRESETS["read_only"])
     assert {
         "list_lifecycle_events",
@@ -50,47 +71,24 @@ def test_read_only_sees_the_reads_and_writes_need_every_scope():
         "list_controls",
         "get_control",
     } <= read_only
-    assert {"create_lifecycle_event", "create_support_definition"} & read_only == set()
-    # Which manage action a call needs depends on the id it passes, so one alone is not enough.
-    assert "create_lifecycle_event" not in registry.permitted_by(["product:manage"])
-    assert "create_lifecycle_event" in registry.permitted_by(LIFECYCLE_WRITES)
+    assert {"create_lifecycle_event", "create_support_definition"} & set(registry.all_specs()) == set()
 
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("scope", ["product_id", "component_id", "release_id", "component_release_id"])
-async def test_events_and_definitions_round_trip_on_every_scope(mcp_owner, make_token, scope):
-    ids = await sync_to_async(_scopes)(mcp_owner, "bound")
-    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES + LIFECYCLE_WRITES)
-    target = {scope: ids[scope]}
+async def test_events_and_definitions_read_on_every_scope(mcp_owner, make_token, scope):
+    entities = await sync_to_async(_scopes)(mcp_owner, "bound")
+    await sync_to_async(_seed)(scope, entities[scope])
+    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES)
+    target = {scope: entities[scope].id}
 
     async with mcp_http() as client:
-        definition = await call_tool(
-            client,
-            token,
-            "create_support_definition",
-            {**target, "support_id": "lts", "description": "Long-term support", "url": "https://example.com/lts"},
-        )
-        event = await call_tool(
-            client,
-            token,
-            "create_lifecycle_event",
-            {
-                **target,
-                "event_type": "endOfSupport",
-                "effective": "2027-01-01T00:00:00Z",
-                "versions": [{"version": "1.0"}],
-                "support_id": "lts",
-            },
-        )
         listed = await call_tool(client, token, "list_lifecycle_events", target)
-        one = await call_tool(
-            client, token, "list_lifecycle_events", {**target, "event_id": structured(event)["event_id"]}
-        )
+        event_id = structured(listed)["items"][0]["event_id"]
+        one = await call_tool(client, token, "list_lifecycle_events", {**target, "event_id": event_id})
         definitions = await call_tool(client, token, "list_support_definitions", target)
 
-    assert structured(definition)["support_id"] == "lts"
-    assert structured(event)["event_type"] == "endOfSupport"
     assert [row["event_type"] for row in structured(listed)["items"]] == ["endOfSupport"]
     assert structured(listed)["has_more"] is False
     assert structured(one)["versions"] == [{"version": "1.0", "range": None}]
@@ -99,23 +97,18 @@ async def test_events_and_definitions_round_trip_on_every_scope(mcp_owner, make_
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-async def test_events_page_and_report_more(mcp_owner, make_token, product_in_bound_workspace):
-    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES + LIFECYCLE_WRITES)
+async def test_events_page_and_report_more(make_token, product_in_bound_workspace):
+    from sbomify.apps.core.services import cle
+
+    def seed() -> None:
+        for version in ("1.0", "1.1", "1.2"):
+            created = cle.create_cle_event(product_in_bound_workspace, "released", EFFECTIVE, version=version)
+            assert created.ok, created.error
+
+    await sync_to_async(seed)()
+    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES)
 
     async with mcp_http() as client:
-        for version in ("1.0", "1.1", "1.2"):
-            created = await call_tool(
-                client,
-                token,
-                "create_lifecycle_event",
-                {
-                    "product_id": product_in_bound_workspace.id,
-                    "event_type": "released",
-                    "effective": "2026-01-01T00:00:00Z",
-                    "version": version,
-                },
-            )
-            structured(created)
         first = await call_tool(
             client, token, "list_lifecycle_events", {"product_id": product_in_bound_workspace.id, "page_size": 2}
         )
@@ -153,63 +146,18 @@ async def test_a_call_names_exactly_one_scope(make_token, product_in_bound_works
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("scope", ["product_id", "component_id", "release_id", "component_release_id"])
-async def test_writes_refuse_another_workspaces_ids(mcp_owner, make_token, scope):
-    from sbomify.apps.sboms.models import (
-        ComponentCLEEvent,
-        ComponentCLESupportDefinition,
-        ComponentReleaseCLEEvent,
-        ProductCLEEvent,
-        ReleaseCLEEvent,
-    )
-
-    ids = await sync_to_async(_scopes)(mcp_owner, "other")
-    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES + LIFECYCLE_WRITES)
-    target = {scope: ids[scope]}
+async def test_reads_refuse_another_workspaces_ids(mcp_owner, make_token, scope):
+    entities = await sync_to_async(_scopes)(mcp_owner, "other")
+    await sync_to_async(_seed)(scope, entities[scope])
+    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES)
+    target = {scope: entities[scope].id}
 
     async with mcp_http() as client:
-        event = await call_tool(
-            client,
-            token,
-            "create_lifecycle_event",
-            {**target, "event_type": "released", "effective": "2026-01-01T00:00:00Z", "version": "1.0"},
-        )
-        definition = await call_tool(
-            client, token, "create_support_definition", {**target, "support_id": "lts", "description": "LTS"}
-        )
+        events = await call_tool(client, token, "list_lifecycle_events", target)
+        definitions = await call_tool(client, token, "list_support_definitions", target)
 
-    assert "No " in refusal(event) and "found" in refusal(event)
-    assert "No " in refusal(definition) and "found" in refusal(definition)
-
-    def nothing_written() -> bool:
-        models = (ProductCLEEvent, ComponentCLEEvent, ReleaseCLEEvent, ComponentReleaseCLEEvent)
-        return (
-            not any(model.objects.exists() for model in models) and not ComponentCLESupportDefinition.objects.exists()
-        )
-
-    assert await sync_to_async(nothing_written)()
-
-
-@pytest.mark.asyncio
-@pytest.mark.django_db(transaction=True)
-async def test_an_invalid_event_is_refused_with_the_reason(make_token, product_in_bound_workspace):
-    token = await sync_to_async(make_token)(LIFECYCLE_SCOPES + LIFECYCLE_WRITES)
-
-    async with mcp_http() as client:
-        missing_versions = await call_tool(
-            client,
-            token,
-            "create_lifecycle_event",
-            {"product_id": product_in_bound_workspace.id, "event_type": "endOfLife", "effective": "2027-01-01T00:00Z"},
-        )
-        naive = await call_tool(
-            client,
-            token,
-            "create_lifecycle_event",
-            {"product_id": product_in_bound_workspace.id, "event_type": "released", "effective": "2027-01-01T00:00"},
-        )
-
-    assert "versions" in refusal(missing_versions)
-    assert "timezone" in refusal(naive)
+    for response in (events, definitions):
+        assert "No " in refusal(response) and "found" in refusal(response)
 
 
 @pytest.mark.asyncio

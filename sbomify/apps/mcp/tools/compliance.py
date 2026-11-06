@@ -46,6 +46,11 @@ InternalDocumentKind = Literal[
     "final_report",
 ]
 
+# The wizard is owner and admin work, so its writes declare an admin-tier scope:
+# a token scoped for day-to-day product work does not answer a conformity
+# assessment.
+_ASSESSOR = ("workspace:manage",)
+
 # Steps a person saves in sbomify. Step 3 writes into the public security.txt,
 # step 5 publishes the Declaration of Conformity.
 _PERSON_STEPS = {
@@ -183,7 +188,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "save_cra_step", "product:manage", writes=True, idempotent=True)
+    @mcp_tool(mcp, "save_cra_step", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
     async def save_cra_step(
         principal: Principal, assessment_id: str, step: int, data: dict[str, Any]
     ) -> dict[str, Any]:
@@ -212,7 +217,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "update_cra_finding", "product:manage", writes=True, idempotent=True)
+    @mcp_tool(mcp, "update_cra_finding", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
     async def update_cra_finding(
         principal: Principal,
         assessment_id: str,
@@ -246,7 +251,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "add_cra_observation", "product:manage", writes=True, idempotent=False)
+    @mcp_tool(mcp, "add_cra_observation", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=False)
     async def add_cra_observation(
         principal: Principal,
         assessment_id: str,
@@ -278,7 +283,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "generate_cra_document", "product:manage", writes=True, idempotent=False)
+    @mcp_tool(mcp, "generate_cra_document", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=False)
     async def generate_cra_document(
         principal: Principal, assessment_id: str, kind: InternalDocumentKind
     ) -> dict[str, Any]:

@@ -48,6 +48,8 @@ Some writes stay with a person in sbomify, because they publish, attest or admin
 - generating the VDP, security.txt or Declaration of Conformity, saving CRA step 3 (it fills the
   public security.txt) and finishing the assessment;
 - Article 14 reports, filings with ENISA, and signing a declaration or an export;
+- recording lifecycle events and support definitions, which are permanent and public over TEA;
+- uploading an artifact's signature or provenance, which CI does once per artifact;
 - approving VEX submissions, advisory changes and access requests;
 - anything that needs the admin role, such as control statuses and plugin settings.
 

@@ -9,12 +9,24 @@ from mcp.server.fastmcp.exceptions import ToolError
 from .. import serializers
 from ..auth import Principal, require
 from ..limits import enforce_stored_size
-from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, resolve_workspace, run_db, unwrap_view
+from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
 from .artifacts import _bounded, _get_artifact
-from .signatures import lookup_artifact
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
+
+def lookup_artifact(principal: Principal, artifact_id: str) -> None:
+    """Confine ``artifact_id`` to the caller's workspace, with no action check.
+
+    A write tool's own action is checked by the view it delegates to, so this
+    must not also demand a read scope the caller may not hold.
+    """
+    from sbomify.apps.sboms.models import SBOM
+
+    team = resolve_workspace(principal)
+    if not SBOM.objects.filter(pk=artifact_id, component__team=team).exists():
+        raise not_found("Artifact", artifact_id)
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -49,8 +61,12 @@ def register_tools(mcp: FastMCP) -> None:
             if obj.sbom_filename:
                 try:
                     size = StorageClient("SBOMS").get_sbom_size(obj.sbom_filename)
-                except (ClientError, BotoCoreError):
-                    size = None
+                except (ClientError, BotoCoreError) as exc:
+                    # The inventory service fetches and parses the whole file, so an
+                    # artifact whose size cannot be read is not inspected at all.
+                    raise ToolError(
+                        f"Could not read the size of artifact {artifact_id}, so it was not inspected."
+                    ) from exc
                 enforce_stored_size(size, artifact_id=artifact_id)
             result = inventory_for(principal.request, artifact_id)
             if not result.ok:

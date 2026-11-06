@@ -135,17 +135,25 @@ def register_tools(mcp: FastMCP) -> None:
         """
 
         def call() -> dict[str, Any]:
+            from django.db import transaction
+
             from sbomify.apps.core import apis
+            from sbomify.apps.core.models import Product
             from sbomify.apps.core.schemas import ProductPatchSchema
 
             product = _lookup_product(principal, product_id)
             component = _lookup_component(principal, component_id)
-            current = list(product.components.values_list("id", flat=True))
-            if component.id not in current:
-                # The view replaces the whole set, so send the current set plus
-                # the new one: a component already there must not be dropped.
-                payload = _schema(ProductPatchSchema, "component list", component_ids=[*current, component.id])
-                unwrap_view(apis.patch_product(principal.request, product_id, payload), action="Adding the component")
+            # The view replaces the whole set, so send the current set plus the
+            # new one. The product row stays locked from the read to the write,
+            # so two adds at once cannot each drop the other's component.
+            with transaction.atomic():
+                Product.objects.select_for_update().get(pk=product.pk)
+                current = list(product.components.values_list("id", flat=True))
+                if component.id not in current:
+                    payload = _schema(ProductPatchSchema, "component list", component_ids=[*current, component.id])
+                    unwrap_view(
+                        apis.patch_product(principal.request, product_id, payload), action="Adding the component"
+                    )
             return {"product_id": product.id, "component_id": component.id, "added": True}
 
         return await run_db(call)
