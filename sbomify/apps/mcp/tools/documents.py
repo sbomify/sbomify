@@ -75,11 +75,13 @@ def register_tools(mcp: FastMCP) -> None:
         Returns the new document's id.
         """
         _check_document_type(document_type)
-        raw = decode_base64(content_base64, label="Document")
 
         def call() -> dict[str, Any]:
             from sbomify.apps.documents.apis import create_document as view
 
+            # Decoded here, on the worker thread: a file up to the upload limit
+            # decoded on the event loop would stall every other request it serves.
+            raw = decode_base64(content_base64, label="Document")
             _lookup_component(principal, component_id)
             request = _with_body(principal, raw)
             request.content_type = content_type
