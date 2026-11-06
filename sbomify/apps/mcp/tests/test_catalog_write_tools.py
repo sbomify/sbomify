@@ -88,6 +88,56 @@ async def test_create_and_update_a_product(business_workspace, make_token):
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_dates_are_cleared_by_name_not_by_null(make_token, component_in_bound_workspace, product_in_bound_workspace, release_in_bound_workspace):
+    """A left-out argument and a null look the same to a tool, so a date is emptied by naming it in clear."""
+    import datetime
+
+    from sbomify.apps.core.models import Component, Product, Release
+
+    def dated() -> None:
+        day = datetime.date(2030, 1, 31)
+        Product.objects.filter(pk=product_in_bound_workspace.pk).update(end_of_life=day, end_of_support=day)
+        Component.objects.filter(pk=component_in_bound_workspace.pk).update(end_of_support=day)
+        Release.objects.filter(pk=release_in_bound_workspace.pk).update(
+            released_at=datetime.datetime(2030, 1, 31, tzinfo=datetime.UTC)
+        )
+
+    await sync_to_async(dated)()
+    token = await sync_to_async(make_token)(["product:manage", "component:manage", "release:manage"])
+    product_id = product_in_bound_workspace.id
+
+    async with mcp_http() as client:
+        await call_tool(client, token, "update_product", {"product_id": product_id, "clear": ["end_of_life"]})
+        await call_tool(
+            client,
+            token,
+            "update_component_metadata",
+            {"component_id": component_in_bound_workspace.id, "clear": ["end_of_support"]},
+        )
+        await call_tool(
+            client, token, "update_release", {"release_id": release_in_bound_workspace.id, "clear": ["released_at"]}
+        )
+        unknown = await call_tool(client, token, "update_product", {"product_id": product_id, "clear": ["name"]})
+        both = await call_tool(
+            client,
+            token,
+            "update_product",
+            {"product_id": product_id, "end_of_life": "2031-01-01", "clear": ["end_of_life"]},
+        )
+
+    product = await sync_to_async(Product.objects.get)(pk=product_id)
+    assert product.end_of_life is None
+    assert str(product.end_of_support) == "2030-01-31"
+    component = await sync_to_async(Component.objects.get)(pk=component_in_bound_workspace.pk)
+    assert component.end_of_support is None
+    release = await sync_to_async(Release.objects.get)(pk=release_in_bound_workspace.pk)
+    assert release.released_at is None
+    assert "cannot be cleared" in refusal(unknown)
+    assert "both set and cleared" in refusal(both)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_adding_a_component_keeps_the_products_others(
     mcp_owner, make_token, product_in_bound_workspace, component_in_bound_workspace
 ):

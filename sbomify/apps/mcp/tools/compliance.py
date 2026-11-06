@@ -241,19 +241,26 @@ def register_tools(mcp: FastMCP) -> None:
         """
 
         def call() -> dict[str, Any]:
+            from django.db import transaction
+
             from sbomify.apps.compliance import apis
+            from sbomify.apps.compliance.models import OSCALFinding
             from sbomify.apps.compliance.schemas import FindingUpdateSchema
 
-            finding = _lookup_finding(principal, assessment_id, finding_id)
-            payload = FindingUpdateSchema(
-                status=status,
-                notes=finding.notes if notes is None else notes,
-                justification=finding.justification if justification is None else justification,
-            )
-            result: dict[str, Any] = _unwrap(
-                apis.update_finding(principal.request, assessment_id, finding_id, payload),
-                action="Updating the finding",
-            )
+            _lookup_finding(principal, assessment_id, finding_id)
+            # The view writes the notes and justification it is sent, so the ones
+            # left out come from the row locked until the write.
+            with transaction.atomic():
+                finding = OSCALFinding.objects.select_for_update().only("notes", "justification").get(pk=finding_id)
+                payload = FindingUpdateSchema(
+                    status=status,
+                    notes=finding.notes if notes is None else notes,
+                    justification=finding.justification if justification is None else justification,
+                )
+                result: dict[str, Any] = _unwrap(
+                    apis.update_finding(principal.request, assessment_id, finding_id, payload),
+                    action="Updating the finding",
+                )
             return result
 
         return await run_db(call)
