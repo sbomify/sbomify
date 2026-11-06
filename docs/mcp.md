@@ -33,13 +33,25 @@ personal access token, sent as a bearer token.
 
 3. Ask the agent to list its tools. `tools/list` is filtered by the token's scopes, so what comes
    back is the reference for that token. The tools cover the workspace and its products,
-   components, releases, artifacts, vulnerabilities, assessments, advisories and contact profiles.
+   components, releases, artifacts, documents, vulnerabilities, assessments, advisories, contact
+   profiles, suppliers, lifecycle events, security controls, CRA assessments and licenses.
 
 Give each agent its own token. Rate limits are per token, so an agent that shares one with CI shares
 its budget.
 
 No tool deletes anything. Destructive actions are refused at registration, so "delete our SBOMs" has
 nothing to call.
+
+Some writes stay with a person in sbomify, because they publish, attest or administer:
+
+- publishing an advisory, and changing product or component visibility;
+- generating the VDP, security.txt or Declaration of Conformity, saving CRA step 3 (it fills the
+  public security.txt) and finishing the assessment;
+- Article 14 reports, filings with ENISA, and signing a declaration or an export;
+- recording lifecycle events and support definitions, which are permanent and public over TEA;
+- uploading an artifact's signature or provenance, which CI does once per artifact;
+- approving VEX submissions, advisory changes and access requests;
+- anything that needs the admin role, such as control statuses and plugin settings.
 
 ## Settings
 
