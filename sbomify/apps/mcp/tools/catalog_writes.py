@@ -40,6 +40,14 @@ class Contact(BaseModel):
     bom_ref: str | None = None
 
 
+class CustomLicense(BaseModel):
+    """A license with no SPDX identifier, as ``get_component_metadata`` returns one."""
+
+    name: str
+    url: str | None = None
+    text: str | None = None
+
+
 def _schema(schema: type[BaseModel], label: str, **fields: Any) -> Any:
     """Build a REST request schema, answering a validation failure as a refusal the agent can fix."""
     try:
@@ -380,7 +388,7 @@ def register_tools(mcp: FastMCP) -> None:
         supplier_address: str | None = None,
         supplier_contacts: list[Contact] | None = None,
         authors: list[Contact] | None = None,
-        licenses: list[str] | None = None,
+        licenses: list[str | CustomLicense] | None = None,
         lifecycle_phase: str | None = None,
         release_date: date | None = None,
         end_of_support: date | None = None,
@@ -394,7 +402,8 @@ def register_tools(mcp: FastMCP) -> None:
         `get_component_metadata` first and send the full list you want.
 
         `licenses` are SPDX identifiers or expressions, such as "MIT" or
-        "Apache-2.0 OR MIT". `lifecycle_phase` is one of: design, pre-build,
+        "Apache-2.0 OR MIT", and custom licenses as `{"name", "url", "text"}`
+        objects, the way `get_component_metadata` returns them. `lifecycle_phase` is one of: design, pre-build,
         build, post-build, operations, discovery, decommission. Dates are ISO
         dates (YYYY-MM-DD).
 
@@ -429,9 +438,14 @@ def register_tools(mcp: FastMCP) -> None:
 
             patch: dict[str, Any] = {
                 key: fields[key]
-                for key in ("lifecycle_phase", "release_date", "end_of_support", "end_of_life", "licenses")
+                for key in ("lifecycle_phase", "release_date", "end_of_support", "end_of_life")
                 if key in fields
             }
+            if "licenses" in fields:
+                patch["licenses"] = [
+                    entry if isinstance(entry, str) else entry.model_dump(exclude_none=True)
+                    for entry in fields["licenses"]
+                ]
             if "authors" in fields:
                 patch["authors"] = [author.model_dump(exclude_none=True) for author in fields["authors"]]
             if {"supplier_name", "supplier_urls", "supplier_address", "supplier_contacts"} & fields.keys():
@@ -443,11 +457,14 @@ def register_tools(mcp: FastMCP) -> None:
                     "address": fields.get("supplier_address", component.supplier_address),
                 }
                 # The view replaces the contacts whenever the supplier is sent, so
-                # contacts left out are sent back as they are stored.
-                contacts = fields.get("supplier_contacts") or [
-                    Contact(name=c.name, email=c.email, phone=c.phone, bom_ref=c.bom_ref)
-                    for c in component.supplier_contacts.order_by("order", "pk")
-                ]
+                # contacts left out go back as stored. An empty list clears them.
+                if "supplier_contacts" in fields:
+                    contacts = fields["supplier_contacts"]
+                else:
+                    contacts = [
+                        Contact(name=c.name, email=c.email, phone=c.phone, bom_ref=c.bom_ref)
+                        for c in component.supplier_contacts.order_by("order", "pk")
+                    ]
                 supplier["contacts"] = [c.model_dump(exclude_none=True) for c in contacts]
                 patch["supplier"] = supplier
 

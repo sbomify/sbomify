@@ -199,7 +199,7 @@ async def test_component_metadata_round_trip(make_token, component_in_bound_work
                 "supplier_urls": ["https://example.com"],
                 "supplier_contacts": [{"name": "Grace", "email": "grace@example.com", "bom_ref": "contact-grace"}],
                 "authors": [{"name": "Ada", "email": "ada@example.com", "bom_ref": "author-ada"}],
-                "licenses": ["Apache-2.0 OR MIT"],
+                "licenses": ["Apache-2.0 OR MIT", {"name": "Example EULA", "url": "https://example.com/eula"}],
                 "lifecycle_phase": "build",
             },
         )
@@ -208,6 +208,14 @@ async def test_component_metadata_round_trip(make_token, component_in_bound_work
             client, token, "update_component_metadata", {"component_id": component_id, "supplier_address": "1 Main St"}
         )
         metadata = structured(await call_tool(client, token, "get_component_metadata", {"component_id": component_id}))
+        # Sent back as read, then with the contacts emptied: the empty list clears them.
+        await call_tool(
+            client,
+            token,
+            "update_component_metadata",
+            {"component_id": component_id, "licenses": metadata["licenses"], "supplier_contacts": []},
+        )
+        cleared = structured(await call_tool(client, token, "get_component_metadata", {"component_id": component_id}))
         bad_phase = await call_tool(
             client, token, "update_component_metadata", {"component_id": component_id, "lifecycle_phase": "shipping"}
         )
@@ -219,7 +227,12 @@ async def test_component_metadata_round_trip(make_token, component_in_bound_work
         {"name": "Grace", "email": "grace@example.com", "bom_ref": "contact-grace"}
     ]
     assert metadata["authors"] == [{"name": "Ada", "email": "ada@example.com", "bom_ref": "author-ada"}]
-    assert metadata["licenses"] == ["Apache-2.0 OR MIT"]
+    assert metadata["licenses"] == [
+        "Apache-2.0 OR MIT",
+        {"name": "Example EULA", "url": "https://example.com/eula", "text": None},
+    ]
+    assert cleared["licenses"] == metadata["licenses"]
+    assert not cleared["supplier"].get("contacts")
     assert metadata["lifecycle_phase"] == "build"
     assert "Unknown lifecycle_phase" in refusal(bad_phase)
 
