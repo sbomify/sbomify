@@ -195,7 +195,9 @@ def register_tools(mcp: FastMCP) -> None:
         """Save fields of CRA assessment step 1, 2 or 4.
 
         `data` holds the step's fields as `get_cra_step` returns them; only the
-        fields you send change. Step 4's fields can be sent flat or under
+        fields you send change. In step 1 the conformity procedure is kept
+        unless you send it or change `product_category`, which picks that
+        category's default. Step 4's fields can be sent flat or under
         `user_info`, as the read returns them. Step 2 takes `waivers` (BSI
         finding id to `{"justification": ...}`, for tooling limitations only). Step 3 feeds
         the public security.txt and step 5 publishes the Declaration of
@@ -204,7 +206,10 @@ def register_tools(mcp: FastMCP) -> None:
         """
 
         def call() -> dict[str, Any]:
+            from django.db import transaction
+
             from sbomify.apps.compliance import apis
+            from sbomify.apps.compliance.models import CRAAssessment
             from sbomify.apps.compliance.schemas import StepDataSchema
 
             if step in _PERSON_STEPS:
@@ -216,10 +221,20 @@ def register_tools(mcp: FastMCP) -> None:
                 # sent back nested, every edit would be dropped and the step still
                 # marked complete.
                 fields = {**{k: v for k, v in data.items() if k != "user_info"}, **data["user_info"]}
-            result: dict[str, Any] = _unwrap(
-                apis.save_step_data(principal.request, assessment_id, step, StepDataSchema(data=fields)),
-                action=f"Saving step {step}",
-            )
+            with transaction.atomic():
+                if step == 1 and "conformity_assessment_procedure" not in fields and "product_category" not in fields:
+                    # Step 1 resets an unsent procedure to the category default, so a
+                    # save of some other field would move a product off a third-party
+                    # procedure (Module B+C or H) onto self-assessment. Send back the
+                    # stored one, read from the row locked until the write.
+                    stored = CRAAssessment.objects.select_for_update().values_list(
+                        "conformity_assessment_procedure", flat=True
+                    )
+                    fields = {**fields, "conformity_assessment_procedure": stored.get(pk=assessment_id)}
+                result: dict[str, Any] = _unwrap(
+                    apis.save_step_data(principal.request, assessment_id, step, StepDataSchema(data=fields)),
+                    action=f"Saving step {step}",
+                )
             return result
 
         return await run_db(call)
