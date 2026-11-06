@@ -337,13 +337,19 @@ def _serialize_crypto_asset(asset: CryptoAsset) -> dict[str, Any]:
     }
 
 
-def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[str, Any]]:
+def get_crypto_inventory(
+    request: HttpRequest, sbom_id: str, *, raw: bytes | None = None
+) -> ServiceResult[dict[str, Any]]:
     """Derive the cryptographic-asset (CBOM) inventory for an SBOM.
 
     Reads the immutable artifact from storage and projects its
     ``cryptographic-asset`` components (ADR-004 — nothing is persisted or
     mutated). Returns an empty inventory when the artifact carries no crypto
     assets or is not a parseable CycloneDX document.
+
+    ``raw`` is the artifact's bytes when the caller already fetched them, so a
+    caller that must bound what it parses checks them first and the file is
+    not fetched twice.
     """
     try:
         sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
@@ -374,7 +380,8 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
         return ServiceResult.success(cached)
 
     try:
-        raw = StorageClient("SBOMS").get_sbom_data(sbom.sbom_filename)
+        if raw is None:
+            raw = StorageClient("SBOMS").get_sbom_data(sbom.sbom_filename)
     except (BotoCoreError, ClientError) as exc:
         # The posture card is best-effort and lazy-loaded after page render
         # (ComponentCryptoPostureView / SbomCryptoInventoryView): ANY storage

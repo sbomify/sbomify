@@ -197,12 +197,13 @@ async def test_component_metadata_round_trip(make_token, component_in_bound_work
                 "component_id": component_id,
                 "supplier_name": "Example Ltd",
                 "supplier_urls": ["https://example.com"],
-                "authors": [{"name": "Ada", "email": "ada@example.com"}],
+                "supplier_contacts": [{"name": "Grace", "email": "grace@example.com", "bom_ref": "contact-grace"}],
+                "authors": [{"name": "Ada", "email": "ada@example.com", "bom_ref": "author-ada"}],
                 "licenses": ["Apache-2.0 OR MIT"],
                 "lifecycle_phase": "build",
             },
         )
-        # A later supplier change that names only the address keeps the name and URLs.
+        # A later supplier change that names only the address keeps the name, URLs and contacts.
         await call_tool(
             client, token, "update_component_metadata", {"component_id": component_id, "supplier_address": "1 Main St"}
         )
@@ -214,7 +215,10 @@ async def test_component_metadata_round_trip(make_token, component_in_bound_work
     assert metadata["supplier"]["name"] == "Example Ltd"
     assert metadata["supplier"]["url"] == ["https://example.com"]
     assert metadata["supplier"]["address"] == "1 Main St"
-    assert metadata["authors"] == [{"name": "Ada", "email": "ada@example.com"}]
+    assert metadata["supplier"]["contacts"] == [
+        {"name": "Grace", "email": "grace@example.com", "bom_ref": "contact-grace"}
+    ]
+    assert metadata["authors"] == [{"name": "Ada", "email": "ada@example.com", "bom_ref": "author-ada"}]
     assert metadata["licenses"] == ["Apache-2.0 OR MIT"]
     assert metadata["lifecycle_phase"] == "build"
     assert "Unknown lifecycle_phase" in refusal(bad_phase)

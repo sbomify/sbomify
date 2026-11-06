@@ -8,7 +8,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ..limits import enforce_stored_size
+from ..limits import enforce_parse_size, enforce_stored_size
 from ._base import DETAIL_COLLECTION_LIMIT, clamp_page, mcp_tool, not_found, resolve_workspace, run_db, unwrap_view
 from .artifacts import _bounded, _get_artifact
 
@@ -58,17 +58,21 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.sboms.services.sboms import get_crypto_inventory as inventory_for
 
             obj = _get_artifact(principal, artifact_id)
+            raw: bytes | None = None
             if obj.sbom_filename:
+                store = StorageClient("SBOMS")
                 try:
-                    size = StorageClient("SBOMS").get_sbom_size(obj.sbom_filename)
+                    # The size first, so an oversized artifact is refused before
+                    # its transfer; then the bytes, so what gets parsed is bounded
+                    # by memory as well as by size.
+                    enforce_stored_size(store.get_sbom_size(obj.sbom_filename), artifact_id=artifact_id)
+                    raw = store.get_sbom_data(obj.sbom_filename)
                 except (ClientError, BotoCoreError) as exc:
-                    # The inventory service fetches and parses the whole file, so an
-                    # artifact whose size cannot be read is not inspected at all.
                     raise ToolError(
-                        f"Could not read the size of artifact {artifact_id}, so it was not inspected."
+                        f"Artifact {artifact_id} could not be read from storage, so it was not inspected."
                     ) from exc
-                enforce_stored_size(size, artifact_id=artifact_id)
-            result = inventory_for(principal.request, artifact_id)
+                enforce_parse_size(raw, artifact_id=artifact_id)
+            result = inventory_for(principal.request, artifact_id, raw=raw)
             if not result.ok:
                 raise ToolError(f"Crypto inventory failed ({result.status_code or 400}): {result.error}")
             data = result.value or {}

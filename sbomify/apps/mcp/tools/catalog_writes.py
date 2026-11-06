@@ -27,11 +27,17 @@ if TYPE_CHECKING:
 
 
 class Contact(BaseModel):
-    """A person named on a component: a supplier contact or an author."""
+    """A person named on a component: a supplier contact or an author.
+
+    ``bom_ref`` is the reference a generated SBOM uses for the person. It comes
+    back from ``get_component_metadata`` and goes back unchanged, so a list
+    read and sent again keeps it.
+    """
 
     name: str
     email: str | None = None
     phone: str | None = None
+    bom_ref: str | None = None
 
 
 def _schema(schema: type[BaseModel], label: str, **fields: Any) -> Any:
@@ -436,8 +442,13 @@ def register_tools(mcp: FastMCP) -> None:
                     "url": fields.get("supplier_urls", component.supplier_url or []),
                     "address": fields.get("supplier_address", component.supplier_address),
                 }
-                if "supplier_contacts" in fields:
-                    supplier["contacts"] = [c.model_dump(exclude_none=True) for c in fields["supplier_contacts"]]
+                # The view replaces the contacts whenever the supplier is sent, so
+                # contacts left out are sent back as they are stored.
+                contacts = fields.get("supplier_contacts") or [
+                    Contact(name=c.name, email=c.email, phone=c.phone, bom_ref=c.bom_ref)
+                    for c in component.supplier_contacts.order_by("order", "pk")
+                ]
+                supplier["contacts"] = [c.model_dump(exclude_none=True) for c in contacts]
                 patch["supplier"] = supplier
 
             payload = _schema(ComponentMetaDataPatch, "metadata", **patch)

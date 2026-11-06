@@ -195,8 +195,9 @@ def register_tools(mcp: FastMCP) -> None:
         """Save fields of CRA assessment step 1, 2 or 4.
 
         `data` holds the step's fields as `get_cra_step` returns them; only the
-        fields you send change. Step 2 takes `waivers` (BSI finding id to
-        `{"justification": ...}`, for tooling limitations only). Step 3 feeds
+        fields you send change. Step 4's fields can be sent flat or under
+        `user_info`, as the read returns them. Step 2 takes `waivers` (BSI
+        finding id to `{"justification": ...}`, for tooling limitations only). Step 3 feeds
         the public security.txt and step 5 publishes the Declaration of
         Conformity, so a person saves those in sbomify; answer step 3's
         controls with `update_cra_finding` instead.
@@ -209,8 +210,14 @@ def register_tools(mcp: FastMCP) -> None:
             if step in _PERSON_STEPS:
                 raise ToolError(_PERSON_STEPS[step])
             _lookup_assessment(principal, assessment_id)
+            fields = data
+            if step == 4 and isinstance(data.get("user_info"), dict):
+                # The read nests step 4 under user_info and the save takes it flat;
+                # sent back nested, every edit would be dropped and the step still
+                # marked complete.
+                fields = {**{k: v for k, v in data.items() if k != "user_info"}, **data["user_info"]}
             result: dict[str, Any] = _unwrap(
-                apis.save_step_data(principal.request, assessment_id, step, StepDataSchema(data=data)),
+                apis.save_step_data(principal.request, assessment_id, step, StepDataSchema(data=fields)),
                 action=f"Saving step {step}",
             )
             return result

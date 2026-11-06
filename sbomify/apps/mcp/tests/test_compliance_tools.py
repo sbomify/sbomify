@@ -105,7 +105,7 @@ async def test_save_cra_step_saves_step_four_and_leaves_the_public_steps_to_a_pe
     from sbomify.apps.compliance.models import CRAAssessment
     from sbomify.apps.teams.models import Workspace
 
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["product:read", "product:manage", "workspace:manage"])
     saved = structured(
         await _run(
             token,
@@ -113,6 +113,10 @@ async def test_save_cra_step_saves_step_four_and_leaves_the_public_steps_to_a_pe
             {"assessment_id": assessment.id, "step": 4, "data": {"support_email": "support@example.com"}},
         )
     )
+    # Sent back in the shape get_cra_step reads it, under user_info.
+    as_read = structured(await _run(token, "get_cra_step", {"assessment_id": assessment.id, "step": 4}))["data"]
+    as_read["user_info"]["support_url"] = "https://example.com/support"
+    await _run(token, "save_cra_step", {"assessment_id": assessment.id, "step": 4, "data": as_read})
     security_txt = await _run(
         token,
         "save_cra_step",
@@ -129,6 +133,7 @@ async def test_save_cra_step_saves_step_four_and_leaves_the_public_steps_to_a_pe
     assert "a person finishes it" in _refusal(finish)
     stored = await sync_to_async(CRAAssessment.objects.get)(pk=assessment.id)
     assert stored.support_email == "support@example.com"
+    assert stored.support_url == "https://example.com/support"
     assert stored.vdp_url != "https://example.com/vdp"
     assert stored.status != CRAAssessment.WizardStatus.COMPLETE
     team = await sync_to_async(Workspace.objects.get)(pk=assessment.team_id)

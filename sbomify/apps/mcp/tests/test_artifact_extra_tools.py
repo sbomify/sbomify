@@ -213,8 +213,14 @@ async def test_get_crypto_inventory_pages_the_assets(make_token, component_in_bo
             for name in ("AES-128-GCM", "AES-256-GCM", "ChaCha20")
         ],
     }
+    fetches: list[str] = []
+
+    def fetch(self, name):
+        fetches.append(name)
+        return json.dumps(document).encode()
+
     monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", lambda self, name: 1024)
-    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", lambda self, name: json.dumps(document).encode())
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", fetch)
     token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
 
     async with mcp_http() as client:
@@ -223,6 +229,8 @@ async def test_get_crypto_inventory_pages_the_assets(make_token, component_in_bo
         )
 
     inventory = structured(response)
+    # Fetched once, by the tool that bounds it, not again by the inventory service.
+    assert len(fetches) == 1
     assert inventory["count"] == 3
     assert inventory["assets"]["total"] == 3
     assert inventory["assets"]["has_more"] is True
@@ -249,6 +257,26 @@ async def test_get_crypto_inventory_refuses_an_artifact_too_large_to_parse(
         response = await call_tool(client, token, "get_crypto_inventory", {"artifact_id": sbom.id})
 
     assert "limit for inspection over MCP" in _refusal(response)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_get_crypto_inventory_refuses_a_document_too_costly_to_parse(
+    make_token, component_in_bound_workspace, monkeypatch
+):
+    """Under the byte ceiling is not enough: a document of tiny parts can still take too much memory parsed."""
+    from sbomify.apps.mcp import limits
+
+    sbom = await sync_to_async(_sbom)(component_in_bound_workspace)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_size", lambda self, name: 1024)
+    monkeypatch.setattr(object_store.StorageClient, "get_sbom_data", lambda self, name: b"[" + b"0," * 400 + b"0]")
+    monkeypatch.setattr(limits, "within_parse_budget", lambda raw, ceiling: False)
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["read_only"])
+
+    async with mcp_http() as client:
+        response = await call_tool(client, token, "get_crypto_inventory", {"artifact_id": sbom.id})
+
+    assert "too many small parts" in _refusal(response)
 
 
 def _plugins(team, *names, enabled=("extra-check",)):
