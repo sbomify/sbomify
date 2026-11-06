@@ -29,6 +29,9 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from mcp.server.fastmcp.exceptions import ToolError
 
+from sbomify.apps.core.parse_budget import PARSE_MEMORY_FACTOR as PARSE_MEMORY_FACTOR
+from sbomify.apps.core.parse_budget import parsed_size_estimate as parsed_size_estimate
+from sbomify.apps.core.parse_budget import within_parse_budget as within_parse_budget
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -79,32 +82,6 @@ def enforce_upload_size(raw: bytes, *, label: str) -> None:
             f"{label} is {len(raw)} bytes, over the {MAX_UPLOAD_BYTES} byte limit for MCP uploads. "
             "Use the REST API or the web uploader for artifacts this large."
         )
-
-
-PARSE_MEMORY_FACTOR = 8
-"""How many times the byte ceiling a document may take once parsed.
-
-Real SBOMs take two to four times their size as Python objects, so one at the
-ceiling fits. A document built of tiny objects takes up to thirty times, and
-that is what this refuses."""
-
-
-def parsed_size_estimate(raw: bytes) -> int:
-    """An upper bound on what ``json.loads(raw)`` holds in memory, read from the text alone.
-
-    Each object or array costs up to about 256 bytes once parsed, each further
-    member about 64, and text about twice its length. Measured against the SBOM
-    fixtures and against arrays of empty objects, arrays, zeros and strings,
-    every one came in under it. A brace or comma inside a string only makes it
-    higher. Three byte counts, so a document is sized without being parsed.
-    """
-    containers = raw.count(b"{") + raw.count(b"[")
-    return 2 * len(raw) + 256 * containers + 64 * raw.count(b",")
-
-
-def within_parse_budget(raw: bytes, ceiling: int) -> bool:
-    """Whether ``raw`` is under ``ceiling`` bytes and parses into no more than ``PARSE_MEMORY_FACTOR`` times it."""
-    return len(raw) <= ceiling and parsed_size_estimate(raw) <= PARSE_MEMORY_FACTOR * ceiling
 
 
 def enforce_parse_size(raw: bytes | None, *, artifact_id: str) -> None:
