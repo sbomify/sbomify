@@ -186,6 +186,7 @@ async def test_preview_vex_counts_what_it_would_suppress_and_stores_nothing(make
 
     assert preview["format"] == "cyclonedx"
     assert preview["would_suppress"] == 1
+    assert len(preview["matched"]) == 1
     assert await sync_to_async(SBOM.objects.filter(bom_type=SBOM.BomType.VEX).count)() == 0
     assert "VEX preview failed" in _error(not_vex)
 
@@ -287,3 +288,34 @@ async def test_a_read_token_sees_the_reads_but_not_the_writes_or_component_tools
     names = {tool["name"] for tool in parse(response)["result"]["tools"]}
     assert {"get_vulnerability_kpis", "get_vulnerability_trends", "list_suppliers"} <= names
     assert not names & {"create_supplier", "update_supplier", "get_component_triage", "preview_vex"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_preview_vex_cuts_the_scanner_text_it_samples(make_token, component_in_bound_workspace, monkeypatch):
+    """The sample holds package names from scanner output, which are as long as an SBOM makes them."""
+    from sbomify.apps.vulnerability_scanning import apis
+
+    long_name = "p" * 50_000
+    sample = [{"id": f"CVE-2026-{n}", "package": long_name, "version": "1"} for n in range(100)]
+    monkeypatch.setattr(
+        apis,
+        "preview_vex",
+        lambda request, component_id: (200, {"would_suppress": 100, "matched": sample, "format": "cyclonedx"}),
+    )
+    token = await sync_to_async(make_token)(["component:access"])
+
+    async with mcp_http() as client:
+        preview = structured(
+            await call_tool(
+                client,
+                token,
+                "preview_vex",
+                {"component_id": component_in_bound_workspace.id, "content": json.dumps(NOT_AFFECTED_VEX)},
+            )
+        )
+
+    assert preview["would_suppress"] == 100
+    assert len(preview["matched"]) == 51
+    assert len(preview["matched"][0]["package"]) < 1200
+
