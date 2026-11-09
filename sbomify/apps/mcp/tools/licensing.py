@@ -2,7 +2,8 @@
 
 The REST endpoints these mirror check no action beyond authentication: the
 license list is reference data. ``workspace:read`` is declared so a token
-scoped to nothing at all is not offered them.
+scoped to nothing at all is not offered them, and each still resolves the
+caller's workspace, the choke point that refuses a guest like every other tool.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal
-from ._base import clamp_page, mcp_tool, run_db
+from ._base import clamp_page, mcp_tool, resolve_workspace, run_db
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -36,6 +37,7 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             from sbomify.apps.licensing.loader import get_license_list
 
+            resolve_workspace(principal)
             term = (search or "").strip().casefold()
             matches = [
                 entry
@@ -67,6 +69,7 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             from sbomify.apps.licensing.loader import validate_expression
 
+            resolve_workspace(principal)
             return serializers.compact(validate_expression(expression))
 
         return await run_db(query)

@@ -19,8 +19,11 @@ def _admit_every_mcp_request(monkeypatch):
     async def authenticated(scope):
         return None
 
+    async def may_upload(scope):
+        return True
+
     monkeypatch.setattr("sbomify.asgi.authenticate_request", authenticated)
-    monkeypatch.setattr("sbomify.asgi.may_send_large_body", lambda scope: True)
+    monkeypatch.setattr("sbomify.asgi.may_send_large_body", may_upload)
 
 
 @pytest.mark.anyio

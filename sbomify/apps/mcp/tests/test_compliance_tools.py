@@ -68,7 +68,7 @@ async def _run(token, tool, arguments):
 async def test_start_cra_assessment_creates_once(make_token, product_in_bound_workspace):
     from sbomify.apps.compliance.models import CRAAssessment
 
-    token = await sync_to_async(make_token)(["product:manage"])
+    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
     first = structured(await _run(token, "start_cra_assessment", {"product_id": product_in_bound_workspace.id}))
     again = structured(await _run(token, "start_cra_assessment", {"product_id": product_in_bound_workspace.id}))
 
@@ -76,6 +76,22 @@ async def test_start_cra_assessment_creates_once(make_token, product_in_bound_wo
     assert first["current_step"] == 1
     stored = await sync_to_async(CRAAssessment.objects.get)(product=product_in_bound_workspace)
     assert stored.id == first["id"]
+
+
+@pytest.mark.asyncio
+async def test_a_member_cannot_start_a_cra_assessment(mcp_owner, make_token, product_in_bound_workspace):
+    """Starting answers with the assessment, and the wizard, reading it included, is owner and admin work."""
+    from sbomify.apps.compliance.models import CRAAssessment
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    await sync_to_async(Member.objects.filter(user=user, team=bound).update)(role="member")
+    token = await sync_to_async(make_token)(None)
+
+    refusal = _refusal(await _run(token, "start_cra_assessment", {"product_id": product_in_bound_workspace.id}))
+
+    assert "Forbidden" in refusal
+    assert not await sync_to_async(CRAAssessment.objects.filter(product=product_in_bound_workspace).exists)()
 
 
 @pytest.mark.asyncio
@@ -338,7 +354,12 @@ def test_answering_the_assessment_needs_an_admin_tier_scope():
     """The wizard is owner and admin work, so a token needs an admin-tier scope to change an assessment."""
     from sbomify.apps.mcp import registry
 
-    writes = {"save_cra_step", "update_cra_finding", "add_cra_observation", "generate_cra_document"}
+    writes = {
+        "start_cra_assessment",
+        "save_cra_step",
+        "update_cra_finding",
+        "add_cra_observation",
+        "generate_cra_document",
+    }
     assert writes & registry.permitted_by(["product:manage"]) == set()
     assert writes <= registry.permitted_by(["product:manage", "workspace:manage"])
-    assert "start_cra_assessment" in registry.permitted_by(["product:manage"])

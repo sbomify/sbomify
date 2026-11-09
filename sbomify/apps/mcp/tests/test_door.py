@@ -149,6 +149,29 @@ async def test_a_large_body_reaches_the_app_only_from_a_token_that_may_upload(ma
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(("role", "admitted"), [("guest", False), ("operator", False), ("member", True)])
+async def test_a_full_scope_token_sends_a_large_body_only_when_its_holder_may_upload(
+    make_token, mcp_owner, role, admitted
+):
+    """A full-scope token is offered upload_artifact, but its holder's role still decides."""
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    await sync_to_async(Member.objects.filter(user=user, team=bound).update)(role=role)
+    token = await sync_to_async(make_token)(None)
+    recorder = _Recorder()
+
+    sent = await _drive(_router(recorder), _scope(token.encoded_token, length=LARGE))
+
+    if admitted:
+        assert len(recorder.states) == 1
+    else:
+        assert recorder.states == []
+        assert sent[0]["status"] == 413
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_a_large_body_without_a_token_is_refused_unread():
     recorder = _Recorder()
 

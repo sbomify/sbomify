@@ -436,12 +436,32 @@ def audit_invalid_request(scope: Any, reason: str) -> None:
     audit("request", principal, outcome="invalid_request", detail=reason)
 
 
-def may_send_large_body(scope: Any) -> bool:
-    """Whether this request's caller may call a tool whose arguments carry an artifact."""
+async def may_send_large_body(scope: Any) -> bool:
+    """Whether this request's caller may call a tool whose arguments carry an artifact.
+
+    The token's scopes and the person's role both decide, as they do for the
+    upload itself. A guest or an operator holding a full-scope token is offered
+    ``upload_artifact`` but refused it, so they get an envelope's size and
+    deadline, not an upload's.
+    """
     from . import registry
 
     principal = (scope.get("state") or {}).get(PRINCIPAL_STATE)
-    return principal is not None and bool(set(UPLOAD_TOOLS) & registry.permitted_by(principal.scopes))
+    if principal is None or not set(UPLOAD_TOOLS) & registry.permitted_by(principal.scopes):
+        return False
+    return await database_sync_to_async(_may_publish)(principal)
+
+
+def _may_publish(principal: Principal) -> bool:
+    from sbomify.apps.core.authz import can
+
+    from .tools._base import resolve_workspace
+
+    try:
+        workspace = resolve_workspace(principal)
+    except ToolError:
+        return False
+    return bool(can(principal.request, "artifact:publish", workspace))
 
 
 async def _charge_refusal(stub: HttpRequest, *, tool: str, reason: str) -> None:
