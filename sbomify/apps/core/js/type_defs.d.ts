@@ -67,6 +67,7 @@ export interface ComponentMetaInfo {
   release_date: string | null;
   end_of_support: string | null;
   end_of_life: string | null;
+  vcs_url: string | null;
 }
 
 export interface UserItemsResponse {
