@@ -7,6 +7,7 @@ oversized request. These tests drive ``MCPRouter`` itself.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from unittest.mock import patch
@@ -154,7 +155,7 @@ async def test_a_large_body_without_a_token_is_refused_unread():
     sent = await _drive(_router(recorder), _scope(None, length=LARGE))
 
     assert recorder.states == []
-    assert sent[0]["status"] == 413
+    assert sent[0]["status"] == 401
 
 
 @pytest.mark.asyncio
@@ -286,6 +287,61 @@ async def test_an_upload_of_no_stated_length_goes_through_up_to_the_upload_cap(m
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_a_body_that_stalls_gets_a_408_and_gives_its_slot_back(make_token, settings, monkeypatch):
+    """A request holds its slot while its body arrives, so the body gets a deadline."""
+    import sbomify.asgi
+
+    settings.MCP_MAX_CONCURRENT_REQUESTS = 1
+    monkeypatch.setattr(sbomify.asgi, "MCP_BODY_SECONDS", 0.05)
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    router = _router(_Reader())
+
+    first = True
+
+    async def stalls():
+        nonlocal first
+        if first:
+            first = False
+            return {"type": "http.request", "body": b"{", "more_body": True}
+        await asyncio.Event().wait()
+
+    stalled = await asyncio.wait_for(_drive(router, _scope(token.encoded_token, length=64), stalls), timeout=2)
+    after = await _drive(router, _scope(token.encoded_token, length=200), _body(200))
+
+    assert stalled[0]["status"] == 408
+    assert len([m for m in stalled if m["type"] == "http.response.start"]) == 1
+    assert after[0]["status"] == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_the_body_deadline_stops_once_the_body_is_in(make_token, monkeypatch):
+    """The transport keeps calling receive to notice a hang-up while it answers; that wait is not the body's."""
+    import sbomify.asgi
+
+    monkeypatch.setattr(sbomify.asgi, "MCP_BODY_SECONDS", 0.05)
+    token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
+    messages = iter([{"type": "http.request", "body": b"{}", "more_body": False}])
+
+    async def receive():
+        if (message := next(messages, None)) is not None:
+            return message
+        await asyncio.sleep(0.2)
+        return {"type": "http.disconnect"}
+
+    async def answers_after_watching(scope, receive, send):
+        assert (await receive())["type"] == "http.request"
+        assert (await receive())["type"] == "http.disconnect"
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    sent = await _drive(_router(answers_after_watching), _scope(token.encoded_token, length=2), receive)
+
+    assert sent[0]["status"] == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_the_real_transport_answers_413_when_the_body_is_cut_off(make_token, settings):
     token = await sync_to_async(make_token)(SCOPE_PRESETS["agent"])
     build_app()
@@ -335,11 +391,11 @@ async def test_a_body_its_headers_call_too_large_is_audited_once(make_token, sta
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 async def test_a_large_body_without_a_token_keeps_its_one_door_event():
-    """The door already audited the missing token, so the 413 adds nothing."""
+    """The door already audited the missing token, so the 401 adds nothing."""
     with patch.object(limits, "log") as spy:
         sent = await _drive(_router(_Recorder()), _scope(None, length=LARGE))
 
-    assert sent[0]["status"] == 413
+    assert sent[0]["status"] == 401
     assert _tool_call_outcomes(spy) == ["denied"]
 
 

@@ -35,6 +35,7 @@ from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
 from sbomify.apps.mcp.auth import (  # noqa: E402
+    MCPRateLimitedError,
     audit_invalid_request,
     audit_rejected,
     authenticate_request,
@@ -50,6 +51,13 @@ mcp_application = build_app()
 
 # How long an MCP request waits for a free slot before it is told to retry.
 MCP_SLOT_WAIT_SECONDS = 5.0
+
+# How long a request may take to send its whole body while it holds a slot.
+# Nothing upstream bounds this: uvicorn has no body timeout and gunicorn's
+# --timeout is a worker heartbeat. An upload is up to three times
+# MCP_MAX_UPLOAD_BYTES of JSON, so a token that may upload gets longer.
+MCP_BODY_SECONDS = 30.0
+MCP_UPLOAD_BODY_SECONDS = 300.0
 
 
 async def _send_error(send: Send, status: int, message: str, *, retry_after: int | None = None) -> None:
@@ -92,42 +100,60 @@ _ANSWER_KEPT = 64 * 1024
 
 
 class _BodyCap:
-    """Counts the body as the app reads it and stops it at ``cap`` bytes.
+    """Counts the body as the app reads it and stops it at ``cap`` bytes or ``seconds``.
 
     The headers cannot size every body (see ``_may_carry_large_body``), so this
-    is the limit that holds. Past the cap the app is told the client hung up,
-    so it reads nothing more, and whatever it answers to that is dropped: the
-    router sends the 413 itself.
+    is the limit that holds. Past the cap, or once the body has taken longer
+    than ``seconds`` to arrive, the app is told the client hung up, so it reads
+    nothing more, and whatever it answers to that is dropped: the router sends
+    the 413 or 408 itself. The clock stops at the body's last chunk, because
+    the transport keeps calling ``receive`` after that to notice a hang-up
+    while it streams its answer.
 
     It also keeps the answer's status and its first and last bytes, so the
     router can audit a call the app rejected before any tool ran.
     """
 
-    def __init__(self, receive: Receive, send: Send, cap: int) -> None:
+    def __init__(self, receive: Receive, send: Send, cap: int, seconds: float) -> None:
         self._receive = receive
         self._send = send
         self.cap = cap
+        self.deadline = asyncio.get_running_loop().time() + seconds
         self.seen = 0
+        self.body_done = False
         self.exceeded = False
+        self.timed_out = False
         self.started = False
         self.status = 0
         self.answer = bytearray()
         self.answer_size = 0
         self.tail = b""
 
+    @property
+    def cut(self) -> bool:
+        return self.exceeded or self.timed_out
+
     async def receive(self) -> Any:
-        if self.exceeded:
+        if self.cut:
             return {"type": "http.disconnect"}
-        message = await self._receive()
+        if self.body_done:
+            return await self._receive()
+        try:
+            async with asyncio.timeout_at(self.deadline):
+                message = await self._receive()
+        except TimeoutError:
+            self.timed_out = True
+            return {"type": "http.disconnect"}
         if message["type"] == "http.request":
             self.seen += len(message.get("body", b""))
             if self.seen > self.cap:
                 self.exceeded = True
                 return {"type": "http.disconnect"}
+            self.body_done = not message.get("more_body", False)
         return message
 
     async def send(self, message: Any) -> None:
-        if self.exceeded:
+        if self.cut:
             return
         if message["type"] == "http.response.start":
             self.started = True
@@ -152,6 +178,11 @@ async def _send_too_large(scope: Scope, send: Send, cap: int, *, may_upload: boo
     await _send_error(send, 413, f"Request body over {cap} bytes.{reason}")
 
 
+async def _send_too_slow(scope: Scope, send: Send, seconds: float) -> None:
+    audit_invalid_request(scope, "body_timeout")
+    await _send_error(send, 408, f"Request body not received within {seconds:g} seconds.")
+
+
 class MCPRouter:
     """Routes ``/mcp`` to the MCP server; everything else to Django.
 
@@ -173,9 +204,10 @@ class MCPRouter:
     Then, before the MCP app reads anything, the request is authenticated from
     its headers (``authenticate_request``): every request is charged and
     audited, including a malformed one FastMCP would refuse before any tool
-    code ran. A caller over its budget is refused here, and so is a body over
-    ``MCP_MAX_REQUEST_BYTES`` from anyone whose token cannot call an upload
-    tool, since only an artifact needs that much. Neither body is read. When
+    code ran. A caller over its budget is refused here, so is one without a
+    usable token, and so is a body over ``MCP_MAX_REQUEST_BYTES`` from anyone
+    whose token cannot call an upload tool, since only an artifact needs that
+    much. None of those bodies is read. When
     FastMCP refuses an authenticated call itself (a parse error, an unknown
     tool, arguments that fail the schema), the router audits it after the
     answer, since the tool wrapper never saw it (``audit_rejected``).
@@ -183,7 +215,9 @@ class MCPRouter:
     Headers cannot size every body: HTTP/2 and HTTP/3 send one without stating
     its length. So the body is also counted as the app reads it, and cut off
     with a 413 past the same cap, or past the transport's own cap for a token
-    that may upload (``_BodyCap``).
+    that may upload (``_BodyCap``). A request holds its slot while its body
+    arrives, so the body also has ``MCP_BODY_SECONDS`` to arrive in, or
+    ``MCP_UPLOAD_BODY_SECONDS`` for a token that may upload, then a 408.
     """
 
     def __init__(self, django_app: ASGIApp, mcp_app: ASGIApp) -> None:
@@ -218,24 +252,30 @@ class MCPRouter:
                 # A per-request context gives each request its own executor, the
                 # same isolation Django requests get.
                 async with ThreadSensitiveContext():
-                    if (over_budget := await authenticate_request(scope)) is not None:
-                        await _send_error(send, 429, str(over_budget), retry_after=over_budget.retry_after)
+                    if (refused := await authenticate_request(scope)) is not None:
+                        if isinstance(refused, MCPRateLimitedError):
+                            await _send_error(send, 429, str(refused), retry_after=refused.retry_after)
+                        else:
+                            await _send_error(send, 401, str(refused))
                         return
                     may_upload = may_send_large_body(scope)
                     cap = mcp.settings.max_request_body_size if may_upload else settings.MCP_MAX_REQUEST_BYTES
                     if _states_large_body(scope) and not may_upload:
                         await _send_too_large(scope, send, cap, may_upload=False)
                         return
-                    body = _BodyCap(receive, send, cap)
+                    seconds = MCP_UPLOAD_BODY_SECONDS if may_upload else MCP_BODY_SECONDS
+                    body = _BodyCap(receive, send, cap, seconds)
                     try:
                         await self.mcp_app(scope, body.receive, body.send)
                     except Exception:
                         # The app may raise on the hang-up it was told about.
-                        if not body.exceeded:
+                        if not body.cut:
                             raise
-                    if body.exceeded and not body.started:
+                    if body.timed_out and not body.started:
+                        await _send_too_slow(scope, send, seconds)
+                    elif body.exceeded and not body.started:
                         await _send_too_large(scope, send, cap, may_upload=may_upload)
-                    elif not body.exceeded:
+                    elif not body.cut:
                         audit_rejected(scope, body.status, body.whole_answer, body.tail)
             finally:
                 for slot in held:
