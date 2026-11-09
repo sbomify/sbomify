@@ -258,7 +258,7 @@ class MCPRouter:
                         else:
                             await _send_error(send, 401, str(refused))
                         return
-                    may_upload = may_send_large_body(scope)
+                    may_upload = await may_send_large_body(scope)
                     cap = mcp.settings.max_request_body_size if may_upload else settings.MCP_MAX_REQUEST_BYTES
                     if _states_large_body(scope) and not may_upload:
                         await _send_too_large(scope, send, cap, may_upload=False)

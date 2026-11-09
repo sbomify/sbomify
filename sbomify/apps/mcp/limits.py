@@ -24,6 +24,7 @@ The defences layer as follows, strongest first:
 from __future__ import annotations
 
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -42,6 +43,11 @@ if TYPE_CHECKING:
 # LOG_LEVEL. Passing the full name here would double the prefix and drop
 # success events whenever LOG_LEVEL is raised.
 log = getLogger("audit.mcp")
+
+# Pydantic quotes the value it rejected. From a delegated REST view that value is
+# a slice of the uploaded artifact, and its repr never spans a line, so the match
+# runs to the last input_type on the line: a value quoting one cannot end it early.
+_INPUT_VALUE = re.compile(r"input_value=.*, input_type=")
 
 # Defined unconditionally in settings.py, so no fallback defaults here — a
 # second copy of each default would drift from the one settings actually uses.
@@ -200,7 +206,7 @@ def audit(
         # runs, where nothing has been resolved yet.
         "team_id": _team_id(principal) if principal else None,
         "scoped": principal.scopes is not None if principal else None,
-        "detail": detail,
+        "detail": _INPUT_VALUE.sub("input_type=", detail) if detail else detail,
         **fields,
     }
     message = f"mcp_tool_call {json.dumps(event, default=str)}"

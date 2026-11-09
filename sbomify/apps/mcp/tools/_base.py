@@ -199,13 +199,12 @@ def mcp_tool(
                 # re-raised unchanged for the agent.
                 #
                 # Bounded, because these messages are not all ours. A refusal
-                # from a delegated REST view can be a pydantic ValidationError
-                # whose text quotes the offending input_value — a slice of the
-                # uploaded artifact — and several local messages interpolate a
-                # caller-supplied id. audit()'s promise is that artifact content
-                # never reaches the log, and an unbounded detail is also free
-                # log amplification for anyone willing to fail on purpose. The
-                # agent still gets the message in full; only the log is cut.
+                # from a delegated REST view can be a pydantic ValidationError,
+                # whose quoted input_value audit() strips, and several local
+                # messages interpolate a caller-supplied id. An unbounded detail
+                # is free log amplification for anyone willing to fail on
+                # purpose. The agent still gets the message in full; only the
+                # log is cut.
                 audit(name, principal, outcome="denied", detail=untrusted(str(exc), limit=AUDIT_DETAIL_LIMIT))
                 raise
             except Exception:
