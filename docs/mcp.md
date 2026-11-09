@@ -76,6 +76,9 @@ production realm needs an operator to set them:
 | `mcp` as a realm optional client scope | A client registered on the fly may only ask for the realm's default scopes |
 | A client registration policy that admits the clients to allow | Claude Code registers with an `http://localhost:<port>/callback` redirect |
 
+The kind stack under `deploy/local` has its own realm bootstrap, which sets none of these up yet, so
+MCP OAuth does not work there. Use a personal access token on that stack.
+
 ## Settings
 
 | Setting | Purpose |
@@ -139,7 +142,7 @@ artifacts. Only an upload needs a body that large.
 its rate limit. The body was not read.
 
 **401 on every call**: the caller presented no token, or one that is unknown, expired or revoked. The
-body was not read.
+body was not read. A client that speaks MCP OAuth starts its sign-in from this 401.
 
 **408 on a tool call**: the request body took longer than 30 seconds to arrive, or 300 seconds from a
 token that may upload. A request holds one of the worker's slots while its body arrives, so the
