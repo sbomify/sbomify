@@ -27,7 +27,8 @@ access token, whose scopes the person chose when making it.
 from __future__ import annotations
 
 import functools
-import os
+import threading
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -53,7 +54,11 @@ _JWKS_TIMEOUT_SECONDS = 5
 
 #: The least time between two fetches one worker makes because a token named a key its cached set lacks.
 _JWKS_REFRESH_GAP_SECONDS = 60
-_JWKS_REFRESH_MARKER = "sbomify:mcp:oauth:jwks:forced_refresh"
+_refresh_lock = threading.Lock()
+_last_forced_refresh = float("-inf")
+
+#: Clock skew allowed on ``iat`` and ``exp``: Keycloak and the app run on different hosts.
+_LEEWAY_SECONDS = 30
 
 
 @dataclass(frozen=True)
@@ -134,9 +139,15 @@ def _jwks_client() -> jwt.PyJWKClient:
     return jwt.PyJWKClient(url, lifespan=_JWKS_LIFESPAN_SECONDS, timeout=_JWKS_TIMEOUT_SECONDS)
 
 
-def _refresh_marker() -> str:
-    """This worker's forced-refresh window, kept in the shared cache so it survives nothing but the worker."""
-    return f"{_JWKS_REFRESH_MARKER}:{os.getpid()}"
+def _may_force_refresh() -> bool:
+    """Whether this worker may fetch the key set again now, and if so, start its window."""
+    global _last_forced_refresh
+    with _refresh_lock:
+        now = time.monotonic()
+        if now - _last_forced_refresh < _JWKS_REFRESH_GAP_SECONDS:
+            return False
+        _last_forced_refresh = now
+        return True
 
 
 def _signing_key(token: str) -> Any | None:
@@ -145,17 +156,16 @@ def _signing_key(token: str) -> Any | None:
     ``PyJWKClient`` fetches the key set again whenever a token names a key it has
     not cached, so tokens with made-up ``kid`` values would each cost a Keycloak
     fetch. A key missing from the cached set forces one fetch per worker per
-    window; inside the window it is refused. The window is per worker because
-    the key set is cached per worker: shared, one worker's fetch after Keycloak
-    rotates its key would spend the window for every other worker still
-    holding the old set, and they would refuse valid tokens until it passed.
+    window; inside the window it is refused. The window lives in the process,
+    like the key set it guards: kept anywhere shared, one worker's fetch after
+    Keycloak rotates its key would spend the window for every other worker,
+    in this pod or another, still holding the old set, and they would refuse
+    valid tokens until it passed.
     """
-    from django.core.cache import cache
-
     kid = jwt.get_unverified_header(token).get("kid")
     client = _jwks_client()
     for refresh in (False, True):
-        if refresh and not cache.add(_refresh_marker(), True, timeout=_JWKS_REFRESH_GAP_SECONDS):
+        if refresh and not _may_force_refresh():
             return None
         for key in client.get_signing_keys(refresh=refresh):
             if key.key_id == kid:
@@ -176,6 +186,7 @@ def verify(token: str) -> dict[str, Any] | None:
             algorithms=["RS256", "ES256"],
             audience=resource(),
             issuer=issuer(),
+            leeway=_LEEWAY_SECONDS,
             options={"require": ["exp", "iat", "sub"]},
         )
     except jwt.PyJWKClientError:

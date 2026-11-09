@@ -40,9 +40,7 @@ class _RealmKeys:
 
 @pytest.fixture(autouse=True)
 def realm_keys(monkeypatch):
-    from django.core.cache import cache
-
-    cache.delete(oauth._refresh_marker())
+    monkeypatch.setattr(oauth, "_last_forced_refresh", float("-inf"))
     keys = _RealmKeys()
     monkeypatch.setattr(oauth, "_jwks_client", lambda: keys)
     return keys
@@ -182,15 +180,17 @@ def test_each_client_a_person_signs_in_with_keeps_its_own_budget(signed_in):
     assert code.pk != desktop.pk
 
 
-def test_each_worker_refreshes_for_a_rotated_key(realm_keys, monkeypatch):
-    """Key sets are cached per worker, so one worker's refresh must not spend another's window."""
-    from django.core.cache import cache
-
-    workers = (900101, 900102)
-    for worker in workers:
-        cache.delete(f"{oauth._JWKS_REFRESH_MARKER}:{worker}")
-    for worker in workers:
-        monkeypatch.setattr(oauth.os, "getpid", lambda worker=worker: worker)
-        oauth.verify(_token(kid="rotated-in"))
+def test_the_refresh_window_reopens_once_its_gap_has_passed(realm_keys, monkeypatch):
+    """A key rotated in after the last forced fetch is fetched as soon as the gap allows."""
+    oauth.verify(_token(kid="made-up"))
+    monkeypatch.setattr(oauth, "_last_forced_refresh", time.monotonic() - oauth._JWKS_REFRESH_GAP_SECONDS - 1)
+    oauth.verify(_token(kid="rotated-in"))
 
     assert realm_keys.forced_fetches == 2
+
+
+def test_a_token_minted_on_a_clock_slightly_ahead_still_verifies():
+    """Keycloak runs on another host; a fresh token's iat can be a few seconds in our future."""
+    ahead = int(time.time()) + 10
+
+    assert oauth.verify(_token(iat=ahead, exp=ahead + 300)) is not None
