@@ -107,8 +107,8 @@ Two structured audit streams cover MCP traffic:
   unknown or expired one, or an address over its budget) gets one event too, with the client
   address and no token fields. So does an authenticated call the server rejects before any tool
   runs (unparseable JSON, an unknown tool, arguments that fail the tool's schema, a body over its
-  size cap): outcome `invalid_request`, tool `request`, and the error code (or `body_too_large`)
-  as the detail, never the input.
+  size cap or too slow to arrive): outcome `invalid_request`, tool `request`, and the error code
+  (or `body_too_large`, `body_timeout`) as the detail, never the input.
 - `sbomify.audit.token_auth`: the existing token-authentication events. MCP requests appear with an
   `attempted_action` of `mcp request`; the `mcp_tool_call` event names the tool.
 
@@ -138,8 +138,12 @@ artifacts. Only an upload needs a body that large.
 **429 with `Retry-After`**: the token, or for a request without a usable token its address, is over
 its rate limit. The body was not read.
 
-**Empty `tools/list`**: the caller presented no token or an invalid one. Unauthenticated callers are
-deliberately offered nothing, since every tool would refuse them anyway.
+**401 on every call**: the caller presented no token, or one that is unknown, expired or revoked. The
+body was not read.
+
+**408 on a tool call**: the request body took longer than 30 seconds to arrive, or 300 seconds from a
+token that may upload. A request holds one of the worker's slots while its body arrives, so the
+server stops waiting.
 
 ## Deployment notes
 

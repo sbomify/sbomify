@@ -345,7 +345,9 @@ async def authenticate_request(scope: Any) -> MCPAuthError | None:
     The answer is left in ``scope["state"]`` for ``principal_for``, and a
     refusal is also returned so the router can answer it without reading the
     body: a caller over its budget with a 429, and one without a usable token
-    with the 401 that starts an MCP client's OAuth sign-in.
+    with the 401 that starts an MCP client's OAuth sign-in. Reading a refused
+    caller's body would let anyone hold a slot for as long as they take to
+    send it.
     """
     from starlette.requests import Request
 
