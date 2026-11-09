@@ -293,6 +293,7 @@ def _build_component_metadata_from_native_fields(component: Component) -> Compon
         contact_profile_id=component.contact_profile_id,
         contact_profile=None,  # Not needed for CycloneDX generation
         uses_custom_contact=component.contact_profile is None,
+        vcs_url=component.vcs_url or None,
     )
 
 
