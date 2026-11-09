@@ -250,15 +250,15 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     return principal
 
 
-async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
+async def authenticate_request(scope: Any) -> MCPAuthError | None:
     """Authenticate an ``/mcp`` request once, from its headers, before its body is read.
 
     Every request is charged and audited here, whatever it goes on to call.
-    The answer is left in ``scope["state"]`` for ``principal_for``. A caller
-    over its budget is returned so the router can refuse it without reading
-    the body; any other refusal is left for the call to report, so a client
-    without a usable token still sees an empty ``tools/list`` rather than an
-    HTTP error.
+    The answer is left in ``scope["state"]`` for ``principal_for``, and a
+    refusal is also returned so the router can answer it without reading the
+    body: a caller over its budget with a 429, and one without a usable token
+    with a 401. Reading a refused caller's body would let anyone hold a slot
+    for as long as they take to send it.
     """
     from starlette.requests import Request
 
@@ -269,6 +269,7 @@ async def authenticate_request(scope: Any) -> MCPRateLimitedError | None:
         return exc
     except MCPAuthError as exc:
         state[REFUSAL_STATE] = exc
+        return exc
     return None
 
 
