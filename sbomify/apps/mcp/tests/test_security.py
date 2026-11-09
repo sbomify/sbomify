@@ -229,6 +229,24 @@ def test_untrusted_text_is_truncated():
     assert truncated.endswith("[truncated by sbomify]")
 
 
+def test_an_audit_detail_never_quotes_the_rejected_input(monkeypatch):
+    """Pydantic quotes the value it refused, and from an upload that value is a slice of the artifact."""
+    from unittest.mock import MagicMock
+
+    spy = MagicMock()
+    monkeypatch.setattr(limits, "log", spy)
+    detail = (
+        "1 validation error for CyclonedxSoftwareBillOfMaterialsStandard\ncomponents.0.type\n"
+        "  Input should be 'library' [type=enum, input_value='ARTIFACT-TEXT, input_type=x', input_type=str]"
+    )
+
+    limits.audit("upload_artifact", None, outcome="denied", detail=detail)
+
+    message, extra = spy.warning.call_args.args[0], spy.warning.call_args.kwargs["extra"]
+    assert "ARTIFACT-TEXT" not in message and "ARTIFACT-TEXT" not in extra["detail"]
+    assert "[type=enum, input_type=str]" in extra["detail"]
+
+
 # --------------------------------------------------------------------------
 # 3. Live probing over the transport
 # --------------------------------------------------------------------------
