@@ -107,7 +107,7 @@ def _lookup_report(principal: Principal, report_id: str) -> None:
 
 
 def register_tools(mcp: FastMCP) -> None:
-    @mcp_tool(mcp, "start_cra_assessment", "product:manage", writes=True, idempotent=True)
+    @mcp_tool(mcp, "start_cra_assessment", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
     async def start_cra_assessment(principal: Principal, product_id: str) -> dict[str, Any]:
         """Start the CRA conformity assessment for a product, or return the one it already has.
 
@@ -117,8 +117,15 @@ def register_tools(mcp: FastMCP) -> None:
 
         def call() -> dict[str, Any]:
             from sbomify.apps.compliance import apis
+            from sbomify.apps.compliance.permissions import AccessCheckFailure, require_product_cra_access
 
             _lookup_product(principal, product_id)
+            # The REST view lets anyone who may manage the product start one, but the
+            # wizard in sbomify, reading the assessment included, is owner and admin
+            # work. Starting answers with the assessment, so it takes the wizard's check.
+            access = require_product_cra_access(principal.request, product_id)
+            if isinstance(access, AccessCheckFailure):
+                raise ToolError(f"Starting the CRA assessment failed ({access.status_code}): {access.message}")
             result: dict[str, Any] = _unwrap(
                 apis.create_or_get_assessment(principal.request, product_id), action="Starting the CRA assessment"
             )

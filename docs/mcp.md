@@ -54,7 +54,8 @@ Some writes stay with a person in sbomify, because they publish, attest or admin
 - workspace administration: control statuses and evidence, catalog changes and plugin settings.
 
 Some tools that are offered still need an admin-tier scope (`workspace:manage`) and an owner or admin
-role: supplier writes, creating or editing a contact profile, and the CRA wizard writes.
+role: supplier writes, creating or editing a contact profile, and the CRA wizard writes, starting an
+assessment included.
 
 ## Settings
 

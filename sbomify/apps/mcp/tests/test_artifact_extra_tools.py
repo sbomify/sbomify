@@ -353,6 +353,26 @@ async def test_search_and_validate_licenses(make_token):
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
+async def test_a_guest_is_refused_the_license_tools(mcp_owner, make_token):
+    """The license list is reference data, but a guest is refused every tool, these included."""
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    await sync_to_async(Member.objects.filter(user=user, team=bound).update)(role="guest")
+    token = await sync_to_async(make_token)(None)
+
+    async with mcp_http() as client:
+        found = await call_tool(client, token, "search_licenses", {"search": "MIT"})
+        valid = await call_tool(client, token, "validate_license_expression", {"expression": "MIT"})
+
+    for response in (found, valid):
+        payload = parse(response)
+        assert payload["result"].get("isError") is True, payload
+        assert "Guest members" in json.dumps(payload)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
 async def test_get_artifact_and_get_document_name_their_releases(
     mcp_owner, make_token, product_in_bound_workspace, component_in_bound_workspace
 ):
