@@ -22,6 +22,12 @@ x-keycloak-admin-env: &keycloak-admin-env
   KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
   KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
 
+# Where the dev stack serves the app. The backend and the Keycloak bootstrap
+# must agree: the bootstrap writes it into the audience of MCP access tokens,
+# and /mcp accepts only a token whose audience is its own URL.
+x-app-env: &app-env
+  APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
+
 x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
@@ -56,9 +62,8 @@ services:
       - ./bin/keycloak-bootstrap.sh:/keycloak-bootstrap.sh
     entrypoint: /bin/sh /keycloak-bootstrap.sh
     environment:
-      <<: [*keycloak-env, *keycloak-admin-env]
+      <<: [*keycloak-env, *keycloak-admin-env, *app-env]
       KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
-      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
 
   # S3-compatible storage for local development. SeaweedFS `mini` runs the whole
   # stack in one process and creates the buckets from S3_BUCKET on boot, so no
@@ -116,7 +121,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
     depends_on:
       sbomify-db:
         condition: service_healthy
@@ -135,7 +140,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   sbomify-worker:
     logging: *default-logging
@@ -149,7 +154,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   sbomify-scheduler:
     logging: *default-logging
@@ -161,7 +166,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:

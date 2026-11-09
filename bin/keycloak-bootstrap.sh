@@ -8,6 +8,14 @@ ADMIN_USER="${KC_BOOTSTRAP_ADMIN_USERNAME}"
 ADMIN_PASS="${KC_BOOTSTRAP_ADMIN_PASSWORD}"
 CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET}"
 APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:8000}"
+# The same normalization the backend applies (normalize_base_url): no trailing
+# slash, and https for a bare host. The MCP audience below must match the
+# backend's URL character for character.
+APP_BASE_URL="${APP_BASE_URL%/}"
+case "$APP_BASE_URL" in
+  http://*|https://*) ;;
+  *) APP_BASE_URL="https://$APP_BASE_URL" ;;
+esac
 
 # Wait for Keycloak REST API to be ready
 until /opt/keycloak/bin/kcadm.sh config credentials --server "$KC_URL" --realm master --user "$ADMIN_USER" --password "$ADMIN_PASS"; do
@@ -148,7 +156,7 @@ fi
 # redirect, as Claude Code's does. Development only: a production realm's
 # registration policy is an operator's decision (docs/mcp.md).
 if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
-  MCP_RESOURCE="${APP_BASE_URL%/}/mcp"
+  MCP_RESOURCE="$APP_BASE_URL/mcp"
   if ! /opt/keycloak/bin/kcadm.sh get client-scopes -r "$REALM" --fields name --format csv --noquotes | grep -qx mcp; then
     /opt/keycloak/bin/kcadm.sh create client-scopes -r "$REALM" \
       -s name=mcp \
@@ -158,7 +166,10 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
       -s 'attributes."consent.screen.text"=Read your sbomify workspace from an AI assistant'
   fi
   MCP_SCOPE_ID=$(/opt/keycloak/bin/kcadm.sh get client-scopes -r "$REALM" --fields id,name --format csv --noquotes | grep ',mcp$' | cut -d, -f1)
-  if ! /opt/keycloak/bin/kcadm.sh get "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models" -r "$REALM" | grep -q '"mcp-audience"'; then
+  # Updated on every run, not only created: the audience follows APP_BASE_URL
+  # when a developer changes it, without wiping the Keycloak volume.
+  MCP_MAPPER_ID=$(/opt/keycloak/bin/kcadm.sh get "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models" -r "$REALM" --fields id,name --format csv --noquotes | grep ',mcp-audience$' | cut -d, -f1)
+  if [ -z "$MCP_MAPPER_ID" ]; then
     /opt/keycloak/bin/kcadm.sh create "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models" -r "$REALM" \
       -s name=mcp-audience \
       -s protocol=openid-connect \
@@ -166,6 +177,9 @@ if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
       -s "config.\"included.custom.audience\"=$MCP_RESOURCE" \
       -s 'config."access.token.claim"=true' \
       -s 'config."id.token.claim"=false'
+  else
+    /opt/keycloak/bin/kcadm.sh update "client-scopes/$MCP_SCOPE_ID/protocol-mappers/models/$MCP_MAPPER_ID" -r "$REALM" \
+      -s "config.\"included.custom.audience\"=$MCP_RESOURCE"
   fi
   if ! /opt/keycloak/bin/kcadm.sh get "realms/$REALM/default-optional-client-scopes" --fields name --format csv --noquotes | grep -qx mcp; then
     /opt/keycloak/bin/kcadm.sh update "realms/$REALM/default-optional-client-scopes/$MCP_SCOPE_ID"
