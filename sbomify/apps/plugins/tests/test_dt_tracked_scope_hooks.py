@@ -17,6 +17,7 @@ from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 from sbomify.apps.vulnerability_scanning.models import (
+    ComponentDependencyTrackMapping,
     DependencyTrackCollection,
     DependencyTrackServer,
     SbomDependencyTrackProjectVersion,
@@ -319,6 +320,48 @@ class TestOrderDoesNotBreakTheScope:
         assert by_version[str(newer.id)]["active"] is True
         assert by_version[str(older.id)]["isLatest"] is False
         assert by_version[str(older.id)]["active"] is False
+
+    def test_a_finished_scan_takes_the_component_lock_before_it_writes_its_rows(self, env):
+        # A reconcile takes the lock and then writes the version row. A scan that
+        # wrote the row first, then took the lock for its tag sync in the same
+        # transaction, could deadlock with one.
+        from contextlib import contextmanager
+
+        from sbomify.apps.vulnerability_scanning.services import dt_scope
+
+        _, _, component, server = env
+        sbom = _sbom(component, "s1")
+        row = SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sbom, dt_server=server, dt_project_version=str(sbom.id), dt_project_version_uuid=uuid.uuid4()
+        )
+        events: list[str] = []
+        real = dt_scope.component_lock
+
+        @contextmanager
+        def recording(component_id, dt_server_id):
+            events.append("lock")
+            with real(component_id, dt_server_id):
+                yield
+            events.append("unlock")
+
+        written = {
+            SbomDependencyTrackProjectVersion._meta.db_table: "version",
+            ComponentDependencyTrackMapping._meta.db_table: "mapping",
+        }
+
+        def record_writes(execute, sql, params, many, context):
+            events.extend(name for table, name in written.items() if sql.startswith(f'UPDATE "{table}"'))
+            return execute(sql, params, many, context)
+
+        client = _client()
+        client.get_project_metrics.return_value = {"vulnerabilities": 0}
+        client.get_project_vulnerabilities.return_value = {"content": []}
+        with patch.object(dt_scope, "component_lock", recording), connection.execute_wrapper(record_writes):
+            DependencyTrackPlugin()._poll_results(
+                client=client, version_row=row, sbom_id=str(sbom.id), project_name="p", current_release_names=[]
+            )
+
+        assert events == ["lock", "version", "mapping", "unlock"]
 
 
 @pytest.mark.django_db

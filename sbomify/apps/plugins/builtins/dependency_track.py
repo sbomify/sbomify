@@ -803,18 +803,24 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # source. Best-effort when on: a failure must never fail the scan.
         self._sync_triage_vex_safely(client, version_row)
 
-        now = dj_timezone.now()
-        version_row.last_metrics_sync = now
-        version_row.save(update_fields=["last_metrics_sync", "updated_at"])
-
-        # Also update the component-level mapping so admin/API consumers see
-        # the most recent poll timestamp at the component level (not just per-SBOM).
         from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
 
-        ComponentDependencyTrackMapping.objects.filter(
-            component=version_row.sbom.component,
-            dt_server=version_row.dt_server,
-        ).update(last_metrics_sync=now)
+        now = dj_timezone.now()
+        # The component's lock before either row, the order a reconcile takes
+        # them in. The scan's transaction keeps the rows until it commits and
+        # takes the lock for the tag sync before then, so writing first could
+        # deadlock with a reconcile that holds the lock and waits on the row.
+        with component_lock(version_row.sbom.component_id, version_row.dt_server_id):
+            version_row.last_metrics_sync = now
+            version_row.save(update_fields=["last_metrics_sync", "updated_at"])
+
+            # Also update the component-level mapping so admin/API consumers see
+            # the most recent poll timestamp at the component level (not just per-SBOM).
+            ComponentDependencyTrackMapping.objects.filter(
+                component=version_row.sbom.component,
+                dt_server=version_row.dt_server,
+            ).update(last_metrics_sync=now)
 
         findings = self._convert_dt_findings(vulnerabilities)
 
