@@ -3,8 +3,10 @@ One VEX ruling waiting for approval, as a row in the Review tab's list. The row
 says what it is in one line (the component and versions, where it came from, how many
 rulings, what approving would hide) and opens to the evidence: the
 submitter's notes, each ruling, the fix it links to, and anything the queue
-could not read from the file. Approve and Reject stay on the row so a reviewer
-never has to open one to decide it.
+could not read from the file. Rulings that say the same thing about the same
+vulnerability arrive merged, so a verdict and its reason read once, above the
+packages it covers, however many versions it was sent for. Approve and Reject
+stay on the row so a reviewer never has to open one to decide it.
 
 item is a row from services/vex_review.submission_row. decide_url is the
 review panel's decision endpoint; the row posts its own id to it. open starts
@@ -74,14 +76,24 @@ first, so the parent list needs no styling of its own.
         {% if item.rulings %}
             <ul class="m-0 list-none p-0">
                 {% for ruling in item.rulings %}
-                    <li class="grid grid-cols-1 gap-x-4 gap-y-0.5 border-t border-solid border-border py-2 text-sm sm:grid-cols-[11rem_14rem_minmax(0,1fr)]">
-                        <span class="font-mono text-xs leading-5 text-text">{{ ruling.vuln_id }}</span>
-                        <span class="min-w-0 text-text-muted [overflow-wrap:anywhere] sm:row-span-2">{{ ruling.package }}</span>
-                        <span class="text-text">
-                            {{ ruling.state }}
-                            {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
+                    <li class="flex flex-col gap-1.5 border-t border-solid border-border py-3">
+                        <span class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                            <span class="font-mono text-xs text-text">{{ ruling.vuln_id }}</span>
+                            <span class="text-text">
+                                {{ ruling.state }}
+                                {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
+                            </span>
                         </span>
-                        {% if ruling.detail %}<span class="text-xs text-text-muted sm:col-start-3">{{ ruling.detail }}</span>{% endif %}
+                        <ul class="m-0 flex list-none flex-wrap gap-1.5 p-0"
+                            aria-label="Packages">
+                            {% for package in ruling.packages %}
+                                <li class="max-w-full rounded-[var(--radius-sm)] border border-solid border-border px-2 py-0.5 text-xs">
+                                    <span class="font-medium text-text [overflow-wrap:anywhere]">{{ package.name }}</span>
+                                    {% if package.versions %}<span class="text-text-muted">{{ package.versions|join:", " }}</span>{% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        {% if ruling.detail %}<p class="m-0 text-xs text-text-muted [overflow-wrap:anywhere]">{{ ruling.detail }}</p>{% endif %}
                     </li>
                 {% endfor %}
             </ul>

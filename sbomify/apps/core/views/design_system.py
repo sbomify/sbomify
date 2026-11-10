@@ -204,7 +204,7 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "submitted_by": "Jane Doe",
             "submitted_via": "Claude fix agent",
             "summary": (
-                "1 ruling · hides 1 open vulnerability in current and released versions"
+                "3 rulings · hides 3 open vulnerabilities in current and released versions"
                 ' · Jane Doe via "Claude fix agent"'
             ),
             "context": "example-parser is only imported by the release script, which never ships.\n\nNo code change.",
@@ -213,10 +213,16 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-10001",
-                    "package": "example-parser@1.0.0",
                     "state": "Not affected",
                     "reason": "Code not reachable",
                     "detail": "Only the release script imports it.",
+                    "packages": [
+                        {"name": "example-parser", "versions": ["1.0.0"]},
+                        {
+                            "name": "@example-scope/instrumentation-example-database-driver",
+                            "versions": ["0.48.0", "0.49.1"],
+                        },
+                    ],
                 }
             ],
         },
@@ -241,10 +247,10 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-20001",
-                    "package": "Whole component",
                     "state": "False positive",
                     "reason": "",
                     "detail": "",
+                    "packages": [{"name": "Whole component", "versions": []}],
                 }
             ],
         },
