@@ -26,6 +26,9 @@ FINDING = {
     },
 }
 
+TOKEN = "01a1c50c-ec03-7209-be4a-8b4dac354c18"
+ANALYSED = {"lastBomImport": 1762196390000, "lastVulnerabilityAnalysis": 1762196400000}
+
 
 @pytest.mark.django_db
 class TestPollWaitsOnAnalysis:
@@ -93,3 +96,77 @@ class TestPollWaitsOnAnalysis:
             self._poll(version_row, client)
 
         client.get_project_vulnerabilities.assert_not_called()
+
+    # Dependency Track 5.2.1, measured: metrics answer 0.05 s after an upload,
+    # counting no vulnerabilities, while the upload's token still says PENDING,
+    # and the finding arrives a second later. On a re-upload of the same version
+    # the last analysis is still stamped on the project. Either way the checks
+    # above read findings DT had not produced yet, so a row with a token waits
+    # for DT to say it processed that upload.
+    @pytest.fixture
+    def uploaded_row(self, version_row):
+        version_row.dt_upload_token = TOKEN
+        version_row.save(update_fields=["dt_upload_token"])
+        return version_row
+
+    def _token_client(self, processing: dict | Exception, metrics: dict | None = None) -> MagicMock:
+        client = self._client(ANALYSED)
+        client.get_project_metrics.return_value = {"vulnerabilities": 0} if metrics is None else metrics
+        if isinstance(processing, Exception):
+            client.get_upload_processing.side_effect = processing
+        else:
+            client.get_upload_processing.return_value = processing
+        return client
+
+    @pytest.mark.parametrize(
+        "processing",
+        [{"processing": True}, {"processing": True, "status": "PENDING"}, {"processing": True, "status": "RUNNING"}],
+    )
+    def test_an_upload_dt_is_processing_waits_though_metrics_and_an_old_analysis_answer(
+        self, uploaded_row, processing
+    ) -> None:
+        client = self._token_client(processing)
+
+        with pytest.raises(RetryLaterError, match="still processing"):
+            self._poll(uploaded_row, client)
+
+        client.get_upload_processing.assert_called_once_with(TOKEN)
+        client.get_project_vulnerabilities.assert_not_called()
+
+    @pytest.mark.parametrize("processing", [{"processing": False}, {"processing": False, "status": "COMPLETED"}])
+    def test_a_processed_upload_is_read_and_its_token_dropped(self, uploaded_row, processing) -> None:
+        result = self._poll(uploaded_row, self._token_client(processing))
+
+        assert result.summary.total_findings == 1
+        uploaded_row.refresh_from_db()
+        assert uploaded_row.dt_upload_token is None
+        assert uploaded_row.last_metrics_sync is not None
+
+    def test_a_token_dt_does_not_know_falls_back_to_the_project(self, uploaded_row) -> None:
+        """DT 5 expires tokens and DT 4 forgets them on restart. Both then answer
+        ``processing: false`` with no status, as DT 4 does for a finished upload,
+        so the project's own state decides, as it does without a token."""
+        client = self._token_client({"processing": False}, metrics={})
+        client.get_project.return_value = {"lastBomImport": 1762196390000, "lastVulnerabilityAnalysis": None}
+
+        with pytest.raises(RetryLaterError, match="still processing"):
+            self._poll(uploaded_row, client)
+
+        client.get_project_vulnerabilities.assert_not_called()
+
+    def test_a_token_dt_cannot_answer_for_keeps_waiting(self, uploaded_row) -> None:
+        client = self._token_client(Exception("Dependency Track error (503): Service Unavailable"))
+
+        with pytest.raises(RetryLaterError, match="still processing"):
+            self._poll(uploaded_row, client)
+
+        client.get_project_vulnerabilities.assert_not_called()
+
+    def test_without_a_token_dt_is_not_asked(self, version_row) -> None:
+        """Rows uploaded before tokens were kept poll as they always did."""
+        client = self._token_client({"processing": True})
+
+        result = self._poll(version_row, client)
+
+        assert result.summary.total_findings == 1
+        client.get_upload_processing.assert_not_called()

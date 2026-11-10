@@ -151,3 +151,40 @@ class TestALostUploadIsSentAgain:
         upload.assert_not_called()
         assert outcome.summary.total_findings == 0
         assert self._row_kept(scan)
+
+    def _with_token(self, scan, processing: dict) -> MagicMock:
+        scan.row.dt_upload_token = uuid.uuid4()
+        scan.row.save(update_fields=["dt_upload_token"])
+        client = self._client(metrics={"vulnerabilities": 0}, project=ANALYSED)
+        client.get_upload_processing.return_value = processing
+        return client
+
+    def test_an_upload_dt_says_it_is_processing_after_a_day_is_uploaded_again(self, scan) -> None:
+        upload, outcome = self._assess(scan, self._with_token(scan, {"processing": True, "status": "PENDING"}))
+
+        upload.assert_called_once()
+        assert isinstance(outcome, RetryLaterError)
+        assert not self._row_kept(scan)
+
+    def test_an_upload_dt_is_processing_since_today_keeps_waiting(self, scan) -> None:
+        scan.row.last_sbom_upload = timezone.now() - timedelta(hours=6)
+        scan.row.save(update_fields=["last_sbom_upload"])
+
+        upload, outcome = self._assess(scan, self._with_token(scan, {"processing": True, "status": "RUNNING"}))
+
+        upload.assert_not_called()
+        assert isinstance(outcome, RetryLaterError)
+        assert "still processing" in str(outcome)
+        assert self._row_kept(scan)
+
+    def test_an_upload_dt_failed_to_process_is_uploaded_again(self, scan) -> None:
+        """DT 5 reports FAILED and stops. Reading the project then would return the
+        previous upload's findings, or none."""
+        scan.row.last_sbom_upload = timezone.now() - timedelta(minutes=5)
+        scan.row.save(update_fields=["last_sbom_upload"])
+
+        upload, outcome = self._assess(scan, self._with_token(scan, {"processing": False, "status": "FAILED"}))
+
+        upload.assert_called_once()
+        assert isinstance(outcome, RetryLaterError)
+        assert not self._row_kept(scan)

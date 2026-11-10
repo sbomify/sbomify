@@ -525,6 +525,7 @@ class TestDependencyTrackPluginScanOnce:
 
         def fake_upload(*, project_name, project_version, sbom_data, auto_create, **_tree):
             captured_uploads.append({"project_name": project_name, "project_version": project_version})
+            return {"token": "01a1c50c-ec03-7209-be4a-8b4dac354c18"}
 
         def fake_find_project(name, version):
             return {"uuid": "00000000-0000-0000-0000-000000000001"}
@@ -567,6 +568,8 @@ class TestDependencyTrackPluginScanOnce:
         row = SbomDependencyTrackProjectVersion.objects.get(sbom=sbom, dt_server=server)
         assert row.dt_project_version == str(sbom.id)
         assert str(row.dt_project_version_uuid) == "00000000-0000-0000-0000-000000000001"
+        # The upload's token, which the poll asks DT about before reading findings
+        assert str(row.dt_upload_token) == "01a1c50c-ec03-7209-be4a-8b4dac354c18"
 
         # Initial tag set was pushed to DT — contains all 3 release names (sorted/dedupe'd)
         assert len(captured_tag_sets) == 1
