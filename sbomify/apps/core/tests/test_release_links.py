@@ -125,41 +125,53 @@ class TestLinkingApi:
         assert client.delete(url, **get_api_headers(token)).status_code == 204
         assert client.delete(url, **get_api_headers(token)).status_code == 404
 
-    def test_linking_and_unlinking_tell_the_linked_releases_too(self, authenticated_api_client, app, toolchain, mocker):
+    def test_linking_and_unlinking_tell_the_linked_releases_too(
+        self, authenticated_api_client, app, toolchain, mocker, django_capture_on_commit_callbacks
+    ):
         """Whether a linked release is still monitored depends on the releases linking to it,
         so its open page, and those of the releases it links on, repaint too."""
         runtime = _release(app.product.team, "Runtime")
         ReleaseLink.objects.create(release=toolchain, linked_release=runtime)
-        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        # The endpoint tells the release it changed, and a removed link tells the rest itself.
+        sent = mocker.patch("sbomify.apps.core.apis.broadcast_to_workspace")
+        mocker.patch(BROADCAST, sent)
         client, token = authenticated_api_client
 
-        assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 201
-        assert (
-            client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token)).status_code
-            == 204
-        )
+        with django_capture_on_commit_callbacks(execute=True):
+            assert _post(client, token, app, {"release_id": toolchain.id}).status_code == 201
+            assert (
+                client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token)).status_code
+                == 204
+            )
 
-        told = [c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"]
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
         assert told.count(str(app.id)) == 2
         assert told.count(str(toolchain.id)) == 2
         assert told.count(str(runtime.id)) == 2
 
     def test_unlinking_tells_the_releases_that_ship_the_linked_sboms(
-        self, authenticated_api_client, app, toolchain, mocker
+        self, authenticated_api_client, app, toolchain, mocker, django_capture_on_commit_callbacks
     ):
-        """A retired release sharing the linked release's SBOM can stop being monitored with it."""
+        """A retired release sharing the linked release's SBOM can stop being monitored with it. Each hears once."""
         bundle = _sbom(toolchain, "bundle")
         sibling = _release(app.product.team, "Sibling")
         ReleaseArtifact.objects.create(release=sibling, sbom=bundle)
         ReleaseLink.objects.create(release=app, linked_release=toolchain)
-        sent = mocker.patch("sbomify.apps.core.apis.schedule_broadcast")
+        sent = mocker.patch("sbomify.apps.core.apis.broadcast_to_workspace")
+        mocker.patch(BROADCAST, sent)
         client, token = authenticated_api_client
 
-        response = client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token))
+        with django_capture_on_commit_callbacks(execute=True):
+            response = client.delete(f"/api/v1/releases/{app.id}/links/{toolchain.id}", **get_api_headers(token))
 
         assert response.status_code == 204
-        told = {c.args[2]["release_id"] for c in sent.call_args_list if c.args[1] == "release_updated"}
-        assert str(sibling.id) in told
+        told = [
+            c.kwargs["data"]["release_id"] for c in sent.call_args_list if c.kwargs["message_type"] == "release_updated"
+        ]
+        assert {str(app.id), str(toolchain.id), str(sibling.id)} <= set(told)
+        assert len(told) == len(set(told))
 
     @pytest.mark.parametrize("action", ["withdraw", "archive"])
     def test_retiring_a_release_tells_the_releases_it_links_to(

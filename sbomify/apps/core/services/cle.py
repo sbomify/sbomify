@@ -27,7 +27,7 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
-from sbomify.apps.core.models import Release, ReleaseSupersession
+from sbomify.apps.core.models import Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     audit,
@@ -47,7 +47,6 @@ from sbomify.apps.sboms.models import (
     ComponentCLESupportDefinition,
     ComponentReleaseCLEEvent,
     ComponentReleaseCLESupportDefinition,
-    Product,
     ProductCLEEvent,
     ProductCLESupportDefinition,
     ReleaseCLEEvent,
@@ -398,6 +397,15 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
                 # A date written to the column before it was an event has nothing to withdraw.
                 Product.objects.filter(pk=product.pk).update(**{field: None})
         else:
+            if event_type == CLEEventType.END_OF_SUPPORT:
+                # The column is the latest date across support policies, so under a named
+                # policy that ends later it never shows this date, and every repeat of the
+                # request wrote the same event again. This date is written under no policy,
+                # so that is where it is compared.
+                events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
+                unnamed = [e for e in events if e.event_type != event_type or not e.support_id]
+                if value == product_dates(unnamed)[0]:
+                    continue
             effective = datetime.combine(value, time.min, tzinfo=UTC)
             versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
             result = create_cle_event(product, event_type, effective, versions=versions)
@@ -552,7 +560,10 @@ def create_release_cle_event(
             successor = resolved.value
             if drop_in and successor is not None:
                 # The caller read this release before the lock, so a date edit committed since would be missed.
-                release.refresh_from_db(fields=["released_at"])
+                try:
+                    release.refresh_from_db(fields=["released_at"])
+                except Release.DoesNotExist:
+                    return ServiceResult.failure("Release no longer exists", status_code=404)
                 if backdated := backdated_takeover(release, successor):
                     return ServiceResult.failure(backdated, status_code=400)
 

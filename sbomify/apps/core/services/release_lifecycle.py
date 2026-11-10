@@ -30,12 +30,13 @@ from functools import partial
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, F, OuterRef, Q, QuerySet
 from django.utils import timezone
 
 from sbomify.apps.core.models import (
     LATEST_RELEASE_NAME,
     Component,
+    Product,
     Release,
     ReleaseArtifact,
     ReleaseLink,
@@ -43,7 +44,7 @@ from sbomify.apps.core.models import (
 )
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
-from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
+from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -204,8 +205,7 @@ def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
                 status_code=400,
             )
         return ServiceResult.success(predecessor)
-    siblings = Release.objects.filter(product_id=successor.product_id)
-    predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
+    predecessor = _sibling_named(successor.product_id, item.version)
     if predecessor is None:
         return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
     return ServiceResult.success(predecessor)
@@ -229,6 +229,10 @@ def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceRe
             .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
             .exists()
         ):
+            # A live edge on the other line is a conflict, in the words declaring it would get.
+            other_line = existing_supersession(predecessor, successor.version or successor.name, item.drop_in)
+            if not other_line.ok:
+                return ServiceResult.failure(other_line.error or "Conflicting supersession", other_line.status_code)
             missing.append(predecessor.name)
     return ServiceResult.success(missing)
 
@@ -243,10 +247,13 @@ _UNTRACKED_REASONS = {
 
 
 def _shipped_sboms(release_ids: list[Any], *, public_only: bool) -> dict[Any, set[str]]:
-    """Each release's SBOMs, or only those of public components for a Trust Center posture."""
+    """The SBOMs each release's counts include: its workspace's, or the public ones for a Trust Center posture."""
     artifacts = ReleaseArtifact.objects.filter(release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM)
     if public_only:
         artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    else:
+        # A component transferred to another workspace leaves its artifacts behind, and the counts skip them.
+        artifacts = artifacts.filter(sbom__component__team_id=F("release__product__team_id"))
     shipped: dict[Any, set[str]] = defaultdict(set)
     for release_id, sbom_id in artifacts.values_list("release_id", "sbom_id"):
         shipped[release_id].add(sbom_id)
@@ -810,7 +817,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    changed = [field for field, value in changes.items() if getattr(release, field) != value]
+    # A date sent without an offset is read the way ``Release.save()`` reads it,
+    # so the stored instant sent again is not a change.
+    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
     if not changed:
         return ServiceResult.success((release, False))
 

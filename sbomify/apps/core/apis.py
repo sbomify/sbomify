@@ -152,7 +152,7 @@ def _broadcast_release_updated(release: Release) -> None:
 
 
 def _broadcast_linked_releases_updated(linked: Release) -> None:
-    """Tell the workspace a link to ``linked`` was added or removed.
+    """Tell the workspace a link to ``linked`` was added. Removing one sends the same from the link's own delete.
 
     A linked release stays monitored while a live release links to it, and so
     do the releases it links on and the releases shipping their SBOMs, so their
@@ -968,13 +968,14 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.is_public = payload.is_public
 
             product.save()
-            # Lifecycle dates are CLE events, the one place they are stored.
+            # Lifecycle dates are CLE events, the one place they are stored. Only the
+            # ones the client sent: a date left out is not a null, which withdraws its events.
             dated = set_product_dates(
                 product,
                 {
-                    "release_date": payload.release_date,
-                    "end_of_support": payload.end_of_support,
-                    "end_of_life": payload.end_of_life,
+                    field: getattr(payload, field)
+                    for field in ("release_date", "end_of_support", "end_of_life")
+                    if field in payload.model_fields_set
                 },
             )
             if not dated.ok:
@@ -2390,6 +2391,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "release_date": component.release_date,
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
+        "vcs_url": component.vcs_url or None,
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -2502,6 +2504,9 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
             component.end_of_support = meta_dict["end_of_support"]
         if "end_of_life" in meta_dict:
             component.end_of_life = meta_dict["end_of_life"]
+
+        if "vcs_url" in meta_dict:
+            component.vcs_url = meta_dict["vcs_url"] or ""
 
         # Handle licenses using native fields
         if "licenses" in meta_dict:
@@ -3739,6 +3744,10 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             # Normalize nullable fields that can't be NULL in the DB
             if "description" in update_data and update_data["description"] is None:
                 update_data["description"] = ""
+            if "version" in update_data and update_data["version"] is None:
+                update_data["version"] = ""
+            if "is_prerelease" in update_data and update_data["is_prerelease"] is None:
+                del update_data["is_prerelease"]
 
             # Writes only the fields that changed, from the locked row.
             saved = save_release_changes(release.pk, update_data)
@@ -3793,26 +3802,6 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
         }
 
-    # A release's CLE records are its published lifecycle history, exported over
-    # TEA, and both foreign keys cascade. Deleting the release takes the trail
-    # with it and says nothing.
-    #
-    # PROTECT on those keys is not the fix. Workspace deletion cascades through
-    # product to release, so it would block account deletion, and a nullable key
-    # would push a release-less event into every reader. Refusing here is the
-    # same shape as the `latest` refusal above, and deleting the product still
-    # removes a product's history deliberately rather than by accident.
-    lifecycle_records = release.cle_events.count() + release.cle_support_definitions.count()
-    if lifecycle_records:
-        return 400, {
-            "detail": (
-                f"Cannot delete release '{release.name}'. It carries {lifecycle_records} lifecycle "
-                f"record(s) that sbomify publishes, and deleting the release would destroy them. "
-                f"Delete the product if you mean to remove its history as well."
-            ),
-            "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
-        }
-
     # Capture data for broadcast before deleting
     workspace_key = release.product.team.key
     product_id = str(release.product.id)
@@ -3820,11 +3809,34 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
 
     try:
         with transaction.atomic():
+            # A CLE event is written under the product lock, so one written
+            # while this delete waited for it is counted below.
+            Product.objects.select_for_update().filter(pk=release.product_id).first()
+
+            # A release's CLE records are its published lifecycle history, exported over
+            # TEA, and both foreign keys cascade. Deleting the release takes the trail
+            # with it and says nothing.
+            #
+            # PROTECT on those keys is not the fix. Workspace deletion cascades through
+            # product to release, so it would block account deletion, and a nullable key
+            # would push a release-less event into every reader. Refusing here is the
+            # same shape as the `latest` refusal above, and deleting the product still
+            # removes a product's history deliberately rather than by accident.
+            lifecycle_records = release.cle_events.count() + release.cle_support_definitions.count()
+            if lifecycle_records:
+                return 400, {
+                    "detail": (
+                        f"Cannot delete release '{release.name}'. It carries {lifecycle_records} lifecycle "
+                        f"record(s) that sbomify publishes, and deleting the release would destroy them. "
+                        f"Delete the product if you mean to remove its history as well."
+                    ),
+                    "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+                }
+
             # Deleting a successor would quietly turn each drop-in edge into one
             # to a release outside sbomify, which still retires its predecessor.
             # The product lock keeps a new edge from landing between the check
             # and the delete.
-            Product.objects.select_for_update().filter(pk=release.product_id).first()
             replaced = sorted(
                 set(
                     ReleaseSupersession.objects.live()
@@ -4725,10 +4737,8 @@ def unlink_release_from_release(request: HttpRequest, release_id: str, linked_re
         status = result.status_code or 400
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
+    # The link's own delete tells the linked release and every release it kept monitored.
     _broadcast_release_updated(release)
-    linked = Release.objects.select_related("product__team").filter(pk=linked_release_id).first()
-    if linked is not None:
-        _broadcast_linked_releases_updated(linked)
     return 204, None
 
 

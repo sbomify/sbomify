@@ -162,11 +162,12 @@
         </c-cards.card>
     {% endif %}
     {% comment %}Its own live region, there even while the panel is empty: withdrawn or reactivated through the API or in another tab, the notice that its counts are from the last scan comes and goes with the header. The morph keeps the table's expanded state.{% endcomment %}
+    {# A finished scan or a re-applied VEX names an SBOM or a component, not the release, so the artifacts table matches those and raises the second trigger. #}
     <div id="release-vulnerabilities-region"
          x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
          hx-get="{{ request.get_full_path }}"
          hx-select="#release-vulnerabilities-region"
-         hx-trigger="live-refresh"
+         hx-trigger="live-refresh, refresh-release-artifact-vulnerabilities from:body"
          hx-swap="morph"
          hx-disinherit="*"
          {% if not vulnerabilities.assessed and not vulnerabilities.unassessed %}hidden{% endif %}>

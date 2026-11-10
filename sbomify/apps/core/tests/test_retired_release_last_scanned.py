@@ -213,6 +213,22 @@ class TestUntrackedNotice:
         }
         assert untracked_notice(retired, public_only=True) is None
 
+    def test_a_component_moved_to_another_workspace_is_not_weighed(
+        self, team_with_business_plan: Workspace, sample_team: Workspace
+    ) -> None:
+        product = _product(team_with_business_plan)
+        retired = Release.objects.create(product=product, name="1.0.0")
+        shared = _scan(retired, "lib", OLDEST, [])
+        moved = _scan(retired, "tool", OLDEST, [_finding("CVE-1")])
+        ReleaseArtifact.objects.create(release=Release.objects.create(product=product, name="1.1.0"), sbom=shared)
+        _withdraw(retired)
+        # A transfer leaves the release's artifact behind, and the counts leave its SBOM out.
+        Component.objects.filter(pk=moved.component_id).update(team=sample_team)
+        retired = Release.objects.select_related("product").get(pk=retired.pk)
+
+        assert build_release_vuln_postures([retired])[retired.id]["counts"]["total"] == 0
+        assert untracked_notice(retired) is None
+
 
 class TestReleasePage:
     def _page(self, client: Client, release: Release) -> str:
@@ -234,6 +250,21 @@ class TestReleasePage:
         assert "liveRegion(" in region[0] and 'hx-select="#release-vulnerabilities-region"' in region[0]
         assert "release_updated" in region[0] and "key: 'release_id'" in region[0]
         assert release.pk in region[0]
+
+    def test_the_vulnerabilities_panel_follows_scans_of_its_sboms(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        """A finished scan or a re-applied VEX names an SBOM or a component, so the panel hears of it from the table."""
+        release = Release.objects.create(product=_product(team_with_business_plan), name="1.0.0")
+        _scan(release, "lib", OLDEST, [_finding("CVE-1")])
+
+        page = self._page(authenticated_web_client, release)
+
+        region = re.search(r'<div id="release-vulnerabilities-region"[^>]*>', page)
+        assert region is not None
+        raised = "refresh-release-artifact-vulnerabilities"
+        assert f'hx-trigger="live-refresh, {raised} from:body"' in region[0]
+        assert f"new CustomEvent('{raised}')" in page
 
     def test_a_retired_release_dates_its_counts(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

@@ -2068,6 +2068,36 @@ class TestReleaseDeleteKeepsLifecycleHistory:
         assert ReleaseCLEEvent.objects.filter(release=release).count() == 1
 
     @pytest.mark.django_db
+    def test_the_records_are_counted_under_the_product_lock(
+        self,
+        sample_product: Product,
+        sample_access_token: AccessToken,
+    ):
+        """A CLE event is written under that lock, so one written while the delete waited is seen."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        self._as_owner(client, sample_product)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = client.delete(
+                reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            )
+
+        assert response.status_code == 400
+        statements = [query["sql"] for query in queries.captured_queries]
+        product_table, event_table = Product._meta.db_table, ReleaseCLEEvent._meta.db_table
+        locks = [i for i, sql in enumerate(statements) if "FOR UPDATE" in sql and f'FROM "{product_table}"' in sql]
+        counts = [i for i, sql in enumerate(statements) if f'FROM "{event_table}"' in sql]
+        assert locks and counts and locks[0] < counts[0], statements
+
+    @pytest.mark.django_db
     def test_a_release_without_them_still_deletes(
         self,
         sample_product: Product,  # noqa: F811
