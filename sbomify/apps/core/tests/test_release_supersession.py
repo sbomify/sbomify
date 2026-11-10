@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
@@ -800,6 +801,25 @@ class TestChoosingTheLine:
         assert candidate.is_prerelease
         assert not ReleaseSupersession.objects.filter(to_release=candidate).exists()
         assert _state(stable) == Release.LifecycleState.ACTIVE
+
+    def test_a_prerelease_is_told_when_its_predecessor_was_dropped(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        stable = _release(product, "1.2.4", **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc)))
+
+        def told(name: str, **fields: Any) -> list[str]:
+            response = authenticated_web_client.post(
+                reverse("core:release_new"), {"product_id": product.id, "name": name, "is_prerelease": "on", **fields}
+            )
+            assert response.status_code == 302
+            return [str(message) for message in get_messages(response.wsgi_request)]
+
+        # Unread messages stay queued for the next request, so the dropped choice comes last.
+        dropped = "It replaces no release. To replace one, choose a line."
+        assert dropped not in told("2.0.0-rc.1")
+        assert dropped not in told("2.0.0-rc.2", replaces=stable.pk, replaces_line="new")
+        assert told("2.0.0-rc.3", replaces=stable.pk)[-2:] == ["Release created. Add its artifacts below.", dropped]
 
     def test_a_prerelease_keeps_a_predecessor_chosen_with_a_line(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

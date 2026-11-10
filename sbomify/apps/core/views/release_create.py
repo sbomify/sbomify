@@ -55,6 +55,8 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
             result = create_workspace_release(request, form.cleaned_data)
             if result.ok and result.value:
                 messages.success(request, "Release created. Add its artifacts below.")
+                if form.dropped_replaces:
+                    messages.info(request, "It replaces no release. To replace one, choose a line.")
                 destination = reverse("core:release_details", args=[result.value["product_id"], result.value["id"]])
                 if request.headers.get("HX-Request"):
                     return HttpResponse(headers={"HX-Redirect": destination})
