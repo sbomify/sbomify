@@ -73,7 +73,11 @@ withdrawal and no archiving shows the card only to managers, for the actions.
         {% endif %}
         {% if release.withdrawn_at %}
             <c-forms.field horizontal label="Withdrawn">
-            <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            {% if lifecycle.withdrawn_reason %}
+                <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            {% else %}
+                <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}</c-forms.static>
+            {% endif %}
             </c-forms.field>
         {% endif %}
         {% if release.archived_at %}

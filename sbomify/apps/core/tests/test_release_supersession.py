@@ -871,6 +871,29 @@ class TestWithdrawnReason:
 
         assert data["withdrawn_reason"] == "compromised"
 
+    def test_the_card_gives_a_reader_outside_the_workspace_the_date_alone(self, guest_user: AbstractBaseUser) -> None:
+        release = self._public_withdrawn()
+        Release.objects.filter(pk=release.pk).update(withdrawn_at=datetime(2026, 1, 5, tzinfo=dt_timezone.utc))
+        client = Client()
+        client.force_login(guest_user)
+
+        page = client.get(reverse("core:release_details", args=[release.product_id, release.pk])).content.decode()
+
+        assert "5 Jan 2026" in page
+        assert "5 Jan 2026." not in page
+
+    def test_the_card_gives_the_workspace_the_date_and_the_reason(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "2.3.1")
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+        Release.objects.filter(pk=release.pk).update(withdrawn_at=datetime(2026, 1, 5, tzinfo=dt_timezone.utc))
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.pk]))
+
+        assert "5 Jan 2026. Compromised." in page.content.decode()
+
     def test_a_page_of_several_products_asks_about_the_workspace_once(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
