@@ -1240,6 +1240,23 @@ class TestReleaseEdits:
         assert response.status_code == 500, response.content
         assert response.json()["error_code"] != "DUPLICATE_NAME"
 
+    @pytest.mark.parametrize(("field", "stored"), [("version", ""), ("is_prerelease", True)])
+    def test_a_null_for_a_column_that_cannot_hold_one_is_not_written(
+        self,
+        authenticated_api_client: tuple[Client, AccessToken],
+        sample_product: Product,
+        field: str,
+        stored: object,
+    ) -> None:
+        # A null version clears it, as an empty one does; a null flag is no change.
+        client, token = authenticated_api_client
+        release = _release(sample_product, "1.0.0", is_prerelease=True)
+
+        response = self._send(client, token, "patch", release, {field: None})
+
+        assert response.status_code == 200, response.content
+        assert getattr(_fresh(release), field) == stored
+
     def test_a_duplicate_name_is_still_reported_as_one(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:

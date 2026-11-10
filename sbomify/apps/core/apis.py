@@ -3541,6 +3541,10 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             # Normalize nullable fields that can't be NULL in the DB
             if "description" in update_data and update_data["description"] is None:
                 update_data["description"] = ""
+            if "version" in update_data and update_data["version"] is None:
+                update_data["version"] = ""
+            if "is_prerelease" in update_data and update_data["is_prerelease"] is None:
+                del update_data["is_prerelease"]
 
             # Writes only the fields that changed, from the locked row.
             saved = save_release_changes(release.pk, update_data)
