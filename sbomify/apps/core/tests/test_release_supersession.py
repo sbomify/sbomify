@@ -763,6 +763,15 @@ class TestChoosingTheLine:
         assert "released after" in (result.error or "")
         assert _edges(old) == []
 
+    def test_a_predecessor_deleted_before_the_lock_is_a_404(self, sample_product: Product) -> None:
+        old = _release(sample_product, "1.0", **_on(PAST))
+        _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        Release.objects.filter(pk=old.pk).delete()
+
+        result = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="2.0", drop_in=True)
+
+        assert (result.error, result.status_code) == ("Release no longer exists", 404)
+
     def test_an_edit_with_a_bare_timestamp_meets_the_same_line_rule_rather_than_failing(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
