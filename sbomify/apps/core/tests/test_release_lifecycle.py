@@ -433,7 +433,8 @@ class TestEdgeValidation:
         assert edge.ok and edge.value is not None
         _withdraw_event(edge.value)
 
-        assert _supersede(new, "1.0.0").ok
+        # The reverse edge records an upgrade path: 1.0.0 came out first, so it cannot replace 1.0.1 on its line.
+        assert _supersede(new, "1.0.0", drop_in=False).ok
 
     def test_successors_are_capped(self, sample_product: Product) -> None:
         old = _release(sample_product, "1.0.0")
@@ -565,7 +566,8 @@ class TestPendingEdges:
         client, token = authenticated_api_client
         old, other = _release(sample_product, "1.0"), _release(sample_product, "2.1")
         assert _supersede(old, "2.0").ok
-        assert _supersede(other, "1.0").ok
+        # A new-line edge still counts for the cycle check; same line would need 1.0 released after 2.1.
+        assert _supersede(other, "1.0", drop_in=False).ok
 
         response = self._patch(client, token, other, {"version": "2.0"})
 
@@ -874,7 +876,7 @@ class TestDeleteGuard:
 
         response = client.delete(f"/api/v1/releases/{new.pk}", **get_api_headers(token))
         assert response.status_code == 400
-        assert response.json()["detail"] == "Release 1.0.1 replaces 1.0.0. Remove that link first."
+        assert response.json()["detail"] == "Release 1.0.1 replaces 1.0.0. Remove that link on its Lifecycle card first."
         assert Release.objects.filter(pk=new.pk).exists()
 
         _withdraw_event(edge.value)
@@ -1128,7 +1130,8 @@ class TestReleaseEdits:
     ) -> None:
         client, token = authenticated_api_client
         first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
-        old, other = _release(sample_product, "1.9"), _release(sample_product, "1.8")
+        old = _release(sample_product, "1.9", created_at=PAST, released_at=PAST)
+        other = _release(sample_product, "1.8", created_at=PAST, released_at=PAST)
         new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
         took_its_date = _supersede(old, "2.0", effective=first_date)
         own_date = _supersede(other, "2.0", effective=PAST)
@@ -1149,7 +1152,7 @@ class TestReleaseEdits:
         # A published event is never edited: the old one is withdrawn and the edge is published again.
         client, token = authenticated_api_client
         first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
-        old = _release(sample_product, "1.9")
+        old = _release(sample_product, "1.9", created_at=PAST, released_at=PAST)
         new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
         declared = create_release_cle_event(
             old,

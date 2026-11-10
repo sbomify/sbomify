@@ -27,9 +27,11 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
-from sbomify.apps.core.models import Product, ReleaseSupersession
+from sbomify.apps.core.models import Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
     audit,
+    backdated_takeover,
+    broadcast_releases_updated,
     existing_supersession,
     recompute_release_lifecycle,
     resolve_successor,
@@ -51,7 +53,7 @@ from sbomify.apps.sboms.models import (
 if TYPE_CHECKING:
     from django.db import models as django_models
 
-    from sbomify.apps.core.models import Component, ComponentRelease, Release
+    from sbomify.apps.core.models import Component, ComponentRelease
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +480,14 @@ def create_release_cle_event(
             if not resolved.ok:
                 return ServiceResult.failure(resolved.error or "Invalid supersession", status_code=400)
             successor = resolved.value
+            if drop_in and successor is not None:
+                # The caller read this release before the lock, so a date edit committed since would be missed.
+                try:
+                    release.refresh_from_db(fields=["released_at"])
+                except Release.DoesNotExist:
+                    return ServiceResult.failure("Release no longer exists", status_code=404)
+                if backdated := backdated_takeover(release, successor):
+                    return ServiceResult.failure(backdated, status_code=400)
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
             entity=release,
@@ -521,14 +531,16 @@ def create_release_cle_event(
                 superseded_by_version=superseded_by_version,
                 drop_in=drop_in,
             )
+            # A link shows on the pages of both its releases.
+            broadcast_releases_updated(product, [release, *([successor] if successor else [])])
         elif event_type == CLEEventType.WITHDRAWN and withdrawn_event_id is not None:
-            withdrawn = (
-                ReleaseSupersession.objects.live()
-                .filter(cle_event__release=release, cle_event__event_id=withdrawn_event_id)
-                .update(withdrawn_at=timezone.now())
+            live = ReleaseSupersession.objects.live().filter(
+                cle_event__release=release, cle_event__event_id=withdrawn_event_id
             )
-            if withdrawn:
+            successors = list(Release.objects.filter(predecessor_edges__in=live))
+            if live.update(withdrawn_at=timezone.now()):
                 audit("withdraw_supersession", release, actor_id, event_id=event.event_id)
+                broadcast_releases_updated(product, [release, *successors])
         recompute_release_lifecycle(product)
     return result
 

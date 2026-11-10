@@ -26,6 +26,7 @@ import logging
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, datetime
+from functools import partial
 from typing import Any
 
 from django.db import transaction
@@ -34,6 +35,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
@@ -67,6 +69,186 @@ def tracked_releases(releases: QuerySet[Release] | None = None, now: datetime | 
         & (Q(effective_end_of_life__isnull=True) | Q(effective_end_of_life__gte=today))
     )
     return (Release.objects.all() if releases is None else releases).filter(Q(is_latest=True) | live)
+
+
+def broadcast_releases_updated(product: Product, releases: Iterable[Release]) -> None:
+    """Tell the workspace, once the transaction commits, that these releases moved.
+
+    A write to one release can move others: withdrawing a successor hands its
+    predecessor back, and a link shows on the pages of both its releases. Each
+    page and list showing a release listens for ``release_updated`` on its ID.
+    """
+    workspace_key = product.team.key
+    if not workspace_key:
+        return
+    for release in releases:
+        data = {"release_id": str(release.pk), "product_id": str(product.pk), "name": release.name}
+        transaction.on_commit(
+            partial(broadcast_to_workspace, workspace_key=workspace_key, message_type="release_updated", data=data)
+        )
+
+
+def backdated_takeover(predecessor: Release, successor: Release) -> str | None:
+    """Why ``successor`` cannot take over ``predecessor``'s line, or None when the dates allow it.
+
+    A release cannot replace one that came out after it on the same line:
+    a backdated entry would retire the current release the moment it was saved.
+    Either date can still be the bare timestamp an edit sent, which ``save()``
+    has not made aware yet, so both are read the way it will read them.
+    """
+    successor_date = Release._as_aware(successor.released_at)
+    predecessor_date = Release._as_aware(predecessor.released_at)
+    if successor_date and predecessor_date and successor_date < predecessor_date:
+        return (
+            f"Release {predecessor.name} was released after {successor.name}, so {successor.name} cannot "
+            "replace it on the same line. Choose a new line, or check the release dates."
+        )
+    return None
+
+
+def replacement_candidates(product_id: str) -> list[Release]:
+    """The releases a new release of the product can supersede: named, still monitored, newest first."""
+    return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
+
+
+def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
+    """The release a ``supersedes`` item names: by ID within the workspace, or by version then name."""
+    if item.release_id:
+        predecessor = Release.objects.select_related("product").filter(pk=item.release_id).first()
+        if predecessor is None or predecessor.product.team_id != successor.product.team_id:
+            return ServiceResult.failure(f"Release {item.release_id} not found.", status_code=400)
+        if predecessor.product_id != successor.product_id:
+            return ServiceResult.failure(
+                f"Release {predecessor.name} belongs to another product. "
+                "A release can only supersede releases of its own product.",
+                status_code=400,
+            )
+        return ServiceResult.success(predecessor)
+    predecessor = _sibling_named(successor.product_id, item.version)
+    if predecessor is None:
+        return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
+    return ServiceResult.success(predecessor)
+
+
+def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceResult[list[str]]:
+    """The ``supersedes`` items that ``successor`` does not already replace with a live edge on the same line.
+
+    A create that finds the release already exists may only confirm what is
+    there. It never writes edges onto a release someone else made, so a name
+    typed by mistake cannot retire the release the form had preselected.
+    """
+    missing = []
+    for item in items:
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        predecessor = found.value
+        if (
+            not ReleaseSupersession.objects.live()
+            .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
+            .exists()
+        ):
+            # A live edge on the other line is a conflict, in the words declaring it would get.
+            other_line = existing_supersession(predecessor, successor.version or successor.name, item.drop_in)
+            if not other_line.ok:
+                return ServiceResult.failure(other_line.error or "Conflicting supersession", other_line.status_code)
+            missing.append(predecessor.name)
+    return ServiceResult.success(missing)
+
+
+def declare_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[None]:
+    """Record that ``successor`` supersedes each release ``items`` names.
+
+    Each item has ``release_id`` or ``version`` (then name, within the successor's
+    product) and ``drop_in``. Each is one edge, written through the same service
+    and validation as the CLE endpoint, so a release can replace several at once.
+    Run it inside the transaction that owns the successor: a failure leaves
+    earlier edges for the caller to roll back.
+    """
+    # cle.py imports this module for the edge rules.
+    from sbomify.apps.core.services.cle import create_release_cle_event
+
+    successor_version = successor.version or successor.name
+    for item in items:
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        predecessor = found.value
+
+        # An edge declared before this release existed was linked to it on create. Its
+        # date is when the caller said the successor takes over, so only drop_in must agree.
+        if (
+            ReleaseSupersession.objects.live()
+            .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
+            .exists()
+        ):
+            continue
+        result = create_release_cle_event(
+            predecessor,
+            CLEEventType.SUPERSEDED_BY,
+            successor.released_at or successor.created_at,
+            version=predecessor.version,
+            superseded_by_version=successor_version,
+            drop_in=item.drop_in,
+            actor_id=actor_id,
+        )
+        if not result.ok or result.value is None:
+            status = 409 if result.status_code == 409 else 400
+            return ServiceResult.failure(result.error or "Invalid supersession", status_code=status)
+        edge = ReleaseSupersession.objects.filter(cle_event=result.value).first()
+        if edge is None or edge.to_release_id != successor.pk:
+            return ServiceResult.failure(
+                f"{successor_version} names more than one release of this product. Give this release a version.",
+                status_code=400,
+            )
+    return ServiceResult.success(None)
+
+
+def remove_supersession(release_id: str, edge_id: str, *, actor_id: Any = None) -> ServiceResult[ReleaseSupersession]:
+    """Withdraw one live edge into or out of ``release_id``, so a mistaken Replaces can be undone.
+
+    It goes through the CLE ``withdrawn`` path, so the published lifecycle
+    records the correction and the history keeps the edge. The caller checks
+    that the person can manage the release.
+    """
+    # cle.py imports this module for the edge rules.
+    from sbomify.apps.core.services.cle import create_release_cle_event
+
+    # Read under the product lock: a release-date edit republishes the edge
+    # under it, and an edge read first would withdraw its old event.
+    with transaction.atomic():
+        product_id = Release.objects.filter(pk=release_id).values_list("product_id", flat=True).first()
+        Product.objects.select_for_update().filter(pk=product_id).first()
+        edge = (
+            ReleaseSupersession.objects.live()
+            .select_related("from_release", "cle_event")
+            .filter(Q(from_release_id=release_id) | Q(to_release_id=release_id), pk=edge_id)
+            .first()
+        )
+        if edge is None or edge.cle_event is None:
+            return ServiceResult.failure("That link no longer exists.", status_code=404)
+        result = create_release_cle_event(
+            edge.from_release,
+            CLEEventType.WITHDRAWN,
+            timezone.now(),
+            withdrawn_event_id=edge.cle_event.event_id,
+            actor_id=actor_id,
+        )
+        if not result.ok:
+            return ServiceResult.failure(
+                result.error or "The link could not be removed.", status_code=result.status_code
+            )
+        edge.refresh_from_db()
+    return ServiceResult.success(edge)
+
+
+def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:
+    """The live edges into and out of a release: every release it replaces, and every successor it has."""
+    edges = ReleaseSupersession.objects.live().select_related("from_release", "to_release")
+    return {
+        "predecessors": list(edges.filter(to_release_id=release_id)),
+        "successors": list(edges.filter(from_release_id=release_id)),
+    }
 
 
 def existing_supersession(
@@ -165,7 +347,7 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
         )
         .select_related("from_release")
     )
-    linked = 0
+    linked = []
     for edge in pending:
         target = _sibling_named(release.product_id, edge.successor_label)
         if target is None or target.pk != release.pk:
@@ -182,6 +364,8 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
                 f"{release.name} already leads back to {edge.from_release.name}, so this would make a cycle.",
                 status_code=400,
             )
+        if edge.drop_in and (backdated := backdated_takeover(edge.from_release, release)):
+            return ServiceResult.failure(backdated, status_code=400)
         if ReleaseSupersession.objects.live().filter(from_release_id=edge.from_release_id, to_release=release).exists():
             return ServiceResult.failure(
                 f"Release {edge.from_release.name} already names {release.name} as a successor, so "
@@ -189,9 +373,10 @@ def link_pending_supersessions(release: Release) -> ServiceResult[int]:
                 status_code=409,
             )
         ReleaseSupersession.objects.filter(pk=edge.pk).update(to_release=release)
-        linked += 1
+        linked.append(edge.from_release)
     recompute_release_lifecycle(product)
-    return ServiceResult.success(linked)
+    broadcast_releases_updated(product, linked)
+    return ServiceResult.success(len(linked))
 
 
 def _leads_back(successor: Release, predecessor: Release) -> bool:
@@ -356,6 +541,7 @@ def recompute_release_lifecycle(product: Product) -> None:
             changed.append(release)
     if changed:
         Release.objects.bulk_update(changed, fields)
+        broadcast_releases_updated(product, changed)
 
 
 def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
@@ -368,7 +554,8 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
 
     Moving the release date moves the live edges that took their date from it,
     and publishes each again at the new date; clearing it leaves them where
-    they are. A new name or version links the edges declared before it existed.
+    they are. A date that would put a drop-in successor before its predecessor
+    is refused, as declaring that edge would be. A new name or version links the edges declared before it existed.
     Call inside a transaction; a duplicate name or version raises
     ``IntegrityError``. The value is the saved release and whether anything
     changed.
@@ -392,6 +579,13 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     previous_release_date = release.released_at
     for field in changed:
         setattr(release, field, changes[field])
+    if "released_at" in changed:
+        drop_ins = ReleaseSupersession.objects.live().filter(drop_in=True).select_related("from_release", "to_release")
+        for edge in drop_ins.filter(Q(to_release=release) | Q(from_release=release, to_release__isnull=False)):
+            predecessor = release if edge.from_release_id == release.pk else edge.from_release
+            successor = release if edge.to_release_id == release.pk else edge.to_release
+            if successor is not None and (backdated := backdated_takeover(predecessor, successor)):
+                return ServiceResult.failure(backdated, status_code=400)
     release.save(update_fields=changed)
 
     if "released_at" in changed and previous_release_date is not None and release.released_at is not None:
