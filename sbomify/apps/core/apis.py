@@ -2336,6 +2336,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "release_date": component.release_date,
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
+        "vcs_url": component.vcs_url or None,
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -2448,6 +2449,9 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
             component.end_of_support = meta_dict["end_of_support"]
         if "end_of_life" in meta_dict:
             component.end_of_life = meta_dict["end_of_life"]
+
+        if "vcs_url" in meta_dict:
+            component.vcs_url = meta_dict["vcs_url"] or ""
 
         # Handle licenses using native fields
         if "licenses" in meta_dict:

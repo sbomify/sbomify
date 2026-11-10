@@ -116,6 +116,28 @@
                         </div>
                     </div>
                     </c-cards.card>
+                    <!-- Source Control -->
+                    <c-cards.card class="shadow">
+                    <c-slot name="header">
+                    <c-cards.header>
+                    <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                        Source Control
+                        <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                           x-tooltip.bottom="'The repository this component is built from'"></i>
+                    </h6>
+                    </c-cards.header>
+                    </c-slot>
+                    <div>
+                        <c-forms.label for="metadata-vcs-url">Repository URL</c-forms.label>
+                        <c-forms.input type="url" id="metadata-vcs-url" placeholder="https://github.com/example/repo" x-model="metadata.vcs_url" @input="hasUnsavedChanges = true; validateVcsUrl()" ::data-state="validationErrors.vcs_url ? 'error' : ''" ::aria-invalid="validationErrors.vcs_url ? 'true' : 'false'" aria-describedby="metadata-vcs-url-help" />
+                        <template x-if="validationErrors.vcs_url">
+                            <c-forms.error x-text="validationErrors.vcs_url"></c-forms.error>
+                        </template>
+                        <template x-if="!validationErrors.vcs_url">
+                            <c-forms.hint id="metadata-vcs-url-help">Shows where this component's SBOMs come from.</c-forms.hint>
+                        </template>
+                    </div>
+                    </c-cards.card>
                     <!-- Licenses -->
                     <c-cards.card class="shadow licenses-card-container">
                     <c-slot name="header">

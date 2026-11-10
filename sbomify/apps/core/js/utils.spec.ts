@@ -5,6 +5,7 @@ import {
     formatRelativeDate,
     formatCompactRelativeDate,
     formatLastChecked,
+    isHttpUrl,
 } from './utils'
 
 describe('Utils', () => {
@@ -504,6 +505,20 @@ describe('Utils', () => {
             expect(EVENTS.ITEM_CREATED).toBe('item_created')
             expect(EVENTS.ITEM_UPDATED).toBe('item_updated')
             expect(EVENTS.ITEM_DELETED).toBe('item_deleted')
+        })
+    })
+
+    describe('isHttpUrl', () => {
+        test('accepts http and https repository URLs', () => {
+            expect(isHttpUrl('https://github.com/example/repo')).toBe(true)
+            expect(isHttpUrl('http://git.example.com/group/project.git')).toBe(true)
+        })
+
+        test('rejects other schemes, bare text and credentials', () => {
+            expect(isHttpUrl('javascript:alert(1)')).toBe(false)
+            expect(isHttpUrl('git@github.com:example/repo.git')).toBe(false)
+            expect(isHttpUrl('github.com/example/repo')).toBe(false)
+            expect(isHttpUrl('https://user:token@github.com/example/repo')).toBe(false)
         })
     })
 })
