@@ -952,13 +952,14 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.is_public = payload.is_public
 
             product.save()
-            # Lifecycle dates are CLE events, the one place they are stored.
+            # Lifecycle dates are CLE events, the one place they are stored. Only the
+            # ones the client sent: a date left out is not a null, which withdraws its events.
             dated = set_product_dates(
                 product,
                 {
-                    "release_date": payload.release_date,
-                    "end_of_support": payload.end_of_support,
-                    "end_of_life": payload.end_of_life,
+                    field: getattr(payload, field)
+                    for field in ("release_date", "end_of_support", "end_of_life")
+                    if field in payload.model_fields_set
                 },
             )
             if not dated.ok:
