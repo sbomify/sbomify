@@ -32,9 +32,9 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseSupersession
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
+from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
