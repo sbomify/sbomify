@@ -1179,6 +1179,28 @@ class TestReleaseEdits:
         assert document.ok and document.value is not None
         assert {event.id: event.effective for event in document.value.events}[republished.event_id] == corrected
 
+    @pytest.mark.parametrize("method", ["patch", "put"])
+    def test_resending_the_release_date_without_an_offset_republishes_nothing(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, method: str
+    ) -> None:
+        # The stored instant written as local time is the same date, not a correction.
+        client, token = authenticated_api_client
+        first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
+        old = _release(sample_product, "1.9")
+        new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
+        declared = _supersede(old, "2.0", effective=first_date)
+        assert declared.ok and declared.value
+        payload: dict[str, object] = {"released_at": timezone.make_naive(first_date).isoformat()}
+        if method == "put":
+            payload.update({"name": "2.0", "version": "2.0", "is_prerelease": False})
+
+        response = self._send(client, token, method, new, payload)
+
+        assert response.status_code == 200, response.content
+        assert _fresh(new).released_at == first_date
+        assert list(ReleaseCLEEvent.objects.filter(release=old)) == [declared.value]
+        assert _edge(declared.value).effective == first_date
+
     def test_clearing_the_release_date_leaves_its_edges_alone(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:

@@ -383,7 +383,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    changed = [field for field, value in changes.items() if getattr(release, field) != value]
+    # A date sent without an offset is read the way ``Release.save()`` reads it,
+    # so the stored instant sent again is not a change.
+    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
     if not changed:
         return ServiceResult.success((release, False))
 
