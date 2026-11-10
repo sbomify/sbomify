@@ -27,7 +27,7 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
-from sbomify.apps.core.models import Release, ReleaseSupersession
+from sbomify.apps.core.models import Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
     audit,
     backdated_takeover,
@@ -44,7 +44,6 @@ from sbomify.apps.sboms.models import (
     ComponentCLESupportDefinition,
     ComponentReleaseCLEEvent,
     ComponentReleaseCLESupportDefinition,
-    Product,
     ProductCLEEvent,
     ProductCLESupportDefinition,
     ReleaseCLEEvent,

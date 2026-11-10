@@ -33,10 +33,10 @@ from django.db import transaction
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseSupersession
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
-from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
+from sbomify.apps.sboms.models import BaseCLEEvent, CLEEventType, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -570,7 +570,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    changed = [field for field, value in changes.items() if getattr(release, field) != value]
+    # A date sent without an offset is read the way ``Release.save()`` reads it,
+    # so the stored instant sent again is not a change.
+    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
     if not changed:
         return ServiceResult.success((release, False))
 
