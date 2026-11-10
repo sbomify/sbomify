@@ -992,6 +992,22 @@ class TestRemoveLink:
         ).exists()
         assert _state(old) == Release.LifecycleState.ACTIVE
 
+    def test_the_dialog_is_handed_the_name_as_written(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # The dialog writes the name with x-text, so an HTML entity in the expression would show as typed.
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new = _release(product, "1.0.0"), _release(product, "R&D build")
+        _supersede(old, new)
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="R&D fork").ok
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, old.id])).content.decode()
+
+        assert r"name: 'R\u0026D build' }" in page
+        assert r"name: 'R\u0026D fork' }" in page
+        assert "Remove link to R&amp;D build" in page
+        assert "Remove link to R&amp;D fork" in page
+
     def test_the_edge_is_read_under_the_product_lock(self, team_with_business_plan: Workspace) -> None:
         # A release-date edit republishes the edge under the product lock, so an
         # edge read before it would withdraw an event that is no longer its own.
