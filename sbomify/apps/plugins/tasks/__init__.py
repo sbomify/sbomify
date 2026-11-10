@@ -929,6 +929,42 @@ def _reconcile_findings(sbom_id: str) -> None:
         logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
 
 
+def _scan_if_newly_tracked(sbom_id: str, release: Any) -> None:
+    """Scan an SBOM Dependency Track skipped as not monitored, now that a release ships it.
+
+    An upload queues the scan, and the uploader attaches the SBOM to its release
+    in a later call. If a newer SBOM arrives in between, the scan finds this one
+    unmonitored and records a skip. Attaching the release starts no scan of its
+    own, so the SBOM would wait for the next scheduled scan, where one runs. A
+    run newer than the skip, even one still in flight, means that scan has
+    already been asked for.
+    """
+    from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun, TeamPluginSettings
+
+    plugin_name = "dependency-track"
+    team_id = release.product.team_id
+    latest = AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=plugin_name).order_by("-created_at")[:1]
+    skipped = AssessmentRun.objects.filter(
+        id__in=latest.values("id"),
+        result_skipped=True,
+        result__findings__contains=[{"id": "dependency-track:not-tracked"}],
+    )
+    if not skipped.exists() or not tracked_sboms(SBOM.objects.filter(pk=sbom_id), team_id=team_id).exists():
+        return
+
+    settings = TeamPluginSettings.objects.filter(team_id=team_id).first()
+    enqueue_assessment(
+        sbom_id=sbom_id,
+        plugin_name=plugin_name,
+        run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+        config=(settings.get_plugin_config(plugin_name) if settings else None) or None,
+        release_id=str(release.pk),
+    )
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -1067,6 +1103,8 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                     release_id,
                     exc_info=True,
                 )
+
+    _scan_if_newly_tracked(sbom_id, release)
 
     logger.info(
         "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
