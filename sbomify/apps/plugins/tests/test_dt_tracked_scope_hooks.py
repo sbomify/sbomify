@@ -109,6 +109,33 @@ class TestUploadLandsInTheTree:
         assert states[str(old_row.dt_project_version_uuid)]["active"] is False
         assert states[str(old_row.dt_project_version_uuid)]["is_latest"] is False
 
+    def test_the_scan_leaves_the_rest_of_the_component_to_the_reconcile_its_sbom_queued(
+        self, env, tmp_path, django_capture_on_commit_callbacks
+    ):
+        # On a component never backfilled every version differs. Writing them all
+        # inside the scan could outrun its time limit and roll its upload back.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        _, _, component, server = env
+        never_backfilled = [
+            SbomDependencyTrackProjectVersion.objects.create(
+                sbom=sbom, dt_server=server, dt_project_version=str(sbom.id), dt_project_version_uuid=uuid.uuid4()
+            )
+            for sbom in (_sbom(component, "one"), _sbom(component, "two"))
+        ]
+        client = _client()
+
+        with (
+            patch.object(reconcile_component_dt_scope, "send") as send,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            new = _sbom(component, "new")
+        _first_scan(DependencyTrackPlugin(), new, server, client, tmp_path)
+
+        send.assert_called_once_with(str(component.id))
+        written = {c.args[0] for c in client.set_project_state.call_args_list}
+        assert written.isdisjoint(str(row.dt_project_version_uuid) for row in never_backfilled)
+
     def test_a_key_that_may_not_change_projects_still_gets_the_scan(self, env, tmp_path):
         _, _, component, server = env
         sbom = _sbom(component, "s1")

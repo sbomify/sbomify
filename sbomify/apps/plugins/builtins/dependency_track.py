@@ -309,9 +309,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
             # The upload may have replaced the component's previous SBOM in its
             # latest release, which takes that version out of what is tracked.
+            # Only this version and the latest flag are written here. The SBOM's
+            # own save queued the whole component as a task, and writing every
+            # version of one never backfilled could outrun this scan's time limit.
             from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
 
-            reconcile_component_safely(sbom.component, dt_server)
+            reconcile_component_safely(sbom.component, dt_server, only={sbom.id})
 
             logger.info(
                 f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
