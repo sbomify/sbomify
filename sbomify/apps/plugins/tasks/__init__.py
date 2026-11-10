@@ -1510,7 +1510,6 @@ def _run_scheduled_security_scans(
     only_cyclonedx: bool = False,
     team_key: str | None = None,
     dry_run: bool = False,
-    needs_product: bool = False,
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
@@ -1527,14 +1526,10 @@ def _run_scheduled_security_scans(
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
         team_key: Only this workspace.
         dry_run: Count what would be enqueued; enqueue nothing.
-        needs_product: If True, leave out components in no product of their
-            workspace, which the plugin would only skip (DT).
 
     Returns:
         Dictionary with scan statistics.
     """
-    from django.db.models import F
-
     from sbomify.apps.sboms.models import SBOM
 
     from ..models import AssessmentRun, TeamPluginSettings
@@ -1626,8 +1621,6 @@ def _run_scheduled_security_scans(
 
         if only_cyclonedx:
             sbom_qs = sbom_qs.filter(format="cyclonedx")
-        if needs_product:
-            sbom_qs = sbom_qs.filter(component__products__team_id=F("component__team_id"))
 
         # The failure backoff is applied per batch rather than precomputed over
         # the whole table, and only to what has already survived the skip window
@@ -1787,7 +1780,6 @@ def hourly_dt_scan_task(team_key: str | None = None, dry_run: bool = False) -> d
         only_cyclonedx=True,
         team_key=team_key,
         dry_run=dry_run,
-        needs_product=True,
     )
 
 
