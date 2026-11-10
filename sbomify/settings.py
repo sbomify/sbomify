@@ -74,9 +74,9 @@ TEA_CACHE_TTL: int = int(os.environ.get("TEA_CACHE_TTL", "3600"))
 # Time to wait after SBOM upload before retrieving results to allow DT to process
 DT_PROCESSING_DELAY_SECONDS = int(os.environ.get("DT_PROCESSING_DELAY_SECONDS", 5))
 
-# Optional private CA certificate for Dependency Track servers behind an internal CA.
-# Added to certifi's trust store for DT connections only; when unset, DT is verified
-# against certifi like every other outbound HTTPS call.
+# Optional custom CA certificate for Dependency Track TLS connections.
+# Added to certifi's trust store for DT calls only, as REDIS_CA_CERTS is for Redis.
+# When unset, DT is verified against certifi like every other outbound HTTPS call.
 DT_CA_CERTS = os.environ.get("DT_CA_CERTS", "")
 
 # Payment failure grace period in days before account is restricted

@@ -400,8 +400,8 @@ services:
 >
 > `DT_CA_CERTS` follows the same rule. The backend (admin health checks and
 > management commands) and the worker (scans) both call Dependency Track, so
-> both need the file. A missing or unreadable file raises `ImproperlyConfigured`
-> naming the path on the first Dependency Track call.
+> both need the file, or the first Dependency Track call raises the same
+> `FileNotFoundError`.
 
 Deploy with:
 
