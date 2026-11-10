@@ -235,6 +235,25 @@ async def test_idempotency_is_only_claimed_where_a_repeat_is_a_no_op():
     assert hints["tag_artifact_to_release"] is False
 
 
+@pytest.mark.asyncio
+async def test_every_tool_has_a_title_a_person_can_read():
+    """A client shows the title, not the name, and connector directories refuse a tool without one."""
+    from sbomify.apps.mcp.server import mcp
+
+    tools = {tool.name: tool for tool in await mcp.list_tools()}
+
+    assert set(tools) == set(registry.all_specs())
+    for name, tool in tools.items():
+        assert tool.title and "_" not in tool.title, name
+        # Both places a client may read it from.
+        assert tool.annotations.title == tool.title, name
+    assert tools["list_products"].title == "List products"
+    assert tools["get_cra_step"].title == "Get CRA step"
+    assert tools["upload_vex"].title == "Upload VEX"
+    assert tools["get_vulnerability_kpis"].title == "Get vulnerability KPIs"
+    assert tools["get_product_eol_readiness"].title == "Get product EOL readiness"
+
+
 def test_a_tool_added_without_mcp_tool_stops_the_server_from_starting():
     """FastMCP.add_tool is public, and a tool added through it has no scope check, audit or cap."""
     from types import SimpleNamespace
