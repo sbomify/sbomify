@@ -331,7 +331,7 @@ def test_a_completed_scan_error_shows_what_the_scanner_said():
 
 @pytest.mark.parametrize(("status", "offered"), [("completed", True), ("failed", True), ("pending", False)])
 def test_a_dependency_track_scan_with_no_result_offers_a_reimport(status, offered):
-    """Rachel's case: DT gave up with "still processing" and nothing else could start it again."""
+    """A scan that gave up on "still processing" had nothing else to start it again."""
     run = _run(status=status)
     run["result"] = {
         "summary": {"total_findings": 1, "pass_count": 0, "fail_count": 0, "warning_count": 0, "error_count": 1},
