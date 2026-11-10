@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin, _UploadFailed
 from sbomify.apps.plugins.sdk.base import RetryLaterError
 from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
@@ -151,6 +151,16 @@ class TestPollWaitsOnAnalysis:
         client.get_project.return_value = {"lastBomImport": 1762196390000, "lastVulnerabilityAnalysis": None}
 
         with pytest.raises(RetryLaterError, match="still processing"):
+            self._poll(uploaded_row, client)
+
+        client.get_project_vulnerabilities.assert_not_called()
+
+    def test_an_upload_dt_failed_to_process_is_not_read(self, uploaded_row) -> None:
+        """DT 5 only. Its own exception, so the scan reports the failure where a
+        lost upload is sent again at once."""
+        client = self._token_client({"processing": False, "status": "FAILED"})
+
+        with pytest.raises(_UploadFailed, match="failed to process"):
             self._poll(uploaded_row, client)
 
         client.get_project_vulnerabilities.assert_not_called()

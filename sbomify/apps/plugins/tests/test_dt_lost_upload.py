@@ -177,14 +177,24 @@ class TestALostUploadIsSentAgain:
         assert "still processing" in str(outcome)
         assert self._row_kept(scan)
 
-    def test_an_upload_dt_failed_to_process_is_uploaded_again(self, scan) -> None:
+    def test_an_upload_dt_failed_to_process_is_reported_then_uploaded_at_the_next_scan(self, scan) -> None:
         """DT 5 reports FAILED and stops. Reading the project then would return the
-        previous upload's findings, or none."""
+        previous upload's findings, or none, and the same BOM sent again at once
+        would fail the same way on every poll."""
         scan.row.last_sbom_upload = timezone.now() - timedelta(minutes=5)
         scan.row.save(update_fields=["last_sbom_upload"])
+        client = self._with_token(scan, {"processing": False, "status": "FAILED"})
 
-        upload, outcome = self._assess(scan, self._with_token(scan, {"processing": False, "status": "FAILED"}))
+        upload, outcome = self._assess(scan, client)
+
+        upload.assert_not_called()
+        client.get_project_vulnerabilities.assert_not_called()
+        assert outcome.summary.error_count == 1
+        assert "could not process this SBOM" in outcome.findings[0].description
+        assert not self._row_kept(scan)
+
+        upload, outcome = self._assess(scan, client)
 
         upload.assert_called_once()
         assert isinstance(outcome, RetryLaterError)
-        assert not self._row_kept(scan)
+        assert "uploaded" in str(outcome)

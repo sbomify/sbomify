@@ -55,6 +55,10 @@ class _UploadLost(Exception):
     """Dependency Track no longer has the upload on record, or never analysed it."""
 
 
+class _UploadFailed(_UploadLost):
+    """Dependency Track read the upload and could not process it."""
+
+
 def _is_unsupported_spec_version(error: Exception) -> bool:
     """Whether Dependency Track refused the upload over its CycloneDX version.
 
@@ -341,6 +345,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
         except RetryLaterError:
             raise
+        except _UploadFailed as failed:
+            # The same BOM sent again at once would fail the same way, on every
+            # poll of this run. Forgetting the version leaves the upload to the
+            # next scan, and this run says what happened.
+            logger.warning(f"[DT] {failed} for SBOM {sbom_id}")
+            version_row.delete()
+            return self._create_error_result(
+                "Dependency Track could not process this SBOM. sbomify sends it again at the next scan."
+            )
         except _UploadLost as lost:
             # Polling a lost upload asks for a retry every time, so without this
             # the scan settles on "Could not scan" and no rescan can lift it.
@@ -788,8 +801,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Raises:
             RetryLaterError: If DT is still processing.
-            _UploadLost: If DT no longer has the version, failed to process the
-                upload, or has not analysed it in a day.
+            _UploadLost: If DT no longer has the version, or has not analysed it
+                in a day.
+            _UploadFailed: If DT 5 says processing the upload failed.
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
@@ -912,7 +926,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         as in _analysis_finished.
 
         Raises:
-            _UploadLost: If DT 5 says processing the upload failed.
+            _UploadFailed: If DT 5 says processing the upload failed.
         """
         try:
             state = client.get_upload_processing(token)
@@ -922,7 +936,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             logger.debug("[DT] Could not read the processing state of upload %s", token, exc_info=True)
             return None
         if state.get("status") == "FAILED":
-            raise _UploadLost("Dependency Track failed to process the upload")
+            raise _UploadFailed("Dependency Track failed to process the upload")
         return bool(state.get("processing"))
 
     @staticmethod
