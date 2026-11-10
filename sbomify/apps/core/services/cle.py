@@ -398,6 +398,15 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
                 # A date written to the column before it was an event has nothing to withdraw.
                 Product.objects.filter(pk=product.pk).update(**{field: None})
         else:
+            if event_type == CLEEventType.END_OF_SUPPORT:
+                # The column is the latest date across support policies, so under a named
+                # policy that ends later it never shows this date, and every repeat of the
+                # request wrote the same event again. This date is written under no policy,
+                # so that is where it is compared.
+                events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
+                unnamed = [e for e in events if e.event_type != event_type or not e.support_id]
+                if value == product_dates(unnamed)[0]:
+                    continue
             effective = datetime.combine(value, time.min, tzinfo=UTC)
             versions = [] if event_type == CLEEventType.RELEASED else [{"range": "vers:generic/*"}]
             result = create_cle_event(product, event_type, effective, versions=versions)
