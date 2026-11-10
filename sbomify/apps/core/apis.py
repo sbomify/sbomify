@@ -152,7 +152,7 @@ def _broadcast_release_updated(release: Release) -> None:
 
 
 def _broadcast_linked_releases_updated(linked: Release) -> None:
-    """Tell the workspace a link to ``linked`` was added or removed.
+    """Tell the workspace a link to ``linked`` was added. Removing one sends the same from the link's own delete.
 
     A linked release stays monitored while a live release links to it, and so
     do the releases it links on and the releases shipping their SBOMs, so their
@@ -4725,10 +4725,8 @@ def unlink_release_from_release(request: HttpRequest, release_id: str, linked_re
         status = result.status_code or 400
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
+    # The link's own delete tells the linked release and every release it kept monitored.
     _broadcast_release_updated(release)
-    linked = Release.objects.select_related("product__team").filter(pk=linked_release_id).first()
-    if linked is not None:
-        _broadcast_linked_releases_updated(linked)
     return 204, None
 
 
