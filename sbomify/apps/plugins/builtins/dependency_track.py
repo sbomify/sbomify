@@ -213,21 +213,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 ),
             )
 
-        # Guard: DT scanning requires product membership. Check via the direct
-        # Product↔Component M2M (stable at SBOM creation time) rather than
-        # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
-        # and release association in separate API calls, so the ReleaseArtifact
-        # may not exist yet when the upload-triggered scan fires).
-        has_product = sbom.component.products.filter(team=team).exists()
-        if not has_product:
-            return self.create_skipped_result(
-                finding_id="dependency-track:no-product",
-                title="Component Not in a Product",
-                description=(
-                    "Dependency Track only scans components that belong to a product. "
-                    "Add this component to a product so Dependency Track can scan it."
-                ),
-            )
+        # Dependency Track scans what sbomify tracks: each component's newest
+        # SBOM, product or not, and the SBOMs its live releases ship. An upload
+        # already made keeps polling, so a newer SBOM arriving mid-scan does
+        # not throw away results Dependency Track is already producing.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        tracked = tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists()
+        if not tracked and not SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists():
+            return self._not_monitored()
 
         # Resolve release names for DT project tags. May be empty if the
         # ReleaseArtifact hasn't been committed yet (race with sbomify-action).
@@ -242,10 +237,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return self._create_error_result(str(e))
 
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
-        from sbomify.apps.vulnerability_scanning.models import (
-            ComponentDependencyTrackMapping,
-            SbomDependencyTrackProjectVersion,
-        )
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
 
         # Project name is component-scoped (not product-scoped). Multi-product
         # components end up with a single DT project that aggregates all their
@@ -255,6 +247,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Check if we already have a per-SBOM version row — if so this is a
         # poll retry; if not, this is the first scan and we need to upload.
         version_row = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id, dt_server=dt_server).first()
+
+        if version_row is None and not tracked:
+            # Its upload is on another server, one the workspace no longer uses.
+            # There is nothing on this one to keep polling, and an SBOM sbomify
+            # no longer tracks is not sent to it.
+            return self._not_monitored()
 
         if version_row is None:
             # First scan for this SBOM against this DT server. Upload bytes,
@@ -1185,6 +1183,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
 
         return findings
+
+    def _not_monitored(self) -> AssessmentResult:
+        """The skip for an SBOM sbomify does not track."""
+        return self.create_skipped_result(
+            finding_id="dependency-track:not-tracked",
+            title="Not Monitored",
+            description=(
+                "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
+                "This SBOM is neither, so Dependency Track did not scan it."
+            ),
+        )
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.

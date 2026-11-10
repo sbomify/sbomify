@@ -62,8 +62,15 @@
                         {% endif %}
                         {% if unfinished %}
                             <ul class="m-0 divide-y divide-[color-mix(in_oklab,var(--color-border)_70%,transparent)] p-0{% if matrix.columns %} border-t border-solid border-border{% endif %}">
+                                {% comment %}A scan with nothing to read (skipped, unreadable or errored) gets a Re-run: what stopped it can change, and nothing else would run it again. The control hides itself while a run is queued or running.{% endcomment %}
                                 {% for tile in unfinished %}
-                                    <c-assessments.row anchor="plugin-{{ tile.run.plugin_name }}" name="{{ tile.run.plugin_display_name|default:tile.run.plugin_name }}" tone="{{ tile.tone }}" label="{{ tile.label }}" caption="{{ tile.caption }}" :segments="tile.segments" bar_label="{{ tile.bar_label }}" :stale="tile.run.current_version" />
+                                    {% with run=tile.run %}
+                                        <c-assessments.row anchor="plugin-{{ run.plugin_name }}" name="{{ run.plugin_display_name|default:run.plugin_name }}" tone="{{ tile.tone }}" label="{{ tile.label }}" caption="{{ tile.caption }}" :segments="tile.segments" bar_label="{{ tile.bar_label }}" :stale="run.current_version">
+                                        <c-slot name="action">
+                                        {% include 'plugins/components/_rerun_button.html.j2' %}
+                                        </c-slot>
+                                        </c-assessments.row>
+                                    {% endwith %}
                                 {% endfor %}
                             </ul>
                         {% endif %}
