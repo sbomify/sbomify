@@ -51,6 +51,7 @@ x-common-env: &common-env
   EMAIL_USE_SSL: ${EMAIL_USE_SSL:-False}
   EMAIL_USE_TLS: ${EMAIL_USE_TLS:-False}
   REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
+  DT_CA_CERTS: ${DT_CA_CERTS:-}
   REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}

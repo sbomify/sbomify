@@ -196,6 +196,9 @@ REDIS_URL=redis://redis.example.com:6379
 # REDIS_URL=rediss://:password@redis.example.com:6379  # With password + TLS
 # REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
 
+# Dependency Track behind a private CA
+# DT_CA_CERTS=/path/to/ca.crt       # Added to the default trust store for DT calls
+
 # Features
 BILLING=False
 
@@ -319,6 +322,18 @@ Set `REDIS_CA_CERTS` to your CA root certificate. This is passed to all Redis co
 REDIS_CA_CERTS=/certs/root_ca.crt
 ```
 
+### Configure Dependency Track
+
+Set `DT_CA_CERTS` to your CA root certificate when your Dependency Track servers use certificates from your private CA:
+
+```env
+DT_CA_CERTS=/certs/root_ca.crt
+```
+
+It applies to every call sbomify makes to a Dependency Track server: scans, health checks, project cleanup and the `dt_tracked_scope` command. It adds to the default trust store, so public Dependency Track servers keep working. Other outbound HTTPS calls are not affected.
+
+Without it, every call to a private-CA Dependency Track server fails with `CERTIFICATE_VERIFY_FAILED`. If the error persists with `DT_CA_CERTS` set, check that the server sends its intermediate certificates: `openssl s_client -connect <dt-host>:443 -showcerts` should list more than the server certificate.
+
 ### Configure Keycloak
 
 The `ca-cert` init container copies your private CA certificate into a shared volume. Enable it by setting:
@@ -354,12 +369,14 @@ services:
     environment:
       DATABASE_SSLROOTCERT: /certs/root_ca.crt
       REDIS_CA_CERTS: /certs/root_ca.crt
+      DT_CA_CERTS: /certs/root_ca.crt
 
   sbomify-worker:
     volumes:
       - *ca-volume
     environment:
       REDIS_CA_CERTS: /certs/root_ca.crt
+      DT_CA_CERTS: /certs/root_ca.crt
 
   sbomify-scheduler:
     volumes:
@@ -380,6 +397,11 @@ services:
 > container can read the env var but cannot read the file at that path, the
 > first scheduled job crashes the scheduler with `FileNotFoundError` from
 > `ssl.load_verify_locations`.
+>
+> `DT_CA_CERTS` follows the same rule. The backend (admin health checks and
+> management commands) and the worker (scans) both call Dependency Track, so
+> both need the file. A missing or unreadable file raises `ImproperlyConfigured`
+> naming the path on the first Dependency Track call.
 
 Deploy with:
 
