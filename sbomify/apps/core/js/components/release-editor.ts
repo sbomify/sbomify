@@ -57,6 +57,9 @@ export function registerReleaseEditor() {
             id: null, name: '', version: '', description: '', is_prerelease: false,
             created_at: '', released_at: ''
         } as ReleaseForm,
+        // The release date as the dialog opened. The field keeps minutes only,
+        // so sending back a date nobody touched would still move it.
+        openedReleasedAt: '',
 
         openEditModal(release: Release) {
             this.form = {
@@ -68,6 +71,7 @@ export function registerReleaseEditor() {
                 created_at: formatDateTimeForInput(release.created_at),
                 released_at: formatDateTimeForInput(release.release_date || release.created_at)
             };
+            this.openedReleasedAt = this.form.released_at;
             this.showModal = true;
         },
 
@@ -106,7 +110,7 @@ export function registerReleaseEditor() {
                     is_prerelease: this.form.is_prerelease
                 };
                 if (createdAt) data.created_at = createdAt;
-                if (releasedAt) data.released_at = releasedAt;
+                if (releasedAt && this.form.released_at !== this.openedReleasedAt) data.released_at = releasedAt;
 
                 await $axios.patch(`/api/v1/releases/${this.form.id}`, data);
                 showSuccess('Release updated');

@@ -41,7 +41,7 @@ class Command(BaseCommand):
             if options["plugin"] not in (None, plugin):
                 continue
             try:
-                stats = sweep(team_key=options["workspace"], dry_run=options["dry_run"])
+                stats = sweep(workspace_key=options["workspace"], dry_run=options["dry_run"])
             except Exception as exc:
                 # Its retries ran out, or the database was gone before it started.
                 failed.append(f"{label}: {exc}")

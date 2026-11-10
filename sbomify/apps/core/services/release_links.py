@@ -72,9 +72,11 @@ def unlink_release(release: Release, linked_release_id: str) -> ServiceResult[No
         return ServiceResult.failure("Cannot unlink releases from the 'latest' release", status_code=400)
     # The row read is the row deleted: a link created between a lookup and the
     # delete would otherwise go with nobody told to reconcile what it shipped.
+    # Only the link row is locked. The linked release's row would be locked
+    # here without its product, out of the order its own writers take.
     with transaction.atomic():
         link = (
-            ReleaseLink.objects.select_for_update()
+            ReleaseLink.objects.select_for_update(of=("self",))
             .select_related("linked_release")
             .filter(release=release, linked_release_id=linked_release_id)
             .first()

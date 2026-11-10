@@ -3078,6 +3078,117 @@ def test_a_date_only_in_the_column_survives_an_edit_of_another(
 
 
 @pytest.mark.django_db
+def test_a_put_that_omits_the_dates_leaves_the_lifecycle_alone(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """PUT read a date the client left out as a null, and withdrew its published
+    events: renaming a product from an older client erased its lifecycle history."""
+    from datetime import date
+
+    from django.db import transaction
+
+    from sbomify.apps.core.services.cle import set_product_dates
+
+    dates = {"release_date": date(2024, 1, 15), "end_of_support": date(2025, 6, 30), "end_of_life": date(2026, 12, 31)}
+    with transaction.atomic():
+        assert set_product_dates(sample_product, dates).ok
+    events = ProductCLEEvent.objects.filter(product=sample_product).count()
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        f"/api/v1/products/{sample_product.id}",
+        json.dumps({"name": "Renamed", "is_public": sample_product.is_public}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    assert ProductCLEEvent.objects.filter(product=sample_product).count() == events
+    sample_product.refresh_from_db()
+    assert sample_product.name == "Renamed"
+    assert {field: getattr(sample_product, field) for field in dates} == dates
+
+
+@pytest.mark.django_db
+def test_a_put_with_a_null_date_clears_it_and_no_other(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """A null the client sent is still the client clearing that date."""
+    from datetime import date
+
+    from django.db import transaction
+
+    from sbomify.apps.core.services.cle import set_product_dates
+
+    with transaction.atomic():
+        assert set_product_dates(
+            sample_product, {"end_of_support": date(2025, 6, 30), "end_of_life": date(2026, 12, 31)}
+        ).ok
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.put(
+        f"/api/v1/products/{sample_product.id}",
+        json.dumps({"name": sample_product.name, "is_public": sample_product.is_public, "end_of_support": None}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 200
+    assert (response.json()["end_of_support"], response.json()["end_of_life"]) == (None, "2026-12-31")
+    sample_product.refresh_from_db()
+    assert (sample_product.end_of_support, sample_product.end_of_life) == (None, date(2026, 12, 31))
+    assert ProductCLEEvent.objects.filter(product=sample_product, event_type="withdrawn").count() == 1
+
+
+@pytest.mark.django_db
+def test_repeating_an_end_of_support_a_longer_policy_outlasts_records_it_once(
+    sample_product: Product,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Under a named policy that ends later the column never shows the date sent, so
+    every identical request appended the same event to the published lifecycle."""
+    from datetime import date, datetime, timezone
+
+    from sbomify.apps.core.services.cle import create_cle_event, create_support_definition
+
+    assert create_support_definition(sample_product, "lts", "Long term support").ok
+    assert create_cle_event(
+        sample_product,
+        "endOfSupport",
+        datetime(2030, 1, 1, tzinfo=timezone.utc),
+        versions=[{"range": "vers:generic/*"}],
+        support_id="lts",
+    ).ok
+    client = Client()
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    def recorded_after_sending(day: str) -> list[date]:
+        response = client.patch(
+            f"/api/v1/products/{sample_product.id}",
+            json.dumps({"end_of_support": day}),
+            content_type="application/json",
+            **get_api_headers(sample_access_token),
+        )
+        assert response.status_code == 200
+        assert response.json()["end_of_support"] == "2030-01-01"
+        unnamed = ProductCLEEvent.objects.filter(product=sample_product, event_type="endOfSupport", support_id="")
+        return [event.effective.date() for event in unnamed.order_by("event_id")]
+
+    assert recorded_after_sending("2026-01-01") == [date(2026, 1, 1)]
+    assert recorded_after_sending("2026-01-01") == [date(2026, 1, 1)]
+    # A correction is a new statement, and so is going back on it.
+    assert recorded_after_sending("2027-01-01") == [date(2026, 1, 1), date(2027, 1, 1)]
+    assert recorded_after_sending("2026-01-01") == [date(2026, 1, 1), date(2027, 1, 1), date(2026, 1, 1)]
+
+
+@pytest.mark.django_db
 def test_product_lifecycle_events_clear_values(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
