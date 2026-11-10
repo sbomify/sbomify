@@ -443,7 +443,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         project_version = str(sbom.id)
 
-        client.upload_sbom_with_project_creation(
+        response = client.upload_sbom_with_project_creation(
             project_name=project_name,
             project_version=project_version,
             sbom_data=sbom_bytes,
@@ -464,6 +464,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version": project_version,
                 "dt_project_version_uuid": version_uuid,
                 "last_sbom_upload": dj_timezone.now(),
+                "dt_upload_token": response.get("token") or None,
             },
         )
 
@@ -710,11 +711,19 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Raises:
             RetryLaterError: If DT is still processing.
-            _UploadLost: If DT no longer has the version, or has not analysed it in a day.
+            _UploadLost: If DT no longer has the version, failed to process the
+                upload, or has not analysed it in a day.
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
         version_uuid = str(version_row.dt_project_version_uuid)
+        uploaded = version_row.last_sbom_upload or version_row.created_at
+
+        token = version_row.dt_upload_token
+        if token and (processing := self._upload_processing(client, str(token))) is not False:
+            if processing and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
+                raise _UploadLost(f"Dependency Track has not processed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
+            raise RetryLaterError("Dependency Track still processing SBOM")
 
         try:
             metrics = client.get_project_metrics(version_uuid)
@@ -724,7 +733,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
         if not metrics and not (finished := self._analysis_finished(client, version_uuid)):
-            uploaded = version_row.last_sbom_upload or version_row.created_at
             if finished is False and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
                 raise _UploadLost(f"Dependency Track has not analysed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
             raise RetryLaterError("Dependency Track still processing SBOM")
@@ -740,7 +748,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         now = dj_timezone.now()
         version_row.last_metrics_sync = now
-        version_row.save(update_fields=["last_metrics_sync", "updated_at"])
+        # Read once, the token has done its job. Rescans of this version upload
+        # nothing, so they skip the call, and DT 5 forgets old tokens anyway.
+        version_row.dt_upload_token = None
+        version_row.save(update_fields=["last_metrics_sync", "dt_upload_token", "updated_at"])
 
         # Also update the component-level mapping so admin/API consumers see
         # the most recent poll timestamp at the component level (not just per-SBOM).
@@ -807,6 +818,31 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 **conversion_note,
             },
         )
+
+    @staticmethod
+    def _upload_processing(client: Any, token: str) -> bool | None:
+        """Whether Dependency Track is still processing the upload behind this token.
+
+        Neither the metrics nor ``lastVulnerabilityAnalysis`` can say that on
+        DT 5: it answers metrics for a version before analysing it, and after a
+        re-upload the previous analysis is still stamped on the project. The
+        token ``/v1/bom`` returned covers the import and the analysis on both
+        DT 4 and DT 5. ``processing: false`` with no status is also what DT
+        answers for a token it does not know, after DT 5 has expired it or DT 4
+        restarted, so the caller still checks the project before reading. A
+        failed read returns None, as in _analysis_finished.
+
+        Raises:
+            _UploadLost: If DT 5 says processing the upload failed.
+        """
+        try:
+            state = client.get_upload_processing(token)
+        except Exception:
+            logger.debug("[DT] Could not read the processing state of upload %s", token, exc_info=True)
+            return None
+        if state.get("status") == "FAILED":
+            raise _UploadLost("Dependency Track failed to process the upload")
+        return bool(state.get("processing"))
 
     @staticmethod
     def _analysis_finished(client: Any, version_uuid: str) -> bool | None:
