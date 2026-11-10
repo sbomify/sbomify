@@ -220,16 +220,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
         from sbomify.apps.core.services.release_lifecycle import tracked_sboms
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
 
-        uploaded = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists()
-        if not uploaded and not tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists():
-            return self.create_skipped_result(
-                finding_id="dependency-track:not-tracked",
-                title="Not Monitored",
-                description=(
-                    "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
-                    "This SBOM is neither, so Dependency Track did not scan it."
-                ),
-            )
+        tracked = tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists()
+        if not tracked and not SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists():
+            return self._not_monitored()
 
         # Resolve release names for DT project tags. May be empty if the
         # ReleaseArtifact hasn't been committed yet (race with sbomify-action).
@@ -254,6 +247,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Check if we already have a per-SBOM version row — if so this is a
         # poll retry; if not, this is the first scan and we need to upload.
         version_row = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id, dt_server=dt_server).first()
+
+        if version_row is None and not tracked:
+            # Its upload is on another server, one the workspace no longer uses.
+            # There is nothing on this one to keep polling, and an SBOM sbomify
+            # no longer tracks is not sent to it.
+            return self._not_monitored()
 
         if version_row is None:
             # First scan for this SBOM against this DT server. Upload bytes,
@@ -1184,6 +1183,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
 
         return findings
+
+    def _not_monitored(self) -> AssessmentResult:
+        """The skip for an SBOM sbomify does not track."""
+        return self.create_skipped_result(
+            finding_id="dependency-track:not-tracked",
+            title="Not Monitored",
+            description=(
+                "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
+                "This SBOM is neither, so Dependency Track did not scan it."
+            ),
+        )
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.
