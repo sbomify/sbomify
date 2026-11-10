@@ -30,7 +30,7 @@ from sbomify.apps.plugins.models import (
     RunStatus,
     TeamPluginSettings,
 )
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, ScanMode
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 from sbomify.apps.plugins.tasks import (
     attach_release_to_runs_task,
@@ -352,6 +352,62 @@ class TestAttachReleaseToRunsTask:
         # sync_release_tags is NOT called (failed run has no DT project)
         assert len(sync_calls) == 0
         assert result["synced_plugins"] == []
+
+    @pytest.mark.parametrize(
+        ("skip", "shipped", "rescan_started", "scans"),
+        [
+            pytest.param("dependency-track:not-tracked", True, False, True, id="skipped-as-not-monitored"),
+            pytest.param("dependency-track:not-tracked", False, False, False, id="still-not-monitored"),
+            pytest.param("dependency-track:not-enabled", True, False, False, id="skipped-for-another-reason"),
+            pytest.param("dependency-track:not-tracked", True, True, False, id="scan-already-started"),
+        ],
+    )
+    def test_scans_an_sbom_skipped_as_not_monitored_once_a_release_ships_it(
+        self, sample_team_with_owner_member, monkeypatch, skip, shipped, rescan_started, scans
+    ):
+        """Its upload scan ran after a newer SBOM arrived and before the release shipped it,
+        so the run is a skip and no scheduled scan is due to come back to it."""
+        team = sample_team_with_owner_member.team
+        _make_dt_plugin()
+        settings = _enable_plugins(team, "dependency-track")
+        settings.plugin_configs = {"dependency-track": {"dt_server_id": "pinned"}}
+        settings.save()
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", version="1.0", component=component, format="cyclonedx")
+        SBOM.objects.create(name="s", version="1.1", component=component, format="cyclonedx")
+        release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
+        if shipped:
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        run = {
+            "sbom": sbom,
+            "plugin_name": "dependency-track",
+            "plugin_version": "1.0.0",
+            "plugin_config_hash": "abc",
+            "category": AssessmentCategory.SECURITY.value,
+            "run_reason": "on_upload",
+        }
+        AssessmentRun.objects.create(
+            **run,
+            status=RunStatus.COMPLETED.value,
+            result={"findings": [{"id": skip}], "metadata": {"skipped": True}},
+        )
+        if rescan_started:
+            AssessmentRun.objects.create(**run, status=RunStatus.PENDING.value)
+        enqueued: list[dict] = []
+        monkeypatch.setattr("sbomify.apps.plugins.tasks.enqueue_assessment", lambda **kwargs: enqueued.append(kwargs))
+
+        attach_release_to_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release.id))
+
+        scan = {
+            "sbom_id": str(sbom.id),
+            "plugin_name": "dependency-track",
+            "run_reason": RunReason.ON_RELEASE_ASSOCIATION,
+            "config": {"dt_server_id": "pinned"},
+            "release_id": str(release.id),
+        }
+        assert enqueued == ([scan] if scans else [])
 
 
 @pytest.mark.django_db

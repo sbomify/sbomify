@@ -17,6 +17,7 @@ from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 from sbomify.apps.vulnerability_scanning.models import (
+    ComponentDependencyTrackMapping,
     DependencyTrackCollection,
     DependencyTrackServer,
     SbomDependencyTrackProjectVersion,
@@ -89,6 +90,21 @@ class TestUploadLandsInTheTree:
             str(collection.dt_project_uuid),
         )
 
+    def test_a_component_in_no_product_lands_in_the_same_tree(self, env, tmp_path):
+        team, _, _, server = env
+        loose = Component.objects.create(name="loose", team=team)
+        sbom = _sbom(loose, "s1")
+        client = _client()
+
+        _first_scan(DependencyTrackPlugin(), sbom, server, client, tmp_path)
+
+        collection = DependencyTrackCollection.objects.get(dt_server=server, component=loose)
+        upload = client.upload_sbom_with_project_creation.call_args.kwargs
+        assert upload["parent_uuid"] == str(collection.dt_project_uuid)
+        assert upload["is_latest"] is True
+        row = SbomDependencyTrackProjectVersion.objects.get(sbom=sbom, dt_server=server)
+        assert (row.dt_active, row.dt_is_latest) == (True, True)
+
     def test_the_version_it_replaces_is_retired(self, env, tmp_path):
         _, _, component, server = env
         old = _sbom(component, "old")
@@ -109,6 +125,33 @@ class TestUploadLandsInTheTree:
         assert states[str(old_row.dt_project_version_uuid)]["active"] is False
         assert states[str(old_row.dt_project_version_uuid)]["is_latest"] is False
 
+    def test_the_scan_leaves_the_rest_of_the_component_to_the_reconcile_its_sbom_queued(
+        self, env, tmp_path, django_capture_on_commit_callbacks
+    ):
+        # On a component never backfilled every version differs. Writing them all
+        # inside the scan could outrun its time limit and roll its upload back.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        _, _, component, server = env
+        never_backfilled = [
+            SbomDependencyTrackProjectVersion.objects.create(
+                sbom=sbom, dt_server=server, dt_project_version=str(sbom.id), dt_project_version_uuid=uuid.uuid4()
+            )
+            for sbom in (_sbom(component, "one"), _sbom(component, "two"))
+        ]
+        client = _client()
+
+        with (
+            patch.object(reconcile_component_dt_scope, "send") as send,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            new = _sbom(component, "new")
+        _first_scan(DependencyTrackPlugin(), new, server, client, tmp_path)
+
+        send.assert_called_once_with(str(component.id))
+        written = {c.args[0] for c in client.set_project_state.call_args_list}
+        assert written.isdisjoint(str(row.dt_project_version_uuid) for row in never_backfilled)
+
     def test_a_key_that_may_not_change_projects_still_gets_the_scan(self, env, tmp_path):
         _, _, component, server = env
         sbom = _sbom(component, "s1")
@@ -122,36 +165,63 @@ class TestUploadLandsInTheTree:
         assert SbomDependencyTrackProjectVersion.objects.filter(sbom=sbom).exists()
 
 
+def _old_sbom_shipped_again(env):
+    """An old, retired SBOM a new release ships, with its scan and version row."""
+    _, product, component, server = env
+    old = _sbom(component, "old")
+    _sbom(component, "new")
+    old_row = SbomDependencyTrackProjectVersion.objects.create(
+        sbom=old,
+        dt_server=server,
+        dt_project_version=str(old.id),
+        dt_project_version_uuid=uuid.uuid4(),
+        dt_active=False,
+    )
+    run = AssessmentRun.objects.create(
+        sbom=old,
+        plugin_name="dependency-track",
+        plugin_version="1.1.0",
+        plugin_config_hash="h",
+        category=AssessmentCategory.SECURITY.value,
+        run_reason="on_upload",
+        status=RunStatus.COMPLETED.value,
+        result={"summary": {"total_findings": 0}},
+    )
+    release = Release.objects.create(product=product, name="11.5")
+    ReleaseArtifact.objects.create(release=release, sbom=old)
+    return old, old_row, run, release
+
+
 @pytest.mark.django_db
 class TestReleaseChangesMoveTheScope:
     def test_shipping_an_old_sbom_in_a_release_brings_it_back(self, env):
-        _, product, component, server = env
-        old = _sbom(component, "old")
-        _sbom(component, "new")
-        old_row = SbomDependencyTrackProjectVersion.objects.create(
-            sbom=old,
-            dt_server=server,
-            dt_project_version=str(old.id),
-            dt_project_version_uuid=uuid.uuid4(),
-            dt_active=False,
-        )
-        run = AssessmentRun.objects.create(
-            sbom=old,
-            plugin_name="dependency-track",
-            plugin_version="1.1.0",
-            plugin_config_hash="h",
-            category=AssessmentCategory.SECURITY.value,
-            run_reason="on_upload",
-            status=RunStatus.COMPLETED.value,
-            result={"summary": {"total_findings": 0}},
-        )
-        release = Release.objects.create(product=product, name="11.5")
-        ReleaseArtifact.objects.create(release=release, sbom=old)
+        old, old_row, run, release = _old_sbom_shipped_again(env)
         client = _client()
 
         with patch(CLIENT, return_value=client):
             DependencyTrackPlugin().sync_release_tags(sbom_id=str(old.id), run_id=str(run.id), release=release)
 
+        states = {c.args[0]: c.kwargs for c in client.set_project_state.call_args_list}
+        assert states[str(old_row.dt_project_version_uuid)]["active"] is True
+
+    def test_a_scope_write_an_outage_drops_is_queued_to_retry(self, env):
+        # The attach and detach tasks never retry a plugin hook, so without this
+        # the version keeps its old state until a backfill finds it.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        _, _, component, _ = env
+        old, old_row, run, release = _old_sbom_shipped_again(env)
+        client = _client()
+        client.set_project_state.side_effect = DependencyTrackAPIError("Service unavailable", status_code=503)
+
+        with patch(CLIENT, return_value=client), patch.object(reconcile_component_dt_scope, "send") as send:
+            DependencyTrackPlugin().sync_release_tags(sbom_id=str(old.id), run_id=str(run.id), release=release)
+
+        send.assert_called_once_with(str(component.id), [str(old.id)])
+        client.set_project_state.side_effect = None
+        client.set_project_state.reset_mock()
+        with patch(CLIENT, return_value=client):
+            reconcile_component_dt_scope.fn(str(component.id), [str(old.id)])
         states = {c.args[0]: c.kwargs for c in client.set_project_state.call_args_list}
         assert states[str(old_row.dt_project_version_uuid)]["active"] is True
 
@@ -280,7 +350,8 @@ class TestOrderDoesNotBreakTheScope:
         assert dt.projects[old_uuid]["tags"] == []
         assert dt.projects[old_uuid]["active"] is False
 
-    def test_an_older_sbom_scanned_after_a_newer_one_leaves_latest_on_the_newer(self, env, tmp_path):
+    def test_an_older_sbom_scanned_after_a_newer_one_never_reaches_dependency_track(self, env, tmp_path):
+        """Its queued scan runs once a newer SBOM exists, so sbomify no longer tracks it."""
         _, _, component, server = env
         older = _sbom(component, "older")
         newer = _sbom(component, "newer")
@@ -288,13 +359,61 @@ class TestOrderDoesNotBreakTheScope:
         plugin = DependencyTrackPlugin()
 
         _first_scan(plugin, newer, server, dt, tmp_path)
-        _first_scan(plugin, older, server, dt, tmp_path)
+        path = tmp_path / "sbom.json"
+        with (
+            patch(CLIENT, return_value=dt),
+            patch.object(plugin, "_select_dt_server", return_value=server),
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+        ):
+            result = plugin.assess(sbom_id=older.id, sbom_path=path, context=None)
 
+        assert result.findings[0].id == "dependency-track:not-tracked"
         by_version = {p["version"]: p for p in dt.projects.values()}
+        assert str(older.id) not in by_version
         assert by_version[str(newer.id)]["isLatest"] is True
         assert by_version[str(newer.id)]["active"] is True
-        assert by_version[str(older.id)]["isLatest"] is False
-        assert by_version[str(older.id)]["active"] is False
+
+    def test_a_finished_scan_takes_the_component_lock_before_it_writes_its_rows(self, env):
+        # A reconcile takes the lock and then writes the version row. A scan that
+        # wrote the row first, then took the lock for its tag sync in the same
+        # transaction, could deadlock with one.
+        from contextlib import contextmanager
+
+        from sbomify.apps.vulnerability_scanning.services import dt_scope
+
+        _, _, component, server = env
+        sbom = _sbom(component, "s1")
+        row = SbomDependencyTrackProjectVersion.objects.create(
+            sbom=sbom, dt_server=server, dt_project_version=str(sbom.id), dt_project_version_uuid=uuid.uuid4()
+        )
+        events: list[str] = []
+        real = dt_scope.component_lock
+
+        @contextmanager
+        def recording(component_id, dt_server_id):
+            events.append("lock")
+            with real(component_id, dt_server_id):
+                yield
+            events.append("unlock")
+
+        written = {
+            SbomDependencyTrackProjectVersion._meta.db_table: "version",
+            ComponentDependencyTrackMapping._meta.db_table: "mapping",
+        }
+
+        def record_writes(execute, sql, params, many, context):
+            events.extend(name for table, name in written.items() if sql.startswith(f'UPDATE "{table}"'))
+            return execute(sql, params, many, context)
+
+        client = _client()
+        client.get_project_metrics.return_value = {"vulnerabilities": 0}
+        client.get_project_vulnerabilities.return_value = {"content": []}
+        with patch.object(dt_scope, "component_lock", recording), connection.execute_wrapper(record_writes):
+            DependencyTrackPlugin()._poll_results(
+                client=client, version_row=row, sbom_id=str(sbom.id), project_name="p", current_release_names=[]
+            )
+
+        assert events == ["lock", "version", "mapping", "unlock"]
 
 
 @pytest.mark.django_db

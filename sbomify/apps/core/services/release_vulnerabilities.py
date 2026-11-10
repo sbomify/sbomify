@@ -11,6 +11,7 @@ from django.urls import reverse
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Release, ReleaseArtifact
 from sbomify.apps.core.services.inventory_page import _counts
+from sbomify.apps.core.services.release_lifecycle import untracked_notice
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.services.sboms_table import sbom_vulnerability_counts
@@ -60,5 +61,7 @@ def build_release_vulnerabilities(request: HttpRequest, release_id: str) -> Serv
             "suppressed_count": posture.get("suppressed_count", 0),
             "findings": findings,
             "artifacts": artifacts,
+            "untracked": untracked_notice(release),
+            "last_scanned_at": posture.get("last_scanned_at"),
         }
     )

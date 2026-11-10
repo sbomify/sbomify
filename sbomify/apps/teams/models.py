@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator, RegexValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
@@ -301,6 +301,19 @@ class Workspace(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        """Lock the workspace's products, in key order, before Django collects anything to delete.
+
+        A release edit locks its product and then the release, and the
+        products' own pre_delete handlers lock rows of theirs, so the products
+        are locked before any of that runs.
+        """
+        from sbomify.apps.sboms.models import Product
+
+        with transaction.atomic():
+            list(Product.objects.select_for_update().filter(team=self).order_by("pk").values_list("pk"))
+            return super().delete(*args, **kwargs)
 
     @property
     def display_name(self) -> str:

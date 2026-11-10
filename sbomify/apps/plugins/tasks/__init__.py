@@ -929,6 +929,42 @@ def _reconcile_findings(sbom_id: str) -> None:
         logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
 
 
+def _scan_if_newly_tracked(sbom_id: str, release: Any) -> None:
+    """Scan an SBOM Dependency Track skipped as not monitored, now that a release ships it.
+
+    An upload queues the scan, and the uploader attaches the SBOM to its release
+    in a later call. If a newer SBOM arrives in between, the scan finds this one
+    unmonitored and records a skip. Attaching the release starts no scan of its
+    own, so the SBOM would wait for the next scheduled scan, where one runs. A
+    run newer than the skip, even one still in flight, means that scan has
+    already been asked for.
+    """
+    from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun, TeamPluginSettings
+
+    plugin_name = "dependency-track"
+    team_id = release.product.team_id
+    latest = AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=plugin_name).order_by("-created_at")[:1]
+    skipped = AssessmentRun.objects.filter(
+        id__in=latest.values("id"),
+        result_skipped=True,
+        result__findings__contains=[{"id": "dependency-track:not-tracked"}],
+    )
+    if not skipped.exists() or not tracked_sboms(SBOM.objects.filter(pk=sbom_id), team_id=team_id).exists():
+        return
+
+    settings = TeamPluginSettings.objects.filter(team_id=team_id).first()
+    enqueue_assessment(
+        sbom_id=sbom_id,
+        plugin_name=plugin_name,
+        run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+        config=(settings.get_plugin_config(plugin_name) if settings else None) or None,
+        release_id=str(release.pk),
+    )
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -1067,6 +1103,8 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                     release_id,
                     exc_info=True,
                 )
+
+    _scan_if_newly_tracked(sbom_id, release)
 
     logger.info(
         "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
@@ -1508,6 +1546,8 @@ def _run_scheduled_security_scans(
     skip_hours: int,
     task_name: str,
     only_cyclonedx: bool = False,
+    workspace_key: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
@@ -1522,6 +1562,8 @@ def _run_scheduled_security_scans(
         skip_hours: Skip SBOMs scanned within this many hours.
         task_name: Short label used in log messages.
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
+        workspace_key: Only this workspace.
+        dry_run: Count what would be enqueued; enqueue nothing.
 
     Returns:
         Dictionary with scan statistics.
@@ -1552,7 +1594,10 @@ def _run_scheduled_security_scans(
     try:
         # Find teams with this plugin enabled, filtered by billing plan.
         team_configs: dict[int, dict[str, Any]] = {}
-        for settings_obj in TeamPluginSettings.objects.select_related("team"):
+        team_settings = TeamPluginSettings.objects.select_related("team")
+        if workspace_key:
+            team_settings = team_settings.filter(team__key=workspace_key)
+        for settings_obj in team_settings:
             if not settings_obj.is_plugin_enabled(plugin_name):
                 continue
             if not plan_filter(settings_obj.team):
@@ -1595,33 +1640,19 @@ def _run_scheduled_security_scans(
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
-        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
-        # with at least one ReleaseArtifact link is eligible — the scan will
-        # cover all of its current releases via the M2M populated at run
-        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
-        # accessor join to keep the query small and avoid name-coupling.
-        from django.db.models import Exists, OuterRef
-
-        from sbomify.apps.core.models import ReleaseArtifact
+        # Stream eligible SBOMs directly. The scans cover what sbomify tracks:
+        # each component's newest SBOM of a format, and every SBOM a release it
+        # still monitors ships, or one such a release links to. The same set
+        # Dependency-Track keeps active, so the two cannot drift apart.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
 
         sbom_qs = (
-            SBOM.objects.filter(
-                bom_type=SBOM.BomType.SBOM,
-                component__team_id__in=team_ids,
+            tracked_sboms(
+                SBOM.objects.filter(component__team_id__in=team_ids)
+                # A row with no stored artifact can never be assessed; failed runs
+                # do not count as recent, so without this it re-fails every sweep.
+                .exclude(sbom_filename="")
             )
-            # A row with no stored artifact can never be assessed; failed runs
-            # do not count as recent, so without this it re-fails every sweep.
-            .exclude(sbom_filename="")
-            .annotate(
-                has_release_artifact=Exists(
-                    ReleaseArtifact.objects.filter(
-                        sbom_id=OuterRef("pk"),
-                        # Defense-in-depth: only count same-team release artifacts
-                        release__product__team_id=OuterRef("component__team_id"),
-                    )
-                )
-            )
-            .filter(has_release_artifact=True)
             .values("id", "component__team_id", "format")
             .distinct()
         )
@@ -1657,6 +1688,10 @@ def _run_scheduled_security_scans(
                     stats["skipped_failure_backoff"] += 1
                     continue
 
+                if dry_run:
+                    stats["assessments_enqueued"] += 1
+                    continue
+
                 team_id = sbom_row["component__team_id"]
                 plugin_config = team_configs.get(team_id) or None
 
@@ -1669,9 +1704,10 @@ def _run_scheduled_security_scans(
                 stats["assessments_enqueued"] += 1
 
         logger.info(
-            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, "
+            "[TASK_%s] Completed%s: %d %s assessments enqueued across %d teams, "
             "%d skipped (recent), %d skipped (failing)",
             task_name,
+            " (dry run, none actually enqueued)" if dry_run else "",
             stats["assessments_enqueued"],
             plugin_name,
             stats["teams_scanned"],
@@ -1698,7 +1734,7 @@ def _run_scheduled_security_scans(
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def weekly_osv_scan_task() -> dict[str, Any]:
+def weekly_osv_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
     Scans eligible SBOMs (with at least one release association) for Community-plan
@@ -1712,6 +1748,8 @@ def weekly_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_community_team,
         skip_hours=168,  # 7 days
         task_name="weekly_osv_scan",
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 
@@ -1728,7 +1766,7 @@ def weekly_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def daily_osv_scan_task() -> dict[str, Any]:
+def daily_osv_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
     Scans eligible SBOMs (with at least one release association) for paid teams.
@@ -1742,6 +1780,8 @@ def daily_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_paid_team,
         skip_hours=24,
         task_name="daily_osv_scan",
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 
@@ -1761,7 +1801,7 @@ def daily_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def hourly_dt_scan_task() -> dict[str, Any]:
+def hourly_dt_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
     Scans eligible CycloneDX SBOMs (with at least one release association) for paid
@@ -1776,6 +1816,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         skip_hours=1,
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 

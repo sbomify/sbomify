@@ -220,19 +220,21 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 ),
             )
 
-        # Guard: DT scanning requires product membership. Check via the direct
-        # Product↔Component M2M (stable at SBOM creation time) rather than
-        # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
-        # and release association in separate API calls, so the ReleaseArtifact
-        # may not exist yet when the upload-triggered scan fires).
-        has_product = sbom.component.products.filter(team=team).exists()
-        if not has_product:
+        # Dependency Track scans what sbomify tracks: each component's newest
+        # SBOM, product or not, and the SBOMs its live releases ship. An upload
+        # already made keeps polling, so a newer SBOM arriving mid-scan does
+        # not throw away results Dependency Track is already producing.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        uploaded = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists()
+        if not uploaded and not tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists():
             return self.create_skipped_result(
-                finding_id="dependency-track:no-product",
-                title="Component Not in a Product",
+                finding_id="dependency-track:not-tracked",
+                title="Not Monitored",
                 description=(
-                    "Dependency Track only scans components that belong to a product. "
-                    "Add this component to a product so Dependency Track can scan it."
+                    "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
+                    "This SBOM is neither, so Dependency Track did not scan it."
                 ),
             )
 
@@ -249,10 +251,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return self._create_error_result(str(e))
 
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
-        from sbomify.apps.vulnerability_scanning.models import (
-            ComponentDependencyTrackMapping,
-            SbomDependencyTrackProjectVersion,
-        )
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
 
         # Project name is component-scoped (not product-scoped). Multi-product
         # components end up with a single DT project that aggregates all their
@@ -325,9 +324,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
             # The upload may have replaced the component's previous SBOM in its
             # latest release, which takes that version out of what is tracked.
+            # Only this version and the latest flag are written here. The SBOM's
+            # own save queued the whole component as a task, and writing every
+            # version of one never backfilled could outrun this scan's time limit.
             from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
 
-            reconcile_component_safely(sbom.component, dt_server)
+            reconcile_component_safely(sbom.component, dt_server, only={sbom.id})
 
             logger.info(
                 f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
@@ -607,9 +609,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
             return
 
-        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component_safely
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
 
         component = version_rows[0].sbom.component
+        unsettled = 0
         for version_row in version_rows:
             # The tag write and the reconcile under one lock, so no reconcile
             # elsewhere writes the project between this read and this write.
@@ -638,9 +642,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
                         exc_info=True,
                     )
 
-                # A release gaining or losing this SBOM can bring a version of the
-                # component into what sbomify tracks, or take one out of it.
-                reconcile_component_safely(component, version_row.dt_server)
+                # A release gaining or losing this SBOM can bring its version into
+                # what sbomify tracks, or take it out. Only that version, and the
+                # latest flag, can move: the rest wait for the backfill and the sweep.
+                try:
+                    counts = reconcile_component(component, version_row.dt_server, only={version_row.sbom_id})
+                    unsettled += counts["failed"] - counts["refused"]
+                except Exception:
+                    logger.warning("[DT] Could not reconcile component %s", component.id, exc_info=True)
+                    unsettled += 1
+        if unsettled:
+            # The attach and detach tasks never retry a hook, so an outage here
+            # would leave the version as it was until a backfill. A task that
+            # retries carries the same bounded write on.
+            reconcile_component_dt_scope.send(str(component.id), [str(sbom_id)])
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
@@ -843,21 +858,27 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # source. Best-effort when on: a failure must never fail the scan.
         self._sync_triage_vex_safely(client, version_row)
 
-        now = dj_timezone.now()
-        version_row.last_metrics_sync = now
-        # Read once, the token has done its job. Rescans of this version upload
-        # nothing, so they skip the call, and DT 5 forgets old tokens anyway.
-        version_row.dt_upload_token = None
-        version_row.save(update_fields=["last_metrics_sync", "dt_upload_token", "updated_at"])
-
-        # Also update the component-level mapping so admin/API consumers see
-        # the most recent poll timestamp at the component level (not just per-SBOM).
         from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
 
-        ComponentDependencyTrackMapping.objects.filter(
-            component=version_row.sbom.component,
-            dt_server=version_row.dt_server,
-        ).update(last_metrics_sync=now)
+        now = dj_timezone.now()
+        # The component's lock before either row, the order a reconcile takes
+        # them in. The scan's transaction keeps the rows until it commits and
+        # takes the lock for the tag sync before then, so writing first could
+        # deadlock with a reconcile that holds the lock and waits on the row.
+        with component_lock(version_row.sbom.component_id, version_row.dt_server_id):
+            version_row.last_metrics_sync = now
+            # Read once, the token has done its job. Rescans of this version upload
+            # nothing, so they skip the call, and DT 5 forgets old tokens anyway.
+            version_row.dt_upload_token = None
+            version_row.save(update_fields=["last_metrics_sync", "dt_upload_token", "updated_at"])
+
+            # Also update the component-level mapping so admin/API consumers see
+            # the most recent poll timestamp at the component level (not just per-SBOM).
+            ComponentDependencyTrackMapping.objects.filter(
+                component=version_row.sbom.component,
+                dt_server=version_row.dt_server,
+            ).update(last_metrics_sync=now)
 
         findings = self._convert_dt_findings(vulnerabilities)
 

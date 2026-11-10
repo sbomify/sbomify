@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import contextvars
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from allauth.account.signals import user_signed_up
@@ -511,3 +514,149 @@ def reject_cross_tenant_product_component_links(
                     f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
                     f"product team={product_team_id}"
                 )
+
+
+class _ReleasesToTell:
+    """The SBOMs and releases one transaction moved, told once it commits: one query, one message per release."""
+
+    def __init__(self) -> None:
+        self.sbom_ids: set[Any] = set()
+        self.release_ids: set[Any] = set()
+
+    def add(self, sbom_ids: list[Any], release_ids: list[Any] | None) -> None:
+        self.sbom_ids.update(sbom_ids)
+        self.release_ids.update(release_ids or [])
+
+    def __call__(self) -> None:
+        from django.db.models import Q
+
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
+
+        releases = (
+            Release.objects.filter(Q(artifacts__sbom_id__in=self.sbom_ids) | Q(pk__in=self.release_ids))
+            .select_related("product__team")
+            .distinct()
+        )
+        for release in releases:
+            broadcast_releases_updated(release.product, [release])
+
+
+_releases_told_together: contextvars.ContextVar[_ReleasesToTell | None] = contextvars.ContextVar(
+    "_releases_told_together", default=None
+)
+
+
+@contextmanager
+def releases_told_together() -> Iterator[None]:
+    """Tell each release once for everything this block changes.
+
+    A create has no delete to share a notice with, so a block that rewrites
+    many pins one row at a time, like a latest release's refresh, would query
+    and broadcast once per row. The notice is queued as the block ends, in
+    whatever transaction is open, so it goes if that transaction rolls back.
+    """
+    if _releases_told_together.get() is not None:
+        yield
+        return
+    pending = _ReleasesToTell()
+    token = _releases_told_together.set(pending)
+    try:
+        yield
+    finally:
+        _releases_told_together.reset(token)
+        if pending.sbom_ids or pending.release_ids:
+            transaction.on_commit(pending, robust=True)
+
+
+def _tell_releases_shipping(sbom_ids: list[Any], also: list[Any] | None = None, origin: Any = None) -> None:
+    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
+
+    Whether a retired release's SBOMs are still scanned is decided by the
+    other releases shipping them, by the live releases linking to it and by
+    the newest SBOM of each component, so a change to any of them moves what
+    its open page says. ``origin`` is the delete the change came from: every
+    call one cascade makes adds to the one notice it queued, so a delete
+    taking many shared SBOMs with it tells each release once. A notice no
+    longer queued, because it ran or rolled back, is never added to. Inside
+    ``releases_told_together`` every call adds to that block's notice.
+    """
+    together = _releases_told_together.get()
+    if together is not None:
+        together.add(sbom_ids, also)
+        return
+    pending = getattr(origin, "_releases_to_tell", None)
+    queued = transaction.get_connection().run_on_commit
+    if pending is not None and any(func is pending for _, func, _ in queued):
+        pending.add(sbom_ids, also)
+        return
+    pending = _ReleasesToTell()
+    pending.add(sbom_ids, also)
+    if origin is not None:
+        origin._releases_to_tell = pending
+    transaction.on_commit(pending, robust=True)
+
+
+@receiver(post_save, sender="core.ReleaseArtifact")
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def tell_releases_sharing_an_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A release gaining or losing an SBOM, or being deleted, can start or stop it being scanned for the others.
+
+    The release itself is told too: losing its one untracked SBOM can leave the
+    rest of a retired release fully monitored, and an SBOM's own delete sends
+    only ``sbom_deleted``.
+    """
+    if instance.sbom_id and kwargs.get("created", True):
+        _tell_releases_shipping([instance.sbom_id], also=[instance.release_id], origin=kwargs.get("origin"))
+
+
+@receiver(post_delete, sender="core.ReleaseLink")
+def tell_releases_a_removed_link_kept_scanned(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A live release linking to another kept it scanned, and the releases it links on, and those sharing their SBOMs.
+
+    Deleting the linking release takes the link with it, even when it ships no
+    SBOM of its own.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    reached = [instance.linked_release_id, *releases_linked_from([instance.linked_release_id])]
+    shipped = list(
+        ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values_list("sbom_id", flat=True)
+    )
+    _tell_releases_shipping(shipped, also=reached, origin=kwargs.get("origin"))
+
+
+@receiver(post_save, sender="sboms.SBOM")
+def tell_releases_shipping_the_replaced_newest(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
+    """A new SBOM takes over as its component's newest of that format, which kept the one before it scanned."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if not created or instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    replaced = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .exclude(pk=instance.pk)
+        .order_by("-created_at", "-id")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    if replaced:
+        _tell_releases_shipping([replaced])
+
+
+@receiver(post_delete, sender="sboms.SBOM")
+def tell_releases_shipping_the_new_newest(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Deleting a component's newest SBOM of a format makes the one before it the newest, scanned again."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    newest = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .order_by("-created_at", "-id")
+        .values_list("pk", "created_at")
+        .first()
+    )
+    if newest and newest[1] <= instance.created_at:
+        _tell_releases_shipping([newest[0]])

@@ -331,6 +331,100 @@ class TestRerunHiddenWhenRefused:
         assert f"/api/v1/plugins/assessments/{sample_sbom.id}/" in html
 
 
+DT = "dependency-track"
+
+
+def _rerun_url(sbom: SBOM) -> str:
+    """The control's fetch URL as the page writes it: escapejs turns the plugin name's hyphen into \\u002D."""
+    return f"/api/v1/plugins/assessments/{sbom.id}/dependency\\u002Dtrack/rerun"
+
+
+class TestASkippedScanCanBeRerun:
+    """A skip names a precondition, such as Dependency Track being off, that can change, so the scan gets a Re-run."""
+
+    @pytest.fixture
+    def dt(self, sample_sbom):
+        RegisteredPlugin.objects.update_or_create(
+            name=DT,
+            defaults={
+                "display_name": "Dependency Track",
+                "category": "security",
+                "version": "1.1.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.dependency_track.DependencyTrackPlugin",
+                "is_enabled": True,
+            },
+        )
+        _enable(sample_sbom.component.team, DT)
+
+    def _scan(self, sbom: SBOM, result: dict) -> None:
+        AssessmentRun.objects.create(
+            sbom=sbom, plugin_name=DT, plugin_version="1.1.0", category="security", status="completed", result=result
+        )
+
+    @staticmethod
+    def _skipped() -> dict:
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+
+        return DependencyTrackPlugin().create_skipped_result(
+            finding_id="dependency-track:not-enabled",
+            title="Dependency Track Not Enabled",
+            description="Dependency Track is not enabled for this workspace, so it did not scan this SBOM.",
+        ).to_dict()
+
+    def test_a_skipped_scan_offers_a_rerun(self, sample_sbom, sample_user, dt):
+        self._scan(sample_sbom, self._skipped())
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert _rerun_url(sample_sbom) in html
+
+    def test_a_queued_scan_offers_none_until_it_settles(self, sample_sbom, sample_user, dt):
+        AssessmentRun.objects.create(
+            sbom=sample_sbom, plugin_name=DT, plugin_version="1.1.0", category="security", status="pending"
+        )
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert 'id="plugin-dependency-track"' in html
+        assert _rerun_url(sample_sbom) not in html
+
+    def test_a_scan_with_results_keeps_its_own_cadence(self, sample_sbom, sample_user, dt):
+        from sbomify.apps.plugins.sdk.results import AssessmentResult, AssessmentSummary
+
+        clean = AssessmentResult(
+            plugin_name=DT,
+            plugin_version="1.1.0",
+            category="security",
+            assessed_at="2026-10-29T00:00:00+00:00",
+            summary=AssessmentSummary(total_findings=0, by_severity={"critical": 0, "high": 0, "medium": 0, "low": 0}),
+            findings=[],
+        )
+        self._scan(sample_sbom, clean.to_dict())
+
+        html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
+
+        assert _rerun_url(sample_sbom) not in html
+
+    def test_a_reader_who_cannot_manage_the_component_is_not_offered_one(self, sample_sbom, sample_user, dt):
+        self._scan(sample_sbom, self._skipped())
+
+        html = _page(_client_as(sample_sbom, sample_user, "operator"), sample_sbom)
+
+        assert _rerun_url(sample_sbom) not in html
+
+    def test_the_rerun_endpoint_queues_a_skipped_scan(self, sample_sbom, sample_user, dt, mocker):
+        self._scan(sample_sbom, self._skipped())
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+        mocker.patch("sbomify.apps.plugins.apis.announce_assessment_started")
+
+        response = _client_as(sample_sbom, sample_user, "owner").post(
+            f"/api/v1/plugins/assessments/{sample_sbom.id}/{DT}/rerun"
+        )
+
+        assert response.status_code == 202, response.content
+        assert send.call_args.kwargs["plugin_name"] == DT
+
+
 @pytest.mark.parametrize(
     ("to_fix", "columns", "expected", "absent"),
     [

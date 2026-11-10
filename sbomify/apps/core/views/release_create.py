@@ -11,6 +11,7 @@ from django.views import View
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import ReleaseCreateForm
 from sbomify.apps.core.services.release_creation import create_workspace_release, release_product_choices
+from sbomify.apps.core.services.release_lifecycle import replacement_candidates
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 
@@ -28,18 +29,34 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
         if not choices.ok:
             return HttpResponse(choices.error, status=choices.status_code or 403)
         products = choices.value or []
-        product_id = request.POST.get("product_id", "") if request.method == "POST" else request.GET.get("product", "")
+        if request.method == "POST":
+            product_id = request.POST.get("product_id", "")
+        else:
+            # ``product`` arrives from a link; ``product_id`` from the product select re-rendering its releases.
+            product_id = request.GET.get("product") or request.GET.get("product_id", "")
         if request.method == "GET" and product_id and product_id not in dict(products):
             return HttpResponse("Product not found", status=404)
+        candidates = replacement_candidates(product_id) if product_id in dict(products) else []
+        # The product select sends the prerelease box along, so a reload keeps the rule below.
+        is_prerelease = bool(request.GET.get("is_prerelease")) if request.method == "GET" else False
         form = ReleaseCreateForm(
             request.POST if request.method == "POST" else None,
             products=products,
-            initial={"product_id": product_id},
+            candidates=[(release.pk, release.name) for release in candidates],
+            initial={
+                "product_id": product_id,
+                # The release a new one most often replaces. A prerelease is offered, never chosen for you.
+                "replaces": ""
+                if is_prerelease
+                else next((release.pk for release in candidates if not release.is_prerelease), ""),
+            },
         )
         if request.method == "POST" and form.is_valid():
             result = create_workspace_release(request, form.cleaned_data)
             if result.ok and result.value:
                 messages.success(request, "Release created. Add its artifacts below.")
+                if form.dropped_replaces:
+                    messages.info(request, "It replaces no release. To replace one, choose a line.")
                 destination = reverse("core:release_details", args=[result.value["product_id"], result.value["id"]])
                 if request.headers.get("HX-Request"):
                     return HttpResponse(headers={"HX-Redirect": destination})
@@ -56,5 +73,9 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
             "products": products,
             "back_url": back_url,
             "timezone_name": timezone.get_current_timezone_name(),
+            "line_options": [
+                {"value": "same", "label": "Same line", "icon": "fas fa-arrow-right"},
+                {"value": "new", "label": "New line", "icon": "fas fa-code-branch"},
+            ],
         }
         return render(request, "core/release_new.html.j2", context)
