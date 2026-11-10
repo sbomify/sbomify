@@ -27,7 +27,7 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
-from sbomify.apps.core.models import Release, ReleaseSupersession
+from sbomify.apps.core.models import Product, Release, ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     audit,
@@ -45,7 +45,6 @@ from sbomify.apps.sboms.models import (
     ComponentCLESupportDefinition,
     ComponentReleaseCLEEvent,
     ComponentReleaseCLESupportDefinition,
-    Product,
     ProductCLEEvent,
     ProductCLESupportDefinition,
     ReleaseCLEEvent,
@@ -494,7 +493,10 @@ def create_release_cle_event(
             successor = resolved.value
             if drop_in and successor is not None:
                 # The caller read this release before the lock, so a date edit committed since would be missed.
-                release.refresh_from_db(fields=["released_at"])
+                try:
+                    release.refresh_from_db(fields=["released_at"])
+                except Release.DoesNotExist:
+                    return ServiceResult.failure("Release no longer exists", status_code=404)
                 if backdated := backdated_takeover(release, successor):
                     return ServiceResult.failure(backdated, status_code=400)
 

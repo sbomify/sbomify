@@ -33,10 +33,17 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifact, ReleaseLink, ReleaseSupersession
+from sbomify.apps.core.models import (
+    LATEST_RELEASE_NAME,
+    Product,
+    Release,
+    ReleaseArtifact,
+    ReleaseLink,
+    ReleaseSupersession,
+)
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
-from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, Product, ProductCLEEvent, ReleaseCLEEvent
+from sbomify.apps.sboms.models import SBOM, BaseCLEEvent, CLEEventType, ProductCLEEvent, ReleaseCLEEvent
 
 audit_log = logging.getLogger("sbomify.audit.release")
 
@@ -197,8 +204,7 @@ def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
                 status_code=400,
             )
         return ServiceResult.success(predecessor)
-    siblings = Release.objects.filter(product_id=successor.product_id)
-    predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
+    predecessor = _sibling_named(successor.product_id, item.version)
     if predecessor is None:
         return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
     return ServiceResult.success(predecessor)
@@ -222,6 +228,10 @@ def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceRe
             .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
             .exists()
         ):
+            # A live edge on the other line is a conflict, in the words declaring it would get.
+            other_line = existing_supersession(predecessor, successor.version or successor.name, item.drop_in)
+            if not other_line.ok:
+                return ServiceResult.failure(other_line.error or "Conflicting supersession", other_line.status_code)
             missing.append(predecessor.name)
     return ServiceResult.success(missing)
 
@@ -655,7 +665,9 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    changed = [field for field, value in changes.items() if getattr(release, field) != value]
+    # A date sent without an offset is read the way ``Release.save()`` reads it,
+    # so the stored instant sent again is not a change.
+    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
     if not changed:
         return ServiceResult.success((release, False))
 

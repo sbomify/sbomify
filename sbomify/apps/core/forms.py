@@ -169,6 +169,7 @@ class ReleaseCreateForm(forms.Form):
     released_at = forms.DateTimeField(required=False)
     replaces = forms.ChoiceField(required=False)
     replaces_line = forms.ChoiceField(choices=[("same", "Same line"), ("new", "New line")], required=False)
+    dropped_replaces = False
 
     def __init__(
         self,
@@ -186,6 +187,8 @@ class ReleaseCreateForm(forms.Form):
         # The prerelease box clears Replaces in the browser; a submit that beats the page script keeps the
         # server's preselection, which never has a line. A line means the user chose the predecessor.
         if cleaned.get("is_prerelease") and not cleaned.get("replaces_line"):
+            # The view says so: someone who did pick it would otherwise take the link as made.
+            self.dropped_replaces = bool(cleaned.get("replaces"))
             cleaned["replaces"] = ""
         # Same line retires the release it replaces, so the form never guesses which one is meant.
         if cleaned.get("replaces") and not cleaned.get("replaces_line"):

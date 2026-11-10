@@ -1,6 +1,6 @@
-Complete Your Account Setup
+Finish setting up your account
 
-Dear ${user.firstName!user.username},
+Hi ${user.firstName!user.username},
 
 Your administrator has requested that you complete the following action(s) on your sbomify account:
 
@@ -18,7 +18,7 @@ This link will expire in ${linkExpirationFormatter(linkExpiration)}.
 
 If you did not expect this email, please contact your administrator.
 
-Regards,
+Cheers,
 The sbomify Team
 
 ------------------------------

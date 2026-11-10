@@ -3,7 +3,7 @@
 # written, with no size limit and no rotation, so a long-running deployment
 # accumulates container logs until the disk is full. Caddy logs every request to
 # stdout (the `log` blocks in Caddyfile), which makes it the largest writer by a
-# wide margin, and a disk full of them takes Postgres and Redis down with it.
+# wide margin, and a disk full of them takes Postgres and Valkey down with it.
 #
 # 10 MB x 3 files caps each container at 30 MB. Raise it via the environment if
 # you want deeper history and have the disk for it.
@@ -80,15 +80,25 @@ services:
       timeout: 2s
       retries: 10
 
+  # Valkey by default. Anything that speaks the Redis protocol works, so
+  # REDIS_IMAGE=redis:8-alpine runs Redis instead. Neither can read the
+  # other's data files, so empty the volume when switching an existing stack.
+  #
+  # The service keeps its old name so REDIS_URL overrides and the published
+  # port carry over an upgrade. The volume does not: Valkey refuses the RDB
+  # files Redis 8 writes and exits at startup, so reusing sbomify_redis_data
+  # would crash-loop. Everything stored here is the cache and the task queue,
+  # so starting empty is safe once the workers have drained it.
   sbomify-redis:
-    image: ${REDIS_IMAGE:-redis:8-alpine}
+    image: ${REDIS_IMAGE:-valkey/valkey:9-alpine}
     logging: *default-logging
     restart: ${REDIS_RESTART_POLICY:-always}
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
-      - sbomify_redis_data:/data
+      - sbomify_valkey_data:/data
     healthcheck:
+      # The Valkey image links redis-cli to valkey-cli, so this runs in both.
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
@@ -248,6 +258,6 @@ services:
 
 volumes:
   sbomify_postgres_data:
-  sbomify_redis_data:
+  sbomify_valkey_data:
   ca_certs:
   caddy_data:

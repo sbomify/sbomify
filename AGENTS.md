@@ -538,7 +538,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 - **Database**: PostgreSQL 17
 - **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
-- **Caching/Broker**: Redis 8
+- **Caching/Broker**: Valkey 9 (anything speaking the Redis protocol works, Redis 8 included)
 
 ### Authentication
 
