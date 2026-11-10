@@ -54,6 +54,7 @@ def _client() -> MagicMock:
     client.create_collection_project.side_effect = lambda name, version, **kw: {"uuid": str(uuid.uuid4())}
     client.find_project_by_name_version.return_value = {"uuid": NEW_VERSION}
     client.set_project_state.return_value = True
+    client.upload_sbom_with_project_creation.return_value = {"token": str(uuid.uuid4())}
     return client
 
 
@@ -237,6 +238,7 @@ class FakeDT(MagicMock):
         super().__init__()
         self.projects: dict[str, dict] = {}
         self.stale: dict[str, dict] = {}
+        self.tokens: list[str] = []
 
     def _get_child_mock(self, **kw):
         return MagicMock(**kw)
@@ -276,7 +278,8 @@ class FakeDT(MagicMock):
         project_uuid = self.add(project_name, project_version, parent=kw.get("parent_uuid"))
         if kw.get("is_latest"):
             self._make_latest(project_uuid)
-        return {"token": "t"}
+        self.tokens.append(str(uuid.uuid4()))
+        return {"token": self.tokens[-1]}
 
     def _lookup(self, name, version):
         return next(
@@ -433,6 +436,9 @@ class TestADeletedCollectionIsMadeAgain:
         parents = {p["version"]: p["parent"] for p in dt.projects.values()}
         assert parents[str(first.id)] == live
         assert parents[str(second.id)] == live
+        # The token of the flat upload that went through, which the poll waits on
+        row = SbomDependencyTrackProjectVersion.objects.get(sbom=second, dt_server=server)
+        assert str(row.dt_upload_token) == dt.tokens[-1]
 
     def test_a_reconcile_whose_collection_was_deleted_makes_it_again(self, env):
         _, _, component, server = env
