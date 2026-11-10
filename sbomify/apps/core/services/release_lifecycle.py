@@ -124,8 +124,7 @@ def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
                 status_code=400,
             )
         return ServiceResult.success(predecessor)
-    siblings = Release.objects.filter(product_id=successor.product_id)
-    predecessor = siblings.filter(version=item.version).first() or siblings.filter(name=item.version).first()
+    predecessor = _sibling_named(successor.product_id, item.version)
     if predecessor is None:
         return ServiceResult.failure(f"This product has no release {item.version}.", status_code=400)
     return ServiceResult.success(predecessor)
