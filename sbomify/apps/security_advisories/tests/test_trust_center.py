@@ -22,6 +22,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
+    AdvisoryReference,
     AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
@@ -304,7 +305,9 @@ def test_a_withdrawn_header_says_withdrawn_instead_of_a_live_status(team, public
     advisory.withdrawal_reason = "Reissued."
     advisory.save()
 
-    url = reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    url = reverse(
+        "core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id}
+    )
     page = client.get(url).content.decode()
 
     assert re.search(r"border-dashed[^>]*>\s*<i class=\"fas fa-rotate-left\"[^>]*></i>Withdrawn", page)
@@ -680,6 +683,56 @@ def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
     assert quote(hostile, safe="") in captured["path"]
 
 
+def test_the_trust_center_links_an_advisory_by_its_tracking_id(team, public_product, client):
+    """The address a reader sees and shares is the id they would quote, not the primary key."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    page = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+    content = page.content.decode()
+
+    assert f"/advisories/{advisory.tracking_id}/" in content
+    assert f"/advisories/{advisory.id}/" not in content
+
+
+@pytest.mark.parametrize("scoped", [True, False])
+def test_a_primary_key_link_redirects_to_the_tracking_id(team, public_product, client, scoped):
+    """Links shared before tracking ids were the address keep working, and land on the one URL."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    if scoped:
+        old = reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        new = f"/public/workspace/{team.key}/advisories/{advisory.tracking_id}/"
+    else:
+        session = client.session
+        session["current_workspace"] = {"key": team.key}
+        session.save()
+        old = reverse("core:advisory_details_public_current", kwargs={"advisory_id": advisory.id})
+        new = f"/advisories/{advisory.tracking_id}/"
+
+    response = client.get(old)
+
+    assert response.status_code == 301
+    assert response["Location"] == new
+    assert client.get(new).status_code == 200
+
+
+def test_a_hidden_advisory_does_not_redirect_by_primary_key(team, public_product, client):
+    """A redirect would confirm the advisory exists, which is what the 404 keeps quiet."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.GATED)
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    assert response.status_code == 404
+
+
 # --- the redirect target -----------------------------------------------------
 #
 # The redirect host comes from team.custom_domain, which an owner types in and
@@ -738,7 +791,7 @@ def test_a_timeline_note_renders_as_markdown_on_the_trust_center(team, public_pr
     )
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     content = response.content.decode()
@@ -768,7 +821,7 @@ def test_the_description_and_vulnerability_text_render_as_markdown_on_the_trust_
     publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     content = response.content.decode()
@@ -804,7 +857,7 @@ def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, 
     assert detail["statuses"][0]["affected_versions"] == [*commits, ">= 2.0.0, < 2.4.1"]
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
     content = response.content.decode()
     assert response.status_code == 200
@@ -832,7 +885,7 @@ def test_a_recommended_version_without_ranges_still_names_the_affected_versions(
     assert detail["statuses"][0]["version_labels"] == ["Before 2.0.0"]
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
     assert "Before 2.0.0" in response.content.decode()
 
@@ -871,7 +924,7 @@ def test_the_version_check_gets_the_bounds_behind_each_label(team, public_produc
     assert checks[not_affected.id] == {"suppressed": True, "ranges": []}
 
     content = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     ).content.decode()
     assert 'id="advisory-version-checks"' in content
     assert "versionCheck('advisory-version-checks')" in content
@@ -911,8 +964,32 @@ def test_a_zero_cvss_score_renders_rather_than_reading_as_unscored(team, public_
 
     index = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
     detail = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     assert re.search(r"tabular-nums[^>]*>\s*0\.0\s*<", index.content.decode())
     assert re.search(r"CVSS.{0,400}?>\s*0\.0\s*<", detail.content.decode(), re.S)
+
+
+def test_cve_ids_and_references_link_to_insights_on_the_trust_center(team, public_product, client):
+    """A CVE on the page links to its Insights page, and so does a reference whose id Insights
+    publishes, even when it stored another URL. A reference Insights does not cover keeps its own."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30020")
+    AdvisoryReference.objects.create(
+        advisory=advisory, external_id="GHSA-6q48-6c7w-9gw2", url="https://github.com/advisories/GHSA-6q48-6c7w-9gw2"
+    )
+    AdvisoryReference.objects.create(advisory=advisory, external_id="CVE-2026-30021")
+    AdvisoryReference.objects.create(advisory=advisory, external_id="DSA-5020-1", url="https://example.com/dsa-5020-1")
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    ).content.decode()
+
+    assert 'href="https://insights.sbomify.com/CVE-2026-30020/"' in content
+    assert 'href="https://insights.sbomify.com/GHSA-6q48-6c7w-9gw2/"' in content
+    assert 'href="https://insights.sbomify.com/CVE-2026-30021/"' in content
+    assert 'href="https://example.com/dsa-5020-1"' in content
+    assert "github.com/advisories" not in content

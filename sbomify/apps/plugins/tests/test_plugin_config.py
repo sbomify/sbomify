@@ -641,6 +641,7 @@ class TestHourlyDTScanTaskPluginSettings:
             team=business_team,
             name="DT Test Product",
         )
+        product.components.add(component)  # the scan skips a component in no product
         release = Release.objects.create(
             product=product,
             name="v1.0",

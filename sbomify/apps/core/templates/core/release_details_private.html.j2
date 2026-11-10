@@ -161,9 +161,19 @@
         </div>
         </c-cards.card>
     {% endif %}
-    {% if vulnerabilities.assessed or vulnerabilities.unassessed %}
-        {% include 'core/components/release_vulnerabilities.html.j2' %}
-    {% endif %}
+    {% comment %}Its own live region, there even while the panel is empty: withdrawn or reactivated through the API or in another tab, the notice that its counts are from the last scan comes and goes with the header. The morph keeps the table's expanded state.{% endcomment %}
+    <div id="release-vulnerabilities-region"
+         x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
+         hx-get="{{ request.get_full_path }}"
+         hx-select="#release-vulnerabilities-region"
+         hx-trigger="live-refresh"
+         hx-swap="morph"
+         hx-disinherit="*"
+         {% if not vulnerabilities.assessed and not vulnerabilities.unassessed %}hidden{% endif %}>
+        {% if vulnerabilities.assessed or vulnerabilities.unassessed %}
+            {% include 'core/components/release_vulnerabilities.html.j2' %}
+        {% endif %}
+    </div>
     {# Its own live region: a link added or removed through the API repaints it. #}
     <div id="release-links"
          x-data="liveRegion({ refresh: ['release_updated'], key: 'release_id', id: '{{ release.id|escapejs }}' })"
@@ -172,14 +182,24 @@
          hx-trigger="live-refresh"
          hx-swap="morph"
          hx-disinherit="*"
-         {% if not linked_releases %}hidden{% endif %}>{% include 'core/components/release_links.html.j2' %}</div>
+         {% if not linked_releases and not can_manage_links %}hidden{% endif %}>
+        {% include 'core/components/release_links_card.html.j2' %}
+    </div>
     {# Release Artifacts #}
     <div>
         {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest artifact_vulnerabilities=vulnerabilities.artifacts %}
     </div>
-    {% if not release.is_latest %}
+    {% comment %}Its own live region, there even while the card is empty: withdrawn through the API or in another tab, the card repaints with the header. It names the releases around this one, so any release in the product changing or going repaints it.{% endcomment %}
+    <div id="release-lifecycle"
+         x-data="liveRegion({ refresh: ['release_updated', 'release_deleted'], key: 'product_id', id: '{{ release.product.id|escapejs }}' })"
+         hx-get="{{ request.get_full_path }}"
+         hx-select="#release-lifecycle"
+         hx-trigger="live-refresh"
+         hx-swap="morph"
+         hx-disinherit="*"
+         {% if not lifecycle.shown %}hidden{% endif %}>
         {% include 'core/components/release_lifecycle_card.html.j2' %}
-    {% endif %}
+    </div>
     {# Danger Zone #}
     {% if can_delete_release %}
         <div>

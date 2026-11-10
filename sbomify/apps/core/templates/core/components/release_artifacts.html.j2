@@ -165,6 +165,9 @@
                         <template x-if="getArtifactVulnerabilities(artifact).low > 0">
                             <c-badges.severity level="low" x-text="$number(getArtifactVulnerabilities(artifact).low) + ' Low'" />
                         </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).suppressed > 0">
+                            <c-forms.hint compact x-text="$number(getArtifactVulnerabilities(artifact).suppressed) + ' suppressed by VEX'" />
+                        </template>
                     </a>
                 </template>
                 </c-tables.cell>
@@ -267,8 +270,9 @@
                 {# Expose the picker's own sort state through the shared table contract. #}
                 <c-tables.table sized variant_class="min-w-256" class="max-h-[50vh] overflow-y-auto" aria-label="Available artifacts" x-data="{ get sortColumn() { return availableSortColumn }, get sortDirection() { return availableSortDirection }, sort(column) { setAvailableSort(column) } }">
                 <c-tables.head>
-                <c-tables.header-cell class="w-12">
-                <c-forms.checkbox aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
+                {# The picker keeps its own selection state, so it borrows select-cell's gutter rather than the component. #}
+                <c-tables.header-cell variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" data-cell-select>
+                <c-forms.checkbox-input class="align-middle" aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
                 </c-tables.header-cell>
                 <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
                 <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
@@ -280,8 +284,8 @@
                 <tbody>
                     <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
                         <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" ::class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'" tabindex="0" @click="toggleArtifactSelection(artifact.id)" @keydown.enter.prevent="toggleArtifactSelection(artifact.id)" @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
-                        <c-tables.cell nowrap>
-                        <c-forms.checkbox ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
+                        <c-tables.cell variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" data-cell-select>
+                        <c-forms.checkbox-input class="align-middle" ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
                         </c-tables.cell>
                         <c-tables.cell>
                         <div class="w-8 h-8 rounded-lg flex items-center justify-center"

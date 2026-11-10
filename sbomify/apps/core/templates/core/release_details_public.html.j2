@@ -99,7 +99,14 @@
                 {% if untracked %}
                     <c-feedback.alert standing icon="fas fa-clock-rotate-left" title="No longer monitored">
                     {{ untracked.reason }} on {{ untracked.on|date:"j M Y" }}.
-                    These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                    {% if untracked.sboms %}
+                        {{ untracked.stopped }} of its {{ untracked.sboms }} SBOMs {{ untracked.stopped|pluralize:"is,are" }} no longer scanned.
+                        {% if vuln_posture.last_scanned_at %}
+                            The oldest scan in these counts ran on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                        {% endif %}
+                    {% elif vuln_posture.last_scanned_at %}
+                        These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                    {% endif %}
                     </c-feedback.alert>
                 {% endif %}
                 <c-branded.surface class="flex flex-col gap-5">
@@ -159,7 +166,7 @@
                 </c-branded.surface>
             </section>
         {% endif %}
-        {% include 'core/components/release_links.html.j2' with public=True %}
+        {% include 'core/components/release_links.html.j2' %}
         {# Release Artifacts #}
         {% include 'core/components/public_release_artifacts.html.j2' %}
     </div>

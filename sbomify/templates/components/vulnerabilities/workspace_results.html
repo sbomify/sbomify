@@ -47,7 +47,7 @@ the scanner's full result, which the page itself never loads.
                 </c-tables.cell>
                 <c-tables.cell compact>
                 <div class="flex flex-wrap items-center gap-1.5">
-                    {% with advisory=row.id|advisory_url %}
+                    {% with advisory=row.id|advisory_url:row.aliases %}
                         {% if advisory %}
                             <a href="{{ advisory }}"
                                target="_blank"
@@ -134,6 +134,11 @@ the scanner's full result, which the page itself never loads.
     {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
         <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% elif data.suppressed and not data.query.status %}
+        {% comment %}Cleared by a VEX is not the same as never affected, so say so and show where they went.{% endcomment %}
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="{{ data.suppressed|intcomma }} suppressed by VEX.">
+        <c-buttons.secondary href="{{ data.suppressed_url }}">Show suppressed</c-buttons.secondary>
         </c-feedback.empty-state>
     {% else %}
         {% if data.single_component %}

@@ -27,10 +27,13 @@ from libtea.models import (
     CLESupportDefinition as TeaCLESupportDefinition,
 )
 
-from sbomify.apps.core.models import ReleaseSupersession
+from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.services.release_lifecycle import (
     after_lifecycle_change,
     audit,
+    backdated_takeover,
+    broadcast_releases_updated,
+    covers_every_version,
     existing_supersession,
     product_dates,
     recompute_release_lifecycle,
@@ -54,7 +57,7 @@ from sbomify.apps.sboms.models import (
 if TYPE_CHECKING:
     from django.db import models as django_models
 
-    from sbomify.apps.core.models import Component, ComponentRelease, Release
+    from sbomify.apps.core.models import Component, ComponentRelease
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +366,10 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
     The product columns are rebuilt from the events on every product CLE write,
     so a date written to a column alone would be undone by the next event of
     any type. A new date is recorded as an event for every version, as the
-    lifecycle card records it; clearing one withdraws its surviving events.
+    lifecycle card records it; clearing one withdraws its surviving events for
+    every version, the ones ``product_dates`` folds into the column. A date for
+    some versions is a separate declaration and stays, except a release date:
+    every ``released`` event feeds that column, so clearing it withdraws them all.
     ``dates`` holds only the fields the caller sets. The value is whether
     anything changed. Call inside a transaction.
     """
@@ -375,7 +381,13 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
         if value is None:
             events = list(ProductCLEEvent.objects.filter(product=product).order_by("event_id"))
             withdrawn = {e.withdrawn_event_id for e in events if e.event_type == CLEEventType.WITHDRAWN}
-            surviving = [e for e in events if e.event_type == event_type and e.event_id not in withdrawn]
+            surviving = [
+                e
+                for e in events
+                if e.event_type == event_type
+                and e.event_id not in withdrawn
+                and (event_type == CLEEventType.RELEASED or covers_every_version(e.versions))
+            ]
             for event in surviving:
                 result = create_cle_event(
                     product, CLEEventType.WITHDRAWN, timezone.now(), withdrawn_event_id=event.event_id
@@ -538,20 +550,11 @@ def create_release_cle_event(
             if not resolved.ok:
                 return ServiceResult.failure(resolved.error or "Invalid supersession", status_code=400)
             successor = resolved.value
-            # A release cannot take over a line from one that came out after it. Without this,
-            # a backdated entry would retire the current release the moment it was saved.
-            if (
-                drop_in
-                and successor is not None
-                and successor.released_at
-                and release.released_at
-                and successor.released_at < release.released_at
-            ):
-                return ServiceResult.failure(
-                    f"Release {release.name} was released after {successor.name}, so {successor.name} cannot "
-                    "replace it on the same line. Choose a new line, or check the release dates.",
-                    status_code=400,
-                )
+            if drop_in and successor is not None:
+                # The caller read this release before the lock, so a date edit committed since would be missed.
+                release.refresh_from_db(fields=["released_at"])
+                if backdated := backdated_takeover(release, successor):
+                    return ServiceResult.failure(backdated, status_code=400)
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
             entity=release,
@@ -595,17 +598,66 @@ def create_release_cle_event(
                 superseded_by_version=superseded_by_version,
                 drop_in=drop_in,
             )
+            # A link shows on the pages of both its releases.
+            broadcast_releases_updated(product, [release, *([successor] if successor else [])])
         elif event_type == CLEEventType.WITHDRAWN and withdrawn_event_id is not None:
-            withdrawn = (
-                ReleaseSupersession.objects.live()
-                .filter(cle_event__release=release, cle_event__event_id=withdrawn_event_id)
-                .update(withdrawn_at=timezone.now())
+            live = ReleaseSupersession.objects.live().filter(
+                cle_event__release=release, cle_event__event_id=withdrawn_event_id
             )
-            if withdrawn:
+            successors = list(Release.objects.filter(predecessor_edges__in=live))
+            if live.update(withdrawn_at=timezone.now()):
                 audit("withdraw_supersession", release, actor_id, event_id=event.event_id)
+                broadcast_releases_updated(product, [release, *successors])
         recompute_release_lifecycle(product)
         if queue_reconcile:
             after_lifecycle_change(product.pk)
+    return result
+
+
+def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCLEEvent | None]:
+    """Publish ``edge`` again at its current date, withdrawing the event it was published as.
+
+    A published event is never edited, since a consumer may already hold it,
+    so a moved date is a correction: a ``withdrawn`` event naming the old one,
+    then a new ``supersededBy`` event carrying everything the old one did but
+    the date. The edge stays live and points at the new event. An edge with no
+    event is left as it is. Call under the product lock.
+    """
+    old = edge.cle_event
+    if old is None:
+        return ServiceResult.success(None)
+    publish: dict[str, Any] = {
+        "entity": edge.from_release,
+        "entity_fk_field": "release",
+        "event_model": ReleaseCLEEvent,
+        "support_def_model": ReleaseCLESupportDefinition,
+        "entity_label": "release",
+    }
+    withdrawn = create_cle_event_generic(
+        **publish,
+        event_type=CLEEventType.WITHDRAWN,
+        effective=timezone.now(),
+        withdrawn_event_id=old.event_id,
+        reason="The successor's release date moved.",
+    )
+    if not withdrawn.ok:
+        return withdrawn
+    result: ServiceResult[ReleaseCLEEvent | None] = create_cle_event_generic(
+        **publish,
+        event_type=CLEEventType.SUPERSEDED_BY,
+        effective=edge.effective,
+        version=old.version,
+        versions=old.versions,
+        support_id=old.support_id,
+        license=old.license,
+        superseded_by_version=old.superseded_by_version,
+        identifiers=old.identifiers,
+        reason=old.reason,
+        description=old.description,
+        references=old.references,
+    )
+    if result.ok:
+        ReleaseSupersession.objects.filter(pk=edge.pk).update(cle_event=result.value)
     return result
 
 
@@ -699,6 +751,10 @@ def recompute_lifecycle_dates(product: Product) -> None:
     neither column. Then rederives the releases' dates, since a release
     without its own takes the product's.
 
+    A column no event of its type ever wrote was set before dates were
+    events, and is left as it is: rebuilding it would clear it. Its
+    releases do not inherit it either, since they read only the events.
+
     Should be called within a ``transaction.atomic()`` block when used alongside
     event creation to ensure consistency.
     """
@@ -716,10 +772,28 @@ def recompute_lifecycle_dates(product: Product) -> None:
         if event.event_id not in withdrawn_ids and event.event_type == ProductCLEEvent.EventType.RELEASED:
             release_date = event.effective.date()
 
-    product.release_date = release_date
     # The same fold the releases inherit, so the product never reads one date while its releases keep another.
-    product.end_of_support, product.end_of_life = product_dates(events)
-    product.save(update_fields=["release_date", "end_of_support", "end_of_life"])
+    end_of_support, end_of_life = product_dates(events)
+    # Only an event that can feed the column counts as having written it: a
+    # version-scoped end of support or end of life never does.
+    written = {
+        event.event_type
+        for event in events
+        if event.event_type == ProductCLEEvent.EventType.RELEASED or covers_every_version(event.versions)
+    }
+    folded = [
+        (field, value)
+        for field, event_type, value in (
+            ("release_date", ProductCLEEvent.EventType.RELEASED, release_date),
+            ("end_of_support", ProductCLEEvent.EventType.END_OF_SUPPORT, end_of_support),
+            ("end_of_life", ProductCLEEvent.EventType.END_OF_LIFE, end_of_life),
+        )
+        if event_type in written
+    ]
+    for field, value in folded:
+        setattr(product, field, value)
+    if folded:
+        product.save(update_fields=[field for field, _ in folded])
     recompute_release_lifecycle(product)
 
 

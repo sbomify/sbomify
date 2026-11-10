@@ -17,7 +17,7 @@ from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.models import Release, ReleaseSupersession
 from sbomify.apps.core.schemas import ReleaseResponseSchema
 from sbomify.apps.core.services.cle import create_cle_event, create_release_cle_event
-from sbomify.apps.core.services.release_lifecycle import set_release_state
+from sbomify.apps.core.services.release_lifecycle import remove_supersession, set_release_state
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Workspace
@@ -191,7 +191,7 @@ class TestCreateWithSupersedes:
     def test_an_edge_declared_before_the_release_existed_is_linked_not_refused(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
-        old = _release(sample_product, "1.2.3")
+        old = _release(sample_product, "1.2.3", **_on(datetime(2024, 12, 1, tzinfo=dt_timezone.utc)))
         # CI named the successor before it existed, so the edge was stored unlinked.
         early = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True)
         assert early.ok
@@ -211,6 +211,40 @@ class TestCreateWithSupersedes:
         new = response.json()["id"]
         assert [edge.to_release_id for edge in _edges(old)] == [new]
         assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_an_edge_declared_early_is_held_to_the_release_dates_too(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # 1.2.3 came out now and CI named 1.2.4 before it existed. A 1.2.4 dated before 1.2.3 cannot
+        # take over its line, whether the edge is declared on create or was declared early.
+        old = _release(sample_product, "1.2.3")
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="1.2.4", drop_in=True).ok
+
+        response = self._create(
+            authenticated_api_client,
+            sample_product,
+            name="1.2.4",
+            version="1.2.4",
+            created_at=PAST.isoformat(),
+            released_at=PAST.isoformat(),
+        )
+
+        assert response.status_code == 400, response.content
+        assert "was released after 1.2.4" in response.json()["detail"]
+        assert not Release.objects.filter(product=sample_product, name="1.2.4").exists()
+
+    def test_the_response_says_where_the_new_release_stands(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        """The lifecycle is worked out on other copies of the release, so the response reads it back."""
+        assert create_cle_event(sample_product, "endOfSupport", PAST, versions=[{"range": "vers:generic/*"}]).ok
+
+        response = self._create(authenticated_api_client, sample_product, name="3.0", version="3.0")
+
+        assert response.status_code == 201, response.content
+        assert response.json()["lifecycle_state"] == "end_of_support"
+        assert response.json()["is_tracked"] is False
+        assert response.json()["effective_end_of_support"] == PAST.date().isoformat()
 
     def test_restating_an_earlier_edge_differently_is_refused_with_a_way_out(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -495,6 +529,39 @@ class TestWhereAReleaseStands:
         assert "Previous releases" in page.decode() and "New line" in page.decode()
         assert "still monitored" not in page.decode()
 
+    def test_an_outside_successor_says_which_line_it_is_on(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "1.0.0")
+        assert create_release_cle_event(release, "supersededBy", PAST, superseded_by_version="1.0.1", drop_in=True).ok
+        assert create_release_cle_event(release, "supersededBy", PAST, superseded_by_version="2.0.0").ok
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id])).content
+        page = page.decode()
+
+        assert "Same line, replaces this release, outside sbomify" in page
+        assert "New line, outside sbomify" in page
+
+    def test_the_lifecycle_card_follows_updates_to_its_release(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        """Withdrawn through the API or in another tab, the card repaints with the header. It names
+        its neighbours too, so a renamed or deleted release in the same product repaints it as well."""
+        import re
+
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "1.0.0")
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.id]))
+
+        region = re.search(r'<div id="release-lifecycle"[^>]*>', page.content.decode(), re.S)
+        assert region is not None
+        assert "liveRegion(" in region[0] and 'hx-select="#release-lifecycle"' in region[0]
+        assert "release_updated" in region[0] and "release_deleted" in region[0]
+        assert "key: 'product_id'" in region[0]
+        assert product.pk in region[0]
+
     def test_withdrawing_from_the_details_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
@@ -652,6 +719,70 @@ class TestChoosingTheLine:
         assert upgrade_path.status_code == 201, upgrade_path.content
         assert _state(major) == Release.LifecycleState.ACTIVE
 
+    @pytest.mark.parametrize("edited", ["predecessor", "successor"])
+    def test_an_edit_cannot_move_a_date_past_the_same_line_rule(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, edited: str
+    ) -> None:
+        # 2.0 replaces 1.0. Moving either date so 2.0 predates 1.0 is the backdated takeover a
+        # declaration is refused for, so the edit is refused and rolled back.
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0", **_on(PAST))
+        new = _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        _supersede(old, new)
+        release, moved_to = (
+            (old, datetime(2025, 9, 1, tzinfo=dt_timezone.utc))
+            if edited == "predecessor"
+            else (new, datetime(2024, 6, 1, tzinfo=dt_timezone.utc))
+        )
+
+        response = client.patch(
+            f"/api/v1/releases/{release.pk}",
+            data={k: v.isoformat() for k, v in _on(moved_to).items()},
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 400, response.content
+        assert "released after" in response.json()["detail"]
+        assert Release.objects.get(pk=release.pk).released_at == release.released_at
+
+    def test_a_declaration_reads_the_predecessor_date_under_the_lock(self, sample_product: Product) -> None:
+        # The endpoint loads the predecessor before the product lock is taken. A date edit that
+        # commits in between must still count, or a backdated drop-in edge gets through.
+        old = _release(sample_product, "1.0", **_on(PAST))
+        _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        stale = Release.objects.get(pk=old.pk)
+        Release.objects.filter(pk=old.pk).update(released_at=datetime(2025, 9, 1, tzinfo=dt_timezone.utc))
+
+        result = create_release_cle_event(stale, "supersededBy", PAST, superseded_by_version="2.0", drop_in=True)
+
+        assert result.status_code == 400, result.error
+        assert "released after" in (result.error or "")
+        assert _edges(old) == []
+
+    def test_an_edit_with_a_bare_timestamp_meets_the_same_line_rule_rather_than_failing(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # A timestamp without an offset is read as local time, as the release model reads it, and is
+        # held to the same rule: comparing it with an aware date raised a TypeError and answered 500.
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0", **_on(PAST))
+        new = _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        _supersede(old, new)
+
+        def move_to(released_at: str) -> Any:
+            return client.patch(
+                f"/api/v1/releases/{new.pk}",
+                data={"released_at": released_at},
+                content_type="application/json",
+                **get_api_headers(token),
+            )
+
+        assert move_to("2025-07-01T12:00:00").status_code == 200
+        refused = move_to("2024-06-01T12:00:00")
+        assert refused.status_code == 400, refused.content
+        assert "released after" in refused.json()["detail"]
+
     def test_a_prerelease_replaces_nothing_even_if_the_page_script_never_ran(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
@@ -740,6 +871,78 @@ class TestWithdrawnReason:
 
         assert data["withdrawn_reason"] == "compromised"
 
+    def test_a_page_of_several_products_asks_about_the_workspace_once(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        """The read decision is the same for every product in one workspace, so a page does not
+        look the caller's membership up again for each product on it."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        client, token = authenticated_api_client
+
+        def member_reads() -> int:
+            with CaptureQueriesContext(connection) as queries:
+                response = client.get("/api/v1/releases", **get_api_headers(token))
+            assert response.status_code == 200, response.content
+            return sum('"workspaces_members"' in query["sql"] for query in queries.captured_queries)
+
+        _release(sample_product, "1.0.0")
+        one_product = member_reads()
+        for n in range(3):
+            _release(Product.objects.create(team=sample_product.team, name=f"Product {n}"), "1.0.0")
+
+        assert member_reads() == one_product
+
+
+class TestOtherReleasesHear:
+    """A write to one release can move others. Each page listens for release_updated on its own ID."""
+
+    @pytest.fixture
+    def told(self, mocker: Any, django_capture_on_commit_callbacks: Any) -> Any:
+        sent = mocker.patch("sbomify.apps.core.services.release_lifecycle.broadcast_to_workspace")
+
+        def run(act: Any) -> set[str]:
+            with django_capture_on_commit_callbacks(execute=True):
+                act()
+            return {
+                call.kwargs["data"]["release_id"]
+                for call in sent.call_args_list
+                if call.kwargs["message_type"] == "release_updated"
+            }
+
+        return run
+
+    def test_withdrawing_a_successor_tells_its_predecessor(self, sample_product: Product, told: Any) -> None:
+        old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
+        _supersede(old, new)
+
+        assert old.pk in told(lambda: set_release_state(new, "withdraw", reason="defective"))
+
+    def test_creating_a_release_that_replaces_another_tells_it(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, told: Any
+    ) -> None:
+        client, token = authenticated_api_client
+        old = _release(sample_product, "1.0.0")
+
+        heard = told(
+            lambda: client.post(
+                "/api/v1/releases",
+                data={"product_id": sample_product.pk, "name": "1.0.1", "supersedes": [{"release_id": old.pk}]},
+                content_type="application/json",
+                **get_api_headers(token),
+            )
+        )
+
+        assert old.pk in heard
+
+    def test_removing_a_link_tells_both_releases(self, sample_product: Product, told: Any) -> None:
+        old, new = _release(sample_product, "1.0.0"), _release(sample_product, "1.0.1")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        assert {old.pk, new.pk} <= told(lambda: remove_supersession(new.pk, edge.pk))
+
 
 class TestRemoveLink:
     """A mistaken Replaces can be undone from the Lifecycle card."""
@@ -765,6 +968,26 @@ class TestRemoveLink:
             event_type="withdrawn"
         ).exists()
         assert _state(old) == Release.LifecycleState.ACTIVE
+
+    def test_the_edge_is_read_under_the_product_lock(self, team_with_business_plan: Workspace) -> None:
+        # A release-date edit republishes the edge under the product lock, so an
+        # edge read before it would withdraw an event that is no longer its own.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new = _release(product, "1.0.0"), _release(product, "2.0.0")
+        _supersede(old, new)
+        (edge,) = _edges(old)
+
+        with CaptureQueriesContext(connection) as queries:
+            assert remove_supersession(new.pk, edge.pk).ok
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        products = Product._meta.db_table
+        locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{products}"' in text)
+        read = next(i for i, text in enumerate(sql) if f'FROM "{ReleaseSupersession._meta.db_table}"' in text)
+        assert locked < read
 
     def test_a_link_of_another_release_is_not_removed_from_this_page(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace

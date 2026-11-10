@@ -85,17 +85,46 @@ def hash_email(email: str) -> str:
 
 
 _MAX_SESSION_ID_LENGTH = 200
+_MAX_PERSISTED_COOKIE_LENGTH = 4096
+
+
+def _persisted_state(request: Any) -> dict[str, Any]:
+    """Read the state posthog-js keeps in its ``ph_<project key>_posthog`` cookie.
+
+    The cookie is written on ``.sbomify.com``, so a visitor who accepted
+    analytics on the marketing site carries their anonymous ``distinct_id``
+    and session into the app before the app has loaded any JavaScript.
+    """
+    api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
+    if not api_key or not hasattr(request, "COOKIES"):
+        return {}
+    import json
+    from urllib.parse import unquote
+
+    raw = request.COOKIES.get(f"ph_{api_key}_posthog", "")
+    if not raw or len(raw) > _MAX_PERSISTED_COOKIE_LENGTH:
+        return {}
+    try:
+        state = json.loads(unquote(raw))
+    except ValueError:
+        return {}
+    return state if isinstance(state, dict) else {}
 
 
 def get_distinct_id(request: Any) -> str:
     """Derive a stable distinct_id from the request.
 
-    Returns the user PK for authenticated users, the PostHog session ID
-    cookie for anonymous visitors, or an existing Django session key.
+    Returns the user PK for authenticated users. For anonymous visitors it
+    returns the browser's own PostHog ``distinct_id``, so a server-side event
+    lands on the same person as the pages they viewed, then falls back to
+    the PostHog session ID cookie or an existing Django session key.
     Never creates a new session purely for analytics.
     """
     if hasattr(request, "user") and request.user.is_authenticated:
         return str(request.user.pk)
+    browser_id = _persisted_state(request).get("distinct_id")
+    if isinstance(browser_id, str) and 0 < len(browser_id) <= _MAX_SESSION_ID_LENGTH:
+        return browser_id
     session_id = get_session_id(request)
     if session_id:
         return session_id
@@ -113,34 +142,78 @@ def get_session_id(request: Any) -> str:
     from urllib.parse import unquote
 
     value = unquote(request.COOKIES.get("ph_session_id", ""))
+    if not value:
+        # posthog-js stores the session as [last activity, session id, start].
+        sesid = _persisted_state(request).get("$sesid")
+        if isinstance(sesid, list) and len(sesid) > 1 and isinstance(sesid[1], str):
+            value = sesid[1]
     if len(value) > _MAX_SESSION_ID_LENGTH:
         return ""
     return value
 
 
-def has_opted_out(request: Any) -> bool:
-    """Check if the user has opted out of analytics via the PostHog cookie.
+def consent_cookie_name() -> str:
+    """Name of the cookie posthog-js keeps the visitor's consent in.
 
-    With opt_out_capturing_by_default enabled on the frontend, the absence
-    of a consent cookie means the user hasn't opted in yet — treat as opted out.
+    The app initialises posthog-js with ``opt_out_capturing_persistence_type:
+    'cookie'``, so the decision is written as ``__ph_opt_in_out_<project key>``
+    on ``.sbomify.com`` with the value ``1`` or ``0``. The marketing site
+    writes the same cookie, which makes one decision hold on both, and lets
+    the server read it here.
     """
+    return f"__ph_opt_in_out_{getattr(settings, 'POSTHOG_API_KEY', '')}"
+
+
+def consent_status(request: Any) -> bool | None:
+    """Return True if the visitor opted in, False if they declined, None if they have not chosen."""
     if not hasattr(request, "COOKIES"):
+        return None
+    value = request.COOKIES.get(consent_cookie_name())
+    if value in ("1", "true"):
         return True
-    # PostHog JS SDK stores opt-out state in a cookie named ph_<project_key>_opt_in_out
-    # When opted out, the value is "0". When opted in, "1".
-    # Check the exact cookie for the current project key first to avoid
-    # reading a stale cookie from a rotated key or a different project.
-    api_key: str = getattr(settings, "POSTHOG_API_KEY", "")
-    if api_key:
-        exact_cookie = f"ph_{api_key}_opt_in_out"
-        if exact_cookie in request.COOKIES:
-            return bool(request.COOKIES[exact_cookie] == "0")
-    # Fallback: scan for any matching cookie (covers edge cases)
-    for name, value in request.COOKIES.items():
-        if name.startswith("ph_") and name.endswith("_opt_in_out"):
-            return bool(value == "0")
-    # No consent cookie found — with opt-out-by-default, treat as opted out
-    return True
+    if value in ("0", "false"):
+        return False
+    return None
+
+
+def has_opted_out(request: Any) -> bool:
+    """Check whether server-side capture must be skipped for this request.
+
+    With opt_out_capturing_by_default enabled on the frontend, a visitor who
+    has not chosen yet is treated as opted out.
+    """
+    return consent_status(request) is not True
+
+
+_CLIENT_EVENTS_SESSION_KEY = "posthog_client_events"
+_MAX_CLIENT_EVENTS = 10
+
+
+def queue_client_event(request: Any, event: str, properties: dict[str, Any] | None = None) -> None:
+    """Hold an event in the session for the browser to send on its next full page.
+
+    For events that must land on the person, not the workspace: the browser
+    sends them after ``posthog.identify``, which merges the visitor's
+    anonymous history (the marketing pages they read first) into the user.
+    A visitor who has not chosen yet keeps the event until they do; one
+    who declined never has it queued.
+    """
+    if not is_enabled() or not hasattr(request, "session") or consent_status(request) is False:
+        return
+    queued = list(request.session.get(_CLIENT_EVENTS_SESSION_KEY, []))[-(_MAX_CLIENT_EVENTS - 1) :]
+    queued.append({"event": event, "properties": properties or {}})
+    request.session[_CLIENT_EVENTS_SESSION_KEY] = queued
+
+
+def take_client_events(request: Any) -> list[dict[str, Any]]:
+    """Hand queued events to the page once the visitor opted in, and drop them if they declined."""
+    if not hasattr(request, "session"):
+        return []
+    status = consent_status(request)
+    if status is None:
+        return []
+    queued: list[dict[str, Any]] = request.session.pop(_CLIENT_EVENTS_SESSION_KEY, [])
+    return queued if status else []
 
 
 def capture_for_request(

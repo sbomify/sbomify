@@ -43,7 +43,7 @@ def build_release_vulnerabilities(request: HttpRequest, release_id: str) -> Serv
         sbom_ids_by_component.setdefault(component_id, []).append(sbom_id)
 
     artifacts: dict[str, dict[str, Any] | None] = {}
-    for sbom_id, counts in sbom_vulnerability_counts(sbom_ids_by_component).items():
+    for sbom_id, counts in sbom_vulnerability_counts(sbom_ids_by_component, release_id=release.id).items():
         artifacts[sbom_id] = None
         if counts is not None:
             artifacts[sbom_id] = counts | {"url": reverse("sboms:sbom_vulnerabilities", args=[sbom_id])}
