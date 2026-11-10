@@ -251,6 +251,21 @@ class TestReleasePage:
         assert "release_updated" in region[0] and "key: 'release_id'" in region[0]
         assert release.pk in region[0]
 
+    def test_the_vulnerabilities_panel_follows_scans_of_its_sboms(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        """A finished scan or a re-applied VEX names an SBOM or a component, so the panel hears of it from the table."""
+        release = Release.objects.create(product=_product(team_with_business_plan), name="1.0.0")
+        _scan(release, "lib", OLDEST, [_finding("CVE-1")])
+
+        page = self._page(authenticated_web_client, release)
+
+        region = re.search(r'<div id="release-vulnerabilities-region"[^>]*>', page)
+        assert region is not None
+        raised = "refresh-release-artifact-vulnerabilities"
+        assert f'hx-trigger="live-refresh, {raised} from:body"' in region[0]
+        assert f"new CustomEvent('{raised}')" in page
+
     def test_a_retired_release_dates_its_counts(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
