@@ -22,6 +22,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
+    AdvisoryReference,
     AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
@@ -289,6 +290,29 @@ def test_withdrawn_advisories_stay_readable(team, public_product):
     result = get_public_advisory(make_request(), team, advisory.id)
     assert result.ok
     assert result.value["is_withdrawn"]
+
+
+def test_a_withdrawn_header_says_withdrawn_instead_of_a_live_status(team, public_product, client):
+    """A retracted advisory has no "where is this now", so Withdrawn replaces
+    the status rather than sitting beside it, and the facts the header carries
+    are not repeated down the side."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    advisory.remediation_status = SecurityAdvisory.RemediationStatus.INVESTIGATING
+    advisory.status = SecurityAdvisory.Status.WITHDRAWN
+    advisory.withdrawn_at = timezone.now()
+    advisory.withdrawal_reason = "Reissued."
+    advisory.save()
+
+    url = reverse(
+        "core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id}
+    )
+    page = client.get(url).content.decode()
+
+    assert re.search(r"border-dashed[^>]*>\s*<i class=\"fas fa-rotate-left\"[^>]*></i>Withdrawn", page)
+    assert "Investigating" not in page
+    assert ">Details<" not in page
 
 
 # --- viewer scope and the landing-page summary -------------------------------
@@ -659,6 +683,56 @@ def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
     assert quote(hostile, safe="") in captured["path"]
 
 
+def test_the_trust_center_links_an_advisory_by_its_tracking_id(team, public_product, client):
+    """The address a reader sees and shares is the id they would quote, not the primary key."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    page = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+    content = page.content.decode()
+
+    assert f"/advisories/{advisory.tracking_id}/" in content
+    assert f"/advisories/{advisory.id}/" not in content
+
+
+@pytest.mark.parametrize("scoped", [True, False])
+def test_a_primary_key_link_redirects_to_the_tracking_id(team, public_product, client, scoped):
+    """Links shared before tracking ids were the address keep working, and land on the one URL."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    if scoped:
+        old = reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        new = f"/public/workspace/{team.key}/advisories/{advisory.tracking_id}/"
+    else:
+        session = client.session
+        session["current_workspace"] = {"key": team.key}
+        session.save()
+        old = reverse("core:advisory_details_public_current", kwargs={"advisory_id": advisory.id})
+        new = f"/advisories/{advisory.tracking_id}/"
+
+    response = client.get(old)
+
+    assert response.status_code == 301
+    assert response["Location"] == new
+    assert client.get(new).status_code == 200
+
+
+def test_a_hidden_advisory_does_not_redirect_by_primary_key(team, public_product, client):
+    """A redirect would confirm the advisory exists, which is what the 404 keeps quiet."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.GATED)
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    assert response.status_code == 404
+
+
 # --- the redirect target -----------------------------------------------------
 #
 # The redirect host comes from team.custom_domain, which an owner types in and
@@ -717,7 +791,7 @@ def test_a_timeline_note_renders_as_markdown_on_the_trust_center(team, public_pr
     )
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     content = response.content.decode()
@@ -747,7 +821,7 @@ def test_the_description_and_vulnerability_text_render_as_markdown_on_the_trust_
     publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     content = response.content.decode()
@@ -773,7 +847,7 @@ def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, 
     status = AdvisoryProductStatus.objects.create(
         vulnerability=vulnerability, advisory_product=advisory_product, status=AdvisoryProductStatus.Status.EXPLOITABLE
     )
-    commits = [f"c0ffee{i}" for i in range(5)]
+    commits = [f"c0ffee{i}" for i in range(9)]
     for commit in commits:
         AdvisoryVersionRange.objects.create(product_status=status, introduced=commit, last_affected=commit)
     AdvisoryVersionRange.objects.create(product_status=status, introduced="2.0.0", fixed="2.4.1")
@@ -783,11 +857,11 @@ def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, 
     assert detail["statuses"][0]["affected_versions"] == [*commits, ">= 2.0.0, < 2.4.1"]
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
     content = response.content.decode()
     assert response.status_code == 200
-    assert "Show all 6" in content
+    assert "Show all 10" in content
     assert "[c0ffee0, c0ffee0]" not in content
 
 
@@ -811,9 +885,49 @@ def test_a_recommended_version_without_ranges_still_names_the_affected_versions(
     assert detail["statuses"][0]["version_labels"] == ["Before 2.0.0"]
 
     response = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
     assert "Before 2.0.0" in response.content.decode()
+
+
+def test_the_version_check_gets_the_bounds_behind_each_label(team, public_product, client):
+    """The page tests a typed version in the browser, so each row sends the
+    bounds behind its labels, one per label and in the same order. A row that is
+    not affected says so rather than sending nothing to match against."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Checkable")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    exploitable = AdvisoryProductStatus.objects.create(
+        vulnerability=AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30011"),
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.EXPLOITABLE,
+    )
+    AdvisoryVersionRange.objects.create(product_status=exploitable, introduced="2.0.0", fixed="2.4.1")
+    AdvisoryVersionRange.objects.create(product_status=exploitable, introduced="6282ec8", last_affected="6282ec8")
+    not_affected = AdvisoryProductStatus.objects.create(
+        vulnerability=AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30012"),
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.NOT_AFFECTED,
+        justification=AdvisoryProductStatus.Justification.CODE_NOT_PRESENT,
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    checks = detail["version_checks"]
+    row = next(r for r in detail["statuses"] if r["id"] == exploitable.id)
+    assert [r["label"] for r in checks[exploitable.id]["ranges"]] == row["version_labels"]
+    assert {"label": "From 2.0.0, fixed in 2.4.1", "introduced": "2.0.0", "fixed": "2.4.1", "last_affected": ""} in (
+        checks[exploitable.id]["ranges"]
+    )
+    assert checks[exploitable.id]["suppressed"] is False
+    assert checks[not_affected.id] == {"suppressed": True, "ranges": []}
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    ).content.decode()
+    assert 'id="advisory-version-checks"' in content
+    assert "versionCheck('advisory-version-checks')" in content
 
 
 def test_the_index_lists_versions_one_per_range(team, public_product):
@@ -850,8 +964,32 @@ def test_a_zero_cvss_score_renders_rather_than_reading_as_unscored(team, public_
 
     index = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
     detail = client.get(
-        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
     )
 
     assert re.search(r"tabular-nums[^>]*>\s*0\.0\s*<", index.content.decode())
     assert re.search(r"CVSS.{0,400}?>\s*0\.0\s*<", detail.content.decode(), re.S)
+
+
+def test_cve_ids_and_references_link_to_insights_on_the_trust_center(team, public_product, client):
+    """A CVE on the page links to its Insights page, and so does a reference whose id Insights
+    publishes, even when it stored another URL. A reference Insights does not cover keeps its own."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30020")
+    AdvisoryReference.objects.create(
+        advisory=advisory, external_id="GHSA-6q48-6c7w-9gw2", url="https://github.com/advisories/GHSA-6q48-6c7w-9gw2"
+    )
+    AdvisoryReference.objects.create(advisory=advisory, external_id="CVE-2026-30021")
+    AdvisoryReference.objects.create(advisory=advisory, external_id="DSA-5020-1", url="https://example.com/dsa-5020-1")
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    ).content.decode()
+
+    assert 'href="https://insights.sbomify.com/CVE-2026-30020/"' in content
+    assert 'href="https://insights.sbomify.com/GHSA-6q48-6c7w-9gw2/"' in content
+    assert 'href="https://insights.sbomify.com/CVE-2026-30021/"' in content
+    assert 'href="https://example.com/dsa-5020-1"' in content
+    assert "github.com/advisories" not in content

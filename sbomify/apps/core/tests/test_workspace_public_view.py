@@ -311,8 +311,65 @@ def test_workspace_public_hides_artifacts_section_when_empty():
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Section header should not be shown when there are no global artifacts
-    assert "Organization Compliance Artifacts" not in content
+    # Neither the section nor an empty state should be shown when there are no global artifacts
+    assert 'id="compliance"' not in content
+    assert "No compliance artifacts" not in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_shows_artifacts_section_when_present():
+    team = _public_workspace("Artifact Workspace")
+    Component.objects.create(
+        name="SOC 2 Report",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+
+    content = _visit(team)
+
+    assert 'id="compliance"' in content
+    assert "SOC 2 Report" in content
+
+
+@pytest.mark.django_db
+def test_workspace_public_does_not_list_the_workspace_nda_as_an_artifact():
+    team = _public_workspace("NDA Workspace")
+    nda_component = team.get_or_create_company_wide_component()
+    Document.objects.create(
+        name="Mutual NDA",
+        version="1.0",
+        component=nda_component,
+        document_type=Document.DocumentType.NDA,
+    )
+
+    content = _visit(team)
+
+    assert nda_component.name not in content
+    assert 'id="compliance"' not in content
+    assert "Compliance artifact" not in _stat_labels(content)
+
+
+@pytest.mark.django_db
+def test_workspace_public_lists_a_component_holding_an_nda_alongside_other_documents():
+    team = _public_workspace("Legal Workspace")
+    legal = Component.objects.create(
+        name="Legal pack",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+        is_global=True,
+        component_type=Component.ComponentType.DOCUMENT,
+    )
+    Document.objects.create(name="Mutual NDA", version="1.0", component=legal, document_type=Document.DocumentType.NDA)
+    Document.objects.create(
+        name="Privacy policy", version="1.0", component=legal, document_type=Document.DocumentType.COMPLIANCE
+    )
+
+    content = _visit(team)
+
+    assert 'id="compliance"' in content
+    assert "Legal pack" in content
 
 
 @pytest.mark.django_db

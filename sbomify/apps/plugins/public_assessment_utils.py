@@ -4,6 +4,9 @@ This module provides functions to aggregate assessment results for public displa
 showing only passing assessments at component and product levels.
 
 Key principle: Only show assessments that PASS. Never show failures on public pages.
+
+Security scans are never shown. A badge that appears only when a scan is clean
+discloses, by its absence, that open vulnerabilities exist.
 """
 
 from dataclasses import dataclass
@@ -89,6 +92,16 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
     """Get a mapping of plugin names to (display_name, category)."""
     plugins = RegisteredPlugin.objects.filter(is_enabled=True)
     return {p.name: (p.display_name, p.category) for p in plugins}
+
+
+def _public_runs(runs: list[AssessmentRun]) -> list[AssessmentRun]:
+    """Drop the security scans, which public pages never reflect in any way.
+
+    Dropped before aggregation, not after: a component whose scan found
+    vulnerabilities would otherwise still empty the product-level intersection
+    and take its compliance badges with it, which leaks the same fact.
+    """
+    return [run for run in runs if run.category != AssessmentCategory.SECURITY.value]
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
@@ -270,7 +283,7 @@ def _get_passing_assessments_by_sbom(
     SBOM versions would otherwise pull every one of them into memory.
     """
 
-    runs = status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name")
+    runs = _public_runs(status_runs(latest_run_ids(AssessmentRun.objects.all(), sbom_ids), "plugin_name"))
     passing_by_sbom: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     for run in runs:
         if _is_run_passing(run):
@@ -427,7 +440,7 @@ def get_component_latest_sbom_assessment_status(component: "Component") -> Compo
         )
 
     # Check if any assessments were run (even failing ones)
-    latest_runs = _get_latest_assessment_runs_for_sbom(str(latest_sbom.id))
+    latest_runs = _public_runs(_get_latest_assessment_runs_for_sbom(str(latest_sbom.id)))
     has_assessments = len(latest_runs) > 0
 
     # Get only passing assessments for display
@@ -583,7 +596,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 3: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = status_runs(latest_ids, "-created_at")
+    all_runs = _public_runs(status_runs(latest_ids, "-created_at"))
 
     # Step 4: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()
@@ -685,7 +698,7 @@ def get_components_latest_sbom_assessments_batch(
     # Step 2: Get all assessment runs for these SBOMs (batch query)
     latest_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
 
-    all_runs = status_runs(latest_ids, "-created_at")
+    all_runs = _public_runs(status_runs(latest_ids, "-created_at"))
 
     # Step 3: Compute passing assessments per SBOM
     plugin_info = _get_plugin_display_names()

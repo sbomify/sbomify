@@ -1,6 +1,6 @@
-Verify Your Email Address
+Verify your email address
 
-Dear ${user.firstName!user.username},
+Hi ${user.firstName!user.username},
 
 Thank you for creating an account with sbomify. To complete your registration and access your account, please verify your email address by clicking the link below.
 
@@ -10,7 +10,7 @@ This link will expire in ${linkExpirationFormatter(linkExpiration)}. If it expir
 
 If you did not create an account with sbomify, please ignore this email.
 
-Regards,
+Cheers,
 The sbomify Team
 
 ------------------------------

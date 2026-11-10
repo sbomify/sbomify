@@ -215,6 +215,9 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "advisory:manage": ADMINISTER,
     "advisory:publish": ADMINISTER,
     "advisory:delete": ADMINISTER,
+    # CRA Article 14 reports go to ENISA and the national CSIRTs, so recording
+    # one is the same outward act as publishing an advisory.
+    "cra_report:manage": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -267,6 +270,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "component:read_internal": READ_INTERNAL,
     "product:read": READ_INTERNAL,
     "advisory:read": READ_INTERNAL,
+    "cra_report:read": READ_INTERNAL,
     "release:read": READ_INTERNAL_OR_BOT,
     "document:read": READ_INTERNAL,
     "sbom:read": READ_INTERNAL,
@@ -348,6 +352,33 @@ _AGENT_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
 def is_agent_scope(scopes: list[str] | None) -> bool:
     """True iff ``scopes`` is a list the AI agent preset produced, now or before."""
     return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
+
+
+# Every scope list the publish preset has ever stored, for the same reason.
+_PUBLISH_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
+    frozenset({"artifact:publish"}),
+    frozenset(SCOPE_PRESETS["publish"] or []),
+)
+
+
+def scope_label(scopes: list[str] | None) -> str:
+    """The token type a person picked when creating a token, read back off its stored scopes.
+
+    Matches the preset labels in the token-creation form. A token whose scopes
+    match no preset, past or present, is ``Custom``.
+    """
+    if scopes is None:
+        return "Full access"
+    scope_set = frozenset(scopes)
+    if scope_set in _AGENT_SCOPE_HISTORY:
+        return "AI agent"
+    if scope_set in _PUBLISH_SCOPE_HISTORY:
+        return "Publish only"
+    # Keyed on the verb like the preset itself, so a read-only token made before
+    # a read action was added still reads as read-only.
+    if scope_set and all(s.split(":", 1)[-1].startswith("read") or s in _ABAC_ACTIONS for s in scope_set):
+        return "Read-only"
+    return "Custom"
 
 
 def credential_channel(request: Any) -> str:

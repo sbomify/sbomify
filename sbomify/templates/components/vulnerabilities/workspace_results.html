@@ -47,7 +47,7 @@ the scanner's full result, which the page itself never loads.
                 </c-tables.cell>
                 <c-tables.cell compact>
                 <div class="flex flex-wrap items-center gap-1.5">
-                    {% with advisory=row.id|advisory_url %}
+                    {% with advisory=row.id|advisory_url:row.aliases %}
                         {% if advisory %}
                             <a href="{{ advisory }}"
                                target="_blank"
@@ -115,8 +115,10 @@ the scanner's full result, which the page itself never loads.
             {% endfor %}
         </tbody>
         </c-tables.table>
+    {% elif data.details_unavailable and data.totals_only_indexing %}
+        <c-feedback.empty-state icon="fas fa-hourglass-half" title="Loading vulnerability details" message="The details for {% for item in data.totals_only_indexing %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% endfor %} are still loading. {{ data.totals_only_indexing|length|pluralize:'Its,Their' }} counts are already in the summary, and the list fills in once ready." />
     {% elif data.details_unavailable %}
-        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scan reports totals only, so there are no vulnerabilities to list. Its counts are in the summary." />
+        <c-feedback.empty-state icon="fas fa-circle-info" title="Vulnerability details unavailable" message="The scans of {% for item in data.totals_only_reported %}{{ item.name }}{% if not forloop.last %}, {% endif %}{% endfor %} report totals only, so there are no vulnerabilities to list. Their counts are in the summary. Rescan to list them." />
     {% elif data.scoped_components and data.unassessed_components == data.scoped_components %}
         {% if data.single_component %}
             <c-feedback.empty-state icon="fas fa-hourglass-half" title="Not scanned yet" message="Vulnerabilities in this version appear here once it is scanned." />
@@ -132,6 +134,11 @@ the scanner's full result, which the page itself never loads.
     {% elif data.filtered %}
         <c-feedback.empty-state icon="fas fa-filter" title="No matching vulnerabilities" message="Try another search or clear the filters.">
         <c-buttons.secondary href="{{ data.base_url }}">Clear filters</c-buttons.secondary>
+        </c-feedback.empty-state>
+    {% elif data.suppressed and not data.query.status %}
+        {% comment %}Cleared by a VEX is not the same as never affected, so say so and show where they went.{% endcomment %}
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No open vulnerabilities" message="{{ data.suppressed|intcomma }} suppressed by VEX.">
+        <c-buttons.secondary href="{{ data.suppressed_url }}">Show suppressed</c-buttons.secondary>
         </c-feedback.empty-state>
     {% else %}
         {% if data.single_component %}

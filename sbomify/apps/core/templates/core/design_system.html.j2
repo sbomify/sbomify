@@ -108,7 +108,7 @@
     <tbody>
         <c-tables.row>
         <c-tables.cell><c-overview.record href="{% url 'core:products_dashboard' %}" title="Example product" detail="3 components" /></c-tables.cell>
-        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" /></c-tables.cell>
+        <c-tables.cell><c-overview.exposure :counts="overview_demo_counts" :unassessed="1" noun="component" /></c-tables.cell>
         </c-tables.row>
     </tbody>
     </c-overview.table>
@@ -1126,6 +1126,12 @@ first-of-type rule that drops the leading hairline reads the section's position
         column has an edge to scan down instead of a break landing somewhere different on every row.
         The third row below carries a name long enough to show it.
     </p>
+    <p class="text-sm text-text-muted">
+        A badge, flag or icon link on the same line as the name goes in the
+        <c-code-inline>trail</c-code-inline> slot of <c-code-inline>&lt;c-tables.name&gt;</c-code-inline>,
+        never after the name in the cell. The name gives way and the trail keeps its width, so a long
+        name can never clip the badge. The second and third rows below carry one.
+    </p>
     <c-tables.shell x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
     <c-tables.toolbar>
     <c-forms.search-input size="sm" id="ds-table-search" label="Search components" placeholder="Search components…" />
@@ -1153,14 +1159,24 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">
+        <c-tables.name>
+        acme-vault-core
+        <c-slot name="trail"><c-badges.solid-danger size="sm">KEV</c-badges.solid-danger></c-slot>
+        </c-tables.name>
+        </c-tables.cell>
         <c-tables.cell><c-badges.format format="spdx">SPDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">
+        <c-tables.name>
+        <span title="acme-gateway-edge-proxy-transport-security-module">acme-gateway-edge-proxy-transport-security-module</span>
+        <c-slot name="trail"><c-badges.secondary>VEX</c-badges.secondary></c-slot>
+        </c-tables.name>
+        </c-tables.cell>
         <c-tables.cell><c-badges.format format="cyclonedx">CycloneDX</c-badges.format></c-tables.cell>
         <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
@@ -1641,7 +1657,7 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-feedback.alert variant="success" title="Saved">Your changes have been saved.</c-feedback.alert>
         <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
         <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
-        <c-feedback.alert variant="info">10 components still need a completed security assessment.</c-feedback.alert>
+        <c-feedback.alert variant="info">10 components have not been scanned yet. The counts above leave them out.</c-feedback.alert>
         <c-feedback.alert variant="success" title="security.txt">
         Served at <c-code-inline>/.well-known/security.txt</c-code-inline>. Fill the named action slot with the
         control that resolves the notice and it sits at the end of the row.
@@ -2218,9 +2234,18 @@ first-of-type rule that drops the leading hairline reads the section's position
             <c-branded.badge brand>Advisory</c-branded.badge>
             </c-slot>
             <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
-                <c-branded.badge tone="critical">Critical</c-branded.badge>
-                <c-branded.meta-item mono>CVE-2026-21004</c-branded.meta-item>
-                <c-branded.meta-item icon="fas fa-bullhorn">Published 3 Aug 2026</c-branded.meta-item>
+                <div class="flex items-center gap-2">
+                    <c-branded.badge tone="critical">Critical</c-branded.badge>
+                    <c-branded.badge><i class="fas fa-wrench" aria-hidden="true"></i>Fix in progress</c-branded.badge>
+                </div>
+                <c-branded.meta-item label="CVSS">9.8</c-branded.meta-item>
+                <c-branded.meta-item mono label="CVE ID">CVE-2026-21004</c-branded.meta-item>
+                <c-branded.meta-item label="Published">3 Aug 2026</c-branded.meta-item>
+            </div>
+            <div class="flex items-center gap-2">
+                <c-branded.badge tone="success"><i class="fas fa-circle-check" aria-hidden="true"></i>Resolved</c-branded.badge>
+                <c-branded.badge dashed><i class="fas fa-rotate-left" aria-hidden="true"></i>Withdrawn</c-branded.badge>
+                <c-branded.badge><i class="fas fa-lock" aria-hidden="true"></i>Restricted</c-branded.badge>
             </div>
             </c-branded.page-header>
             </c-branded.masthead>
@@ -2258,6 +2283,46 @@ first-of-type rule that drops the leading hairline reads the section's position
                 </c-branded.facts>
                 </c-branded.panel>
             </div>
+            {% with n=forloop.counter|stringformat:"s" %}
+                {% with checks_id="demo-version-checks-"|add:n %}
+                    {{ demo_version_checks|json_script:checks_id }}
+                    <c-branded.version-check checks="{{ checks_id }}" field_id="demo-version-check-{{ forloop.counter }}" class="mt-4">
+                    <c-branded.version-row key="gateway" heading="Acme Gateway" status_label="Fixed" status_variant="success" :versions="demo_version_labels_gateway" label="Affected versions of Acme Gateway">
+                    Upgrade to <span class="font-mono text-text">2.4.1</span>.
+                    </c-branded.version-row>
+                    <c-branded.version-row key="agent" heading="Acme Agent" status_label="Affected" status_variant="danger" :versions="demo_version_labels_agent" label="Affected versions of Acme Agent">
+                    <c-slot name="eyebrow">CVE-2026-21004</c-slot>
+                    No fix yet. Turn off remote provisioning until one ships.
+                    </c-branded.version-row>
+                    <c-branded.version-row key="console" heading="Acme Console" status_label="Not affected" status_variant="success">
+                    <c-slot name="meta">Code not present</c-slot>
+                    The console never loads the parser.
+                    </c-branded.version-row>
+                    </c-branded.version-check>
+                {% endwith %}
+            {% endwith %}
+            <c-branded.surface class="mt-4">
+            <c-branded.expandable more="Read the full description" less="Show less">
+            <c-branded.markdown class="text-sm leading-7 text-text-secondary">
+            <h3>Summary</h3>
+            <p>
+                A crafted packet can crash the parser before authentication. Any gateway that accepts traffic from
+                an untrusted network is exposed.
+            </p>
+            <h3>Impact</h3>
+            <p>
+                An attacker who can reach the management port can stop the gateway. Repeated packets keep it down.
+                We have no evidence this was used.
+            </p>
+            <h3>Remediation</h3>
+            <ol>
+                <li>Upgrade to 2.4.1 or later.</li>
+                <li>Restrict the management port to trusted networks.</li>
+                <li>Restart the gateway after upgrading.</li>
+            </ol>
+            </c-branded.markdown>
+            </c-branded.expandable>
+            </c-branded.surface>
             </c-branded.surface>
             </c-branded.theme>
         {% endfor %}

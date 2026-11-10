@@ -1,0 +1,27 @@
+{% comment %}
+"Am I affected?" as a tool rather than a list: the products an advisory names,
+each a c-branded.version-row, under one field where a reader types the version
+they run and every row answers for it.
+
+The title sits inside the panel, with the field beside it, because the field
+belongs to the rows and not to the page. It also puts the panel's top edge on
+the same line as the side column's first panel, which a heading above the box
+pushed down.
+
+checks is the id of a json_script holding each row's ranges, keyed by the row's
+key; the versionCheck Alpine component reads it and owns the typed version.
+Without scripts the field does nothing and the rows still list every range, so
+nothing is lost but the shortcut.
+
+A typed version changes several rows at once, so one polite live region says
+the overall result rather than each row announcing its own.
+{% endcomment %}
+<c-vars title="Am I affected?" checks field_id="version-check" placeholder="Your version, e.g. 2.4.1" class />
+<c-branded.surface flush x-data="versionCheck('{{ checks }}')" class="{{ class }}" :attrs="attrs">
+<div class="flex items-center justify-between gap-x-4 gap-y-3 [flex-wrap:wrap] border-b border-solid border-border px-5 py-4">
+    <h2 class="text-lg font-semibold text-text my-0! leading-7">{{ title }}</h2>
+    <c-forms.search-input size="sm" id="{{ field_id }}" label="Check your version" placeholder="{{ placeholder }}" model="query" icon="fas fa-magnifying-glass" autocomplete="off" spellcheck="false" />
+</div>
+<p class="sr-only" aria-live="polite" x-text="summary"></p>
+{{ slot }}
+</c-branded.surface>

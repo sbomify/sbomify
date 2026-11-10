@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Trial Period Expired{% endblock %}
+{% block title %}Your trial has ended{% endblock %}
 {% block content %}
     <h1>Your trial has ended</h1>
     <p>Hi {{ user_name }},</p>
@@ -8,6 +8,6 @@
         to continue using all features.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ upgrade_url }}" class="button">Upgrade Now</a>
+        <a href="{{ upgrade_url }}" class="button">Upgrade now</a>
     </p>
 {% endblock %}
