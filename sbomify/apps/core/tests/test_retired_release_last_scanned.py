@@ -213,6 +213,22 @@ class TestUntrackedNotice:
         }
         assert untracked_notice(retired, public_only=True) is None
 
+    def test_a_component_moved_to_another_workspace_is_not_weighed(
+        self, team_with_business_plan: Workspace, sample_team: Workspace
+    ) -> None:
+        product = _product(team_with_business_plan)
+        retired = Release.objects.create(product=product, name="1.0.0")
+        shared = _scan(retired, "lib", OLDEST, [])
+        moved = _scan(retired, "tool", OLDEST, [_finding("CVE-1")])
+        ReleaseArtifact.objects.create(release=Release.objects.create(product=product, name="1.1.0"), sbom=shared)
+        _withdraw(retired)
+        # A transfer leaves the release's artifact behind, and the counts leave its SBOM out.
+        Component.objects.filter(pk=moved.component_id).update(team=sample_team)
+        retired = Release.objects.select_related("product").get(pk=retired.pk)
+
+        assert build_release_vuln_postures([retired])[retired.id]["counts"]["total"] == 0
+        assert untracked_notice(retired) is None
+
 
 class TestReleasePage:
     def _page(self, client: Client, release: Release) -> str:

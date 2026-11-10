@@ -30,7 +30,7 @@ from functools import partial
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q, QuerySet
+from django.db.models import Exists, F, OuterRef, Q, QuerySet
 from django.utils import timezone
 
 from sbomify.apps.core.models import (
@@ -243,10 +243,13 @@ _UNTRACKED_REASONS = {
 
 
 def _shipped_sboms(release_ids: list[Any], *, public_only: bool) -> dict[Any, set[str]]:
-    """Each release's SBOMs, or only those of public components for a Trust Center posture."""
+    """The SBOMs each release's counts include: its workspace's, or the public ones for a Trust Center posture."""
     artifacts = ReleaseArtifact.objects.filter(release_id__in=release_ids, sbom__bom_type=SBOM.BomType.SBOM)
     if public_only:
         artifacts = artifacts.filter(sbom__component__visibility=Component.Visibility.PUBLIC)
+    else:
+        # A component transferred to another workspace leaves its artifacts behind, and the counts skip them.
+        artifacts = artifacts.filter(sbom__component__team_id=F("release__product__team_id"))
     shipped: dict[Any, set[str]] = defaultdict(set)
     for release_id, sbom_id in artifacts.values_list("release_id", "sbom_id"):
         shipped[release_id].add(sbom_id)
