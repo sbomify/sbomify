@@ -48,6 +48,19 @@ export function isEmpty(obj: unknown | string | number | object | null | undefin
  * Parse JSON from a script tag by ID. Returns null if not found, empty, or invalid.
  * Use with Django's json_script filter: {{ data|json_script:"my-id" }}
  */
+/**
+ * Whether a value is an http(s) URL with a host and no credentials.
+ * Mirrors clean_vcs_url on the server so the form rejects what the API would.
+ */
+export function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !!url.hostname && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 export function parseJsonScript<T = unknown>(elementId: string): T | null {
   const scriptEl = document.getElementById(elementId);
   if (!scriptEl?.textContent || scriptEl.textContent === 'null') {
