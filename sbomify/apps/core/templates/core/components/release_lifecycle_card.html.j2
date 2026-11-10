@@ -88,7 +88,7 @@ withdrawal and no archiving shows the card only to managers, for the actions.
         {% endif %}
         {% if lifecycle.can_manage %}
             {% if release.withdrawn_at or release.archived_at %}
-                <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again. A supersession or a support date still applies.">
+                <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again, unless it is replaced or past its support dates.">
                 <form method="post" action="{{ lifecycle_url }}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reactivate">

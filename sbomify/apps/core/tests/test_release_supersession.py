@@ -579,6 +579,7 @@ class TestWhereAReleaseStands:
 
         page = authenticated_web_client.get(response["Location"]).content.decode()
         assert "Withdrawn" in page and "Reactivate release" in page
+        assert "sbomify monitors it again, unless it is replaced or past its support dates." in page
 
         authenticated_web_client.post(url, {"action": "reactivate"})
         assert _state(release) == Release.LifecycleState.ACTIVE
