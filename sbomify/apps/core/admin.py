@@ -191,6 +191,27 @@ class ProductAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         """Display the workspace (team) name for the Product."""
         return obj.team.name if obj.team else "No Team"
 
+    def delete_model(self, request: Any, obj: Any) -> None:
+        """Queue the Dependency-Track reconciles the cascade cannot, as the product API does."""
+        from django.db import transaction
+
+        from sbomify.apps.core.services.release_lifecycle import reconcile_after_removal
+
+        with transaction.atomic():
+            reconcile_after_removal(obj.releases.values_list("pk", flat=True))
+            super().delete_model(request, obj)
+
+    def delete_queryset(self, request: Any, queryset: Any) -> None:
+        """The bulk delete, with the same reconciles."""
+        from django.db import transaction
+
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.services.release_lifecycle import reconcile_after_removal
+
+        with transaction.atomic():
+            reconcile_after_removal(Release.objects.filter(product__in=queryset).values_list("pk", flat=True))
+            super().delete_queryset(request, queryset)
+
 
 class ComponentAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin configuration for Component model."""

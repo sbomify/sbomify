@@ -37,6 +37,7 @@ from sbomify.apps.core.queries import (
 from sbomify.apps.core.services.release_lifecycle import (
     declare_supersedes,
     link_pending_supersessions,
+    reconcile_after_removal,
     save_release_changes,
     set_release_state,
     supersession_links,
@@ -1084,9 +1085,14 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
     from sbomify.apps.compliance.services.report_service import delete_with_reports
 
     try:
-        deleted = delete_with_reports(
-            [product], "product", "This product has a filed CRA report, kept as evidence, so it cannot be deleted."
-        )
+        with transaction.atomic():
+            reconcile_after_removal(product.releases.values_list("pk", flat=True))
+            deleted = delete_with_reports(
+                [product], "product", "This product has a filed CRA report, kept as evidence, so it cannot be deleted."
+            )
+            if not deleted.ok:
+                # Drops the reconciles queued above: nothing was removed.
+                transaction.set_rollback(True)
         if not deleted.ok:
             return deleted.status_code, {"detail": deleted.error, "error_code": ErrorCode.CONFLICT}
 
@@ -3804,6 +3810,7 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
                     "detail": f"Release {release.name} replaces {names}. Remove {links} on its Lifecycle card first.",
                     "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
                 }
+            reconcile_after_removal([release.pk])
             release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
