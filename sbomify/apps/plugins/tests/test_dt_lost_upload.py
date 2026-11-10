@@ -20,7 +20,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-from sbomify.apps.plugins.sdk.base import RetryLaterError
+from sbomify.apps.plugins.sdk.base import RetryLaterError, SBOMContext
 from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
 ANALYSED = {"lastBomImport": 1762196390000, "lastVulnerabilityAnalysis": 1762196400000}
@@ -73,7 +73,7 @@ class TestALostUploadIsSentAgain:
         return client
 
     @staticmethod
-    def _assess(scan, client: MagicMock) -> tuple[MagicMock, object]:
+    def _assess(scan, client: MagicMock, context: SBOMContext | None = None) -> tuple[MagicMock, object]:
         upload = MagicMock(return_value=SimpleNamespace(dt_project_version_uuid=uuid.uuid4(), dt_project_version="v"))
         with (
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
@@ -83,7 +83,7 @@ class TestALostUploadIsSentAgain:
             patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient", return_value=client),
         ):
             try:
-                outcome: object = DependencyTrackPlugin().assess(str(scan.sbom.id), scan.path)
+                outcome: object = DependencyTrackPlugin().assess(str(scan.sbom.id), scan.path, context=context)
             except RetryLaterError as retry:
                 outcome = retry
         return upload, outcome
@@ -151,3 +151,37 @@ class TestALostUploadIsSentAgain:
         upload.assert_not_called()
         assert outcome.summary.total_findings == 0
         assert self._row_kept(scan)
+
+    def test_a_rerun_a_person_asked_for_uploads_again(self, scan) -> None:
+        """Left alone, an analysed version is read as it stands: the result they
+        asked to replace."""
+        upload, outcome = self._assess(
+            scan, self._client(metrics={}, project=ANALYSED), SBOMContext(rerun_requested=True)
+        )
+
+        upload.assert_called_once()
+        assert isinstance(outcome, RetryLaterError)
+        assert not self._row_kept(scan)
+
+    def test_a_requested_rerun_keeps_the_version_on_another_server(self, scan) -> None:
+        """Release tags reach a project through its record, so one on a server
+        this run does not use has to outlive it."""
+        from sbomify.apps.vulnerability_scanning.models import (
+            DependencyTrackServer,
+            SbomDependencyTrackProjectVersion,
+        )
+
+        other = DependencyTrackServer.objects.create(
+            name="DT Other Server", url="https://dt-other.example.com", api_key="key", health_status="healthy"
+        )
+        elsewhere = SbomDependencyTrackProjectVersion.objects.create(
+            sbom=scan.sbom,
+            dt_server=other,
+            dt_project_version=str(scan.sbom.id),
+            dt_project_version_uuid=uuid.uuid4(),
+        )
+
+        self._assess(scan, self._client(metrics={}, project=ANALYSED), SBOMContext(rerun_requested=True))
+
+        assert not self._row_kept(scan)
+        assert SbomDependencyTrackProjectVersion.objects.filter(pk=elsewhere.pk).exists()
