@@ -1189,7 +1189,7 @@ class TestReleaseEdits:
         # The stored instant written as local time is the same date, not a correction.
         client, token = authenticated_api_client
         first_date = datetime(2025, 3, 1, 12, 0, tzinfo=dt_timezone.utc)
-        old = _release(sample_product, "1.9")
+        old = _release(sample_product, "1.9", created_at=PAST, released_at=PAST)
         new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
         declared = _supersede(old, "2.0", effective=first_date)
         assert declared.ok and declared.value
