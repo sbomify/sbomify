@@ -10,9 +10,11 @@ there to read. The scan then shows "Could not scan".
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 import pytest
+from django.utils import timezone
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin, _UploadFailed
 from sbomify.apps.plugins.sdk.base import RetryLaterError
@@ -172,6 +174,19 @@ class TestPollWaitsOnAnalysis:
             self._poll(uploaded_row, client)
 
         client.get_project_vulnerabilities.assert_not_called()
+
+    def test_a_token_dt_still_cannot_answer_for_later_falls_back_to_the_project(self, uploaded_row) -> None:
+        """A proxy that refuses the token endpoint fails every read. Waiting on
+        it without end would hold the findings back for good."""
+        uploaded_row.last_sbom_upload = timezone.now() - timedelta(hours=1)
+        uploaded_row.save(update_fields=["last_sbom_upload"])
+        client = self._token_client(Exception("Dependency Track error (503): Service Unavailable"))
+
+        result = self._poll(uploaded_row, client)
+
+        assert result.summary.total_findings == 1
+        uploaded_row.refresh_from_db()
+        assert uploaded_row.dt_upload_token is None
 
     def test_a_dt_without_the_token_endpoint_falls_back_to_the_project(self, uploaded_row) -> None:
         """A 404 will not turn into an answer on a later poll. Waiting on it

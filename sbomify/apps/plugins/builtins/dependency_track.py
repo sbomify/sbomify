@@ -50,6 +50,9 @@ _FALLBACK_SPEC_VERSIONS = ("1.6", "1.5")
 #: because sending the same BOM to a busy server only lengthens its queue.
 _LOST_UPLOAD_AFTER = timedelta(days=1)
 
+#: How long a failing read of the upload token holds a scan back. An endpoint that never answers would hold it for good.
+_TOKEN_UNREADABLE_AFTER = timedelta(minutes=30)
+
 
 class _UploadLost(Exception):
     """Dependency Track no longer has the upload on record, or never analysed it."""
@@ -814,7 +817,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if token and (processing := self._upload_processing(client, str(token))) is not False:
             if processing and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
                 raise _UploadLost(f"Dependency Track has not processed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
-            raise RetryLaterError("Dependency Track still processing SBOM")
+            # A read that keeps failing is not an answer. Past the limit the
+            # project decides, as it does for a token DT does not know.
+            if processing or dj_timezone.now() - uploaded <= _TOKEN_UNREADABLE_AFTER:
+                raise RetryLaterError("Dependency Track still processing SBOM")
 
         try:
             metrics = client.get_project_metrics(version_uuid)
