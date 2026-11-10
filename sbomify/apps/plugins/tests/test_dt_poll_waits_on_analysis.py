@@ -16,6 +16,7 @@ import pytest
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 from sbomify.apps.plugins.sdk.base import RetryLaterError
+from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
 FINDING = {
     "vulnerability": {"vulnId": "CVE-2021-44228", "severity": "CRITICAL", "description": "rce"},
@@ -161,6 +162,17 @@ class TestPollWaitsOnAnalysis:
             self._poll(uploaded_row, client)
 
         client.get_project_vulnerabilities.assert_not_called()
+
+    def test_a_dt_without_the_token_endpoint_falls_back_to_the_project(self, uploaded_row) -> None:
+        """A 404 will not turn into an answer on a later poll. Waiting on it
+        would hold the findings back for good, so the project decides."""
+        client = self._token_client(DependencyTrackAPIError("Dependency Track error (404)", status_code=404))
+
+        result = self._poll(uploaded_row, client)
+
+        assert result.summary.total_findings == 1
+        uploaded_row.refresh_from_db()
+        assert uploaded_row.dt_upload_token is None
 
     def test_without_a_token_dt_is_not_asked(self, version_row) -> None:
         """Rows uploaded before tokens were kept poll as they always did."""

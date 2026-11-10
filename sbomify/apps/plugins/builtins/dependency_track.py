@@ -907,14 +907,18 @@ class DependencyTrackPlugin(AssessmentPlugin):
         DT 4 and DT 5. ``processing: false`` with no status is also what DT
         answers for a token it does not know, after DT 5 has expired it or DT 4
         restarted, so the caller still checks the project before reading. A
-        failed read returns None, as in _analysis_finished.
+        404 is a Dependency Track with no such endpoint: it will never answer,
+        so the project decides there too. Any other failed read returns None,
+        as in _analysis_finished.
 
         Raises:
             _UploadLost: If DT 5 says processing the upload failed.
         """
         try:
             state = client.get_upload_processing(token)
-        except Exception:
+        except Exception as exc:
+            if getattr(exc, "status_code", None) == 404:
+                return False
             logger.debug("[DT] Could not read the processing state of upload %s", token, exc_info=True)
             return None
         if state.get("status") == "FAILED":
