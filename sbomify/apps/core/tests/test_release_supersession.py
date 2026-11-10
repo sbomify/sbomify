@@ -289,6 +289,8 @@ class TestCreateWithSupersedes:
         assert through_cle.status_code == 409, through_cle.content
         assert through_create.status_code == 409, through_create.content
         assert through_create.json()["error_code"] == "CONFLICT"
+        assert "already names 1.2.4 as the same line" in through_cle.json()["detail"]
+        assert through_create.json()["detail"] == through_cle.json()["detail"]
         assert [edge.drop_in for edge in _edges(old)] == [True]
 
     def test_an_edge_declared_early_with_another_date_is_the_same_edge(

@@ -149,6 +149,10 @@ def undeclared_supersedes(successor: Release, items: Iterable[Any]) -> ServiceRe
             .filter(from_release=predecessor, to_release=successor, drop_in=item.drop_in)
             .exists()
         ):
+            # A live edge on the other line is a conflict, in the words declaring it would get.
+            other_line = existing_supersession(predecessor, successor.version or successor.name, item.drop_in)
+            if not other_line.ok:
+                return ServiceResult.failure(other_line.error or "Conflicting supersession", other_line.status_code)
             missing.append(predecessor.name)
     return ServiceResult.success(missing)
 
