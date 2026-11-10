@@ -16,7 +16,7 @@ Reference:
 import json
 import re
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +44,15 @@ logger = getLogger(__name__)
 #: Older spec versions to offer a Dependency Track that refuses the document's
 #: own, newest first. 1.5 covers servers from before 1.6 support.
 _FALLBACK_SPEC_VERSIONS = ("1.6", "1.5")
+
+#: How long Dependency Track may sit on an upload without analysing it before the
+#: upload is taken as lost and sent again. Well past any backlog DT works through,
+#: because sending the same BOM to a busy server only lengthens its queue.
+_LOST_UPLOAD_AFTER = timedelta(days=1)
+
+
+class _UploadLost(Exception):
+    """Dependency Track no longer has the upload on record, or never analysed it."""
 
 
 def _is_unsupported_spec_version(error: Exception) -> bool:
@@ -309,9 +318,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
             # The upload may have replaced the component's previous SBOM in its
             # latest release, which takes that version out of what is tracked.
+            # Only this version and the latest flag are written here. The SBOM's
+            # own save queued the whole component as a task, and writing every
+            # version of one never backfilled could outrun this scan's time limit.
             from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
 
-            reconcile_component_safely(sbom.component, dt_server)
+            reconcile_component_safely(sbom.component, dt_server, only={sbom.id})
 
             logger.info(
                 f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
@@ -332,6 +344,14 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
         except RetryLaterError:
             raise
+        except _UploadLost as lost:
+            # Polling a lost upload asks for a retry every time, so without this
+            # the scan settles on "Could not scan" and no rescan can lift it.
+            # Forgetting the version makes this a first scan, which uploads again
+            # to the same project name and version.
+            logger.warning(f"[DT] {lost} for SBOM {sbom_id}, uploading it again")
+            version_row.delete()
+            return self.assess(sbom_id, sbom_path, dependency_status, context)
         except Exception as e:
             logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
             return self._create_error_result(f"Failed to poll DT results: {e}")
@@ -783,15 +803,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Raises:
             RetryLaterError: If DT is still processing.
+            _UploadLost: If DT no longer has the version, or has not analysed it in a day.
         """
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
+
         version_uuid = str(version_row.dt_project_version_uuid)
 
         try:
             metrics = client.get_project_metrics(version_uuid)
-        except Exception:
+        except Exception as e:
+            if isinstance(e, DependencyTrackAPIError) and e.status_code == 404:
+                raise _UploadLost("Dependency Track no longer has this project version") from e
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
-        if not metrics:
+        if not metrics and not (finished := self._analysis_finished(client, version_uuid)):
+            uploaded = version_row.last_sbom_upload or version_row.created_at
+            if finished is False and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
+                raise _UploadLost(f"Dependency Track has not analysed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
             raise RetryLaterError("Dependency Track still processing SBOM")
 
         vulnerabilities_response = client.get_project_vulnerabilities(version_uuid)
@@ -803,18 +831,24 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # source. Best-effort when on: a failure must never fail the scan.
         self._sync_triage_vex_safely(client, version_row)
 
-        now = dj_timezone.now()
-        version_row.last_metrics_sync = now
-        version_row.save(update_fields=["last_metrics_sync", "updated_at"])
-
-        # Also update the component-level mapping so admin/API consumers see
-        # the most recent poll timestamp at the component level (not just per-SBOM).
         from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
 
-        ComponentDependencyTrackMapping.objects.filter(
-            component=version_row.sbom.component,
-            dt_server=version_row.dt_server,
-        ).update(last_metrics_sync=now)
+        now = dj_timezone.now()
+        # The component's lock before either row, the order a reconcile takes
+        # them in. The scan's transaction keeps the rows until it commits and
+        # takes the lock for the tag sync before then, so writing first could
+        # deadlock with a reconcile that holds the lock and waits on the row.
+        with component_lock(version_row.sbom.component_id, version_row.dt_server_id):
+            version_row.last_metrics_sync = now
+            version_row.save(update_fields=["last_metrics_sync", "updated_at"])
+
+            # Also update the component-level mapping so admin/API consumers see
+            # the most recent poll timestamp at the component level (not just per-SBOM).
+            ComponentDependencyTrackMapping.objects.filter(
+                component=version_row.sbom.component,
+                dt_server=version_row.dt_server,
+            ).update(last_metrics_sync=now)
 
         findings = self._convert_dt_findings(vulnerabilities)
 
@@ -872,6 +906,24 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 **conversion_note,
             },
         )
+
+    @staticmethod
+    def _analysis_finished(client: Any, version_uuid: str) -> bool | None:
+        """Whether Dependency Track has finished analysing this project version.
+
+        DT stamps ``lastVulnerabilityAnalysis`` on the project when its analysis
+        ends, then queues the metrics update as a separate event, which can wait
+        behind every other project's metrics. The findings are readable from the
+        stamp on, so a scan that waited for metrics alone could run out of retries
+        with its results already there. A failed read returns None: DT has not
+        said, which is not the same as an upload it never analysed.
+        """
+        try:
+            project = client.get_project(version_uuid)
+        except Exception:
+            logger.debug("[DT] Could not read the analysis state of project %s", version_uuid, exc_info=True)
+            return None
+        return bool(project.get("lastVulnerabilityAnalysis"))
 
     @staticmethod
     def _imported_spec_version(client: Any, version_uuid: str, declared_spec: str) -> str | None:

@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.15"
 
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -282,6 +282,41 @@ jobs:
           name: e2e-test-diffs-group-${{ matrix.group }}
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
           if-no-files-found: ignore
+
+  # Valkey is what ships, Redis is what many deployments already run, and the
+  # suite above only ever sees one of them. These are the tests that talk to a
+  # live server: the cache, the broker and the channel layer as settings.py
+  # builds them, run against each image.
+  redis-protocol:
+    name: Redis protocol (${{ matrix.server }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        server: ['valkey/valkey:9-alpine', 'redis:8-alpine']
+    env:
+      REDIS_IMAGE: ${{ matrix.server }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # --no-deps: these tests need the server and nothing else, so skip
+      # building the browser and starting the database.
+      - name: Start the server and the test container
+        run: docker compose -f docker-compose.tests.yml up -d --wait --no-deps redis tests
+
+      # The tests skip when no server answers, which here would pass a job that
+      # tested nothing, so a skip fails it.
+      - name: Run tests
+        shell: bash
+        run: |
+          set -o pipefail
+          docker compose -f docker-compose.tests.yml exec -T tests uv run pytest --tb=short -v -rs \
+            sbomify/apps/core/tests/test_redis_protocol_compat.py \
+            sbomify/apps/core/tests/test_dramatiq_broker.py | tee test_results.txt
+          ! grep -q SKIPPED test_results.txt
 
   frontend-tests:
     name: Frontend Tests

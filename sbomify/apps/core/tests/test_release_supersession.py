@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
@@ -288,6 +289,8 @@ class TestCreateWithSupersedes:
         assert through_cle.status_code == 409, through_cle.content
         assert through_create.status_code == 409, through_create.content
         assert through_create.json()["error_code"] == "CONFLICT"
+        assert "already names 1.2.4 as the same line" in through_cle.json()["detail"]
+        assert through_create.json()["detail"] == through_cle.json()["detail"]
         assert [edge.drop_in for edge in _edges(old)] == [True]
 
     def test_an_edge_declared_early_with_another_date_is_the_same_edge(
@@ -576,6 +579,7 @@ class TestWhereAReleaseStands:
 
         page = authenticated_web_client.get(response["Location"]).content.decode()
         assert "Withdrawn" in page and "Reactivate release" in page
+        assert "sbomify monitors it again, unless it is replaced or past its support dates." in page
 
         authenticated_web_client.post(url, {"action": "reactivate"})
         assert _state(release) == Release.LifecycleState.ACTIVE
@@ -760,6 +764,15 @@ class TestChoosingTheLine:
         assert "released after" in (result.error or "")
         assert _edges(old) == []
 
+    def test_a_predecessor_deleted_before_the_lock_is_a_404(self, sample_product: Product) -> None:
+        old = _release(sample_product, "1.0", **_on(PAST))
+        _release(sample_product, "2.0", **_on(datetime(2025, 6, 1, tzinfo=dt_timezone.utc)))
+        Release.objects.filter(pk=old.pk).delete()
+
+        result = create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="2.0", drop_in=True)
+
+        assert (result.error, result.status_code) == ("Release no longer exists", 404)
+
     def test_an_edit_with_a_bare_timestamp_meets_the_same_line_rule_rather_than_failing(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:
@@ -800,6 +813,25 @@ class TestChoosingTheLine:
         assert candidate.is_prerelease
         assert not ReleaseSupersession.objects.filter(to_release=candidate).exists()
         assert _state(stable) == Release.LifecycleState.ACTIVE
+
+    def test_a_prerelease_is_told_when_its_predecessor_was_dropped(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        stable = _release(product, "1.2.4", **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc)))
+
+        def told(name: str, **fields: Any) -> list[str]:
+            response = authenticated_web_client.post(
+                reverse("core:release_new"), {"product_id": product.id, "name": name, "is_prerelease": "on", **fields}
+            )
+            assert response.status_code == 302
+            return [str(message) for message in get_messages(response.wsgi_request)]
+
+        # Unread messages stay queued for the next request, so the dropped choice comes last.
+        dropped = "It replaces no release. To replace one, choose a line."
+        assert dropped not in told("2.0.0-rc.1")
+        assert dropped not in told("2.0.0-rc.2", replaces=stable.pk, replaces_line="new")
+        assert told("2.0.0-rc.3", replaces=stable.pk)[-2:] == ["Release created. Add its artifacts below.", dropped]
 
     def test_a_prerelease_keeps_a_predecessor_chosen_with_a_line(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -870,6 +902,29 @@ class TestWithdrawnReason:
         data = client.get(f"/api/v1/releases/{release.pk}", **get_api_headers(token)).json()
 
         assert data["withdrawn_reason"] == "compromised"
+
+    def test_the_card_gives_a_reader_outside_the_workspace_the_date_alone(self, guest_user: AbstractBaseUser) -> None:
+        release = self._public_withdrawn()
+        Release.objects.filter(pk=release.pk).update(withdrawn_at=datetime(2026, 1, 5, tzinfo=dt_timezone.utc))
+        client = Client()
+        client.force_login(guest_user)
+
+        page = client.get(reverse("core:release_details", args=[release.product_id, release.pk])).content.decode()
+
+        assert "5 Jan 2026" in page
+        assert "5 Jan 2026." not in page
+
+    def test_the_card_gives_the_workspace_the_date_and_the_reason(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        release = _release(product, "2.3.1")
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+        Release.objects.filter(pk=release.pk).update(withdrawn_at=datetime(2026, 1, 5, tzinfo=dt_timezone.utc))
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, release.pk]))
+
+        assert "5 Jan 2026. Compromised." in page.content.decode()
 
     def test_a_page_of_several_products_asks_about_the_workspace_once(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
@@ -968,6 +1023,22 @@ class TestRemoveLink:
             event_type="withdrawn"
         ).exists()
         assert _state(old) == Release.LifecycleState.ACTIVE
+
+    def test_the_dialog_is_handed_the_name_as_written(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        # The dialog writes the name with x-text, so an HTML entity in the expression would show as typed.
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old, new = _release(product, "1.0.0"), _release(product, "R&D build")
+        _supersede(old, new)
+        assert create_release_cle_event(old, "supersededBy", PAST, superseded_by_version="R&D fork").ok
+
+        page = authenticated_web_client.get(reverse("core:release_details", args=[product.id, old.id])).content.decode()
+
+        assert r"name: 'R\u0026D build' }" in page
+        assert r"name: 'R\u0026D fork' }" in page
+        assert "Remove link to R&amp;D build" in page
+        assert "Remove link to R&amp;D fork" in page
 
     def test_the_edge_is_read_under_the_product_lock(self, team_with_business_plan: Workspace) -> None:
         # A release-date edit republishes the edge under the product lock, so an

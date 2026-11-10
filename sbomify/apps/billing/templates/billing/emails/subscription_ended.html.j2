@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Subscription Ended{% endblock %}
+{% block title %}Subscription ended{% endblock %}
 {% block content %}
     <h1>Subscription ended</h1>
     <p>Hi {{ user_name }},</p>
@@ -8,6 +8,6 @@
         has been deactivated. You can renew any time to pick up where you left off.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ upgrade_url }}" class="button">Renew Subscription</a>
+        <a href="{{ upgrade_url }}" class="button">Renew subscription</a>
     </p>
 {% endblock %}

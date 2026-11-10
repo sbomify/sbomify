@@ -54,8 +54,9 @@ withdrawal and no archiving shows the card only to managers, for the actions.
                         {% endif %}
                     </div>
                     {% if lifecycle.can_manage %}
-                        {% firstof edge.to_release.name edge.successor_label as successor_name %}
-                        <c-buttons.icon size="sm" label="Remove link to {{ successor_name }}" @click="removeLink = { id: '{{ edge.pk|escapejs }}', name: '{{ successor_name|escapejs }}' }"><i class="fas fa-link-slash" aria-hidden="true"></i></c-buttons.icon>
+                        {% with successor_name=edge.to_release.name|default:edge.successor_label %}
+                            <c-buttons.icon size="sm" label="Remove link to {{ successor_name }}" @click="removeLink = { id: '{{ edge.pk|escapejs }}', name: '{{ successor_name|escapejs }}' }"><i class="fas fa-link-slash" aria-hidden="true"></i></c-buttons.icon>
+                        {% endwith %}
                     {% endif %}
                 </div>
             {% endfor %}
@@ -73,7 +74,11 @@ withdrawal and no archiving shows the card only to managers, for the actions.
         {% endif %}
         {% if release.withdrawn_at %}
             <c-forms.field horizontal label="Withdrawn">
-            <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            {% if lifecycle.withdrawn_reason %}
+                <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}. {{ lifecycle.withdrawn_reason }}.</c-forms.static>
+            {% else %}
+                <c-forms.static>{{ release.withdrawn_at|date:"j M Y" }}</c-forms.static>
+            {% endif %}
             </c-forms.field>
         {% endif %}
         {% if release.archived_at %}
@@ -83,7 +88,7 @@ withdrawal and no archiving shows the card only to managers, for the actions.
         {% endif %}
         {% if lifecycle.can_manage %}
             {% if release.withdrawn_at or release.archived_at %}
-                <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again. A supersession or a support date still applies.">
+                <c-forms.field horizontal label="Reactivate release" hint="sbomify monitors it again, unless it is replaced or past its support dates.">
                 <form method="post" action="{{ lifecycle_url }}">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="reactivate">
