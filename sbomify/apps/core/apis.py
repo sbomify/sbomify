@@ -151,6 +151,22 @@ def _broadcast_release_updated(release: Release) -> None:
     )
 
 
+def _broadcast_linked_releases_updated(linked: Release) -> None:
+    """Tell the workspace a link to ``linked`` was added. Removing one sends the same from the link's own delete.
+
+    A linked release stays monitored while a live release links to it, and so
+    do the releases it links on and the releases shipping their SBOMs, so their
+    pages repaint as well.
+    """
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    reached = {linked.pk, *releases_linked_from([linked.pk])}
+    shipped = ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values("sbom_id")
+    moved = Release.objects.filter(Q(pk__in=reached) | Q(artifacts__sbom_id__in=shipped)).distinct()
+    for release in moved.select_related("product__team"):
+        _broadcast_release_updated(release)
+
+
 def _broadcast_product_updated(product: Product) -> None:
     """Tell the workspace a product was edited, so open inventories repaint it."""
     if product.team.key:
@@ -3544,7 +3560,9 @@ def set_release_lifecycle(request: HttpRequest, release_id: str, payload: Releas
         code = ErrorCode.RELEASE_NOT_FOUND if status == 404 else ErrorCode.VALIDATION_ERROR
         return status, {"detail": result.error, "error_code": code}
 
-    _broadcast_release_updated(release)
+    # The releases it links to, and those shipping the same SBOMs, may have
+    # been monitored only through it.
+    _broadcast_linked_releases_updated(release)
     return 200, _build_release_response(request, result.value)
 
 
@@ -4688,6 +4706,7 @@ def link_release_to_release(request: HttpRequest, release_id: str, payload: Rele
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
     _broadcast_release_updated(release)
+    _broadcast_linked_releases_updated(linked)
     return 201, _release_link_response(result.value)
 
 
@@ -4718,6 +4737,7 @@ def unlink_release_from_release(request: HttpRequest, release_id: str, linked_re
         status = result.status_code or 400
         return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
 
+    # The link's own delete tells the linked release and every release it kept monitored.
     _broadcast_release_updated(release)
     return 204, None
 
