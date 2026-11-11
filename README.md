@@ -444,10 +444,13 @@ You can create a token under **Administration → Access Management** in your De
 
 Each SBOM sbomify sends to Dependency Track is a project version named `{prefix}-sbomify-{component-id}`, with the SBOM's ID as the version. sbomify groups them as a tree:
 
-- `{prefix}-sbomify-workspace-{workspace-key}`: a collection for the workspace, holding
-- `{prefix}-sbomify-component-{component-id}`: a collection for each component, holding that component's SBOM versions.
+- `{prefix}-sbomify-workspace-{workspace-key}`: a collection for the workspace, holding one group for each product and two for components no single product owns:
+  - `{prefix}-sbomify-product-{product-id}`: the components in that product and no other.
+  - `{prefix}-sbomify-shared-{workspace-key}`: the components in more than one product.
+  - `{prefix}-sbomify-no-product-{workspace-key}`: the components in no product.
+- `{prefix}-sbomify-component-{component-id}`: a collection for each component, in one of those groups, holding that component's SBOM versions.
 
-Collections carry no BOM; Dependency Track sums their children.
+Collections carry no BOM; Dependency Track sums their children. A component moves when it joins or leaves a product. Deleting a product moves its components out and sets its collection inactive.
 
 sbomify tracks the newest SBOM of each format for a component and every SBOM a release it still monitors ships, including the releases those link to. A release stops counting once it is withdrawn, archived, replaced by a release on the same line, or past its end of support or end of life. Tracked versions stay active, and the newest of them is marked latest. Every other version is set inactive, never deleted: Dependency Track stops analysing it and keeps its findings and audit history. A version comes back when a release that sbomify monitors ships it again. The scheduled scans cover the same SBOMs.
 
