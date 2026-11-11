@@ -139,15 +139,16 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_OWNER,
         "Owner",
         "Full control of the workspace. Everything an admin can do, plus deleting "
-        "the workspace, inviting owners and removing other owners.",
+        "the workspace, making someone an owner, and changing or removing admins "
+        "and other owners.",
     ),
     (
         ROLE_ADMIN,
         "Admin",
         "Runs the workspace day to day: create, edit and delete products, "
         "components and releases; upload artifacts; manage workspace settings, "
-        "the Trust Center, integrations, members and billing. Cannot invite or "
-        "remove an owner, or delete the workspace.",
+        "the Trust Center, integrations, members and billing. Cannot make someone "
+        "an owner, change or remove an owner or another admin, or delete the workspace.",
     ),
     (
         ROLE_MEMBER,

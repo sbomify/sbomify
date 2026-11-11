@@ -103,6 +103,21 @@ class InvitationCreateSchema(BaseModel):
     )
 
 
+class MemberRoleUpdateSchema(BaseModel):
+    role: str = Field(
+        description=(
+            "owner, admin, member or operator. Only an owner can change an owner's or an admin's role, "
+            "or make someone an owner."
+        )
+    )
+
+
+class MemberRoleSchema(BaseModel):
+    id: int
+    user_id: int
+    role: str
+
+
 class TeamSchema(BaseModel):
     key: str
     name: str
