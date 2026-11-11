@@ -50,9 +50,16 @@ _FALLBACK_SPEC_VERSIONS = ("1.6", "1.5")
 #: because sending the same BOM to a busy server only lengthens its queue.
 _LOST_UPLOAD_AFTER = timedelta(days=1)
 
+#: How long a failing read of the upload token holds a scan back. An endpoint that never answers would hold it for good.
+_TOKEN_UNREADABLE_AFTER = timedelta(minutes=30)
+
 
 class _UploadLost(Exception):
     """Dependency Track no longer has the upload on record, or never analysed it."""
+
+
+class _UploadFailed(_UploadLost):
+    """Dependency Track read the upload and could not process it."""
 
 
 def _is_unsupported_spec_version(error: Exception) -> bool:
@@ -213,21 +220,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 ),
             )
 
-        # Guard: DT scanning requires product membership. Check via the direct
-        # Product↔Component M2M (stable at SBOM creation time) rather than
-        # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
-        # and release association in separate API calls, so the ReleaseArtifact
-        # may not exist yet when the upload-triggered scan fires).
-        has_product = sbom.component.products.filter(team=team).exists()
-        if not has_product:
-            return self.create_skipped_result(
-                finding_id="dependency-track:no-product",
-                title="Component Not in a Product",
-                description=(
-                    "Dependency Track only scans components that belong to a product. "
-                    "Add this component to a product so Dependency Track can scan it."
-                ),
-            )
+        # Dependency Track scans what sbomify tracks: each component's newest
+        # SBOM, product or not, and the SBOMs its live releases ship. An upload
+        # already made keeps polling, so a newer SBOM arriving mid-scan does
+        # not throw away results Dependency Track is already producing.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+
+        tracked = tracked_sboms(SBOM.objects.filter(pk=sbom.pk), team_id=team.id).exists()
+        if not tracked and not SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).exists():
+            return self._not_monitored()
 
         # Resolve release names for DT project tags. May be empty if the
         # ReleaseArtifact hasn't been committed yet (race with sbomify-action).
@@ -242,10 +244,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             return self._create_error_result(str(e))
 
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
-        from sbomify.apps.vulnerability_scanning.models import (
-            ComponentDependencyTrackMapping,
-            SbomDependencyTrackProjectVersion,
-        )
+        from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
 
         # Project name is component-scoped (not product-scoped). Multi-product
         # components end up with a single DT project that aggregates all their
@@ -256,12 +255,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # poll retry; if not, this is the first scan and we need to upload.
         version_row = SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id, dt_server=dt_server).first()
 
-        if version_row is not None and context is not None and context.rerun_requested:
+        if version_row is None and not tracked:
+            # Its upload is on another server, one the workspace no longer uses.
+            # There is nothing on this one to keep polling, and an SBOM sbomify
+            # no longer tracks is not sent to it.
+            return self._not_monitored()
+
+        if version_row is not None and tracked and context is not None and context.rerun_requested:
             # A person asked for this run, and polling the version on record would
             # only repeat the outcome they want replaced. Forgetting it makes this a
             # first scan, which uploads to the same project name and version, so DT
             # re-imports into the project it has. Only this server's record goes: one
-            # on another server still carries that project's release tags.
+            # on another server still carries that project's release tags. An SBOM
+            # sbomify no longer tracks keeps polling the version it has instead:
+            # it is not sent to Dependency Track again.
             version_row.delete()
             version_row = None
 
@@ -325,6 +332,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 # Another concurrent scan created it — fine, nothing to reconcile.
                 pass
 
+            # The upload may have replaced the component's previous SBOM in its
+            # latest release, which takes that version out of what is tracked.
+            # Only this version and the latest flag are written here. The SBOM's
+            # own save queued the whole component as a task, and writing every
+            # version of one never backfilled could outrun this scan's time limit.
+            from sbomify.apps.vulnerability_scanning.services.dt_scope import reconcile_component_safely
+
+            reconcile_component_safely(sbom.component, dt_server, only={sbom.id})
+
             logger.info(
                 f"[DT] SBOM {sbom_id} uploaded to DT version {version_row.dt_project_version}, will poll for results"
             )
@@ -344,6 +360,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
         except RetryLaterError:
             raise
+        except _UploadFailed as failed:
+            # The same BOM sent again at once would fail the same way, on every
+            # poll of this run. Forgetting the version leaves the upload to the
+            # next scan, and this run says what happened.
+            logger.warning(f"[DT] {failed} for SBOM {sbom_id}")
+            version_row.delete()
+            return self._create_error_result(
+                "Dependency Track could not process this SBOM. sbomify sends it again at the next scan."
+            )
         except _UploadLost as lost:
             # Polling a lost upload asks for a retry every time, so without this
             # the scan settles on "Could not scan" and no rescan can lift it.
@@ -446,18 +471,68 @@ class DependencyTrackPlugin(AssessmentPlugin):
             Exception: if upload, lookup, or DB write fails. The caller wraps
             in a DT-setup-failed error result.
         """
-        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackClient
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
+
+        # Under the component's lock, so a first scan running beside this one
+        # decides latest only after this version's row exists.
+        with component_lock(sbom.component_id, dt_server.id):
+            return self._upload_new_sbom_version_locked(
+                sbom=sbom,
+                sbom_bytes=sbom_bytes,
+                dt_server=dt_server,
+                project_name=project_name,
+                current_release_names=current_release_names,
+            )
+
+    def _upload_new_sbom_version_locked(
+        self,
+        *,
+        sbom: Any,
+        sbom_bytes: bytes,
+        dt_server: Any,
+        project_name: str,
+        current_release_names: list[str],
+    ) -> Any:
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError, DependencyTrackClient
         from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import (
+            component_collection_safely,
+            forget_collections,
+            is_newest_tracked,
+            parent_missing,
+        )
 
         client = DependencyTrackClient(dt_server.url, dt_server.api_key)
         project_version = str(sbom.id)
 
-        client.upload_sbom_with_project_creation(
-            project_name=project_name,
-            project_version=project_version,
-            sbom_data=sbom_bytes,
-            auto_create=True,
-        )
+        # Born in its component's collection. None when the key may not make
+        # collections: the upload then goes ahead as it always did. Latest only
+        # when it is the newest tracked SBOM, since first scans can finish out
+        # of order and setting the flag clears it on every other version.
+        parent_uuid = component_collection_safely(client, sbom.component, dt_server)
+        is_latest = is_newest_tracked(sbom, dt_server)
+
+        def upload(parent: str | None) -> dict[str, Any]:
+            return client.upload_sbom_with_project_creation(
+                project_name=project_name,
+                project_version=project_version,
+                sbom_data=sbom_bytes,
+                auto_create=True,
+                parent_uuid=parent,
+                is_latest=is_latest,
+            )
+
+        try:
+            response = upload(parent_uuid)
+        except DependencyTrackAPIError as exc:
+            # The recorded collection was deleted in Dependency-Track. Upload
+            # flat, as before collections existed; the reconcile that follows
+            # makes the collection again and moves this version under it.
+            if parent_uuid is None or not parent_missing(exc):
+                raise
+            forget_collections(sbom.component, dt_server)
+            parent_uuid = None
+            response = upload(None)
 
         project_data = client.find_project_by_name_version(project_name, project_version)
         if not project_data:
@@ -473,6 +548,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 "dt_project_version": project_version,
                 "dt_project_version_uuid": version_uuid,
                 "last_sbom_upload": dj_timezone.now(),
+                "dt_active": True,
+                "dt_is_latest": is_latest,
+                "dt_parent_uuid": parent_uuid,
+                "dt_upload_token": response.get("token") or None,
             },
         )
 
@@ -529,7 +608,9 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # Find the DT version row. There may be multiple dt_servers per
         # (sbom, ...), so update all.
         version_rows = list(
-            SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).select_related("dt_server")
+            SbomDependencyTrackProjectVersion.objects.filter(sbom_id=sbom_id).select_related(
+                "dt_server", "sbom__component__team"
+            )
         )
         if not version_rows:
             logger.debug(
@@ -538,24 +619,53 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
             return
 
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock, reconcile_component
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        component = version_rows[0].sbom.component
+        unsettled = 0
         for version_row in version_rows:
-            try:
-                client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
-                written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
-                (logger.info if written else logger.debug)(
-                    "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
-                    "set" if written else "already in sync,",
-                    canonical_names,
-                    version_row.dt_project_version_uuid,
-                    sbom_id,
-                )
-            except Exception:
-                logger.warning(
-                    "[DT] sync_release_tags: failed to set tags on version %s for SBOM %s",
-                    version_row.dt_project_version_uuid,
-                    sbom_id,
-                    exc_info=True,
-                )
+            # The tag write and the reconcile under one lock, so no reconcile
+            # elsewhere writes the project between this read and this write.
+            with component_lock(component.id, version_row.dt_server_id):
+                try:
+                    client = DependencyTrackClient(version_row.dt_server.url, version_row.dt_server.api_key)
+                    written = client.set_project_tags(str(version_row.dt_project_version_uuid), canonical_names)
+                    if written:
+                        # The tag write sent back the whole project as it was read,
+                        # which may be from before a reconcile retired it. Forget
+                        # what we last wrote, so the reconcile below re-reads it.
+                        version_row.dt_active = None
+                        version_row.save(update_fields=["dt_active", "updated_at"])
+                    (logger.info if written else logger.debug)(
+                        "[DT] sync_release_tags: %s tags=%s on version %s for SBOM %s",
+                        "set" if written else "already in sync,",
+                        canonical_names,
+                        version_row.dt_project_version_uuid,
+                        sbom_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "[DT] sync_release_tags: failed to set tags on version %s for SBOM %s",
+                        version_row.dt_project_version_uuid,
+                        sbom_id,
+                        exc_info=True,
+                    )
+
+                # A release gaining or losing this SBOM can bring its version into
+                # what sbomify tracks, or take it out. Only that version, and the
+                # latest flag, can move: the rest wait for the backfill and the sweep.
+                try:
+                    counts = reconcile_component(component, version_row.dt_server, only={version_row.sbom_id})
+                    unsettled += counts["failed"] - counts["refused"]
+                except Exception:
+                    logger.warning("[DT] Could not reconcile component %s", component.id, exc_info=True)
+                    unsettled += 1
+        if unsettled:
+            # The attach and detach tasks never retry a hook, so an outage here
+            # would leave the version as it was until a backfill. A task that
+            # retries carries the same bounded write on.
+            reconcile_component_dt_scope.send(str(component.id), [str(sbom_id)])
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.
@@ -719,11 +829,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
         Raises:
             RetryLaterError: If DT is still processing.
-            _UploadLost: If DT no longer has the version, or has not analysed it in a day.
+            _UploadLost: If DT no longer has the version, or has not analysed it
+                in a day.
+            _UploadFailed: If DT 5 says processing the upload failed.
         """
         from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
         version_uuid = str(version_row.dt_project_version_uuid)
+        uploaded = version_row.last_sbom_upload or version_row.created_at
+
+        token = version_row.dt_upload_token
+        if token and (processing := self._upload_processing(client, str(token))) is not False:
+            if processing and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
+                raise _UploadLost(f"Dependency Track has not processed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
+            # A read that keeps failing is not an answer. Past the limit the
+            # project decides, as it does for a token DT does not know.
+            if processing or dj_timezone.now() - uploaded <= _TOKEN_UNREADABLE_AFTER:
+                raise RetryLaterError("Dependency Track still processing SBOM")
 
         try:
             metrics = client.get_project_metrics(version_uuid)
@@ -733,7 +855,6 @@ class DependencyTrackPlugin(AssessmentPlugin):
             raise RetryLaterError("Dependency Track project metrics not yet available")
 
         if not metrics and not (finished := self._analysis_finished(client, version_uuid)):
-            uploaded = version_row.last_sbom_upload or version_row.created_at
             if finished is False and dj_timezone.now() - uploaded > _LOST_UPLOAD_AFTER:
                 raise _UploadLost(f"Dependency Track has not analysed the upload from {uploaded:%Y-%m-%d %H:%M} UTC")
             raise RetryLaterError("Dependency Track still processing SBOM")
@@ -747,18 +868,27 @@ class DependencyTrackPlugin(AssessmentPlugin):
         # source. Best-effort when on: a failure must never fail the scan.
         self._sync_triage_vex_safely(client, version_row)
 
-        now = dj_timezone.now()
-        version_row.last_metrics_sync = now
-        version_row.save(update_fields=["last_metrics_sync", "updated_at"])
-
-        # Also update the component-level mapping so admin/API consumers see
-        # the most recent poll timestamp at the component level (not just per-SBOM).
         from sbomify.apps.vulnerability_scanning.models import ComponentDependencyTrackMapping
+        from sbomify.apps.vulnerability_scanning.services.dt_scope import component_lock
 
-        ComponentDependencyTrackMapping.objects.filter(
-            component=version_row.sbom.component,
-            dt_server=version_row.dt_server,
-        ).update(last_metrics_sync=now)
+        now = dj_timezone.now()
+        # The component's lock before either row, the order a reconcile takes
+        # them in. The scan's transaction keeps the rows until it commits and
+        # takes the lock for the tag sync before then, so writing first could
+        # deadlock with a reconcile that holds the lock and waits on the row.
+        with component_lock(version_row.sbom.component_id, version_row.dt_server_id):
+            version_row.last_metrics_sync = now
+            # Read once, the token has done its job. Rescans of this version upload
+            # nothing, so they skip the call, and DT 5 forgets old tokens anyway.
+            version_row.dt_upload_token = None
+            version_row.save(update_fields=["last_metrics_sync", "dt_upload_token", "updated_at"])
+
+            # Also update the component-level mapping so admin/API consumers see
+            # the most recent poll timestamp at the component level (not just per-SBOM).
+            ComponentDependencyTrackMapping.objects.filter(
+                component=version_row.sbom.component,
+                dt_server=version_row.dt_server,
+            ).update(last_metrics_sync=now)
 
         findings = self._convert_dt_findings(vulnerabilities)
 
@@ -816,6 +946,35 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 **conversion_note,
             },
         )
+
+    @staticmethod
+    def _upload_processing(client: Any, token: str) -> bool | None:
+        """Whether Dependency Track is still processing the upload behind this token.
+
+        Neither the metrics nor ``lastVulnerabilityAnalysis`` can say that on
+        DT 5: it answers metrics for a version before analysing it, and after a
+        re-upload the previous analysis is still stamped on the project. The
+        token ``/v1/bom`` returned covers the import and the analysis on both
+        DT 4 and DT 5. ``processing: false`` with no status is also what DT
+        answers for a token it does not know, after DT 5 has expired it or DT 4
+        restarted, so the caller still checks the project before reading. A
+        404 is a Dependency Track with no such endpoint: it will never answer,
+        so the project decides there too. Any other failed read returns None,
+        as in _analysis_finished.
+
+        Raises:
+            _UploadFailed: If DT 5 says processing the upload failed.
+        """
+        try:
+            state = client.get_upload_processing(token)
+        except Exception as exc:
+            if getattr(exc, "status_code", None) == 404:
+                return False
+            logger.debug("[DT] Could not read the processing state of upload %s", token, exc_info=True)
+            return None
+        if state.get("status") == "FAILED":
+            raise _UploadFailed("Dependency Track failed to process the upload")
+        return bool(state.get("processing"))
 
     @staticmethod
     def _analysis_finished(client: Any, version_uuid: str) -> bool | None:
@@ -1095,6 +1254,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             )
 
         return findings
+
+    def _not_monitored(self) -> AssessmentResult:
+        """The skip for an SBOM sbomify does not track."""
+        return self.create_skipped_result(
+            finding_id="dependency-track:not-tracked",
+            title="Not Monitored",
+            description=(
+                "sbomify monitors each component's newest SBOM and the SBOMs its current releases ship. "
+                "This SBOM is neither, so Dependency Track did not scan it."
+            ),
+        )
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.

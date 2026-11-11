@@ -145,6 +145,7 @@ def _get_public_releases(
             "released_at": release.released_at,
             "artifacts_count": release.annotated_artifacts_count,
             "has_sboms": release.annotated_has_sboms,
+            "lifecycle_state": release.lifecycle_state,
         }
         if is_custom_domain:
             release_data["public_url"] = f"/product/{product_slug}/release/{release_data['slug'] or release.id}/"

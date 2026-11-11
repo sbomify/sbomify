@@ -25,6 +25,7 @@
     <c-branded.badge brand>Release</c-branded.badge>
     {% if release.is_latest %}<c-branded.badge tone="success">Latest</c-branded.badge>{% endif %}
     {% if release.is_prerelease %}<c-branded.badge tone="medium">Pre-release</c-branded.badge>{% endif %}
+    <c-branded.release-state state="{{ release.lifecycle_state }}" />
     </c-slot>
     <div class="flex items-center gap-x-5 gap-y-2 [flex-wrap:wrap]">
         <c-branded.meta-item icon="far fa-calendar">
@@ -95,6 +96,19 @@
                      x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); } }"
                      x-init="init()">
                 <c-branded.section-header title="Vulnerability posture" subtitle="Known vulnerabilities across this release, with our VEX statements applied." />
+                {% if untracked %}
+                    <c-feedback.alert standing icon="fas fa-clock-rotate-left" title="No longer monitored">
+                    {{ untracked.reason }} on {{ untracked.on|date:"j M Y" }}.
+                    {% if untracked.sboms %}
+                        {{ untracked.stopped }} of its {{ untracked.sboms }} SBOMs {{ untracked.stopped|pluralize:"is,are" }} no longer scanned.
+                        {% if vuln_posture.last_scanned_at %}
+                            The oldest scan in these counts ran on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                        {% endif %}
+                    {% elif vuln_posture.last_scanned_at %}
+                        These counts are from its last scan, on {{ vuln_posture.last_scanned_at|date:"j M Y" }}.
+                    {% endif %}
+                    </c-feedback.alert>
+                {% endif %}
                 <c-branded.surface class="flex flex-col gap-5">
                 {# Severity breakdown (VEX applied) #}
                 <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
@@ -142,7 +156,13 @@
                 </div>
                 <p class="text-sm text-text-muted m-0"
                    x-show="!data.findings.length"
-                   x-cloak>No vulnerabilities found in this release.</p>
+                   x-cloak>
+                    {% if untracked %}
+                        No known vulnerabilities at its last scan.
+                    {% else %}
+                        No vulnerabilities found in this release.
+                    {% endif %}
+                </p>
                 </c-branded.surface>
             </section>
         {% endif %}

@@ -284,27 +284,26 @@ class TestCRAExportPackage:
 
 @pytest.mark.django_db
 class TestEuAuthorizedRepresentative:
-    """CRA Art. 22/25 (checklist 7.4): a manufacturer without an EU
-    establishment must appoint an AR before market placement."""
+    """CRA Art. 18 (checklist 7.4): a manufacturer *may* appoint an AR, so
+    the block is optional, but a started one has to be finished."""
 
-    def test_an_unanswered_determination_is_incomplete_but_not_a_breach(self, cra_assessment):
+    def test_an_unanswered_determination_is_incomplete(self, cra_assessment):
         assert cra_assessment.is_eu_established is None
-        assert cra_assessment.requires_authorized_representative is False
         assert "Record whether" in cra_assessment.eu_representation_problems[0]
 
     def test_an_eu_established_manufacturer_needs_no_representative(self, cra_assessment):
         cra_assessment.is_eu_established = True
 
-        assert cra_assessment.requires_authorized_representative is False
         assert cra_assessment.eu_representation_problems == []
 
-    def test_a_non_eu_manufacturer_without_a_representative_is_a_breach(self, cra_assessment):
+    def test_a_non_eu_manufacturer_may_leave_the_representative_out(self, cra_assessment):
+        """Art. 18(1): "A manufacturer may, by a written mandate, appoint an
+        authorised representative." Nothing in the CRA makes it mandatory."""
         cra_assessment.is_eu_established = False
 
-        assert cra_assessment.requires_authorized_representative is True
-        problem = cra_assessment.eu_representation_problems[0]
-        assert "Art. 22" in problem
-        assert "name" in problem and "mandate date" in problem
+        assert cra_assessment.authorized_rep_is_recorded is False
+        assert cra_assessment.authorized_rep_problems == []
+        assert cra_assessment.eu_representation_problems == []
 
     def test_a_complete_representative_block_clears_the_obligation(self, cra_assessment):
         from datetime import date
@@ -324,6 +323,7 @@ class TestEuAuthorizedRepresentative:
         cra_assessment.authorized_rep_email = "ar@acme-eu.example"
 
         problem = cra_assessment.eu_representation_problems[0]
+        assert "Art. 18" in problem
         assert "address" in problem
         assert "mandate date" in problem
         assert "contact email" not in problem

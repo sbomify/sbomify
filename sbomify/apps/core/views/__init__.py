@@ -60,6 +60,7 @@ from sbomify.apps.core.views.products_dashboard import ProductCreateView as Prod
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
+from sbomify.apps.core.views.release_details_private import ReleaseLifecycleView as ReleaseLifecycleView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.release_links import ReleaseLinksView as ReleaseLinksView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
@@ -523,6 +524,12 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         if not target_team.can_be_private():
             component.visibility = Component.Visibility.PUBLIC
         component.save()
+
+        # Its Dependency-Track collection belongs under the new workspace's now.
+        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+
+        moved_id = str(component.pk)
+        transaction.on_commit(lambda: reconcile_component_dt_scope.send(moved_id), robust=True)
 
     messages.add_message(
         request,

@@ -70,34 +70,140 @@ class TestDependencyTrackSkippedFinding:
     release association — never from the upload path after Task 9 lands.
     """
 
-    def test_no_release_returns_warning_not_error(self, tmp_path, sample_team_with_owner_member):
+    def test_the_newest_sbom_of_a_component_in_no_product_is_scanned(self, tmp_path, sample_team_with_owner_member):
+        """sbomify tracks each component's newest SBOM whether or not a product holds it."""
         from sbomify.apps.core.models import Component
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.sboms.models import SBOM
 
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="c", team=team)
-        sbom = SBOM.objects.create(
-            name="lithium",
-            component=component,
-            format="cyclonedx",
-            format_version="1.6",
-        )
-
+        sbom = SBOM.objects.create(name="lithium", component=component, format="cyclonedx", format_version="1.6")
         sbom_path = tmp_path / "sbom.json"
         sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
 
         plugin = DependencyTrackPlugin()
-        with patch.object(plugin, "_team_has_dt_enabled", return_value=True):
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(plugin, "_select_dt_server", side_effect=RuntimeError("no server")),
+        ):
             result = plugin.assess(sbom_id=sbom.id, sbom_path=sbom_path)
 
-        assert len(result.findings) == 1
-        finding = result.findings[0]
-        assert finding.status == "warning"
-        assert finding.id == "dependency-track:no-product"
-        assert "product" in finding.description.lower()
+        # Reaching server selection proves nothing skipped it for want of a product.
+        assert result.metadata.get("skipped") is not True
+        assert any("no server" in (f.description or "").lower() for f in result.findings)
+
+    def test_an_sbom_sbomify_no_longer_tracks_is_skipped(self, tmp_path, sample_team_with_owner_member):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        older = SBOM.objects.create(
+            name="lithium", version="1.0", component=component, format="cyclonedx", format_version="1.6"
+        )
+        SBOM.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=30))
+        SBOM.objects.create(name="lithium", version="2.0", component=component, format="cyclonedx", format_version="1.6")
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        plugin = DependencyTrackPlugin()
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(plugin, "_select_dt_server", side_effect=AssertionError("must not reach Dependency Track")),
+        ):
+            result = plugin.assess(sbom_id=older.id, sbom_path=sbom_path)
+
+        (finding,) = result.findings
+        assert finding.id == "dependency-track:not-tracked"
+        assert result.metadata["skipped"] is True
         assert result.summary.error_count == 0
-        assert result.summary.warning_count == 1
+
+    def test_a_scan_already_uploaded_keeps_polling_after_a_newer_sbom_arrives(
+        self, tmp_path, sample_team_with_owner_member
+    ):
+        """The upload settled before the newer SBOM landed, so its results are still collected."""
+        import uuid
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer, SbomDependencyTrackProjectVersion
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        older = SBOM.objects.create(
+            name="lithium", version="1.0", component=component, format="cyclonedx", format_version="1.6"
+        )
+        SBOM.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=30))
+        SBOM.objects.create(name="lithium", version="2.0", component=component, format="cyclonedx", format_version="1.6")
+        server = DependencyTrackServer.objects.create(name="dt", url="https://dt.example.com", api_key="key")
+        SbomDependencyTrackProjectVersion.objects.create(
+            sbom=older, dt_server=server, dt_project_version="1.0", dt_project_version_uuid=uuid.uuid4()
+        )
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        plugin = DependencyTrackPlugin()
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(plugin, "_select_dt_server", side_effect=RuntimeError("no server")),
+        ):
+            result = plugin.assess(sbom_id=older.id, sbom_path=sbom_path)
+
+        assert result.metadata.get("skipped") is not True
+        assert any("no server" in (f.description or "").lower() for f in result.findings)
+
+    def test_an_untracked_sbom_uploaded_to_another_server_is_not_sent_to_this_one(
+        self, tmp_path, sample_team_with_owner_member
+    ):
+        """The workspace changed server, and the older SBOM's upload is on the one it left."""
+        import uuid
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer, SbomDependencyTrackProjectVersion
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="c", team=team)
+        older = SBOM.objects.create(
+            name="lithium", version="1.0", component=component, format="cyclonedx", format_version="1.6"
+        )
+        SBOM.objects.filter(pk=older.pk).update(created_at=timezone.now() - timedelta(days=30))
+        SBOM.objects.create(name="lithium", version="2.0", component=component, format="cyclonedx", format_version="1.6")
+        left = DependencyTrackServer.objects.create(name="left", url="https://left.example.com", api_key="key")
+        current = DependencyTrackServer.objects.create(name="current", url="https://current.example.com", api_key="key")
+        SbomDependencyTrackProjectVersion.objects.create(
+            sbom=older, dt_server=left, dt_project_version="1.0", dt_project_version_uuid=uuid.uuid4()
+        )
+        sbom_path = tmp_path / "sbom.json"
+        sbom_path.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6"}')
+
+        plugin = DependencyTrackPlugin()
+        with (
+            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
+            patch.object(plugin, "_select_dt_server", return_value=current),
+            patch.object(plugin, "_upload_new_sbom_version") as upload,
+        ):
+            result = plugin.assess(sbom_id=older.id, sbom_path=sbom_path)
+
+        upload.assert_not_called()
+        (finding,) = result.findings
+        assert finding.id == "dependency-track:not-tracked"
+        assert result.metadata["skipped"] is True
+        assert not SbomDependencyTrackProjectVersion.objects.filter(sbom=older, dt_server=current).exists()
 
     def test_dt_not_enabled_is_a_skip_in_workspace_words(self, tmp_path, sample_team_with_owner_member):
         from sbomify.apps.core.models import Component

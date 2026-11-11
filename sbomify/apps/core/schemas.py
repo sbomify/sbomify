@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -629,6 +629,28 @@ class ReleaseArtifactDetailSchema(BaseModel):
     document: ArtifactDocumentSchema | None = None
 
 
+class SupersedesItem(BaseModel):
+    """A release of the same product that the new release supersedes, named by ID or by version."""
+
+    release_id: str | None = None
+    version: str | None = Field(
+        default=None, max_length=255, description="The superseded release's version, or its name if it has none"
+    )
+    drop_in: bool = Field(
+        default=True,
+        description=(
+            "The new release replaces this one, which stops being monitored. "
+            "False records an upgrade path to a new line and keeps this release monitored."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def names_one_release(self) -> SupersedesItem:
+        if bool(self.release_id) == bool(self.version):
+            raise ValueError("Name the superseded release by release_id or by version, not both")
+        return self
+
+
 class ReleaseCreateSchema(BaseModel):
     """Schema for creating a new Release via top-level API endpoint."""
 
@@ -639,6 +661,22 @@ class ReleaseCreateSchema(BaseModel):
     product_id: str = Field(..., description="ID of the product this release belongs to")
     created_at: datetime | None = None
     released_at: datetime | None = None
+    supersedes: list[SupersedesItem] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Releases of the same product this release supersedes. Recorded with the release, or not at all.",
+    )
+
+
+class ReleaseLifecycleSchema(BaseModel):
+    """Withdraw, archive or reactivate a release."""
+
+    action: Literal["withdraw", "archive", "reactivate"]
+    reason: str = Field(
+        default="",
+        max_length=30,
+        description="Why the release is withdrawn: defective, compromised or published_in_error. Withdraw only.",
+    )
 
 
 class ReleaseUpdateSchema(BaseModel):
@@ -663,6 +701,16 @@ class ReleasePatchSchema(BaseModel):
     released_at: datetime | None = None
 
 
+class ReleaseEdgeSchema(BaseModel):
+    """One supersession edge, described by the release at its other end."""
+
+    release_id: str | None = Field(description="The other release, or null for a successor outside sbomify")
+    name: str
+    version: str | None = None
+    drop_in: bool = Field(description="True on the same line, where the later release replaces the earlier one")
+    effective: datetime
+
+
 class ReleaseResponseSchema(BaseModel):
     """Schema for Release API responses."""
 
@@ -679,6 +727,37 @@ class ReleaseResponseSchema(BaseModel):
     released_at: datetime | None = None
     artifacts_count: int | None = None
     artifacts: list[ReleaseArtifactDetailSchema] | None = None
+    lifecycle_state: str = Field(
+        description="active, superseded, end_of_support, end_of_life, withdrawn or archived. Only active is monitored."
+    )
+    is_tracked: bool = Field(
+        description=(
+            "Whether the release itself is still monitored: lifecycle_state is active. Its SBOMs can still be "
+            "scanned while a monitored release ships them too or links to it."
+        )
+    )
+    superseded_at: datetime | None = None
+    end_of_support: date | None = Field(default=None, description="The release's own end of support, if it has one")
+    end_of_life: date | None = Field(default=None, description="The release's own end of life, if it has one")
+    effective_end_of_support: date | None = Field(
+        default=None,
+        description="The end of support that applies: the release's own, else the product's for every version",
+    )
+    effective_end_of_life: date | None = Field(
+        default=None,
+        description="The end of life that applies: the release's own, else the product's for every version",
+    )
+    withdrawn_at: datetime | None = None
+    withdrawn_reason: str | None = Field(
+        default=None, description="Why the release was withdrawn. Null for readers outside the workspace."
+    )
+    archived_at: datetime | None = None
+    predecessors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release this one follows. On a single release only, not in lists."
+    )
+    successors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release that follows this one. On a single release only, not in lists."
+    )
 
 
 class ReleaseArtifactCreateSchema(BaseModel):
