@@ -7,6 +7,8 @@ interface ScrollableTabs {
     resizeObserver: ResizeObserver | undefined;
     selectionObserver: MutationObserver | undefined;
     initTimer: ReturnType<typeof setTimeout> | undefined;
+    rows(): { scroller: HTMLElement; tabItems: HTMLElement } | null;
+    observe(retry: boolean): void;
     measure(): void;
     scroll(direction: number): void;
     reveal(target: EventTarget | null): void;
@@ -24,15 +26,31 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
         initTimer: undefined as ReturnType<typeof setTimeout> | undefined,
 
         init() {
+            this.observe(true);
+        },
+
+        /** The row's elements, or null while a morph has not put them in place. */
+        rows() {
+            const { scroller, tabItems } = this.$refs;
+            if (!(scroller instanceof HTMLElement) || !(tabItems instanceof HTMLElement)) return null;
+            return { scroller, tabItems };
+        },
+
+        observe(retry: boolean) {
+            const rows = this.rows();
+            if (!rows) {
+                if (retry) this.$nextTick(() => this.observe(false));
+                return;
+            }
             this.resizeObserver = new ResizeObserver(() => {
                 this.measure();
                 this.revealActive();
             });
             this.resizeObserver.observe(this.$root);
-            this.resizeObserver.observe(this.$refs.scroller);
-            this.resizeObserver.observe(this.$refs.tabItems);
+            this.resizeObserver.observe(rows.scroller);
+            this.resizeObserver.observe(rows.tabItems);
             this.selectionObserver = new MutationObserver(() => this.revealActive());
-            this.selectionObserver.observe(this.$refs.tabItems, {
+            this.selectionObserver.observe(rows.tabItems, {
                 subtree: true, attributes: true, attributeFilter: ['aria-current', 'aria-selected']
             });
             this.initTimer = setTimeout(() => {
@@ -42,7 +60,8 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
         },
 
         measure() {
-            const row = this.$refs.scroller;
+            const row = this.rows()?.scroller;
+            if (!row) return;
             this.overflow = row.scrollWidth > this.$root.clientWidth + 1;
             this.canScrollBack = row.scrollLeft > 1;
             this.canScrollForward = row.scrollLeft + row.clientWidth < row.scrollWidth - 1;
@@ -57,8 +76,8 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
         },
 
         reveal(target: EventTarget | null) {
-            const row = this.$refs.scroller;
-            if (!(target instanceof HTMLElement) || !row.contains(target)) return;
+            const row = this.rows()?.scroller;
+            if (!row || !(target instanceof HTMLElement) || !row.contains(target)) return;
             const bounds = row.getBoundingClientRect();
             const tab = target.getBoundingClientRect();
             if (tab.width > bounds.width || tab.left < bounds.left) row.scrollLeft += tab.left - bounds.left;
@@ -67,7 +86,7 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
         },
 
         revealActive() {
-            this.reveal(this.$refs.tabItems.querySelector('[aria-current="page"], [aria-selected="true"]'));
+            this.reveal(this.rows()?.tabItems.querySelector('[aria-current="page"], [aria-selected="true"]') ?? null);
         },
 
         destroy() {
