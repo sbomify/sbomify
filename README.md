@@ -437,6 +437,7 @@ To integrate with Dependency Track, you need to create an API token with the fol
 - `VIEW_PORTFOLIO`
 - `VIEW_VULNERABILITY`
 - `PORTFOLIO_MANAGEMENT`, so sbomify can group projects into collections and retire the versions it no longer tracks. Without it scans still work, and projects stay flat and active.
+- `PORTFOLIO_ACCESS_CONTROL_BYPASS`, only on Dependency Track 5 with portfolio access control turned on. Without it the key gets 403 on every project its team was not given, such as projects created before access control was turned on.
 
 You can create a token under **Administration → Access Management** in your Dependency Track instance (use the workspace management interface there).
 
