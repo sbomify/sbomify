@@ -41,6 +41,7 @@ from sbomify.apps.core.services.release_lifecycle import (
     reconcile_after_removal,
     save_release_changes,
     set_release_state,
+    set_supersedes,
     supersession_links,
     undeclared_supersedes,
 )
@@ -3729,7 +3730,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
     try:
         with transaction.atomic():
-            update_data = payload.model_dump(exclude_unset=True)
+            update_data = payload.model_dump(exclude_unset=True, exclude={"supersedes"})
 
             # Prevent renaming to "latest"
             if "name" in update_data and update_data["name"].lower() == LATEST_RELEASE_NAME.lower():
@@ -3755,6 +3756,14 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
                 transaction.set_rollback(True)
                 return _release_edit_refused(saved.status_code, saved.error)
             release, changed = saved.value
+            # After the dates, so the same-line rule reads the ones this edit sets.
+            if payload.supersedes is not None:
+                linked = set_supersedes(release, payload.supersedes, actor_id=request.user.pk)
+                if not linked.ok:
+                    transaction.set_rollback(True)
+                    return _supersedes_error(linked)
+                changed = changed or bool(linked.value)
+                release.refresh_from_db()
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
