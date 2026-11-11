@@ -121,6 +121,13 @@
       "keywords": ["my profile", "personal settings", "user settings", "email", "password", "my account"]
     },
     {
+      "title": "Trust Center access",
+      "url_name": "core:trust_center_access",
+      "section": "settings",
+      "icon": "fa-key",
+      "keywords": ["access requests", "my requests", "requested access", "nda", "gated", "trust centers"]
+    },
+    {
       "title": "Upgrade plan",
       "url_name": "billing:select_plan",
       "section": "actions",

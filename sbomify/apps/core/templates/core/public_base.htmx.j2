@@ -538,7 +538,8 @@
                         {% if user.is_authenticated %}
                             {% load teams %}
                             {% user_workspaces as available_workspaces %}
-                            {% if available_workspaces|length > 1 %}
+                            {% comment %}A Trust Center session reaches its own Trust Center only, so it has no workspace to switch to.{% endcomment %}
+                            {% if available_workspaces|length > 1 and not request.session.trust_center_host %}
                                 <div class="relative"
                                      x-data="{ open: false }"
                                      @click.outside="open = false"
