@@ -34,6 +34,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.core.services.trust_center_session import SESSION_HOST_KEY as TRUST_CENTER_SESSION_HOST_KEY
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.artifact_upload import ArtifactUploadView as ArtifactUploadView
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
@@ -84,6 +85,7 @@ from sbomify.apps.core.views.trust_center_advisories import (
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoryDetailView as TrustCenterAdvisoryDetailView,
 )
+from sbomify.apps.core.views.trust_center_session import trust_center_sign_in_url
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
 from sbomify.apps.sboms.utils import get_product_sbom_package
 
@@ -128,6 +130,12 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     native Keycloak login screen. The Allauth provider view builds the correct
     OIDC authorize URL (including callback and state) for us.
     """
+
+    # A Trust Center host cannot hold the app's session, so its readers sign in
+    # on the app domain and are handed back (see core/services/trust_center_session.py).
+    trust_center_url = trust_center_sign_in_url(request, request.GET.get("next"))
+    if trust_center_url:
+        return redirect(trust_center_url)
 
     login_path = reverse("openid_connect_login", args=["keycloak"])
     # Validate next parameter to prevent open redirect attacks
@@ -413,6 +421,11 @@ def logout(request: HttpRequest) -> HttpResponse:
     if not request.user.is_authenticated:
         # User is already logged out, redirect to login
         return redirect(reverse("core:keycloak_login"))
+
+    # Signing out of a Trust Center leaves the reader signed in to sbomify itself.
+    if request.session.get(TRUST_CENTER_SESSION_HOST_KEY):
+        django_logout(request)
+        return redirect("/")
 
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.

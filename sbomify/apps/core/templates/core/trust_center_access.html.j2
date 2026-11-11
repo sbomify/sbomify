@@ -1,0 +1,40 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}Trust Center access · sbomify{% endblock %}
+{% block content %}
+    <c-layout.page-header title="Trust Center access" subtitle="The Trust Centers you have asked for access to." />
+    <c-cards.card flush>
+    {% if access_requests %}
+        <c-tables.shell nested>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell nowrap>Trust Center</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Status</c-tables.header-cell>
+        <c-tables.header-cell date>Requested</c-tables.header-cell>
+        <c-tables.header-cell date>Decided</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for row in access_requests %}
+                <c-tables.row>
+                <c-tables.cell nowrap>
+                <a href="{{ row.trust_center_url }}"
+                   class="font-medium text-text hover:underline">{{ row.workspace_name }}</a>
+                </c-tables.cell>
+                <c-tables.cell nowrap>
+                <c-badges.dynamic variant="{{ row.status_variant }}">{{ row.status_label }}</c-badges.dynamic>
+                </c-tables.cell>
+                <c-tables.cell date>
+                <span class="text-sm text-text-muted">{{ row.requested_at|date:"j M Y" }}</span>
+                </c-tables.cell>
+                <c-tables.cell date>
+                <span class="text-sm text-text-muted">{{ row.decided_at|date:"j M Y"|default:"Not yet" }}</span>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+        </c-tables.shell>
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-key" icon_size="sm" icon_variant="neutral" title="No access requests" message="When you request access on a Trust Center, it shows up here." />
+    {% endif %}
+    </c-cards.card>
+{% endblock %}
