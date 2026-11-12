@@ -12,6 +12,7 @@ from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.forms import ReleaseCreateForm
 from sbomify.apps.core.services.release_creation import create_workspace_release, release_product_choices
 from sbomify.apps.core.services.release_lifecycle import replacement_candidates
+from sbomify.apps.core.services.release_versions import likely_predecessor
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 
 
@@ -37,18 +38,27 @@ class ReleaseCreateView(GuestAccessBlockedMixin, TeamRoleRequiredMixin, LoginReq
         if request.method == "GET" and product_id and product_id not in dict(products):
             return HttpResponse("Product not found", status=404)
         candidates = replacement_candidates(product_id) if product_id in dict(products) else []
-        # The product select sends the prerelease box along, so a reload keeps the rule below.
+        # The product select, the name and the version send the form along, so a reload keeps the rule below.
         is_prerelease = bool(request.GET.get("is_prerelease")) if request.method == "GET" else False
+        typed = request.GET.get("version") or request.GET.get("name") or ""
         form = ReleaseCreateForm(
             request.POST if request.method == "POST" else None,
             products=products,
             candidates=[(release.pk, release.name) for release in candidates],
             initial={
                 "product_id": product_id,
-                # The release a new one most often replaces. A prerelease is offered, never chosen for you.
+                # What the typed version most likely replaces. A prerelease is offered, never chosen for you.
                 "replaces": ""
                 if is_prerelease
-                else next((release.pk for release in candidates if not release.is_prerelease), ""),
+                else likely_predecessor(
+                    typed,
+                    [
+                        (release.pk, release.version or release.name)
+                        for release in candidates
+                        if not release.is_prerelease
+                    ],
+                )
+                or "",
             },
         )
         if request.method == "POST" and form.is_valid():
