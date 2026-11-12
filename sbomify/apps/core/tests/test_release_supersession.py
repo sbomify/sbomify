@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime
 from datetime import timezone as dt_timezone
 from typing import Any
@@ -1132,3 +1134,118 @@ class TestEffectiveDates:
     def test_is_tracked_says_what_it_covers(self) -> None:
         description = ReleaseResponseSchema.model_fields["is_tracked"].description or ""
         assert "links" in description
+
+
+class TestEditingWhatAReleaseReplaces:
+    """The edit dialog changes, adds or removes the release a release replaces, through the release PATCH."""
+
+    LATER = datetime(2025, 6, 1, tzinfo=dt_timezone.utc)
+
+    def _patch(self, api: tuple[Client, AccessToken], release: Release, **body: Any) -> Any:
+        client, token = api
+        return client.patch(
+            f"/api/v1/releases/{release.pk}", data=body, content_type="application/json", **get_api_headers(token)
+        )
+
+    def test_detaching_a_release_brings_back_the_one_it_replaced(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # 2.0.0 was taken to replace 1.9.5, but it starts a new line, so the edit drops the link.
+        old = _release(sample_product, "1.9.5", **_on(PAST))
+        new = _release(sample_product, "2.0.0", **_on(self.LATER))
+        _supersede(old, new)
+
+        response = self._patch(authenticated_api_client, new, supersedes=[])
+
+        assert response.status_code == 200, response.content
+        assert _edges(old) == []
+        assert _state(old) == Release.LifecycleState.ACTIVE
+
+    def test_moving_the_link_to_a_new_line_keeps_the_old_release_monitored(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.9.5", **_on(PAST))
+        new = _release(sample_product, "2.0.0", **_on(self.LATER))
+        _supersede(old, new)
+
+        response = self._patch(authenticated_api_client, new, supersedes=[{"release_id": old.pk, "drop_in": False}])
+
+        assert response.status_code == 200, response.content
+        (edge,) = _edges(old)
+        assert edge.to_release == new
+        assert edge.drop_in is False
+        assert _state(old) == Release.LifecycleState.ACTIVE
+
+    def test_an_edit_can_name_the_release_it_replaces(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.9.5", **_on(PAST))
+        new = _release(sample_product, "1.9.6", **_on(self.LATER))
+
+        response = self._patch(authenticated_api_client, new, supersedes=[{"release_id": old.pk}])
+
+        assert response.status_code == 200, response.content
+        (edge,) = _edges(old)
+        assert edge.to_release == new
+        assert edge.drop_in is True
+        assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_an_edit_that_leaves_supersedes_out_keeps_the_link(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.9.5", **_on(PAST))
+        new = _release(sample_product, "1.9.6", **_on(self.LATER))
+        _supersede(old, new)
+
+        response = self._patch(authenticated_api_client, new, description="Patch release")
+
+        assert response.status_code == 200, response.content
+        assert len(_edges(old)) == 1
+        assert _state(old) == Release.LifecycleState.SUPERSEDED
+
+    def test_restating_the_link_it_has_writes_nothing(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        old = _release(sample_product, "1.9.5", **_on(PAST))
+        new = _release(sample_product, "1.9.6", **_on(self.LATER))
+        _supersede(old, new)
+        (edge,) = _edges(old)
+        events = old.cle_events.count()
+
+        response = self._patch(authenticated_api_client, new, supersedes=[{"release_id": old.pk, "drop_in": True}])
+
+        assert response.status_code == 200, response.content
+        assert [e.pk for e in _edges(old)] == [edge.pk]
+        assert old.cle_events.count() == events
+
+    def test_a_refused_link_rolls_back_the_whole_edit(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
+    ) -> None:
+        # Same line cannot point back in time: 2.0 cannot replace 3.0, which came out after it.
+        new = _release(sample_product, "2.0", **_on(self.LATER))
+        newer = _release(sample_product, "3.0", **_on(datetime(2025, 9, 1, tzinfo=dt_timezone.utc)))
+
+        response = self._patch(
+            authenticated_api_client, new, name="2.0 LTS", supersedes=[{"release_id": newer.pk, "drop_in": True}]
+        )
+
+        assert response.status_code == 400, response.content
+        assert "released after" in response.json()["detail"]
+        assert Release.objects.get(pk=new.pk).name == "2.0"
+        assert _edges(newer) == []
+
+    def test_the_dialog_is_given_what_each_release_replaces(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        old = _release(product, "1.9.5", **_on(PAST))
+        new = _release(product, "2.0.0", **_on(self.LATER))
+        _supersede(old, new)
+
+        page = authenticated_web_client.get(reverse("core:product_releases", args=[product.id])).content.decode()
+
+        data = json.loads(re.search(r'<script id="product-release-replaces"[^>]*>(.*?)</script>', page, re.S).group(1))
+        assert data["replaces"][new.pk] == [{"id": old.pk, "name": "1.9.5", "drop_in": True}]
+        # The superseded release is no longer offered as a choice, but it stays the one 2.0.0 replaces.
+        assert {"id": new.pk, "name": "2.0.0"} in data["options"]
+        assert {"id": old.pk, "name": "1.9.5"} not in data["options"]

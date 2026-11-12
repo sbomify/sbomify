@@ -699,6 +699,14 @@ class ReleasePatchSchema(BaseModel):
     is_prerelease: bool | None = None
     created_at: datetime | None = None
     released_at: datetime | None = None
+    supersedes: list[SupersedesItem] | None = Field(
+        default=None,
+        max_length=8,
+        description=(
+            "Every release of the same product this release supersedes. Links left out are removed, "
+            "so an empty list removes them all. Leave it out to keep them as they are."
+        ),
+    )
 
 
 class ReleaseEdgeSchema(BaseModel):

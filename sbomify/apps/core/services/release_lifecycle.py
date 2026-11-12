@@ -192,6 +192,25 @@ def replacement_candidates(product_id: str) -> list[Release]:
     return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
 
 
+def replace_choices(product_id: str, release_ids: Iterable[str]) -> dict[str, Any]:
+    """What the edit dialog offers a release to replace, and the releases each of ``release_ids`` replaces now.
+
+    The options are the ones the new-release form offers. A release this one
+    already replaces on the same line is no longer monitored, so it is not
+    among them; the dialog adds a release's own predecessors back.
+    """
+    replaces: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    edges = ReleaseSupersession.objects.live().select_related("from_release")
+    for edge in edges.filter(to_release_id__in=list(release_ids)).order_by("pk"):
+        replaces[str(edge.to_release_id)].append(
+            {"id": edge.from_release_id, "name": edge.from_release.name, "drop_in": edge.drop_in}
+        )
+    return {
+        "options": [{"id": release.pk, "name": release.name} for release in replacement_candidates(product_id)],
+        "replaces": dict(replaces),
+    }
+
+
 def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
     """The release a ``supersedes`` item names: by ID within the workspace, or by version then name."""
     if item.release_id:
@@ -418,6 +437,33 @@ def remove_supersession(release_id: str, edge_id: str, *, actor_id: Any = None) 
             )
         edge.refresh_from_db()
     return ServiceResult.success(edge)
+
+
+def set_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[bool]:
+    """Make ``items`` every release ``successor`` supersedes, and say whether any link changed.
+
+    A live link the items leave out is withdrawn, as Remove link does, and the
+    rest are declared. Withdrawing comes first, so moving a link to the other
+    line is not refused as a conflict with itself. Run it inside the
+    transaction that owns the edit: a failure leaves the caller to roll back.
+    """
+    items = list(items)
+    wanted = set()
+    for item in items:
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        wanted.add((found.value.pk, item.drop_in))
+    live = list(ReleaseSupersession.objects.live().filter(to_release=successor))
+    for edge in live:
+        if (edge.from_release_id, edge.drop_in) not in wanted:
+            removed = remove_supersession(successor.pk, edge.pk, actor_id=actor_id)
+            if not removed.ok:
+                return ServiceResult.failure(removed.error or "Invalid supersession", status_code=removed.status_code)
+    declared = declare_supersedes(successor, items, actor_id=actor_id)
+    if not declared.ok:
+        return ServiceResult.failure(declared.error or "Invalid supersession", status_code=declared.status_code)
+    return ServiceResult.success({(edge.from_release_id, edge.drop_in) for edge in live} != wanted)
 
 
 def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:
