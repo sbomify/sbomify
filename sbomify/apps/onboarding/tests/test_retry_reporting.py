@@ -164,6 +164,19 @@ class TestTheBudgetComesFromTheActor:
 
         assert _actor_max_retries(ACTOR) == MAX_RETRIES
 
+    def test_the_dependency_track_scope_actors_read_their_own_budget(self) -> None:
+        from sbomify.apps.vulnerability_scanning.tasks import DT_SCOPE_RETRIES
+        from sbomify.sentry_config import _actor_max_retries
+
+        for actor_name in (
+            "reconcile_component_dt_scope",
+            "reconcile_product_dt_scope",
+            "retire_deleted_dt_version",
+            "retire_deleted_dt_collection",
+        ):
+            assert actor_name in REPORT_ON_RETRY_EXHAUSTION_ONLY
+            assert _actor_max_retries(actor_name) == DT_SCOPE_RETRIES
+
     def test_an_unknown_actor_is_none(self) -> None:
         from sbomify.sentry_config import _actor_max_retries
 

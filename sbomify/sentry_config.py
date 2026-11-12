@@ -176,6 +176,12 @@ REPORT_ON_RETRY_EXHAUSTION_ONLY = frozenset(
         "send_first_component_email_task",
         "send_first_sbom_email_task",
         "send_collaboration_email_task",
+        # Dependency-Track scope writes retry through a DT restart or outage
+        # (DT_SCOPE_RETRIES), so each attempt in between is not news.
+        "reconcile_component_dt_scope",
+        "reconcile_product_dt_scope",
+        "retire_deleted_dt_version",
+        "retire_deleted_dt_collection",
     }
 )
 
