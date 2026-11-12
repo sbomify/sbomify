@@ -27,6 +27,7 @@ os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 
 # Disable PostHog analytics in tests
 os.environ["POSTHOG_API_KEY"] = ""
+os.environ["TELEMETRY_ENABLED"] = "False"
 
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
