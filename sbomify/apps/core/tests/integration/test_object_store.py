@@ -215,6 +215,26 @@ class TestS3ObjectStoreClient:
         mock_s3.Object.return_value.delete.assert_called_once()
         mock_s3.Object.assert_called_with("my-bucket", "path/to/key")
 
+    def test_delete_objects_sends_one_request_per_thousand_keys(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.delete_objects.return_value = {}
+        keys = [f"k{index}" for index in range(1001)]
+
+        store.delete_objects("my-bucket", keys)
+
+        calls = mock_s3.Bucket.return_value.delete_objects.call_args_list
+        assert [len(call.kwargs["Delete"]["Objects"]) for call in calls] == [1000, 1]
+        assert calls[1].kwargs["Delete"] == {"Objects": [{"Key": "k1000"}], "Quiet": True}
+
+    def test_delete_objects_raises_when_a_key_is_refused(self, s3_store):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.delete_objects.return_value = {
+            "Errors": [{"Key": "a", "Code": "AccessDenied", "Message": "denied"}]
+        }
+
+        with pytest.raises(RuntimeError, match="AccessDenied"):
+            store.delete_objects("my-bucket", ["a", "b"])
+
     def test_upload_file(self, s3_store):
         store, mock_s3 = s3_store
         store.upload_file("my-bucket", "/tmp/file.txt", "path/to/key")
@@ -462,6 +482,11 @@ class TestStorageClient:
         client = StorageClient("MEDIA")
         client.delete_object("test_bucket", "test_object")
         self.mock_store.delete_object.assert_called_once_with("test_bucket", "test_object")
+
+    def test_delete_objects_delegates(self):
+        client = StorageClient("MEDIA")
+        client.delete_objects("test_bucket", ["a", "b"])
+        self.mock_store.delete_objects.assert_called_once_with("test_bucket", ["a", "b"])
 
     def test_upload_file_delegates(self):
         client = StorageClient("MEDIA")

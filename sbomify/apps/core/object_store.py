@@ -43,6 +43,10 @@ def log_orphaned_object(object_name: str) -> None:
     log.warning("%s: %s", ORPHANED_OBJECT_MARKER, object_name)
 
 
+#: The most keys one S3 DeleteObjects request accepts.
+DELETE_OBJECTS_LIMIT = 1000
+
+
 class ObjectStoreClient(ABC):
     """Base class for object storage backends."""
 
@@ -54,6 +58,9 @@ class ObjectStoreClient(ABC):
 
     @abstractmethod
     def delete_object(self, bucket_name: str, key: str) -> None: ...
+
+    @abstractmethod
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None: ...
 
     @abstractmethod
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]: ...
@@ -159,6 +166,20 @@ class S3ObjectStoreClient(ObjectStoreClient):
 
     def delete_object(self, bucket_name: str, key: str) -> None:
         self._resource.Object(bucket_name, key).delete()
+
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None:
+        # One request per 1000 keys, the most DeleteObjects takes, rather than
+        # one per key. A key that is already gone is not an error.
+        for start in range(0, len(keys), DELETE_OBJECTS_LIMIT):
+            chunk = keys[start : start + DELETE_OBJECTS_LIMIT]
+            response = self._resource.Bucket(bucket_name).delete_objects(
+                Delete={"Objects": [{"Key": key} for key in chunk], "Quiet": True}
+            )
+            if errors := response.get("Errors"):
+                first = errors[0]
+                raise RuntimeError(
+                    f"{len(errors)} of {len(chunk)} deletes failed, first {first.get('Key')}: {first.get('Code')}"
+                )
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return list(self.iter_objects(bucket_name, prefix))
@@ -361,6 +382,9 @@ class StorageClient:
 
     def delete_object(self, bucket_name: str, object_name: str) -> None:
         self._store.delete_object(bucket_name, object_name)
+
+    def delete_objects(self, bucket_name: str, object_names: list[str]) -> None:
+        self._store.delete_objects(bucket_name, object_names)
 
     def object_exists(self, bucket_name: str, object_name: str) -> bool:
         """Return whether an object is present, without fetching its body."""
