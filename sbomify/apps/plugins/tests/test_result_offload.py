@@ -52,6 +52,7 @@ class FakeBucket:
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
         self.puts = 0
+        self.batch_deletes = 0
 
     def upload_data_as_file(self, bucket: str, key: str, data: bytes) -> None:
         self.puts += 1
@@ -72,6 +73,11 @@ class FakeBucket:
 
     def delete_object(self, bucket: str, key: str) -> None:
         self.objects.pop(key, None)
+
+    def delete_objects(self, bucket: str, keys: list[str]) -> None:
+        self.batch_deletes += 1
+        for key in keys:
+            self.objects.pop(key, None)
 
 
 @pytest.fixture
@@ -754,6 +760,40 @@ class TestRetentionReclaimsTheStoredPayload:
         assert not AssessmentRun.objects.filter(pk=superseded.pk).exists()
         assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == []
 
+    def test_a_batch_of_pruned_runs_is_deleted_in_one_request(self, sbom, bucket):
+        """Listing and deleting each run's objects one by one cost two requests
+        a run, which on a large backlog outlasted the task's time limit."""
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = [_run(sbom, days_ago=800 + index) for index in range(3)]
+        assert offload_assessment_results() == 3
+        bucket.list_cached_aggregates = None  # type: ignore[assignment,method-assign]
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 3
+
+        assert bucket.batch_deletes == 1
+        for run in superseded:
+            assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{run.id}/")]
+
+    def test_an_earlier_revision_of_a_pruned_run_is_left_to_the_orphan_sweep(self, sbom, bucket):
+        """The row names only its current revision, so the prune deletes that
+        one and the orphan sweep collects the rest by run id."""
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = _run(sbom, days_ago=800)
+        assert offload_assessment_results() == 1
+        revision = f"{RESULT_PREFIX}{superseded.id}/earlier.json"
+        bucket.objects[revision] = b"{}"
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+        assert [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{superseded.id}/")] == [revision]
+
+        assert delete_orphaned_result_objects() == 1
+        assert revision not in bucket.objects
+
     @pytest.mark.django_db(transaction=True)
     def test_an_offload_landing_mid_prune_still_has_its_objects_deleted(self, sbom, bucket):
         """An offload that commits its key after the batch read which rows hold
@@ -803,13 +843,13 @@ class TestRetentionReclaimsTheStoredPayload:
         pruned = _run(sbom, days_ago=900)
         assert offload_assessment_results() == 2
 
-        def unreachable(bucket_name: str, key: str) -> None:
+        def unreachable(bucket_name: str, keys: list[str]) -> None:
             raise ConnectionError("object store unreachable")
 
-        bucket.delete_object = unreachable  # type: ignore[method-assign]
+        bucket.delete_objects = unreachable  # type: ignore[method-assign]
         with pytest.raises(ConnectionError):
             prune_assessment_runs(keep_per_plugin=2, min_age_days=0)
-        del bucket.delete_object
+        del bucket.delete_objects
         assert not AssessmentRun.objects.filter(pk=pruned.pk).exists()
 
         assert delete_orphaned_result_objects() == 1
