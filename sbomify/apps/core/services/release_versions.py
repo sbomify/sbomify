@@ -11,65 +11,96 @@ guess. Versions are compared only with versions carrying the same prefix, so a
 monorepo's ``api-v2.3.1`` never replaces its ``web-v2.4.0``. A codename, a
 commit hash or a Go pseudo-version cannot be ordered, so it gets no guess
 rather than a wrong one.
+
+Maven's comparator, from univers, does the ordering. It reads no scheme in
+particular: it splits on separators and digit-letter changes, compares numbers
+as numbers, ranks alpha, beta, milestone, rc and snapshot below the release,
+treats final, ga and release as the release itself, and sorts anything else
+after it, which covers hotfixes (10.2.9-h1), letter fixes (1.1.1w) and
+rebuilds (2.36-9+deb12u1). What it leaves out is handled here: epochs, a
+Debian tilde, PEP 440's dev, prefixes, commit hashes and Go pseudo-versions.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
+from itertools import groupby, takewhile
+from string import digits, hexdigits
 from typing import NamedTuple
 
-# Words that mark a version as not yet released, across SemVer, PEP 440, Maven and nightlies. A single
-# letter counts only with a number after it (1.0a1), so OpenSSL's 1.1.1a stays a fix release.
-_PRERELEASE = frozenset(
-    {"a", "alpha", "b", "beta", "c", "rc", "cr", "pre", "preview", "dev", "snapshot", "m", "milestone", "ea", "nightly"}
-)
-# Labels naming the release itself: 5.4.0.Final is 5.4.0.
-_SAME_RELEASE = frozenset({"final", "ga", "release", "stable", "lts"})
+from univers.versions import InvalidVersion, MavenVersion
 
-_EPOCH = re.compile(r"(\d+)[:!]")
-_NUMBERS = re.compile(r"\d+(?:[._-]\d+)*")
-_COMMIT = re.compile(r"(?=.*[a-f])(?=.*\d)[0-9a-f]{7,40}")
-# A commit hash as one part of a version, as in 2026.04.14.1a2b3c4: it names a build but orders nothing.
-_COMMIT_PART = re.compile(r"[._+-](?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?=$|[._+-])")
-_GO_PSEUDO = re.compile(r"\d{14}-[0-9a-f]{12}$")
-_TOKEN = re.compile(r"[a-z]+|\d+")
-
-_Tail = tuple[tuple[int, int, str], ...]
+# Words marking a prerelease that Maven's comparator sorts after the release instead.
+_MORE_PRERELEASE_WORDS = frozenset({"dev", "pre", "preview", "nightly"})
+_SEPARATORS = " ._-+/"
 
 
 class _Version(NamedTuple):
     prefix: str
     prerelease: bool
-    order: tuple[int, tuple[int, ...], bool, _Tail]
+    order: tuple[int, MavenVersion]
+
+
+def _is_commit(text: str) -> bool:
+    """Whether ``text`` looks like a commit hash: 7 to 40 hex characters mixing letters and digits."""
+    return 7 <= len(text) <= 40 and all(c in hexdigits for c in text) and not text.isdigit() and not text.isalpha()
+
+
+def _is_go_pseudo_version(text: str) -> bool:
+    """Whether ``text`` is a Go pseudo-version, vX.Y.Z-[pre.]yyyymmddhhmmss-abcdefabcdef, which only Go orders."""
+    parts = text.split("-")
+    if len(parts) < 3 or len(parts[-1]) != 12 or not all(c in hexdigits for c in parts[-1]):
+        return False
+    stamp = parts[-2].rpartition(".")[2]
+    return len(stamp) == 14 and stamp.isdigit()
+
+
+def _without_commits(text: str) -> str:
+    """``text`` without a commit hash written as one dotted part, as in 2026.04.14.1a2b3c4.
+
+    The hash names a build and orders nothing. A rebuild counter after it, as in 1a2b3c4-v2, stays.
+    """
+    kept: list[str] = []
+    for part in text.split("."):
+        head, dash, rest = part.partition("-")
+        if not _is_commit(head):
+            kept.append(part)
+        elif rest and kept:
+            kept[-1] += dash + rest
+    return ".".join(kept)
+
+
+def _split_epoch(text: str) -> tuple[int, str]:
+    """Debian's 1:2.30 and PEP 440's 1!2.0 lead with an epoch, which outranks any version without one."""
+    for mark in (":", "!"):
+        head, found, rest = text.partition(mark)
+        if found and head.isdigit():
+            return int(head), rest
+    return 0, text
 
 
 def _parse(value: str) -> _Version | None:
     text = value.strip().lower()
-    if _COMMIT.fullmatch(text) or _GO_PSEUDO.search(text):
+    if _is_commit(text) or _is_go_pseudo_version(text):
         return None
-    text = _COMMIT_PART.sub("", text)
-    epoch = 0
-    if match := _EPOCH.match(text):
-        epoch, text = int(match.group(1)), text[match.end() :]
-    numbers_match = _NUMBERS.search(text)
-    if numbers_match is None:
+    epoch, text = _split_epoch(_without_commits(text))
+    prefix = "".join(takewhile(lambda c: not c.isdigit(), text))
+    version = text[len(prefix) :]
+    if not version:
         return None
     # A "v" before the number is spelling: v1.2.3 is 1.2.3, and sbomify-v26.8.0 has the prefix "sbomify".
-    prefix = re.sub(r"(^|[^a-z])v$", r"\1", text[: numbers_match.start()].rstrip(" -_./")).strip(" -_./")
-    numbers = [int(part) for part in re.split(r"[._-]", numbers_match.group())]
-    while numbers and numbers[-1] == 0:
-        numbers.pop()  # 1.2 and 1.2.0 are one version
-    suffix = text[numbers_match.end() :]
-    tokens = _TOKEN.findall(suffix)
-    word = tokens[0] if tokens and tokens[0].isalpha() else ""
-    prerelease = "~" in suffix or (word in _PRERELEASE and (len(word) > 1 or (len(tokens) > 1 and tokens[1].isdigit())))
-    if tokens == [word] and word in _SAME_RELEASE:
-        tokens = []
-    # Anything else after the number sorts after it: a hotfix (10.2.9-h1), a letter fix (1.1.1w), a rebuild
-    # (2.36-9+deb12u1). A number in it compares as a number and above a word, as Maven and RPM do.
-    tail = tuple((1, int(token), "") if token.isdigit() else (0, 0, token) for token in tokens)
-    return _Version(prefix, prerelease, (epoch, tuple(numbers), bool(tail), tail))
+    prefix = prefix.rstrip(_SEPARATORS)
+    if prefix == "v" or (prefix.endswith("v") and prefix[-2] in _SEPARATORS):
+        prefix = prefix[:-1].rstrip(_SEPARATORS)
+    released = "".join(takewhile(lambda c: c in digits + "._-", version)).rstrip("._-")
+    try:
+        ordered, plain = MavenVersion(version), MavenVersion(released)
+    except InvalidVersion:
+        return None
+    words = ["".join(run) for letters, run in groupby(version[len(released) :], str.isalpha) if letters]
+    # Maven sorts 2.0.0-rc.1 below 2.0.0 by itself. A tilde and PEP 440's dev need saying.
+    prerelease = ordered < plain or "~" in version or (bool(words) and words[0] in _MORE_PRERELEASE_WORDS)
+    return _Version(prefix, prerelease, (epoch, ordered))
 
 
 def likely_predecessor[K](version: str, candidates: Iterable[tuple[K, str]]) -> K | None:
@@ -89,5 +120,5 @@ def likely_predecessor[K](version: str, candidates: Iterable[tuple[K, str]]) -> 
     if not below:
         return None
     top = max(order for order, _key in below)
-    (best, *tied) = [key for order, key in below if order == top]
+    best, *tied = [key for order, key in below if order == top]
     return None if tied else best

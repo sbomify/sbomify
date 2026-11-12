@@ -70,6 +70,7 @@ dependencies = [
     "jsonschema>=4.26,<5",
     "django-cotton>=2.7.2",
     "fastjsonschema>=2.22.2",
+    "univers>=32.0.1,<33",
 ]
 
 [project.urls]
