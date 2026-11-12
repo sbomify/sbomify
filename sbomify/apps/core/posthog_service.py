@@ -13,6 +13,7 @@ logger = getLogger(__name__)
 _lock = threading.Lock()
 _client: Any = None
 _initialized = False
+_installation_id = ""
 
 
 #: The tenant word in event names. ``team:*`` is emitted beside ``workspace:*``
@@ -62,6 +63,33 @@ def _get_client() -> Any:
             _initialized = True
 
     return _client
+
+
+def get_installation_id() -> str:
+    """Return this installation's id, read once per process.
+
+    Returns an empty string when it cannot be read, so an analytics call
+    never fails because of it. A failure is not cached; the next call retries.
+    """
+    global _installation_id
+    if _installation_id:
+        return _installation_id
+
+    try:
+        from sbomify.apps.core.models import Installation
+
+        _installation_id = str(Installation.get().installation_id)
+    except Exception:
+        logger.exception("Failed to read the installation id")
+    return _installation_id
+
+
+def _with_installation_id(properties: dict[str, Any] | None) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(properties or {})
+    installation_id = get_installation_id()
+    if installation_id:
+        merged["installation_id"] = installation_id
+    return merged
 
 
 def is_enabled() -> bool:
@@ -320,7 +348,7 @@ def capture(
         logger.exception("Failed to run registry validation for event %s", event)
 
     try:
-        merged: dict[str, Any] = dict(properties or {})
+        merged = _with_installation_id(properties)
         if request:
             session_id = get_session_id(request)
             if session_id:
@@ -355,7 +383,7 @@ def identify(
         return
 
     try:
-        client.identify(distinct_id, properties=properties or {})
+        client.identify(distinct_id, properties=_with_installation_id(properties))
     except Exception:
         logger.exception("Failed to identify PostHog user %s", distinct_id)
 
@@ -371,7 +399,7 @@ def group_identify(
         return
 
     try:
-        client.group_identify(group_type, group_key, properties=properties or {})
+        client.group_identify(group_type, group_key, properties=_with_installation_id(properties))
     except Exception:
         logger.exception("Failed to identify PostHog group %s:%s", group_type, group_key)
 
