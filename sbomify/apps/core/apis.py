@@ -4486,7 +4486,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, sbom.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4509,6 +4509,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": None,
                 "document_version": None,
                 "component_slug": get_component_public_slug(artifact.sbom.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
         except Exception:
             log.exception("Error processing SBOM")
@@ -4534,7 +4536,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            result = add_artifact_to_release(release, document=document, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4556,6 +4558,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
                 "component_slug": get_component_public_slug(artifact.document.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
         except Exception:
             log.exception("Error processing document")

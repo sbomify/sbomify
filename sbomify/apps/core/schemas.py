@@ -773,6 +773,14 @@ class ReleaseArtifactCreateSchema(BaseModel):
 
     sbom_id: str | None = None
     document_id: str | None = None
+    replace: bool = Field(
+        False,
+        description=(
+            "Explicitly replace an artifact of the same kind from the same component that is already "
+            "in the release. By default such an add is refused, so a release is never overwritten "
+            "unless the caller asks for it."
+        ),
+    )
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -882,3 +890,11 @@ class ReleaseArtifactAddResponseSchema(BaseModel):
     document_type: str | None = None
     document_version: str | None = None
     component_slug: str | None = None
+    replaced: bool = Field(
+        False,
+        description=(
+            "True when the add superseded an artifact of the same kind from the same component that "
+            "was already in the release (only possible with replace=True)."
+        ),
+    )
+    replaced_artifact_name: str | None = Field(None, description="Name of the artifact that was superseded.")
