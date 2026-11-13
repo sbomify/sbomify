@@ -25,7 +25,7 @@ def schedule_installation_usage_report() -> None:
     """Queue a usage report once the current transaction commits, unless one is already queued."""
     from sbomify.apps.core import posthog_service
 
-    if not posthog_service.is_enabled():
+    if not posthog_service.is_telemetry_enabled():
         return
 
     def _send() -> None:
@@ -40,7 +40,9 @@ def schedule_installation_usage_report() -> None:
 
 @dramatiq.actor(queue_name="installation_usage", max_retries=1, time_limit=300000)
 def report_installation_usage() -> Any:
-    """Send PostHog the size of this installation: workspaces, products, components."""
+    """Send the telemetry project the size of this installation: users, workspaces, products, components."""
+    from django.contrib.auth import get_user_model
+
     from sbomify.apps.core import posthog_service
     from sbomify.apps.core.analytics import events
     from sbomify.apps.plugins.utils import get_sbomify_version
@@ -50,7 +52,7 @@ def report_installation_usage() -> Any:
     # Cleared before counting, so a change made while this runs queues the next report.
     cache.delete(USAGE_REPORT_PENDING_KEY)
 
-    if not posthog_service.is_enabled():
+    if not posthog_service.is_telemetry_enabled():
         return
 
     installation_id = posthog_service.get_installation_id()
@@ -59,12 +61,13 @@ def report_installation_usage() -> Any:
         return
 
     properties = {
+        "user_count": get_user_model().objects.count(),
         "workspace_count": Workspace.objects.count(),
         "product_count": Product.objects.count(),
         "component_count": Component.objects.count(),
         "sbomify_version": get_sbomify_version(),
     }
-    posthog_service.capture(
+    posthog_service.capture_telemetry(
         installation_id,
         events.INSTALLATION_USAGE_REPORTED,
         properties,

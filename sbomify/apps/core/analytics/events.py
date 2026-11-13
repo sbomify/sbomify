@@ -756,6 +756,7 @@ INSTALLATION_USAGE_REPORTED = _register(
         description="How large this installation is. Sent when its size changes, and on deploy.",
         distinct_id_kind="installation",
         properties={
+            "user_count": "Number of user accounts.",
             "workspace_count": "Number of workspaces.",
             "product_count": "Number of products across all workspaces.",
             "component_count": "Number of components across all workspaces.",
