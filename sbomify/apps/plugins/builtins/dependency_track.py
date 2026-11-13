@@ -230,6 +230,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if holder is None:
             if not tracked:
                 return self._not_monitored()
+            # The tree holds one SBOM per component in each place. The other
+            # format of a build is tracked but held as its CycloneDX twin, and
+            # would wait here for a project it never gets.
+            if (stand_in := dt_release_tree.stand_in_for(sbom)) is not None:
+                return self._scanned_as(stand_in)
             if needs_conversion:
                 # The tree converts it when it uploads; one that cannot convert would leave this scan waiting.
                 try:
@@ -328,14 +333,35 @@ class DependencyTrackPlugin(AssessmentPlugin):
 
     @staticmethod
     def _send_again(holder: Any, version_row: Any, team: Any) -> None:
-        """Forget the tree project and the scan handle so the tree's next sync uploads the BOM again."""
+        """Forget the tree project and the scan handle so the tree's next sync uploads the BOM again.
+
+        Only under the tree's lock, and without waiting for it: a sync running
+        now may be about to write that row. Then nothing is forgotten, and the
+        next poll or scan tries again.
+        """
         from sbomify.apps.vulnerability_scanning.services import dt_release_tree
 
-        version_row.delete()
-        # Dependency-Track may still have the project; the sync finds it again by name.
-        holder._dt_project_gone = True
-        holder.delete()
+        with dt_release_tree.try_workspace_lock(team.id, holder.dt_server_id) as locked:
+            if not locked:
+                return
+            version_row.delete()
+            # Dependency-Track may still have the project; the sync finds it again by name.
+            holder._dt_project_gone = True
+            holder.delete()
         dt_release_tree.queue_sync(team.id)
+
+    def _scanned_as(self, stand_in: Any) -> AssessmentResult:
+        """The skip for a tracked SBOM the tree holds as another, the CycloneDX document of the same build."""
+        label = f"{stand_in.name} {stand_in.version}".strip()
+        fmt = "CycloneDX" if stand_in.format == "cyclonedx" else "SPDX"
+        return self.create_skipped_result(
+            finding_id="dependency-track:scanned-as-another-sbom",
+            title="Scanned as Another SBOM",
+            description=(
+                "Dependency Track scans one SBOM for each component of a release, and one for its newest build. "
+                f"For this component it scans {label} ({fmt}), so it did not scan this one."
+            ),
+        )
 
     def _validate_cyclonedx(self, sbom_bytes: bytes) -> bool:
         """Validate that the SBOM is CycloneDX format.

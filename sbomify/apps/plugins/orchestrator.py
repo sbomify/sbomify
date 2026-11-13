@@ -404,11 +404,11 @@ class PluginOrchestrator:
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
 
-            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
-            # scoped downstream state (e.g. DT project version tags). After
-            # the M2M is populated, call sync_release_tags so the plugin can
-            # reconcile against the final canonical release set. One-shot
-            # plugins skip this — they have no long-lived external state.
+            # Continuous plugins (scan_mode=CONTINUOUS) may keep release-scoped
+            # state outside sbomify. After the M2M is populated, call
+            # sync_release_tags so such a plugin can reconcile against the final
+            # release set. No built-in plugin overrides it today, and one-shot
+            # plugins skip it: they keep no state outside sbomify.
             if metadata.scan_mode == ScanMode.CONTINUOUS:
                 try:
                     plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)

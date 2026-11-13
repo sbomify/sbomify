@@ -163,6 +163,36 @@ class TestScanFromTheTree:
         assert handle.dt_project_version_uuid == scan.holder.dt_project_uuid
         assert handle.dt_project_version == "latest"
 
+    def test_the_spdx_twin_of_a_held_build_is_scanned_as_its_cyclonedx_document(
+        self, scan, django_capture_on_commit_callbacks
+    ):
+        twin = _sbom(scan.component, "4.1.0", fmt="spdx")
+
+        with (
+            patch(f"{TASKS}.sync_dt_release_tree.send") as send,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            result = _assess(scan, _client(), sbom=twin)
+
+        assert result.findings[0].id == "dependency-track:scanned-as-another-sbom"
+        assert "auth 4.1.0 (CycloneDX)" in result.findings[0].description
+        send.assert_not_called()
+
+    def test_the_second_sbom_a_release_ships_for_a_component_is_scanned_as_the_one_it_holds(self, scan):
+        from sbomify.apps.core.models import Product, Release, ReleaseArtifact
+
+        product = Product.objects.create(name="Gateway", team=scan.team)
+        product.components.add(scan.component)
+        release = Release.objects.create(product=product, name="1.0", version="1.0")
+        spdx = _sbom(scan.component, "4.0.0", fmt="spdx")
+        ReleaseArtifact.objects.create(release=release, sbom=scan.old)
+        ReleaseArtifact.objects.create(release=release, sbom=spdx)
+
+        result = _assess(scan, _client(), sbom=spdx)
+
+        assert result.findings[0].id == "dependency-track:scanned-as-another-sbom"
+        assert "auth 4.0.0 (CycloneDX)" in result.findings[0].description
+
     def test_a_spec_version_the_server_refused_is_a_skip_that_says_so(self, scan):
         DependencyTrackTreeProject.objects.filter(pk=scan.holder.pk).update(
             upload_refused="The BOM is invalid: unsupported specVersion 1.7"

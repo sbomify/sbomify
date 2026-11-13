@@ -942,7 +942,8 @@ def after_lifecycle_change(product_id: Any) -> None:
     """Once the write commits, bring Dependency-Track in line with where the product's releases now stand.
 
     A broker error after the commit is logged, not raised: the write stands,
-    and ``dt_tracked_scope`` repairs what the lost message would have done.
+    and the daily ``dt_tracked_scope`` sweep, which syncs every workspace's
+    tree, repairs what the lost message would have done.
     """
     from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
