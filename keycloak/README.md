@@ -54,6 +54,7 @@ themes/sbomify/
 │   ├── login-username.ftl        # Username step (identity-first flow)
 │   ├── login-update-profile.ftl, update-email.ftl
 │   ├── login-idp-link-confirm.ftl, login-idp-link-email.ftl
+│   ├── login-oauth-grant.ftl     # An app asks to connect (consent)
 │   ├── info.ftl, error.ftl, terms.ftl
 │   ├── logout-confirm.ftl, login-page-expired.ftl
 │   └── resources/css/
