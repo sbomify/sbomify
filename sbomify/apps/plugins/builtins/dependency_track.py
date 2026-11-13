@@ -199,7 +199,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             sbom = SBOM.objects.select_related("component__team").get(id=sbom_id)
             team = sbom.component.team
         except Exception as e:
-            logger.error(f"[DT] Failed to look up SBOM {sbom_id}: {e}")
+            logger.error("[DT] Failed to look up SBOM %s: %s", sbom_id, e)
             return self._create_error_result(f"Failed to look up SBOM: {e}")
 
         # Check team has DT provider enabled
@@ -289,7 +289,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             self._send_again(holder, version_row, team)
             raise RetryLaterError("Dependency Track lost this SBOM; it is being uploaded again")
         except Exception as e:
-            logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
+            logger.error("[DT] Failed to poll results for SBOM %s: %s", sbom_id, e)
             return self._create_error_result(f"Failed to poll DT results: {e}")
         # The tree may have put another SBOM in the project while this one was read.
         if not type(holder).objects.filter(pk=holder.pk, sbom_id=sbom.id).exists():
