@@ -153,3 +153,9 @@ def test_task_persists_the_scheduled_retry_for_cleanup(
     run.refresh_from_db()
     assert run.retry_at is not None
     assert before + timedelta(hours=2) <= run.retry_at <= timezone.now() + timedelta(hours=2)
+
+
+def test_retry_ladder_doubles_up_to_an_hour() -> None:
+    minutes = [delay // 60_000 for delay in RETRY_LATER_DELAYS_MS]
+
+    assert minutes == [2, 4, 8, 16, 32, 60, 60, 60, 60, 60]
