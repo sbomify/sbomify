@@ -1,0 +1,222 @@
+"""OAuth for the MCP endpoint: Keycloak issues the token, ``/mcp`` checks it.
+
+Keycloak already owns identity here, and it implements everything an MCP
+client needs from an authorization server: discovery, dynamic client
+registration and the authorization-code flow with PKCE. So sbomify is only the
+resource server. It publishes RFC 9728 metadata naming the realm, answers a
+request without a usable token with a 401 that points at that metadata, and
+verifies the access token the client comes back with.
+
+A token is accepted when the realm signed it, it has not expired, and its
+``aud`` names this server's ``/mcp`` URL. The audience comes from the realm's
+``mcp`` client scope, so a token issued to any other client of the realm,
+such as the one the web app signs in with, is refused. Keycloak does not
+support the RFC 8707 ``resource`` parameter yet, and the audience mapper is
+its documented way to bind a token to one resource meanwhile.
+
+The token's ``sub`` is the Keycloak user id, which django-allauth stores as the
+``SocialAccount`` uid when that person signs in to sbomify, so a token resolves
+to the same user the browser does. Someone who has never signed in to sbomify
+has no user to resolve to and is refused.
+
+An OAuth session acts with the read-only preset. It can read everything the
+person's role lets them read and write nothing. Writes still need a personal
+access token, whose scopes the person chose when making it.
+"""
+
+from __future__ import annotations
+
+import functools
+import threading
+import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
+
+import jwt
+from django.conf import settings
+
+from sbomify.logging import getLogger
+
+if TYPE_CHECKING:
+    from django.contrib.auth.base_user import AbstractBaseUser
+
+logger = getLogger(__name__)
+
+#: The Keycloak client scope an MCP client asks for. It carries the audience mapper.
+SCOPE = "mcp"
+
+#: Where RFC 9728 metadata for ``/mcp`` lives: the well-known prefix, then the resource's path.
+METADATA_PATH = "/.well-known/oauth-protected-resource/mcp"
+
+#: How long a fetched signing key set is reused before Keycloak is asked again.
+_JWKS_LIFESPAN_SECONDS = 300
+_JWKS_TIMEOUT_SECONDS = 5
+
+#: The least time between two fetches one worker makes because a token named a key its cached set lacks.
+_JWKS_REFRESH_GAP_SECONDS = 60
+_refresh_lock = threading.Lock()
+_last_forced_refresh = float("-inf")
+
+#: Clock skew allowed on ``iat`` and ``exp``: Keycloak and the app run on different hosts.
+_LEEWAY_SECONDS = 30
+
+
+@dataclass(frozen=True)
+class OAuthCredential:
+    """What ``request.access_token_record`` carries for an OAuth caller.
+
+    The contract the auth module documents: ``scopes`` for ``can()`` and
+    ``pk`` for the rate-limit window and the audit line. There is no row, so
+    nothing else.
+
+    ``pk`` names the person and the client they signed in with (``azp``),
+    not one access token: each client keeps its own budget, so one cannot
+    throttle another, and a refreshed token keeps the budget its client had
+    rather than starting a fresh one.
+    """
+
+    pk: str
+    scopes: list[str]
+
+
+def issuer() -> str:
+    """The realm's issuer, as Keycloak writes it into the tokens it signs.
+
+    Keycloak writes its public URL (``KC_HOSTNAME_URL``) as ``iss``, and
+    ``KEYCLOAK_PUBLIC_URL`` is that URL, falling back to ``KEYCLOAK_SERVER_URL``
+    where the two are the same.
+    """
+    return f"{settings.KEYCLOAK_PUBLIC_URL.rstrip('/')}/realms/{settings.KEYCLOAK_REALM}"
+
+
+def resource() -> str:
+    """This server's MCP URL, which a token's ``aud`` must name."""
+    from sbomify.apps.core.url_utils import get_base_url
+
+    return f"{get_base_url()}/mcp"
+
+
+def metadata_url() -> str:
+    from sbomify.apps.core.url_utils import get_base_url
+
+    return f"{get_base_url()}{METADATA_PATH}"
+
+
+def protected_resource_metadata() -> dict[str, Any]:
+    """The RFC 9728 document a client reads to find out where to sign in."""
+    return {
+        "resource": resource(),
+        "authorization_servers": [issuer()],
+        "scopes_supported": [SCOPE],
+        "bearer_methods_supported": ["header"],
+        "resource_name": "sbomify",
+    }
+
+
+def www_authenticate(*, invalid: bool) -> str:
+    """The challenge on a 401, pointing the client at the metadata."""
+    challenge = f'Bearer resource_metadata="{metadata_url()}", scope="{SCOPE}"'
+    return f'{challenge}, error="invalid_token"' if invalid else challenge
+
+
+def is_keycloak_token(token: str) -> bool:
+    """Whether ``token`` claims to come from the realm, before anything about it is trusted.
+
+    Only routes the token: a personal access token is a JWT too, signed by
+    sbomify, and naming another issuer sends it down the PAT path.
+    ``verify`` checks the claim properly.
+    """
+    try:
+        claims = jwt.decode(token, options={"verify_signature": False})
+    except jwt.PyJWTError:
+        return False
+    return claims.get("iss") == issuer()
+
+
+@functools.cache
+def _jwks_client() -> jwt.PyJWKClient:
+    url = f"{settings.KEYCLOAK_SERVER_URL.rstrip('/')}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/certs"
+    return jwt.PyJWKClient(url, lifespan=_JWKS_LIFESPAN_SECONDS, timeout=_JWKS_TIMEOUT_SECONDS)
+
+
+def _may_force_refresh() -> bool:
+    """Whether this worker may fetch the key set again now, and if so, start its window."""
+    global _last_forced_refresh
+    with _refresh_lock:
+        now = time.monotonic()
+        if now - _last_forced_refresh < _JWKS_REFRESH_GAP_SECONDS:
+            return False
+        _last_forced_refresh = now
+        return True
+
+
+def _signing_key(token: str) -> Any | None:
+    """The realm key that signed ``token``, or ``None`` when the realm has no such key.
+
+    ``PyJWKClient`` fetches the key set again whenever a token names a key it has
+    not cached, so tokens with made-up ``kid`` values would each cost a Keycloak
+    fetch. A key missing from the cached set forces one fetch per worker per
+    window; inside the window it is refused. The window lives in the process,
+    like the key set it guards: kept anywhere shared, one worker's fetch after
+    Keycloak rotates its key would spend the window for every other worker,
+    in this pod or another, still holding the old set, and they would refuse
+    valid tokens until it passed.
+    """
+    kid = jwt.get_unverified_header(token).get("kid")
+    client = _jwks_client()
+    for refresh in (False, True):
+        if refresh and not _may_force_refresh():
+            return None
+        for key in client.get_signing_keys(refresh=refresh):
+            if key.key_id == kid:
+                return key
+    return None
+
+
+def verify(token: str) -> dict[str, Any] | None:
+    """The token's claims when the realm signed it for this server with the ``mcp`` scope, else ``None``."""
+    try:
+        key = _signing_key(token)
+        if key is None:
+            logger.info("[MCP] Refused an OAuth credential signed with a key the realm does not have")
+            return None
+        claims: dict[str, Any] = jwt.decode(
+            token,
+            key.key,
+            algorithms=["RS256", "ES256"],
+            audience=resource(),
+            issuer=issuer(),
+            leeway=_LEEWAY_SECONDS,
+            options={"require": ["exp", "iat", "sub"]},
+        )
+    except jwt.PyJWKClientError:
+        logger.warning("[MCP] Could not read Keycloak's signing keys", exc_info=True)
+        return None
+    except jwt.PyJWTError as exc:
+        # The argument is PyJWT's reason (expired, wrong audience), never the credential itself.
+        logger.info("[MCP] Refused a realm sign-in: %s", exc)
+        return None
+    # The metadata and the challenge both ask for the mcp scope, so a token
+    # carrying the audience without it was not issued through that consent.
+    if SCOPE not in str(claims.get("scope") or "").split():
+        logger.info("[MCP] Refused an OAuth credential without the mcp scope")
+        return None
+    return claims
+
+
+def resolve(token: str) -> tuple[AbstractBaseUser, OAuthCredential] | tuple[None, None]:
+    """The sbomify user an OAuth token speaks for, and the credential to record, or ``(None, None)``."""
+    from allauth.socialaccount.models import SocialAccount
+
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+
+    claims = verify(token)
+    if claims is None:
+        return None, None
+    account = SocialAccount.objects.filter(provider="keycloak", uid=claims["sub"]).select_related("user").first()
+    # The same liveness the token path checks: a soft-deleted account stays
+    # active until it is purged, and must not keep reading through Keycloak.
+    if account is None or not account.user.is_active or account.user.deleted_at is not None:
+        return None, None
+    pk = f"oauth:{claims['sub']}:{claims.get('azp') or 'unknown-client'}"
+    return account.user, OAuthCredential(pk=pk, scopes=list(SCOPE_PRESETS["read_only"] or []))
