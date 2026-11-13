@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
@@ -53,7 +54,38 @@ class UTCZRenderer(JSONRenderer):
         return super().render(request, data, response_status=response_status)
 
 
-api = NinjaAPI(
+class CachedSchemaNinjaAPI(NinjaAPI):
+    """NinjaAPI that builds its OpenAPI document once per process.
+
+    ninja regenerates the whole document on every hit to ``/openapi.json``:
+    one pydantic ``model_json_schema`` call per request and response model,
+    each re-deduplicating its own definitions. With ~175 paths and ~630
+    component schemas that is about a second of CPU per request, for a
+    document that cannot change once the routers are mounted.
+
+    Keyed on ``path_prefix`` because the same API object renders a different
+    document for each prefix it is mounted under. Callers get a deep copy, so
+    one that edits the dict it was handed cannot corrupt what the next request
+    serves; copying costs milliseconds, generating costs the second.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._openapi_schema_cache: dict[str, Any] = {}
+
+    def get_openapi_schema(self, *, path_prefix: str | None = None, path_params: dict[str, Any] | None = None) -> Any:
+        if path_prefix is None:
+            path_prefix = self.get_root_path(path_params or {})
+        schema = self._openapi_schema_cache.get(path_prefix)
+        if schema is None:
+            # Racing threads may both build it; the result is identical, so
+            # the last write winning is harmless and no lock is needed.
+            schema = super().get_openapi_schema(path_prefix=path_prefix)
+            self._openapi_schema_cache[path_prefix] = schema
+        return deepcopy(schema)
+
+
+api = CachedSchemaNinjaAPI(
     # CSRF protects cookie/session-authenticated requests. Personal Access Token
     # (bearer) clients are exempted by BearerAuthCsrfExemptMiddleware so the API stays
     # usable for programmatic clients (which carry no CSRF cookie and cannot be a CSRF
@@ -233,7 +265,7 @@ MOUNTS: tuple[tuple[str, str], ...] = (
 # attached and dies with a ConfigError naming /sboms. The real fault is then
 # invisible, buried under a cascade blaming the wrong line.
 
-api_v2 = NinjaAPI(
+api_v2 = CachedSchemaNinjaAPI(
     version="2.0.0",
     urls_namespace="api-2",
     csrf=True,
