@@ -17,7 +17,7 @@
 	}
 
 	@django_health {
-		path /UuPha8mu/*
+		path {$HEALTH_CHECK_PATH:/UuPha8mu/}*
 	}
 	handle @django_health {
 		log_skip
