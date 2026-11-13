@@ -17,9 +17,32 @@ Deploy sbomify using Docker Compose with cryptographic image verification.
 **Included Services:**
 
 - PostgreSQL 17 - Production-ready database
-- Redis 8 - Cache and message broker
+- Valkey 9 - Cache and message broker
 
-> Use external database/Redis only if you need HA or managed services.
+> Use external database/Valkey only if you need HA or managed services.
+> sbomify speaks the Redis protocol, so Redis 7+ and managed services built on
+> either (ElastiCache, Memorystore, Upstash) work too. To run Redis in the
+> bundled service instead, set `REDIS_IMAGE=redis:8-alpine`.
+
+### Upgrading from Redis
+
+Earlier releases bundled Redis 8 with its data in the `sbomify_redis_data`
+volume. Valkey cannot read the files Redis 8 writes and exits at startup, so
+the bundled service now keeps its data in a new `sbomify_valkey_data` volume and
+starts empty. Nothing in it needs to survive: it holds the cache and the task
+queue. Let the workers drain the queue before upgrading, or any task still
+waiting in it is dropped.
+
+Once the new version is running, remove the old volume:
+
+```bash
+docker volume rm <project>_sbomify_redis_data
+```
+
+The same applies when switching the bundled service between Valkey and Redis
+later with `REDIS_IMAGE`: neither reads the other's data files, so stop the
+stack and remove `<project>_sbomify_valkey_data` first, or the new server exits
+at startup.
 
 ## Quick Start
 
@@ -168,7 +191,7 @@ DATABASE_PASSWORD=password
 # DATABASE_SSLMODE=require          # or verify-ca, verify-full
 # DATABASE_SSLROOTCERT=/path/to/ca.crt
 
-# External Redis (default: uses included Redis)
+# External Valkey or Redis (default: uses included Valkey)
 REDIS_URL=redis://redis.example.com:6379
 # REDIS_URL=rediss://:password@redis.example.com:6379  # With password + TLS
 # REDIS_CA_CERTS=/path/to/ca.crt    # Custom CA for Redis TLS
@@ -178,6 +201,10 @@ BILLING=False
 
 # GitHub token for SBOM attestation lookups (see below)
 # GITHUB_API_TOKEN=github_pat_your_token
+
+# Anonymous usage telemetry: the number of users, workspaces, products and
+# components, and the sbomify version. On by default, off when CI is set.
+# TELEMETRY_ENABLED=False
 ```
 
 ### GitHub token for attestation checks

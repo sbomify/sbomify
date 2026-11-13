@@ -4,13 +4,13 @@
 # These are deliberately NOT part of the Helm chart. Stateful services have
 # their own operational lifecycle (backups, failover, version upgrades) that
 # should not be coupled to an application release. The chart therefore requires
-# you to point it at PostgreSQL, Redis, object storage and Keycloak that you
+# you to point it at PostgreSQL, Valkey, object storage and Keycloak that you
 # provide; this file is simply what "you provide" means on a laptop.
 #
 # Single replica, no backups, no TLS, published credentials. For production:
 #
 #   PostgreSQL  a managed service, or the CloudNativePG operator
-#   Redis       a managed service, or an operator
+#   Valkey      a managed service, or an operator (Redis works too)
 #   Storage     S3 / Cloudflare R2 / Tigris, or a MinIO you operate
 #   Keycloak    the Keycloak Operator, the project's official Kubernetes path
 #               (Keycloak deliberately publishes no official Helm chart)
@@ -100,36 +100,36 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: sbomify-dev-redis
+  name: sbomify-dev-valkey
   labels:
-    app.kubernetes.io/name: sbomify-dev-redis
+    app.kubernetes.io/name: sbomify-dev-valkey
     app.kubernetes.io/part-of: sbomify-dev-dependencies
 spec:
   clusterIP: None
   ports:
-    - name: redis
+    - name: valkey
       port: 6379
-      targetPort: redis
+      targetPort: valkey
   selector:
-    app.kubernetes.io/name: sbomify-dev-redis
+    app.kubernetes.io/name: sbomify-dev-valkey
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: sbomify-dev-redis
+  name: sbomify-dev-valkey
   labels:
-    app.kubernetes.io/name: sbomify-dev-redis
+    app.kubernetes.io/name: sbomify-dev-valkey
     app.kubernetes.io/part-of: sbomify-dev-dependencies
 spec:
-  serviceName: sbomify-dev-redis
+  serviceName: sbomify-dev-valkey
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: sbomify-dev-redis
+      app.kubernetes.io/name: sbomify-dev-valkey
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: sbomify-dev-redis
+        app.kubernetes.io/name: sbomify-dev-valkey
         app.kubernetes.io/part-of: sbomify-dev-dependencies
     spec:
       securityContext:
@@ -140,19 +140,19 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: redis
-          image: redis:8-alpine
+        - name: valkey
+          image: valkey/valkey:9-alpine
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          args: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+          args: ["valkey-server", "--appendonly", "yes", "--dir", "/data"]
           ports:
-            - name: redis
+            - name: valkey
               containerPort: 6379
           readinessProbe:
-            exec: {command: ["redis-cli", "ping"]}
+            exec: {command: ["valkey-cli", "ping"]}
             initialDelaySeconds: 3
             periodSeconds: 5
           resources:

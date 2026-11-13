@@ -19,7 +19,7 @@ from django.template.defaultfilters import pluralize
 from django.utils import timezone
 
 from sbomify.apps.billing.billing_processing import get_resource_limit
-from sbomify.apps.billing.config import get_unlimited_plan_limits
+from sbomify.apps.billing.config import get_unlimited_plan_limits, is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end
 from sbomify.apps.billing.stripe_client import get_stripe_client
@@ -390,7 +390,7 @@ def user_seat(team: Workspace, *, is_joining_via_invite: bool = False) -> Iterat
     serialises the seat count against concurrent inserts, and the count stays
     inside it; the cancel is Stripe's state, which no row lock protects.
     """
-    cancel_due = None if is_joining_via_invite else _cancel_still_due(team)
+    cancel_due = None if is_joining_via_invite or not is_billing_enabled() else _cancel_still_due(team)
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=team.pk)
         yield can_add_user_to_team(locked, is_joining_via_invite=is_joining_via_invite, cancel_due=cancel_due)
@@ -443,6 +443,11 @@ def can_add_user_to_team(
     Returns:
         Tuple of (can_add, error_message). If can_add is False, error_message contains the reason.
     """
+    # With billing disabled every workspace is unlimited, as products and
+    # components already are in ``core.apis``.
+    if not is_billing_enabled():
+        return True, ""
+
     if not team.billing_plan:
         try:
             plan = BillingPlan.objects.get(key="community")
@@ -848,17 +853,39 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     4. Updates session data accordingly.
     5. Returns a redirect to the appropriate next page.
     """
-    removed_user: User = membership.user
-    removed_team_name = membership.team.display_name
-    removed_team_key = membership.team.key or ""
-    removed_role = membership.role
-    current_user = cast(User, request.user)
-    is_self_removal = membership.user_id == current_user.id
+    from django.http import HttpResponseForbidden
 
-    # Check if this is the user's last workspace BEFORE deleting
-    is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
+    from sbomify.apps.core.errors import error_response
+    from sbomify.apps.teams.permissions import check_member_removal
 
-    membership.delete()
+    with transaction.atomic():
+        # Role changes take the same workspace lock. Re-read the membership
+        # after acquiring it: the caller's copy may predate a role change.
+        team = Workspace.objects.select_for_update().get(pk=membership.team_id)
+        locked_membership = Member.objects.select_for_update().filter(pk=membership.pk, team=team).first()
+        if locked_membership is None:
+            messages.error(request, "Membership not found")
+            return redirect_to_team_settings(team.key or "", active_tab or "members")
+        membership = locked_membership
+
+        denial = check_member_removal(request.user, membership)
+        if denial:
+            if denial.forbidden:
+                return error_response(request, HttpResponseForbidden(denial.message))
+            messages.add_message(request, denial.level, denial.message)
+            return redirect_to_team_settings(team.key or "", active_tab or "members")
+
+        removed_user: User = membership.user
+        removed_team_name = team.display_name
+        removed_team_key = team.key or ""
+        removed_role = membership.role
+        current_user = cast(User, request.user)
+        is_self_removal = membership.user_id == current_user.id
+
+        # Check if this is the user's last workspace BEFORE deleting
+        is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
+
+        membership.delete()
 
     # Fires for both delete_member() and TeamSettingsView._delete_member()
     # entry points; tests cover both paths. Deferred via ``on_commit`` so a

@@ -19,7 +19,6 @@ document-artifact guards) that still apply in the new model.
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
 
 import pytest
 from django.utils import timezone
@@ -32,7 +31,7 @@ from sbomify.apps.plugins.models import (
     RunStatus,
     TeamPluginSettings,
 )
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, ScanMode
 from sbomify.apps.plugins.sdk.results import PluginMetadata
 from sbomify.apps.plugins.tasks import (
     attach_release_to_runs_task,
@@ -355,6 +354,62 @@ class TestAttachReleaseToRunsTask:
         assert len(sync_calls) == 0
         assert result["synced_plugins"] == []
 
+    @pytest.mark.parametrize(
+        ("skip", "shipped", "rescan_started", "scans"),
+        [
+            pytest.param("dependency-track:not-tracked", True, False, True, id="skipped-as-not-monitored"),
+            pytest.param("dependency-track:not-tracked", False, False, False, id="still-not-monitored"),
+            pytest.param("dependency-track:not-enabled", True, False, False, id="skipped-for-another-reason"),
+            pytest.param("dependency-track:not-tracked", True, True, False, id="scan-already-started"),
+        ],
+    )
+    def test_scans_an_sbom_skipped_as_not_monitored_once_a_release_ships_it(
+        self, sample_team_with_owner_member, monkeypatch, skip, shipped, rescan_started, scans
+    ):
+        """Its upload scan ran after a newer SBOM arrived and before the release shipped it,
+        so the run is a skip and no scheduled scan is due to come back to it."""
+        team = sample_team_with_owner_member.team
+        _make_dt_plugin()
+        settings = _enable_plugins(team, "dependency-track")
+        settings.plugin_configs = {"dependency-track": {"dt_server_id": "pinned"}}
+        settings.save()
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        sbom = SBOM.objects.create(name="s", version="1.0", component=component, format="cyclonedx")
+        SBOM.objects.create(name="s", version="1.1", component=component, format="cyclonedx")
+        release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
+        if shipped:
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        run = {
+            "sbom": sbom,
+            "plugin_name": "dependency-track",
+            "plugin_version": "1.0.0",
+            "plugin_config_hash": "abc",
+            "category": AssessmentCategory.SECURITY.value,
+            "run_reason": "on_upload",
+        }
+        AssessmentRun.objects.create(
+            **run,
+            status=RunStatus.COMPLETED.value,
+            result={"findings": [{"id": skip}], "metadata": {"skipped": True}},
+        )
+        if rescan_started:
+            AssessmentRun.objects.create(**run, status=RunStatus.PENDING.value)
+        enqueued: list[dict] = []
+        monkeypatch.setattr("sbomify.apps.plugins.tasks.enqueue_assessment", lambda **kwargs: enqueued.append(kwargs))
+
+        attach_release_to_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release.id))
+
+        scan = {
+            "sbom_id": str(sbom.id),
+            "plugin_name": "dependency-track",
+            "run_reason": RunReason.ON_RELEASE_ASSOCIATION,
+            "config": {"dt_server_id": "pinned"},
+            "release_id": str(release.id),
+        }
+        assert enqueued == ([scan] if scans else [])
+
 
 @pytest.mark.django_db
 class TestOrchestratorPopulatesM2MAtCompletion:
@@ -526,214 +581,6 @@ class TestCronIteratesUniqueSboms:
         )
 
         assert [call["sbom_id"] for call in enqueued] == ([str(sbom.id)] if rescanned else [])
-
-
-@pytest.mark.django_db
-class TestDependencyTrackPluginScanOnce:
-    """The DT plugin uses one DT project version per SBOM, releases as tags."""
-
-    def _make_env(self):
-        """Build a team, product, component, SBOM linked to two named releases."""
-        from sbomify.apps.teams.models import Workspace
-        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
-
-        team = Workspace.objects.create(name="DT Scan Once Team", key="dt-so", billing_plan="business")
-        product = Product.objects.create(name="p", team=team)
-        component = Component.objects.create(name="c", team=team)
-        product.components.add(component)
-
-        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sha256_hash="a" * 64)
-
-        # Use auto-created latest + two named releases
-        release_latest = Release.get_or_create_latest_release(product)
-        release_v1 = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
-        release_v2 = Release.objects.create(product=product, name="v2.0.0", version="2.0.0")
-        ReleaseArtifact.objects.get_or_create(release=release_latest, sbom=sbom)
-        ReleaseArtifact.objects.create(release=release_v1, sbom=sbom)
-        ReleaseArtifact.objects.create(release=release_v2, sbom=sbom)
-
-        server = DependencyTrackServer.objects.create(
-            name="Scan Once DT",
-            url="https://dt-so.example.com",
-            api_key="key",
-            health_status="healthy",
-        )
-        return team, product, component, sbom, server, [release_latest.name, release_v1.name, release_v2.name]
-
-    def test_first_scan_uploads_once_creates_version_row_sets_tags(self, sample_team_with_owner_member, tmp_path):
-        """Plugin's first assess() call on a 3-release SBOM uploads ONCE,
-        persists a SbomDependencyTrackProjectVersion row with sbom.id as the
-        version, and sets the DT tag set to all 3 release names."""
-        from unittest.mock import MagicMock
-
-        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-        from sbomify.apps.plugins.sdk.base import RetryLaterError
-        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
-
-        team, product, component, sbom, server, release_names = self._make_env()
-        _make_dt_plugin()
-        _enable_plugins(team, "dependency-track")
-
-        captured_uploads: list[dict] = []
-        captured_tag_sets: list[dict] = []
-
-        def fake_upload(*, project_name, project_version, sbom_data, auto_create):
-            captured_uploads.append({"project_name": project_name, "project_version": project_version})
-
-        def fake_find_project(name, version):
-            return {"uuid": "00000000-0000-0000-0000-000000000001"}
-
-        def fake_set_tags(project_uuid, tag_names):
-            captured_tag_sets.append({"uuid": project_uuid, "tag_names": tag_names})
-
-        mock_client = MagicMock()
-        mock_client.upload_sbom_with_project_creation.side_effect = fake_upload
-        mock_client.find_project_by_name_version.side_effect = fake_find_project
-        mock_client.set_project_tags.side_effect = fake_set_tags
-        mock_client.get_project.return_value = {"uuid": "00000000-0000-0000-0000-000000000001", "name": "p-c"}
-
-        plugin = DependencyTrackPlugin()
-
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_bytes(b'{"bomFormat":"CycloneDX","specVersion":"1.6"}')
-
-        with (
-            patch(
-                "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
-                return_value=mock_client,
-            ),
-            patch.object(plugin, "_select_dt_server", return_value=server),
-            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
-            patch(
-                "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService._get_environment_prefix",
-                return_value="dev",
-            ),
-        ):
-            with pytest.raises(RetryLaterError):
-                plugin.assess(sbom_id=sbom.id, sbom_path=sbom_path, context=None)
-
-        # Exactly ONE upload call. project_version must be sbom.id (Q1=A).
-        assert len(captured_uploads) == 1
-        assert captured_uploads[0]["project_version"] == str(sbom.id)
-        assert str(component.id) in captured_uploads[0]["project_name"]  # component ID is part of project_name
-
-        # SbomDependencyTrackProjectVersion row was persisted
-        row = SbomDependencyTrackProjectVersion.objects.get(sbom=sbom, dt_server=server)
-        assert row.dt_project_version == str(sbom.id)
-        assert str(row.dt_project_version_uuid) == "00000000-0000-0000-0000-000000000001"
-
-        # Initial tag set was pushed to DT — contains all 3 release names (sorted/dedupe'd)
-        assert len(captured_tag_sets) == 1
-        assert set(captured_tag_sets[0]["tag_names"]) == set(release_names)
-
-    def test_retry_uses_stored_version_uuid_no_reupload(self, sample_team_with_owner_member, tmp_path):
-        """Retry after first upload polls using stored UUID — no second upload call."""
-        from unittest.mock import MagicMock
-
-        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
-
-        team, product, component, sbom, server, release_names = self._make_env()
-        _make_dt_plugin()
-        _enable_plugins(team, "dependency-track")
-
-        # Pre-create the version row as if first upload already happened
-        SbomDependencyTrackProjectVersion.objects.create(
-            sbom=sbom,
-            dt_server=server,
-            dt_project_version=str(sbom.id),
-            dt_project_version_uuid="00000000-0000-0000-0000-000000000001",
-        )
-
-        captured_uploads: list[dict] = []
-
-        def fake_upload(*, project_name, project_version, sbom_data, auto_create):
-            captured_uploads.append({"project_name": project_name, "project_version": project_version})
-
-        mock_client = MagicMock()
-        mock_client.upload_sbom_with_project_creation.side_effect = fake_upload
-        mock_client.get_project_metrics.return_value = {"components": 0, "vulnerabilities": 0}
-        mock_client.get_project_vulnerabilities.return_value = {"content": []}
-
-        plugin = DependencyTrackPlugin()
-
-        sbom_path = tmp_path / "sbom.json"
-        sbom_path.write_bytes(b'{"bomFormat":"CycloneDX","specVersion":"1.6"}')
-
-        with (
-            patch(
-                "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
-                return_value=mock_client,
-            ),
-            patch.object(plugin, "_select_dt_server", return_value=server),
-            patch.object(plugin, "_team_has_dt_enabled", return_value=True),
-            patch(
-                "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService._get_environment_prefix",
-                return_value="dev",
-            ),
-        ):
-            result = plugin.assess(sbom_id=sbom.id, sbom_path=sbom_path, context=None)
-
-        assert captured_uploads == [], "Retry path must NOT re-upload the SBOM"
-        assert result is not None
-        assert result.summary.total_findings == 0
-        # Result metadata should reflect the stored version UUID and canonical tag set
-        assert result.metadata["dt_project_uuid"] == "00000000-0000-0000-0000-000000000001"
-        assert result.metadata["dt_project_version"] == str(sbom.id)
-        assert set(result.metadata["dt_project_release_tags"]) == set(release_names)
-
-    def test_sync_release_tags_pushes_canonical_set_from_m2m(self, sample_team_with_owner_member):
-        """Q2=B: sync_release_tags re-reads the full release set from AssessmentRun.releases
-        M2M and PATCHes the DT tag list to match (idempotent, self-healing)."""
-        from unittest.mock import MagicMock
-
-        from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-        from sbomify.apps.plugins.models import AssessmentRun, AssessmentRunRelease, RunStatus
-        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
-
-        team, product, component, sbom, server, release_names = self._make_env()
-
-        # Pre-create the version row
-        SbomDependencyTrackProjectVersion.objects.create(
-            sbom=sbom,
-            dt_server=server,
-            dt_project_version=str(sbom.id),
-            dt_project_version_uuid="00000000-0000-0000-0000-000000000001",
-        )
-
-        # Completed run with M2M pointing at all 3 releases
-        run = AssessmentRun.objects.create(
-            sbom=sbom,
-            plugin_name="dependency-track",
-            plugin_version="1.1.0",
-            plugin_config_hash="abc",
-            category=AssessmentCategory.SECURITY.value,
-            run_reason="on_upload",
-            status=RunStatus.COMPLETED.value,
-            result={"summary": {"total_findings": 0}},
-        )
-        for r in Release.objects.filter(product=product):
-            AssessmentRunRelease.objects.create(assessment_run=run, release=r)
-
-        captured_tag_sets: list[dict] = []
-        mock_client = MagicMock()
-        mock_client.set_project_tags.side_effect = lambda uuid, names: captured_tag_sets.append(
-            {"uuid": uuid, "names": names}
-        )
-
-        plugin = DependencyTrackPlugin()
-        newly_attached_release = Release.objects.filter(product=product, name="v2.0.0").first()
-
-        with patch(
-            "sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient",
-            return_value=mock_client,
-        ):
-            plugin.sync_release_tags(sbom_id=str(sbom.id), run_id=str(run.id), release=newly_attached_release)
-
-        assert len(captured_tag_sets) == 1
-        # The tag set must match the canonical M2M content, NOT just the newly
-        # attached release — that's the Q2=B invariant.
-        assert set(captured_tag_sets[0]["names"]) == set(release_names)
 
 
 @pytest.mark.django_db

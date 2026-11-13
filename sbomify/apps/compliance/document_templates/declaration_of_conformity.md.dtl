@@ -29,7 +29,7 @@
 {% if authorized_rep_name %}
 ## 2a. Authorized Representative
 
-{% if authorized_rep_required %}Appointed under CRA Art. 22 because the manufacturer is not established in the Union.{% else %}Appointed by the manufacturer. This assessment does not record an Art. 22 obligation, which arises only for manufacturers established outside the Union.{% endif %}
+Appointed by the manufacturer by written mandate under CRA Art. 18.
 
 - **Name:** {{ authorized_rep_name }}
 {% if authorized_rep_address %}
@@ -46,20 +46,12 @@
 {% endif %}
 
 The Authorized Representative holds a copy of this declaration and of the technical documentation, and is empowered to act on the manufacturer's behalf before market surveillance authorities.
-{% elif authorized_rep_required %}
-## 2a. Authorized Representative
-
-> ⚠️  The manufacturer is recorded as not established in the Union, so CRA
-> Art. 22 requires an Authorized Representative to be appointed before this
-> product is placed on the market. No representative has been recorded —
-> this declaration MUST NOT be signed until one is.
 {% elif eu_establishment_unanswered %}
 ## 2a. Authorized Representative
 
 > ⚠️  It has not been recorded whether the manufacturer is established in the
-> Union, so whether CRA Art. 22 requires an Authorized Representative is
-> unknown. Answer the establishment question in Step 1 and regenerate this
-> document. Silence here is not a statement that no representative is needed.
+> Union. Answer the establishment question in Step 1 and regenerate this
+> document.
 {% endif %}
 
 ## 3. Responsibility Statement

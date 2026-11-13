@@ -256,6 +256,17 @@ def check_component_access(
             requires_access_request=False,
         )
 
+    # A session handed over to a workspace's Trust Center host reaches that
+    # workspace and nothing else (see core/services/trust_center_session.py).
+    scope_team = getattr(request, "trust_center_scope_team", None)
+    if scope_team is not None and (team is None or team.pk != scope_team.pk):
+        return ComponentAccessResult(
+            has_access=False,
+            reason="trust_center_scope",
+            requires_authentication=True,
+            requires_access_request=False,
+        )
+
     # Gated components require authentication and access approval
     if component.visibility == Component.Visibility.GATED:
         if not request.user.is_authenticated:

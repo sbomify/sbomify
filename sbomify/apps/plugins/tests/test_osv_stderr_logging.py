@@ -123,7 +123,7 @@ class TestTheWarningItProduces:
             OSVPlugin().assess("test-sbom", sbom_file)
 
         calls = list(warning.call_args_list) + list(error.call_args_list)
-        return next(call.args[0] for call in calls if "Scanner returned code" in call.args[0])
+        return next(call.args[0] % call.args[1:] for call in calls if "Scanner returned code" in call.args[0])
 
     def test_the_logged_warning_carries_the_cause(self, sbom_file: Path) -> None:
         assert "permission denied" in self._scanner_warning(sbom_file)

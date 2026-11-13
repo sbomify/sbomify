@@ -538,7 +538,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 - **Database**: PostgreSQL 17
 - **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
-- **Caching/Broker**: Redis 8
+- **Caching/Broker**: Valkey 9 (anything speaking the Redis protocol works, Redis 8 included)
 
 ### Authentication
 
@@ -561,7 +561,7 @@ Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owne
 
 `operator` is the read-mostly security role: it reads everything internal (`READ_INTERNAL`) and holds exactly one write, `artifact:publish_vex`, which is the `TRIAGE` tier. That lets it record triage decisions in the app and through the triage API, and nothing else — no products, no components, no releases, no uploads, no settings. The VEX **file upload** endpoints pair `artifact:publish_vex` with `artifact:publish`, which operators do not have, so uploading an artifact stays with members, admins and CI bots. The split mirrors Dependency-Track's `VULNERABILITY_ANALYSIS` vs `BOM_UPLOAD`.
 
-Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rules — *an admin may not remove an owner, and may not change the role of, or remove, an owner or another admin* — are relational rather than tiers, so they live in `check_member_removal` and `check_role_change` (`teams/permissions.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 

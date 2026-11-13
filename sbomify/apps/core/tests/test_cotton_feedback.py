@@ -69,6 +69,12 @@ def test_alert_shell_tints_the_surface_and_keeps_neutral_text(rendered: str) -> 
     assert 'role="alert"' in info
 
 
+def test_a_standing_alert_is_a_note_not_an_announcement(rendered: str) -> None:
+    standing = _probe(rendered, "alert-standing")
+    assert 'role="note"' in standing
+    assert 'role="alert"' not in standing
+
+
 def test_alert_default_variant_is_info(rendered: str) -> None:
     assert "[--alert-accent:var(--color-primary)]" in _probe(rendered, "alert-info")
     assert "fas fa-info-circle" in _section(rendered, "alert-info")

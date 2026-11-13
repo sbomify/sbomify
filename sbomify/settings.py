@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -328,6 +329,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -1426,6 +1428,21 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Installation telemetry: the installation usage report goes to its own PostHog
+# project, never the user analytics one above. The key is a write-only project
+# key, hardcoded so every installation reports to the same place without a
+# self-hoster configuring anything. TELEMETRY_ENABLED=False turns it off.
+TELEMETRY_POSTHOG_API_KEY = "phc_tt6dpYfx2yVK876BTJCBP5Xd6uZ95mrxmEyHvyE2UGq5"
+TELEMETRY_POSTHOG_HOST = "https://us.i.posthog.com"
+
+
+def telemetry_enabled(environ: Mapping[str, str]) -> bool:
+    """On unless TELEMETRY_ENABLED says otherwise. Off by default in CI, which sets CI."""
+    return _env_bool(environ.get("TELEMETRY_ENABLED") or None, not _env_bool(environ.get("CI"), False))
+
+
+TELEMETRY_ENABLED = telemetry_enabled(os.environ)
 
 # Integrations
 #

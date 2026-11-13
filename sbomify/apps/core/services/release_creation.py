@@ -7,7 +7,7 @@ from django.http import HttpRequest
 from sbomify.apps.core.apis import create_release
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product
-from sbomify.apps.core.schemas import ReleaseCreateSchema
+from sbomify.apps.core.schemas import ReleaseCreateSchema, SupersedesItem
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Workspace
 
@@ -27,7 +27,13 @@ def create_workspace_release(request: HttpRequest, data: dict[str, Any]) -> Serv
     product = Product.objects.select_related("team").filter(id=data["product_id"], team__key=workspace_key).first()
     if product is None or not can(request, "release:create", product):
         return ServiceResult.failure("Choose a product from this workspace.", status_code=403)
-    status, result = create_release(request, ReleaseCreateSchema(**data))
+    fields = {key: value for key, value in data.items() if key not in ("replaces", "replaces_line")}
+    supersedes = (
+        [SupersedesItem(release_id=data["replaces"], drop_in=data.get("replaces_line") != "new")]
+        if data.get("replaces")
+        else []
+    )
+    status, result = create_release(request, ReleaseCreateSchema(**fields, supersedes=supersedes))
     if status == 201:
         return ServiceResult.success(result)
     if status == 200:
