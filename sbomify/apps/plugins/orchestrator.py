@@ -276,6 +276,7 @@ class PluginOrchestrator:
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
+                rerun_requested=run_reason is RunReason.MANUAL and existing_run_id is None,
             )
 
             # Write to temporary file and execute plugin

@@ -245,6 +245,19 @@ class DependencyTrackPlugin(AssessmentPlugin):
             dt_release_tree.queue_sync(team.id)
             raise RetryLaterError("Waiting for Dependency Track to take this SBOM into the workspace's tree")
 
+        if tracked and context is not None and context.rerun_requested:
+            # A person asked for this run, and reading the project would only
+            # repeat the outcome they want replaced. Letting go of the SBOM has
+            # the tree's next sync upload it again into the projects it has, so
+            # Dependency-Track re-imports it, and retries a refused upload. Only
+            # this server's projects let go. An SBOM sbomify no longer tracks
+            # keeps reading what it has: it is not sent again.
+            type(holder).objects.filter(dt_server=dt_server, team_id=team.id, sbom=sbom, dt_active=True).update(
+                sbom=None
+            )
+            dt_release_tree.queue_sync(team.id)
+            raise RetryLaterError("Sending this SBOM to Dependency Track again")
+
         if holder.upload_refused:
             if needs_conversion:
                 return self._create_unconvertible_result(holder.upload_refused)

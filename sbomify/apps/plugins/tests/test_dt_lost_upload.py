@@ -19,7 +19,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
-from sbomify.apps.plugins.sdk.base import RetryLaterError
+from sbomify.apps.plugins.sdk.base import RetryLaterError, SBOMContext
 from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
 
 TREE = "sbomify.apps.vulnerability_scanning.services.dt_release_tree"
@@ -72,7 +72,7 @@ class TestALostUploadIsSentAgain:
         return client
 
     @staticmethod
-    def _assess(scan, client: MagicMock) -> tuple[MagicMock, object]:
+    def _assess(scan, client: MagicMock, context: SBOMContext | None = None) -> tuple[MagicMock, object]:
         """Run a scan; returns the tree's sync queue and the outcome."""
         with (
             patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
@@ -81,7 +81,7 @@ class TestALostUploadIsSentAgain:
             patch("sbomify.apps.vulnerability_scanning.clients.DependencyTrackClient", return_value=client),
         ):
             try:
-                outcome: object = DependencyTrackPlugin().assess(str(scan.sbom.id), scan.path)
+                outcome: object = DependencyTrackPlugin().assess(str(scan.sbom.id), scan.path, context=context)
             except RetryLaterError as retry:
                 outcome = retry
         return queued, outcome
@@ -149,6 +149,59 @@ class TestALostUploadIsSentAgain:
         assert outcome.summary.total_findings == 0
         assert self._project_kept(scan)
 
+    def _holds(self, scan) -> bool:
+        return type(scan.holder).objects.filter(pk=scan.holder.pk, sbom=scan.sbom).exists()
+
+    def test_a_rerun_a_person_asked_for_uploads_again(self, scan) -> None:
+        """Left alone, an analysed project is read as it stands: the result they
+        asked to replace. The project stays, so DT re-imports into it."""
+        queued, outcome = self._assess(
+            scan, self._client(metrics={}, project=ANALYSED), SBOMContext(rerun_requested=True)
+        )
+
+        queued.assert_called_once_with(scan.team.id)
+        assert isinstance(outcome, RetryLaterError)
+        assert self._project_kept(scan)
+        assert not self._holds(scan)
+
+    def test_a_requested_rerun_leaves_the_project_on_another_server(self, scan) -> None:
+        """A server this run does not use is not sent the SBOM again."""
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackServer
+
+        other = DependencyTrackServer.objects.create(
+            name="DT Other Server", url="https://dt-other.example.com", api_key="key", health_status="healthy"
+        )
+        elsewhere = type(scan.holder).objects.create(
+            dt_server=other,
+            team=scan.team,
+            kind=scan.holder.kind,
+            component=scan.sbom.component,
+            sbom=scan.sbom,
+            dt_project_uuid=uuid.uuid4(),
+            dt_name=scan.holder.dt_name,
+            dt_version="latest",
+        )
+
+        self._assess(scan, self._client(metrics={}, project=ANALYSED), SBOMContext(rerun_requested=True))
+
+        assert not self._holds(scan)
+        assert type(scan.holder).objects.filter(pk=elsewhere.pk, sbom=scan.sbom).exists()
+
+    def test_a_requested_rerun_of_an_sbom_no_longer_tracked_polls_what_it_has(self, scan) -> None:
+        """A newer SBOM replaced it. Its upload keeps being read, but it is not sent
+        to Dependency Track again: only tracked SBOMs are."""
+        from sbomify.apps.sboms.models import SBOM
+
+        SBOM.objects.create(name="s", version="2", component=scan.sbom.component, format="cyclonedx", format_version="1.6")
+
+        queued, outcome = self._assess(
+            scan, self._client(metrics={}, project=ANALYSED), SBOMContext(rerun_requested=True)
+        )
+
+        queued.assert_not_called()
+        assert outcome.summary.total_findings == 0
+        assert self._holds(scan)
+
     def _with_token(self, scan, processing: dict) -> MagicMock:
         type(scan.holder).objects.filter(pk=scan.holder.pk).update(dt_upload_token=uuid.uuid4())
         client = self._client(metrics={"vulnerabilities": 0}, project=ANALYSED)
@@ -161,6 +214,7 @@ class TestALostUploadIsSentAgain:
         queued.assert_called_once()
         assert isinstance(outcome, RetryLaterError)
         assert not self._project_kept(scan)
+
 
     def test_an_upload_dt_is_processing_since_today_keeps_waiting(self, scan) -> None:
         self._uploaded_at(scan, timezone.now() - timedelta(hours=6))

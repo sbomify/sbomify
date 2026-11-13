@@ -828,6 +828,19 @@ def _after_commit(func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     transaction.on_commit(call, robust=True)
 
 
+def _same_value(stored: Any, sent: Any) -> bool:
+    """Whether a value an edit sends is the one the release already has.
+
+    A date sent without an offset is read the way ``Release.save()`` reads it.
+    Dates are compared to the second, because the API answers them to the
+    second: a client sending back the date it read is not moving it.
+    """
+    sent = Release._as_aware(sent)
+    if isinstance(stored, datetime) and isinstance(sent, datetime):
+        return stored.replace(microsecond=0) == sent.replace(microsecond=0)
+    return bool(stored == sent)
+
+
 def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
     """Write a person's edit to a release, under the product lock and then the release lock.
 
@@ -854,9 +867,7 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    # A date sent without an offset is read the way ``Release.save()`` reads it,
-    # so the stored instant sent again is not a change.
-    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
+    changed = [field for field, value in changes.items() if not _same_value(getattr(release, field), value)]
     if not changed:
         return ServiceResult.success((release, False))
 
