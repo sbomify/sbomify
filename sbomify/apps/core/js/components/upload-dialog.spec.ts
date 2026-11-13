@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import {
     bomTypeFromDetail,
     bomTypeFromHash,
@@ -9,13 +9,25 @@ import {
     type UploadTypeState,
 } from './upload-dialog';
 
-// bun runs these without a DOM; the dialog only reads location.hash.
-const page = globalThis as { window?: { location: { hash: string } } };
-const ownWindow = !page.window;
-page.window ??= { location: { hash: '' } };
-const setHash = (hash: string) => { page.window!.location.hash = hash; };
+// bun runs these without a DOM; the dialog only reads location.hash. Other
+// specs leave their own fake window behind (some without a location), so
+// install ours for this file and put back whatever was there before.
+type FakeWindow = { location: { hash: string } };
+const page = globalThis as { window?: FakeWindow };
+const fakeWindow: FakeWindow = { location: { hash: '' } };
+let hadWindow = false;
+let previousWindow: FakeWindow | undefined;
+beforeAll(() => {
+    hadWindow = 'window' in page;
+    previousWindow = page.window;
+    page.window = fakeWindow;
+});
+afterAll(() => {
+    if (hadWindow) page.window = previousWindow;
+    else delete page.window;
+});
+const setHash = (hash: string) => { fakeWindow.location.hash = hash; };
 afterEach(() => setHash(''));
-afterAll(() => { if (ownWindow) delete page.window; });
 
 const openEvent = (detail?: unknown) => ({ detail }) as unknown as Event;
 
