@@ -122,3 +122,35 @@ def test_the_seat_lock_is_not_held_across_the_stripe_read(django_user_model, moc
     assert in_transaction == [False]
     assert can_add is False
     assert "scheduled downgrade to Community" in msg
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("billing_plan", ["community", "business", None])
+def test_seats_are_unlimited_with_billing_disabled(django_user_model, settings, mocker, billing_plan):
+    """A self-hosted instance with BILLING=False has no seat limit, whatever plan the
+    workspace row carries, the same as products and components. Stripe is never asked."""
+    settings.BILLING = False
+    stripe_read = mocker.patch("sbomify.apps.teams.utils.get_subscription_cancel_at_period_end")
+    BillingPlan.objects.create(key="community", name="Community", max_users=1)
+    BillingPlan.objects.create(key="business", name="Business", max_users=2)
+    owner = django_user_model.objects.create_user(username="owner", email="owner@example.com", password="password")
+    team = Workspace.objects.create(
+        name="Self-hosted Team",
+        billing_plan=billing_plan,
+        billing_plan_limits={"cancel_at_period_end": True, "scheduled_downgrade_plan": "community"},
+    )
+    Member.objects.create(user=owner, team=team, role="owner")
+    for n in range(3):
+        Invitation.objects.create(
+            team=team,
+            email=f"invitee{n}@example.com",
+            role="member",
+            expires_at=timezone.now() + timezone.timedelta(days=7),
+        )
+
+    from sbomify.apps.teams.utils import user_seat
+
+    assert can_add_user_to_team(team) == (True, "")
+    with user_seat(team) as verdict:
+        assert verdict == (True, "")
+    stripe_read.assert_not_called()
