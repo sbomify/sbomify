@@ -17,14 +17,19 @@ from sbomify.apps.core.models import Installation
 from sbomify.apps.core.tasks import USAGE_REPORT_PENDING_KEY, report_installation_usage
 
 
+def _forget_clients() -> None:
+    posthog_service._client = None
+    posthog_service._initialized = False
+    posthog_service._telemetry_client = None
+    posthog_service._telemetry_initialized = False
+
+
 @pytest.fixture(autouse=True)
 def _reset_state() -> Iterator[None]:
-    posthog_service._client = None
-    posthog_service._initialized = False
+    _forget_clients()
     cache.delete(USAGE_REPORT_PENDING_KEY)
     yield
-    posthog_service._client = None
-    posthog_service._initialized = False
+    _forget_clients()
     cache.delete(USAGE_REPORT_PENDING_KEY)
 
 
@@ -34,6 +39,57 @@ def mock_client() -> MagicMock:
     posthog_service._client = client
     posthog_service._initialized = True
     return client
+
+
+@pytest.fixture
+def mock_telemetry_client() -> MagicMock:
+    client = MagicMock()
+    posthog_service._telemetry_client = client
+    posthog_service._telemetry_initialized = True
+    return client
+
+
+class TestTelemetryClient:
+    def test_uses_its_own_hardcoded_project(self, settings, mocker: MockerFixture) -> None:
+        settings.TELEMETRY_ENABLED = True
+        settings.POSTHOG_API_KEY = "phc_user_analytics"
+        posthog_cls = mocker.patch("posthog.Posthog")
+
+        assert posthog_service._get_telemetry_client() is posthog_cls.return_value
+
+        posthog_cls.assert_called_once_with(
+            "phc_tt6dpYfx2yVK876BTJCBP5Xd6uZ95mrxmEyHvyE2UGq5", host="https://us.i.posthog.com"
+        )
+
+    def test_does_not_depend_on_user_analytics(self, settings) -> None:
+        settings.TELEMETRY_ENABLED = True
+        settings.POSTHOG_API_KEY = ""
+
+        assert posthog_service.is_telemetry_enabled()
+        assert not posthog_service.is_enabled()
+
+    def test_can_be_turned_off(self, settings, mocker: MockerFixture) -> None:
+        settings.TELEMETRY_ENABLED = False
+        posthog_cls = mocker.patch("posthog.Posthog")
+
+        assert posthog_service._get_telemetry_client() is None
+        posthog_cls.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({}, True),
+        ({"TELEMETRY_ENABLED": ""}, True),
+        ({"CI": "true"}, False),
+        ({"CI": "true", "TELEMETRY_ENABLED": "True"}, True),
+        ({"TELEMETRY_ENABLED": "False"}, False),
+    ],
+)
+def test_telemetry_setting(environ: dict[str, str], expected: bool) -> None:
+    from sbomify.settings import telemetry_enabled
+
+    assert telemetry_enabled(environ) is expected
 
 
 @pytest.mark.django_db
@@ -106,19 +162,27 @@ class TestInstallationIdOnEveryCall:
 
 @pytest.mark.django_db
 class TestReportInstallationUsage:
-    @override_settings(POSTHOG_API_KEY="phc_test_key")
-    def test_reports_counts(self, mock_client: MagicMock, sample_component) -> None:
+    @override_settings(TELEMETRY_ENABLED=True, POSTHOG_API_KEY="phc_test_key")
+    def test_reports_counts(
+        self, mock_telemetry_client: MagicMock, mock_client: MagicMock, sample_user, sample_component
+    ) -> None:
+        from django.contrib.auth import get_user_model
+
+        from sbomify.apps.plugins.utils import get_sbomify_version
         from sbomify.apps.sboms.models import Component, Product
         from sbomify.apps.teams.models import Workspace
 
         report_installation_usage()
 
         installation_id = str(Installation.get().installation_id)
-        mock_client.capture.assert_called_once()
-        call = mock_client.capture.call_args
+        mock_client.capture.assert_not_called()
+        mock_telemetry_client.capture.assert_called_once()
+        call = mock_telemetry_client.capture.call_args
         assert call.args == (installation_id, events.INSTALLATION_USAGE_REPORTED)
         assert call.kwargs["groups"] == {"installation": installation_id}
         properties = call.kwargs["properties"]
+        assert properties["user_count"] == get_user_model().objects.count() >= 1
+        assert properties["sbomify_version"] == get_sbomify_version()
         assert properties["workspace_count"] == Workspace.objects.count() >= 1
         assert properties["product_count"] == Product.objects.count() >= 1
         assert properties["component_count"] == Component.objects.count() >= 1
@@ -128,13 +192,22 @@ class TestReportInstallationUsage:
             {k: v for k, v in properties.items() if k != "installation_id"},
         ) == []
 
-    def test_noop_when_disabled(self, mock_client: MagicMock) -> None:
+    @override_settings(TELEMETRY_ENABLED=True)
+    def test_every_telemetry_event_carries_the_version(self, mock_telemetry_client: MagicMock) -> None:
+        from sbomify.apps.plugins.utils import get_sbomify_version
+
+        posthog_service.capture_telemetry("installation", events.INSTALLATION_USAGE_REPORTED, {})
+
+        assert mock_telemetry_client.capture.call_args.kwargs["properties"]["sbomify_version"] == get_sbomify_version()
+
+    @override_settings(TELEMETRY_ENABLED=False, POSTHOG_API_KEY="phc_test_key")
+    def test_noop_when_disabled(self, mock_telemetry_client: MagicMock) -> None:
         report_installation_usage()
 
-        mock_client.capture.assert_not_called()
+        mock_telemetry_client.capture.assert_not_called()
 
-    @override_settings(POSTHOG_API_KEY="phc_test_key")
-    def test_clears_pending_marker(self, mock_client: MagicMock) -> None:
+    @override_settings(TELEMETRY_ENABLED=True)
+    def test_clears_pending_marker(self, mock_telemetry_client: MagicMock) -> None:
         cache.set(USAGE_REPORT_PENDING_KEY, True)
 
         report_installation_usage()
@@ -145,21 +218,28 @@ class TestReportInstallationUsage:
 @pytest.mark.django_db(transaction=True)
 class TestUsageReportScheduling:
     @pytest.fixture
-    def posthog_enabled(self, settings) -> None:
-        settings.POSTHOG_API_KEY = "phc_test_key"
+    def telemetry_enabled(self, settings) -> None:
+        settings.TELEMETRY_ENABLED = True
 
     @pytest.fixture
     def mock_send(self, mocker: MockerFixture) -> MagicMock:
         return mocker.patch("sbomify.apps.core.tasks.report_installation_usage.send_with_options")
 
     def test_creating_entities_queues_one_report(
-        self, posthog_enabled: None, mock_send: MagicMock, sample_component
+        self, telemetry_enabled: None, mock_send: MagicMock, sample_component
     ) -> None:
         mock_send.assert_called_once()
         assert mock_send.call_args.kwargs["delay"] > 0
 
+    def test_creating_a_user_queues_a_report(self, telemetry_enabled: None, mock_send: MagicMock) -> None:
+        from django.contrib.auth import get_user_model
+
+        get_user_model().objects.create_user(username="new-user", email="new-user@example.com")
+
+        mock_send.assert_called_once()
+
     def test_deleting_queues_a_report_after_the_last_one_ran(
-        self, posthog_enabled: None, mock_send: MagicMock, sample_product
+        self, telemetry_enabled: None, mock_send: MagicMock, sample_product
     ) -> None:
         from sbomify.apps.core.models import Component
 

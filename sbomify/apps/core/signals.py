@@ -662,13 +662,14 @@ def tell_releases_shipping_the_new_newest(sender: Any, instance: Any, **kwargs: 
         _tell_releases_shipping([newest[0]])
 
 
+@receiver(post_save, sender="core.User")
 @receiver(post_save, sender="teams.Workspace")
 @receiver(post_save, sender="sboms.Product")
 @receiver(post_save, sender="core.Product")
 @receiver(post_save, sender="sboms.Component")
 @receiver(post_save, sender="core.Component")
 def report_usage_on_create(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
-    """Report the installation's size to PostHog when a workspace, product or component is added.
+    """Report the installation's size when a user, workspace, product or component is added.
 
     ``core.Product`` and ``core.Component`` are proxies, and a save through a
     proxy sends the signal from the proxy, so both senders are needed.
@@ -681,13 +682,14 @@ def report_usage_on_create(sender: Any, instance: Any, created: bool, **kwargs: 
     schedule_installation_usage_report()
 
 
+@receiver(post_delete, sender="core.User")
 @receiver(post_delete, sender="teams.Workspace")
 @receiver(post_delete, sender="sboms.Product")
 @receiver(post_delete, sender="core.Product")
 @receiver(post_delete, sender="sboms.Component")
 @receiver(post_delete, sender="core.Component")
 def report_usage_on_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
-    """Report the installation's size to PostHog when a workspace, product or component is removed."""
+    """Report the installation's size when a user, workspace, product or component is removed."""
     from sbomify.apps.core.tasks import schedule_installation_usage_report
 
     schedule_installation_usage_report()
