@@ -33,6 +33,8 @@ def run_sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     provider = get_provider(integration.provider)
     if provider is None:
         return ServiceResult.failure(f"Unknown provider: {integration.provider}", status_code=400)
+    if not provider.syncs:
+        return ServiceResult.failure(f"{provider.name} has nothing to sync", status_code=400)
 
     # Keyed to the generation like every other write here. `_claim` has already
     # set RUNNING for the task path; this is for a direct caller. Unconditional

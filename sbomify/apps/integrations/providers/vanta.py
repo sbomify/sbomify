@@ -45,7 +45,7 @@ VANTA = ProviderSpec(
     key="vanta",
     name="Vanta",
     tagline="Publish the frameworks and controls you already track in Vanta.",
-    icon="fa-shield-halved",
+    icon="fas fa-shield-halved",
     docs_url="https://developer.vanta.com/docs/concepts/authentication",
     reads=(
         "The frameworks your Vanta account tracks",

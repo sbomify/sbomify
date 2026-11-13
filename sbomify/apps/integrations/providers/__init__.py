@@ -7,9 +7,10 @@ on its spec, so nothing here has to grow when a second one arrives.
 from __future__ import annotations
 
 from sbomify.apps.integrations.providers.base import ProviderSpec
+from sbomify.apps.integrations.providers.slack import SLACK
 from sbomify.apps.integrations.providers.vanta import VANTA
 
-PROVIDERS: tuple[ProviderSpec, ...] = (VANTA,)
+PROVIDERS: tuple[ProviderSpec, ...] = (VANTA, SLACK)
 
 PROVIDERS_BY_KEY: dict[str, ProviderSpec] = {provider.key: provider for provider in PROVIDERS}
 

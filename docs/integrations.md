@@ -4,9 +4,11 @@ A workspace's compliance programme usually already lives in a dedicated tool.
 Integrations read that programme and republish the part of it the workspace
 chooses, so the trust center can be true without anyone retyping it.
 
-Vanta is the first provider. This page is the operator reference: how to
-register the OAuth client, what the sync writes, and what to check when it
-stops.
+Vanta is the first compliance provider. Slack is the first notification
+provider: it reads nothing, and posts the VEX approval queue and vulnerability
+news to the channels a workspace picks (see [Slack](#slack)). This page is the
+operator reference: how to register each OAuth client, what each connection
+writes, and what to check when it stops.
 
 ## What a connection does
 
@@ -149,14 +151,77 @@ kept, so reconnecting is not a re-import, but nothing stays public: a trust
 center must not go on claiming a control is met from a source nobody is reading
 any more.
 
+## Slack
+
+Slack is the first provider sbomify writes to rather than reads from. A
+workspace installs the sbomify app into its Slack workspace, then picks a
+channel for each kind of message on the Integrations tab. Each message can go
+to a different channel, or be turned off.
+
+| Message | When it is posted |
+| --- | --- |
+| VEX approval queue | Each time a VEX ruling is submitted for approval |
+| Daily vulnerability digest | Every day at 08:00 UTC: open totals by severity, known exploited, past fix-by date, what opened and closed in the last 24 hours, rulings waiting, and the top five priorities |
+| New vulnerabilities | When a scan finds a vulnerability a component did not have before, at or above the severity the route asks for (high and above by default) |
+
+"New" is decided by `plugins.lifecycle.record_run`, the one place that knows a
+vulnerability is new to a component rather than new to a scan: a rescan, a
+second scanner or a fresh SBOM of the same component reports it again and
+opens nothing. A new vulnerability a published VEX already covers is not
+posted.
+
+### Setting up the Slack app
+
+1. Create an app at <https://api.slack.com/apps> and add the bot token scopes
+   `chat:write`, `chat:write.public`, `channels:read` and `groups:read`.
+2. Add the redirect URL:
+
+   ```text
+   https://<your-host>/integrations/oauth/slack/callback
+   ```
+
+3. Turn on public distribution if workspaces other than your own will connect.
+4. Set the credentials:
+
+   | Variable | Default | What it is |
+   | --- | --- | --- |
+   | `SLACK_CLIENT_ID` | empty | The app's client id |
+   | `SLACK_CLIENT_SECRET` | empty | The app's client secret |
+   | `SLACK_OAUTH_AUTHORIZE_URL` | `https://slack.com/oauth/v2/authorize` | Where the customer consents |
+   | `SLACK_OAUTH_TOKEN_URL` | `https://slack.com/api/oauth.v2.access` | Where codes are exchanged |
+   | `SLACK_API_BASE_URL` | `https://slack.com/api` | Where the Web API calls go |
+
+`chat:write.public` lets the bot post to any public channel without being
+invited. A private channel is only listed once the app has been invited to it.
+
+### How delivery behaves
+
+Messages are posted by dramatiq tasks queued after the change that caused them
+commits, so a Slack outage delays a message and never fails a scan or a
+submission. Slack answers almost every call with a 200 and reports failure in
+the body, so the client sorts errors by what Slack said:
+
+- **A dead token** (`invalid_auth`, `token_revoked`, `account_inactive`,
+  `missing_scope`) marks the connection as needing a reconnect.
+- **A refused channel** (`channel_not_found`, `not_in_channel`, `is_archived`)
+  is recorded on that message's row, and every other message keeps working.
+- **Anything else** (rate limits, 5xx, timeouts) is retried by dramatiq.
+
+Bot tokens do not expire, so a Slack connection has no refresh and nothing to
+sync, and the scheduler never queues one.
+
 ## Adding a provider
 
 1. A `ProviderSpec` in `sbomify/apps/integrations/providers/`, added to
    `PROVIDERS`.
-2. A `sync(integration) -> ServiceResult[dict]` function named by the spec's
-   `sync_path`.
-3. A `ControlCatalog.Source` member whose value is the provider key, so a
-   disconnect can find what it published.
+2. For a compliance provider, a `sync(integration) -> ServiceResult[dict]`
+   function named by the spec's `sync_path`, and a `ControlCatalog.Source`
+   member whose value is the provider key, so a disconnect can find what it
+   published.
+3. For a notification provider, `kind="notifications"` on the spec. The routes,
+   the tasks and the tab are shared, but the client is Slack's today, so a
+   second one needs `services.notifications` to pick a client by provider.
 
-The OAuth module, the views and the templates are provider-agnostic and should
-not need changing.
+The OAuth module, the views and the templates are provider-agnostic. Where a
+provider departs from the OAuth spec (Slack's form-encoded token endpoint,
+comma-separated scopes, tokens that never expire) it says so on its spec.

@@ -26,6 +26,7 @@ import requests
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
 from sbomify.apps.core.integrations.http import request_with_retry
 from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
@@ -49,6 +50,8 @@ class TokenSet:
     refresh_token: str
     expires_at: datetime | None
     scopes: tuple[str, ...]
+    # Who the credential belongs to, from ``ProviderSpec.account_path``.
+    account: dict[str, str] | None = None
 
 
 def callback_url(request: HttpRequest, provider: ProviderSpec) -> str:
@@ -78,7 +81,7 @@ def start_authorization(request: HttpRequest, provider: ProviderSpec, workspace_
         "client_id": provider.client_id,
         "redirect_uri": callback_url(request, provider),
         "response_type": "code",
-        "scope": " ".join(provider.scopes),
+        "scope": provider.scope_separator.join(provider.scopes),
         "state": nonce,
     }
     return f"{provider.authorize_url}?{urlencode(params)}"
@@ -161,15 +164,18 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
     }
 
     try:
-        # JSON, not form encoding: Vanta's token endpoint rejects
-        # ``application/x-www-form-urlencoded`` outright, and every provider
-        # accepts JSON.
-        response = request_with_retry(
-            "POST",
-            provider.token_url,
-            json=body,
-            headers={"Accept": "application/json", "Content-Type": "application/json"},
-        )
+        # The encoding is the provider's choice: Vanta's token endpoint rejects
+        # ``application/x-www-form-urlencoded`` outright, and Slack's accepts
+        # nothing else.
+        if provider.exchange_encoding == "form":
+            response = request_with_retry("POST", provider.token_url, data=body, headers={"Accept": "application/json"})
+        else:
+            response = request_with_retry(
+                "POST",
+                provider.token_url,
+                json=body,
+                headers={"Accept": "application/json", "Content-Type": "application/json"},
+            )
     except requests.RequestException as exc:
         # A timeout or a DNS blip says nothing about the credential, so it must
         # not cost the workspace its connection.
@@ -193,6 +199,15 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
             f"{provider.name} returned an unreadable token response.", service=provider.key
         ) from exc
 
+    # Slack answers every call with a 200 and reports a refusal in the body,
+    # so a status check alone would store ``{"ok": false}`` as a credential.
+    if isinstance(data, dict) and data.get("ok") is False:
+        error = data.get("error")
+        logger.warning("%s token endpoint refused the grant: %s", provider.key, error)
+        if error == "ratelimited":
+            raise ProviderUnavailable(f"{provider.name} is not answering.", service=provider.key)
+        raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
+
     return _token_set(provider, data)
 
 
@@ -213,6 +228,15 @@ def _token_set(provider: ProviderSpec, data: Any) -> TokenSet:
         expires_at = timezone.now() + timedelta(seconds=int(expires_in))
 
     scope = data.get("scope")
-    scopes = tuple(scope.split()) if isinstance(scope, str) and scope else provider.scopes
+    # Space-separated per the OAuth spec, comma-separated from Slack.
+    scopes = tuple(scope.replace(",", " ").split()) if isinstance(scope, str) and scope else provider.scopes
 
-    return TokenSet(access_token=access_token, refresh_token=refresh_token, expires_at=expires_at, scopes=scopes)
+    account = import_string(provider.account_path)(data) if provider.account_path else None
+
+    return TokenSet(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        scopes=scopes,
+        account=account,
+    )
