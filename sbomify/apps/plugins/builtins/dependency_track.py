@@ -206,7 +206,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             sbom = SBOM.objects.select_related("component__team").get(id=sbom_id)
             team = sbom.component.team
         except Exception as e:
-            logger.error(f"[DT] Failed to look up SBOM {sbom_id}: {e}")
+            logger.error("[DT] Failed to look up SBOM %s: %s", sbom_id, e)
             return self._create_error_result(f"Failed to look up SBOM: {e}")
 
         # Check team has DT provider enabled
@@ -286,7 +286,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 version_row = upload(sbom_bytes)
             except Exception as e:
                 if not _is_unsupported_spec_version(e):
-                    logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
+                    logger.error("[DT] Failed to upload SBOM %s to DT: %s", sbom_id, e)
                     return self._create_error_result(f"DT upload failed: {e}")
                 # CycloneDX moved ahead of this server. A copy at an older spec
                 # version usually carries everything a scan matches on, so that
@@ -367,7 +367,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
             version_row.delete()
             return self.assess(sbom_id, sbom_path, dependency_status, context)
         except Exception as e:
-            logger.error(f"[DT] Failed to poll results for SBOM {sbom_id}: {e}")
+            logger.error("[DT] Failed to poll results for SBOM %s: %s", sbom_id, e)
             return self._create_error_result(f"Failed to poll DT results: {e}")
 
     def _upload_older_spec_copy(
@@ -395,7 +395,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 version_row = upload(copy)
             except Exception as e:
                 if not _is_unsupported_spec_version(e):
-                    logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT as CycloneDX {target}: {e}")
+                    logger.error("[DT] Failed to upload SBOM %s to DT as CycloneDX %s: %s", sbom_id, target, e)
                     return self._create_error_result(f"DT upload failed: {e}")
                 refusal = e
                 continue
