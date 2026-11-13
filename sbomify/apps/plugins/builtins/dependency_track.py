@@ -261,6 +261,17 @@ class DependencyTrackPlugin(AssessmentPlugin):
             # no longer tracks is not sent to it.
             return self._not_monitored()
 
+        if version_row is not None and tracked and context is not None and context.rerun_requested:
+            # A person asked for this run, and polling the version on record would
+            # only repeat the outcome they want replaced. Forgetting it makes this a
+            # first scan, which uploads to the same project name and version, so DT
+            # re-imports into the project it has. Only this server's record goes: one
+            # on another server still carries that project's release tags. An SBOM
+            # sbomify no longer tracks keeps polling the version it has instead:
+            # it is not sent to Dependency Track again.
+            version_row.delete()
+            version_row = None
+
         if version_row is None:
             # First scan for this SBOM against this DT server. Upload bytes,
             # discover the new DT project version UUID, persist the row, set
