@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.plugins.sdk.base import RetryLaterError
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.vulnerability_scanning.models import (
@@ -54,6 +55,7 @@ def _sbom(component: Component, version: str, fmt: str = "cyclonedx") -> SBOM:
 @pytest.fixture
 def scan(sample_team_with_owner_member, tmp_path):
     team = sample_team_with_owner_member.team
+    TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": ["dependency-track"]})
     server = DependencyTrackServer.objects.create(
         name="dt", url="https://dt.example.com", api_key="k", health_status="healthy"
     )
