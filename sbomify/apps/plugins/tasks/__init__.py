@@ -982,10 +982,9 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
 
     Called by the ReleaseArtifact post_save signal handler. Finds the most
     recent completed run per plugin for the given SBOM and adds the release
-    to each run's ``releases`` M2M. For plugins that expose a
-    ``sync_release_tags`` hook (currently only Dependency Track), the task
-    also asks the plugin to update its downstream tag state — e.g. PATCH
-    the DT project version's tags so the new release shows up in DT.
+    to each run's ``releases`` M2M. It also calls each continuous plugin's
+    ``sync_release_tags`` hook, so one that keeps release-scoped state outside
+    sbomify can update it. No built-in plugin overrides the hook today.
 
     Race (Option A): if no completed run exists yet (the upload-triggered
     scan is still running), this task is a no-op. The orchestrator's
@@ -1132,11 +1131,11 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
     """Detach a removed release from AssessmentRuns for an SBOM (Stage 5 Issue A).
 
     Called by the ReleaseArtifact post_delete signal handler. Removes the
-    release from every AssessmentRun M2M for the SBOM and asks each plugin
-    that exposes a ``sync_release_tags`` hook to re-push the canonical tag
-    set (minus the just-removed release). Uses the same Q2=B "re-read full
-    canonical set" semantic as the attach path, so DT tag state converges
-    correctly regardless of ordering.
+    release from every AssessmentRun M2M for the SBOM and calls each
+    continuous plugin's ``sync_release_tags`` hook with the canonical set
+    (minus the just-removed release). It re-reads the full set, as the attach
+    path does, so the order of attach and detach does not matter. No built-in
+    plugin overrides the hook today.
 
     Args:
         sbom_id: The SBOM primary key.

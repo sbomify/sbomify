@@ -131,25 +131,16 @@ def tracked_sboms(sboms: QuerySet[SBOM] | None = None, team_id: Any = None) -> Q
 
 
 def reconcile_after_removal(release_ids: Iterable[Any]) -> None:
-    """Queue, for once a delete of these releases commits, the reconciles its cascade does not.
+    """Queue, for once a delete of these releases commits, the sync of their workspace's Dependency-Track tree.
 
-    Their components may be shipped by nothing once they go, and the releases
-    they link to lose a reason to stay tracked. Call before the delete, while
-    the artifacts and links still exist.
+    The releases they link to lose a reason to stay tracked. Links never cross
+    workspaces, so one sync covers them. Call before the delete, while the
+    releases still exist.
     """
-    from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+    from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
-    ids = list(release_ids)
-    component_ids = set(
-        ReleaseArtifact.objects.filter(release_id__in=ids, sbom__isnull=False).values_list(
-            "sbom__component_id", flat=True
-        )
-    )
-    linked = set(Release.objects.filter(pk__in=releases_linked_from(ids)).values_list("product_id", flat=True))
-    for product_id in linked:
-        after_lifecycle_change(product_id)
-    for component_id in component_ids:
-        _after_commit(reconcile_component_dt_scope.send, str(component_id))
+    for team_id in set(Release.objects.filter(pk__in=list(release_ids)).values_list("product__team_id", flat=True)):
+        queue_sync(team_id)
 
 
 def broadcast_releases_updated(product: Product, releases: Iterable[Release]) -> None:
@@ -962,11 +953,12 @@ def after_lifecycle_change(product_id: Any) -> None:
     """Once the write commits, bring Dependency-Track in line with where the product's releases now stand.
 
     A broker error after the commit is logged, not raised: the write stands,
-    and ``dt_tracked_scope`` repairs what the lost message would have done.
+    and the daily ``dt_tracked_scope`` sweep, which syncs every workspace's
+    tree, repairs what the lost message would have done.
     """
-    from sbomify.apps.vulnerability_scanning.tasks import reconcile_product_dt_scope
+    from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
-    transaction.on_commit(lambda: reconcile_product_dt_scope.send(str(product_id)), robust=True)
+    queue_sync(Product.objects.filter(pk=product_id).values_list("team_id", flat=True).first())
 
 
 def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:

@@ -533,16 +533,16 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         # reject any subsequent ``add()`` to this component. The clear MUST
         # happen before the team change.
         component.products.clear()
+        old_team_id = component.team_id
         component.team_id = team_id
         if not target_team.can_be_private():
             component.visibility = Component.Visibility.PUBLIC
         component.save()
 
-        # Its Dependency-Track collection belongs under the new workspace's now.
-        from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+        # Its projects leave the old workspace's Dependency-Track tree; its save queued the new one's.
+        from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
-        moved_id = str(component.pk)
-        transaction.on_commit(lambda: reconcile_component_dt_scope.send(moved_id), robust=True)
+        queue_sync(old_team_id)
 
     messages.add_message(
         request,

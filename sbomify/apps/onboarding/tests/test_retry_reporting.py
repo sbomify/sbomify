@@ -168,12 +168,7 @@ class TestTheBudgetComesFromTheActor:
         from sbomify.apps.vulnerability_scanning.tasks import DT_SCOPE_RETRIES
         from sbomify.sentry_config import _actor_max_retries
 
-        for actor_name in (
-            "reconcile_component_dt_scope",
-            "reconcile_product_dt_scope",
-            "retire_deleted_dt_version",
-            "retire_deleted_dt_collection",
-        ):
+        for actor_name in ("sync_dt_release_tree", "retire_deleted_dt_collection"):
             assert actor_name in REPORT_ON_RETRY_EXHAUSTION_ONLY
             assert _actor_max_retries(actor_name) == DT_SCOPE_RETRIES
 
@@ -324,10 +319,9 @@ class TestAgainstTheRealMiddlewareChain:
 
     def test_only_the_exhausting_attempt_reaches_the_transport(self) -> None:
         """The behaviour this change is for, with nothing stubbed but the wire."""
-        from sbomify.sentry_config import REPORT_ON_RETRY_EXHAUSTION_ONLY
-
+        # A listed actor declared here with its real budget: the filter reads the registered actor's.
         events: list[Any] = []
-        self._run_until_exhausted(events, next(iter(REPORT_ON_RETRY_EXHAUSTION_ONLY)), max_retries=3)
+        self._run_until_exhausted(events, ACTOR, max_retries=MAX_RETRIES)
 
         assert len(events) == 1, f"expected one event for four attempts, got {len(events)}"
 
@@ -340,10 +334,9 @@ class TestAgainstTheRealMiddlewareChain:
         ``DramatiqIntegration`` captured left four of those behind, so the
         outage still arrived as five issues rather than one.
         """
-        from sbomify.sentry_config import REPORT_ON_RETRY_EXHAUSTION_ONLY
-
+        # A listed actor declared here with its real budget: the filter reads the registered actor's.
         events: list[Any] = []
-        self._run_until_exhausted(events, next(iter(REPORT_ON_RETRY_EXHAUSTION_ONLY)), max_retries=3)
+        self._run_until_exhausted(events, ACTOR, max_retries=MAX_RETRIES)
 
         loggers = [event.get("logger") for event in events]
         assert len(events) == 1, f"expected one event for four attempts, got {len(events)}: {loggers}"
