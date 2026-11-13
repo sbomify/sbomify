@@ -124,10 +124,10 @@ def prune_assessment_runs(
             # so one landing mid-batch is either seen here or finds the row gone
             # and writes nothing, deleting what it stored.
             offloaded = [
-                run_id
-                for run_id, key in AssessmentRun.objects.select_for_update()
+                key
+                for key in AssessmentRun.objects.select_for_update()
                 .filter(id__in=batch)
-                .values_list("id", "result_object_key")
+                .values_list("result_object_key", flat=True)
                 if key
             ]
             # Count what the delete actually removed, not what was asked for: a
@@ -136,8 +136,7 @@ def prune_assessment_runs(
             # run whole, findings blob included, just to delete it.
             _, per_model = AssessmentRun.objects.filter(id__in=batch).only("id").delete()
         removed += per_model.get("plugins.AssessmentRun", 0)
-        for run_id in offloaded:
-            delete_result_objects(run_id)
+        delete_result_objects(offloaded)
     if removed:
         logger.info(f"[RETENTION] pruned {removed} assessment runs")
     return removed

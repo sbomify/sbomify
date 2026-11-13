@@ -339,19 +339,19 @@ def delete_result_object(key: str) -> None:
     _client().delete_object(_bucket(), key)
 
 
-def delete_result_objects(run_id: Any) -> int:
-    """Remove every stored payload for a run. Returns how many were deleted.
+def delete_result_objects(keys: list[str]) -> int:
+    """Remove the stored payloads of deleted runs by key. Returns how many were asked for.
 
-    By prefix rather than by key, because a run that was re-annotated after
-    being offloaded has more than one revision stored and the row only records
-    the current one. Nothing else can reference these objects: the prefix is the
-    run id.
+    One request per thousand keys. Retention used to list each run's prefix and
+    delete what it found one key at a time, two requests a run, which on a large
+    backlog outlasted the task's time limit. The keys are the ones the rows
+    recorded; an earlier revision of a run re-annotated after it was offloaded
+    has no row naming it, and ``delete_orphaned_result_objects`` collects it by
+    its run id like any other orphan.
     """
-    client = _client()
-    bucket = _bucket()
-    keys = client.list_cached_aggregates(f"{RESULT_PREFIX}{run_id}/")
-    for key in keys:
-        client.delete_object(bucket, key)
+    if not keys:
+        return 0
+    _client().delete_objects(_bucket(), keys)
     return len(keys)
 
 
@@ -437,6 +437,6 @@ def _delete_orphans(client: Any, bucket: str, keys_by_run: dict[uuid.UUID, list[
         return 0
     live = set(AssessmentRun.objects.filter(id__in=list(keys_by_run)).values_list("id", flat=True))
     orphaned = [key for run_id, keys in keys_by_run.items() if run_id not in live for key in keys]
-    for key in orphaned:
-        client.delete_object(bucket, key)
+    if orphaned:
+        client.delete_objects(bucket, orphaned)
     return len(orphaned)
