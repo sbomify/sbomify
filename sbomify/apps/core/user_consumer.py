@@ -14,6 +14,7 @@ from typing import Any
 
 from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION, WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
 from sbomify.apps.core.utils import user_group_name
+from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -33,6 +34,10 @@ class UserConsumer(WorkspaceConsumer):
                 await self._reject(WS_CLOSE_SERVICE_RESTART)
             except Exception:
                 logger.debug("close after failed accept also failed", exc_info=True)
+            return
+
+        if self.scope.get(AUTH_UNAVAILABLE_SCOPE_KEY):
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
 
         user: Any = self.scope.get("user")
