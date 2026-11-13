@@ -679,12 +679,16 @@ class PluginOrchestrator:
                 self._lock_missing_content_report(run)
             now = timezone.now()
             synthesized_result["assessed_at"] = now.isoformat()
+            # update() skips the save() that fills the result columns, and
+            # readers that never load the blob go by those columns alone.
             updated = AssessmentRun.objects.filter(
                 id=run_id,
                 status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),
             ).update(
                 status=RunStatus.COMPLETED.value,
                 result=synthesized_result,
+                result_summary=synthesized_result["summary"],
+                result_skipped=None,
                 result_schema_version="1.0",
                 error_message=error_message,
                 completed_at=now,
