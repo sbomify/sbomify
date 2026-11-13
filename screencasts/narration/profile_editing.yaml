@@ -1,0 +1,51 @@
+# Narration for screencasts/profile_editing.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to set up a party in sbomify. A party holds your supplier,
+      manufacturer and security contacts.
+
+  parties_live_under:
+    text: >-
+      Parties live under Settings. You add one once and reuse it across your
+      components.
+
+  give_party_name:
+    text: >-
+      Give the party a name, and make it the default for new components.
+
+  entity_organization_pied:
+    text: >-
+      An entity is an organization. Here, Pied Piper is both the manufacturer and
+      the supplier. Add its name, email and phone number.
+
+  address_website_fill:
+    text: >-
+      Next come the address and website. They fill in the supplier details on
+      your components.
+
+  every_entity_needs:
+    text: >-
+      Every entity needs at least one contact person. Tick the roles each person
+      covers.
+
+  gilfoyle_security_contact:
+    text: >-
+      Gilfoyle is the security contact. That is who receives vulnerability
+      reports. Dinesh joins as a technical contact.
+
+  click_done_close:
+    text: >-
+      Click Done to close the entity. The summary shows its roles and contacts.
+
+  create_party:
+    text: >-
+      Then create the party.
+
+  party_saved_marked:
+    text: >-
+      The party is saved and marked as the default. New components pick up these
+      contacts automatically.

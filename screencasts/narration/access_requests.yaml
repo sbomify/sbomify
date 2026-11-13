@@ -1,0 +1,56 @@
+# Narration for screencasts/access_requests.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how gated access works on a Trust Center. Some documents, like an
+      audit report, are shared only after you approve the request. First, the
+      visitor's side.
+
+  first_visitor_s:
+    text: >-
+      Dana, a customer, opens Pied Piper's SOC 2 report.
+
+  report_gated_dana:
+    text: >-
+      The report is gated, so Dana cannot open it yet. Dana requests access.
+
+  workspace_asks_nda:
+    text: >-
+      This workspace asks for an NDA, so signing it is the next step.
+
+  dana_reads_nda:
+    text: >-
+      Dana reads the NDA, types a full name and agrees to the terms.
+
+  sbomify_records_signature:
+    text: >-
+      sbomify records the signature with the time, IP address and a hash of the
+      NDA.
+
+  request_waits_workspace:
+    text: >-
+      The request now waits for the workspace to approve it.
+
+  admin_s_side:
+    text: >-
+      Now the admin's side. Workspace admins are notified of every new request.
+
+  access_requests_trust:
+    text: >-
+      Access requests are on the Trust Center tab in Settings. Dana's shows the
+      NDA as signed.
+
+  approve_request:
+    text: >-
+      Approve the request, and Dana can open and download the report.
+
+  dana_moves_approved:
+    text: >-
+      Dana moves to Approved requests. You can revoke access here at any time.
+
+  back_trust_center:
+    text: >-
+      Back on the Trust Center, the report now reads Access granted for Dana.
