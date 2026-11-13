@@ -432,7 +432,7 @@ class TestLifecycleEndpoint:
 
 
 class TestNewReleasePage:
-    def test_the_newest_stable_release_is_offered_first(
+    def test_the_releases_are_offered_newest_first(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
     ) -> None:
         product = Product.objects.create(team=team_with_business_plan, name="Gateway")
@@ -452,8 +452,42 @@ class TestNewReleasePage:
             stable.pk,
             older.pk,
         ]
-        # A prerelease is offered but never chosen for you.
-        assert form["replaces"].value() == stable.pk
+        # Until a version is typed nothing is chosen: a release date does not say what replaces what.
+        assert not form["replaces"].value()
+
+    def test_the_typed_version_chooses_what_it_replaces(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        backported = _release(product, "1.2.4", **_on(datetime(2026, 3, 1, tzinfo=dt_timezone.utc)))
+        _release(product, "2.0.0", **_on(datetime(2026, 9, 1, tzinfo=dt_timezone.utc)))
+        _release(product, "2.1.0-rc1", is_prerelease=True, **_on(datetime(2026, 10, 1, tzinfo=dt_timezone.utc)))
+
+        def chosen(**typed: str) -> str:
+            response = authenticated_web_client.get(
+                reverse("core:release_new"), {"product_id": product.id, **typed}, headers={"HX-Request": "true"}
+            )
+            assert response.status_code == 200
+            return response.context["form"]["replaces"].value()
+
+        # 1.2.5 is a backport: it replaces 1.2.4, not 2.0.0, though 2.0.0 shipped later.
+        assert chosen(name="Backport", version="1.2.5") == backported.pk
+        # With no version, the name is read the same way.
+        assert chosen(name="1.2.5") == backported.pk
+        assert not chosen(name="Spring release")
+        assert not chosen(name="1.2.5", is_prerelease="on")
+
+    def test_typing_a_version_refreshes_the_guess(
+        self, authenticated_web_client: Client, team_with_business_plan: Workspace
+    ) -> None:
+        product = Product.objects.create(team=team_with_business_plan, name="Gateway")
+        _release(product, "1.0.0")
+        page = authenticated_web_client.get(reverse("core:release_new"), {"product": product.id}).content.decode()
+        fields = 'hx-include="#release-product, #release-name, #release-version, #release-prerelease"'
+        for field in ("release-name", "release-version"):
+            start = page.rindex("<", 0, page.index(f'id="{field}"'))
+            tag = page[start : page.index(">", start)]
+            assert fields in tag and 'hx-target="#release-replaces"' in tag and 'hx-trigger="change"' in tag
 
     def test_changing_the_product_offers_its_releases(
         self, authenticated_web_client: Client, team_with_business_plan: Workspace
@@ -479,8 +513,8 @@ class TestNewReleasePage:
         form = response.context["form"]
         assert stable.pk in [value for value, _label in form.fields["replaces"].choices]
         assert not form["replaces"].value()
-        # The product select sends the checkbox along, so the reload knows.
-        assert 'hx-include="#release-prerelease"' in response.content.decode()
+        # The product select sends the checkbox and the typed version along, so the reload knows.
+        assert 'hx-include="#release-name, #release-version, #release-prerelease"' in response.content.decode()
 
     @pytest.mark.parametrize(("line", "drop_in"), [("same", True), ("new", False)])
     def test_creating_a_release_that_replaces_another(
@@ -665,7 +699,9 @@ class TestChoosingTheLine:
         product = Product.objects.create(team=team_with_business_plan, name="Gateway")
         stable = _release(product, "1.2.4")
 
-        form = authenticated_web_client.get(reverse("core:release_new"), {"product": product.id}).context["form"]
+        form = authenticated_web_client.get(
+            reverse("core:release_new"), {"product": product.id, "version": "1.2.5"}
+        ).context["form"]
 
         assert form["replaces"].value() == stable.pk
         assert not form["replaces_line"].value()
