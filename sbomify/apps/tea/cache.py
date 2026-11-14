@@ -97,7 +97,7 @@ def tea_cached(key_builder: Callable[..., tuple[str, ...]]) -> Callable[..., Any
     (excluding ``request``) and must return a tuple of strings that form the
     cache key after the ``tea:{team_key}:`` prefix.
 
-    The resolved ``Team`` instance is set on ``request.tea_team`` so the
+    The resolved ``Workspace`` instance is set on ``request.tea_team`` so the
     endpoint can access it without calling ``get_team_or_400`` itself.
 
     Only explicit ``(200, body)`` response tuples are cached; error responses
