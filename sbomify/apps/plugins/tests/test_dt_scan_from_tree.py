@@ -206,6 +206,22 @@ class TestScanFromTheTree:
         assert result.metadata.get("unsupported_input") is True
         client.get_project_vulnerabilities.assert_not_called()
 
+    def test_an_sbom_the_server_refused_as_invalid_is_a_skip_that_says_why(self, scan):
+        DependencyTrackTreeProject.objects.filter(pk=scan.holder.pk).update(
+            upload_refused=(
+                "Dependency Track error (400): The uploaded BOM is invalid: Schema validation failed "
+                "(/components/3/externalReferences/1/url: does not match the iri-reference pattern)"
+            )
+        )
+        client = _client()
+
+        result = _assess(scan, client)
+
+        assert result.findings[0].id == "dependency-track:sbom-rejected"
+        assert "/components/3/externalReferences/1/url" in result.findings[0].description
+        assert "spec version" not in result.findings[0].description
+        client.get_project_vulnerabilities.assert_not_called()
+
     @pytest.mark.parametrize("imported, noted", [("CycloneDX 1.6", True), ("CycloneDX 1.7", False), (None, False)])
     def test_the_result_says_when_a_converted_copy_was_scanned(self, scan, imported, noted):
         scan.path.write_text(json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.7", "version": 1}))
