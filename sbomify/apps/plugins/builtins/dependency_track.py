@@ -123,7 +123,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
     - Subsequent retries: polls DT for vulnerability results
 
     Retries are bounded by the task framework (``RETRY_LATER_DELAYS_MS`` in
-    ``plugins/tasks``): at most 4 retries at 2min, 5min, 10min, 15min.
+    ``plugins/tasks``): 10 retries, doubling from 2 minutes up to an hour.
     After the last retry the framework records a graceful failure.
 
     Attributes:
