@@ -102,6 +102,7 @@ def test_release_page_lists_vulnerabilities(
     assert "<c-" not in content
     assert 'id="release-vulnerabilities"' in content
     assert "CVE-1" in content and "CVE-2" in content
+    assert 'href="https://insights.sbomify.com/CVE-1/"' in content
     assert "1 SBOM not scanned yet" in content
     assert 'id="release-artifact-vulnerabilities"' in content
 
