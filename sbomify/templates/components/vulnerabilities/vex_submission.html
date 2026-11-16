@@ -78,7 +78,14 @@ first, so the parent list needs no styling of its own.
                 {% for ruling in item.rulings %}
                     <li class="flex flex-col gap-1.5 border-t border-solid border-border py-3">
                         <span class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                            <span class="font-mono text-xs text-text">{{ ruling.vuln_id }}</span>
+                            {% if ruling.url %}
+                                <a href="{{ ruling.url }}"
+                                   target="_blank"
+                                   rel="noopener"
+                                   class="font-mono text-xs text-primary hover:underline">{{ ruling.vuln_id }}</a>
+                            {% else %}
+                                <span class="font-mono text-xs text-text">{{ ruling.vuln_id }}</span>
+                            {% endif %}
                             <span class="text-text">
                                 {{ ruling.state }}
                                 {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
