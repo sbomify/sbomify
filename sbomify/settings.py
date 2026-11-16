@@ -311,6 +311,9 @@ API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Outermost of ours: the database errors it answers for are raised in the
+    # middleware below as well as in views.
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
     # stashed on the request onto X-RateLimit-* headers.
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
@@ -1111,6 +1114,13 @@ if _trust_center_raw:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
     # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
     TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
+
+# How long a public Trust Center page is kept to be served while the database is
+# unavailable (see core/stale_cache.py). 0 turns it off.
+TRUST_CENTER_STALE_CACHE_TTL = int(os.environ.get("TRUST_CENTER_STALE_CACHE_TTL", "86400"))
+# At most one rewrite of a page's stored copy per this many seconds.
+TRUST_CENTER_STALE_CACHE_REFRESH = int(os.environ.get("TRUST_CENTER_STALE_CACHE_REFRESH", "60"))
+TRUST_CENTER_STALE_CACHE_MAX_BYTES = int(os.environ.get("TRUST_CENTER_STALE_CACHE_MAX_BYTES", str(1024 * 1024)))
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
