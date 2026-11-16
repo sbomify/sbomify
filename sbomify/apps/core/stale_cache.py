@@ -166,6 +166,9 @@ class TrustCenterStaleCacheMiddleware:
             return None
 
         age = max(0, int(time.time() - entry["stored_at"]))
+        # The body is the exact bytes a view already rendered (through the template
+        # engine) for this same host and path, written to the cache only by _store.
+        # nosemgrep: opengrep-rules.python.django.security.audit.xss.direct-use-of-httpresponse
         response = HttpResponse(b"" if request.method == "HEAD" else entry["content"], status=200)
         for name, value in entry["headers"]:
             response[name] = value
