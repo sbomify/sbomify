@@ -17,6 +17,7 @@ class CoreConfig(AppConfig):
 
         import sbomify.apps.core.cron  # noqa: F401
         import sbomify.apps.core.signals  # noqa: F401
+        import sbomify.apps.core.tasks  # noqa: F401
         from sbomify.apps.core.posthog_service import shutdown
 
         atexit.register(shutdown)

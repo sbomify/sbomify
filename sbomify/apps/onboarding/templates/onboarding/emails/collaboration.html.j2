@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Invite your team - sbomify{% endblock %}
+{% block title %}Invite your team{% endblock %}
 {% block content %}
     <h1>Invite your team, {{ user.first_name|default:user.username }}!</h1>
     <p>
@@ -20,10 +20,10 @@
     <p style="text-align: center; margin: 32px 0;">
         {% if workspace_key %}
             <a href="{{ base_url }}{% url 'workspaces:team_settings_tab' workspace_key=workspace_key tab='members' %}"
-               class="button">Invite Members</a>
+               class="button">Invite members</a>
         {% else %}
             <a href="{{ base_url }}{% url 'workspaces:teams_dashboard' %}"
-               class="button">Invite Members</a>
+               class="button">Invite members</a>
         {% endif %}
     </p>
     <p>Got questions? Just reply to this email.</p>

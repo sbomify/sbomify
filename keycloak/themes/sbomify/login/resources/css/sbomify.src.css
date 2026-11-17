@@ -19,6 +19,12 @@
     --color-primary: rgb(124 140 255);
     --color-primary-dark: rgb(66 99 235);
     --color-primary-light: rgb(163 174 255);
+    /* --color-primary is an accent for text and edges on dark; white text on it
+       fails contrast. A filled button reads the fill tokens instead. */
+    --color-primary-fill: rgb(66 99 235);
+    --color-primary-fill-end: rgb(52 78 205);
+    --color-primary-fill-hover: rgb(74 104 237);
+    --color-primary-fill-hover-end: rgb(60 90 225);
 
     /* Surfaces */
     --color-background: rgb(21 23 36);
@@ -325,18 +331,21 @@
 
 /* ===== BUTTONS ===== */
 @layer components {
-    /* The app's filled-button recipe, parameterized by --btn-accent so a variant
-       sets three properties instead of restating the base. */
+    /* The app's filled-button recipe (c-buttons.primary), parameterized so a
+       variant sets the custom properties instead of restating the base. The
+       fill comes from the fill tokens; --btn-accent is the edge and the glow. */
     .btn-submit {
         --btn-accent: var(--color-primary);
-        --btn-accent-dark: var(--color-primary-dark);
-        --btn-accent-hover: var(--color-primary-light);
+        --btn-fill: var(--color-primary-fill);
+        --btn-fill-end: var(--color-primary-fill-end);
+        --btn-fill-hover: var(--color-primary-fill-hover);
+        --btn-fill-hover-end: var(--color-primary-fill-hover-end);
         @apply flex items-center justify-center gap-2 w-full font-medium;
         min-height: 2.75rem;
         padding: 0.625rem 1.25rem;
         font-size: 0.875rem;
         color: var(--btn-text, white);
-        background: linear-gradient(135deg, var(--btn-accent) 0%, var(--btn-accent-dark) 100%);
+        background: linear-gradient(135deg, var(--btn-fill) 0%, var(--btn-fill-end) 100%);
         border: solid var(--btn-accent) 0.5px;
         border-radius: var(--radius-control);
         box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
@@ -347,7 +356,7 @@
     }
 
     .btn-submit:hover {
-        background: linear-gradient(135deg, var(--btn-accent-hover) 0%, var(--btn-accent) 100%);
+        background: linear-gradient(135deg, var(--btn-fill-hover) 0%, var(--btn-fill-hover-end) 100%);
         box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
     }
 
@@ -685,7 +694,7 @@
         min-height: 2.75rem;
         padding: 0.625rem 1.25rem;
         color: white;
-        background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+        background: linear-gradient(135deg, var(--color-primary-fill) 0%, var(--color-primary-fill-end) 100%);
         border: solid var(--color-primary) 0.5px;
         border-radius: var(--radius-control);
     }

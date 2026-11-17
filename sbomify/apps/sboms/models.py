@@ -606,6 +606,13 @@ class Component(models.Model):
     )
     end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
 
+    vcs_url = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Source control repository the component is built from",
+    )
+
     # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict, blank=True)
     products = models.ManyToManyField(Product, through="sboms.ProductComponent", related_name="components")

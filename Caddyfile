@@ -110,7 +110,7 @@
 		}
 
 		# Active health checks
-		health_uri {$HEALTH_CHECK_PATH:/UuPha8mu/}
+		health_uri {$HEALTH_CHECK_PATH:/UuPha8mu/}live/
 		health_interval 10s
 		health_timeout 3s
 		health_status 200
@@ -219,7 +219,7 @@ https:// {
 				read_timeout 0
 				write_timeout 0
 			}
-			health_uri {$HEALTH_CHECK_PATH:/UuPha8mu/}
+			health_uri {$HEALTH_CHECK_PATH:/UuPha8mu/}live/
 			health_interval 10s
 			health_timeout 3s
 			health_status 200

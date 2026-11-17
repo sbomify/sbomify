@@ -116,6 +116,21 @@ def _is_valid_url(value: str) -> bool:
     return bool(URL_PATTERN.match(value))
 
 
+def _first_valid_url(url: Any) -> str | None:
+    """Return the first valid URL from a CycloneDX organizationalEntity url.
+
+    The schema types `url` as an array of strings; a bare string is
+    accepted too, since producers in the wild emit both.
+    """
+    if isinstance(url, str):
+        return url if _is_valid_url(url) else None
+    if isinstance(url, list):
+        for u in url:
+            if isinstance(u, str) and _is_valid_url(u):
+                return u
+    return None
+
+
 def _parse_version(version_str: str) -> tuple[int, ...]:
     """Parse a version string into a tuple of integers for comparison."""
     # Remove common prefixes
@@ -1538,13 +1553,7 @@ class BSICompliancePlugin(AssessmentPlugin):
             source = metadata.get(source_key, {})
             if not source:
                 continue
-            url = source.get("url", "")
-            # url can be a string or list
-            if isinstance(url, list):
-                for u in url:
-                    if isinstance(u, str) and _is_valid_url(u):
-                        return u
-            elif isinstance(url, str) and _is_valid_url(url):
+            if url := _first_valid_url(source.get("url")):
                 return url
             contacts = source.get("contact") or []
             for contact in contacts if isinstance(contacts, list) else []:
@@ -1576,9 +1585,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(manufacturer, dict):
             return None
 
-        # Check for URL
-        url = manufacturer.get("url", "")
-        if isinstance(url, str) and _is_valid_url(url):
+        if url := _first_valid_url(manufacturer.get("url")):
             return url
 
         # Check for email in contacts
