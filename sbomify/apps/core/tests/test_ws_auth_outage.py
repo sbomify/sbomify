@@ -125,3 +125,43 @@ class TestTheConsumersCloseForRetry:
         sent = await _drive(WorkspaceConsumer, "/ws/workspace/ws-key/", {"workspace_key": "ws-key"}, user=_User())
 
         assert _close_code(sent) == WS_CLOSE_SERVICE_RESTART
+
+
+class TestThroughTheApplication:
+    """``asgi.py`` is what puts the middleware in front of the consumers, so
+    these drive the real application with the session table unreachable."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["/ws/user/", "/ws/workspace/ws-key/"])
+    async def test_a_session_that_cannot_be_read_closes_with_1012(self, monkeypatch, path: str) -> None:
+        from unittest.mock import Mock
+
+        from django.conf import settings
+
+        from sbomify.asgi import application
+
+        monkeypatch.setattr(
+            "django.contrib.sessions.backends.db.SessionStore.load",
+            Mock(side_effect=OperationalError("timeout expired")),
+        )
+        sent: list[dict] = []
+        inbox = [{"type": "websocket.connect"}]
+
+        async def send(message: dict) -> None:
+            sent.append(message)
+
+        async def receive() -> dict:
+            return inbox.pop(0) if inbox else {"type": "websocket.disconnect", "code": 1000}
+
+        scope = {
+            "type": "websocket",
+            "path": path,
+            "raw_path": path.encode(),
+            "headers": [(b"cookie", f"{settings.SESSION_COOKIE_NAME}=some-session-key".encode())],
+            "query_string": b"",
+            "subprotocols": [],
+        }
+        await application(scope, receive, send)
+
+        assert [m["type"] for m in sent] == ["websocket.accept", "websocket.close"]
+        assert _close_code(sent) == WS_CLOSE_SERVICE_RESTART
