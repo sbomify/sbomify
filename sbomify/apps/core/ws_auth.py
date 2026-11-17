@@ -22,9 +22,7 @@ from channels.sessions import CookieMiddleware, SessionMiddleware
 from django.contrib.auth.models import AnonymousUser
 from django.db import DatabaseError
 
-from sbomify.logging import getLogger
-
-logger = getLogger(__name__)
+from sbomify.backend_outage import report_backend_outage
 
 # Set on the scope when the session or user could not be read. A consumer that
 # finds it must close for an outage, not for an unauthenticated client.
@@ -36,9 +34,12 @@ class ResilientAuthMiddleware(AuthMiddleware):
         try:
             await super().resolve_scope(scope)
         except DatabaseError as exc:
-            # One line per socket, no traceback: a database outage fails every
-            # reconnecting tab at once.
-            logger.warning(f"WebSocket session lookup failed for {scope.get('path')}: {exc!r}")
+            # Only an unreachable database is an outage. Anything else (a missing
+            # table, a bad password) is a fault that must stay loud, not a 1012
+            # every tab retries forever. The shared outage line is throttled, so a
+            # database outage failing every reconnecting tab at once logs once.
+            if report_backend_outage(exc, "websocket session") is None:
+                raise
             scope["user"]._wrapped = AnonymousUser()
             scope[AUTH_UNAVAILABLE_SCOPE_KEY] = True
 

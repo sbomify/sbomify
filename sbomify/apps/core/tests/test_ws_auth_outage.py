@@ -20,11 +20,19 @@ from unittest.mock import AsyncMock
 import psycopg2
 import pytest
 from channels.auth import UserLazyObject
-from django.db import OperationalError
+from django.db import OperationalError, ProgrammingError
 
 from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION, WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
 from sbomify.apps.core.user_consumer import UserConsumer
 from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY, ResilientAuthMiddleware
+
+
+def _unreachable(message: str = "timeout expired") -> OperationalError:
+    """Django's error wrapping the driver's, as Django raises it: the driver's
+    message is what says Postgres is unreachable rather than the query wrong."""
+    error = OperationalError(message)
+    error.__cause__ = psycopg2.OperationalError(message)
+    return error
 
 
 class _User:
@@ -55,7 +63,7 @@ def _close_code(sent: list[dict]) -> int | None:
 class TestTheMiddlewareRecordsTheOutage:
     @pytest.mark.asyncio
     async def test_a_failed_session_read_reaches_the_consumer_as_a_flag(self, monkeypatch) -> None:
-        monkeypatch.setattr("channels.auth.get_user", AsyncMock(side_effect=OperationalError("timeout expired")))
+        monkeypatch.setattr("channels.auth.get_user", AsyncMock(side_effect=_unreachable()))
         seen: dict[str, Any] = {}
 
         async def inner(scope: dict, receive: Any, send: Any) -> None:
@@ -65,6 +73,18 @@ class TestTheMiddlewareRecordsTheOutage:
 
         assert seen[AUTH_UNAVAILABLE_SCOPE_KEY] is True
         assert seen["user"].is_authenticated is False
+
+    @pytest.mark.asyncio
+    async def test_a_database_fault_that_is_not_an_outage_still_raises(self, monkeypatch) -> None:
+        """A missing table is a fault to fix, not a 1012 every tab retries forever."""
+        missing = ProgrammingError('relation "django_session" does not exist')
+        monkeypatch.setattr("channels.auth.get_user", AsyncMock(side_effect=missing))
+
+        async def inner(scope: dict, receive: Any, send: Any) -> None:
+            raise AssertionError("the consumer must not run")
+
+        with pytest.raises(ProgrammingError):
+            await ResilientAuthMiddleware(inner)({"type": "websocket", "path": "/ws/user/", "session": {}}, None, None)
 
     @pytest.mark.asyncio
     async def test_a_working_session_read_sets_no_flag(self, monkeypatch) -> None:
@@ -117,11 +137,9 @@ class TestTheConsumersCloseForRetry:
 
     @pytest.mark.asyncio
     async def test_the_membership_check_failing_is_an_outage_too(self, monkeypatch) -> None:
-        # Django wraps the driver's error, and the driver's message is what says
-        # Postgres is unreachable rather than the query being wrong.
-        refused = OperationalError("connection refused")
-        refused.__cause__ = psycopg2.OperationalError("connection refused")
-        monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(side_effect=refused))
+        monkeypatch.setattr(
+            WorkspaceConsumer, "_check_workspace_membership", AsyncMock(side_effect=_unreachable("connection refused"))
+        )
 
         sent = await _drive(WorkspaceConsumer, "/ws/workspace/ws-key/", {"workspace_key": "ws-key"}, user=_User())
 
@@ -143,7 +161,7 @@ class TestThroughTheApplication:
 
         monkeypatch.setattr(
             "django.contrib.sessions.backends.db.SessionStore.load",
-            Mock(side_effect=OperationalError("timeout expired")),
+            Mock(side_effect=_unreachable()),
         )
         sent: list[dict] = []
         inbox = [{"type": "websocket.connect"}]
