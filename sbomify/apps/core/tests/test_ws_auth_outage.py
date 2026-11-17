@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock
 import psycopg2
 import pytest
 from channels.auth import UserLazyObject
-from django.db import OperationalError, ProgrammingError
+from django.db import InterfaceError, OperationalError, ProgrammingError
 
 from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION, WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
 from sbomify.apps.core.user_consumer import UserConsumer
@@ -64,6 +64,22 @@ class TestTheMiddlewareRecordsTheOutage:
     @pytest.mark.asyncio
     async def test_a_failed_session_read_reaches_the_consumer_as_a_flag(self, monkeypatch) -> None:
         monkeypatch.setattr("channels.auth.get_user", AsyncMock(side_effect=_unreachable()))
+        seen: dict[str, Any] = {}
+
+        async def inner(scope: dict, receive: Any, send: Any) -> None:
+            seen.update(scope)
+
+        await ResilientAuthMiddleware(inner)({"type": "websocket", "path": "/ws/user/", "session": {}}, None, None)
+
+        assert seen[AUTH_UNAVAILABLE_SCOPE_KEY] is True
+        assert seen["user"].is_authenticated is False
+
+    @pytest.mark.asyncio
+    async def test_a_connection_the_server_already_closed_is_an_outage_too(self, monkeypatch) -> None:
+        """Django raises this one as ``InterfaceError``, which is not a ``DatabaseError``."""
+        closed = InterfaceError("connection already closed")
+        closed.__cause__ = psycopg2.InterfaceError("connection already closed")
+        monkeypatch.setattr("channels.auth.get_user", AsyncMock(side_effect=closed))
         seen: dict[str, Any] = {}
 
         async def inner(scope: dict, receive: Any, send: Any) -> None:

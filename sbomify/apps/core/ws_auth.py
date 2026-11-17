@@ -20,7 +20,6 @@ from typing import Any
 from channels.auth import AuthMiddleware
 from channels.sessions import CookieMiddleware, SessionMiddleware
 from django.contrib.auth.models import AnonymousUser
-from django.db import DatabaseError
 
 from sbomify.backend_outage import report_backend_outage
 
@@ -33,11 +32,13 @@ class ResilientAuthMiddleware(AuthMiddleware):
     async def resolve_scope(self, scope: Any) -> None:
         try:
             await super().resolve_scope(scope)
-        except DatabaseError as exc:
-            # Only an unreachable database is an outage. Anything else (a missing
-            # table, a bad password) is a fault that must stay loud, not a 1012
-            # every tab retries forever. The shared outage line is throttled, so a
-            # database outage failing every reconnecting tab at once logs once.
+        except Exception as exc:
+            # Only an unreachable backend is an outage, and the classifier decides
+            # that, not the exception class: "connection already closed" arrives as
+            # Django's InterfaceError, which is not a DatabaseError. Anything else (a
+            # missing table, a bad password) is a fault that must stay loud, not a
+            # 1012 every tab retries forever. The shared outage line is throttled, so
+            # an outage failing every reconnecting tab at once logs once.
             if report_backend_outage(exc, "websocket session") is None:
                 raise
             scope["user"]._wrapped = AnonymousUser()
