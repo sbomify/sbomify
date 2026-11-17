@@ -373,6 +373,26 @@ class SupplierSchema(BaseModel):
         return v
 
 
+def clean_vcs_url(value: Any) -> str | None:
+    """A repository URL a browser can open, or ``None`` to clear it.
+
+    Only http(s) URLs with a host are accepted: the value is rendered as a link
+    and handed to the fix prompt, so ``javascript:`` or a bare path must not get in.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Source control URL must be a string")
+    url: str = value.strip()
+    if not url:
+        return None
+    if len(url) > 500:
+        raise ValueError("Source control URL must be at most 500 characters")
+    if not re.fullmatch(r"https?://[^\s/?#@]+(?:[/?#]\S*)?", url, flags=re.IGNORECASE):
+        raise ValueError("Source control URL must be an http:// or https:// URL")
+    return url
+
+
 class ComponentMetaData(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -391,6 +411,8 @@ class ComponentMetaData(BaseModel):
     release_date: date | None = Field(default=None, description="Release date of the component")
     end_of_support: date | None = Field(default=None, description="Date when bugfixes stop (security-only after this)")
     end_of_life: date | None = Field(default=None, description="Date when all support ends")
+
+    vcs_url: str | None = Field(default=None, description="Source control repository the component is built from")
 
     @field_validator("authors", mode="before")
     @classmethod
@@ -555,6 +577,13 @@ class ComponentMetaDataUpdate(BaseModel):
     end_of_support: date | None = None
     end_of_life: date | None = None
 
+    vcs_url: str | None = None
+
+    @field_validator("vcs_url", mode="before")
+    @classmethod
+    def validate_vcs_url(cls, v: Any) -> str | None:
+        return clean_vcs_url(v)
+
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v: Any) -> Any:
@@ -589,6 +618,13 @@ class ComponentMetaDataPatch(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
+
+    vcs_url: str | None = None
+
+    @field_validator("vcs_url", mode="before")
+    @classmethod
+    def validate_vcs_url(cls, v: Any) -> str | None:
+        return clean_vcs_url(v)
 
     @field_validator("authors", mode="before")
     @classmethod

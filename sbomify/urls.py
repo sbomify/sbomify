@@ -27,6 +27,7 @@ from django.views.generic import RedirectView
 from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.core.views.liveness import liveness
 from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
 from sbomify.apps.security_advisories.wellknown import (
     ProviderMetadataView,
@@ -96,6 +97,9 @@ urlpatterns = [
     path("", include("sbomify.apps.oidc.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path("api/v2/", api_v2.urls, name="api-2"),
+    # Liveness for the reverse proxy: answers without touching the database, so a
+    # database outage does not take every backend out of rotation with it.
+    path("UuPha8mu/live/", liveness, name="liveness"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]
 

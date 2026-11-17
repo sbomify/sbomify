@@ -22,14 +22,15 @@ _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 4
 _PRODUCT_LIMIT = 8
 
-# The cached context's shape. v7 adds needs_attention_total, which the digest
+# The cached context's shape. v8 adds the VEX-suppressed counts the exposure
+# rows and the open card state beside the open ones. v7 adds needs_attention_total, which the digest
 # panel compares against the rows it shows to decide whether to state the
 # slice, and the two product-membership flags the exposure footer uses to say
 # why its rows do not sum. v6 added has_scannable_components, v5 medium_low,
 # v4 the unmeasured flags. An entry written by an earlier release lacks the
 # newer keys, and each missing value reads as false, so the panel silently
 # drops the sentence it exists to show.
-_CACHE_VERSION = "v7"
+_CACHE_VERSION = "v8"
 
 
 def dashboard_cache_key(team_id: int) -> str:
@@ -125,7 +126,7 @@ def build_dashboard_context(team_id: int, *, fresh: bool = False) -> ServiceResu
             product_names_by_component.setdefault(component_id, []).append(product.name)
         counts = {
             key: sum(picture["counts"].get(component_id, {}).get(key, 0) for component_id in security_ids)
-            for key in ("total", "critical", "high", "medium", "low")
+            for key in ("total", "critical", "high", "medium", "low", "suppressed")
         }
         counts["other"] = counts["total"] - counts["critical"] - counts["high"]
         counts["unknown"] = counts["other"] - counts["medium"] - counts["low"]
@@ -178,6 +179,9 @@ def build_dashboard_context(team_id: int, *, fresh: bool = False) -> ServiceResu
             "open": open_findings,
             "critical_high": sum(count["critical"] + count["high"] for count in counts.values()),
             "medium_low": sum(count["medium"] + count["low"] for count in counts.values()),
+            # Left out of "open" by the VEX, and stated beside it so a reader
+            # can tell a clean workspace from one whose findings were ruled out.
+            "suppressed": sum(count.get("suppressed", 0) for count in counts.values()),
             "past_sla": past_sla,
             "sla_unknown": sum(count["total"] for count in counts.values())
             - len(picture["findings"])

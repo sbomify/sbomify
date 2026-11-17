@@ -8,7 +8,15 @@ from django.contrib.auth.mixins import AccessMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect
 
-from sbomify.apps.core.authz import ADMINISTER, ROLE_ADMIN, ROLE_OWNER
+from sbomify.apps.core.authz import (
+    ADMINISTER,
+    ROLE_ADMIN,
+    ROLE_BOT,
+    ROLE_GUEST,
+    ROLE_MEMBER,
+    ROLE_OPERATOR,
+    ROLE_OWNER,
+)
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.teams.models import Member
 
@@ -50,6 +58,12 @@ def check_member_removal(actor: Any, target: Member) -> MemberRemovalDenial | No
         if target.role == ROLE_OWNER:
             return MemberRemovalDenial("Admins cannot remove workspace owners.")
 
+        # Admins are peers: only an owner manages them. Without this, the rule
+        # that an admin may not demote another admin (check_role_change) would
+        # be one click from meaningless, since removing is the stronger act.
+        if target.role == ROLE_ADMIN and target.user_id != getattr(actor, "id", None):
+            return MemberRemovalDenial("Only workspace owners can remove admins.")
+
         # Admins can't quietly remove themselves — unless they're leaving for a
         # workspace they've been invited to.
         if target.user_id == getattr(actor, "id", None):
@@ -71,6 +85,83 @@ def check_member_removal(actor: Any, target: Member) -> MemberRemovalDenial | No
         if count_team_owners(target.team_id) <= 1:
             return MemberRemovalDenial(
                 "Cannot delete the only owner of the workspace. Please assign another owner first.",
+                level=messages.WARNING,
+            )
+
+    return None
+
+
+# Roles a person can be moved between from the members page. ``guest`` comes and
+# goes through trust-center access requests and ``bot`` belongs to an OIDC
+# trusted-publisher binding, so neither is assignable, and a membership holding
+# either is not changed here.
+ASSIGNABLE_ROLES: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_OPERATOR)
+
+# What an admin may change: the roles below their own. Owners and other admins
+# are managed by owners only.
+ADMIN_MANAGEABLE_ROLES: tuple[str, ...] = (ROLE_MEMBER, ROLE_OPERATOR)
+
+
+def assignable_roles_for(actor_role: str | None, actor_id: Any, target_role: str, target_user_id: Any) -> list[str]:
+    """The roles a target holding ``target_role`` can be moved to by the actor.
+
+    Empty when the actor may not change the target at all. Mirrors
+    ``check_role_change`` so the members page only offers what the server will
+    accept; ``check_role_change`` stays the authority, and still refuses
+    demoting the only owner.
+    """
+    if target_role in (ROLE_GUEST, ROLE_BOT):
+        return []
+    if actor_role == ROLE_OWNER:
+        offered = ASSIGNABLE_ROLES
+    elif actor_role == ROLE_ADMIN and target_role in ADMIN_MANAGEABLE_ROLES and target_user_id != actor_id:
+        offered = tuple(role for role in ASSIGNABLE_ROLES if role != ROLE_OWNER)
+    else:
+        return []
+    return [role for role in offered if role != target_role]
+
+
+def check_role_change(actor: Any, target: Member, new_role: str) -> MemberRemovalDenial | None:
+    """Can ``actor`` move ``target`` to ``new_role``? ``None`` means yes.
+
+    Relational, like ``check_member_removal``: the answer depends on the
+    target's role as well as the actor's.
+
+    * Owners can change anyone's role, their own included, as long as the
+      workspace keeps at least one owner.
+    * Admins can change the role of members and operators, up to admin. They
+      cannot touch an owner or another admin (themselves included), and cannot
+      make anyone an owner — the same line ``member:grant_owner`` draws for
+      invitations.
+    * Guest and bot memberships are never changed here.
+
+    The last-owner check counts owners at call time; callers that write the
+    change must hold a lock on the workspace row while they do.
+    """
+    actor_membership = Member.objects.filter(user=actor, team=target.team).first()
+    if actor_membership is None or actor_membership.role not in ADMINISTER:
+        return MemberRemovalDenial("You don't have permission to manage this workspace's members", forbidden=True)
+
+    if target.role in (ROLE_GUEST, ROLE_BOT):
+        return MemberRemovalDenial("This membership's role cannot be changed here.", forbidden=True)
+
+    if new_role not in ASSIGNABLE_ROLES:
+        return MemberRemovalDenial(f"Role must be one of: {', '.join(ASSIGNABLE_ROLES)}")
+
+    if actor_membership.role == ROLE_ADMIN:
+        if target.role == ROLE_OWNER:
+            return MemberRemovalDenial("Only workspace owners can change an owner's role.")
+        if target.role == ROLE_ADMIN:
+            return MemberRemovalDenial("Only workspace owners can change an admin's role.")
+        if new_role == ROLE_OWNER:
+            return MemberRemovalDenial("Only workspace owners can make someone an owner.")
+
+    if target.role == ROLE_OWNER and new_role != ROLE_OWNER:
+        from sbomify.apps.teams.queries import count_team_owners
+
+        if count_team_owners(target.team_id) <= 1:
+            return MemberRemovalDenial(
+                "Cannot change the role of the only owner of the workspace. Please assign another owner first.",
                 level=messages.WARNING,
             )
 

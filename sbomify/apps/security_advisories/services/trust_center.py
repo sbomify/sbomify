@@ -586,17 +586,41 @@ def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
     return _version_lists(status)[0]
 
 
-def _version_labels(status: AdvisoryProductStatus) -> list[str]:
-    """The affected versions in words, as the detail table lists them. A
-    suppressing status lists nothing, because no version is affected. With no
-    ranges, a recommended version still says what is affected, the same
-    fallback ``_version_lists`` takes."""
+def _version_checks(status: AdvisoryProductStatus) -> list[dict[str, str]]:
+    """The affected ranges with their words, as the detail page lists them.
+
+    Each entry keeps the bounds next to its label so the page can test a
+    reader's version against the range a label names. A suppressing status
+    lists nothing, because no version is affected. With no ranges, a
+    recommended version still says what is affected, the same fallback
+    ``_version_lists`` takes.
+    """
     if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
         return []
-    labels = [version_range_label(r) for r in status.version_ranges.all()]
-    if not labels and status.recommended_version:
-        labels.append(f"Before {status.recommended_version}")
-    return labels
+    checks = [
+        {
+            "label": version_range_label(r),
+            "introduced": r.introduced,
+            "fixed": r.fixed,
+            "last_affected": r.last_affected,
+        }
+        for r in status.version_ranges.all()
+    ]
+    if not checks and status.recommended_version:
+        checks.append(
+            {
+                "label": f"Before {status.recommended_version}",
+                "introduced": "",
+                "fixed": status.recommended_version,
+                "last_affected": "",
+            }
+        )
+    return checks
+
+
+def _version_labels(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions in words, one per entry of ``_version_checks``."""
+    return [check["label"] for check in _version_checks(status)]
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
@@ -688,6 +712,8 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         "status_label": remediation.get("label", ""),
         "status_variant": remediation.get("variant", "secondary"),
         "status_icon": remediation.get("icon", "fas fa-circle"),
+        # The header's status badge: Resolved is the one status in colour.
+        "status_tone": "success" if advisory.remediation_status == SecurityAdvisory.RemediationStatus.RESOLVED else "",
         "is_open": advisory.remediation_status not in SecurityAdvisory.CLOSED_REMEDIATION_STATUSES,
         "publication_status": advisory.status,
         "publication_label": advisory.get_status_display(),
@@ -744,6 +770,12 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []
         projection["statuses"] = _public_statuses(advisory, scope)
+        # What the version check on the page tests a typed version against,
+        # keyed by status row. Only the bounds go to the browser, not the rows.
+        projection["version_checks"] = {
+            row["id"]: {"suppressed": row["is_suppressed"], "ranges": row["version_checks"]}
+            for row in projection["statuses"]
+        }
         # Only the CSAF renderer reads these: the trust centre shows a timeline,
         # a machine consumer needs a version that moves for every rendered
         # change. See ``signals.py`` for where they are advanced.
@@ -802,6 +834,8 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
                     "affected_versions": _affected_versions(status),
                     "version_labels": _version_labels(status),
+                    "is_suppressed": status.status in AdvisoryProductStatus.SUPPRESSING_STATES,
+                    "version_checks": _version_checks(status),
                 }
             )
     return rows

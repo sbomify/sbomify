@@ -1,0 +1,112 @@
+{% comment %}
+    The releases of other products this release ships with, on the app's release
+    page, with the add and remove controls for someone who can manage the
+    release. The Trust Center shows the same list read-only through
+    release_links.html.j2.
+{% endcomment %}
+<c-tables.shell id="release-links-card" x-data="{ showAddModal: false, showRemoveModal: false, removeId: '', removeName: '' }">
+<c-tables.toolbar>
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-link text-primary" aria-hidden="true"></i>Ships with
+</h4>
+<c-slot name="right">
+{% if can_manage_links and linked_releases %}
+    <c-buttons.primary size="sm" @click="showAddModal = true">
+    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add release
+    </c-buttons.primary>
+{% endif %}
+</c-slot>
+</c-tables.toolbar>
+{% if linked_releases %}
+    <c-tables.table aria-label="Linked releases">
+    <c-tables.head>
+    <c-tables.header-cell nowrap>Product</c-tables.header-cell>
+    <c-tables.header-cell nowrap>Release</c-tables.header-cell>
+    <c-tables.header-cell class="hidden md:table-cell">Version</c-tables.header-cell>
+    {% if can_manage_links %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
+    </c-tables.head>
+    <tbody>
+        {% for linked in linked_releases %}
+            <c-tables.row>
+            <c-tables.cell nowrap>{{ linked.product_name }}</c-tables.cell>
+            <c-tables.cell nowrap>
+            <a class="font-medium text-text hover:text-text no-underline"
+               href="{{ linked.url }}">{{ linked.name }}</a>
+            </c-tables.cell>
+            <c-tables.cell class="hidden md:table-cell">{{ linked.version }}</c-tables.cell>
+            {% if can_manage_links %}
+                <c-tables.actions-cell>
+                <c-actions-menu label="Linked release actions">
+                <c-dropdowns.item-danger icon="fas fa-unlink" @click="removeId = '{{ linked.id|escapejs }}'; removeName = '{{ linked.product_name|escapejs }} {{ linked.name|escapejs }}'; showRemoveModal = true">
+                Remove
+                </c-dropdowns.item-danger>
+                </c-actions-menu>
+                </c-tables.actions-cell>
+            {% endif %}
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+{% elif can_manage_links %}
+    <c-feedback.empty-state compact icon="fas fa-link" icon_variant="neutral" title="Ships with no other release" message="Add a release of another product this release includes, such as a toolchain it downloads. Its SBOMs become part of this release's SBOM.">
+    <c-buttons.primary size="sm" @click="showAddModal = true">
+    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add release
+    </c-buttons.primary>
+    </c-feedback.empty-state>
+{% endif %}
+{% if can_manage_links %}
+    <c-modal teleport="false" id="addReleaseLinkModal" show="showAddModal" title="Add release">
+    {% if link_candidates %}
+        <form id="add-release-link-form"
+              hx-post="{% url 'core:release_links' links_product_id links_release_id %}"
+              hx-target="#release-links-card"
+              hx-swap="outerHTML">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <c-forms.label for="add-release-link-release" required>Release</c-forms.label>
+            <c-forms.select id="add-release-link-release" name="linked_release_id" required>
+            <option value="">Select a release...</option>
+            {% for group in link_candidates %}
+                <optgroup label="{{ group.product_name }}">
+                    {% for candidate in group.releases %}<option value="{{ candidate.id }}">{{ candidate.label }}</option>{% endfor %}
+                </optgroup>
+            {% endfor %}
+            </c-forms.select>
+        </form>
+    {% else %}
+        <p class="text-text-muted text-sm m-0">No other product in this workspace has a release to add.</p>
+    {% endif %}
+    <c-slot name="footer">
+    <c-buttons.ghost @click="showAddModal = false">Cancel</c-buttons.ghost>
+    {% if link_candidates %}
+        <c-buttons.primary type="submit" form="add-release-link-form">
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add
+        </c-buttons.primary>
+    {% endif %}
+    </c-slot>
+    </c-modal>
+    <c-modal teleport="false" show="showRemoveModal" size="sm" role="alertdialog" aria-labelledby="removeReleaseLinkLabel">
+    <div class="text-center">
+        <h4 id="removeReleaseLinkLabel"
+            class="text-lg font-semibold text-text tracking-[-0.01em] mb-2">Remove release</h4>
+        <p class="text-text mb-2">
+            Remove <span class="font-semibold" x-text="removeName"></span> from this release?
+        </p>
+        <p class="text-text-muted text-sm">Its SBOMs leave this release's SBOM. The release itself is not changed.</p>
+    </div>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="showRemoveModal = false">Cancel</c-buttons.ghost>
+    <form hx-post="{% url 'core:release_links' links_product_id links_release_id %}"
+          hx-target="#release-links-card"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="linked_release_id" :value="removeId">
+        <c-buttons.danger type="submit">
+        <i class="fas fa-unlink mr-2" aria-hidden="true"></i>Remove
+        </c-buttons.danger>
+    </form>
+    </c-slot>
+    </c-modal>
+{% endif %}
+</c-tables.shell>

@@ -1,0 +1,56 @@
+{% comment %}
+One product's answer inside c-branded.version-check: the product, its status,
+what to do, and the versions it affects.
+
+The versions are chips rather than a bulleted column. They are short and a
+reader scans them for one value, so a wrapping row holds a dozen in the space
+a list gave to three. Past `limit` (default 8) the rest fold behind a native
+<details>, the same :has() fold as c-lists.folding, so the toggle works before
+scripts load. It is restated here rather than nested because each chip binds
+its own match state, which that component has no way to carry.
+
+While a version is typed the row says whether it is affected, as a badge whose
+variant the versionCheck component binds, and each chip says whether its range
+holds the version through data-match: a match is tinted, a miss recedes, and a
+folded match unfolds, so the chip that answers is never the hidden one. Every
+recipe is keyed off that attribute, so the page passes data, never a class.
+
+The default slot is what to do, in a sentence. The meta slot is the reason a
+product is not affected, and the eyebrow slot names the vulnerability when an
+advisory has several. They are slots rather than props because a page sets
+them conditionally, and a prop set to an empty string still renders. key ties the row to its entry in the version-check's
+ranges, label names the version list for a screen reader.
+{% endcomment %}
+<c-vars key heading status_label status_variant versions label limit="8" class />
+<div class="group/fold flex flex-col gap-2.5 border-b border-solid border-border px-5 py-4 last:border-b-0{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if eyebrow.strip %}<p class="font-mono text-xs text-text-muted my-0">{{ eyebrow }}</p>{% endif %}
+    <div class="flex items-center gap-x-3 gap-y-2 [flex-wrap:wrap]">
+        <p class="text-sm font-semibold text-text my-0">{{ heading }}</p>
+        {% if status_label %}<c-badges.dynamic variant="{{ status_variant }}">{{ status_label }}</c-badges.dynamic>{% endif %}
+        <c-badges.dynamic class="ml-auto" ::data-variant="variant('{{ key }}')" x-show="verdict('{{ key }}')" x-text="text('{{ key }}')" x-cloak />
+    </div>
+    {% if slot.strip %}<p class="text-sm leading-6 text-text-secondary my-0">{{ slot }}</p>{% endif %}
+    {% if meta.strip %}<p class="text-xs text-text-muted my-0">{{ meta }}</p>{% endif %}
+    {% if versions %}
+        <div class="flex flex-col gap-1.5">
+            <p class="text-xs font-medium text-text-muted my-0">Affected versions</p>
+            <ul role="list"
+                {% if label %}aria-label="{{ label }}"{% endif %}
+                class="flex gap-1.5 [flex-wrap:wrap] list-none my-0 pl-[0]">
+                {% for item in versions %}
+                    <li class="rounded-[var(--radius-sm)] border border-solid border-border bg-surface-hover px-[0.4375rem] py-[0.125rem] font-mono text-xs text-text-secondary [overflow-wrap:anywhere] transition-[opacity,color,background-color,border-color] duration-150 data-[match=in]:border-[color-mix(in_oklab,var(--color-danger)_45%,transparent)] data-[match=in]:bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] data-[match=in]:text-danger-ink data-[match=out]:opacity-[0.45]{% if forloop.counter > limit|add:0 %} [display:none] group-has-[details[open]]/fold:[display:list-item] data-[match=in]:[display:list-item]{% endif %}"
+                        :data-match="match('{{ key }}', {{ forloop.counter0 }})">{{ item }}</li>
+                {% endfor %}
+            </ul>
+            {% if versions|length > limit|add:0 %}
+                <details class="w-fit">
+                    <summary class="w-fit cursor-pointer list-none text-xs font-medium text-text-secondary hover:text-text hover:underline underline-offset-2 [&::-webkit-details-marker]:hidden">
+                        <span class="group-has-[details[open]]/fold:[display:none]">Show all {{ versions|length }}</span>
+                        <span class="[display:none] group-has-[details[open]]/fold:[display:inline]">Show fewer</span>
+                    </summary>
+                </details>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>

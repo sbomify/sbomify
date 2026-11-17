@@ -163,8 +163,9 @@ database:
   # sslmode for the connection (disable/require/verify-ca/verify-full).
   sslMode: "require"
 
-# -- REQUIRED. Redis you provide: a managed service (ElastiCache, Upstash...)
-# or an in-cluster operator.
+# -- REQUIRED. Valkey or Redis you provide: a managed service (ElastiCache,
+# Memorystore, Upstash...) or an in-cluster operator. Either works; sbomify only
+# needs the Redis protocol.
 #
 # sbomify uses DB 0 (cache), 1 (task queue) and 2 (websocket channels), so
 # these settings must point at the server, not a specific database number.

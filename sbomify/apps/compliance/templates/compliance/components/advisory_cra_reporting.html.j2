@@ -1,0 +1,35 @@
+{% comment %}Shown on an advisory once one of its vulnerabilities is known exploited, or a report already exists. Article 14 makes that an early warning to ENISA within 24 hours, one report per affected product.{% endcomment %}
+{% if cra_reporting.show %}
+    <div class="space-y-3 border-t border-border/60 pt-6">
+        <h2 class="text-xs uppercase tracking-wide text-text-muted">CRA reporting</h2>
+        {% if cra_reporting.known_exploited %}
+            <p class="text-sm text-text-muted m-0">
+                A known exploited vulnerability needs an early warning to ENISA within 24 hours.
+            </p>
+        {% endif %}
+        {% for row in cra_reporting.rows %}
+            <div class="flex items-center justify-between gap-3">
+                <span class="text-sm text-text min-w-0 truncate">{{ row.product_name }}</span>
+                {% if row.report %}
+                    <c-buttons.ghost size="sm" href="{% url 'compliance:cra_report_detail' row.report.id %}">
+                    {% if not row.next_due %}
+                        Filed
+                    {% elif row.next_due.overdue %}
+                        {{ row.next_due.label }} overdue
+                    {% else %}
+                        {{ row.next_due.label }} due
+                    {% endif %}
+                    </c-buttons.ghost>
+                {% elif can_manage_cra_reports and row.can_start %}
+                    <form method="post" action="{% url 'compliance:cra_report_create' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="kind" value="vulnerability" />
+                        <input type="hidden" name="product_id" value="{{ row.product_id }}" />
+                        <input type="hidden" name="advisory_id" value="{{ advisory.pk }}" />
+                        <c-buttons.secondary type="submit" size="sm">Start a CRA report</c-buttons.secondary>
+                    </form>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}

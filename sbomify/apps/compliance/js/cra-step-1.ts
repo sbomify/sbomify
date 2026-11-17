@@ -181,13 +181,24 @@ export function craStep1() {
       if (!this.conformityAssessmentProcedure) fields.push({ target: 'conformity-procedure', message: 'Choose a conformity assessment procedure.' });
       if (this.supportPeriodShort && !this.supportPeriodShortJustification.trim()) fields.push({ target: 'support-short-justification', message: 'Explain the support period below five years.' });
       if (this.category === 'class_i' && this.conformityAssessmentProcedure === 'module_a' && !this.harmonisedStandardApplied) fields.push({ target: 'harmonised-standard', message: 'Confirm the harmonized standard, or choose another procedure.' });
-      if (this.euEstablished === 'no') {
+      if (this.authorizedRepIsRecorded) {
         if (!this.authorizedRepName.trim()) fields.push({ target: 'ar-name', message: 'Enter the representative’s name.' });
         if (!this.authorizedRepAddress.trim()) fields.push({ target: 'ar-address', message: 'Enter the representative’s address.' });
         if (!this.authorizedRepEmail.trim()) fields.push({ target: 'ar-email', message: 'Enter the representative’s email.' });
         if (!this.authorizedRepMandateDate) fields.push({ target: 'ar-mandate-date', message: 'Set the representative’s mandate date.' });
       }
       return fields;
+    },
+
+    /** An Authorized Representative is optional (CRA Art. 18). Only a started one must be finished. */
+    get authorizedRepIsRecorded(): boolean {
+      return Boolean(
+        this.authorizedRepName.trim()
+        || this.authorizedRepAddress.trim()
+        || this.authorizedRepEmail.trim()
+        || this.authorizedRepMandateDate
+        || this.authorizedRepMandateReference.trim(),
+      );
     },
 
     get canContinue(): boolean {

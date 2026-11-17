@@ -23,6 +23,10 @@ Rows that Alpine builds (the file history) pass bind instead: the expression
 for one file's counts ({total, critical, high, scanned_nothing}, or null when
 nothing has scanned it). Files are not compared with each other, so there is
 no "new" line.
+
+Either form may carry suppressed: findings a VEX closed. They are never part
+of the open figures, and are stated on a line of their own so a version the
+VEX cleared does not read the same as one nothing was found in.
 {% endcomment %}
 <c-vars summary bind />
 {% if bind %}
@@ -57,6 +61,9 @@ no "new" line.
                       x-text="$number(counts.total - (counts.critical || 0) - (counts.high || 0)) + ' other'"></span>
             </span>
         </template>
+        <span class="text-xs text-text-muted whitespace-nowrap"
+              x-show="counts && counts.suppressed"
+              x-text="counts && counts.suppressed ? $number(counts.suppressed) + ' suppressed by VEX' : ''"></span>
     </span>
 {% elif summary.state == "open" %}
     <span class="flex flex-col gap-0.5" {{ attrs }}>
@@ -71,10 +78,18 @@ no "new" line.
             <span class="text-sm text-text whitespace-nowrap">{{ summary.other|intcomma }} other</span>
             {% if summary.new %}<span class="text-xs text-text-muted whitespace-nowrap">{{ summary.new|intcomma }} new</span>{% endif %}
         {% endif %}
+        {% if summary.suppressed %}<span class="text-xs text-text-muted whitespace-nowrap">{{ summary.suppressed|intcomma }} suppressed by VEX</span>{% endif %}
         {# djlint:on #}
     </span>
 {% elif summary.state == "none" %}
-    <c-feedback.status tone="success" label="None open" />
+    {% if summary.suppressed %}
+        <span class="flex flex-col gap-0.5" {{ attrs }}>
+            <c-feedback.status tone="success" label="None open" />
+            <span class="text-xs text-text-muted whitespace-nowrap">{{ summary.suppressed|intcomma }} suppressed by VEX</span>
+        </span>
+    {% else %}
+        <c-feedback.status tone="success" label="None open" />
+    {% endif %}
 {% elif summary.state == "nothing_scanned" %}
     <c-feedback.status tone="warning" label="Nothing scanned" title="Every scanner skipped this version. Open it to see why." />
 {% elif summary.state == "not_applicable" %}

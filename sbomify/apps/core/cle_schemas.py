@@ -69,6 +69,12 @@ class CLEEventCreateSchema(BaseModel):
     references: list[Annotated[str, Field(max_length=2048)]] = Field(default_factory=list, max_length=100)
 
 
+class ReleaseCLEEventCreateSchema(CLEEventCreateSchema):
+    """A release event. ``drop_in`` on a ``supersededBy`` event says the successor replaces this release."""
+
+    drop_in: bool = False
+
+
 class CLEEventResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
