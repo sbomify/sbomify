@@ -13,6 +13,7 @@ from collections.abc import Callable, Collection
 from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.models import Release, ReleaseArtifact, ReleaseLink
+from sbomify.apps.core.services.release_lifecycle import after_lifecycle_change
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.teams.models import Workspace
 
@@ -61,15 +62,31 @@ def link_release(release: Release, linked_release: Release) -> ServiceResult[Rel
             link = ReleaseLink.objects.create(release=release, linked_release=linked_release)
     except IntegrityError:
         return ServiceResult.failure("This release is already linked", status_code=409)
+    # The linked release's SBOMs now ship with this one, so they may be tracked again.
+    after_lifecycle_change(release.product_id)
     return ServiceResult.success(link)
 
 
 def unlink_release(release: Release, linked_release_id: str) -> ServiceResult[None]:
     if release.is_latest:
         return ServiceResult.failure("Cannot unlink releases from the 'latest' release", status_code=400)
-    deleted, _ = ReleaseLink.objects.filter(release=release, linked_release_id=linked_release_id).delete()
-    if not deleted:
-        return ServiceResult.failure("Linked release not found", status_code=404)
+    # The row read is the row deleted: a link created between a lookup and the
+    # delete would otherwise go with nobody told to reconcile what it shipped.
+    # Only the link row is locked. The linked release's row would be locked
+    # here without its product, out of the order its own writers take.
+    with transaction.atomic():
+        link = (
+            ReleaseLink.objects.select_for_update(of=("self",))
+            .select_related("linked_release")
+            .filter(release=release, linked_release_id=linked_release_id)
+            .first()
+        )
+        if link is None:
+            return ServiceResult.failure("Linked release not found", status_code=404)
+        linked_product_id = link.linked_release.product_id
+        link.delete()
+    # This product no longer reaches the linked release, so its own product reconciles what it ships.
+    after_lifecycle_change(linked_product_id)
     return ServiceResult.success(None)
 
 

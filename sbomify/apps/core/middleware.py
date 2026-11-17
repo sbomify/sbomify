@@ -828,3 +828,28 @@ class RenamedSessionKeysMiddleware:
                 if old in session:
                     session.setdefault(new, session.pop(old))
         return self.get_response(request)
+
+
+class TrustCenterSessionScopeMiddleware:
+    """Keep a Trust Center session to its own host, routes and workspace.
+
+    A session handed over to a Trust Center host (see
+    ``core/services/trust_center_session.py``) is anonymous wherever it may not
+    act. Anywhere it may, the request carries the one workspace it is scoped to,
+    which ``check_component_access`` holds every artifact to.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        from django.contrib.auth.models import AnonymousUser
+
+        from sbomify.apps.core.services.trust_center_session import SESSION_HOST_KEY, scoped_session_allows
+
+        if request.session.get(SESSION_HOST_KEY):
+            if scoped_session_allows(request):
+                setattr(request, "trust_center_scope_team", getattr(request, "custom_domain_team", None))
+            else:
+                request.user = AnonymousUser()
+        return self.get_response(request)

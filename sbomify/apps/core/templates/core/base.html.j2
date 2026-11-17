@@ -142,6 +142,7 @@
             <!-- PostHog analytics -->
             {{ posthog_api_key|json_script:"posthog-api-key" }}
             {{ posthog_host|json_script:"posthog-host" }}
+            {{ posthog_installation_id|json_script:"posthog-installation-id" }}
             {% if posthog_identify %}{{ posthog_identify|json_script:"posthog-identify" }}{% endif %}
             {% with posthog_events=posthog_client_events %}
                 {% if posthog_events %}{{ posthog_events|json_script:"posthog-events" }}{% endif %}
@@ -151,8 +152,17 @@
                 (function() {
                     var apiKey = JSON.parse(document.getElementById('posthog-api-key').textContent);
                     var apiHost = JSON.parse(document.getElementById('posthog-host').textContent);
+                    var installationId = JSON.parse(document.getElementById('posthog-installation-id').textContent);
                     posthog.init(apiKey, {
                         api_host: apiHost,
+                        /* Tag every event with the installation, as the server does */
+                        before_send: function(event) {
+                            if (event && installationId) {
+                                event.properties = event.properties || {};
+                                event.properties.installation_id = installationId;
+                            }
+                            return event;
+                        },
                         defaults: '2026-01-30',
                         person_profiles: 'identified_only',
                         opt_out_capturing_by_default: true,
