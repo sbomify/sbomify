@@ -5,6 +5,7 @@ data-probe attribute, which is both the test's handle and a check that caller
 attributes reach the root element.
 {% endcomment %}
 <c-feedback.alert data-probe="alert-info">Info body</c-feedback.alert>
+<c-feedback.alert standing data-probe="alert-standing">Standing body</c-feedback.alert>
 <c-feedback.alert variant="success" title="Saved" data-probe="alert-success">Success body</c-feedback.alert>
 <c-feedback.alert variant="warning" dismissible data-probe="alert-warning">Warning body</c-feedback.alert>
 <c-feedback.alert variant="danger" icon="fas fa-bomb" class="mb-4" hx-get="/probe" @click.stop="fire()" data-probe="alert-danger">Danger body</c-feedback.alert>

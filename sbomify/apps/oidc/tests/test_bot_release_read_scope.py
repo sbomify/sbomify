@@ -229,3 +229,50 @@ def test_a_member_download_is_not_confined(authenticated_api_client, team_with_b
     client.get(f"/api/v1/releases/{release.id}/download", **get_api_headers(token))
 
     assert builders["sbom"].call_args.kwargs["readable_product_ids"] is None
+
+
+# ---------------------------------------------------------------------------
+# Supersession. A drop-in edge stops sbomify monitoring the release it names,
+# so naming predecessors needs release:manage, which the bot does not hold.
+# ---------------------------------------------------------------------------
+
+
+def test_bot_creates_a_release_but_cannot_name_what_it_replaces(bot_token, own_release):
+    def create(**body):
+        return Client().post(
+            "/api/v1/releases",
+            data=json.dumps({"product_id": own_release.product_id, "name": "v2", "version": "v2", **body}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {bot_token}",
+        )
+
+    refused = create(supersedes=[{"release_id": own_release.id}])
+    assert refused.status_code == 403, refused.content
+    assert "manage releases" in refused.json()["detail"]
+    assert create().status_code == 201
+
+
+def test_bot_sees_why_a_release_was_withdrawn_only_on_a_product_it_publishes_to(
+    bot_token, bound_component, own_release, other_component, public_other_release
+):
+    """The bot lists every release in its workspace, but why one was withdrawn is internal."""
+    from sbomify.apps.core.services.release_lifecycle import set_release_state
+
+    for release in (own_release, public_other_release):
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+    # The bot lists a component's releases only when the component is public.
+    Component.objects.filter(pk__in=[bound_component.pk, other_component.pk]).update(
+        visibility=Component.Visibility.PUBLIC
+    )
+
+    def listed(url: str) -> dict[str, str | None]:
+        response = _get(url, bot_token)
+        assert response.status_code == 200, response.content
+        return {item["id"]: item["withdrawn_reason"] for item in response.json()["items"]}
+
+    assert _get(f"/api/v1/releases/{own_release.id}", bot_token).json()["withdrawn_reason"] == "compromised"
+    assert _get(f"/api/v1/releases/{public_other_release.id}", bot_token).json()["withdrawn_reason"] is None
+    assert listed(f"/api/v1/releases?product_id={own_release.product_id}")[own_release.id] == "compromised"
+    assert listed(f"/api/v1/releases?product_id={public_other_release.product_id}")[public_other_release.id] is None
+    assert listed(f"/api/v1/components/{bound_component.id}/releases")[own_release.id] == "compromised"
+    assert listed(f"/api/v1/components/{other_component.id}/releases")[public_other_release.id] is None

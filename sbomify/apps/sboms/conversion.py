@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft7Validator, ValidationError
+from jsonschema import Draft7Validator, FormatChecker, ValidationError
 from jsonschema.exceptions import best_match
 from referencing import Registry
 from referencing.jsonschema import DRAFT7
@@ -69,6 +69,32 @@ class ConversionFailed(RuntimeError):
     """The document is not one this can express as CycloneDX."""
 
 
+#: The schema formats checked, each one Dependency Track refuses a whole BOM over.
+_FORMATS = FormatChecker(formats=())
+
+#: Never valid in an IRI (RFC 3987): controls, space and the characters it
+#: leaves out, or a percent sign that starts no escape. Brackets are valid
+#: only around an IPv6 host, which a copy can do without.
+_NOT_IN_AN_IRI = re.compile(r'[\x00-\x20\x7f-\x9f<>"{}|\\^`\[\]]|%(?![0-9A-Fa-f]{2})')
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+@_FORMATS.checks("iri-reference")
+def _is_iri_reference(value: object) -> bool:
+    """Whether ``value`` reads as an RFC 3987 IRI-reference, which is how Dependency Track checks a url.
+
+    It refuses every url Dependency-Track 5.2.1 refused when probed. A server
+    that is stricter still says so, and its refusal is recorded.
+    """
+    if not isinstance(value, str):
+        return True
+    if _NOT_IN_AN_IRI.search(value) or value.count("#") > 1:
+        return False
+    # Without a scheme it is a relative reference, whose first segment holds no
+    # colon: git@github.com:org/repo.git is neither.
+    return bool(_SCHEME.match(value)) or ":" not in re.split(r"[/?#]", value, maxsplit=1)[0]
+
+
 @functools.cache
 def _cyclonedx_validator(version: str) -> Draft7Validator:
     """A validator for the vendored CycloneDX ``version`` JSON schema.
@@ -88,17 +114,19 @@ def _cyclonedx_validator(version: str) -> Draft7Validator:
             ),
         ]
     )
-    return Draft7Validator(schema, registry=registry)
+    return Draft7Validator(schema, registry=registry, format_checker=_FORMATS)
 
 
 def downgrade_cyclonedx(data: bytes, version: str) -> bytes:
     """Return a copy of a CycloneDX JSON document that is valid at ``version``.
 
-    For a scanner that refuses a newer spec version. Whatever the older schema
-    does not define is dropped: properties it does not know, enum values it
-    does not list, and a list entry left without a member it requires, a hash
-    whose algorithm 1.6 does not name, say. The vendored schema is the only
-    source of what "does not define" means, so no field list is kept here.
+    For a scanner that refuses a newer spec version, or refuses the document
+    as invalid at its own. Whatever the older schema does not define is
+    dropped: properties it does not know, enum values it does not list, a value
+    that is not in its declared format, such as a url that is no IRI, and a
+    list entry left without a member it requires, a hash whose algorithm 1.6
+    does not name, say. The vendored schema is the only source of what "does
+    not define" means, so no field list is kept here.
 
     Raises :class:`ConversionFailed` when the copy still does not validate,
     since uploading it would only trade one refusal for another.
@@ -147,7 +175,7 @@ def _cuts(error: ValidationError, *, top_level: bool) -> list[tuple[str | int, .
             for key in instance
             if key not in known and not any(re.search(pattern, key) for pattern in patterns)
         ] or None
-    if error.validator in ("enum", "const") and path:
+    if error.validator in ("enum", "const", "format") and path:
         return [path]
     if error.validator == "required" and top_level:
         # The entry lost a member it cannot do without, so the entry goes. Only

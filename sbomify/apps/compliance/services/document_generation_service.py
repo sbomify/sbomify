@@ -347,16 +347,10 @@ def _build_common_context(assessment: CRAAssessment) -> dict[str, Any]:
         "support_period_end": (assessment.support_period_end.isoformat() if assessment.support_period_end else None),
         "manufacturer_name": manufacturer_name,
         "manufacturer_is_placeholder": manufacturer_is_placeholder,
-        # CRA Art. 22/25: the AR's details belong on the accompanying
-        # documentation. ``authorized_rep_required`` lets the DoC warn when
-        # the determination says one is needed but none was captured, rather
-        # than silently omitting a mandatory block.
-        "authorized_rep_required": assessment.requires_authorized_representative,
-        # Distinct from ``not authorized_rep_required``: that is also true when
-        # the manufacturer *is* established in the Union, where omitting 2a is
-        # correct. Unanswered means the document cannot say either way, and a
-        # declaration that quietly leaves out a mandatory block reads as though
-        # the block did not apply.
+        # CRA Art. 18: appointing an AR is optional, but an appointed one's
+        # details belong on the accompanying documentation. Unanswered means
+        # the establishment determination has not been recorded, and the DoC
+        # says so rather than quietly omitting section 2a.
         "eu_establishment_unanswered": assessment.is_eu_established is None,
         "authorized_rep_name": _sanitize(assessment.authorized_rep_name, escape_markdown=True),
         "authorized_rep_address": _sanitize(assessment.authorized_rep_address, escape_markdown=True),
