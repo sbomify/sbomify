@@ -22,6 +22,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 
 from sbomify.apps.plugins.tests import spdx3_corpus as corpus
@@ -71,6 +72,38 @@ def _invalid(version: str = "3.0.1") -> dict[str, Any]:
     # spdxId must be an IRI, and creationInfo must be present.
     document["@graph"][2] = {"type": "software_Package", "spdxId": 17}
     return document
+
+
+_REFERENCE_VALIDATOR = jsonschema.Draft202012Validator(
+    {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {"a": {"type": "integer"}, "b": {"type": "string", "minLength": 2}},
+            "required": ["a", "b"],
+            "additionalProperties": False,
+        },
+    }
+)
+_REFERENCE_INSTANCE = [{"a": "x", "b": "y", "c": 1}] * 2400
+
+
+def _reference_cpu() -> float:
+    """CPU this machine spends, right now, on a fixed piece of jsonschema work.
+
+    The same kind of interpreter work the enumerator does, so it slows down by
+    the same factor on a slower or busier runner. It runs no SPDX 3 code and
+    no step meter, so a regression in either cannot make the reference slower
+    and hide itself. The fastest of three runs, so one stall does not count.
+    """
+
+    def once() -> float:
+        started = time.process_time()
+        for _error in _REFERENCE_VALIDATOR.iter_errors(_REFERENCE_INSTANCE):
+            pass
+        return time.process_time() - started
+
+    return min(once() for _ in range(3))
 
 
 @pytest.mark.parametrize("version", VERSIONS)
@@ -463,7 +496,13 @@ class TestTheMessagesStayBounded:
     ) -> None:
         """Each part here fits the value, nesting and text limits. Its messages
         are itemised within the fixed per-document step allowance under both
-        schemas, whatever the part holds."""
+        schemas, whatever the part holds.
+
+        The bound is relative to ``_reference_cpu`` rather than a fixed number
+        of seconds. A fixed second held on a developer machine and failed on a
+        busy CI runner doing the same work. With the allowance in place a part
+        costs a few reference runs; with no allowance, the parts that need it
+        cost ninety or more."""
         document = _valid(3, version)
         if where == "element":
             document["@graph"].append(part)
@@ -471,12 +510,13 @@ class TestTheMessagesStayBounded:
             document.update(part)
         spdx3_schema_errors(_invalid(version), version)  # build the validators outside the measurement
 
+        reference = _reference_cpu()
         started = time.process_time()
         errors = spdx3_schema_errors(document, version)
         elapsed = time.process_time() - started
 
         assert errors
-        assert elapsed < 1, f"{elapsed:.1f} s of CPU to refuse one part"
+        assert elapsed < 20 * reference, f"{elapsed / reference:.0f} reference runs of CPU to refuse one part"
 
     def test_the_value_budget_is_spent_across_the_document(self, version: str) -> None:
         """Every itemised part draws on the one budget, so a part past it is
