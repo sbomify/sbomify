@@ -68,7 +68,11 @@ def _absolute(path: str) -> str:
 
 
 def _link(url: str, label: str) -> str:
-    return f"<{url}|{_escape(label)}>" if url else _escape(label)
+    # Some URLs are built from free text (a VEX advisory id), and a "|" or ">" in
+    # one would close the link early and let the rest be read as a mention.
+    if not url or any(char in url for char in "<>|") or any(char.isspace() for char in url):
+        return _escape(label)
+    return f"<{url}|{_escape(label)}>"
 
 
 def _plural(count: int, singular: str, plural: str | None = None) -> str:

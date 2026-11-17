@@ -355,6 +355,18 @@ class TestMessages:
         assert "<@U1>" not in body
         assert "&lt;!here&gt; &amp; co" in body
 
+    def test_an_advisory_id_cannot_break_out_of_its_link(self, sample_team_with_owner_member):
+        """A VEX id is free text, and the URL built from it lands inside ``<url|label>``."""
+        component = Component.objects.create(name="payments-api", team=sample_team_with_owner_member.team)
+
+        message = messages.new_vulnerabilities_message(
+            component, [{"advisory_id": "DSA-1|x> <!channel> <x", "severity": "high", "package": "", "version": ""}]
+        )
+
+        body = json.dumps(message.blocks)
+        assert "<!channel>" not in body
+        assert "&lt;!channel&gt;" in body
+
     def test_the_notification_text_cannot_ping_a_channel_either(self, sample_team_with_owner_member):
         """The plain ``text`` is mrkdwn too: Slack shows it in notifications and reads it aloud."""
         team = sample_team_with_owner_member.team
