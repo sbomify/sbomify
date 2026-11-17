@@ -151,6 +151,14 @@ kept, so reconnecting is not a re-import, but nothing stays public: a trust
 center must not go on claiming a control is met from a source nobody is reading
 any more.
 
+A provider whose credential never expires is also asked to revoke it, through
+`ProviderSpec.revoke_path`. Slack's bot token is one: deleting our copy would
+leave it working in Slack. The revoke runs after the row is deleted, and only
+for the credential that transaction deleted, because a reinstall can hand back
+the same token. The disconnect stands whatever Slack answers. If Slack cannot
+be reached, the failure is logged and the toast tells the user to remove the
+app in Slack.
+
 ## Slack
 
 Slack is the first provider sbomify writes to rather than reads from. A

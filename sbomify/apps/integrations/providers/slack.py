@@ -1,4 +1,4 @@
-"""Slack: the spec for the connection, and a thin client over the two calls it needs.
+"""Slack: the spec for the connection, and a thin client over the calls it needs.
 
 Slack is the first provider sbomify writes to rather than reads from. The
 workspace installs the sbomify app through Slack's OAuth v2 flow, which hands
@@ -55,6 +55,7 @@ SLACK = ProviderSpec(
     scope_separator=",",
     tokens_expire=False,
     account_path="sbomify.apps.integrations.providers.slack.account",
+    revoke_path="sbomify.apps.integrations.providers.slack.revoke",
 )
 
 # Slack's own ceiling for conversations.list is 1000; it recommends 200 and
@@ -121,12 +122,17 @@ def account(data: dict[str, Any]) -> dict[str, str]:
     return {key: str(team[key]) for key in ("id", "name") if isinstance(team.get(key), str)}
 
 
+def revoke(access_token: str) -> None:
+    """Make Slack stop accepting a bot token. It never expires, so nothing else will."""
+    SlackClient(access_token).revoke()
+
+
 def _base_url() -> str:
     return str(getattr(settings, "SLACK_API_BASE_URL", "") or "https://slack.com/api").rstrip("/")
 
 
 class SlackClient:
-    """The two Slack Web API calls sbomify makes, with Slack's errors sorted.
+    """The Slack Web API calls sbomify makes, with Slack's errors sorted.
 
     Never logs a response body: an error echo can carry the token back.
     """
@@ -210,3 +216,7 @@ class SlackClient:
             "chat.postMessage",
             json={"channel": channel_id, "text": text, "blocks": blocks, "unfurl_links": False},
         )
+
+    def revoke(self) -> None:
+        """Revoke the token this client was built with."""
+        self._call("POST", "auth.revoke")

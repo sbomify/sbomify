@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
+import requests
 from django.test import Client
 from django.urls import reverse
 
@@ -345,7 +348,7 @@ class TestTheSettingsTab:
         assert NotificationRoute.objects.exists() is allowed
         assert len(fake_slack.posts) == (1 if allowed else 0)
 
-    def test_disconnecting_drops_every_route(self, admin_client_for_team, connected_slack) -> None:
+    def test_disconnecting_drops_every_route(self, admin_client_for_team, connected_slack, slack_api) -> None:
         _route(connected_slack)
 
         admin_client_for_team.post(
@@ -355,6 +358,102 @@ class TestTheSettingsTab:
 
         assert not Integration.objects.filter(provider="slack").exists()
         assert not NotificationRoute.objects.exists()
+
+
+@pytest.mark.usefixtures("slack_credentials")
+class TestDisconnectRevokesTheToken:
+    """A bot token never expires, so deleting our copy would leave it working in Slack."""
+
+    def test_revokes_the_token_it_deletes(self, connected_slack, slack_api) -> None:
+        calls, _answer = slack_api
+
+        result = connections.disconnect(connected_slack.team, "slack")
+
+        assert result.ok
+        assert result.value is False
+        assert not Integration.objects.filter(provider="slack").exists()
+        [call] = calls
+        assert call["method"] == "POST"
+        assert call["url"] == "https://slack.example/api/auth.revoke"
+        assert call["headers"]["Authorization"] == "Bearer xoxb-live"
+
+    @pytest.mark.parametrize(
+        "answer",
+        [{"status": 503, "body": {}}, {"raise": requests.ConnectionError("dns")}],
+        ids=["slack-busy", "slack-unreachable"],
+    )
+    def test_a_slack_that_does_not_answer_still_disconnects(
+        self, connected_slack, slack_api, caplog, monkeypatch, answer
+    ) -> None:
+        """The user asked to cut the connection, so ours goes. That Slack may still
+        accept the token is logged and reported, not swallowed."""
+        # LOGGING sets ``propagate: False`` on ``sbomify``, which keeps caplog blind.
+        monkeypatch.setattr(logging.getLogger("sbomify"), "propagate", True)
+        _calls, stub = slack_api
+        stub.update(answer)
+
+        result = connections.disconnect(connected_slack.team, "slack")
+
+        assert result.ok
+        assert result.value is True
+        assert not Integration.objects.filter(provider="slack").exists()
+        assert "Could not revoke the slack credential" in caplog.text
+        assert "xoxb-live" not in caplog.text
+
+    def test_a_token_slack_already_refuses_counts_as_revoked(self, connected_slack, slack_api) -> None:
+        _calls, stub = slack_api
+        stub["body"] = {"ok": False, "error": "token_revoked"}
+
+        result = connections.disconnect(connected_slack.team, "slack")
+
+        assert result.ok
+        assert result.value is False
+
+    def test_a_reconnect_landing_mid_disconnect_revokes_nothing(self, connected_slack, slack_api, monkeypatch) -> None:
+        """Slack can hand a reinstall the same bot token, so revoking here could
+        cut off the connection somebody has just made."""
+        from sbomify.apps.integrations import oauth
+
+        calls, _answer = slack_api
+        read = connections.get_integration
+
+        def read_then_reconnect(team, provider_key):
+            stale = read(team, provider_key)
+            connections.save_connection(
+                team,
+                SLACK,
+                oauth.TokenSet(access_token="xoxb-live", refresh_token="", expires_at=None, scopes=SLACK.scopes),
+                None,
+            )
+            return stale
+
+        monkeypatch.setattr(connections, "get_integration", read_then_reconnect)
+
+        result = connections.disconnect(connected_slack.team, "slack")
+
+        assert not result.ok
+        assert calls == []
+
+    def test_the_toast_says_when_slack_did_not_confirm(self, admin_client_for_team, connected_slack, slack_api) -> None:
+        _calls, stub = slack_api
+        stub.update({"status": 503, "body": {}})
+
+        response = admin_client_for_team.post(
+            reverse("integrations:panel", kwargs={"workspace_key": connected_slack.team.key}),
+            {"action": "disconnect", "provider": "slack"},
+        )
+
+        assert "Remove the sbomify app in Slack" in response["HX-Trigger"]
+
+    def test_the_toast_is_unchanged_when_slack_confirms(
+        self, admin_client_for_team, connected_slack, slack_api
+    ) -> None:
+        response = admin_client_for_team.post(
+            reverse("integrations:panel", kwargs={"workspace_key": connected_slack.team.key}),
+            {"action": "disconnect", "provider": "slack"},
+        )
+
+        assert "Disconnected Slack. sbomify no longer posts to it." in response["HX-Trigger"]
 
 
 @pytest.mark.usefixtures("slack_credentials")

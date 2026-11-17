@@ -227,3 +227,15 @@ class TestPostMessage:
             "blocks": [{"type": "divider"}],
             "unfurl_links": False,
         }
+
+
+class TestRevoke:
+    def test_revokes_the_token_it_was_built_with(self, api) -> None:
+        calls, responses = api
+        responses.append(_Response(200, {"ok": True, "revoked": True}))
+
+        SlackClient("xoxb-live").revoke()
+
+        assert calls[0]["method"] == "POST"
+        assert calls[0]["url"] == "https://slack.example/api/auth.revoke"
+        assert calls[0]["headers"]["Authorization"] == "Bearer xoxb-live"
