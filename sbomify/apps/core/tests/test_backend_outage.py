@@ -612,7 +612,7 @@ class _User:
     id = 7
 
 
-async def _connect_to_workspace(user: Any) -> list[dict]:
+async def _connect_to_workspace(user: Any, consumer: Any = None) -> list[dict]:
     from sbomify.apps.core.consumers import WorkspaceConsumer
 
     sent: list[dict] = []
@@ -631,7 +631,7 @@ async def _connect_to_workspace(user: Any) -> list[dict]:
         "user": user,
         "headers": [],
     }
-    await WorkspaceConsumer.as_asgi()(scope, receive, send)
+    await (consumer or WorkspaceConsumer).as_asgi()(scope, receive, send)
     return sent
 
 
@@ -661,6 +661,30 @@ async def test_a_membership_check_that_fails_otherwise_still_raises(monkeypatch,
     with pytest.raises(ValueError):
         await _connect_to_workspace(_User())
     assert outage_lines == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("consumer_path", ["consumers.WorkspaceConsumer", "user_consumer.UserConsumer"])
+async def test_a_group_join_on_an_unreachable_redis_closes_with_1012(monkeypatch, outage_lines, consumer_path) -> None:
+    import importlib
+    from unittest.mock import AsyncMock, Mock
+
+    from channels.layers import get_channel_layer
+
+    from sbomify.apps.core.consumers import WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
+
+    module_name, class_name = consumer_path.split(".")
+    module = importlib.import_module(f"sbomify.apps.core.{module_name}")
+    own_warning = Mock()
+    monkeypatch.setattr(module.logger, "warning", own_warning)
+    monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True))
+    monkeypatch.setattr(get_channel_layer(), "group_add", AsyncMock(side_effect=RedisConnectionError("Error 111")))
+
+    sent = await _connect_to_workspace(_User(), getattr(module, class_name))
+
+    assert [m.get("code") for m in sent if m["type"] == "websocket.close"] == [WS_CLOSE_SERVICE_RESTART]
+    assert [line.getMessage().rsplit(" during ", 1)[1] for line in outage_lines] == ["websocket group join"]
+    own_warning.assert_not_called()
 
 
 def test_the_rate_limiter_reports_an_unreachable_redis_on_the_outage_line(mocker, outage_lines) -> None:
