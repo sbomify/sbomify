@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import re
 
+from sbomify.backend_outage import unavailable_backend
+
 
 def is_benign_shielded_future_error(record: logging.LogRecord) -> bool:
     # CancelledError comes from asgiref when clients disconnect mid-request;
@@ -113,3 +115,28 @@ def redact_access_log_secrets(record: logging.LogRecord) -> bool:
     if isinstance(record.args, tuple):
         record.args = tuple(_redact(arg) if isinstance(arg, str) else arg for arg in record.args)
     return True
+
+
+# The two lines that carry a traceback for each request or task attempt that
+# failed: Django's "Internal Server Error: <path>" and dramatiq's "Failed to
+# process message ... with unhandled exception".
+_PER_FAILURE_TRACEBACK_LOGGERS = ("django.request", "dramatiq.worker.WorkerThread")
+
+
+def is_backend_outage_traceback(record: logging.LogRecord) -> bool:
+    """``True`` for a per-request or per-task traceback caused by a backend outage.
+
+    During an outage every request in flight and every task attempt writes one,
+    and each says what the shared outage line from ``sbomify.backend_outage``
+    already said, throttled to one per window. Anything not classified as an
+    outage by ``unavailable_backend`` stays, so a real error is never dropped.
+
+    A task that runs out of retries is still visible: ``Retries`` writes its own
+    "Retries exceeded" line, and Sentry keeps that attempt's event.
+    """
+    if record.levelno < logging.ERROR or not record.name.startswith(_PER_FAILURE_TRACEBACK_LOGGERS):
+        return False
+    exc_info = record.exc_info
+    if not exc_info or exc_info[1] is None:
+        return False
+    return unavailable_backend(exc_info[1]) is not None

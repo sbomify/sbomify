@@ -193,24 +193,21 @@ def _forget_throttled_notices():
     _last_reported.clear()
 
 
-def test_one_outage_reports_once_however_many_queues_notice_it() -> None:
-    """The symptom: tens of thousands of events for one Redis outage.
+def test_a_broker_reconnect_never_reaches_sentry_on_its_own() -> None:
+    """The symptom: a "fatal" Sentry issue for every Valkey restart.
 
     Dramatiq restarts its consumer once a second for as long as the broker is
-    unreachable, and logs at CRITICAL each time — one logger per queue, so a
-    six-queue worker multiplies it again. That is the reconnect loop working.
-    The first line is the alert; the rest are the same alert.
+    unreachable, and logs at CRITICAL each time, one logger per queue. That is
+    the reconnect loop working. Throttling it to one report per window still
+    sent one per process per blip, and a blip has recovered before anyone can
+    look at it.
 
-    Keyed on the notice rather than the logger name for that reason: keying on
-    the name would let one outage through once per queue.
+    The console keeps the first line, and an outage that outlasts a window
+    raises the sustained-fault line, which is what Sentry gets instead
+    (``test_a_fault_that_outlives_a_window_raises_one``).
     """
-    first = throttle_self_healing_notices({"event": 1}, {"log_record": _Record(_PLUGINS, _LOOP)})
-    assert first is not None, "the first notice of an outage must still be reported"
-
-    repeat_same_queue = throttle_self_healing_notices({"event": 2}, {"log_record": _Record(_PLUGINS, _LOOP)})
-    repeat_other_queue = throttle_self_healing_notices({"event": 3}, {"log_record": _Record(_BILLING, _LOOP)})
-    assert repeat_same_queue is None
-    assert repeat_other_queue is None
+    for event, record in enumerate((_Record(_PLUGINS, _LOOP), _Record(_PLUGINS, _LOOP), _Record(_BILLING, _LOOP))):
+        assert throttle_self_healing_notices({"event": event}, {"log_record": record}) is None
 
 
 def test_the_cache_reports_a_swallowed_outage_once_not_once_per_request() -> None:
@@ -247,12 +244,15 @@ def test_a_different_redis_fault_is_reported_even_mid_outage() -> None:
         wrapper.__cause__ = cause
         return _Record("sbomify.cache", "Exception ignored", wrapper)
 
+    # Redis being unreachable is an outage, which reaches Sentry only if it lasts.
     refused = swallowed(RedisConnError("Error 111 connecting to redis"))
-    assert throttle_self_healing_notices({"event": 1}, {"log_record": refused}) is not None
+    assert throttle_self_healing_notices({"event": 1}, {"log_record": refused}) is None
     assert throttle_self_healing_notices({"event": 2}, {"log_record": refused}) is None
 
+    # An OOM is not an outage, so it is reported, mid-outage or not.
     oom = swallowed(ResponseError("OOM command not allowed when used memory > 'maxmemory'"))
     assert throttle_self_healing_notices({"event": 3}, {"log_record": oom}) is not None
+    assert throttle_self_healing_notices({"event": 4}, {"log_record": oom}) is None
 
 
 def test_the_throttle_alias_failing_is_never_throttled() -> None:
@@ -278,7 +278,7 @@ def test_a_later_outage_is_reported_again() -> None:
     A window that never reopens would report the first outage after a deploy and
     nothing ever again, which is worse than the noise it replaced.
     """
-    record = _Record(_PLUGINS, _LOOP)
+    record = _Record("sbomify.cache", "Exception ignored")
     assert throttle_self_healing_notices({"event": 1}, {"log_record": record}) is not None
     assert throttle_self_healing_notices({"event": 2}, {"log_record": record}) is None
 
