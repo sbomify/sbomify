@@ -82,6 +82,24 @@ describe('scrollable tabs', () => {
         late.tabItems = new FakeElement();
         ticks.splice(0).forEach(tick => tick());
         expect(observed).toEqual([root, late.scroller, late.tabItems]);
+
+        // The arrows act on the same row, not on the empty $refs.
+        const scrolls: unknown[] = [];
+        late.scroller.clientWidth = 200;
+        Object.assign(late.scroller, { scrollBy: (options: unknown) => { scrolls.push(options); } });
+        const matchMedia = () => ({ matches: false });
+        const hadWindow = 'window' in scope;
+        const window = hadWindow ? scope.window as Record<string, unknown> : {};
+        const original = window.matchMedia;
+        Object.assign(window, { matchMedia });
+        if (!hadWindow) scope.window = window;
+        try {
+            tabs.scroll(1);
+        } finally {
+            if (hadWindow) window.matchMedia = original;
+            else delete scope.window;
+        }
+        expect(scrolls).toEqual([{ left: 150, behavior: 'smooth' }]);
     });
 
     test('stays inert when the row never arrives', () => {

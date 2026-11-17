@@ -74,7 +74,8 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
         },
 
         scroll(direction: number) {
-            const row = this.$refs.scroller;
+            const row = this.rows()?.scroller;
+            if (!row) return;
             row.scrollBy({
                 left: direction * row.clientWidth * 0.75,
                 behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
