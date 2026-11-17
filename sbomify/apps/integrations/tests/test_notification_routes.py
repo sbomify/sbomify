@@ -222,7 +222,6 @@ class TestSendTest:
     def test_needs_a_channel_first(self, connected_slack, fake_slack) -> None:
         assert not notifications.send_test(connected_slack.team, "slack", EVENT).ok
 
-
     def test_an_unreachable_slack_is_reported_not_raised(self, connected_slack, fake_slack) -> None:
         """The test runs in the request, so an outage has to come back as an answer, not a 500."""
         _route(connected_slack)
@@ -330,6 +329,21 @@ class TestTheSettingsTab:
 
         assert response.status_code == 200
         assert response.headers.get("HX-Reswap") == "none"
+
+    @pytest.mark.parametrize("role,allowed", [("admin", True), ("operator", False), ("guest", False)])
+    def test_choosing_a_channel_is_for_admins(self, connected_slack, fake_slack, guest_user, role, allowed) -> None:
+        Member.objects.create(user=guest_user, team=connected_slack.team, role=role)
+        client = Client()
+        setup_authenticated_client_session(client, connected_slack.team, guest_user)
+
+        for action in ({"action": "route", "channel_id": "C001"}, {"action": "test"}):
+            client.post(
+                reverse("integrations:panel", kwargs={"workspace_key": connected_slack.team.key}),
+                {"provider": "slack", "event": EVENT, **action},
+            )
+
+        assert NotificationRoute.objects.exists() is allowed
+        assert len(fake_slack.posts) == (1 if allowed else 0)
 
     def test_disconnecting_drops_every_route(self, admin_client_for_team, connected_slack) -> None:
         _route(connected_slack)
