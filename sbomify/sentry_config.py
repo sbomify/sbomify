@@ -93,9 +93,9 @@ _SELF_HEALING_NOTICES = (
     (OUTAGE_LOGGER_NAME, OUTAGE_MESSAGE_PREFIX),
 )
 
-# The one notice that is an outage by construction: dramatiq writes it only from
-# its ``except ConnectionError`` branch, and attaches no exception to classify.
-_OUTAGE_ONLY_NOTICE_LOGGER = "dramatiq.worker.ConsumerThread"
+# Dramatiq's reconnect notice has its exception in the formatting arguments
+# instead of exc_info. ConnectionError also wraps permanent credential errors.
+_CONSUMER_NOTICE_LOGGER = "dramatiq.worker.ConsumerThread"
 
 # Keys are namespaced by consumer ("sentry:…", "log:…"). Sentry and the log
 # handler are different consumers of the same taxonomy and must not share a
@@ -118,11 +118,23 @@ def _fault_name(record: logging.LogRecord) -> str:
     and whose ``__str__`` is "Redis {cause type}: {cause message}" — so the
     cause is the informative half and the wrapper is the same every time.
     """
-    exc_info = record.exc_info
-    if not exc_info or exc_info[1] is None:
+    exc = _notice_exception(record)
+    if exc is None:
         return ""
-    exc = exc_info[1]
     return type(exc.__cause__ or exc).__name__
+
+
+def _notice_exception(record: logging.LogRecord) -> BaseException | None:
+    if record.exc_info and record.exc_info[1] is not None:
+        return record.exc_info[1]
+    # The reconnect loop passes ConnectionClosed as a formatting argument,
+    # without exc_info. Its driver exception is kept in args, not __cause__.
+    if record.name.startswith(_CONSUMER_NOTICE_LOGGER) and isinstance(record.args, tuple) and record.args:
+        exc = record.args[0]
+        if isinstance(exc, BaseException):
+            wrapped = exc.args[0] if exc.args else None
+            return wrapped if isinstance(wrapped, BaseException) else exc
+    return None
 
 
 def _self_healing_notice_key(record: logging.LogRecord) -> str | None:
@@ -311,12 +323,10 @@ def _notice_is_an_outage(record: logging.LogRecord) -> bool:
     something else, an ``OOM`` or a read-only replica. Those are faults, not an
     outage, and stay reported.
     """
-    if record.name.startswith(_OUTAGE_ONLY_NOTICE_LOGGER):
-        return True
-    exc_info = record.exc_info
-    if not exc_info or exc_info[1] is None:
-        return False
-    return unavailable_backend(exc_info[1]) is not None
+    exc = _notice_exception(record)
+    if exc is not None:
+        return unavailable_backend(exc) is not None
+    return record.name.startswith(_CONSUMER_NOTICE_LOGGER)
 
 
 def _event_exception(hint: Any) -> BaseException | None:

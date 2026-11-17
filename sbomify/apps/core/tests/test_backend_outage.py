@@ -20,8 +20,8 @@ from django.db import OperationalError as DjangoOperationalError
 from django.http import HttpRequest, HttpResponse
 from django.urls import path
 from django_redis.exceptions import ConnectionInterrupted
-from dramatiq.errors import ConnectionClosed
-from redis.exceptions import AuthenticationError, BusyLoadingError, ResponseError
+from dramatiq.errors import ConnectionClosed, ConnectionFailed
+from redis.exceptions import AuthenticationError, AuthorizationError, BusyLoadingError, ResponseError
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
@@ -75,7 +75,7 @@ def _context_only() -> BaseException:
         (AuthenticationError("invalid password"), None),
         (_wrapped(ConnectionInterrupted(connection=None), ResponseError("OOM command not allowed")), None),
         (_wrapped(DjangoOperationalError("x"), _PgWithCode("deadlock detected")), None),
-        (DjangoOperationalError("near \"[]\": syntax error"), None),
+        (DjangoOperationalError('near "[]": syntax error'), None),
         (_context_only(), None),
         (ValueError("x"), None),
         (None, None),
@@ -100,6 +100,80 @@ def _context_only() -> BaseException:
 )
 def test_what_counts_as_an_outage(exc: BaseException | None, expected: str | None) -> None:
     assert unavailable_backend(exc) == expected
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        'connection to server at "db" failed: FATAL: password authentication failed for user "app"',
+        'connection to server at "db" failed: fe_sendauth: no password supplied',
+        'connection to server at "db" failed: FATAL: no pg_hba.conf entry for host "192.0.2.1"',
+        'connection to server at "db" failed: FATAL: database "missing" does not exist',
+        'connection to server at "db" failed: SSL error: certificate verify failed',
+        'invalid dsn: invalid connection option "unknown"',
+    ],
+)
+def test_postgres_configuration_failures_without_sqlstate_stay_reported(diagnostic: str) -> None:
+    driver_error = psycopg2.OperationalError(diagnostic)
+    assert driver_error.pgcode is None
+    exc = _wrapped(DjangoOperationalError(diagnostic), driver_error)
+
+    assert unavailable_backend(exc) is None
+    assert throttle_self_healing_notices({"e": 1}, _hint(exc)) is not None
+
+
+@pytest.mark.parametrize(
+    "diagnostic",
+    [
+        "connection refused",
+        "connection timed out",
+        "timeout expired",
+        'could not translate host name "db" to address: Temporary failure in name resolution',
+        "server closed the connection unexpectedly",
+        "SSL SYSCALL error: Connection reset by peer",
+        "SSL connection has been closed unexpectedly",
+        "FATAL: the database system is starting up",
+        "FATAL: sorry, too many clients already",
+    ],
+)
+def test_postgres_transport_failures_without_sqlstate_are_outages(diagnostic: str) -> None:
+    assert unavailable_backend(psycopg2.OperationalError(diagnostic)) == "postgres"
+
+
+@pytest.mark.parametrize("wrapper", [ConnectionClosed, ConnectionFailed])
+@pytest.mark.parametrize("driver_error", [AuthenticationError, AuthorizationError])
+def test_dramatiq_authentication_failures_stay_reported(
+    wrapper: type[ConnectionClosed] | type[ConnectionFailed],
+    driver_error: type[AuthenticationError] | type[AuthorizationError],
+) -> None:
+    exc = wrapper(driver_error("invalid credentials"))
+
+    assert unavailable_backend(exc) is None
+    assert throttle_self_healing_notices({"e": 1}, _hint(exc)) is not None
+
+
+def test_consumer_auth_failure_reports_even_during_a_connection_outage() -> None:
+    def notice(exc: BaseException) -> logging.LogRecord:
+        return logging.LogRecord(
+            "dramatiq.worker.ConsumerThread(default)",
+            logging.CRITICAL,
+            __file__,
+            1,
+            "Consumer encountered a connection error: %s",
+            (ConnectionClosed(exc),),
+            None,
+        )
+
+    outage = notice(RedisConnectionError("connection refused"))
+    auth = notice(AuthenticationError("invalid credentials"))
+    assert throttle_self_healing_notices({"e": 1}, {"log_record": outage}) is None
+    assert sentry_config.is_repeat_self_healing_notice(outage) is False
+
+    # A different fault must not spend the authentication failure's window.
+    assert throttle_self_healing_notices({"e": 2}, {"log_record": auth}) is not None
+    assert sentry_config.is_repeat_self_healing_notice(auth) is False
+    assert throttle_self_healing_notices({"e": 3}, {"log_record": auth}) is None
+    assert sentry_config.is_repeat_self_healing_notice(auth) is True
 
 
 class _Capture(logging.Handler):
@@ -151,11 +225,16 @@ def test_the_outage_line_names_the_backend_and_feeds_the_throttle(outage_lines) 
 
 
 def _postgres_down(request: HttpRequest) -> HttpResponse:
-    raise _wrapped(DjangoOperationalError("x"), psycopg2.OperationalError("could not connect to server"))
+    raise _wrapped(DjangoOperationalError("x"), psycopg2.OperationalError("connection refused"))
 
 
 def _redis_down(request: HttpRequest) -> HttpResponse:
     raise RedisConnectionError("Error 111 connecting to redis:6379. Connection refused.")
+
+
+def _postgres_bad_password(request: HttpRequest) -> HttpResponse:
+    diagnostic = 'FATAL: password authentication failed for user "app"'
+    raise _wrapped(DjangoOperationalError(diagnostic), psycopg2.OperationalError(diagnostic))
 
 
 def _broken(request: HttpRequest) -> HttpResponse:
@@ -165,6 +244,7 @@ def _broken(request: HttpRequest) -> HttpResponse:
 urlpatterns = [
     path("pg/", _postgres_down),
     path("api/v1/redis/", _redis_down),
+    path("pg-bad-password/", _postgres_bad_password),
     path("broken/", _broken),
 ]
 
@@ -196,6 +276,13 @@ class TestWebRequests:
         response = client.get("/broken/")
 
         assert response.status_code == 500
+        assert outage_lines == []
+
+    def test_bad_database_credentials_are_not_a_retryable_outage(self, client, outage_lines) -> None:
+        response = client.get("/pg-bad-password/")
+
+        assert response.status_code == 500
+        assert "Retry-After" not in response
         assert outage_lines == []
 
     def test_an_outage_raised_in_middleware_is_a_503_too(self, client, mocker, outage_lines) -> None:

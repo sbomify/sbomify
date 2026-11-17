@@ -50,6 +50,30 @@ _logger = logging.getLogger(OUTAGE_LOGGER_NAME)
 # server is starting up or in recovery), 53300 too_many_connections.
 _PG_UNAVAILABLE_SQLSTATES = frozenset({"57P01", "57P02", "57P03", "53300"})
 
+# libpq also omits SQLSTATE for authentication, TLS and DSN failures. Only
+# recognized transport/availability diagnostics without a code are outages.
+_PG_UNAVAILABLE_MESSAGES = (
+    "connection refused",
+    "connection timed out",
+    "timeout expired",
+    "could not translate host name",
+    "could not resolve hostname",
+    "could not receive data from server",
+    "could not send data to server",
+    "server closed the connection",
+    "connection already closed",
+    "ssl syscall error",
+    "ssl connection has been closed unexpectedly",
+    "unexpected eof",
+    "network is unreachable",
+    "no route to host",
+    "database system is starting up",
+    "database system is shutting down",
+    "database system is in recovery mode",
+    "too many clients already",
+    "remaining connection slots are reserved",
+)
+
 # How far down a ``raise ... from`` chain to look. Django and django-redis each
 # add one wrapper; anything deeper is not a wrapped outage.
 _MAX_CHAIN = 5
@@ -81,6 +105,9 @@ def _classify_one(exc: BaseException) -> Backend | None:
     # the builtin one; its broker here is Redis, and both raise it ``from None``
     # with the Redis error as the argument, so there is no cause to follow.
     if dramatiq_errors is not None and isinstance(exc, dramatiq_errors.ConnectionError):
+        wrapped = exc.args[0] if exc.args else None
+        if redis_exc is not None and isinstance(wrapped, (redis_exc.AuthenticationError, redis_exc.AuthorizationError)):
+            return None
         return "redis"
 
     try:
@@ -93,13 +120,11 @@ def _classify_one(exc: BaseException) -> Backend | None:
         if isinstance(exc, psycopg2.InterfaceError):
             return "postgres"
         if isinstance(exc, psycopg2.OperationalError):
-            # A connection-level failure (refused, reset, "server closed the
-            # connection unexpectedly", SSL SYSCALL) has no SQLSTATE at all,
-            # because no server answered. Everything else carries one, and
-            # most of those — deadlocks, statement timeouts, serialization
-            # failures — are about the query, not the server.
             pgcode = getattr(exc, "pgcode", None)
-            if pgcode is None or pgcode.startswith("08") or pgcode in _PG_UNAVAILABLE_SQLSTATES:
+            if pgcode is None:
+                diagnostic = str(exc).casefold()
+                return "postgres" if any(message in diagnostic for message in _PG_UNAVAILABLE_MESSAGES) else None
+            if pgcode.startswith("08") or pgcode in _PG_UNAVAILABLE_SQLSTATES:
                 return "postgres"
             return None
 
