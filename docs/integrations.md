@@ -155,7 +155,9 @@ A provider whose credential never expires is also asked to revoke it, through
 `ProviderSpec.revoke_path`. Slack's bot token is one: deleting our copy would
 leave it working in Slack. The revoke runs after the row is deleted, and only
 for the credential that transaction deleted, because a reinstall can hand back
-the same token. The disconnect stands whatever Slack answers. If Slack cannot
+the same token. It is skipped while another connection still holds that token:
+two sbomify workspaces that install the app into one Slack workspace share it.
+The disconnect stands whatever Slack answers. If Slack cannot
 be reached, the failure is logged and the toast tells the user to remove the
 app in Slack.
 

@@ -251,6 +251,12 @@ def disconnect(team: Workspace, provider_key: str) -> ServiceResult[bool]:
     provider = get_provider(provider_key)
     if provider is None or not provider.revoke_path or not deleted_token:
         return ServiceResult.success(False)
+    # Two sbomify workspaces that install one Slack app into the same Slack
+    # workspace hold the same bot token, so revoking it here would cut the other
+    # one off. A reconnect that landed since the delete holds it too.
+    if Integration.objects.filter(provider=provider_key, access_token=deleted_token).exists():
+        logger.info("Kept the %s credential for workspace %s: another connection uses it", provider_key, team.key)
+        return ServiceResult.success(False)
     return ServiceResult.success(not _revoke(provider, deleted_token, team))
 
 

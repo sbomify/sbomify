@@ -400,6 +400,25 @@ class TestDisconnectRevokesTheToken:
         assert "Could not revoke the slack credential" in caplog.text
         assert "xoxb-live" not in caplog.text
 
+    def test_a_token_another_workspace_still_uses_is_left_alone(self, connected_slack, slack_api) -> None:
+        """Two sbomify workspaces that install the app into one Slack workspace get
+        the same bot token. Revoking it for one would cut the other off."""
+        from sbomify.apps.teams.models import Workspace
+
+        calls, _answer = slack_api
+        other = Integration.objects.create(
+            team=Workspace.objects.create(name="Second workspace"),
+            provider=Integration.Provider.SLACK,
+            access_token=connected_slack.access_token,
+        )
+
+        result = connections.disconnect(connected_slack.team, "slack")
+
+        assert result.ok
+        assert result.value is False
+        assert calls == []
+        assert Integration.objects.filter(id=other.id).exists()
+
     def test_a_token_slack_already_refuses_counts_as_revoked(self, connected_slack, slack_api) -> None:
         _calls, stub = slack_api
         stub["body"] = {"ok": False, "error": "token_revoked"}
