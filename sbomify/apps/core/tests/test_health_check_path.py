@@ -31,3 +31,7 @@ def test_invalid_path_is_refused(value: str) -> None:
 
 def test_health_check_url_is_served_under_setting() -> None:
     assert resolve(settings.HEALTH_CHECK_PATH).url_name is not None
+
+
+def test_liveness_url_is_served_under_setting() -> None:
+    assert resolve(f"{settings.HEALTH_CHECK_PATH}live/").url_name == "liveness"
