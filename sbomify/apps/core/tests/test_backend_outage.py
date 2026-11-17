@@ -499,6 +499,21 @@ def test_a_terminated_postgres_session_is_an_outage() -> None:
     assert unavailable_backend(caught.value) == "postgres"
 
 
+@pytest.mark.django_db
+def test_a_cursor_used_after_it_was_closed_is_a_bug_not_an_outage() -> None:
+    """psycopg2 raises InterfaceError for a closed cursor as well as for a
+    closed connection. Only the second is the server going away."""
+    from django.db import connection
+
+    with connection.cursor() as cursor:
+        pass
+    with pytest.raises(DjangoInterfaceError) as caught:
+        cursor.execute("SELECT 1")
+
+    assert "cursor already closed" in str(caught.value)
+    assert unavailable_backend(caught.value) is None
+
+
 def test_a_redis_server_that_refuses_the_connection_is_an_outage() -> None:
     import redis
     from django_redis.cache import RedisCache
