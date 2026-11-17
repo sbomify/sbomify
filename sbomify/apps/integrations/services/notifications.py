@@ -236,7 +236,11 @@ def send_test(team: Workspace, provider_key: str, event: str) -> ServiceResult[s
     if route is None:
         return ServiceResult.failure(f"Pick a channel for {spec.label} first", status_code=400)
 
-    result = deliver(route, connection_test_message(team, spec.label))
+    try:
+        result = deliver(route, connection_test_message(team, spec.label))
+    except ProviderUnavailable as exc:
+        # Sent in the request, so an outage is an answer for the admin, not a retry.
+        return ServiceResult.failure(exc.detail, status_code=exc.status_code)
     if not result.ok:
         return ServiceResult.failure(result.error or "Could not post the test message", status_code=502)
     return ServiceResult.success(f"Sent a test message to #{route.channel_name or route.channel_id}.")

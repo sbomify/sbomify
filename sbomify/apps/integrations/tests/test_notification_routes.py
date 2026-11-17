@@ -223,6 +223,17 @@ class TestSendTest:
         assert not notifications.send_test(connected_slack.team, "slack", EVENT).ok
 
 
+    def test_an_unreachable_slack_is_reported_not_raised(self, connected_slack, fake_slack) -> None:
+        """The test runs in the request, so an outage has to come back as an answer, not a 500."""
+        _route(connected_slack)
+        fake_slack.fail_with = ProviderUnavailable("Slack is not answering.", service="slack")
+
+        result = notifications.send_test(connected_slack.team, "slack", EVENT)
+
+        assert not result.ok
+        assert result.error == "Slack is not answering."
+
+
 class TestActiveRoutes:
     def test_only_working_connections_count(self, connected_slack) -> None:
         _route(connected_slack)
@@ -305,6 +316,20 @@ class TestTheSettingsTab:
         )
 
         assert not NotificationRoute.objects.exists()
+
+    def test_a_test_slack_cannot_answer_is_an_error_toast(
+        self, admin_client_for_team, connected_slack, fake_slack
+    ) -> None:
+        _route(connected_slack)
+        fake_slack.fail_with = ProviderUnavailable("Slack is not answering.", service="slack")
+
+        response = admin_client_for_team.post(
+            reverse("integrations:panel", kwargs={"workspace_key": connected_slack.team.key}),
+            {"action": "test", "provider": "slack", "event": EVENT},
+        )
+
+        assert response.status_code == 200
+        assert response.headers.get("HX-Reswap") == "none"
 
     def test_disconnecting_drops_every_route(self, admin_client_for_team, connected_slack) -> None:
         _route(connected_slack)
