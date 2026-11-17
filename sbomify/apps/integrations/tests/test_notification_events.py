@@ -120,7 +120,6 @@ class TestQueuedOnCommit:
 
         assert queued == []
 
-
     @pytest.mark.parametrize("task,event", [("notify_vex_submission", "vex"), ("notify_new_vulnerabilities", "new")])
     def test_a_broker_that_cannot_be_reached_does_not_stop_the_commit(
         self, component, connected_slack, monkeypatch, django_capture_on_commit_callbacks, task, event
@@ -330,6 +329,26 @@ class TestMessages:
         assert "<!here>" not in body
         assert "<@U1>" not in body
         assert "&lt;!here&gt; &amp; co" in body
+
+    def test_the_notification_text_cannot_ping_a_channel_either(self, sample_team_with_owner_member):
+        """The plain ``text`` is mrkdwn too: Slack shows it in notifications and reads it aloud."""
+        team = sample_team_with_owner_member.team
+        team.name = "<!channel> team"
+        team.save(update_fields=["name"])
+        component = Component.objects.create(name="<!here> & co", team=team)
+
+        built = [
+            messages.connection_test_message(team, "VEX approval queue"),
+            messages.new_vulnerabilities_message(
+                component, [{"advisory_id": "CVE-1", "severity": "high", "package": "", "version": ""}]
+            ),
+            messages.vex_submission_message(_submission(component)),
+            messages.digest_message(team),
+        ]
+
+        for message in built:
+            assert "<!" not in message.text, message.text
+        assert "&lt;!here&gt; &amp; co" in built[1].text
 
     def test_long_headers_are_cut_to_slacks_limit(self, sample_team_with_owner_member):
         component = Component.objects.create(name="x" * 250, team=sample_team_with_owner_member.team)

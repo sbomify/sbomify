@@ -11,7 +11,8 @@ notification and reads it to screen readers, so it has to stand on its own.
 Anything a workspace or a scanner wrote (a component name, a package, an
 agent's context) goes through ``_escape``: Slack reads ``<`` and ``>`` as link
 and mention syntax, so an unescaped ``<!channel>`` in a component name would
-ping a whole channel. Header blocks are ``plain_text`` and need no escaping.
+ping a whole channel. That includes the plain ``text``, which Slack parses as
+mrkdwn too. Header blocks are ``plain_text`` and need no escaping.
 """
 
 from __future__ import annotations
@@ -152,7 +153,7 @@ def _vulnerability_line(advisory_id: str, severity: str, package: str = "", vers
 
 
 def connection_test_message(team: Workspace, label: str) -> Message:
-    text = f"sbomify is connected. {label} for {team.name} will be posted here."
+    text = f"sbomify is connected. {_escape(label)} for {_escape(team.name)} will be posted here."
     return Message(
         text=text,
         blocks=[
@@ -211,7 +212,7 @@ def vex_submission_message(submission: VexSubmission) -> Message:
         _context(team, submission.submitted_at),
         _buttons(("Review", review_url, "primary"), ("View component", component_url, "")),
     ]
-    return Message(text=f"{what} for {component.name} is waiting for approval.", blocks=blocks)
+    return Message(text=f"{what} for {_escape(component.name)} is waiting for approval.", blocks=blocks)
 
 
 def new_vulnerabilities_message(component: Any, rows: list[dict[str, Any]]) -> Message:
@@ -241,7 +242,7 @@ def new_vulnerabilities_message(component: Any, rows: list[dict[str, Any]]) -> M
     plain_counts = ", ".join(
         f"{severities.count(label)} {label}" for label in _SEVERITY_LABELS if severities.count(label)
     )
-    text = f"{noun} in {component.name}" + (f": {plain_counts}." if plain_counts else ".")
+    text = f"{noun} in {_escape(component.name)}" + (f": {plain_counts}." if plain_counts else ".")
     return Message(text=text, blocks=blocks)
 
 
@@ -327,4 +328,4 @@ def digest_message(team: Workspace) -> Message:
     if waiting:
         buttons.append(("Review VEX queue", f"{page_url}?view=review", ""))
     blocks += [_context(team), _buttons(*buttons)]
-    return Message(text=f"Vulnerability digest for {team.name}: {open_noun}.", blocks=blocks)
+    return Message(text=f"Vulnerability digest for {_escape(team.name)}: {open_noun}.", blocks=blocks)
