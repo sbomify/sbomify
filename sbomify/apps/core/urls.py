@@ -10,6 +10,8 @@ from . import views
 from .views.component_metadata import ComponentMetadataFormView
 from .views.component_vulnerabilities import ComponentTriageModalView
 from .views.repository_setup import RepositorySetupInstructionsView, RepositorySetupTokenView
+from .views.trust_center_access import TrustCenterAccessView
+from .views.trust_center_session import TrustCenterSessionView, TrustCenterSignInView
 
 app_name = "core"
 urlpatterns = [
@@ -37,12 +39,19 @@ urlpatterns = [
         views.reject_user_invitation,
         name="reject_user_invitation",
     ),
+    path("settings/trust-centers/", TrustCenterAccessView.as_view(), name="trust_center_access"),
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
     path("login/", views.keycloak_login, name="keycloak_login"),
+    path(
+        "trust-center/<str:workspace_key>/sign-in/",
+        TrustCenterSignInView.as_view(),
+        name="trust_center_sign_in",
+    ),
+    path("trust-center/session/", TrustCenterSessionView.as_view(), name="trust_center_session"),
     # Product/Component URLs - moved from sboms app
     # Backward compatibility redirects for URLs that now have trailing slashes
     path("products", RedirectView.as_view(pattern_name="core:products_dashboard", permanent=True)),
@@ -120,7 +129,12 @@ urlpatterns = [
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
     ),
-    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    # Before the <advisory_id> pattern, which would otherwise swallow "new" and "delete".
+    path(
+        "security-advisories/delete/",
+        views.SecurityAdvisoriesBulkDeleteView.as_view(),
+        name="security_advisories_bulk_delete",
+    ),
     path(
         "security-advisories/new/",
         views.SecurityAdvisoryCreateView.as_view(),
@@ -130,6 +144,11 @@ urlpatterns = [
         "security-advisories/<str:advisory_id>/",
         views.SecurityAdvisoryDetailView.as_view(),
         name="security_advisory_detail",
+    ),
+    path(
+        "security-advisories/<str:advisory_id>/product-releases/",
+        views.SecurityAdvisoryProductReleasesView.as_view(),
+        name="security_advisory_product_releases",
     ),
     path(
         "public/component/<str:component_id>/",
@@ -194,6 +213,16 @@ urlpatterns = [
         "product/<str:product_id>/release/<str:release_id>/",
         views.ReleaseDetailsPrivateView.as_view(),
         name="release_details",
+    ),
+    path(
+        "product/<str:product_id>/release/<str:release_id>/lifecycle/",
+        views.ReleaseLifecycleView.as_view(),
+        name="release_lifecycle",
+    ),
+    path(
+        "product/<str:product_id>/release/<str:release_id>/links/",
+        views.ReleaseLinksView.as_view(),
+        name="release_links",
     ),
     path(
         "public/product/<str:product_id>/release/<str:release_id>/",

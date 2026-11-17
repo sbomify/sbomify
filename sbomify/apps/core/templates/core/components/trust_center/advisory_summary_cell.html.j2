@@ -1,0 +1,45 @@
+{% comment %}
+The summary cell of one advisory in the index table: its CVE and title as the
+link, then its id and the states a reader needs to see without opening it.
+
+Shared by the row that spans product rows and the row of a notice naming no
+products, so the two cannot drift. Expects `advisory` and `advisory_url`.
+
+Resolved is the one status worth seeing without reading, so it is a badge and
+the rest stay muted text. The CVSS badge beside it still says how bad the issue
+was, which is a different question from whether it is still open. Withdrawn is
+a badge for the opposite reason: a retracted advisory that reads as current is
+worse than one that is missing.
+{% endcomment %}
+{% load humanize %}
+<div class="flex flex-col gap-1.5">
+    <a class="text-sm font-semibold leading-snug text-text no-underline hover:underline underline-offset-4"
+       data-button
+       href="{{ advisory_url }}">
+        {% if advisory.cve_ids %}
+            <span class="font-mono text-text-secondary">{{ advisory.cve_ids|join:", " }}</span>
+        {% endif %}
+        {{ advisory.title }}
+    </a>
+    <div class="flex items-center gap-2 [flex-wrap:wrap] text-xs text-text-muted">
+        <span class="font-mono">{{ advisory.id }}</span>
+        {% if advisory.is_gated %}
+            <c-branded.badge brand title="Restricted — shown because you have access to the affected products">
+            <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+            </c-branded.badge>
+        {% endif %}
+        {% if advisory.is_withdrawn %}<c-branded.badge tone="medium">Withdrawn</c-branded.badge>{% endif %}
+        {% if advisory.status == 'resolved' %}
+            <c-branded.badge tone="success">
+            <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+            </c-branded.badge>
+        {% elif advisory.status_label and advisory.affected_rows %}
+            <span class="inline-flex items-center gap-1"><i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}</span>
+        {% endif %}
+    </div>
+    {% if advisory.withheld_product_count %}
+        <p class="text-xs italic text-text-muted my-0">
+            {{ advisory.withheld_product_count|intcomma }} further product{{ advisory.withheld_product_count|pluralize }} not shown
+        </p>
+    {% endif %}
+</div>

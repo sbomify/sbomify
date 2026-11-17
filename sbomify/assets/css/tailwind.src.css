@@ -193,11 +193,10 @@
      Two deliberate placements. They are theme-independent, because the contrast
      partner is #fff either way, so there is nothing to retune and they are not
      redeclared under :root.light. And they live in this plain :root block
-     rather than in @theme, because their only consumer is static/css/
-     trust-center.css, which Tailwind does not process: an @theme variable no
-     Tailwind-scanned source mentions is tree-shaken out of the build, and every
-     rule reading it would fall back to transparent. Verified against the
-     production build, not assumed. */
+     rather than in @theme, because their consumers read them from inline style
+     attributes (the filter facet's severity swatch), which are not utilities:
+     an @theme variable no utility uses is tree-shaken out of the build, and
+     every style reading it would fall back to transparent. */
   --color-severity-critical-fill: rgb(111 19 28);  /* 11.76 under white text */
   --color-severity-high-fill: rgb(114 54 4);       /* 9.35 */
   --color-severity-medium-fill: rgb(107 81 3);     /* 7.49 */
@@ -459,7 +458,7 @@ html.no-transitions * {
     display: block;
   }
 
-  table[data-stack] > thead:not(:has([data-table-sort])) {
+  table[data-stack] > thead:not(:has([data-table-sort], [data-row-select-all])) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -497,6 +496,12 @@ html.no-transitions * {
 
   table[data-stack] > thead > tr > th:has([data-table-sort]) {
     display: block;
+  }
+
+  /* Select-all stays reachable too, leading the bar. */
+  table[data-stack] > thead > tr > th:has([data-row-select-all]) {
+    display: block;
+    order: -1;
   }
 
   table[data-stack] > tbody {
@@ -542,21 +547,37 @@ html.no-transitions * {
     display: none;
   }
 
-  /* The label sits in a left gutter beside its value, not above it, which
-     halves a row's height. It is positioned rather than a flex or grid item so
-     a value made of several nodes (a name, a version and a badge) keeps its
-     own flow. The row's first cell is its subject and needs no label. */
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]) {
+  /* A selectable row keeps its box in the top-left corner, beside the row's
+     subject, and the cell after the box becomes the unlabelled subject. */
+  table[data-stack] > tbody > tr:has(> td[data-cell-select]) {
     position: relative;
+    padding-left: 3.25rem;
+  }
+
+  table[data-stack] > tbody > tr > td[data-cell-select] {
+    position: absolute;
+    top: 0.875rem;
+    left: 1rem;
+    width: auto;
+  }
+
+  /* The label sits in a left gutter beside its value, not above it, which
+     halves a row's height. It floats into the cell's padding rather than being
+     a flex or grid item, so a value made of several nodes (a name, a version
+     and a badge) keeps its own flow, and the cell is its own formatting
+     context so it grows to hold a label that wraps onto a second line under a
+     one-line value. The row's first cell is its subject and needs no label. */
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not(:empty):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td) {
+    display: flow-root;
     padding-left: 7.5rem;
     min-height: 1.25rem;
   }
 
-  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end])::before {
+  table[data-stack] > tbody > tr > td[data-label]:not(:first-child):not([data-cell-end]):not([data-cell-select]):not([data-cell-select] + td)::before {
     content: attr(data-label);
-    position: absolute;
-    top: 0.125rem;
-    left: 0;
+    float: left;
+    margin-top: 0.125rem;
+    margin-left: -7.5rem;
     width: 6.75rem;
     font-size: 0.6875rem;
     line-height: 1.4;

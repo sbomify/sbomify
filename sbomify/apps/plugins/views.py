@@ -211,6 +211,8 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
     def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
         from sbomify.apps.core.authz import can
         from sbomify.apps.vulnerability_scanning.services.finding_browse import query_string
+        from sbomify.apps.vulnerability_scanning.triage import triage_decisions
+        from sbomify.apps.vulnerability_scanning.vex import triage_statements
 
         from .services.run_findings import PAGE_SIZE, PARAM_PREFIX, build_run_findings_page
 
@@ -234,6 +236,7 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             return HttpResponseRedirect(f"{page_url}#plugin-{found.run.plugin_name}")
 
         base_url = reverse("plugins:assessment_run_findings", args=[str(found.run.id)])
+        can_triage = can(request, "artifact:publish_vex", found.sbom.component)
         query = found.panel["query"]
         # The pager sits outside the filter form, so its links carry the active
         # filters themselves; following one must not silently clear the search.
@@ -244,7 +247,17 @@ class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "run": found.run,
                 "is_security": found.is_security,
                 "findings": found.findings,
-                "can_triage": can(request, "artifact:publish_vex", found.sbom.component),
+                # The in-app rulings, the overlay every release shares, read once from
+                # the cache the component page uses. Imported VEX is the run's own
+                # annotation, made in its release context. The recorded decisions
+                # reopen each ruling in its own scope, and only the dialog needs them.
+                "triage": {
+                    "statements": triage_statements(found.sbom.component_id),
+                    "decisions": triage_decisions(found.sbom.component_id) if can_triage else {},
+                }
+                if found.is_security
+                else {},
+                "can_triage": can_triage,
                 "findings_url": base_url,
                 "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
                 # The pager's links reset to page 1; a refresh must not. This

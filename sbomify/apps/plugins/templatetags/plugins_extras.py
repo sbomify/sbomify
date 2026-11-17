@@ -274,7 +274,7 @@ def vulnerability_findings(findings: Any) -> list[Any]:
 
 
 @register.filter
-def vulnerability_table_rows(findings: Any) -> list[dict[str, Any]]:
+def vulnerability_table_rows(findings: Any, triage: Any = None) -> list[dict[str, Any]]:
     """A page of stored findings as c-vulnerabilities.table rows.
 
     The shape the component and report pages render, so a scan opened on the
@@ -283,12 +283,29 @@ def vulnerability_table_rows(findings: Any) -> list[dict[str, Any]]:
     each finding goes through on its own. What the builder leaves out and this
     panel always showed rides along: the read-time exploited and malicious
     marks, and the advisory's own text and links.
-    """
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows
 
+    ``triage`` carries the component's in-app rulings (``statements``), which
+    the component page reads too, and the recorded decisions (``decisions``)
+    the triage dialog reopens in their own scope. A result stored before a
+    ruling's scope was recorded on it has only these to say whether the ruling
+    covers the whole component.
+    """
+    from sbomify.apps.vulnerability_scanning.utils import _scoped_by_advisory, extract_finding_rows
+    from sbomify.apps.vulnerability_scanning.vex import statement_index
+
+    triage = triage if isinstance(triage, dict) else {}
+    # Indexed and grouped once for the page; each row would otherwise redo both.
+    index = statement_index(triage["statements"]) if triage.get("statements") else None
+    decisions = triage.get("decisions") or None
+    scoped = _scoped_by_advisory(decisions) if decisions else None
     rows = []
     for finding in vulnerability_findings(findings):
-        extracted = extract_finding_rows({"findings": [finding]})
+        extracted = extract_finding_rows(
+            {"findings": [finding]},
+            triage_decisions=decisions,
+            vex_index=index,
+            scoped_index=scoped,
+        )
         if not extracted:
             continue
         references = finding.get("references") or []

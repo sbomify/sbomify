@@ -1688,8 +1688,9 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["contact_profile_id"] is None
     assert response_json["contact_profile"] is None
     assert response_json["uses_custom_contact"] is True
-    # 10 base fields + 3 lifecycle event fields = 13
-    assert len(response_json.keys()) == 13
+    # 10 base fields + 3 lifecycle event fields + vcs_url = 14
+    assert len(response_json.keys()) == 14
+    assert response_json["vcs_url"] is None
 
     # Set component metadata
     component_metadata = {
@@ -4212,3 +4213,80 @@ def test_cyclonedx_upload_autodetects_cbom_from_metadata_component(
     assert resp.status_code == 201
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "cbom"
+
+
+# =============================================================================
+# COMPONENT SOURCE CONTROL TESTS
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_component_metadata_sets_and_clears_vcs_url(
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """A component's source control URL round-trips through the metadata API and clears on empty."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+    headers = get_api_headers(sample_access_token)
+
+    response = client.get(url, content_type="application/json", **headers)
+    assert response.status_code == 200
+    assert response.json()["vcs_url"] is None
+
+    response = client.patch(
+        url,
+        json.dumps({"vcs_url": "  https://github.com/example/repo  "}),
+        content_type="application/json",
+        **headers,
+    )
+    assert response.status_code == 204
+    sample_component.refresh_from_db()
+    assert sample_component.vcs_url == "https://github.com/example/repo"
+    assert client.get(url, **headers).json()["vcs_url"] == "https://github.com/example/repo"
+
+    # A PATCH that leaves vcs_url out keeps it.
+    response = client.patch(
+        url, json.dumps({"lifecycle_phase": "build"}), content_type="application/json", **headers
+    )
+    assert response.status_code == 204
+    sample_component.refresh_from_db()
+    assert sample_component.vcs_url == "https://github.com/example/repo"
+
+    response = client.patch(url, json.dumps({"vcs_url": ""}), content_type="application/json", **headers)
+    assert response.status_code == 204
+    sample_component.refresh_from_db()
+    assert sample_component.vcs_url == ""
+    assert client.get(url, **headers).json()["vcs_url"] is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "value",
+    [
+        "javascript:alert(1)",
+        "git@github.com:example/repo.git",
+        "github.com/example/repo",
+        "https://user:token@github.com/example/repo",
+        "https://" + "a" * 500 + ".example.com",
+    ],
+)
+def test_component_metadata_rejects_invalid_vcs_url(
+    sample_component: Component,
+    sample_access_token: AccessToken,  # noqa: F811
+    value: str,
+):
+    """Only http(s) URLs without credentials are stored as a source control link."""
+    client = Client()
+    url = reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id})
+
+    response = client.patch(
+        url,
+        json.dumps({"vcs_url": value}),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 422
+    sample_component.refresh_from_db()
+    assert sample_component.vcs_url == ""

@@ -28,6 +28,8 @@ class FindingSchema(BaseModel):
     # package than the one now scanned — still applied, but flagged for re-review.
     # Optional (None) so only stale findings carry it, matching the stored result.
     analysis_stale: bool | None = None
+    # The suppression covers the whole component, not this package.
+    analysis_component_wide: bool | None = None
     # In CISA's Known Exploited Vulnerabilities catalog; stamped at serialization
     # time from the cached KEV feed, never stored.
     kev: bool = False

@@ -1,10 +1,12 @@
 import { formatNumber } from '../../core/js/number-format';
+import { formatDate } from '../../core/js/utils';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { registerAlpineComponent } from '../../core/js/alpine-components';
 import { getCsrfToken } from '../../core/js/csrf';
 import { showError, showSuccess } from '../../core/js/alerts';
 import { getAssessmentId } from './cra-shared';
+import { shellQuote } from '../../core/js/components/repository-setup';
 
 interface StepStatus {
   complete: boolean;
@@ -35,6 +37,13 @@ interface ExportIntegrity {
   verification_doc: string;
 }
 
+/** The manufacturer's keyless Sigstore signature over the ZIP, verified on upload. */
+interface ExportSignature {
+  signed_by: string;
+  issuer: string;
+  signed_at: string;
+}
+
 interface ExportInfo {
   id: string;
   content_hash: string;
@@ -43,6 +52,8 @@ interface ExportInfo {
   manufacturer_is_placeholder?: boolean;
   integrity?: ExportIntegrity | null;
   files?: ExportFileEntry[];
+  file_name?: string;
+  signature?: ExportSignature | null;
 }
 
 interface ComplianceSummary {
@@ -66,6 +77,15 @@ const DOC_KINDS = [
   { key: 'declaration_of_conformity', label: 'Declaration of Conformity' },
 ];
 
+// The OIDC issuers a manufacturer is likely to sign keyless through.
+const SIGNER_ISSUERS = [
+  { value: 'https://github.com/login/oauth', label: 'GitHub' },
+  { value: 'https://accounts.google.com', label: 'Google' },
+  { value: 'https://login.microsoftonline.com', label: 'Microsoft' },
+  { value: 'https://token.actions.githubusercontent.com', label: 'GitHub Actions' },
+  { value: 'https://gitlab.com', label: 'GitLab' },
+];
+
 interface DocStatus {
   exists: boolean;
   version: number;
@@ -73,7 +93,7 @@ interface DocStatus {
   generated_at: string;
 }
 
-function craStep5() {
+export function craStep5() {
   return {
     assessmentId: '',
     summary: {} as ComplianceSummary,
@@ -85,6 +105,10 @@ function craStep5() {
     docKinds: DOC_KINDS,
     isRefreshing: false,
     isExporting: false,
+    signerIssuers: SIGNER_ISSUERS,
+    signForm: { identity: '', issuer: SIGNER_ISSUERS[0].value },
+    signFile: null as File | null,
+    isSigning: false,
     isFinishing: false,
     generatingDoc: null as string | null,
     previewContent: '',
@@ -297,6 +321,7 @@ function craStep5() {
           } else {
             showError('Failed to get download URL');
           }
+          await this.loadExport(pkg.id);
         } else {
           const err = await resp.json();
           showError(err.error || 'Failed to export');
@@ -305,6 +330,103 @@ function craStep5() {
         showError('Network error');
       } finally {
         this.isExporting = false;
+      }
+    },
+
+    // A signature is checked against one ZIP's hash, so after an export the
+    // card and the signing form must describe the ZIP that was downloaded: not
+    // the one the page loaded with, and not a newer one someone else made.
+    // Until it loads, nothing is offered for signing.
+    async loadExport(packageId: string): Promise<void> {
+      this.lastExport = null;
+      this.signFile = null;
+      const resp = await fetch(`/api/v1/compliance/cra/${this.assessmentId}/export/${packageId}`, {
+        headers: { 'X-CSRFToken': getCsrfToken() },
+      });
+      if (!resp.ok) {
+        showError('The export is ready, but this page could not load it. Reload the page to sign it.');
+        return;
+      }
+      this.lastExport = await resp.json();
+    },
+
+    get signCommand(): string {
+      const file = this.lastExport?.file_name || '<bundle>.zip';
+      return `cosign sign-blob ${file} --bundle ${file}.sigstore.json`;
+    },
+
+    get verifyCommand(): string {
+      const file = this.lastExport?.file_name || '<bundle>.zip';
+      const sig = this.lastExport?.signature;
+      return (
+        `cosign verify-blob ${file} --bundle ${file}.sigstore.json` +
+        // A workflow identity can carry &, ; or $( in its git ref.
+        ` --certificate-identity ${sig ? shellQuote(sig.signed_by) : '<signer>'}` +
+        ` --certificate-oidc-issuer ${sig ? shellQuote(sig.issuer) : '<issuer>'}`
+      );
+    },
+
+    issuerLabel(issuer: string): string {
+      return SIGNER_ISSUERS.find((i) => i.value === issuer)?.label ?? issuer;
+    },
+
+    signedOn(signedAt: string): string {
+      return formatDate(signedAt);
+    },
+
+    pickSignatureFile(event: Event): void {
+      this.signFile = (event.target as HTMLInputElement).files?.[0] ?? null;
+    },
+
+    async uploadSignature(): Promise<void> {
+      if (!this.lastExport || !this.signFile || this.isSigning) return;
+      // The file goes up as chosen: sbomify keeps the signature exactly as the
+      // manufacturer saved it, so it is never parsed and rewritten here.
+      const form = new FormData();
+      form.append('bundle', this.signFile);
+      form.append('identity', this.signForm.identity.trim());
+      form.append('issuer', this.signForm.issuer);
+      const packageId = this.lastExport.id;
+      this.isSigning = true;
+      try {
+        const resp = await fetch(
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${packageId}/signature`,
+          { method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() }, body: form },
+        );
+        const body = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+          // A new export can replace the card while the signature is checked.
+          if (this.lastExport?.id === packageId) {
+            this.lastExport = { ...this.lastExport, signature: body as ExportSignature };
+          }
+          showSuccess('Signature verified and saved');
+        } else {
+          showError(body.error || 'Failed to upload the signature');
+        }
+      } catch {
+        showError('Network error');
+      } finally {
+        this.isSigning = false;
+      }
+    },
+
+    // The signature URL is presigned for 15 minutes, so each click asks for a
+    // fresh one rather than keeping it.
+    async downloadSignature(): Promise<void> {
+      if (!this.lastExport?.signature) return;
+      try {
+        const resp = await fetch(
+          `/api/v1/compliance/cra/${this.assessmentId}/export/${this.lastExport.id}/download`,
+          { headers: { 'X-CSRFToken': getCsrfToken() } },
+        );
+        const dl = resp.ok ? await resp.json() : null;
+        if (dl?.signature_url) {
+          window.open(dl.signature_url, '_blank', 'noopener,noreferrer');
+        } else {
+          showError('Failed to get the signature download URL');
+        }
+      } catch {
+        showError('Network error');
       }
     },
 

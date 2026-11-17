@@ -42,14 +42,22 @@ so the cap only ever catches the pathological one; below that the ellipsis
 lands at the column edge, wherever the layout puts it.
 
 white-space inherits, so a second line inside the cell, a description or a
-mobile fallback, stays on one line too and ellipses the same way. That is the
-intent: the column is one line per row.
+mobile fallback, stays on one line too. That is the intent: the column is one
+line per row. Inheriting nowrap is not inheriting the ellipsis, though:
+text-overflow only marks text that overflows the box it is set on, and a
+stacked line is its own block, so the wrapper cut it mid letter with no mark.
+*:truncate gives every direct child its own ellipsis.
+
+The wrapper clips everything in it as one box, so nothing may follow the name
+on its line: a long name pushes it out of view. A badge, flag or icon link
+beside the name goes in the trail slot of <c-tables.name>, which lets the name
+give way instead. test_cotton_tables.py holds every nowrap cell to that.
 {% endcomment %}
 <c-vars compact end date nowrap muted variant_class class />
 {# djlint:off #}
 {# The branch opens the cell's content, so the formatter must not indent it in. #}
 <td class="{% if compact %}px-3 py-3 text-[0.8125rem]{% else %}px-5 py-5 text-[0.875rem]{% endif %} {% if muted %}text-text-muted{% else %}text-text{% endif %} border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
-    {{ attrs }}>{% if nowrap %}<div class="truncate max-w-[24rem]">{{ slot }}</div>{% else %}{{ slot }}{% endif %}
+    {{ attrs }}>{% if nowrap %}<div class="truncate max-w-[24rem] *:truncate">{{ slot }}</div>{% else %}{{ slot }}{% endif %}
 </td>
 {# djlint:on #}

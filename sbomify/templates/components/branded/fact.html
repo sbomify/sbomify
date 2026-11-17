@@ -1,0 +1,21 @@
+{% comment %}
+One pair in a c-branded.facts list.
+
+Label left, value right, on one line, which is how the app's own detail pages
+set their side panels: the eye runs down the labels and across to the answer.
+
+stacked puts the value under its label instead, for values too long to share a
+line: a CPE, a link with a description, a barcode. The value keeps its full
+width there rather than wrapping a character at a time against the label.
+
+text-align is an arbitrary value because .text-right is one of the legacy
+!important names.
+{% endcomment %}
+<c-vars label stacked class />
+<div class="py-2.5 first:pt-0 last:pb-0 {% if stacked %}flex flex-col gap-1.5{% else %}flex items-baseline justify-between gap-4{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <dt class="shrink-0 text-sm text-text-muted my-0">{{ label }}</dt>
+    <dd class="min-w-0 text-sm text-text my-0 [overflow-wrap:anywhere]{% if not stacked %} [text-align:right]{% endif %}">
+        {{ slot }}
+    </dd>
+</div>

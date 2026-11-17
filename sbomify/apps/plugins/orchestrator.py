@@ -276,6 +276,7 @@ class PluginOrchestrator:
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
+                rerun_requested=run_reason is RunReason.MANUAL and existing_run_id is None,
             )
 
             # Write to temporary file and execute plugin
@@ -395,13 +396,6 @@ class PluginOrchestrator:
                         exc_info=True,
                     )
 
-                # Project the findings into rows, for the same reason and with
-                # the same safety: derived from the immutable run, rebuildable,
-                # and never the reason a good scan result is lost.
-                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
-
-                sync_findings_safely(assessment_run, applied_vex)
-
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
             # SBOM at run-completion time are the releases the result covers.
@@ -411,11 +405,11 @@ class PluginOrchestrator:
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
 
-            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
-            # scoped downstream state (e.g. DT project version tags). After
-            # the M2M is populated, call sync_release_tags so the plugin can
-            # reconcile against the final canonical release set. One-shot
-            # plugins skip this — they have no long-lived external state.
+            # Continuous plugins (scan_mode=CONTINUOUS) may keep release-scoped
+            # state outside sbomify. After the M2M is populated, call
+            # sync_release_tags so such a plugin can reconcile against the final
+            # release set. No built-in plugin overrides it today, and one-shot
+            # plugins skip it: they keep no state outside sbomify.
             if metadata.scan_mode == ScanMode.CONTINUOUS:
                 try:
                     plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
@@ -426,6 +420,21 @@ class PluginOrchestrator:
                         assessment_run.id,
                         exc_info=True,
                     )
+
+            # Project the findings into rows, for the same reason and with the
+            # same safety as the lifecycle: derived from the immutable run,
+            # rebuildable, and never the reason a good scan result is lost.
+            #
+            # After the releases, because the projection drops the rows of
+            # older runs this one supersedes, and a run supersedes another only
+            # by covering all of its releases. And last, after the downstream
+            # tag sync's HTTP calls: the projection locks the finding records it
+            # points at until this task's transaction ends, so the shorter that
+            # stretch is, the less another scan sharing a new record waits.
+            if assessment_run.category == AssessmentCategory.SECURITY.value:
+                from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+                sync_findings_safely(assessment_run, applied_vex, fresh=True)
 
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
@@ -561,9 +570,6 @@ class PluginOrchestrator:
         # The finding renders on the compliance page, so it says what the user
         # is left with rather than how the retries were scheduled. The plugin's
         # message carries the substance; ``title`` lets it name the outcome.
-        from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS
-
-        minutes = sum(RETRY_LATER_DELAYS_MS) // 60_000
         message = error_message.strip()
         if message and not message.endswith((".", "!", "?")):
             message += "."
@@ -571,7 +577,7 @@ class PluginOrchestrator:
             run_id,
             kind="retry-exhausted",
             title=title or "Check did not finish",
-            description=f"{message} sbomify checked again for {minutes} minutes before stopping.".lstrip(),
+            description=f"{message} sbomify checked again several times before stopping.".lstrip(),
             error_message=f"Retry budget exhausted: {error_message}",
             last_error=error_message,
         )
@@ -700,6 +706,17 @@ class PluginOrchestrator:
             # state so settled runs surface against the correct releases —
             # same contract as a normal completion.
             self._sync_run_releases(run, str(run.sbom_id))
+
+        # A settled security run is the newest completed run now, so readers
+        # resolve to it: project it like a normal completion, which also demotes
+        # and drops the rows of the runs it supersedes. Otherwise the previous
+        # run's rows stay current while every reader has moved past them. No
+        # VEX to resolve: the synthesised result is an operational finding,
+        # which projects no rows whatever the statements say.
+        if run.category == AssessmentCategory.SECURITY.value:
+            from sbomify.apps.vulnerability_scanning.findings import sync_findings_safely
+
+            sync_findings_safely(run, [], fresh=True)
 
         logger.info(f"[PLUGIN] finalize {kind}: marked run {run_id} as COMPLETED with {kind} finding")
 

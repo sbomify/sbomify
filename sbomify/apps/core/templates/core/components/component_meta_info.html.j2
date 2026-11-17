@@ -10,7 +10,7 @@
         {% else %}
             false
         {% endif %}
-        })" @metadata-saved="refreshDisplay()" @close-metadata-editor.window="isEditing = false" @edit-metadata.window="isEditing = true">
+        })" @metadata-saved="refreshDisplay()" @close-metadata-editor.window="isEditing = false" @edit-metadata.window="isEditing = true" @ws:message.window="if (!isEditing && ($event.detail.type === 'resync' || ($event.detail.type === 'component_updated' && $event.detail.component_id === componentId))) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => fetchMetadata(), 500); }">
         <!-- Display Mode -->
         <template x-if="!isEditing">
             <div class="component-meta-info-display-container"

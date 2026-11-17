@@ -12,6 +12,7 @@ from django.db.models import DateTimeField, F
 from django.db.models.functions import Coalesce, Greatest, Now
 from django.utils import timezone
 
+from sbomify.apps.teams.broadcasts import broadcast_custom_domain_updated
 from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import custom_domain_challenge, invalidate_custom_domain_cache
 from sbomify.task_utils import record_task_breadcrumb
@@ -92,6 +93,9 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
     limit instead of holding up the domains queued after it.
     """
     if not _serves_challenge(team_id, domain):
+        # The attempt was counted before the probe, so an open settings page
+        # shows a stale "last checked" until it hears this.
+        _announce_domain_check(team_id, "failed")
         return
 
     # Conditional on the domain the probe fetched: the workspace may have
@@ -112,6 +116,13 @@ def probe_custom_domain(team_id: int, domain: str) -> None:
     if validated:
         invalidate_custom_domain_cache(domain)
         logger.info(f"Successfully validated domain {domain}")
+        _announce_domain_check(team_id, "verified")
+
+
+def _announce_domain_check(team_id: int, status: str) -> None:
+    """Tell the workspace a verification attempt finished. The domain itself is not in the message."""
+    workspace_key = Workspace.objects.filter(pk=team_id).values_list("key", flat=True).first()
+    broadcast_custom_domain_updated(workspace_key, status)
 
 
 def _backoff(failures: int) -> timedelta:

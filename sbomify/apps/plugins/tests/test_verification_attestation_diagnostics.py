@@ -116,13 +116,13 @@ class TestTheNotFoundMessage:
 
     def test_it_does_not_assert_the_attestation_is_absent(self, sbom) -> None:
         """GitHub answers 404 for a private or nonexistent repo too, because
-        this lookup is unauthenticated. Asserting the digest was searched for
+        sbomify cannot see private repositories. Asserting the digest was searched for
         and not found sent operators to rewrite a correct attest step when the
         real cause was that sbomify cannot see the repository at all."""
         message = str(self._raise_404(sbom))
 
         assert "private" in message
-        assert "without signing in to GitHub" in message
+        assert "cannot see private repositories" in message
         assert "has no attestation" not in message
 
     def test_it_says_what_to_add_when_nothing_is_attested(self, sbom) -> None:

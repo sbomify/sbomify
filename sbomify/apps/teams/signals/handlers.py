@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.teams.broadcasts import broadcast_invitation_updated, broadcast_member_updated
 from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
@@ -218,6 +219,7 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
     from sbomify.apps.core.posthog_service import capture
 
     workspace_key = instance.team.key or ""
+    broadcast_member_updated(workspace_key, instance.user_id, "role_changed")
     distinct_id = workspace_key or "system"
     captured_old_role = old_role
     captured_new_role = instance.role
@@ -291,6 +293,47 @@ def retire_access_requests_on_internal_promotion(sender: type, instance: Member,
             instance.user_id,
             instance.team_id,
         )
+
+
+def _workspace_key_of(instance: Member | Invitation) -> str | None:
+    try:
+        return instance.team.key
+    except Workspace.DoesNotExist:
+        return None
+
+
+@receiver(post_save, sender=Member)
+def broadcast_member_added(sender: type, instance: Member, created: bool, **kwargs: Any) -> None:
+    """Every way into a workspace creates a Member row, so this is the one place that sees them all."""
+    if created:
+        broadcast_member_updated(_workspace_key_of(instance), instance.user_id, "added")
+
+
+@receiver(post_delete, sender=Member)
+def broadcast_member_removed(sender: type, instance: Member, **kwargs: Any) -> None:
+    """Every way out deletes the row. The removed member's own socket closes on this message."""
+    broadcast_member_updated(_workspace_key_of(instance), instance.user_id, "removed")
+
+
+@receiver(post_save, sender=Invitation)
+def broadcast_invitation_created(sender: type, instance: Invitation, created: bool, **kwargs: Any) -> None:
+    if created:
+        broadcast_invitation_updated(_workspace_key_of(instance), instance.pk, "created")
+
+
+@receiver(post_delete, sender=Invitation)
+def broadcast_invitation_removed(sender: type, instance: Invitation, **kwargs: Any) -> None:
+    """Accepting and withdrawing both delete the row; the membership tells them apart.
+
+    Every acceptance path creates the Member before deleting the invitation, so
+    a member with the invited address means it was accepted. Anything else,
+    withdrawn by an admin, declined, or replaced once expired, is ``revoked``.
+    """
+    workspace_key = _workspace_key_of(instance)
+    if not workspace_key:
+        return
+    accepted = Member.objects.filter(team_id=instance.team_id, user__email__iexact=instance.email).exists()
+    broadcast_invitation_updated(workspace_key, instance.pk, "accepted" if accepted else "revoked")
 
 
 @receiver(post_save, sender=Invitation)

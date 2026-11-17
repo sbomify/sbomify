@@ -149,6 +149,111 @@ def test_current_nav_item_is_marked_for_a_reader_and_a_screen_reader(rendered: s
     assert "border-transparent" in other
 
 
+# ── Page furniture ─────────────────────────────────────────────────────────
+
+
+def test_masthead_shares_the_track_the_nav_and_content_use(rendered: str) -> None:
+    """One width and gutter, so the header, nav and page read as one column."""
+    track = _classes(rendered, "div", 'data-probe="masthead"')
+    assert "border-border" in track
+    assert not any("var(--brand)" in utility for utility in track)
+    inner = rendered.split('data-probe="masthead"', 1)[1]
+    assert "max-w-[1200px]" in inner[: inner.index(">", inner.index("<div")) + 1]
+
+
+def test_back_link_is_muted_text_the_legacy_sheet_leaves_alone(rendered: str) -> None:
+    """Read before it is acted on, so never brand-coloured; data-button keeps the
+    public sheet's bare-anchor rule from repainting it in the accent."""
+    link = _open_tag(rendered, "a", 'data-probe="back-link"')
+    assert "data-button" in link
+    assert 'href="/advisories/"' in link
+    classes = _classes(rendered, "a", 'data-probe="back-link"')
+    assert "text-text-muted" in classes
+    assert not any("--brand" in utility for utility in classes)
+
+
+def test_fact_is_a_definition_pair_on_one_line_unless_stacked(rendered: str) -> None:
+    inline = _classes(rendered, "div", 'data-probe="fact"')
+    stacked = _classes(rendered, "div", 'data-probe="fact-stacked"')
+    assert "justify-between" in inline and "flex-col" not in inline
+    assert "flex-col" in stacked and "justify-between" not in stacked
+    pair = rendered.split('data-probe="fact"', 1)[1]
+    assert pair.index("<dt") < pair.index("Published") < pair.index("<dd") < pair.index("3 Aug 2026")
+
+
+def test_panel_is_a_surface_with_its_title_inside(rendered: str) -> None:
+    panel = _classes(rendered, "div", 'data-probe="panel"')
+    assert {"bg-surface", "border-border"} <= panel
+    assert "<h2" in rendered.split('data-probe="panel"', 1)[1].split("</h2>", 1)[0]
+
+
+def test_timeline_dot_takes_the_status_ramp_never_the_brand(rendered: str) -> None:
+    """A timeline colour means something, so it is a platform token, and a
+    status the model gains later is quiet instead of unstyled."""
+    latest = _open_tag(rendered, "li", 'data-probe="timeline-latest"')
+    assert "--tone: var(--color-success)" in latest
+    assert "--brand" not in latest
+    unknown = _open_tag(rendered, "li", 'data-probe="timeline-last"')
+    assert "--tone: var(--color-text-muted)" in unknown
+
+
+def test_timeline_reads_newest_and_oldest_from_the_list_not_from_props(rendered: str) -> None:
+    """A conditional prop renders empty, and cotton reads an empty attribute as
+    a set boolean, so position comes from the list: the first item is ringed
+    and the last drops its rail."""
+    item = rendered.split('data-probe="timeline-latest"', 1)[1].split("</li>", 1)[0]
+    assert "group-first/event:shadow-" in item
+    assert "group-last/event:hidden" in item
+
+
+def test_version_check_keeps_its_title_inside_and_announces_one_result(rendered: str) -> None:
+    """The title sits in the panel so its top edge lines up with the side
+    column, and a typed version is announced once, not by every row."""
+    check = rendered.split('data-probe="version-check"', 1)[1]
+    assert "versionCheck('probe-checks')" in _open_tag(rendered, "div", 'data-probe="version-check"')
+    assert "<h2" in check.split('data-probe="version-row"', 1)[0]
+    assert 'aria-live="polite"' in check
+
+
+def test_version_row_folds_its_chips_without_scripts_and_unfolds_a_match(rendered: str) -> None:
+    """Chips past the limit fold behind a native details, and a chip whose range
+    holds the typed version shows even while folded."""
+    row = rendered.split('data-probe="version-row"', 1)[1].split('data-probe="version-row-quiet"', 1)[0]
+    assert 'aria-label="Affected versions of Acme Gateway"' in row
+    assert row.count("<li") == 3
+    assert "Show all 3" in row
+    folded = _classes(row, "li", "From 2.0.0")
+    assert {"[display:none]", "group-has-[details[open]]/fold:[display:list-item]"} <= folded
+    assert "data-[match=in]:[display:list-item]" in folded
+    assert ":data-match=\"match('row', 2)\"" in row
+
+
+def test_version_row_renders_nothing_for_a_slot_left_empty(rendered: str) -> None:
+    """A slot a page leaves out, or sets inside a false condition, must not
+    leave an empty paragraph holding a gap open in the row."""
+    row = rendered.split('data-probe="version-row-quiet"', 1)[1].split("</c-branded", 1)[0]
+    row = row.split('data-probe="expandable"', 1)[0]
+    assert "font-mono text-xs text-text-muted" not in row
+    assert "text-sm leading-6" not in row
+
+
+def test_expandable_clamps_only_once_scripts_run(rendered: str) -> None:
+    """Without scripts the whole text shows: the clamp is bound by Alpine,
+    never written into the markup."""
+    body = _open_tag(rendered.split('data-probe="expandable"', 1)[1], "div", 'x-ref="body"')
+    assert ":data-clamped=" in body
+    assert " data-clamped" not in body.replace(":data-clamped", "")
+
+
+def test_a_markdown_link_reads_in_the_body_ink_over_the_legacy_repaint(rendered: str) -> None:
+    """The renderer marks links .text-primary, which a public page repaints in
+    the accent with !important, so the note's link colour has to be important
+    too, and has to be the body ink rather than the brand."""
+    markdown = _classes(rendered, "div", 'data-probe="markdown"')
+    assert {"[&_a]:text-text!", "[&_a]:underline!"} <= markdown
+    assert not any("brand" in name for name in markdown)
+
+
 # ── The legacy-collision guard ──────────────────────────────────────────────
 
 
@@ -465,6 +570,25 @@ def test_badge_drives_every_tone_from_one_recipe(rendered: str) -> None:
     critical = _open_tag(rendered, "span", 'data-probe="badge-critical"')
     assert "--tone: var(--color-severity-critical)" in critical
     assert "bg-[color-mix(in_oklab,var(--tone)_14%,transparent)]" in critical
+
+
+def test_a_dashed_badge_is_an_outline_that_cannot_pass_for_a_tone(rendered: str) -> None:
+    """Withdrawn once borrowed the medium tint and read as a second severity."""
+    dashed = _classes(rendered, "span", 'data-probe="badge-dashed"')
+    assert {"border-dashed", "bg-[transparent]"} <= dashed
+    assert "border-solid" not in dashed
+    assert not any("_14%" in utility for utility in dashed)
+
+
+def test_a_labelled_meta_item_sets_only_its_value_in_mono(rendered: str) -> None:
+    """The label is a word, the value an identifier; several of them wrap apart."""
+    item = _classes(rendered, "span", 'data-probe="meta-labelled"')
+    assert "font-mono" not in item
+    assert "[flex-wrap:wrap]" in item
+    tag = _open_tag(rendered, "span", 'data-probe="meta-labelled"')
+    after = rendered[rendered.index(tag) + len(tag) :]
+    value = r"<span class=\"\[display:contents\] text-text-secondary font-mono text-xs\">"
+    assert re.search(r"<span>\s*CVE IDs\s*</span>\s*" + value, after)
 
 
 def test_badge_covers_the_whole_severity_ramp(rendered: str) -> None:

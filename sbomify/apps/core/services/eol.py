@@ -47,6 +47,9 @@ class EolReadiness:
     unresolved_critical: list[dict[str, Any]] = field(default_factory=list)
     unresolved_high: list[dict[str, Any]] = field(default_factory=list)
     accepted_count: int = 0
+    # Critical and high findings a VEX has closed. Not blockers, and counted
+    # so the checklist says why they are missing rather than dropping them.
+    vex_suppressed_count: int = 0
     has_final_sbom: bool = False
     has_final_vex: bool = False
 
@@ -156,11 +159,20 @@ def eol_readiness(
                 continue
     readiness.accepted_count = len(accepted)
 
+    # The lifecycle stays open while the scanner keeps reporting an advisory,
+    # VEX or not, so a not_affected ruling would otherwise block EOL forever.
+    from sbomify.apps.vulnerability_scanning.kpis import vex_suppressed_advisories
+
+    suppressed = vex_suppressed_advisories(product.team, [component.id for component in components])
     open_rows = VulnerabilityLifecycle.objects.filter(
         component__in=components, resolved_at__isnull=True, severity__in=("critical", "high")
     ).only("advisory_id", "severity", "component_id", "first_seen_at")
     for row in open_rows:
-        if (str(row.component_id), row.advisory_id.lower()) in accepted:
+        key = (str(row.component_id), row.advisory_id.lower())
+        if key in accepted:
+            continue
+        if key in suppressed:
+            readiness.vex_suppressed_count += 1
             continue
         entry = {
             "advisory_id": row.advisory_id,
@@ -189,6 +201,7 @@ def build_eol_advisory(product: Any, user: Any, *, migration_path: str = "") -> 
     with security advisories, and the Trust Center already surfaces it.
     """
     from sbomify.apps.security_advisories.models import AdvisoryEvent, AdvisoryProduct, SecurityAdvisory
+    from sbomify.apps.teams.broadcasts import broadcast_on_commit
 
     readiness = eol_readiness(product)
     when = product.end_of_life or product.end_of_support
@@ -230,6 +243,8 @@ def build_eol_advisory(product: Any, user: Any, *, migration_path: str = "") -> 
         body="End-of-life notice drafted.",
         payload={"to": SecurityAdvisory.RemediationStatus.WONT_FIX.value, "kind": "eol"},
     )
+    # Open advisory tables repaint, as they do for an advisory written by hand.
+    broadcast_on_commit(product.team.key, "advisory_updated", {"advisory_id": str(advisory.id), "action": "created"})
     return advisory
 
 

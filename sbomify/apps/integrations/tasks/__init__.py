@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.services.sync import run_sync
+from sbomify.apps.teams.broadcasts import broadcast_on_commit
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
@@ -89,6 +90,17 @@ def sync_integration(integration_id: str) -> None:
         logger.warning(
             "Sync of %s for workspace %s failed: %s", integration.provider, integration.team.key, result.error
         )
+    # The error text stays on the settings page, which only admins open; every
+    # member hears this, so it carries the outcome and nothing else.
+    broadcast_on_commit(
+        integration.team.key,
+        "integration_synced",
+        {
+            "integration_id": str(integration.id),
+            "provider": integration.provider,
+            "status": "ok" if result.ok else "failed",
+        },
+    )
 
 
 @dramatiq.actor(queue_name="integrations", max_retries=0, time_limit=300_000)

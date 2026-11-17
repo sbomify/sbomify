@@ -437,8 +437,9 @@ Two things that forgiveness does not extend to:
   (`mb-0 mt-0.5`), not the shorthand plus an exception.
 - **`!important` was doing two jobs.** Dropping a legacy class also drops its
   win over the *other* unlayered rules on the page. `static/css/base.css` styles
-  `h1..h6` and `trust-center.css` styles `.tc-fact-label`, both unlayered, so a
-  plain utility on those elements loses to them too. Where that happens, the
+  `h1..h6` and the inline block in `public_base.htmx.j2` styles every bare
+  anchor, both unlayered, so a plain utility on those elements loses to them
+  too. Where that happens, the
   replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
 
 **Scope follows `hx-get`, not just `include`.** Half a public page arrives over
@@ -512,6 +513,23 @@ Plugins analyze SBOMs without modifying them:
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
 
+- **Every change something on screen shows is broadcast**, after commit
+  (`transaction.on_commit`, or `schedule_broadcast` in `core/apis.py`), from
+  every path that makes it: the API endpoint and the HTMX view are two paths.
+  Payloads carry ids, names and statuses only, since every member receives them.
+- **Every list or count that shows it listens.** A listener that never hears
+  its message is the same bug as a message nobody listens for, so add both
+  sides in one change and grep the other side's spelling.
+- **Every listener also matches `resync`.** The store sends it when the socket
+  reopens, because whatever was broadcast while it was down never arrived.
+- **A region with inline edits uses `liveRegion`**
+  (`core/js/components/live-region.ts`): it refreshes only its own element,
+  waits while a field inside has focus, and leaves the page when its subject is
+  deleted.
+- **News for someone outside the workspace goes to `broadcast_to_user()`.** The
+  workspace socket only admits `workspace:read`; public pages connect to the
+  user channel (`ws/user/`) with `$store.ws.connectUser()`.
+
 ### Background Tasks
 
 Dramatiq with Redis for async processing (vulnerability scanning, assessments). Tasks live in `sbomify/apps/*/tasks/`.
@@ -520,7 +538,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 - **Database**: PostgreSQL 17
 - **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
-- **Caching/Broker**: Redis 8
+- **Caching/Broker**: Valkey 9 (anything speaking the Redis protocol works, Redis 8 included)
 
 ### Authentication
 
@@ -543,7 +561,7 @@ Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owne
 
 `operator` is the read-mostly security role: it reads everything internal (`READ_INTERNAL`) and holds exactly one write, `artifact:publish_vex`, which is the `TRIAGE` tier. That lets it record triage decisions in the app and through the triage API, and nothing else — no products, no components, no releases, no uploads, no settings. The VEX **file upload** endpoints pair `artifact:publish_vex` with `artifact:publish`, which operators do not have, so uploading an artifact stays with members, admins and CI bots. The split mirrors Dependency-Track's `VULNERABILITY_ANALYSIS` vs `BOM_UPLOAD`.
 
-Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rules — *an admin may not remove an owner, and may not change the role of, or remove, an owner or another admin* — are relational rather than tiers, so they live in `check_member_removal` and `check_role_change` (`teams/permissions.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 

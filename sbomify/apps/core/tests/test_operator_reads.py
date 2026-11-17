@@ -172,8 +172,8 @@ def test_the_overview_offers_triage_to_every_role_that_can_triage(role, offered,
         "sla": {"label": "7 days", "overdue": False},
     }
 
-    def with_one_finding(team_id):
-        result = real(team_id)
+    def with_one_finding(team_id, **kwargs):
+        result = real(team_id, **kwargs)
         return result.__class__.success({**result.value, "needs_attention": [finding]})
 
     mocker.patch.object(dashboard_page, "build_dashboard_context", with_one_finding)

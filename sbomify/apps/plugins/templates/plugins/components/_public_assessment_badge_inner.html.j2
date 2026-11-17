@@ -16,11 +16,19 @@ A warning here is usually an optional thing that was absent — no signature, no
 provenance, no VCS metadata — rather than a failure, which is why the badge is
 still shown. It just does not claim more than happened.
 {% endcomment %}
-<span class="public-badge {{ badge_class }}"
+{% comment %}
+A passing run is a status the platform measured, not the workspace's own, so it
+is a success-tone badge rather than a brand one. badge_class is the category's
+name, kept on the badge for anything that wants to tell them apart.
+{% endcomment %}
+{# The tooltip sits on a plain wrapper: its filters quote, which a cotton attribute cannot carry. #}
+<span class="inline-flex"
       title="{% if assessment.standard_name %}{{ assessment.standard_name }}{% if assessment.standard_version %} ({{ assessment.standard_version }}){% endif %}: {% else %}{{ assessment.display_name }}: {% endif %}{% if assessment.warning_count %}No failed checks{% else %}{{ status_phrase }}{% endif %}{% if assessment.pass_count and assessment.total_findings %}. {{ assessment.pass_count|intcomma }}/{{ assessment.total_findings|intcomma }} checks passed{% if assessment.warning_count %}, {{ assessment.warning_count|intcomma }} warned{% endif %}{% endif %}{% if assessment.completed_at %}. Verified {{ assessment.completed_at|date:"j M Y" }}{% endif %}">
-    <i class="fas {{ badge_icon }}"></i>
+    <c-branded.badge tone="success" data-category="{{ badge_class }}">
+    <i class="fas {{ badge_icon }}" aria-hidden="true"></i>
     {{ assessment.display_name }}
     {% if assessment.pass_count and assessment.total_findings %}
-        <span class="public-badge-count">{{ assessment.pass_count|intcomma }}/{{ assessment.total_findings|intcomma }}</span>
+        <span class="font-normal tabular-nums opacity-80">{{ assessment.pass_count|intcomma }}/{{ assessment.total_findings|intcomma }}</span>
     {% endif %}
+    </c-branded.badge>
 </span>

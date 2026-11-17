@@ -21,6 +21,9 @@ AWS_SBOMS_STORAGE_BUCKET_URL: {{ include "sbomify.s3SbomsBucketUrl" . | quote }}
 
 # OIDC / Keycloak
 KEYCLOAK_SERVER_URL: {{ include "sbomify.keycloakServerUrl" . | quote }}
+{{- with .Values.auth.keycloak.publicUrl }}
+KEYCLOAK_PUBLIC_URL: {{ printf "%s/" (trimSuffix "/" .) | quote }}
+{{- end }}
 KEYCLOAK_REALM: {{ .Values.auth.keycloak.realm | quote }}
 KEYCLOAK_CLIENT_ID: {{ .Values.auth.keycloak.clientId | quote }}
 

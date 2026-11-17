@@ -1,5 +1,5 @@
 {% comment %}
-Public Product Identifiers — a sidebar tc-panel.
+Public Product Identifiers: a side panel.
 
 One fact per identifier: type label, copyable value, and (for GTIN types)
 the rendered barcode beneath. There's only one <svg data-barcode-id="...">
@@ -8,32 +8,28 @@ document.querySelector lookup is unambiguous.
 {% endcomment %}
 {% load static %}
 {% if product_identifiers %}
-    <div class="tc-panel" x-data="productIdentifiersBarcodes()">
-        <h2 class="tc-panel-title">Identifiers</h2>
-        <div class="tc-facts">
-            {% for identifier in product_identifiers %}
-                <div>
-                    <p class="tc-fact-label">{{ identifier.identifier_type_display }}</p>
-                    <div class="tc-fact-value min-w-0">
-                        {% include 'core/components/copyable_value.html.j2' with value=identifier.value title="Copy "|add:identifier.value %}
-                    </div>
-                    {% if identifier.identifier_type in barcode_types %}
-                        <div class="barcode-wrapper mt-2"
-                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
-                            <svg data-barcode-id="{{ identifier.id }}"
-                                 class="barcode-svg max-w-full"
-                                 x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                 aria-hidden="true">
-                            </svg>
-                            <div x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                 role="status"
-                                 aria-label="Loading barcode">
-                                <c-feedback.skeleton type="image" width="10rem" height="3rem" />
-                            </div>
-                        </div>
-                    {% endif %}
+    <c-branded.panel title="Identifiers" x-data="productIdentifiersBarcodes()">
+    <c-branded.facts>
+    {% for identifier in product_identifiers %}
+        <c-branded.fact label="{{ identifier.identifier_type_display }}" stacked>
+        {% include 'core/components/copyable_value.html.j2' with value=identifier.value title="Copy "|add:identifier.value %}
+        {% if identifier.identifier_type in barcode_types %}
+            <div class="barcode-wrapper"
+                 x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
+                <svg data-barcode-id="{{ identifier.id }}"
+                     class="barcode-svg max-w-full"
+                     x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                     aria-hidden="true">
+                </svg>
+                <div x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                     role="status"
+                     aria-label="Loading barcode">
+                    <c-feedback.skeleton type="image" width="10rem" height="3rem" />
                 </div>
-            {% endfor %}
-        </div>
-    </div>
+            </div>
+        {% endif %}
+        </c-branded.fact>
+    {% endfor %}
+    </c-branded.facts>
+    </c-branded.panel>
 {% endif %}

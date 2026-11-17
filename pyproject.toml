@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "26.10.0"
+version = "26.11.0"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
@@ -52,7 +52,7 @@ dependencies = [
     # The plugin has a ``try/except ImportError`` fallback, but installing
     # the library lets it actually perform signature verification instead
     # of always reporting "library not available".
-    "sigstore>=4.2.0",
+    "sigstore>=4.5.1",
     # Renders the CRA bundle's markdown documents (Declaration of
     # Conformity, VDP, risk assessment, etc.) to PDF so the export ZIP
     # ships both ``.md`` (machine-friendly) and ``.pdf`` (human/auditor
@@ -70,6 +70,7 @@ dependencies = [
     "jsonschema>=4.26,<5",
     "django-cotton>=2.7.2",
     "fastjsonschema>=2.22.2",
+    "univers>=32.0.1,<33",
 ]
 
 [project.urls]
@@ -122,7 +123,7 @@ default-groups = [
 # whenever this floor moves.
 override-dependencies = [
     "cryptography>=50.0.0",
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
     "pygments>=2.20.0",
     "rfc3161-client>=1.0.6",
 ]

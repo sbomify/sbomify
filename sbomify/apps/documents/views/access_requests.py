@@ -26,7 +26,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import get_client_ip
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace, get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.access_emails import (
@@ -80,6 +80,33 @@ def _invalidate_access_requests_cache(team: Workspace) -> None:
     for user_id in admin_members:
         cache_key = f"pending_access_requests:{team.key}:{user_id}"
         cache.delete(cache_key)
+
+
+# What a moderation action leaves the request as, in the access_request_updated
+# message. A cleared rejection deletes the row, so the requester may ask again.
+ACTION_STATUS = {
+    "approve": "approved",
+    "reject": "rejected",
+    "revoke": "revoked",
+    "clear_rejection_done": "cleared",
+}
+
+
+def _broadcast_access_request_updated(team: Workspace, request_id: str, user_id: str, status: str) -> None:
+    """Tell the workspace's open pages an access request changed, once it is committed."""
+    if not team.key:
+        return
+    team_key = team.key
+    data = {"access_request_id": request_id, "user_id": user_id, "status": status, "action": status}
+
+    def _send() -> None:
+        broadcast_to_workspace(workspace_key=team_key, message_type="access_request_updated", data=data)
+        # The requester is not a member, so the workspace feed never reaches
+        # them; their own channel is how their open page learns the verdict.
+        if status != "pending":
+            broadcast_to_user(user_id, "access_request_updated", data)
+
+    transaction.on_commit(_send)
 
 
 def _get_pending_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
@@ -375,6 +402,7 @@ class AccessRequestView(View):
         # If NDA is required, notification will be sent after NDA is signed
         if not requires_nda:
             notify_admins_of_access_request(access_request, team, requires_nda=False)
+            _broadcast_access_request_updated(team, str(access_request.id), str(access_request.user_id), "pending")
             messages.success(request, "Access request submitted. You will be notified when it's approved.")
             return redirect("core:workspace_public", workspace_key=workspace_key)
 
@@ -660,6 +688,7 @@ class NDASigningView(View):
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
             transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
+            _broadcast_access_request_updated(team, str(access_request.id), str(access_request.user_id), "pending")
 
             messages.success(
                 request, "NDA signed successfully. Your access request has been submitted and is pending approval."
@@ -1112,6 +1141,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     return response
                 return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
+            # Read before clear_rejection deletes the row.
+            ws_request_id = str(access_request.id)
+            ws_user_id = str(access_request.user_id)
+
             if action == "approve":
                 # Check status inside transaction after locking
                 if access_request.status != AccessRequest.Status.PENDING:
@@ -1224,6 +1257,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Invalidate cache after transaction commits
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+        # The queue and the bell on every other open page follow the decision,
+        # as they do when it is made through the API.
+        _broadcast_access_request_updated(team, ws_request_id, ws_user_id, ACTION_STATUS[action])
 
         # Handle post-transaction actions based on action type
         if action == "approve":

@@ -1,0 +1,12 @@
+{% comment %}
+A list of label and value pairs, one per row: the Details panel of a product,
+release or advisory.
+
+A real definition list, so a screen reader announces each value against its
+label. Each pair is a c-branded.fact; this owns only the rhythm and the hairline
+between rows.
+{% endcomment %}
+<c-vars class />
+<dl class="flex flex-col my-0 divide-y divide-solid divide-border{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>{{ slot }}
+</dl>

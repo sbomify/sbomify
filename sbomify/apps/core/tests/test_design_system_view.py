@@ -79,3 +79,18 @@ class TestDesignSystemView:
         for kind, heading in (("products", "Products"), ("releases", "Releases"), ("components", "Components")):
             assert f'id="inventory-tab-{kind}"' in html
             assert f'data-inventory-heading="{heading}"' in html
+
+    def test_the_bulk_delete_demo_posts_its_selection_and_deletes_nothing(
+        self, debug_mode, sample_team_with_owner_member
+    ):
+        """The gallery's bulk delete dialog posts to the gallery, which only reports what it received."""
+        member = sample_team_with_owner_member
+        client = Client()
+        setup_authenticated_client_session(client, member.team, member.user)
+        html = client.get(reverse("core:design_system")).content.decode()
+        assert 'id="bulk-actions"' in html
+        assert f'hx-post="{reverse("core:design_system")}"' in html
+
+        response = client.post(reverse("core:design_system"), {"ids": ["demo-bulk-1", "demo-bulk-2"]})
+        assert response.status_code == 200
+        assert "2 selected, nothing deleted" in response["HX-Trigger"]

@@ -36,7 +36,7 @@ placeholder back over a table the reader has filtered.{% endcomment %}
     {% if is_security %}
         {% if findings %}
             {% comment %}The same table the component and report pages use, so a scan reads alike wherever it is opened.{% endcomment %}
-            {% with rows=findings|vulnerability_table_rows %}
+            {% with rows=findings|vulnerability_table_rows:triage %}
                 <c-vulnerabilities.table :rows="rows" :can_triage="can_triage" />
             {% endwith %}
         {% endif %}

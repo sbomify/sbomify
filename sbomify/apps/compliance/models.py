@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -288,9 +289,10 @@ class CRAAssessment(models.Model):
         ),
     )
 
-    # Step 1 — EU Authorized Representative (CRA Art. 22/25, checklist 7.4).
-    # A manufacturer without an EU establishment must appoint an AR *before*
-    # market placement, and the AR's details belong on the accompanying
+    # Step 1 — EU Authorized Representative (CRA Art. 18, checklist 7.4).
+    # Appointing an AR is optional: Art. 18(1) says a manufacturer *may* appoint
+    # one by written mandate, whether or not it is established in the Union.
+    # When one is appointed, its details belong on the accompanying
     # documentation. ``is_eu_established`` is nullable on purpose: NULL means
     # nobody has answered yet, which is a different state from "answered no",
     # and 7.4.1 asks for the determination to be recorded either way.
@@ -299,8 +301,7 @@ class CRAAssessment(models.Model):
         blank=True,
         help_text=(
             "Whether the manufacturer has an EU establishment (checklist 7.4.1). "
-            "False makes an Authorized Representative mandatory; NULL means the "
-            "determination has not been made."
+            "NULL means the determination has not been made."
         ),
     )
     authorized_rep_name = models.CharField(max_length=255, blank=True, default="")
@@ -380,14 +381,22 @@ class CRAAssessment(models.Model):
     )
 
     @property
-    def requires_authorized_representative(self) -> bool:
-        """Whether CRA Art. 22 obliges this assessment to name an AR.
+    def authorized_rep_is_recorded(self) -> bool:
+        """Whether any part of an AR has been entered.
 
-        Only an explicit "not EU-established" triggers the obligation; an
-        unanswered determination is surfaced as incomplete rather than
-        silently treated as compliant.
+        Appointing one is optional (CRA Art. 18(1)), so an empty block is
+        compliant. A started one has to be finished before it can go on the
+        declaration.
         """
-        return self.is_eu_established is False
+        return any(
+            [
+                self.authorized_rep_name.strip(),
+                self.authorized_rep_address.strip(),
+                self.authorized_rep_email.strip(),
+                self.authorized_rep_mandate_date is not None,
+                self.authorized_rep_mandate_reference.strip(),
+            ]
+        )
 
     @property
     def authorized_rep_is_complete(self) -> bool:
@@ -402,18 +411,9 @@ class CRAAssessment(models.Model):
         )
 
     @property
-    def eu_representation_problems(self) -> list[str]:
-        """Reasons the EU-representation block is not yet compliant.
-
-        Two different failures, deliberately not collapsed. An **unanswered**
-        determination is incomplete evidence (7.4.1) and surfaces on the
-        publish/export path, since blocking the wizard on it would strand
-        every assessment created before the question existed. A **missing AR
-        where one is required** is an Art. 22 breach, and that one blocks.
-        """
-        if self.is_eu_established is None:
-            return ["Record whether the manufacturer is established in the EU (CRA Art. 22, checklist 7.4.1)."]
-        if not self.requires_authorized_representative:
+    def authorized_rep_problems(self) -> list[str]:
+        """What a started but unfinished AR block still lacks."""
+        if not self.authorized_rep_is_recorded:
             return []
         missing = []
         if not self.authorized_rep_name.strip():
@@ -427,10 +427,23 @@ class CRAAssessment(models.Model):
         if not missing:
             return []
         return [
-            "A manufacturer without an EU establishment must appoint an Authorized "
-            "Representative before placing the product on the market (CRA Art. 22). "
-            "Missing: " + ", ".join(missing) + "."
+            "An Authorized Representative is optional (CRA Art. 18), but the one recorded here "
+            "is incomplete. Missing: " + ", ".join(missing) + "."
         ]
+
+    @property
+    def eu_representation_problems(self) -> list[str]:
+        """Reasons the EU-representation block is not yet complete.
+
+        Two different failures, deliberately not collapsed. An **unanswered**
+        determination is incomplete evidence (7.4.1) and surfaces on the
+        publish/export path, since blocking the wizard on it would strand
+        every assessment created before the question existed. A **half-entered
+        AR** cannot be put on the declaration, and that one blocks the save.
+        """
+        if self.is_eu_established is None:
+            return ["Record whether the manufacturer is established in the EU (checklist 7.4.1)."]
+        return self.authorized_rep_problems
 
     @property
     def is_signed(self) -> bool:
@@ -532,6 +545,17 @@ class CRAExportPackage(models.Model):
             "treated as retained forever."
         ),
     )
+    # The manufacturer's keyless Sigstore signature over the ZIP, verified on
+    # upload. sbomify holds no signing key. The bundle cosign wrote is stored
+    # beside the ZIP at storage_key + ".sigstore.json".
+    signed_by = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="Certificate identity that signed the bundle: an email or a CI workflow URI. Empty when unsigned.",
+    )
+    signed_by_issuer = models.CharField(max_length=255, blank=True, default="", help_text="OIDC issuer of the signer.")
+    signed_at = models.DateTimeField(null=True, blank=True, help_text="When the signing certificate was issued.")
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -670,3 +694,181 @@ class CRAScopeScreening(models.Model):
     def __str__(self) -> str:
         applies = "in scope" if self.cra_applies else "out of scope"
         return f"CRA Scope Screening for {self.product} ({applies})"
+
+
+class CRAReport(models.Model):
+    """One CRA Article 14 notification for one product, prepared for ENISA's portal.
+
+    The values the portal asks for live in ``srp_fields``, keyed by the ids in
+    ``reporting.SRP_FIELDS``, so a change to ENISA's form needs no migration.
+    The dates are columns because the deadlines are computed from them. The
+    report is editable until its final report is filed.
+    """
+
+    class Kind(models.TextChoices):
+        VULNERABILITY = "vulnerability", "Actively exploited vulnerability"
+        INCIDENT = "incident", "Severe incident"
+
+    class Meta:
+        db_table = "compliance_cra_reports"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["advisory", "product"],
+                condition=models.Q(advisory__isnull=False),
+                name="cra_report_one_per_advisory_product",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(kind="incident") | models.Q(advisory__isnull=False),
+                name="cra_report_vulnerability_has_advisory",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    team = models.ForeignKey(
+        "teams.Workspace", on_delete=models.CASCADE, related_name="cra_reports", db_column="workspace_id"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    # RESTRICT, not CASCADE: a cascade deletes the filings with a raw delete that
+    # no append-only guard sees. Deleting the advisory or the product alone is
+    # refused while a report names it, so it goes through delete_with_reports.
+    # Deleting the workspace still takes the report, which it cascades to as well.
+    advisory = models.ForeignKey(
+        "security_advisories.SecurityAdvisory",
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        related_name="cra_reports",
+    )
+    product = models.ForeignKey("core.Product", on_delete=models.RESTRICT, related_name="cra_reports")
+    aware_at = models.DateTimeField()
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    measure_available_at = models.DateTimeField(null=True, blank=True)
+    srp_fields = models.JSONField(default=dict, blank=True)
+    reminders_pending = models.BooleanField(
+        default=False,
+        help_text="Set with each write until its reminders reached the broker; a later dispatch clears it.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"CRA report for {self.product} ({self.kind})"
+
+    @property
+    def revision(self) -> str:
+        """Changes with every edit. Sent back when filing, to show which draft was copied into the portal."""
+        return self.updated_at.isoformat()
+
+    def filed_stages(self) -> dict[str, Any]:
+        """Stage to the time it was filed, for the stages filed once."""
+        return {f.stage: f.filed_at for f in self.filings.all() if f.stage != "intermediate"}
+
+    def next_due(self, now: Any = None) -> Any:
+        from .reporting import next_due
+
+        return next_due(
+            self.kind,
+            self.aware_at,
+            self.measure_available_at,
+            filed=self.filed_stages(),
+            now=now or timezone.now(),
+        )
+
+    @property
+    def is_closed(self) -> bool:
+        return "final_report" in self.filed_stages()
+
+
+class _AppendOnlyQuerySet(models.QuerySet["CRAReportFiling"]):
+    """Bulk ``update()`` and ``delete()`` bypass the model methods, so they refuse too."""
+
+    def update(self, **kwargs: Any) -> int:
+        raise ValidationError("Filings are append-only.")
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        raise ValidationError("Filings are append-only.")
+
+
+class CRAReportFiling(models.Model):
+    """What was filed in ENISA's portal, at which stage, with its reference. Append-only."""
+
+    class Stage(models.TextChoices):
+        EARLY_WARNING = "early_warning", "Early warning"
+        NOTIFICATION = "notification", "Notification"
+        INTERMEDIATE = "intermediate", "Intermediate report"
+        FINAL_REPORT = "final_report", "Final report"
+        USERS_INFORMED = "users_informed", "Users informed"
+
+    objects = _AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        db_table = "compliance_cra_report_filings"
+        ordering = ["filed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["report", "stage"],
+                condition=~models.Q(stage="intermediate"),
+                name="cra_report_filing_once_per_stage",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="filings")
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    srp_reference = models.CharField(max_length=100, blank=True, default="")
+    filed_at = models.DateTimeField(default=timezone.now)
+    filed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Who recorded the filing, by email: evidence names one person, not a display
+    # name. Kept as text because the account can change its email or be deleted.
+    filer = models.CharField(max_length=254, blank=True, default="")
+    snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.get_stage_display()} for {self.report_id}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise ValidationError("Filings are append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        raise ValidationError("Filings are append-only.")
+
+
+class CRAReportReminder(models.Model):
+    """One reminder to one person: claimed by the worker sending it, then marked sent.
+
+    The unique row is the claim, so two workers that reach the same reminder
+    at once cannot both send it. Per person, so a send that fails for one
+    address is retried for that address alone. Per deadline, so correcting
+    ``aware_at`` or ``measure_available_at`` brings fresh reminders for the
+    corrected time instead of matching the ones already sent for the old one.
+    """
+
+    class Meta:
+        db_table = "compliance_cra_report_reminders"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["report", "stage", "due", "threshold", "recipient"], name="cra_report_reminder_once"
+            ),
+        ]
+
+    report = models.ForeignKey(CRAReport, on_delete=models.CASCADE, related_name="reminders")
+    stage = models.CharField(max_length=20)
+    # The deadline this reminder is for. Rows written before it was recorded
+    # hold NULL, which the unique constraint treats as distinct.
+    due = models.DateTimeField(null=True, blank=True)
+    # "soon" is six hours before the deadline, "due" is the deadline itself.
+    threshold = models.CharField(max_length=10)
+    recipient = models.EmailField()
+    # Set by the worker sending it. A claim older than the actor's time limit
+    # belongs to a worker that died, and another may take it over.
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)

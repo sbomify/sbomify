@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
@@ -7,6 +9,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.billing.plan_features import PLAN_FEATURES
+from sbomify.apps.core.htmx import htmx_success_response
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import BADGE_CATALOGUE, badge_seal_url
 
@@ -40,6 +43,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "select-rows", "label": "Selectable rows", "group": "Containers"},
     {"id": "empty-states", "label": "Empty states", "group": "Containers"},
     {"id": "tables", "label": "Tables", "group": "Data"},
+    {"id": "bulk-actions", "label": "Bulk actions", "group": "Data"},
     {"id": "pagination", "label": "Pagination", "group": "Data"},
     {"id": "stats", "label": "Stat cards", "group": "Data"},
     {"id": "severity", "label": "Severity badges", "group": "Data"},
@@ -92,6 +96,86 @@ def _fix_prompt_demo() -> dict[str, object]:
     return fix
 
 
+def _advisory_proposal_demos() -> list[dict[str, object]]:
+    """Changes an AI agent proposed to a published advisory, as its review list renders them."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    base: dict[str, object] = {
+        "status": "pending",
+        "status_label": "Awaiting review",
+        "status_variant": "warning",
+        "is_pending": True,
+        "from_agent": True,
+        "submitted_by": "Jane Doe",
+        "submitted_via": "Advisory agent",
+        "submitted_at": timezone.now() - timedelta(minutes=8),
+        "note": "",
+        "moves_to": None,
+        "changes": [],
+        "releases": [],
+        "is_text": False,
+        "is_stale": False,
+        "context": "",
+        "decided_by": "",
+        "revised": False,
+        "previous_rejection": None,
+        "rejection_label": "",
+    }
+    return [
+        {
+            **base,
+            "id": "demo-update",
+            "kind": "post_update",
+            "kind_label": "New update",
+            "icon": "fas fa-comment-dots",
+            "headline": "Move the status to Fix in progress",
+            "is_text": True,
+            "moves_to": {"label": "Fix in progress", "variant": "violet", "icon": "fas fa-wrench"},
+            "note": "A fix is in review in **example/gateway#42**. We expect to ship it in 1.4.3.",
+            "context": "The pull request that closes the CVE was opened an hour ago.",
+        },
+        {
+            **base,
+            "id": "demo-fields",
+            "kind": "edit_advisory",
+            "kind_label": "Edit to the advisory",
+            "icon": "fas fa-file-pen",
+            "headline": "Change the severity and CVSS",
+            "is_stale": True,
+            "changes": [
+                {"label": "Severity", "before": "High", "after": "Critical", "long": False},
+                {
+                    "label": "CVSS",
+                    "before": "7.5",
+                    "after": "9.8 (CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H)",
+                    "long": False,
+                },
+            ],
+        },
+        {
+            **base,
+            "id": "demo-rejected",
+            "kind": "post_update",
+            "kind_label": "New update",
+            "icon": "fas fa-comment-dots",
+            "headline": "Move the status to Resolved",
+            "is_text": True,
+            "is_pending": False,
+            "status": "rejected",
+            "status_label": "Rejected",
+            "status_variant": "danger",
+            "note": "Fixed in 1.4.3.",
+            "decided_by": "Jane Doe",
+            "decided_display": "25 Oct 2026",
+            "rejection_label": "Too early",
+            "decision_note": "1.4.3 is tagged but not released. Post this once it is on the downloads page.",
+            "next_step": "Wait until what the note describes has happened, then send it again.",
+        },
+    ]
+
+
 def _vex_submission_demos() -> list[dict[str, object]]:
     """One submission from an AI agent and one upload sent for approval, as the review tab renders them."""
     from datetime import timedelta
@@ -113,22 +197,34 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             **base,
             "id": "demo-agent",
             "component_name": "api-gateway",
+            "versions": ["2.4.1", "2.4.0"],
+            "version_label": "2.4.1, 2.4.0",
+            "display_name": "api-gateway 2.4.1, 2.4.0",
             "from_agent": True,
             "is_file": False,
             "format_label": "Decisions",
             "submitted_by": "Jane Doe",
             "submitted_via": "Claude fix agent",
-            "summary": '1 ruling · hides 1 open vulnerability · Jane Doe via "Claude fix agent"',
+            "summary": (
+                "3 rulings · hides 3 open vulnerabilities in current and released versions"
+                ' · Jane Doe via "Claude fix agent"'
+            ),
             "context": "example-parser is only imported by the release script, which never ships.\n\nNo code change.",
             "fix_reference": "https://github.com/example/api-gateway/pull/42",
             "fix_url": "https://github.com/example/api-gateway/pull/42",
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-10001",
-                    "package": "example-parser@1.0.0",
                     "state": "Not affected",
                     "reason": "Code not reachable",
                     "detail": "Only the release script imports it.",
+                    "packages": [
+                        {"name": "example-parser", "versions": ["1.0.0"]},
+                        {
+                            "name": "@example-scope/instrumentation-example-database-driver",
+                            "versions": ["0.48.0", "0.49.1"],
+                        },
+                    ],
                 }
             ],
         },
@@ -136,13 +232,14 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             **base,
             "id": "demo-upload",
             "component_name": "billing-worker",
+            "display_name": "billing-worker",
             "from_agent": False,
             "source_label": "Upload",
             "is_file": True,
             "format_label": "OpenVEX",
             "submitted_by": "Sam Smith",
             "submitted_via": "",
-            "summary": "1 ruling · hides nothing · 1 not included · Sam Smith",
+            "summary": "1 ruling · hides nothing in current and released versions · 1 not included · Sam Smith",
             "context": "",
             "fix_reference": "",
             "fix_url": "",
@@ -152,10 +249,10 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-20001",
-                    "package": "Whole component",
                     "state": "False positive",
                     "reason": "",
                     "detail": "",
+                    "packages": [{"name": "Whole component", "versions": []}],
                 }
             ],
         },
@@ -254,6 +351,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "workspace_vulnerability_demo": _workspace_vulnerability_demo(),
             "fix_prompt_demo": _fix_prompt_demo(),
             "vex_submission_demos": _vex_submission_demos(),
+            "advisory_proposal_demos": _advisory_proposal_demos(),
             "plan_card_demos": [
                 {
                     "key": "community",
@@ -295,6 +393,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 },
             ],
             "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+            "overview_demo_last_scanned": date(2026, 3, 2),
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
             "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
@@ -442,6 +541,29 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "text-muted",
                 "text-disabled",
             ],
+            "demo_bulk_rows": [
+                {
+                    "id": f"demo-bulk-{index}",
+                    "name": name,
+                    "format": fmt,
+                    "format_label": "SPDX" if fmt == "spdx" else "CycloneDX",
+                    "updated": updated,
+                    "locked": locked,
+                }
+                for index, (name, fmt, updated, locked) in enumerate(
+                    [
+                        ("acme-gateway-core", "cyclonedx", "10 Aug 2026", False),
+                        ("acme-vault-core", "spdx", "2 Aug 2026", False),
+                        ("acme-gateway-edge-proxy", "cyclonedx", "28 Jul 2026", False),
+                        ("acme-billing-service", "cyclonedx", "21 Jul 2026", False),
+                        ("acme-audit-log", "spdx", "14 Jul 2026", True),
+                        ("acme-identity-broker", "cyclonedx", "9 Jul 2026", False),
+                        ("acme-search-indexer", "spdx", "1 Jul 2026", False),
+                        ("acme-report-builder", "cyclonedx", "24 Jun 2026", False),
+                    ],
+                    start=1,
+                )
+            ],
             # The toast demo's Alpine handlers now live in the template: a cotton
             # component takes @click directly, so the attrs string this context used
             # to carry (a template tag argument could not hold its double quotes) is
@@ -509,6 +631,63 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"value": "sbom", "label": "SBOM"},
                 {"value": "document", "label": "Document"},
                 {"value": "release", "label": "Release"},
+            ],
+            "demo_folding_items": [
+                "6282ec8",
+                "50c2c31",
+                "2e9f06e",
+                "c833c95",
+                "52836e5",
+                "ebb0cfb",
+                "fc7f052",
+                "2b4ac46",
+            ],
+            "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
+            # The version check: one product with a span and a pin, one with
+            # pinned commits that fold, and one that is not affected at all.
+            "demo_version_checks": {
+                "gateway": {
+                    "suppressed": False,
+                    "ranges": [
+                        {
+                            "label": "From 2.0.0, fixed in 2.4.1",
+                            "introduced": "2.0.0",
+                            "fixed": "2.4.1",
+                            "last_affected": "",
+                        },
+                        {"label": "1.9.3", "introduced": "1.9.3", "fixed": "", "last_affected": "1.9.3"},
+                    ],
+                },
+                "agent": {
+                    "suppressed": False,
+                    "ranges": [
+                        {"label": sha, "introduced": sha, "fixed": "", "last_affected": sha}
+                        for sha in (
+                            "6282ec8",
+                            "50c2c31",
+                            "2e9f06e",
+                            "c833c95",
+                            "52836e5",
+                            "ebb0cfb",
+                            "fc7f052",
+                            "2b4ac46",
+                            "9d1e0aa",
+                        )
+                    ],
+                },
+                "console": {"suppressed": True, "ranges": []},
+            },
+            "demo_version_labels_gateway": ["From 2.0.0, fixed in 2.4.1", "1.9.3"],
+            "demo_version_labels_agent": [
+                "6282ec8",
+                "50c2c31",
+                "2e9f06e",
+                "c833c95",
+                "52836e5",
+                "ebb0cfb",
+                "fc7f052",
+                "2b4ac46",
+                "9d1e0aa",
             ],
             "demo_breadcrumbs": [
                 {"label": "Products", "url": "#"},
@@ -593,6 +772,7 @@ class DesignSystemView(LoginRequiredMixin, View):
             "visibility": "public",
             "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc),
         }
+        context["value_list_demo"] = ["6282ec8", "50c2c31", "2e9f06e", "c833c95", "52836e5", ">= 2.0.0, < 2.4.1"]
         context["inventory_demo"] = {
             "base_url": inventory_url,
             "content_id": "example-inventory",
@@ -632,3 +812,10 @@ class DesignSystemView(LoginRequiredMixin, View):
         if request.headers.get("HX-Target") == "ds-vulnerability-report":
             return render(request, "core/components/vulnerability_demo.html.j2", context)
         return render(request, "core/design_system.html.j2", context)
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """The bulk delete demo posts here. It deletes nothing and says what it received."""
+        if not settings.DEBUG:
+            raise Http404
+        count = len(request.POST.getlist("ids"))
+        return htmx_success_response(f"Gallery demo: {count} selected, nothing deleted.")

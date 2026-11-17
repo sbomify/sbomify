@@ -73,10 +73,8 @@ def _open_findings(component_id: str, versions: list[tuple[str, list[dict[str, A
         )
         for run in latest:
             results.setdefault(str(run["sbom_id"]), []).append(run["result"])
-    vex_statements = load_vex_suppressions(component_id) if results else []
-
     summaries: list[dict[str, Any]] = []
-    for _, items in versions:
+    for version, items in versions:
         version_results = [
             result for item in items if _bom_type(item) == "sbom" for result in results.get(str(item["sbom"]["id"]), [])
         ]
@@ -88,13 +86,20 @@ def _open_findings(component_id: str, versions: list[tuple[str, list[dict[str, A
         if all(result_scanned_nothing(result) for result in version_results):
             summaries.append({"state": "nothing_scanned"})
             continue
-        rows = [
-            row
-            for row in extract_finding_rows(merge_findings_by_alias(version_results), vex_statements)
-            if not row["vex_suppressed"]
-        ]
-        if rows:
-            summaries.append({"state": "scanned", "rows": rows, "keys": {key for row in rows for key in _keys(row)}})
+        every_row = extract_finding_rows(
+            merge_findings_by_alias(version_results), load_vex_suppressions(component_id, version)
+        )
+        rows = [row for row in every_row if not row["vex_suppressed"]]
+        suppressed = len(every_row) - len(rows)
+        if every_row:
+            summaries.append(
+                {
+                    "state": "scanned",
+                    "rows": rows,
+                    "keys": {key for row in rows for key in _keys(row)},
+                    "suppressed": suppressed,
+                }
+            )
         else:
             # Summary-only providers report counts without findings, so there is
             # nothing to compare between versions, only the worst file's tally.
@@ -109,8 +114,10 @@ def _vulnerabilities(current: dict[str, Any], previous: dict[str, Any] | None) -
     if "counts" in current:
         counts = current["counts"]
         critical, high, total = counts.get("critical", 0), counts.get("high", 0), counts.get("total", 0)
+        suppressed = counts.get("suppressed", 0)
         new = None
     else:
+        suppressed = current["suppressed"]
         rows = current["rows"]
         critical = sum(row["severity"] == "critical" for row in rows)
         high = sum(row["severity"] == "high" for row in rows)
@@ -124,8 +131,16 @@ def _vulnerabilities(current: dict[str, Any], previous: dict[str, Any] | None) -
             else None
         )
     if not total:
-        return {"state": "none"}
-    return {"state": "open", "critical": critical, "high": high, "other": total - critical - high, "new": new}
+        # Only said when there is something to say: a version the VEX cleared.
+        return {"state": "none", "suppressed": suppressed} if suppressed else {"state": "none"}
+    return {
+        "state": "open",
+        "critical": critical,
+        "high": high,
+        "other": total - critical - high,
+        "new": new,
+        "suppressed": suppressed,
+    }
 
 
 def _compliance(items: list[dict[str, Any]]) -> dict[str, Any]:

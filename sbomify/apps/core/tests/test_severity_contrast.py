@@ -8,10 +8,11 @@ partner, so a value that looks fine in one place can fail in another:
 * the same names under ``:root.light`` are text over that tint on white.
 * ``--color-severity-*-fill`` is a solid background that always carries white
   text, in the app and on the public Trust Center. It is declared in the plain
-  ``:root`` block rather than in ``@theme``, because its only consumer is
-  ``static/css/trust-center.css``, which Tailwind does not scan: an ``@theme``
-  variable no scanned source mentions is tree-shaken out of the build, and the
-  rules reading it would resolve to transparent.
+  ``:root`` block rather than in ``@theme``, because its consumers read it
+  through inline ``style`` attributes (the filter facet's severity swatch),
+  which are not utilities: an ``@theme`` variable no utility uses is
+  tree-shaken out of the build, and the styles reading it would resolve to
+  transparent.
 
 These ran at 1.53 to 3.81 after the prototype migration reused the dark ramp on
 white, so the numbers are pinned here rather than left to a screenshot review.
@@ -166,14 +167,13 @@ def test_fills_are_theme_independent(light) -> None:
 def test_fills_are_declared_where_the_build_will_emit_them(dark, root) -> None:
     """Tailwind tree-shakes an @theme variable that no scanned source mentions.
 
-    trust-center.css is plain static CSS, outside Tailwind's source scanning, so
-    a fill declared in @theme is dropped from the build and every rule reading it
-    falls back to transparent: the CVSS chip turns white-on-white and the facet
-    dots disappear. The plain :root block is emitted verbatim, so that is where
-    these belong.
+    The fills are read from inline style attributes, which no utility mentions,
+    so a fill declared in @theme is dropped from the build and every style
+    reading it falls back to transparent: the facet dots disappear. The plain
+    :root block is emitted verbatim, so that is where these belong.
     """
     assert not [name for name in dark if name.endswith("-fill")], (
-        "severity fills must not live in @theme; trust-center.css is not scanned by Tailwind"
+        "severity fills must not live in @theme; inline styles reading them are not utilities Tailwind keeps"
     )
     assert sorted(name for name in root if name.endswith("-fill")) == [
         "critical-fill",

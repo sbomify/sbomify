@@ -1,23 +1,28 @@
 # Base Python version
-ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
+ARG PYTHON_VERSION=3.15-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.3.8
+# osv-scanner comes from the osv bundle of an sbomify/sbom-tools release,
+# which builds it from source and attests the build. OSV_SCANNER_VERSION is
+# the osv-scanner version that release ships: the build checks the binary
+# reports it, and bin/generate_additional_packages.sh reads it for the SBOM.
+ARG SBOM_TOOLS_VERSION=v26.11.1
+ARG OSV_SCANNER_VERSION=v2.7.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
-ARG COSIGN_VERSION=v3.1.3
-# Chainguard distroless Python for production, pinned by digest for reproducibility.
+ARG COSIGN_VERSION=v3.1.4
+# Chainguard images track :latest on purpose and are never pinned by digest.
+# They are rebuilt daily with security fixes, and a pinned digest freezes the
+# whole base, its apk database included, so scanners keep reporting packages
+# that newer builds have already fixed.
+# Chainguard distroless Python for production.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
-# To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3c42b518cc44bb5277a954826cdb4f9275ef95818d7eb7
-# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
-# digest so the builder image itself is reproducible. The actual .so
-# versions still come from `apk add` against the live Wolfi repo at build
-# time — Wolfi ships no repo-snapshot mechanism, but its package updates
-# are ABI-stable security patches, so the copied libraries stay binary-
-# compatible across rebuilds. Bump the digest below when you want to pick
-# up newer patches.
-# To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:34977aa13765da89f60fee8fe5230e2bb1c55192df08e383c58221ee0d1277fb
+# When :latest moves to a new Python minor, move PYTHON_VERSION with it.
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python:latest
+# Chainguard Wolfi base for the weasyprint-libs builder stage.
+# The .so versions come from `apk add` against the live Wolfi repo at build
+# time. Wolfi package updates are ABI-stable security patches, so the copied
+# libraries stay binary-compatible with the runtime image.
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base:latest
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -28,7 +33,7 @@ ARG VERSION=""
 ARG BUILD_TYPE=""
 
 ### Stage 0: Keycloak Theme Build (Fully Independent)
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS keycloak-build
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS keycloak-build
 
 WORKDIR /keycloak-build
 
@@ -42,7 +47,7 @@ COPY keycloak/themes/ ./themes/
 RUN bun install --frozen-lockfile && bun run build
 
 ### Stage 1: Bun JS build for Production Frontend Assets
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS js-build-prod
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS js-build-prod
 
 WORKDIR /js-build
 
@@ -97,8 +102,13 @@ RUN mkdir -p sbomify/static/css sbomify/static/webfonts sbomify/static/dist
 # Build main frontend assets (Keycloak is built separately in Stage 0)
 RUN bun run copy-deps && bun x vite build
 
+# Vite only minifies what it bundles; the hand-written sheets in static/css
+# are minified here, on this stage's copy, before collectstatic picks them up.
+COPY bin/minify-static-css.ts ./bin/
+RUN bun bin/minify-static-css.ts sbomify/static/css
+
 ### Stage 2: Frontend Development Server
-FROM oven/bun:1.4-debian@sha256:923bedb355f7746666659f71e724998159a5c8c54bd1cb1030e1975a0698415b AS frontend-dev-server
+FROM oven/bun:1.4-debian@sha256:93d5032fe06d163427822dc1598f420363759bb18155c9cc90eb1be05a64a19e AS frontend-dev-server
 
 WORKDIR /app-frontend
 
@@ -203,32 +213,43 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
 FROM alpine:3.24 AS binary-downloader
+ARG SBOM_TOOLS_VERSION
 ARG OSV_SCANNER_VERSION
 ARG COSIGN_VERSION
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
     ARCH="${TARGETARCH}" && \
-    # Download osv-scanner and verify checksum
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${ARCH}" \
-        -o /usr/local/bin/osv-scanner && \
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" \
-        -o /tmp/osv-scanner_SHA256SUMS && \
-    cd /usr/local/bin && \
-    grep "osv-scanner_linux_${ARCH}$" /tmp/osv-scanner_SHA256SUMS > /tmp/osv-checksum.txt && \
-    sed -i "s|osv-scanner_linux_${ARCH}|osv-scanner|" /tmp/osv-checksum.txt && \
-    sha256sum -c /tmp/osv-checksum.txt && \
-    chmod +x /usr/local/bin/osv-scanner && \
     # Download cosign and verify checksum
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${ARCH}" \
         -o /usr/local/bin/cosign && \
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign_checksums.txt" \
         -o /tmp/cosign_checksums.txt && \
+    cd /usr/local/bin && \
     grep "cosign-linux-${ARCH}$" /tmp/cosign_checksums.txt > /tmp/cosign-checksum.txt && \
     sed -i "s|cosign-linux-${ARCH}|cosign|" /tmp/cosign-checksum.txt && \
     sha256sum -c /tmp/cosign-checksum.txt && \
     chmod +x /usr/local/bin/cosign && \
-    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
+    # Download the osv bundle from sbom-tools and verify its build provenance.
+    # The identity pins the attestation to sbom-tools' build workflow at this
+    # release's tag, so a bundle built anywhere else fails here.
+    BUNDLE="osv-linux-${ARCH}.tar.gz" && \
+    curl -fsSL "https://github.com/sbomify/sbom-tools/releases/download/${SBOM_TOOLS_VERSION}/${BUNDLE}" \
+        -o "/tmp/${BUNDLE}" && \
+    curl -fsSL "https://github.com/sbomify/sbom-tools/releases/download/${SBOM_TOOLS_VERSION}/${BUNDLE}.sigstore.json" \
+        -o "/tmp/${BUNDLE}.sigstore.json" && \
+    cosign verify-blob-attestation \
+        --bundle "/tmp/${BUNDLE}.sigstore.json" \
+        --certificate-identity "https://github.com/sbomify/sbom-tools/.github/workflows/build.yml@refs/tags/${SBOM_TOOLS_VERSION}" \
+        --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+        --type slsaprovenance1 \
+        "/tmp/${BUNDLE}" && \
+    mkdir /tmp/osv && \
+    tar -xzf "/tmp/${BUNDLE}" -C /tmp/osv && \
+    install -m 0755 /tmp/osv/bin/osv-scanner /usr/local/bin/osv-scanner && \
+    # Fail the build if OSV_SCANNER_VERSION no longer matches what the release ships
+    osv-scanner --version | grep -qx "osv-scanner version: ${OSV_SCANNER_VERSION#v}" && \
+    rm -rf /tmp/osv "/tmp/${BUNDLE}" "/tmp/${BUNDLE}.sigstore.json" /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev
@@ -348,8 +369,9 @@ RUN apk add --no-cache \
 # / libfreetype / libfontconfig / libopenjp2 / libjpeg) and the Liberation Sans
 # weights + Liberation Mono Regular the print CSS targets. Copying these
 # specific files instead of /usr/lib + /usr/share/fonts wholesale shrinks the
-# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux are
-# already in the prod image — re-copying them would risk a glibc skew, so
+# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux and
+# libexpat are already in the prod image. Re-copying glibc would risk a skew,
+# and the image's own libexpat is what its apk database and SBOM report, so
 # they're intentionally omitted.
 #
 # Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
@@ -379,7 +401,7 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
         libfontconfig.so* \
         libopenjp2.so* libjpeg.so* \
         libbrotlicommon.so* libbrotlidec.so* \
-        libbz2.so* libexpat.so* libfribidi.so* libgraphite2.so* \
+        libbz2.so* libfribidi.so* libgraphite2.so* \
         libgio-2.0.so* libglib-2.0.so* libgmodule-2.0.so* libgobject-2.0.so* \
         libpcre2-8.so* libpng16.so* libz.so* \
         libblkid.so* libmount.so* libselinux.so* \

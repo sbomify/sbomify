@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
+from django.db.models import Q
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -44,6 +45,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import broadcast_to_workspace, push_notification
 from sbomify.task_utils import format_task_error
 
+from ..announce import announce_assessment_settled
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError, SBOMGoneError
 from ..sdk.base import RetryLaterError
 from ..sdk.enums import RunReason, RunStatus, ScanMode
@@ -327,18 +329,12 @@ def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> se
     }
 
 
-# Retry delays for RetryLaterError (in milliseconds)
-# These delays give external systems time to process:
-# - 1st retry: 2 minutes
-# - 2nd retry: 5 minutes
-# - 3rd retry: 10 minutes
-# - 4th retry: 15 minutes
-RETRY_LATER_DELAYS_MS = [
-    2 * 60 * 1000,  # 2 minutes
-    5 * 60 * 1000,  # 5 minutes
-    10 * 60 * 1000,  # 10 minutes
-    15 * 60 * 1000,  # 15 minutes
-]
+# Retry delays for RetryLaterError (in milliseconds): doubling from 2 minutes up
+# to an hour, then hourly, about six hours in all. An external service under load,
+# such as a Dependency Track working through a backlog, can take far longer than
+# the half hour a shorter ladder gave it. Each wait is a delayed message, so no
+# worker is held while it runs down.
+RETRY_LATER_DELAYS_MS = [minutes * 60 * 1000 for minutes in (2, 4, 8, 16, 32, 60, 60, 60, 60, 60)]
 
 
 @dramatiq.actor(
@@ -373,7 +369,7 @@ def run_assessment_task(
 
     If a plugin raises RetryLaterError (e.g., attestation not yet available,
     external service still processing), the task will retry with increasing
-    delays: 2 min, 5 min, 10 min, 15 min.
+    delays (``RETRY_LATER_DELAYS_MS``), or longer when the service asks us to wait.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -459,6 +455,8 @@ def run_assessment_task(
 
             if _retry_later_count < len(RETRY_LATER_DELAYS_MS):
                 delay_ms = RETRY_LATER_DELAYS_MS[_retry_later_count]
+                if retry_error.retry_after_seconds is not None:
+                    delay_ms = max(delay_ms, retry_error.retry_after_seconds * 1000)
                 logger.info(
                     f"[TASK_run_assessment] Transient condition for SBOM {sbom_id} "
                     f"(run: {run_id or 'unknown'}): {retry_error}. "
@@ -479,6 +477,15 @@ def run_assessment_task(
                 }
                 if run_id is not None:
                     retry_kwargs["_existing_run_id"] = run_id
+
+                # The stranded-run sweep must allow this wait, even when the
+                # external service's reset is hours after the first attempt.
+                if run_id is not None:
+                    from ..models import AssessmentRun
+
+                    AssessmentRun.objects.filter(id=run_id, status=RunStatus.PENDING.value).update(
+                        retry_at=timezone.now() + timedelta(milliseconds=delay_ms)
+                    )
 
                 # Re-enqueue the task with incremented retry count
                 run_assessment_task.send_with_options(
@@ -526,6 +533,8 @@ def run_assessment_task(
                             f"[TASK_run_assessment] finalize_retry_exhausted failed for run {run_id}: {finalize_err}",
                             exc_info=True,
                         )
+                    else:
+                        announce_assessment_settled(sbom_id, plugin_name, RunStatus.COMPLETED.value)
 
                 response = {
                     "status": "retry_exhausted",
@@ -549,7 +558,6 @@ def run_assessment_task(
         if assessment_run is None:
             if _existing_run_id:
                 from .. import models as plugin_models
-                from ..sdk.enums import RunStatus
 
                 deleted, _ = plugin_models.AssessmentRun.objects.filter(
                     id=_existing_run_id, status=RunStatus.PENDING.value
@@ -559,6 +567,7 @@ def run_assessment_task(
                         f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
                         f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
                     )
+                    announce_assessment_settled(sbom_id, plugin_name, "skipped")
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -590,6 +599,7 @@ def run_assessment_task(
                     message_type="assessment_complete",
                     data={
                         "sbom_id": sbom_id,
+                        "component_id": str(assessment_run.sbom.component_id),
                         "plugin_name": plugin_name,
                         "status": assessment_run.status,
                     },
@@ -599,10 +609,9 @@ def run_assessment_task(
                 if assessment_run.status == "failed":
                     push_notification(
                         workspace_key=workspace_key,
-                        message=f"Assessment '{plugin_name}' failed for {assessment_run.sbom.name}",
                         severity="warning",
                         notification_type="assessment",
-                        action_url=f"/component/{assessment_run.sbom.component.id}/",
+                        **_failed_run_notification(assessment_run),
                     )
         except Exception as broadcast_error:
             # Don't fail the task if broadcast fails
@@ -625,11 +634,84 @@ def run_assessment_task(
 
     except PluginOrchestratorError as e:
         logger.error(f"[TASK_run_assessment] Orchestrator error: {e}")
+        announce_assessment_settled(sbom_id, plugin_name, RunStatus.FAILED.value)
         return format_task_error("run_assessment", sbom_id, str(e))
 
     except Exception as e:
         logger.exception(f"[TASK_run_assessment] Unexpected error: {e}")
         raise  # Re-raise for Dramatiq retry
+
+
+def announce_assessment_started(
+    sbom_id: str, plugin_name: str, *, component_id: str | None = None, workspace_key: str | None = None
+) -> None:
+    """Broadcast ``assessment_started`` for one SBOM once the current transaction commits.
+
+    Pages that show a run's state repaint on it, so a queued run reads as
+    pending without a reload. Callers that already hold the SBOM's component
+    and workspace pass them to skip the lookup. Never raises.
+    """
+    try:
+        if component_id is None or workspace_key is None:
+            from sbomify.apps.sboms.models import SBOM
+
+            row = SBOM.objects.filter(pk=sbom_id).values("component_id", "component__team__key").first()
+            if not row:
+                return
+            component_id = str(row["component_id"])
+            workspace_key = row["component__team__key"]
+        if not workspace_key:
+            return
+        key = workspace_key
+        data = {"sbom_id": str(sbom_id), "component_id": str(component_id), "plugin_name": plugin_name}
+        transaction.on_commit(
+            lambda: broadcast_to_workspace(workspace_key=key, message_type="assessment_started", data=data)
+        )
+    except Exception:
+        logger.warning("Could not announce started assessment for SBOM %s", sbom_id, exc_info=True)
+
+
+def _failed_run_notification(assessment_run: Any) -> dict[str, str]:
+    """Title, message and action for the notification a failed run raises.
+
+    The run stopped on an error, so it recorded no result: the artifact keeps
+    whatever an earlier run found. The message says that, and sends the reader
+    to the artifact page, which shows the error itself.
+    """
+    from django.urls import reverse
+
+    from ..models import RegisteredPlugin
+    from ..sdk.enums import AssessmentCategory
+
+    sbom = assessment_run.sbom
+    plugin_label = (
+        RegisteredPlugin.objects.filter(name=assessment_run.plugin_name).values_list("display_name", flat=True).first()
+        or assessment_run.plugin_name
+    )
+    artifact = f"{sbom.name} {sbom.version}" if sbom.version else sbom.name
+
+    if assessment_run.category == AssessmentCategory.SECURITY.value:
+        title = "Vulnerability scan failed"
+        message = (
+            f"{plugin_label} could not scan {artifact}. "
+            "Its vulnerability results were not updated, so new vulnerabilities may be missing. "
+            "Open the SBOM to see the error."
+        )
+        action_label = "View SBOM"
+    else:
+        title = "Assessment failed"
+        message = (
+            f"{plugin_label} could not check {artifact}, so no new result was recorded. "
+            "Open the artifact to see the error."
+        )
+        action_label = "View artifact"
+
+    return {
+        "title": title,
+        "message": message,
+        "action_label": action_label,
+        "action_url": reverse("core:component_item", args=[sbom.component_id, "sboms", sbom.id]),
+    }
 
 
 def _create_pending_assessment_run(
@@ -681,6 +763,7 @@ def _create_pending_assessment_run(
         logger.warning(f"[PLUGIN] Failed to eagerly create pending run for {plugin_name} on SBOM {sbom_id}: {exc}")
         return None
 
+    announce_assessment_started(sbom_id, registered.name)
     return str(run.id)
 
 
@@ -831,6 +914,52 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+def _reconcile_findings(sbom_id: str) -> None:
+    """Re-align the SBOM's finding rows after a release change; a failure here never fails the task."""
+    from sbomify.apps.vulnerability_scanning.findings import reconcile_sbom_findings
+
+    try:
+        reconcile_sbom_findings(sbom_id)
+    except Exception:
+        logger.warning("[TASK_release_runs] Could not reconcile finding rows for SBOM %s", sbom_id, exc_info=True)
+
+
+def _scan_if_newly_tracked(sbom_id: str, release: Any) -> None:
+    """Scan an SBOM Dependency Track skipped as not monitored, now that a release ships it.
+
+    An upload queues the scan, and the uploader attaches the SBOM to its release
+    in a later call. If a newer SBOM arrives in between, the scan finds this one
+    unmonitored and records a skip. Attaching the release starts no scan of its
+    own, so the SBOM would wait for the next scheduled scan, where one runs. A
+    run newer than the skip, even one still in flight, means that scan has
+    already been asked for.
+    """
+    from sbomify.apps.core.services.release_lifecycle import tracked_sboms
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun, TeamPluginSettings
+
+    plugin_name = "dependency-track"
+    team_id = release.product.team_id
+    latest = AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=plugin_name).order_by("-created_at")[:1]
+    skipped = AssessmentRun.objects.filter(
+        id__in=latest.values("id"),
+        result_skipped=True,
+        result__findings__contains=[{"id": "dependency-track:not-tracked"}],
+    )
+    if not skipped.exists() or not tracked_sboms(SBOM.objects.filter(pk=sbom_id), team_id=team_id).exists():
+        return
+
+    settings = TeamPluginSettings.objects.filter(team_id=team_id).first()
+    enqueue_assessment(
+        sbom_id=sbom_id,
+        plugin_name=plugin_name,
+        run_reason=RunReason.ON_RELEASE_ASSOCIATION,
+        config=(settings.get_plugin_config(plugin_name) if settings else None) or None,
+        release_id=str(release.pk),
+    )
+
+
 @dramatiq.actor(
     queue_name="plugins",
     max_retries=3,
@@ -848,10 +977,9 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
 
     Called by the ReleaseArtifact post_save signal handler. Finds the most
     recent completed run per plugin for the given SBOM and adds the release
-    to each run's ``releases`` M2M. For plugins that expose a
-    ``sync_release_tags`` hook (currently only Dependency Track), the task
-    also asks the plugin to update its downstream tag state — e.g. PATCH
-    the DT project version's tags so the new release shows up in DT.
+    to each run's ``releases`` M2M. It also calls each continuous plugin's
+    ``sync_release_tags`` hook, so one that keeps release-scoped state outside
+    sbomify can update it. No built-in plugin overrides the hook today.
 
     Race (Option A): if no completed run exists yet (the upload-triggered
     scan is still running), this task is a no-op. The orchestrator's
@@ -937,6 +1065,7 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
     ]
     with transaction.atomic():
         AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+    _reconcile_findings(sbom_id)
 
     # Continuous plugins maintain release-scoped downstream state (e.g. DT
     # project version tags). Ask them to re-sync after the M2M update, but
@@ -969,6 +1098,8 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
                     exc_info=True,
                 )
 
+    _scan_if_newly_tracked(sbom_id, release)
+
     logger.info(
         "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
         release_id,
@@ -995,11 +1126,11 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
     """Detach a removed release from AssessmentRuns for an SBOM (Stage 5 Issue A).
 
     Called by the ReleaseArtifact post_delete signal handler. Removes the
-    release from every AssessmentRun M2M for the SBOM and asks each plugin
-    that exposes a ``sync_release_tags`` hook to re-push the canonical tag
-    set (minus the just-removed release). Uses the same Q2=B "re-read full
-    canonical set" semantic as the attach path, so DT tag state converges
-    correctly regardless of ordering.
+    release from every AssessmentRun M2M for the SBOM and calls each
+    continuous plugin's ``sync_release_tags`` hook with the canonical set
+    (minus the just-removed release). It re-reads the full set, as the attach
+    path does, so the order of attach and detach does not matter. No built-in
+    plugin overrides the hook today.
 
     Args:
         sbom_id: The SBOM primary key.
@@ -1023,6 +1154,7 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
             assessment_run__sbom_id=sbom_id,
             release_id=release_id,
         ).delete()
+    _reconcile_findings(sbom_id)
 
     if detached_count == 0:
         logger.debug(
@@ -1408,6 +1540,8 @@ def _run_scheduled_security_scans(
     skip_hours: int,
     task_name: str,
     only_cyclonedx: bool = False,
+    workspace_key: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
 
@@ -1422,6 +1556,8 @@ def _run_scheduled_security_scans(
         skip_hours: Skip SBOMs scanned within this many hours.
         task_name: Short label used in log messages.
         only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
+        workspace_key: Only this workspace.
+        dry_run: Count what would be enqueued; enqueue nothing.
 
     Returns:
         Dictionary with scan statistics.
@@ -1452,7 +1588,10 @@ def _run_scheduled_security_scans(
     try:
         # Find teams with this plugin enabled, filtered by billing plan.
         team_configs: dict[int, dict[str, Any]] = {}
-        for settings_obj in TeamPluginSettings.objects.select_related("team"):
+        team_settings = TeamPluginSettings.objects.select_related("team")
+        if workspace_key:
+            team_settings = team_settings.filter(team__key=workspace_key)
+        for settings_obj in team_settings:
             if not settings_obj.is_plugin_enabled(plugin_name):
                 continue
             if not plan_filter(settings_obj.team):
@@ -1474,8 +1613,13 @@ def _run_scheduled_security_scans(
         cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
+                # A scan waiting out its retries is in flight however long ago it
+                # was created: its next attempt is due at retry_at. Without this the
+                # hourly sweep starts a second scan of the same SBOM. Only pending
+                # and running runs are read by retry_at, so both branches stay on
+                # the (status, created_at) index.
+                Q(created_at__gte=cutoff) | Q(status__in=["pending", "running"], retry_at__gte=cutoff),
                 plugin_name=plugin_name,
-                created_at__gte=cutoff,
                 status__in=["completed", "running", "pending"],
                 sbom__component__team_id__in=team_ids,
             ).values_list("sbom_id", flat=True)
@@ -1495,33 +1639,19 @@ def _run_scheduled_security_scans(
         if incapable_cutoff < cutoff:
             recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
-        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
-        # with at least one ReleaseArtifact link is eligible — the scan will
-        # cover all of its current releases via the M2M populated at run
-        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
-        # accessor join to keep the query small and avoid name-coupling.
-        from django.db.models import Exists, OuterRef
-
-        from sbomify.apps.core.models import ReleaseArtifact
+        # Stream eligible SBOMs directly. The scans cover what sbomify tracks:
+        # each component's newest SBOM of a format, and every SBOM a release it
+        # still monitors ships, or one such a release links to. The same set
+        # Dependency-Track keeps active, so the two cannot drift apart.
+        from sbomify.apps.core.services.release_lifecycle import tracked_sboms
 
         sbom_qs = (
-            SBOM.objects.filter(
-                bom_type=SBOM.BomType.SBOM,
-                component__team_id__in=team_ids,
+            tracked_sboms(
+                SBOM.objects.filter(component__team_id__in=team_ids)
+                # A row with no stored artifact can never be assessed; failed runs
+                # do not count as recent, so without this it re-fails every sweep.
+                .exclude(sbom_filename="")
             )
-            # A row with no stored artifact can never be assessed; failed runs
-            # do not count as recent, so without this it re-fails every sweep.
-            .exclude(sbom_filename="")
-            .annotate(
-                has_release_artifact=Exists(
-                    ReleaseArtifact.objects.filter(
-                        sbom_id=OuterRef("pk"),
-                        # Defense-in-depth: only count same-team release artifacts
-                        release__product__team_id=OuterRef("component__team_id"),
-                    )
-                )
-            )
-            .filter(has_release_artifact=True)
             .values("id", "component__team_id", "format")
             .distinct()
         )
@@ -1557,6 +1687,10 @@ def _run_scheduled_security_scans(
                     stats["skipped_failure_backoff"] += 1
                     continue
 
+                if dry_run:
+                    stats["assessments_enqueued"] += 1
+                    continue
+
                 team_id = sbom_row["component__team_id"]
                 plugin_config = team_configs.get(team_id) or None
 
@@ -1569,9 +1703,10 @@ def _run_scheduled_security_scans(
                 stats["assessments_enqueued"] += 1
 
         logger.info(
-            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, "
+            "[TASK_%s] Completed%s: %d %s assessments enqueued across %d teams, "
             "%d skipped (recent), %d skipped (failing)",
             task_name,
+            " (dry run, none actually enqueued)" if dry_run else "",
             stats["assessments_enqueued"],
             plugin_name,
             stats["teams_scanned"],
@@ -1598,7 +1733,7 @@ def _run_scheduled_security_scans(
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def weekly_osv_scan_task() -> dict[str, Any]:
+def weekly_osv_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
     Scans eligible SBOMs (with at least one release association) for Community-plan
@@ -1612,6 +1747,8 @@ def weekly_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_community_team,
         skip_hours=168,  # 7 days
         task_name="weekly_osv_scan",
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 
@@ -1628,7 +1765,7 @@ def weekly_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def daily_osv_scan_task() -> dict[str, Any]:
+def daily_osv_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
     Scans eligible SBOMs (with at least one release association) for paid teams.
@@ -1642,6 +1779,8 @@ def daily_osv_scan_task() -> dict[str, Any]:
         plan_filter=_is_paid_team,
         skip_hours=24,
         task_name="daily_osv_scan",
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 
@@ -1661,7 +1800,7 @@ def daily_osv_scan_task() -> dict[str, Any]:
     stop=stop_after_delay(120),
     before_sleep=before_sleep_log(logger, logging.WARNING),
 )
-def hourly_dt_scan_task() -> dict[str, Any]:
+def hourly_dt_scan_task(workspace_key: str | None = None, dry_run: bool = False) -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
     Scans eligible CycloneDX SBOMs (with at least one release association) for paid
@@ -1676,6 +1815,8 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         skip_hours=1,
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
+        workspace_key=workspace_key,
+        dry_run=dry_run,
     )
 
 
@@ -1696,6 +1837,23 @@ def sweep_stranded_runs_task() -> None:
     logger.info(f"[TASK_sweep_stranded_runs] settled {sweep_stranded_runs()} runs")
 
 
+@cron("45 3 * * *")  # type: ignore[untyped-decorator]  # Daily, after the retention prune
+@dramatiq.actor(queue_name="assessment_retention", max_retries=0, time_limit=4 * 3600 * 1000)
+def offload_assessment_results_task() -> None:
+    """Move superseded result payloads out of Postgres, findings stored once.
+
+    Nothing ran the sweep before: it was a management command, and with its
+    floor at a year it could not have reached the hourly rescans that fill the
+    table anyway. It is resumable at any row, so it stops inside its time limit
+    and the next night carries on from the oldest row left; a large backlog can
+    be cleared faster with ``manage.py offload_assessment_results``.
+    """
+    from sbomify.apps.plugins.offload import offload_assessment_results
+
+    moved = offload_assessment_results(max_seconds=3.5 * 3600)
+    logger.info(f"[TASK_offload_assessment_results] offloaded {moved} results")
+
+
 @cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
 @dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
 def prune_assessment_runs_task() -> None:
@@ -1706,8 +1864,22 @@ def prune_assessment_runs_task() -> None:
     staging. See plugins/retention.py for the two rules.
     """
     from sbomify.apps.plugins import result_store, retention
+    from sbomify.apps.vulnerability_scanning.findings import delete_orphaned_records, drop_legacy_findings_table
+
+    # A deferred legacy drop can leave foreign keys that block run deletion.
+    # Finish it before pruning, or leave retention for the next daily attempt.
+    if not drop_legacy_findings_table():
+        logger.warning("[TASK_prune_assessment_runs] Skipping retention while the legacy finding table is locked")
+        return
 
     # Before the prune, so a retry collects what a failed delete left behind.
     orphans = result_store.delete_orphaned_result_objects()
+    shared = result_store.delete_unreferenced_findings_objects()
     removed = retention.prune_assessment_runs()
-    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects")
+    # After it: a pruned run's finding rows go with it, and the records they
+    # shared with no other run are left behind.
+    records = delete_orphaned_records()
+    logger.info(
+        f"[TASK_prune_assessment_runs] removed {removed} runs, {orphans} orphaned result objects, "
+        f"{shared} unreferenced shared findings objects, {records} unreferenced finding records"
+    )

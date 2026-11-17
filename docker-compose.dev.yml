@@ -13,6 +13,7 @@ x-logging: &default-logging
 x-keycloak-env: &keycloak-env
   KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
@@ -25,6 +26,7 @@ x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
   LOCAL_DEV: ${LOCAL_DEV:-True}
+  TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-False}
   EMAIL_HOST: ${EMAIL_HOST:-mailpit}
   EMAIL_PORT: ${EMAIL_PORT:-1025}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-True}

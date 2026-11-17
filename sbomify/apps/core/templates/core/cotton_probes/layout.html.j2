@@ -19,6 +19,8 @@ assert on the output; it is not routed anywhere.
 </c-slot>
 </c-layout.page-header>
 <c-layout.page-header title="Supporting detail" description="A description with more context." data-probe="header-description" />
+<c-layout.page-header title="Markdown detail" :description="probe_markdown" description_markdown data-probe="header-markdown" />
+<c-layout.page-header title="Quoted Markdown detail" description="{{ probe_markdown }}" description_markdown data-probe="header-markdown-quoted" />
 <c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
 <c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" data-probe="section-h2" />
 <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)" data-probe="section-actioned">

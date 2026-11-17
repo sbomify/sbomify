@@ -1,16 +1,18 @@
-{# Declaration of Conformity link for the public product page — a sidebar tc-panel. #}
+{# Declaration of Conformity link for the public product page: a side panel. #}
 {# Expects: has_doc (bool), product (object), preferred_base_url (str) #}
 {% if has_doc %}
-    <div class="tc-panel">
-        <h2 class="tc-panel-title">EU Declaration of Conformity</h2>
-        <p class="text-sm text-text-muted mt-0 mb-[0.75rem]">
-            The manufacturer's declaration that this product conforms to the EU Cyber
-            Resilience Act (Regulation 2024/2847) and the standards listed in Annex V.
-        </p>
-        <a class="text-sm"
-           href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}{% url 'compliance:product_doc_public' product_id=product.id %}">
-            View declaration
-            <i class="fas fa-arrow-right text-xs ml-1" aria-hidden="true"></i>
-        </a>
+    {# Resolved first, so no template tag sits inside an href for the formatter to break. #}
+    {% url 'compliance:product_doc_public' product_id=product.id as doc_path %}
+    <c-branded.panel title="EU Declaration of Conformity">
+    <p class="text-sm text-text-muted my-0">
+        The manufacturer's declaration that this product conforms to the EU Cyber
+        Resilience Act (Regulation 2024/2847) and the standards listed in Annex V.
+    </p>
+    <div class="flex">
+        <c-buttons.secondary size="sm" href="{{ preferred_base_url|default:'' }}{{ doc_path }}">
+        View declaration
+        <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
+        </c-buttons.secondary>
     </div>
+    </c-branded.panel>
 {% endif %}

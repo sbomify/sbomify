@@ -4,7 +4,7 @@ Date: 2025-12-15
 
 ## Status
 
-Accepted
+Accepted. Amended 2026-10-24: result storage, retention and what counts as current (see [Amendment 1](#amendment-1-2026-10-24-result-storage-retention-and-current-results)).
 
 ## Context
 
@@ -523,7 +523,35 @@ flowchart LR
 3. **Plugin Discovery**: Plugins are configured per-team via `TeamAssessmentSettings`, with feature gating based on billing plans. No runtime entry-point discovery.
 4. **License Plugin**: Roadmap item (not yet scheduled).
 5. **Attestation Scope**: The attestation plugin will support both Sigstore bundles and in-toto attestations. Configuration determines which verification methods are applied.
-6. **Result Retention**: All assessment runs are kept forever. No automatic pruning.
+6. **Result Retention**: All assessment runs are kept forever. No automatic pruning. *Superseded by Amendment 1: runs are pruned by a retention policy, and superseded payloads move to object storage.*
+
+## Amendment 1 (2026-10-24): result storage, retention and current results
+
+### Why it was amended
+
+Three parts of this ADR no longer describe the system. Scheduled security scans, Dependency Track above all, rescan every SBOM many times a day, and every run stored its full findings list again even when nothing had changed. Storing every result inline, forever, made `plugins_assessment_runs` the bulk of the database. The changes that followed (#1120 retention, the result offload, #1893, #1901) each moved the code away from this ADR without amending it.
+
+### Amended decisions
+
+**1. Retention.** Runs are pruned daily. A run is deleted only when it is outside the newest 10 for its `(sbom, plugin_name)` **and** older than 30 days (`plugins/retention.py`). The newest run of each pair is never deleted. Decision 6, "kept forever", no longer holds.
+
+**2. Where a result lives.** The plugin contract is unchanged: plugins return an `AssessmentResult`, and the framework decides where it is stored.
+
+- A **current** run (see 3) keeps its payload inline in `AssessmentRun.result`.
+- A **superseded** run's payload moves to object storage once it has been superseded for a day (`plugins/offload.py`, nightly). `result` becomes `NULL` and `result_object_key` names the run's own object. The row, its summary columns and its timestamps stay in Postgres.
+- The findings list is stored **once per distinct content**, in a shared object keyed by its SHA-256, and named by `result_findings_key`. The run's own object holds the rest of the payload. Fields a scanner restamps on every poll while the finding is unchanged (EPSS score and percentile) stay in the run's own object. The daily prune removes shared objects no run names any more.
+- Reading a moved run returns its original payload, `assessed_at` and EPSS included. Runs remain immutable records, and their identity is still the upload (`sbom.id`). Content addressing applies only to stored bytes, so the rejected alternative of keying results by content does not come back. The one sanctioned rewrite is the VEX re-annotation, which writes a new revision of a run's result through `result_store.save_result`.
+
+**3. What counts as current.** The definition above, "latest successful run per `(sbom_id, plugin_name, plugin_config_hash)`", is replaced. A run is current for its `(sbom, plugin_name, release set)` when it is the newest run, the newest completed run, or the newest completed run that was not skipped. A run whose releases are all covered by a newer completed run of the same SBOM and plugin is superseded (`plugins.latest`). `plugin_config_hash` stays on the run for audit and reproducibility, but no longer decides which run is current.
+
+**4. Reading results.** Code reads a run's payload through `result_store.load_result` (or `get_result` / `get_findings` for one stored object), never by assuming it is in the `result` column. Reading the column directly is correct only for a run known to be current, and new code should not rely on that.
+
+### What follows from it
+
+- History is kept for every run inside the retention window, and it costs one stored copy per distinct findings list rather than one per scan.
+- Postgres holds the current answer for each SBOM. Superseded payloads are in object storage, which the deployment already requires.
+- A reader that loads many superseded runs makes object-store requests. The drill-down fetches each shared findings list once, which is the pattern to follow.
+- Readers that still read the `result` column directly must move to `load_result` before any of them reads a superseded run.
 
 ## References
 

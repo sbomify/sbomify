@@ -1,0 +1,35 @@
+{% comment %}
+The band that appears above the table once a row is selected: how many rows
+are selected, a way to clear them, and the bulk actions in the slot. It reads
+the tableSelection state on the shell, so it goes inside the shell, after the
+toolbar and before the table.
+
+noun and plural name what the rows are, so the count reads "3 components"
+rather than "3 selected items". The actions are the page's: a bulk delete is
+a c-buttons.danger size="sm" with @click="confirmDelete()", which opens the
+shell's c-tables.bulk-delete dialog. Nothing in this band deletes on its own.
+
+The band is hidden while nothing is selected, and a hidden element announces
+nothing, so the count is also spoken from a status region that is always
+present.
+
+The padding is written px-4 py-3 rather than p-*, for the same reason as the
+toolbar: the public base's pre-Tailwind utilities.css carries !important p-*
+rules that would repad it there.
+{% endcomment %}
+<c-vars noun="item" plural="items" class />
+<span class="sr-only" role="status" x-text="count ? countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}') + ' selected' : ''"></span>
+<div x-show="count > 0"
+     x-cloak
+     data-bulk-bar
+     class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-surface))] border-b border-solid border-[color-mix(in_oklab,var(--color-primary)_25%,transparent)]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="flex flex-wrap items-center gap-3 min-w-0">
+        <span class="text-sm font-semibold text-text"
+              x-text="countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}') + ' selected'"></span>
+        {% with class="" %}
+            <c-buttons.ghost size="sm" @click="clear()">Clear selection</c-buttons.ghost>
+        {% endwith %}
+    </div>
+    <div class="flex flex-wrap items-center gap-2 min-w-0">{{ slot }}</div>
+</div>

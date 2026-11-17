@@ -1,26 +1,30 @@
 {% extends "core/public_base.htmx.j2" %}
 {% block title %}EU Declaration of Conformity - {{ product.name }}{% endblock %}
+{% block page_header %}
+    <c-branded.masthead>
+    {% comment %}
+    Two whole tags rather than an {% if %} in the href: the formatter breaks a
+    template tag inside an attribute across lines, and the newline would land
+    inside the URL.
+    {% endcomment %}
+    {% if is_custom_domain %}
+        <c-branded.back-link href="/product/{{ product.slug }}/">{{ product.name }}</c-branded.back-link>
+    {% else %}
+        <c-branded.back-link href="/public/product/{{ product.id }}/">{{ product.name }}</c-branded.back-link>
+    {% endif %}
+    <c-branded.page-header title="EU Declaration of Conformity" lede="{{ product.name }}">
+    <c-slot name="eyebrow">
+    <c-branded.badge brand>
+    <i class="fas fa-file-signature" aria-hidden="true"></i>Compliance
+    </c-branded.badge>
+    </c-slot>
+    </c-branded.page-header>
+    </c-branded.masthead>
+{% endblock %}
 {% block content %}
-    <div class="max-w-4xl mx-auto">
-        <div class="mb-6">
-            <a href="{% if is_custom_domain %}/product/{{ product.slug }}/{% else %}/public/product/{{ product.id }}/{% endif %}"
-               class="text-sm text-primary hover:underline">
-                <i class="fas fa-arrow-left mr-1"></i> Back to {{ product.name }}
-            </a>
-        </div>
-        <c-cards.card>
-        <c-slot name="header">
-        <div class="px-6 py-4 border-b border-border">
-            <h1 class="text-xl font-bold text-text flex items-center gap-2 m-0">
-                <i class="fas fa-file-signature text-primary"></i>
-                EU Declaration of Conformity
-            </h1>
-            <p class="text-sm text-text-muted mt-1">{{ product.name }}</p>
-        </div>
-        </c-slot>
-        <div class="prose prose-sm max-w-none dark:prose-invert prose-headings:text-text prose-p:text-text-secondary prose-strong:text-text prose-a:text-primary prose-li:text-text-secondary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
-            {{ doc_html }}
-        </div>
-        </c-cards.card>
+    <c-branded.surface flush>
+    <div class="px-8 py-8 max-sm:px-5 max-sm:py-6 prose prose-sm max-w-[72ch] dark:prose-invert prose-headings:text-text prose-p:text-text-secondary prose-strong:text-text prose-a:text-primary prose-li:text-text-secondary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
+        {{ doc_html }}
     </div>
+    </c-branded.surface>
 {% endblock %}

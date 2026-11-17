@@ -9,12 +9,17 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
 # The Trends filters a shared link may carry. The chart view rides in the URL
 # too, but only the browser reads that one, so it never reaches the fragment.
 TRENDS_URL_FILTERS = ("product_id", "release_id", "days")
+
+
+# The overview's replacement root, which refreshes itself on socket messages.
+OVERVIEW_TARGET = "overview-content"
 
 
 def trends_query(request: HttpRequest) -> str:
@@ -80,7 +85,10 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
-        result = build_dashboard_context(team.id) if team else None
+        # A live refresh comes from a socket message about a change, which the
+        # cached snapshot cannot yet reflect.
+        live_refresh = request.headers.get("HX-Target") == OVERVIEW_TARGET
+        result = build_dashboard_context(team.id, fresh=live_refresh) if team else None
         if result is not None and not result.ok:
             return HttpResponse(result.error, status=result.status_code or 400)
         dashboard = result.value if result and result.value else {"is_first_visit": True}
@@ -92,6 +100,17 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
             "dashboard": dashboard,
             "show_repository_setup": show_repository_setup,
         }
+
+        # The approval queue is read per request rather than from the cached
+        # snapshot: an approval elsewhere must take the count down at once, and
+        # whether the card shows at all depends on the reader, not the workspace.
+        if team and not show_repository_setup and can(request, "vex_submission:read", team):
+            from sbomify.apps.vulnerability_scanning.services.vex_submissions import pending_count
+
+            context["vex_review"] = {
+                "pending": pending_count(team.id),
+                "url": reverse("vulnerability_scanning:vulnerability_scans", args=[team.key]) + "?view=review",
+            }
 
         # An SBOM upload needs a BOM component. Without one, the empty state
         # links to component creation instead.

@@ -34,6 +34,7 @@ from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.core.services.trust_center_session import SESSION_HOST_KEY as TRUST_CENTER_SESSION_HOST_KEY
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.artifact_upload import ArtifactUploadView as ArtifactUploadView
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
@@ -60,15 +61,23 @@ from sbomify.apps.core.views.products_dashboard import ProductCreateView as Prod
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
+from sbomify.apps.core.views.release_details_private import ReleaseLifecycleView as ReleaseLifecycleView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
+from sbomify.apps.core.views.release_links import ReleaseLinksView as ReleaseLinksView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
 from sbomify.apps.core.views.search import SearchView as SearchView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoriesBulkDeleteView as SecurityAdvisoriesBulkDeleteView,
+)
 from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoriesDashboardView as SecurityAdvisoriesDashboardView,
 )
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableView as SecurityAdvisoriesTableView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryCreateView as SecurityAdvisoryCreateView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
+from sbomify.apps.core.views.security_advisories import (
+    SecurityAdvisoryProductReleasesView as SecurityAdvisoryProductReleasesView,
+)
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,
@@ -76,6 +85,7 @@ from sbomify.apps.core.views.trust_center_advisories import (
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoryDetailView as TrustCenterAdvisoryDetailView,
 )
+from sbomify.apps.core.views.trust_center_session import trust_center_sign_in_url
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
 from sbomify.apps.sboms.utils import get_product_sbom_package
 
@@ -121,6 +131,12 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     OIDC authorize URL (including callback and state) for us.
     """
 
+    # A Trust Center host cannot hold the app's session, so its readers sign in
+    # on the app domain and are handed back (see core/services/trust_center_session.py).
+    trust_center_url = trust_center_sign_in_url(request, request.GET.get("next"))
+    if trust_center_url:
+        return redirect(trust_center_url)
+
     login_path = reverse("openid_connect_login", args=["keycloak"])
     # Validate next parameter to prevent open redirect attacks
     # Only allow relative paths (must start with / and not contain ://)
@@ -152,7 +168,12 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        {
+            "id": str(token.id),
+            "description": token.description,
+            "scope_label": token.scope_label,
+            "created_at": token.created_at.isoformat(),
+        }
         for token in access_tokens_qs
     ]
 
@@ -401,13 +422,16 @@ def logout(request: HttpRequest) -> HttpResponse:
         # User is already logged out, redirect to login
         return redirect(reverse("core:keycloak_login"))
 
+    # Signing out of a Trust Center leaves the reader signed in to sbomify itself.
+    if request.session.get(TRUST_CENTER_SESSION_HOST_KEY):
+        django_logout(request)
+        return redirect("/")
+
     django_logout(request)
     # Redirect to Keycloak logout endpoint and then straight into its login page.
     # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    if hasattr(settings, "KEYCLOAK_PUBLIC_URL"):
-        base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")  # type: ignore[misc]
-    else:
-        base_url = settings.KEYCLOAK_SERVER_URL.rstrip("/")
+    # The browser follows this redirect, so it must be the browser-facing URL.
+    base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
     realm = settings.KEYCLOAK_REALM
     client_id = settings.KEYCLOAK_CLIENT_ID
 
@@ -509,10 +533,16 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         # reject any subsequent ``add()`` to this component. The clear MUST
         # happen before the team change.
         component.products.clear()
+        old_team_id = component.team_id
         component.team_id = team_id
         if not target_team.can_be_private():
             component.visibility = Component.Visibility.PUBLIC
         component.save()
+
+        # Its projects leave the old workspace's Dependency-Track tree; its save queued the new one's.
+        from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
+
+        queue_sync(old_team_id)
 
     messages.add_message(
         request,

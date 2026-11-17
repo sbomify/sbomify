@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -310,6 +311,9 @@ API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Outermost of ours: the database errors it answers for are raised in the
+    # middleware below as well as in views.
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
     # stashed on the request onto X-RateLimit-* headers.
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
@@ -328,6 +332,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -1066,6 +1071,11 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+# Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
+# directly (logout) rather than via OIDC discovery. Only needs setting when the
+# app reaches Keycloak at an address the browser cannot, e.g. an in-cluster
+# Service name. Empty counts as unset so a blank Helm/Compose value falls back.
+KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
 KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
 KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
@@ -1090,7 +1100,7 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
@@ -1104,6 +1114,13 @@ if _trust_center_raw:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
     # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
     TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
+
+# How long a public Trust Center page is kept to be served while the database is
+# unavailable (see core/stale_cache.py). 0 turns it off.
+TRUST_CENTER_STALE_CACHE_TTL = int(os.environ.get("TRUST_CENTER_STALE_CACHE_TTL", "86400"))
+# At most one rewrite of a page's stored copy per this many seconds.
+TRUST_CENTER_STALE_CACHE_REFRESH = int(os.environ.get("TRUST_CENTER_STALE_CACHE_REFRESH", "60"))
+TRUST_CENTER_STALE_CACHE_MAX_BYTES = int(os.environ.get("TRUST_CENTER_STALE_CACHE_MAX_BYTES", str(1024 * 1024)))
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
@@ -1390,6 +1407,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.compliance.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
@@ -1418,6 +1436,21 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
 
+# Installation telemetry: the installation usage report goes to its own PostHog
+# project, never the user analytics one above. The key is a write-only project
+# key, hardcoded so every installation reports to the same place without a
+# self-hoster configuring anything. TELEMETRY_ENABLED=False turns it off.
+TELEMETRY_POSTHOG_API_KEY = "phc_tt6dpYfx2yVK876BTJCBP5Xd6uZ95mrxmEyHvyE2UGq5"
+TELEMETRY_POSTHOG_HOST = "https://us.i.posthog.com"
+
+
+def telemetry_enabled(environ: Mapping[str, str]) -> bool:
+    """On unless TELEMETRY_ENABLED says otherwise. Off by default in CI, which sets CI."""
+    return _env_bool(environ.get("TELEMETRY_ENABLED") or None, not _env_bool(environ.get("CI"), False))
+
+
+TELEMETRY_ENABLED = telemetry_enabled(os.environ)
+
 # Integrations
 #
 # One OAuth client per provider, registered by whoever runs this deployment.
@@ -1437,3 +1470,10 @@ VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
 VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Token for the GitHub API calls the SBOM Verification plugin makes to fetch
+# attestations. Optional: without it every lookup shares GitHub's unauthenticated
+# limit of 60 requests an hour, which one release uploading several SBOMs can
+# use up. A fine-grained token with no repository access is enough, because the
+# attestations it reads belong to public repositories.
+GITHUB_API_TOKEN = os.environ.get("GITHUB_API_TOKEN", "")

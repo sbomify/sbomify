@@ -34,7 +34,7 @@ class Command(BaseCommand):
         rows = (
             AssessmentRun.objects.exclude(result_object_key="")
             .order_by("-created_at", "-id")
-            .values_list("id", "result_object_key")
+            .values_list("id", "result_object_key", "result_findings_key")
         )
         if options["limit"] is not None:
             if options["limit"] < 1:
@@ -43,10 +43,16 @@ class Command(BaseCommand):
 
         checked = 0
         missing: list[str] = []
-        for run_id, key in rows.iterator(chunk_size=batch_size):
+        shared_exists: dict[str, bool] = {}
+        for run_id, key, findings_key in rows.iterator(chunk_size=batch_size):
             checked += 1
             if not result_object_exists(key):
                 missing.append(f"{run_id} -> {key}")
+            if findings_key:
+                if findings_key not in shared_exists:
+                    shared_exists[findings_key] = result_object_exists(findings_key)
+                if not shared_exists[findings_key]:
+                    missing.append(f"{run_id} -> {findings_key}")
 
         for line in missing:
             self.stderr.write(self.style.ERROR(f"missing: {line}"))

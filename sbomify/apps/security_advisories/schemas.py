@@ -19,9 +19,14 @@ from datetime import datetime
 from typing import Any
 
 from ninja import Schema
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from sbomify.apps.core.schemas import PaginationMeta
+
+_CONTEXT_HELP = (
+    "What you changed and why, for the person approving it. Only read when the change waits for approval: "
+    "an AI agent token's write to a published advisory does, and answers 202 with the proposed change."
+)
 
 
 class AdvisoryProductSchema(Schema):
@@ -64,9 +69,37 @@ class AdvisoryEventSchema(Schema):
     kind: str
     body: str = ""
     actor: str = ""
+    channel: str = Field(
+        "",
+        description="How the change was sent: agent (an AI agent token), api (any other token), ci, "
+        "or blank for a change made in the app.",
+    )
+    token_id: str = Field("", description="The API token that made the change, when one did.")
     from_status: str | None = None
     to_status: str | None = None
     created_at: datetime
+    edited_at: datetime | None = Field(None, description="When the body was last edited, if it was.")
+
+
+class AdvisoryStatusSchema(Schema):
+    """What one vulnerability means for one product: the row the trust center and CSAF read."""
+
+    id: str
+    label: str = Field(description="The product, and the vulnerability when the advisory has several.")
+    product: str
+    product_id: str | None = Field(None, description="The sbomify product, when the row names one.")
+    vulnerability: str
+    vulnerability_id: str
+    status: str = Field(description="exploitable, not_affected, false_positive, in_triage or resolved.")
+    justification: str = ""
+    response: str = ""
+    impact_statement: str = ""
+    action_statement: str = ""
+    recommended_version: str = ""
+    recommended_release_id: str | None = None
+    fixed_version: str = Field("", description="The first version carrying the fix.")
+    fixed_release_id: str | None = None
+    affected_versions: list[str] = Field(default_factory=list)
 
 
 class AdvisorySchema(Schema):
@@ -97,6 +130,7 @@ class AdvisorySchema(Schema):
 
 class AdvisoryDetailSchema(AdvisorySchema):
     vulnerabilities: list[AdvisoryVulnerabilitySchema] = Field(default_factory=list)
+    statuses: list[AdvisoryStatusSchema] = Field(default_factory=list)
     references: list[AdvisoryReferenceSchema] = Field(default_factory=list)
     timeline: list[AdvisoryEventSchema] = Field(default_factory=list)
 
@@ -120,14 +154,63 @@ class UpdateAdvisorySchema(Schema):
     """A partial update: a field left out keeps its stored value.
 
     ``cvss_score`` and ``cvss_vector`` are one entry: sending ``cvss_score``
-    as null clears both, and a vector without a score is refused.
+    as null clears both, and a vector without a score is refused. A field this
+    endpoint does not write is a 422, not a 200 that stored nothing.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: str | None = Field(None, min_length=1, max_length=255)
     severity: str | None = None
     description: str | None = None
+    summary: str | None = Field(None, description="The one-paragraph summary the trust center leads with.")
     cvss_score: float | None = None
     cvss_vector: str | None = None
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class ProductStatusUpdateSchema(Schema):
+    """A partial update of a product status: only the fields sent are written.
+
+    ``fixed_version`` or ``fixed_release_id`` records the first version carrying
+    the fix, which is what the trust center and CSAF list as fixed. Unless a
+    recommendation is sent too, it also becomes what users are told to upgrade
+    to. Send an empty string or null to clear one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str | None = Field(None, description="exploitable, not_affected, false_positive, in_triage or resolved.")
+    justification: str | None = Field(None, description="Why a not_affected product is not affected.")
+    response: str | None = Field(
+        None, description="can_not_fix, will_not_fix, update, rollback or workaround_available."
+    )
+    impact_statement: str | None = None
+    action_statement: str | None = Field(None, description="What users should do. Shown to readers.")
+    recommended_version: str | None = None
+    recommended_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
+    fixed_version: str | None = None
+    fixed_release_id: str | None = Field(None, description="A release of this product. Not the floating latest.")
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class AddAdvisoryProductSchema(ProductStatusUpdateSchema):
+    """Name another product on an advisory, or more of its affected releases.
+
+    The status fields apply to the new product's rows. Without them it starts
+    under investigation, which a resolved advisory refuses.
+    """
+
+    product_id: str
+    affected_release_ids: list[str] = Field(
+        default_factory=list, description="Releases of this product that carry the vulnerability."
+    )
 
 
 class PublishAdvisorySchema(Schema):
@@ -144,7 +227,79 @@ class AdvisoryUpdateSchema(Schema):
         description="'update' for a note that moves nothing, or a remediation status: "
         "identified, investigating, fix_in_progress, resolved, wont_fix."
     )
-    note: str = ""
+    note: str = Field(
+        "",
+        description="Markdown. Headings, lists, bold, italic, code spans and http(s) or mailto links are rendered; "
+        "raw HTML is shown as text.",
+    )
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class EditAdvisoryUpdateSchema(Schema):
+    """A new body for an update already on the timeline.
+
+    The original text stays on record: the timeline is append-only, so the
+    edit is recorded alongside it and every reader shows the newest text.
+    """
+
+    note: str = Field(min_length=1, description="The update's new text, in Markdown.")
+    context: str = Field(
+        "",
+        description=_CONTEXT_HELP,
+    )
+
+
+class AdvisoryProposalChangeSchema(Schema):
+    label: str
+    before: str = ""
+    after: str = ""
+
+
+class AdvisoryProposalSchema(Schema):
+    """A change to a published advisory that waits for a person to approve it."""
+
+    id: str
+    kind: str = Field(
+        description="post_update, edit_update, edit_advisory, product_status or add_product: the write it holds."
+    )
+    status: str = Field(description="pending, approved, rejected or superseded.")
+    summary: str = Field(description="The change in one line.")
+    note: str = Field("", description="The text of a new or edited update, as it was applied when approved.")
+    changes: list[AdvisoryProposalChangeSchema] = Field(
+        default_factory=list, description="Each value it changes, as it stood when sent and as proposed."
+    )
+    context: str = ""
+    is_stale: bool = Field(False, description="Something it changes has been changed by someone else since.")
+    revised: bool = Field(False, description="The reviewer reworded the text before approving it.")
+    submitted_at: datetime
+    decided_at: datetime | None = None
+    decision_note: str = Field("", description="What the reviewer said when deciding: on a rejection, the specifics.")
+    rejection_reason: str = Field(
+        "",
+        description="Set on a rejection: inaccurate, premature, wording, duplicate or other. Branch on this.",
+    )
+    next_step: str = Field("", description="Set on a rejection: what to do about it, in a sentence.")
+
+
+class SentAdvisoryProposalSchema(AdvisoryProposalSchema):
+    advisory_id: str
+
+
+class ProposalDecisionSchema(Schema):
+    note: str | None = Field(
+        None, description="Approving only: the text to post instead of the proposed one, for an update."
+    )
+    reason: str = Field(
+        "",
+        description="Rejecting only, and required: inaccurate, premature, wording, duplicate or other. "
+        "The sender reads it back with a next step.",
+    )
+    decision_note: str = Field(
+        "", description="Why, for whoever sent the change. Required when rejecting: say what was wrong."
+    )
 
 
 class WithdrawAdvisorySchema(Schema):

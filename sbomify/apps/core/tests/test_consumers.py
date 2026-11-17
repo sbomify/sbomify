@@ -420,6 +420,81 @@ class TestBroadcastResilience:
         consumer.send_json.assert_awaited_once_with(payload)
 
 
+class TestMemberLosesAccess:
+    """Access is checked once, at connect. A ``member_updated`` broadcast about
+    this socket's own user is the only later signal that it no longer may read
+    the workspace, so the consumer closes on it with 1008 after forwarding it."""
+
+    @pytest.fixture
+    def consumer(self):
+        consumer = WorkspaceConsumer()
+        user = MagicMock()
+        user.is_authenticated = True
+        user.id = 42
+        consumer.scope = {"user": user, "url_route": {"kwargs": {"workspace_key": "ws"}}}
+        consumer.workspace_key = "ws"
+        consumer.send_json = AsyncMock()
+        consumer.close = AsyncMock()
+        return consumer
+
+    @staticmethod
+    def _event(**data):
+        return {"type": "workspace_message", "data": {"type": "member_updated", **data}}
+
+    @pytest.mark.asyncio
+    async def test_own_removal_is_forwarded_then_closes_the_socket(self, consumer):
+        event = self._event(user_id=42, action="removed")
+
+        await consumer.workspace_message(event)
+
+        consumer.send_json.assert_awaited_once_with(event["data"])
+        consumer.close.assert_awaited_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+
+    @pytest.mark.asyncio
+    async def test_a_string_user_id_still_matches(self, consumer):
+        await consumer.workspace_message(self._event(user_id="42", action="removed"))
+
+        consumer.close.assert_awaited_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+
+    @pytest.mark.asyncio
+    async def test_someone_elses_removal_leaves_the_socket_open(self, consumer):
+        await consumer.workspace_message(self._event(user_id=7, action="removed"))
+
+        consumer.send_json.assert_awaited_once()
+        consumer.close.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_added_member_leaves_the_socket_open(self, consumer):
+        await consumer.workspace_message(self._event(user_id=42, action="added"))
+
+        consumer.close.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_demotion_out_of_read_access_closes_the_socket(self, consumer):
+        consumer._check_workspace_membership = AsyncMock(return_value=False)
+
+        await consumer.workspace_message(self._event(user_id=42, action="role_changed"))
+
+        consumer._check_workspace_membership.assert_awaited_once()
+        consumer.close.assert_awaited_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+
+    @pytest.mark.asyncio
+    async def test_a_role_change_that_keeps_access_leaves_the_socket_open(self, consumer):
+        consumer._check_workspace_membership = AsyncMock(return_value=True)
+
+        await consumer.workspace_message(self._event(user_id=42, action="role_changed"))
+
+        consumer.close.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_socket_already_gone_does_not_raise_on_close(self, consumer):
+        consumer.close = AsyncMock(side_effect=RuntimeError("Cannot call send once a close message has been sent"))
+
+        await consumer.workspace_message(self._event(user_id=42, action="removed"))
+
+        consumer.close.assert_awaited_once()
+
+
 @pytest.mark.django_db
 class TestWorkspaceMembershipCheck:
     """The real membership check, not a mock.
@@ -438,9 +513,7 @@ class TestWorkspaceMembershipCheck:
         return raw(WorkspaceConsumer(), user, workspace_key)
 
     def _user(self, django_user_model, name):
-        return django_user_model.objects.create_user(
-            username=name, email=f"{name}@test.com", password="password"
-        )
+        return django_user_model.objects.create_user(username=name, email=f"{name}@test.com", password="password")
 
     def test_a_guest_cannot_listen_to_internal_workspace_events(self, django_user_model):
         """A guest is external. Holding a Member row is not permission to listen.

@@ -566,3 +566,21 @@ def test_link_tab_can_bind_selection_while_a_panel_loads(rendered: str) -> None:
     assert "data-[active=true]:bg-surface-hover" in link
     assert "data-[active=true]:text-text" in link
     assert 'role="tab"' not in link
+
+
+def test_live_badge_follows_its_socket_message(rendered: str) -> None:
+    badge = unescape(_open_tag(rendered, "span", "x-data=\"{ badge: '3' }\""))
+    assert 'x-show="badge"' in badge
+    assert 'x-text="badge"' in badge
+    assert "@ws:vex_submission_updated.window=\"badge = $event.detail.pending || ''\"" in badge
+    assert "text-xs tabular-nums text-text-muted" in badge
+
+
+def test_live_badge_renders_while_empty_so_a_count_can_appear(rendered: str) -> None:
+    link = unescape(_chunk(rendered, "a", 'data-probe="live-badge-empty"'))
+    assert "x-data=\"{ badge: '' }\"" in link
+    assert 'x-show="badge"' in link
+
+
+def test_a_static_badge_stays_static(rendered: str) -> None:
+    assert "@ws:" not in _chunk(rendered, "button", "Hand built")

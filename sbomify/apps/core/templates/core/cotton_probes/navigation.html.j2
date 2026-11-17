@@ -71,3 +71,5 @@ small context of lists and assert on the output; it is not routed anywhere.
 <c-navigation.segment ::data-active="chart === 'severity'" title="Severity breakdown">Severity</c-navigation.segment>
 </c-navigation.segmented>
 <c-navigation.tab href="/products/?view=components" active_binding="kind === 'components'" data-probe="live-link">Components</c-navigation.tab>
+<c-navigation.tab href="/review" badge="3" badge_event="vex_submission_updated" badge_field="pending" data-probe="live-badge">Review</c-navigation.tab>
+<c-navigation.tab href="/review" badge="" badge_event="vex_submission_updated" badge_field="pending" data-probe="live-badge-empty">Empty review</c-navigation.tab>

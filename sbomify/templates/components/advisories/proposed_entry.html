@@ -1,0 +1,38 @@
+{% comment %}
+An update an AI agent proposed, shown on the timeline where it would land once
+approved. The dashed rail and outline say it is not part of the record yet.
+This is a preview, not a place to decide: "Review" jumps to the change in the
+review list, which holds the diff, the agent's reasoning and the actions.
+
+item is a pending post_update row from proposals.proposal_row. last drops
+the rail below the entry, the same as a recorded entry at the end of the
+timeline.
+{% endcomment %}
+<c-vars item last />
+<div class="flex gap-4">
+    <div class="flex flex-col items-center">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-[color-mix(in_oklab,var(--color-accent)_55%,transparent)] text-accent-ink"
+              aria-hidden="true">
+            <i class="fas fa-robot text-xs"></i>
+        </span>
+        {% if not last %}<span class="my-1 w-0 flex-1 border-l border-dashed border-border"></span>{% endif %}
+    </div>
+    <div class="min-w-0 flex-1{% if not last %} pb-8{% endif %}">
+        <div class="flex flex-col gap-2 rounded-xl border border-dashed border-border px-4 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="flex min-w-0 flex-wrap items-center gap-2">
+                    <c-badges.warning size="sm">Awaiting review</c-badges.warning>
+                    {% if item.moves_to %}
+                        <c-badges.dynamic variant="{{ item.moves_to.variant }}" size="sm">{{ item.moves_to.label }}</c-badges.dynamic>
+                    {% endif %}
+                    <span class="truncate text-xs text-text-muted">
+                        {% if item.submitted_via %}"{{ item.submitted_via }}"{% else %}{{ item.submitted_by }}{% endif %}
+                    </span>
+                </span>
+                <a href="#proposal-{{ item.id }}"
+                   class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline">Review <i class="fas fa-arrow-up text-[10px]" aria-hidden="true"></i></a>
+            </div>
+            {% if item.note %}<c-typography.markdown :text="item.note" muted />{% endif %}
+        </div>
+    </div>
+</div>

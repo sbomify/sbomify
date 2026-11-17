@@ -5,17 +5,15 @@
 
    Expected assessment dict:
    - display_name: str
-   - category: str (attestation, compliance, security, license)
+   - category: str (attestation, compliance, license); security scans are never shown
    Optional citable facts (rendered when present, omitted when not):
    - standard_name, standard_version, standard_url: which standard was checked
    - pass_count, total_findings: how many checks passed
    - completed_at: when the passing run finished ("verified" date)
 {% endcomment %}
-{% if assessment %}
+{% if assessment and assessment.category != 'security' %}
     {% if assessment.category == 'attestation' %}
         {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-attestation" badge_icon="fa-certificate" status_phrase="Attestation verified" %}
-    {% elif assessment.category == 'security' %}
-        {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-security" badge_icon="fa-shield-halved" status_phrase="No known vulnerabilities in the latest scan" %}
     {% elif assessment.category == 'license' %}
         {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-license" badge_icon="fa-scale-balanced" status_phrase="All checks passed" %}
     {% else %}

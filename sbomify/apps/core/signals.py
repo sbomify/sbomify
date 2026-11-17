@@ -1,15 +1,48 @@
 from __future__ import annotations
 
+import contextvars
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
+from allauth.account.signals import user_signed_up
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models.signals import m2m_changed, post_delete, post_save
+from django.db.models.signals import m2m_changed, post_delete, post_migrate, post_save
 from django.dispatch import receiver
 
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
+
+
+def _schedule_latest_release_updated(release: Any, product: Any) -> None:
+    """Send ``release_updated`` for a latest release once the change commits.
+
+    ``product`` must carry its workspace (``select_related("team")``) so this
+    costs no query. Pages debounce the message, so the few one upload can send
+    repaint once.
+    """
+    from sbomify.apps.core.utils import broadcast_to_workspace
+
+    workspace_key = product.team.key
+    if not workspace_key:
+        return
+    data = {"release_id": str(release.id), "product_id": str(product.id), "name": release.name}
+    transaction.on_commit(
+        lambda: broadcast_to_workspace(workspace_key=workspace_key, message_type="release_updated", data=data)
+    )
+
+
+@receiver(user_signed_up)
+def queue_signed_up_event(sender: Any, request: Any, user: Any, **kwargs: Any) -> None:
+    """Have the browser send ``user:signed_up`` once it has identified the new user."""
+    from sbomify.apps.core.analytics import events
+    from sbomify.apps.core.posthog_service import queue_client_event
+
+    sociallogin = kwargs.get("sociallogin")
+    signup_method = sociallogin.account.provider if sociallogin else "email"
+    queue_client_event(request, events.USER_SIGNED_UP, {"signup_method": signup_method})
 
 
 @receiver(post_save, sender="sboms.SBOM")
@@ -65,7 +98,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
         # Get all products that contain this SBOM's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=sbom_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -73,6 +106,7 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
 
             # Add the SBOM to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(sbom_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added SBOM %s to latest release %s for product %s",
@@ -116,7 +150,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         # Get all products that contain this document's component
         # Cast to core.Component proxy model to access get_products method
         component = Component.objects.get(id=document_instance.component.id)
-        products = component.get_products()
+        products = component.get_products().select_related("team")
 
         for product in products:
             # Get or create latest release for this product
@@ -124,6 +158,7 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
 
             # Add the document to the latest release using the proper method that handles duplicates
             latest_release.add_artifact_to_latest_release(document_instance)
+            _schedule_latest_release_updated(latest_release, product)
 
             logger.info(
                 "Added Document %s to latest release %s for product %s",
@@ -200,7 +235,7 @@ def update_latest_release_on_product_components_changed(
 
     # Single query for all affected products instead of one .get() per id —
     # bulk add/remove can pass dozens of PKs in pk_set.
-    products_by_id = Product.objects.in_bulk(product_ids)
+    products_by_id = Product.objects.select_related("team").in_bulk(product_ids)
     for prod_id in product_ids:
         product = products_by_id.get(prod_id)
         if product is None:
@@ -208,6 +243,7 @@ def update_latest_release_on_product_components_changed(
         try:
             latest_release = Release.get_or_create_latest_release(product)
             latest_release.refresh_latest_artifacts()
+            _schedule_latest_release_updated(latest_release, product)
             logger.info(
                 "Refreshed latest release %s for product %s after component changes",
                 latest_release.id,
@@ -242,15 +278,17 @@ def bump_collection_version_on_artifact_added(sender: Any, instance: Any, create
 
 @receiver(post_save, sender="core.ReleaseArtifact")
 def pin_latest_vex_on_sbom_artifact_added(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
-    """When a component's SBOM is pinned to a release, pin its newest VEX too.
+    """When a component's SBOM is pinned to a release, pin the VEX written for its version.
 
     Covers every path that attaches SBOM artifacts (the Add Artifact dialog,
     the GitHub action's release tagging, latest-release maintenance) so a
-    release carries the component's exploitability statements without a manual
-    pin. A *manually* pinned VEX is a deliberate snapshot: it evicts any auto
-    pin for the same component and is never replaced automatically. Acts only
-    on bom_type='sbom' and manual bom_type='vex' rows — the auto pin this
-    creates matches neither branch, so it can't recurse.
+    release carries the exploitability statements made for the build it ships
+    without a manual pin. A VEX written for another version is never pinned:
+    its statements were verified against a different build. A *manually*
+    pinned VEX is a deliberate snapshot: it evicts any auto pin for the same
+    component and is never replaced automatically. Acts only on
+    bom_type='sbom' and manual bom_type='vex' rows — the auto pin this creates
+    matches neither branch, so it can't recurse.
     """
     if not created or not instance.sbom_id:
         return
@@ -265,14 +303,14 @@ def pin_latest_vex_on_sbom_artifact_added(sender: Any, instance: Any, created: A
         return
 
     try:
-        from sbomify.apps.core.services.vex_pins import ensure_latest_vex_pinned
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
         from sbomify.apps.sboms.models import SBOM
 
         sbom = SBOM.objects.select_related("component").filter(id=instance.sbom_id).first()
         if sbom is None:
             return
         if sbom.bom_type == SBOM.BomType.SBOM.value:
-            ensure_latest_vex_pinned(instance.release, sbom.component)
+            sync_vex_pins(instance.release, sbom.component)
         elif sbom.bom_type == SBOM.BomType.VEX.value and not instance.auto_pinned:
             # A hand-pinned VEX supersedes whatever sbomify auto-pinned for
             # this component on this release.
@@ -300,6 +338,31 @@ def bump_collection_version_on_artifact_removed(sender: Any, instance: Any, **kw
         pass
     except Exception:
         logger.error("Error bumping collection version for release %s", instance.release_id, exc_info=True)
+
+
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def sync_vex_pins_on_sbom_artifact_removed(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """When a component's SBOM leaves a release, drop the VEX pinned for its version.
+
+    Without this the release would keep listing a VEX written for a build it no
+    longer ships. Bulk operations manage their own VEX slots, as on the way in.
+    """
+    from sbomify.apps.core.models import Release, _suppress_collection_signals
+
+    if _suppress_collection_signals.get(False) or not instance.sbom_id:
+        return
+
+    try:
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component").filter(id=instance.sbom_id).first()
+        release = Release.objects.filter(pk=instance.release_id).first()
+        if sbom is None or release is None or sbom.bom_type != SBOM.BomType.SBOM.value:
+            return
+        sync_vex_pins(release, sbom.component)
+    except Exception:
+        logger.error("Error syncing VEX pins for release %s", instance.release_id, exc_info=True)
 
 
 @receiver(post_save, sender="sboms.SBOM")
@@ -451,3 +514,193 @@ def reject_cross_tenant_product_component_links(
                     f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
                     f"product team={product_team_id}"
                 )
+
+
+class _ReleasesToTell:
+    """The SBOMs and releases one transaction moved, told once it commits: one query, one message per release."""
+
+    def __init__(self) -> None:
+        self.sbom_ids: set[Any] = set()
+        self.release_ids: set[Any] = set()
+
+    def add(self, sbom_ids: list[Any], release_ids: list[Any] | None) -> None:
+        self.sbom_ids.update(sbom_ids)
+        self.release_ids.update(release_ids or [])
+
+    def __call__(self) -> None:
+        from django.db.models import Q
+
+        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.services.release_lifecycle import broadcast_releases_updated
+
+        releases = (
+            Release.objects.filter(Q(artifacts__sbom_id__in=self.sbom_ids) | Q(pk__in=self.release_ids))
+            .select_related("product__team")
+            .distinct()
+        )
+        for release in releases:
+            broadcast_releases_updated(release.product, [release])
+
+
+_releases_told_together: contextvars.ContextVar[_ReleasesToTell | None] = contextvars.ContextVar(
+    "_releases_told_together", default=None
+)
+
+
+@contextmanager
+def releases_told_together() -> Iterator[None]:
+    """Tell each release once for everything this block changes.
+
+    A create has no delete to share a notice with, so a block that rewrites
+    many pins one row at a time, like a latest release's refresh, would query
+    and broadcast once per row. The notice is queued as the block ends, in
+    whatever transaction is open, so it goes if that transaction rolls back.
+    """
+    if _releases_told_together.get() is not None:
+        yield
+        return
+    pending = _ReleasesToTell()
+    token = _releases_told_together.set(pending)
+    try:
+        yield
+    finally:
+        _releases_told_together.reset(token)
+        if pending.sbom_ids or pending.release_ids:
+            transaction.on_commit(pending, robust=True)
+
+
+def _tell_releases_shipping(sbom_ids: list[Any], also: list[Any] | None = None, origin: Any = None) -> None:
+    """Once this commits, send ``release_updated`` to every release still shipping these SBOMs, and ``also``.
+
+    Whether a retired release's SBOMs are still scanned is decided by the
+    other releases shipping them, by the live releases linking to it and by
+    the newest SBOM of each component, so a change to any of them moves what
+    its open page says. ``origin`` is the delete the change came from: every
+    call one cascade makes adds to the one notice it queued, so a delete
+    taking many shared SBOMs with it tells each release once. A notice no
+    longer queued, because it ran or rolled back, is never added to. Inside
+    ``releases_told_together`` every call adds to that block's notice.
+    """
+    together = _releases_told_together.get()
+    if together is not None:
+        together.add(sbom_ids, also)
+        return
+    pending = getattr(origin, "_releases_to_tell", None)
+    queued = transaction.get_connection().run_on_commit
+    if pending is not None and any(func is pending for _, func, _ in queued):
+        pending.add(sbom_ids, also)
+        return
+    pending = _ReleasesToTell()
+    pending.add(sbom_ids, also)
+    if origin is not None:
+        origin._releases_to_tell = pending
+    transaction.on_commit(pending, robust=True)
+
+
+@receiver(post_save, sender="core.ReleaseArtifact")
+@receiver(post_delete, sender="core.ReleaseArtifact")
+def tell_releases_sharing_an_sbom(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A release gaining or losing an SBOM, or being deleted, can start or stop it being scanned for the others.
+
+    The release itself is told too: losing its one untracked SBOM can leave the
+    rest of a retired release fully monitored, and an SBOM's own delete sends
+    only ``sbom_deleted``.
+    """
+    if instance.sbom_id and kwargs.get("created", True):
+        _tell_releases_shipping([instance.sbom_id], also=[instance.release_id], origin=kwargs.get("origin"))
+
+
+@receiver(post_delete, sender="core.ReleaseLink")
+def tell_releases_a_removed_link_kept_scanned(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """A live release linking to another kept it scanned, and the releases it links on, and those sharing their SBOMs.
+
+    Deleting the linking release takes the link with it, even when it ships no
+    SBOM of its own.
+    """
+    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    reached = [instance.linked_release_id, *releases_linked_from([instance.linked_release_id])]
+    shipped = list(
+        ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values_list("sbom_id", flat=True)
+    )
+    _tell_releases_shipping(shipped, also=reached, origin=kwargs.get("origin"))
+
+
+@receiver(post_save, sender="sboms.SBOM")
+def tell_releases_shipping_the_replaced_newest(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
+    """A new SBOM takes over as its component's newest of that format, which kept the one before it scanned."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if not created or instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    replaced = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .exclude(pk=instance.pk)
+        .order_by("-created_at", "-id")
+        .values_list("pk", flat=True)
+        .first()
+    )
+    if replaced:
+        _tell_releases_shipping([replaced])
+
+
+@receiver(post_delete, sender="sboms.SBOM")
+def tell_releases_shipping_the_new_newest(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Deleting a component's newest SBOM of a format makes the one before it the newest, scanned again."""
+    from sbomify.apps.sboms.models import SBOM
+
+    if instance.bom_type != SBOM.BomType.SBOM.value:
+        return
+    newest = (
+        SBOM.objects.filter(component_id=instance.component_id, format=instance.format, bom_type=SBOM.BomType.SBOM)
+        .order_by("-created_at", "-id")
+        .values_list("pk", "created_at")
+        .first()
+    )
+    if newest and newest[1] <= instance.created_at:
+        _tell_releases_shipping([newest[0]])
+
+
+@receiver(post_save, sender="core.User")
+@receiver(post_save, sender="teams.Workspace")
+@receiver(post_save, sender="sboms.Product")
+@receiver(post_save, sender="core.Product")
+@receiver(post_save, sender="sboms.Component")
+@receiver(post_save, sender="core.Component")
+def report_usage_on_create(sender: Any, instance: Any, created: bool, **kwargs: Any) -> None:
+    """Report the installation's size when a user, workspace, product or component is added.
+
+    ``core.Product`` and ``core.Component`` are proxies, and a save through a
+    proxy sends the signal from the proxy, so both senders are needed.
+    """
+    if not created or kwargs.get("raw"):
+        return
+
+    from sbomify.apps.core.tasks import schedule_installation_usage_report
+
+    schedule_installation_usage_report()
+
+
+@receiver(post_delete, sender="core.User")
+@receiver(post_delete, sender="teams.Workspace")
+@receiver(post_delete, sender="sboms.Product")
+@receiver(post_delete, sender="core.Product")
+@receiver(post_delete, sender="sboms.Component")
+@receiver(post_delete, sender="core.Component")
+def report_usage_on_delete(sender: Any, instance: Any, **kwargs: Any) -> None:
+    """Report the installation's size when a user, workspace, product or component is removed."""
+    from sbomify.apps.core.tasks import schedule_installation_usage_report
+
+    schedule_installation_usage_report()
+
+
+@receiver(post_migrate)
+def report_usage_on_migrate(sender: Any, **kwargs: Any) -> None:
+    """Report the installation's size on every deploy, so one nobody edits still reports."""
+    if getattr(sender, "label", None) != "core":
+        return
+
+    from sbomify.apps.core.tasks import schedule_installation_usage_report
+
+    schedule_installation_usage_report()

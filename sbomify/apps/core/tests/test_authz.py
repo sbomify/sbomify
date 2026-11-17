@@ -642,3 +642,22 @@ class TestTheOperatorCanReachWhatItMayDo:
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["component:manage"]
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["sbom:manage"]
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["artifact:publish"]
+
+
+@pytest.mark.parametrize(
+    ("scopes", "label"),
+    [
+        (None, "Full access"),
+        (authz.SCOPE_PRESETS["publish"], "Publish only"),
+        (["artifact:publish"], "Publish only"),
+        (authz.SCOPE_PRESETS["agent"], "AI agent"),
+        (["workspace:read", "vex_submission:create", "vex_submission:read"], "AI agent"),
+        (authz.SCOPE_PRESETS["read_only"], "Read-only"),
+        (["sbom:read"], "Read-only"),
+        (["component:read_internal", "component:access"], "Read-only"),
+        (["workspace:read", "component:create"], "Custom"),
+        ([], "Custom"),
+    ],
+)
+def test_scope_label_names_the_preset_a_token_was_made_with(scopes, label):
+    assert authz.scope_label(scopes) == label

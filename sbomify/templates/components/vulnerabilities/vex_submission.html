@@ -1,10 +1,12 @@
 {% comment %}
 One VEX ruling waiting for approval, as a row in the Review tab's list. The row
-says what it is in one line (the component, where it came from, how many
+says what it is in one line (the component and versions, where it came from, how many
 rulings, what approving would hide) and opens to the evidence: the
 submitter's notes, each ruling, the fix it links to, and anything the queue
-could not read from the file. Approve and Reject stay on the row so a reviewer
-never has to open one to decide it.
+could not read from the file. Rulings that say the same thing about the same
+vulnerability arrive merged, so a verdict and its reason read once, above the
+packages it covers, however many versions it was sent for. Approve and Reject
+stay on the row so a reviewer never has to open one to decide it.
 
 item is a row from services/vex_review.submission_row. decide_url is the
 review panel's decision endpoint; the row posts its own id to it. open starts
@@ -16,7 +18,7 @@ the note is offered where it matters instead of on every row.
 A list item: put it in a ul. Rows carry their own divider and drop it on the
 first, so the parent list needs no styling of its own.
 {% endcomment %}
-{% load humanize %}
+{% load humanize markdown_tags %}
 <c-vars item decide_url can_decide open />
 <li class="border-t border-solid border-border first:border-t-0"
     x-data="{ open: {{ open|yesno:'true,false' }} }">
@@ -32,6 +34,9 @@ first, so the parent list needs no styling of its own.
             <span class="min-w-0">
                 <span class="flex flex-wrap items-center gap-2">
                     <span class="font-semibold text-text">{{ item.component_name }}</span>
+                    {% if item.version_label %}
+                        <span class="text-sm text-text-muted" title="{{ item.versions|join:', ' }}">{{ item.version_label }}</span>
+                    {% endif %}
                     {% if item.from_agent %}
                         <c-badges.violet size="sm" class="gap-1"><i class="fas fa-robot" aria-hidden="true"></i>AI agent</c-badges.violet>
                     {% else %}
@@ -43,7 +48,7 @@ first, so the parent list needs no styling of its own.
         </button>
         {% if can_decide %}
             <div class="flex shrink-0 items-center gap-2 pl-[1.75rem] sm:pl-0">
-                <c-buttons.secondary size="sm" @click="$dispatch('vex-reject', { id: '{{ item.id|escapejs }}', name: '{{ item.component_name|escapejs }}' })">
+                <c-buttons.secondary size="sm" @click="$dispatch('vex-reject', { id: '{{ item.id|escapejs }}', name: '{{ item.display_name|escapejs }}' })">
                 Reject
                 </c-buttons.secondary>
                 <form method="post"
@@ -63,18 +68,39 @@ first, so the parent list needs no styling of its own.
          x-show="open"
          {% if not open %}x-cloak{% endif %}
          class="flex flex-col gap-3 pb-5 pl-[3.25rem] pr-5 max-sm:pl-5">
-        {% if item.context %}<p class="m-0 whitespace-pre-line break-words text-sm leading-relaxed text-text">{{ item.context }}</p>{% endif %}
+        {% if item.context %}
+            <div class="prose prose-sm max-w-none break-words text-text prose-headings:text-text prose-headings:text-base prose-p:text-text prose-strong:text-text prose-li:text-text prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
+                {{ item.context|strict_markdown }}
+            </div>
+        {% endif %}
         {% if item.rulings %}
             <ul class="m-0 list-none p-0">
                 {% for ruling in item.rulings %}
-                    <li class="grid grid-cols-1 gap-x-4 gap-y-0.5 border-t border-solid border-border py-2 text-sm sm:grid-cols-[11rem_10rem_minmax(0,1fr)]">
-                        <span class="font-mono text-xs leading-5 text-text">{{ ruling.vuln_id }}</span>
-                        <span class="text-text-muted">{{ ruling.package }}</span>
-                        <span class="text-text">
-                            {{ ruling.state }}
-                            {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
+                    <li class="flex flex-col gap-1.5 border-t border-solid border-border py-3">
+                        <span class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                            {% if ruling.url %}
+                                <a href="{{ ruling.url }}"
+                                   target="_blank"
+                                   rel="noopener"
+                                   class="font-mono text-xs text-primary hover:underline">{{ ruling.vuln_id }}</a>
+                            {% else %}
+                                <span class="font-mono text-xs text-text">{{ ruling.vuln_id }}</span>
+                            {% endif %}
+                            <span class="text-text">
+                                {{ ruling.state }}
+                                {% if ruling.reason %}<span class="text-text-muted">· {{ ruling.reason }}</span>{% endif %}
+                            </span>
                         </span>
-                        {% if ruling.detail %}<span class="text-xs text-text-muted sm:col-start-3">{{ ruling.detail }}</span>{% endif %}
+                        <ul class="m-0 flex list-none flex-wrap gap-1.5 p-0"
+                            aria-label="Packages">
+                            {% for package in ruling.packages %}
+                                <li class="max-w-full rounded-[var(--radius-sm)] border border-solid border-border px-2 py-0.5 text-xs">
+                                    <span class="font-medium text-text [overflow-wrap:anywhere]">{{ package.name }}</span>
+                                    {% if package.versions %}<span class="text-text-muted">{{ package.versions|join:", " }}</span>{% endif %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                        {% if ruling.detail %}<p class="m-0 text-xs text-text-muted [overflow-wrap:anywhere]">{{ ruling.detail }}</p>{% endif %}
                     </li>
                 {% endfor %}
             </ul>

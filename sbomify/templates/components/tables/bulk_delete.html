@@ -1,0 +1,71 @@
+{% comment %}
+The confirmation every bulk delete goes through. Nothing is deleted until a
+person reads what is about to go and presses the button that names it: the
+bulk bar's Delete only opens this dialog (confirmDelete()), and the dialog is
+the only thing that posts.
+
+It reads the tableSelection state on the shell, so it goes inside the shell
+like the bulk bar. The dialog names the count and lists the first five rows by
+name, then how many more, so a select-all that caught more than intended is
+visible before it is acted on. The delete button repeats the count
+("Delete 3 components"), because a button labelled only "Delete" confirms
+nothing.
+
+action is the URL the selection posts to, each selected id as one name field
+("ids" unless name says otherwise), with the CSRF token. Without htmx it is a
+plain form post and the page that answers decides where to go next. With htmx
+it posts in place: hx_target says what the response replaces, outerHTML unless
+hx_swap says otherwise (with no target nothing is swapped, for an endpoint that
+answers with a toast and a refresh trigger). A success empties the selection
+and closes the dialog, and a failure keeps both so the person can try again.
+The delete button disables itself once pressed, so a second press cannot post
+twice, and an htmx request in flight holds the dialog open until it answers.
+
+The rows are read once more as the form posts, and the dialog closes by itself
+if the selection changes while it is open, so it never posts a set other than
+the one it listed.
+
+The delete button finds its form through the dialog it sits in rather than a
+form="" id, so two selectable tables on one page cannot submit each other's
+selection. id is optional and only names the dialog; without it the dialog is
+labelled by aria-label.
+
+htmx turns the teleport off, for the reason in modal.html: HTMX wires hx-* on
+the DOM it can see, and a teleported dialog is still inside its <template>
+when that happens, so the form would fall back to a native submit.
+{% endcomment %}
+<c-vars id="" action name="ids" noun="item" plural="items" htmx hx_target hx_swap warning="This cannot be undone." />
+{# djlint:off #}
+<c-modal id="{{ id }}" show="confirmingDelete" close="cancelDelete()" role="alertdialog" size="sm" title="Delete {{ plural }}" icon="fas fa-trash" teleport="{% if htmx %}false{% else %}true{% endif %}" aria-label="Delete {{ plural }}" style="--chip-accent: var(--color-danger)">
+{# djlint:on #}
+<form data-bulk-delete-form
+      class="flex flex-col gap-3"
+      @pageshow.window="pageRestored($event)"
+      {% if htmx %}hx-post="{{ action }}" hx-swap="{% if hx_swap %}{{ hx_swap }}{% elif hx_target %}outerHTML{% else %}none{% endif %}"{% if hx_target %} hx-target="{{ hx_target }}"{% endif %} @htmx:before-request="if (!startDelete(true)) $event.preventDefault()" @htmx:after-request="deleteFinished($event.detail.successful)"{% else %}method="post" action="{{ action }}" @submit="if (!startDelete()) $event.preventDefault()"{% endif %}>
+    {% csrf_token %}
+    <template x-for="rowId in selected" :key="rowId">
+        <input type="hidden" name="{{ name }}" :value="rowId">
+    </template>
+    <p class="text-sm text-text m-0">
+        Delete <strong x-text="countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}')"></strong>?
+    </p>
+    <ul class="flex flex-col gap-0.5 mb-0 mt-0 pl-0 list-none text-sm text-text">
+        <template x-for="(rowLabel, index) in selectedLabels.slice(0, 5)" :key="index">
+            <li class="truncate font-medium" x-text="rowLabel"></li>
+        </template>
+        <li class="text-text-muted"
+            x-show="selectedLabels.length > 5"
+            x-text="'and ' + $number(selectedLabels.length - 5) + ' more'"></li>
+    </ul>
+    <p class="text-xs text-text-muted m-0">{{ warning }}</p>
+</form>
+<c-slot name="footer">
+{% with class="" %}
+    <c-buttons.secondary @click="cancelDelete()" ::disabled="inFlight">Cancel</c-buttons.secondary>
+    <c-buttons.danger data-bulk-delete-confirm ::disabled="submitting" @click="$el.closest('[role=alertdialog]').querySelector('form[data-bulk-delete-form]').requestSubmit()">
+    <i class="fas fa-trash" aria-hidden="true"></i>
+    <span x-text="'Delete ' + countOf('{{ noun|escapejs }}', '{{ plural|escapejs }}')">Delete</span>
+    </c-buttons.danger>
+{% endwith %}
+</c-slot>
+</c-modal>

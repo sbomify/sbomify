@@ -128,6 +128,10 @@ class Finding:
     # None (not False) so to_dict drops it: only stale findings carry the key,
     # keeping stored results compact on large scans.
     analysis_stale: bool | None = None
+    # True when the suppression covers the whole component rather than this
+    # package, so the triage dialog reopens it in component scope. None (not
+    # False) so to_dict drops it, like analysis_stale.
+    analysis_component_wide: bool | None = None
 
     # Common optional fields
     remediation: str | None = None

@@ -325,8 +325,8 @@ def test_product_details_hides_links_when_empty(public_team, public_product):
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Links panel should not be shown when empty (panel title is "Resources & links")
-    assert "Resources &amp; links" not in content
+    # Links panel should not be shown when empty (panel title is "Resources and links")
+    assert "Resources and links" not in content
 
 
 @pytest.mark.django_db
