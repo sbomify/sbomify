@@ -14,6 +14,7 @@ from ninja.types import DictStrAny
 from sbomify.apis import UTCZRenderer
 from sbomify.apps.tea.apis import router
 from sbomify.apps.tea.mappers import TEA_API_VERSION
+from sbomify.backend_outage import unavailable_backend
 from sbomify.logging import getLogger
 
 log = getLogger(__name__)
@@ -92,7 +93,13 @@ Endpoints can be accessed via:
 
 @tea_api.exception_handler(Exception)
 def tea_global_exception_handler(request: HttpRequest, exc: Exception) -> HttpResponse:
-    """Catch unhandled exceptions and return a generic 500 response."""
+    """Catch unhandled exceptions and return a generic 500 response.
+
+    A backend outage is re-raised, so ``BackendUnavailableMiddleware`` answers
+    it with a 503 the client can retry, like every other endpoint.
+    """
+    if unavailable_backend(exc) is not None:
+        raise exc
     log.exception("Unhandled TEA API error: %s", exc)
     return tea_api.create_response(request, {"error": "Internal server error"}, status=500)
 

@@ -36,6 +36,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import (
+    is_backend_outage_traceback,
     is_benign_shielded_future_error,
     is_on_demand_tls_ask_denial,
     redact_access_log_secrets,
@@ -312,7 +313,11 @@ API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    # Outermost of ours: the database errors it answers for are raised in the
+    # Turns a 500 caused by an unreachable Postgres or Redis into a 503 with
+    # Retry-After. Outside the stale cache so a Trust Center page is replayed
+    # first, and only what that cannot answer becomes a 503.
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
+    # Outermost of the rest: the database errors it answers for are raised in the
     # middleware below as well as in views.
     "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
@@ -851,6 +856,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -936,6 +942,13 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_on_demand_tls_ask_denial(record),
         },
+        # A request or task that failed because Postgres or Redis was
+        # unreachable writes its own traceback, once per request in flight. The
+        # shared outage line already said it, throttled, so these are dropped.
+        "suppress_backend_outage_tracebacks": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_backend_outage_traceback(record),
+        },
         # Keeps the first line of each distinct fault per five-minute window and
         # drops the repeats, so an outage that lasts is still reported for as
         # long as it lasts. Same throttle the Sentry before_send hook applies,
@@ -950,7 +963,11 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
-            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
+            "filters": [
+                "suppress_on_demand_tls_ask_denials",
+                "suppress_backend_outage_tracebacks",
+                "throttle_self_healing_notices",
+            ],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
