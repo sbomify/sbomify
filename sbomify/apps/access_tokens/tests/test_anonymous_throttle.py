@@ -172,14 +172,38 @@ class TestTheBackendGoingDown:
 
     def test_the_outage_is_logged_once_per_window_not_once_per_request(self, mocker):
         """The old 500 was the alert, so silence would hide the outage. A log
-        per refusal would replace one problem with a log storm."""
+        per refusal would replace one problem with a log storm.
+
+        An unreachable Redis goes through the shared outage line every other
+        caller uses, so it is throttled and kept out of Sentry the same way."""
         self._unreachable(mocker)
+        reported = mocker.patch(
+            "sbomify.apps.access_tokens.throttling.report_backend_outage", return_value="redis"
+        )
         logged = mocker.patch("sbomify.apps.access_tokens.throttling.logger")
         throttle = AnonymousIPRateThrottle()
 
         for _ in range(5):
             throttle.allow_request(_request())
 
+        assert reported.call_count == 1
+        assert logged.exception.call_count == 0
+
+    def test_a_fault_that_is_not_an_outage_keeps_its_own_report(self, mocker):
+        """An OOM or a read-only replica is a fault, not Redis being away, and
+        the shared outage line must not swallow it."""
+        from django_redis.exceptions import ConnectionInterrupted
+        from redis.exceptions import ResponseError
+
+        oom = ConnectionInterrupted(connection=None)
+        oom.__cause__ = ResponseError("OOM command not allowed")
+        mocker.patch(
+            "sbomify.apps.access_tokens.throttling.caches",
+            new={"throttle": mocker.Mock(get=mocker.Mock(side_effect=oom))},
+        )
+        logged = mocker.patch("sbomify.apps.access_tokens.throttling.logger")
+
+        assert AnonymousIPRateThrottle().allow_request(_request()) is False
         assert logged.exception.call_count == 1
 
     def test_the_token_throttle_refuses_the_same_way(self, mocker):

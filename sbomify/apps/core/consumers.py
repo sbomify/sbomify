@@ -10,9 +10,9 @@ from typing import Any
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
-from django.db import DatabaseError
 
 from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY
+from sbomify.backend_outage import report_backend_outage
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -119,12 +119,14 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
-        # Verify the user may read this workspace's internal activity. The
-        # database going away here is the same outage as above.
+        # Verify the user may read this workspace's internal activity. With
+        # Postgres unreachable this cannot be answered, so the client is told to
+        # come back (1012) rather than the exception escaping the consumer.
         try:
             is_member = await self._check_workspace_membership(user, self.workspace_key)
-        except DatabaseError as exc:
-            logger.warning(f"WebSocket membership check failed for workspace {self.workspace_key}: {exc!r}")
+        except Exception as exc:
+            if report_backend_outage(exc, "websocket connect") is None:
+                raise
             await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
         if not is_member:
@@ -146,8 +148,9 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         try:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
         except Exception as exc:
-            logger.warning(f"WebSocket group join failed for workspace {self.workspace_key}: {exc!r}")
-            logger.debug("group_add traceback", exc_info=True)
+            if report_backend_outage(exc, "websocket group join") is None:
+                logger.warning(f"WebSocket group join failed for workspace {self.workspace_key}: {exc!r}")
+                logger.debug("group_add traceback", exc_info=True)
             await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
 

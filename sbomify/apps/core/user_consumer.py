@@ -15,6 +15,7 @@ from typing import Any
 from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION, WS_CLOSE_SERVICE_RESTART, WorkspaceConsumer
 from sbomify.apps.core.utils import user_group_name
 from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY
+from sbomify.backend_outage import report_backend_outage
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -49,5 +50,6 @@ class UserConsumer(WorkspaceConsumer):
         try:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
         except Exception as exc:
-            logger.warning(f"User WebSocket group join failed: {exc!r}")
+            if report_backend_outage(exc, "websocket group join") is None:
+                logger.warning(f"User WebSocket group join failed: {exc!r}")
             await self._reject(WS_CLOSE_SERVICE_RESTART)

@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock
 
+import psycopg2
 import pytest
 from channels.auth import UserLazyObject
 from django.db import OperationalError
@@ -116,11 +117,11 @@ class TestTheConsumersCloseForRetry:
 
     @pytest.mark.asyncio
     async def test_the_membership_check_failing_is_an_outage_too(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            WorkspaceConsumer,
-            "_check_workspace_membership",
-            AsyncMock(side_effect=OperationalError("timeout expired")),
-        )
+        # Django wraps the driver's error, and the driver's message is what says
+        # Postgres is unreachable rather than the query being wrong.
+        refused = OperationalError("connection refused")
+        refused.__cause__ = psycopg2.OperationalError("connection refused")
+        monkeypatch.setattr(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(side_effect=refused))
 
         sent = await _drive(WorkspaceConsumer, "/ws/workspace/ws-key/", {"workspace_key": "ws-key"}, user=_User())
 
