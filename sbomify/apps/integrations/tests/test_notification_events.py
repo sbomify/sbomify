@@ -165,6 +165,31 @@ class TestTheProducersCallIn:
         assert result.ok, result.error
         assert ("vex", result.value.id) in queued
 
+    def test_a_submission_is_announced_once_not_again_when_its_impact_lands(
+        self, component, connected_slack, queued, django_capture_on_commit_callbacks
+    ):
+        """The queue broadcast repeats when the impact is stored; the channel hears about the ruling once."""
+        from sbomify.apps.vulnerability_scanning.services.vex_submissions import (
+            create_submission,
+            parse_decisions,
+            record_impact,
+        )
+
+        _route(connected_slack, Event.VEX_SUBMISSIONS)
+        parsed = parse_decisions(
+            [{"vuln_id": "CVE-2026-0001", "state": "not_affected", "justification": "code_not_reachable"}],
+            channel=VexSubmission.Channel.AGENT,
+        )
+        assert parsed.ok, parsed.error
+
+        with django_capture_on_commit_callbacks(execute=True):
+            result = create_submission(component=component, parsed=parsed.value, channel=VexSubmission.Channel.AGENT)
+        with django_capture_on_commit_callbacks(execute=True):
+            record_impact(result.value.id)
+
+        assert VexSubmission.objects.get(id=result.value.id).preview
+        assert queued.count(("vex", result.value.id)) == 1
+
     def test_a_scan_announces_only_what_is_new_to_the_component(
         self, component, connected_slack, queued, django_capture_on_commit_callbacks
     ):
