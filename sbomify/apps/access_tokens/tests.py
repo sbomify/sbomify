@@ -1464,11 +1464,46 @@ def test_an_expired_oidc_token_stays_at_info(sample_user, token_log):  # noqa: F
     assert '"reason": "expired"' in records[-1][2]
 
 
-def test_the_gzip_probe_logs_a_bad_token_at_info_only(token_log):
+def test_the_gzip_probe_records_a_bad_token_as_one_audit_warning(token_log):
+    """The middleware refuses the request before the view's auth runs, so the
+    probe is the only place this rejection can be recorded."""
     from sbomify.apps.core.middleware import _carries_signed_token
 
     request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION="Bearer not-a-jwt")
 
     assert _carries_signed_token(request) is False
 
-    assert [(name, level) for name, level, _ in token_log()] == [("sbomify.apps.access_tokens.utils", logging.INFO)]
+    records = token_log()
+    assert [(name, level) for name, level, _ in records] == [
+        ("sbomify.apps.access_tokens.utils", logging.INFO),
+        ("sbomify.audit.token_auth", logging.WARNING),
+    ]
+    assert '"reason": "decode"' in records[-1][2]
+    assert '"attempted_action": "POST /api/v1/sboms/upload"' in records[-1][2]
+
+
+@pytest.mark.django_db
+def test_the_gzip_probe_records_an_expired_token_at_info(sample_user, token_log):  # noqa: F811
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+    from sbomify.apps.core.middleware import _carries_signed_token
+
+    expired = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+    request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION=f"Bearer {expired}")
+
+    assert _carries_signed_token(request) is False
+
+    records = token_log()
+    assert [level for _, level, _ in records] == [logging.INFO, logging.INFO]
+    assert '"reason": "expired"' in records[-1][2]
+
+
+@pytest.mark.django_db
+def test_the_gzip_probe_records_nothing_for_a_good_token(sample_user, token_log):  # noqa: F811
+    """A token that passes is left for the view's auth to record, once."""
+    from sbomify.apps.core.middleware import _carries_signed_token
+
+    token = create_personal_access_token(sample_user)
+    request = RequestFactory().post("/api/v1/sboms/upload", HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    assert _carries_signed_token(request) is True
+    assert token_log() == []

@@ -643,17 +643,30 @@ def _carries_signed_token(request: HttpRequest) -> bool:
     audience on an OIDC token. It reads no database row, so a revoked token still
     passes here; the view's own auth refuses it after the middleware inflates the
     body. A full check here would record every authentication twice.
+
+    A token that fails here is refused before the view's auth ever sees it, so
+    this records that rejection as the ``token_auth`` audit event itself, the same
+    event (and level) the view would have written.
     """
+    import jwt
     from jwt.exceptions import DecodeError
 
-    from sbomify.apps.access_tokens.utils import decode_personal_access_token
+    from sbomify.apps.access_tokens.utils import _emit_token_auth_event, decode_personal_access_token
 
     scheme, _, token = request.META.get("HTTP_AUTHORIZATION", "").partition(" ")
-    if scheme.casefold() != "bearer" or not token.strip():
+    token = token.strip()
+    if scheme.casefold() != "bearer" or not token:
         return False
     try:
-        decode_personal_access_token(token.strip())
-    except DecodeError:
+        decode_personal_access_token(token)
+    except DecodeError as e:
+        _emit_token_auth_event(
+            "failure",
+            token=token,
+            reason="expired" if isinstance(e.__cause__, jwt.ExpiredSignatureError) else "decode",
+            source_ip=get_client_ip(request),
+            attempted_action=f"{request.method} {request.path}",
+        )
         return False
     return True
 
