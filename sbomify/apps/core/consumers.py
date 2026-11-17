@@ -11,6 +11,7 @@ from typing import Any
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
 
+from sbomify.apps.core.ws_auth import AUTH_UNAVAILABLE_SCOPE_KEY
 from sbomify.backend_outage import report_backend_outage
 from sbomify.logging import getLogger
 
@@ -103,6 +104,12 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
                 await self._reject(WS_CLOSE_SERVICE_RESTART)
             except Exception:
                 logger.debug("close after failed accept also failed", exc_info=True)
+            return
+
+        # The session could not be read, so whether this client may connect is
+        # unknown: an outage, not a verdict about the client.
+        if self.scope.get(AUTH_UNAVAILABLE_SCOPE_KEY):
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
 
         # Check if user is authenticated
