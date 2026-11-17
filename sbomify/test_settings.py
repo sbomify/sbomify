@@ -60,6 +60,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -161,6 +162,7 @@ DJANGO_VITE = {
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
     "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
     "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
