@@ -16,6 +16,10 @@ from django.template.loader import render_to_string
 WARNING_INK = "text-warning"
 
 
+#: The re-run URL as the button writes it: escapejs turns the hyphen into \u002D, which the browser reads back.
+DT_RERUN = "/dependency\\u002Dtrack/rerun"
+
+
 def _run(**overrides) -> dict:
     run = {
         "id": "run1",
@@ -249,7 +253,7 @@ def test_a_vulnerability_scan_is_offered_no_rerun():
     html = _card(scan, standard, sbom_id="sbom1", can_rerun=True)
 
     assert "/sbom1/pqc/rerun" in html
-    assert "/dependency-track/rerun" not in html
+    assert DT_RERUN not in html
     assert 'id="plugin-dependency-track"' not in html
 
 
@@ -323,3 +327,28 @@ def test_a_completed_scan_error_shows_what_the_scanner_said():
 
     run["result"]["findings"] = []
     assert scorecard_for_run(run)["caption"] == "The scanner reported an error."
+
+
+@pytest.mark.parametrize(("status", "offered"), [("completed", True), ("failed", True), ("pending", False)])
+def test_a_dependency_track_scan_with_no_result_offers_a_reimport(status, offered):
+    """A scan that gave up on "still processing" had nothing else to start it again."""
+    run = _run(status=status)
+    run["result"] = {
+        "summary": {"total_findings": 1, "pass_count": 0, "fail_count": 0, "warning_count": 0, "error_count": 1},
+        "findings": [{"id": "dependency-track:error", "title": "Check did not finish", "status": "error"}],
+    }
+
+    html = _card(run, sbom_id="sbom1", can_rerun=True)
+
+    assert (f"/sbom1{DT_RERUN}" in html) is offered
+    assert ("Re\\u002Dimport" in html) is offered
+    if offered:
+        assert "Send this SBOM to Dependency Track again" in html
+
+
+def test_a_reader_who_cannot_rerun_is_offered_no_reimport():
+    run = _run(status="failed")
+
+    html = _card(run, sbom_id="sbom1", can_rerun=False)
+
+    assert DT_RERUN not in html

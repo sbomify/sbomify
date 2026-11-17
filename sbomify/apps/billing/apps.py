@@ -55,6 +55,22 @@ def install_bounded_http_client(configured: object) -> float:
     return timeout
 
 
+def use_maintained_ca_bundle() -> str:
+    """Verify Stripe against certifi, the trust store every other HTTPS call here uses.
+
+    stripe-python verifies api.stripe.com against a CA file it ships itself,
+    frozen at each library release. That copy still trusted the emSign roots
+    after Mozilla, Wolfi and certifi distrusted them, so the Stripe connection
+    accepted certificates the rest of the app rejects. certifi follows those
+    decisions and is updated through the lockfile.
+    """
+    import certifi
+    import stripe
+
+    stripe.ca_bundle_path = certifi.where()
+    return stripe.ca_bundle_path
+
+
 class BillingConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sbomify.apps.billing"
@@ -82,3 +98,6 @@ class BillingConfig(AppConfig):
         # unreachable Stripe took the whole section past the edge's own limit
         # and returned 504 instead of rendering from stored billing data.
         install_bounded_http_client(getattr(settings, "STRIPE_TIMEOUT_SECONDS", None))
+
+        # Before any request: the client reads the path on every call.
+        use_maintained_ca_bundle()

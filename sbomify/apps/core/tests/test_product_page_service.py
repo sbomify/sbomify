@@ -54,6 +54,7 @@ def test_product_metrics_remain_unfiltered_and_releases_use_their_own_artifacts(
         "components": 4,
         "artifacts": 3,
         "open": 1,
+        "suppressed": 0,
         "past_sla": 0,
         "unassessed": 1,
         "unmeasured_open": False,

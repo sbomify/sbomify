@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import pytest
 from django.test import Client
 from django.urls import reverse
-from ninja import Schema
+from ninja import NinjaAPI, Schema
 
 from sbomify.api_schema_variants import ERROR_CODE_RENAMES, VENDORED_MARKER, SchemaVariants
 from sbomify.apis import api, api_v2
@@ -88,8 +88,25 @@ class TestBothVersionsMount:
         )
         first_mount = next(i for i, line in enumerate(source) if line.startswith("for _prefix, _dotted in MOUNTS:"))
 
-        assert line_of("api = NinjaAPI(") < first_mount
-        assert line_of("api_v2 = NinjaAPI(") < first_mount
+        assert line_of("api = CachedSchemaNinjaAPI(") < first_mount
+        assert line_of("api_v2 = CachedSchemaNinjaAPI(") < first_mount
+
+    @pytest.mark.parametrize("target", [api, api_v2], ids=["v1", "v2"])
+    def test_the_openapi_document_is_built_once_and_handed_out_as_a_copy(self, target, mocker):
+        """Generating it costs about a second; serving it should not.
+
+        A caller editing the dict it got must not change what the next request
+        is served, so each call returns a copy of the cached document.
+        """
+        target._openapi_schema_cache.clear()
+        build = mocker.spy(NinjaAPI, "get_openapi_schema")
+
+        first = target.get_openapi_schema()
+        first["paths"].clear()
+        second = target.get_openapi_schema()
+
+        assert build.call_count == 1
+        assert second["paths"]
 
     def test_no_operation_was_lost_except_the_internal_router(self, v1_schema, v2_schema):
         """Every v1 operation exists in v2, minus /internal, which is excluded.

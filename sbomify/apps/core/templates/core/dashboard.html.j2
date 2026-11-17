@@ -20,15 +20,17 @@
         inventory item came or went. The view rebuilds the snapshot for that
         request rather than serving the cached copy. The wait is longer than on
         other pages because an upload settles several scans in a burst, and
-        the overview should repaint once after it, not once per scan.
+        the overview should repaint once after it, not once per scan. A VEX
+        decision arrives on its own, after the reviewer has acted, so it
+        repaints sooner: the reviewer is the one watching for it.
         {% endcomment %}
-        <c-layout.frame id="overview-content" hx-get="{{ request.get_full_path }}" hx-trigger="refresh-overview from:body" hx-select="#overview-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window="if (['assessment_complete', 'vex_reapplied', 'vex_submission_updated', 'sbom_uploaded', 'sbom_deleted', 'product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-overview')), 2000); }">
+        <c-layout.frame id="overview-content" hx-get="{{ request.get_full_path }}" hx-trigger="refresh-overview from:body" hx-select="#overview-content" hx-swap="morph" hx-disinherit="hx-select hx-swap" @ws:message.window="if (['assessment_complete', 'vex_reapplied', 'vex_submission_updated', 'sbom_uploaded', 'sbom_deleted', 'product_created', 'product_updated', 'product_deleted', 'component_created', 'component_updated', 'component_deleted', 'resync'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-overview')), ['vex_reapplied', 'vex_submission_updated'].includes($event.detail.type) ? 500 : 2000); }">
         <c-overview.header subtitle="{{ page_subtitle }}" />
         <div role="group"
              class="grid grid-cols-2 xl:grid-cols-4 gap-3"
              aria-label="Key metrics">
             {# djlint:off #}
-            <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" />
+            <c-layout.stat-card :value="dashboard.metrics.open" :unmeasured="dashboard.metrics.unmeasured_open" unmeasured_label="Not scanned yet" label="Open vulnerability occurrences" icon="fas fa-bullseye" note="{% if dashboard.metrics.suppressed %}{{ dashboard.metrics.suppressed|intcomma }} more suppressed by VEX{% endif %}" />
             <c-layout.stat-card :value="dashboard.metrics.past_sla" :unmeasured="dashboard.metrics.unmeasured_past_sla" unmeasured_label="Not scanned yet" label="Past patch SLA" icon="fas fa-clock" accent="danger" />
             <c-layout.stat-card :value="dashboard.metrics.known_exploited" :unmeasured="dashboard.metrics.unmeasured_known_exploited" unmeasured_label="Not scanned yet" label="Known exploited occurrences" icon="fas fa-triangle-exclamation" accent="danger" />
             {% if vex_review %}

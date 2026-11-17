@@ -96,6 +96,13 @@ class AccessToken(models.Model):
         return f"{self.user_id} - {self.description}"
 
     @property
+    def scope_label(self) -> str:
+        """The token's type as the settings UI names it: Full access, Publish only, AI agent, Read-only or Custom."""
+        from sbomify.apps.core.authz import scope_label
+
+        return scope_label(self.scopes)
+
+    @property
     def is_expired(self) -> bool:
         """True once a token with a set ``expires_at`` is past it; False when ``expires_at`` is NULL (never expires)."""
         return self.expires_at is not None and timezone.now() >= self.expires_at

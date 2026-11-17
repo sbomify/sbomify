@@ -27,6 +27,7 @@
     {% else %}
         <c-dropdowns.item compact icon="far fa-user" href="{% url 'core:settings' %}">My account settings</c-dropdowns.item>
     {% endif %}
+    <c-dropdowns.item compact icon="fas fa-key" href="{% url 'core:trust_center_access' %}">Trust Center access</c-dropdowns.item>
     <c-chrome.theme-picker />
     <c-dropdowns.divider />
     <c-dropdowns.header role="presentation">Help</c-dropdowns.header>

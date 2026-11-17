@@ -15,9 +15,12 @@ options is a list built in the view, each {value, label, icon, variant,
 disabled}, where variant is the badge family the tile wears and reaches
 c-layout.choice as its accent. With no options the group renders its slot, so a
 page can write the tiles by hand.
+
+error is c-forms.field's too: a group the server refused shows why under it,
+like any other field.
 {% endcomment %}
-<c-vars name options selected label hint required class />
-<c-forms.field label="{{ label }}" hint="{{ hint }}" :required="required" class="{{ class }}">
+<c-vars name options selected label hint required error class />
+<c-forms.field label="{{ label }}" hint="{{ hint }}" error="{{ error }}" :required="required" class="{{ class }}">
 <div class="flex flex-wrap gap-2"
      role="radiogroup"
      {% if label %}aria-label="{{ label }}"{% endif %}

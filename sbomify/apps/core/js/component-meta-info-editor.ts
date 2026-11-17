@@ -1,5 +1,6 @@
 import Alpine from './alpine-init';
 import { getCsrfToken } from './csrf';
+import { isHttpUrl } from './utils';
 import type { ContactProfile, ComponentMetaInfo } from './types';
 import {
     ComponentEvents,
@@ -55,7 +56,8 @@ export function registerComponentMetaInfoEditor() {
             // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
             release_date: null,
             end_of_support: null,
-            end_of_life: null
+            end_of_life: null,
+            vcs_url: null
         } as ComponentMetaInfo,
         contactProfiles: props.contactProfiles || [],
         selectedProfileId: props.metadata?.contact_profile_id || '',
@@ -63,7 +65,8 @@ export function registerComponentMetaInfoEditor() {
             supplier: {} as Record<string, string>,
             authors: {} as Record<string, string>,
             licenses: {} as Record<string, string>,
-            lifecycle_phase: null as string | null
+            lifecycle_phase: null as string | null,
+            vcs_url: null as string | null
         },
         isSaving: false,
         hasUnsavedChanges: false,
@@ -111,7 +114,8 @@ export function registerComponentMetaInfoEditor() {
             const hasAuthorErrors = Object.keys(this.validationErrors.authors).length > 0;
             const hasLicenseErrors = Object.keys(this.validationErrors.licenses).length > 0;
             const hasLifecycleErrors = this.validationErrors.lifecycle_phase !== null;
-            return !hasSupplierErrors && !hasAuthorErrors && !hasLicenseErrors && !hasLifecycleErrors;
+            const hasVcsErrors = this.validationErrors.vcs_url !== null;
+            return !hasSupplierErrors && !hasAuthorErrors && !hasLicenseErrors && !hasLifecycleErrors && !hasVcsErrors;
         },
 
         init() {
@@ -312,6 +316,13 @@ export function registerComponentMetaInfoEditor() {
             }
         },
 
+        validateVcsUrl() {
+            const url = (this.metadata.vcs_url || '').trim();
+            this.validationErrors.vcs_url = url && !isHttpUrl(url)
+                ? 'Enter an http:// or https:// URL'
+                : null;
+        },
+
         isValidEmail(email: string): boolean {
             if (!email) return true;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -359,7 +370,8 @@ export function registerComponentMetaInfoEditor() {
                     // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
                     release_date: this.metadata.release_date,
                     end_of_support: this.metadata.end_of_support,
-                    end_of_life: this.metadata.end_of_life
+                    end_of_life: this.metadata.end_of_life,
+                    vcs_url: (this.metadata.vcs_url || '').trim() || null
                 };
 
                 const response = await fetch(`/api/v1/components/${this.componentId}/metadata`, {
