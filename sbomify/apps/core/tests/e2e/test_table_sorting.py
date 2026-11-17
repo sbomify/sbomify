@@ -229,6 +229,16 @@ def test_release_picker_sorts_independently_of_the_release_table(
     expect(main.locator('[data-table-sort="created_at"]')).to_have_attribute("data-sort", "asc")
     expect(main.locator('[data-table-sort="name"]')).to_have_attribute("data-sort", "none")
     picker.get_by_role("checkbox", name="Select Zulu artifact", exact=True).check()
+    # Every box is drawn whole: no box between it and its cell clips it.
+    assert picker.locator("input[type=checkbox]").evaluate_all("""boxes => boxes.every(box => {
+        const rect = box.getBoundingClientRect();
+        for (let node = box.parentElement; node && node.tagName !== 'TABLE'; node = node.parentElement) {
+            if (getComputedStyle(node).overflow === 'visible') continue;
+            const clip = node.getBoundingClientRect();
+            if (rect.left < clip.left || rect.right > clip.right) return false;
+        }
+        return true;
+    })""")
     sort_with_keyboard(picker, "name", geometry(picker))
     expect(picker.locator("tbody tr").first).to_contain_text("Alpha artifact")
     expect(picker.get_by_role("checkbox", name="Select Zulu artifact", exact=True)).to_be_checked()

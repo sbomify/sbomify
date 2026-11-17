@@ -256,8 +256,21 @@ def test_nowrap_cell_holds_the_name_on_one_line_and_caps_it(rendered: str) -> No
     ending in an ellipsis.
     """
     cell = _element_holding(rendered, "td", "Nowrap body cell")
-    assert '<div class="truncate max-w-[24rem]">Nowrap body cell</div>' in cell
+    assert '<div class="truncate max-w-[24rem] *:truncate">Nowrap body cell</div>' in cell
     assert "whitespace-nowrap" not in cell
+
+
+def test_nowrap_cell_ends_every_stacked_line_in_its_own_ellipsis(rendered: str) -> None:
+    """A description under the name is its own block, so it needs its own ellipsis.
+
+    text-overflow only marks text overflowing the box it is set on. With the
+    truncation on the wrapper alone, a long description inherited nowrap, ran
+    past its block and was clipped mid letter by the wrapper with no ellipsis.
+    """
+    cell = _element_holding(rendered, "td", 'data-probe="stacked-description"')
+    wrapper = cell.split('<div class="truncate max-w-[24rem] *:truncate">', 1)
+    assert len(wrapper) == 2, "the nowrap wrapper does not give its children an ellipsis"
+    assert 'data-probe="stacked-description"' in wrapper[1]
 
 
 def test_name_line_lets_the_name_give_way_and_keeps_the_trail_whole(rendered: str) -> None:
@@ -582,6 +595,9 @@ class _Tree(HTMLParser):
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         node = _Node(tag, (dict(attrs).get("class") or "").split())
         self.stack[-1].children.append(node)
+        # Alpine fills an x-text element in the browser: it shows text all the same.
+        if "x-text" in dict(attrs):
+            node.children.append(_Node("#text", text=dict(attrs)["x-text"] or ""))
         if tag not in self.VOID:
             self.stack.append(node)
 
@@ -671,6 +687,7 @@ def test_the_nowrap_guard_catches_a_badge_after_the_name() -> None:
     for body in (
         '<a x-text="name"></a><div class="hidden sm:block mt-1"><c-badges.warning>Doc</c-badges.warning></div>',
         "<c-badges.primary>Product override</c-badges.primary>",
+        '<a :href="url"><span x-text="id"></span><i class="fas fa-external-link-alt"></i></a><span x-text="id"></span>',
     ):
         parser = _Tree()
         parser.feed(body)

@@ -28,7 +28,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.core.authz import ADMINISTER
+from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryAddProductForm, AdvisoryCreateForm
@@ -344,6 +344,8 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if not result.ok or result.value is None:
             raise Http404("Advisory not found")
 
+        from sbomify.apps.compliance.services.report_service import advisory_reporting
+
         advisory = result.value
         current_team = request.session.get("current_workspace") or {}
         can_write = _can_write_advisories(request)
@@ -383,6 +385,8 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 # Real VEX candidates need the linking pass; an empty list renders
                 # the section's own empty state rather than inventing documents.
                 "vex_candidates": [],
+                "cra_reporting": advisory_reporting(team, advisory["pk"]),
+                "can_manage_cra_reports": bool(can(request, "cra_report:manage", team)),
             },
         )
 

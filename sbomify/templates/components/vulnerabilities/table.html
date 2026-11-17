@@ -31,7 +31,7 @@
         </c-tables.cell>
         <c-tables.cell nowrap>
         <c-tables.name>
-        {% with vuln_url=vuln.id|advisory_url %}
+        {% with vuln_url=vuln.id|advisory_url:vuln.aliases %}
             {% if vuln_url %}
                 <a href="{{ vuln_url }}"
                    target="_blank"

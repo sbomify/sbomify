@@ -153,7 +153,7 @@
                 View advisory
                 </c-dropdowns.item>
                 <template x-if="advisory.publication_status !== 'draft'">
-                    <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id='__PK__' %}'.replace('__PK__', advisory.pk), window.location.origin).href)">
+                    <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id='__ID__' %}'.replace('__ID__', advisory.id), window.location.origin).href)">
                     Copy public link
                     </c-dropdowns.item>
                 </template>

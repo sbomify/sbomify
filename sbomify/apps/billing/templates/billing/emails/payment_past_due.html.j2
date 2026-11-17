@@ -1,5 +1,5 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Payment Past Due{% endblock %}
+{% block title %}Payment past due{% endblock %}
 {% block content %}
     <h1>Payment past due</h1>
     <p>Hi {{ user_name }},</p>
@@ -8,6 +8,6 @@
         Please update your payment information to avoid any service interruption.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ action_url }}" class="button">Update Payment Information</a>
+        <a href="{{ action_url }}" class="button">Update payment information</a>
     </p>
 {% endblock %}

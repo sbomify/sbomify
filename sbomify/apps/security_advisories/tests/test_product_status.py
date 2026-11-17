@@ -667,7 +667,10 @@ class TestTheRepairEndToEnd:
         }
 
         page = client.get(
-            reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": drafted.id})
+            reverse(
+                "core:advisory_details_public",
+                kwargs={"workspace_key": team.key, "advisory_id": drafted.tracking_id},
+            )
         ).content.decode()
         assert "Under investigation" not in page
         assert "Fixed" in page
