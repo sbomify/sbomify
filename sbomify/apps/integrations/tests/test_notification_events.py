@@ -321,5 +321,5 @@ class TestMessages:
         message = messages.new_vulnerabilities_message(component, rows)
 
         listing = message.blocks[3]["text"]["text"]
-        assert listing.count("CVERecord") == messages.MAX_LISTED
+        assert listing.count("* high") == messages.MAX_LISTED
         assert "15 more" in listing
