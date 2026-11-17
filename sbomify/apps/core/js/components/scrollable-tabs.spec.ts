@@ -43,10 +43,10 @@ afterEach(() => {
     observed.splice(0);
 });
 
-function setup(refs: Record<string, unknown>) {
+function setup(refs: Record<string, unknown>, root = new FakeElement()) {
     const ticks: (() => void)[] = [];
     const tabs = Object.assign(scrollableTabs(), {
-        $root: new FakeElement() as unknown as HTMLElement,
+        $root: root as unknown as HTMLElement,
         $refs: refs,
         $nextTick: (callback: () => void) => { ticks.push(callback); },
     });
@@ -66,6 +66,22 @@ describe('scrollable tabs', () => {
         refs.tabItems = new FakeElement();
         ticks.splice(0).forEach(tick => tick());
         expect(observed).toEqual([tabs.$root, refs.scroller, refs.tabItems]);
+    });
+
+    test('finds a row that arrives after Alpine has cached $refs', () => {
+        // Alpine builds $refs on first read and never rebuilds it, so refs added later
+        // are only in the DOM.
+        const late: Record<string, FakeElement> = {};
+        const root = Object.assign(new FakeElement(), {
+            querySelector: (selector: string) => late[/x-ref="(\w+)"/.exec(selector)?.[1] ?? ''] ?? null,
+        });
+        const { tabs, ticks } = setup({}, root);
+
+        tabs.init?.();
+        late.scroller = new FakeElement();
+        late.tabItems = new FakeElement();
+        ticks.splice(0).forEach(tick => tick());
+        expect(observed).toEqual([root, late.scroller, late.tabItems]);
     });
 
     test('stays inert when the row never arrives', () => {

@@ -29,9 +29,15 @@ export function scrollableTabs(): AlpineComponent<ScrollableTabs> {
             this.observe(true);
         },
 
-        /** The row's elements, or null while a morph has not put them in place. */
+        /**
+         * The row's elements, or null while a morph has not put them in place.
+         * Alpine builds `$refs` on first read and never rebuilds it, so a row added
+         * after that is looked up in the DOM.
+         */
         rows() {
-            const { scroller, tabItems } = this.$refs;
+            const find = (name: string) => this.$refs[name] ?? this.$root.querySelector(`[x-ref="${name}"]`);
+            const scroller = find('scroller');
+            const tabItems = find('tabItems');
             if (!(scroller instanceof HTMLElement) || !(tabItems instanceof HTMLElement)) return null;
             return { scroller, tabItems };
         },
