@@ -359,3 +359,52 @@ def test_the_declared_version_is_described_for_any_document(document: bytes, exp
     from sbomify.apps.plugins.builtins.osv import _declared_spec_version
 
     assert _declared_spec_version(document) == expected
+
+
+@pytest.fixture
+def osv_log(caplog):
+    """The records osv.py writes. ``sbomify`` does not propagate to caplog's root handler."""
+    import logging
+
+    from sbomify.apps.plugins.builtins import osv as osv_module
+
+    parent = logging.getLogger("sbomify")
+    parent.addHandler(caplog.handler)
+    caplog.set_level(logging.DEBUG, logger=osv_module.logger.name)
+    try:
+        yield lambda: [(r.levelno, r.getMessage()) for r in caplog.records if r.name == osv_module.logger.name]
+    finally:
+        parent.removeHandler(caplog.handler)
+
+
+def test_each_refusal_is_one_info_record_naming_the_sbom_and_version(
+    plugin: OSVPlugin, sbom_file, osv_log, caplog
+) -> None:
+    import logging
+
+    sbom_file.write_text('{"bomFormat": "CycloneDX", "specVersion": "1.6.1", "components": []}')
+
+    with patch("subprocess.run", return_value=_scanner_exiting(127, stderr=REAL_REJECTION)):
+        plugin.assess("first-sbom", sbom_file)
+        first = osv_log()
+        caplog.clear()
+        plugin.assess("second-sbom", sbom_file)
+        second = osv_log()
+
+    for records, sbom_id in ((first, "first-sbom"), (second, "second-sbom")):
+        refusals = [(level, message) for level, message in records if "spec version" in message]
+        assert [level for level, _ in refusals] == [logging.INFO]
+        assert sbom_id in refusals[0][1]
+        assert "specVersion='1.6.1'" in refusals[0][1]
+        assert [message for level, message in records if level >= logging.WARNING] == []
+
+
+def test_any_other_scanner_failure_is_still_one_error_record(plugin: OSVPlugin, sbom_file, osv_log, caplog) -> None:
+    """Logged with arguments, so Sentry groups every SBOM that hits it on one template."""
+    import logging
+
+    with patch("subprocess.run", return_value=_scanner_exiting(127, stderr="osv-scanner: command not found")):
+        plugin.assess("test-sbom", sbom_file)
+
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR and r.msg == "[OSV] Scanner returned code %s: %s"]
+    assert [r.getMessage() for r in errors] == ["[OSV] Scanner returned code 127: osv-scanner: command not found"]
