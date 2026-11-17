@@ -1,8 +1,10 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect, mock, beforeEach, afterAll } from 'bun:test';
 import { craSharedMock } from './cra-shared.mock';
 
 // No DOM here: the component only touches window.parseJsonScript and window.open.
-const win = ((globalThis as unknown as { window?: object }).window ??= {}) as {
+const page = globalThis as unknown as { window?: object };
+const ownWindow = !page.window;
+const win = (page.window ??= {}) as {
   parseJsonScript?: (id: string) => unknown;
   open?: (url: string) => null;
 };
@@ -53,6 +55,11 @@ function stubPage(lastExport: unknown): void {
 function bundleFile(text: string): File {
   return new File([text], 'cra-package-acme-abc.zip.sigstore.json', { type: 'application/json' });
 }
+
+// A window left behind has no location, which breaks a later spec that reads one.
+afterAll(() => {
+  if (ownWindow) delete page.window;
+});
 
 beforeEach(() => {
   calls = [];

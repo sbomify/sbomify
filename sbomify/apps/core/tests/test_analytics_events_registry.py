@@ -42,7 +42,7 @@ class TestRegistryInvariants:
                 assert prop_desc, f"event {spec.name!r} property {prop_name!r} has no description"
 
     def test_distinct_id_kind_is_valid(self) -> None:
-        valid_kinds = {"workspace", "user", "system"}
+        valid_kinds = {"workspace", "user", "system", "installation"}
         for spec in events.all_events():
             assert spec.distinct_id_kind in valid_kinds, (
                 f"event {spec.name!r} has invalid distinct_id_kind {spec.distinct_id_kind!r}"
@@ -176,6 +176,8 @@ class TestCoverageOfShippedEvents:
         # vulnerability_scanning:*
         "vulnerability_scan:initiated",
         "vulnerability_scan:completed",
+        # installation:*
+        "installation:usage_reported",
     }
 
     def test_every_shipped_event_is_registered(self) -> None:

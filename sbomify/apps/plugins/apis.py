@@ -931,6 +931,10 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
         sbom_id=sbom.id,
         plugin_name=plugin_name,
         run_reason=RunReason.MANUAL.value,
+        # The workspace's settings for the plugin, as the upload and the
+        # scheduled scans pass them. Without them a Dependency Track re-run
+        # ignores the server the workspace pinned and picks one from the pool.
+        config=settings.get_plugin_config(plugin_name) or None,
         triggered_by_user_id=user.id if user is not None and user.is_authenticated else None,
     )
     announce_assessment_started(
