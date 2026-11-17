@@ -75,6 +75,7 @@ dependencies = [
     "mcp>=1.28.1,<2",
     "django-cotton>=2.7.2",
     "fastjsonschema>=2.22.2",
+    "univers>=32.0.1,<33",
 ]
 
 [project.urls]

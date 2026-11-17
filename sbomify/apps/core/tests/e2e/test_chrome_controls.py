@@ -172,6 +172,8 @@ def test_chrome_menus(authenticated_page: Page, width: int, theme: str) -> None:
     expect(menu.get_by_role("menuitem", name="My account settings")).to_be_focused()
     expect(menu.get_by_role("menuitem", name="API tokens")).to_have_count(0)
     page.keyboard.press("ArrowDown")
+    expect(menu.get_by_role("menuitem", name="Trust Center access")).to_be_focused()
+    page.keyboard.press("ArrowDown")
     expect(menu.get_by_role("menuitemradio", name="Light", exact=True)).to_be_focused()
     page.keyboard.press("Escape")
     expect(menu).to_be_hidden()
@@ -328,6 +330,7 @@ def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Pag
     ) == [
         # API tokens left this menu for the rail; the rove is what this pins.
         "My account settings",
+        "Trust Center access",
         "Light",
         "Dark",
         "Auto",
@@ -337,6 +340,7 @@ def test_account_menu_arrow_keys_reach_the_theme_control(authenticated_page: Pag
     ]
 
     for role, name in (
+        ("menuitem", "Trust Center access"),
         ("menuitemradio", "Light"),
         ("menuitemradio", "Dark"),
         ("menuitemradio", "Auto"),

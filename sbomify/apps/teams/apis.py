@@ -48,6 +48,8 @@ from sbomify.apps.teams.schemas import (
     ContactProfileUpdateSchema,
     InvitationCreateSchema,
     InvitationSchema,
+    MemberRoleSchema,
+    MemberRoleUpdateSchema,
     MemberSchema,
     PendingInvitationSchema,
     SupplierCreateSchema,
@@ -61,6 +63,7 @@ from sbomify.apps.teams.schemas import (
     UserSchema,
 )
 from sbomify.apps.teams.services.invitations import invite_member, list_invitations, revoke_invitation
+from sbomify.apps.teams.services.members import change_member_role
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
     delete_supplier,
@@ -1795,6 +1798,29 @@ def delete_workspace_supplier(request: HttpRequest, team_key: str, supplier_id: 
     if not result.ok:
         return result.status_code or 400, {"detail": result.error}
     return 204, None
+
+
+@router.patch(
+    "/{team_key}/members/{member_id}",
+    response={200: MemberRoleSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_workspace_member_role(
+    request: HttpRequest, team_key: str, member_id: int, payload: MemberRoleUpdateSchema
+) -> tuple[int, Any]:
+    """Change a member's role. Guests and trusted-publisher bots are not changed here."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+    if payload.role == ROLE_OWNER and not can(request, "member:grant_owner", team):
+        return 403, {"detail": "Only workspace owners can make someone an owner.", "error_code": ErrorCode.FORBIDDEN}
+
+    result = change_member_role(request.user, team, member_id, payload.role)
+    if not result.ok or result.value is None:
+        error: dict[str, Any] = {"detail": result.error}
+        if result.status_code == 403:
+            error["error_code"] = ErrorCode.FORBIDDEN
+        return result.status_code or 400, error
+    return 200, {"id": result.value.id, "user_id": result.value.user_id, "role": result.value.role}
 
 
 def _invitation_payload(invitation: Invitation) -> dict[str, Any]:

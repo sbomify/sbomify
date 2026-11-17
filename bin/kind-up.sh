@@ -13,7 +13,7 @@
 # There is no ingress controller: the chart runs Caddy as the cluster edge,
 # which is what lets workspace custom domains get certificates on demand.
 #
-# PostgreSQL, Redis, SeaweedFS and Keycloak are NOT part of the chart. They are
+# PostgreSQL, Valkey, SeaweedFS and Keycloak are NOT part of the chart. They are
 # applied separately from deploy/local/dependencies.yaml, mirroring how you
 # would point the chart at managed services in production.
 set -euo pipefail
@@ -99,11 +99,17 @@ kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace
 log "Provisioning local backing services (not part of the chart)"
 kubectl -n "${NAMESPACE}" apply -f "${LOCAL_DIR}/dependencies.yaml"
 
-# The migration hook runs before any ordinary resource, so PostgreSQL and Redis
+# A cluster reused from before the switch to Valkey still runs the old Redis
+# StatefulSet next to the new one. Nothing points at it any more; remove it and
+# its volume, which Valkey could not load anyway.
+kubectl -n "${NAMESPACE}" delete statefulset,service sbomify-dev-redis --ignore-not-found
+kubectl -n "${NAMESPACE}" delete pvc data-sbomify-dev-redis-0 --ignore-not-found
+
+# The migration hook runs before any ordinary resource, so PostgreSQL and Valkey
 # have to be serving before `helm install` starts.
-log "Waiting for PostgreSQL, Redis and SeaweedFS"
+log "Waiting for PostgreSQL, Valkey and SeaweedFS"
 kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-postgresql --timeout=300s
-kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-redis --timeout=300s
+kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-valkey --timeout=300s
 kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-s3 --timeout=300s
 
 # ---------------------------------------------------------------------------
