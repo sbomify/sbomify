@@ -56,6 +56,12 @@ depends on its scope:
   history into, or no funnel can say which pages led to the signup.
 * ``"system"`` — for events fired from background context with no
   workspace (rare). ``distinct_id`` is the literal string ``"system"``.
+* ``"installation"`` — for events about the installation as a whole.
+  ``distinct_id`` is the installation id and
+  ``groups={"installation": installation_id}``.
+
+Every event also carries an ``installation_id`` property, which
+``posthog_service`` adds on its way out. It is not listed per event.
 """
 
 from __future__ import annotations
@@ -67,7 +73,7 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-DistinctIdKind = Literal["workspace", "user", "system"]
+DistinctIdKind = Literal["workspace", "user", "system", "installation"]
 
 
 @dataclass(frozen=True)
@@ -739,5 +745,23 @@ VULNERABILITY_SCAN_COMPLETED = _register(
             "plugin": "Plugin that ran the scan.",
             "status": "Final assessment status (completed / failed / etc.).",
         },
+    )
+)
+
+# --- Installation events -------------------------------------------------------
+
+INSTALLATION_USAGE_REPORTED = _register(
+    EventSpec(
+        name="installation:usage_reported",
+        description="How large this installation is. Sent when its size changes, and on deploy.",
+        distinct_id_kind="installation",
+        properties={
+            "user_count": "Number of user accounts.",
+            "workspace_count": "Number of workspaces.",
+            "product_count": "Number of products across all workspaces.",
+            "component_count": "Number of components across all workspaces.",
+            "sbomify_version": "Version of sbomify the installation runs.",
+        },
+        pii_notes="Counts only. No names, keys or anything identifying a workspace.",
     )
 )

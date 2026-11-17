@@ -13,6 +13,9 @@ logger = getLogger(__name__)
 _lock = threading.Lock()
 _client: Any = None
 _initialized = False
+_installation_id = ""
+_telemetry_client: Any = None
+_telemetry_initialized = False
 
 
 #: The tenant word in event names. ``team:*`` is emitted beside ``workspace:*``
@@ -62,6 +65,107 @@ def _get_client() -> Any:
             _initialized = True
 
     return _client
+
+
+def _get_telemetry_client() -> Any:
+    """Lazy-initialize the client for the telemetry project. Returns None when disabled.
+
+    Telemetry goes to its own PostHog project with its own hardcoded key, so it
+    never shares a client, key or host with the user analytics above.
+    """
+    global _telemetry_client, _telemetry_initialized
+    if _telemetry_initialized:
+        return _telemetry_client
+
+    with _lock:
+        if _telemetry_initialized:
+            return _telemetry_client
+
+        if not is_telemetry_enabled():
+            _telemetry_initialized = True
+            return None
+
+        try:
+            from posthog import Posthog
+
+            _telemetry_client = Posthog(  # type: ignore[no-untyped-call]
+                settings.TELEMETRY_POSTHOG_API_KEY,
+                host=settings.TELEMETRY_POSTHOG_HOST,
+            )
+        except Exception:
+            logger.exception("Failed to initialize the telemetry PostHog client")
+            _telemetry_client = None
+        _telemetry_initialized = True
+
+    return _telemetry_client
+
+
+def is_telemetry_enabled() -> bool:
+    """Return True if installation telemetry is on and has a key."""
+    return bool(getattr(settings, "TELEMETRY_ENABLED", False) and getattr(settings, "TELEMETRY_POSTHOG_API_KEY", ""))
+
+
+def capture_telemetry(
+    distinct_id: str,
+    event: str,
+    properties: dict[str, Any] | None = None,
+    *,
+    groups: dict[str, str] | None = None,
+) -> None:
+    """Send an installation telemetry event to the telemetry project. No-op when disabled.
+
+    Every event carries the installation id and the running sbomify version.
+    """
+    client = _get_telemetry_client()
+    if client is None:
+        return
+
+    try:
+        from sbomify.apps.core.analytics.events import validate_payload
+
+        for warning in validate_payload(event, properties):
+            logger.warning("PostHog event registry drift: %s", warning)
+    except Exception:
+        logger.exception("Failed to run registry validation for event %s", event)
+
+    try:
+        from sbomify.apps.plugins.utils import get_sbomify_version
+
+        kwargs: dict[str, Any] = {}
+        if groups:
+            kwargs["groups"] = groups
+        merged = _with_installation_id(properties)
+        merged.setdefault("sbomify_version", get_sbomify_version())
+        client.capture(distinct_id, event, properties=merged, **kwargs)
+    except Exception:
+        logger.exception("Failed to capture telemetry event %s", event)
+
+
+def get_installation_id() -> str:
+    """Return this installation's id, read once per process.
+
+    Returns an empty string when it cannot be read, so an analytics call
+    never fails because of it. A failure is not cached; the next call retries.
+    """
+    global _installation_id
+    if _installation_id:
+        return _installation_id
+
+    try:
+        from sbomify.apps.core.models import Installation
+
+        _installation_id = str(Installation.get().installation_id)
+    except Exception:
+        logger.exception("Failed to read the installation id")
+    return _installation_id
+
+
+def _with_installation_id(properties: dict[str, Any] | None) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(properties or {})
+    installation_id = get_installation_id()
+    if installation_id:
+        merged["installation_id"] = installation_id
+    return merged
 
 
 def is_enabled() -> bool:
@@ -320,7 +424,7 @@ def capture(
         logger.exception("Failed to run registry validation for event %s", event)
 
     try:
-        merged: dict[str, Any] = dict(properties or {})
+        merged = _with_installation_id(properties)
         if request:
             session_id = get_session_id(request)
             if session_id:
@@ -355,7 +459,7 @@ def identify(
         return
 
     try:
-        client.identify(distinct_id, properties=properties or {})
+        client.identify(distinct_id, properties=_with_installation_id(properties))
     except Exception:
         logger.exception("Failed to identify PostHog user %s", distinct_id)
 
@@ -371,18 +475,21 @@ def group_identify(
         return
 
     try:
-        client.group_identify(group_type, group_key, properties=properties or {})
+        client.group_identify(group_type, group_key, properties=_with_installation_id(properties))
     except Exception:
         logger.exception("Failed to identify PostHog group %s:%s", group_type, group_key)
 
 
 def shutdown() -> None:
-    """Flush and close the client. Call on app shutdown."""
-    global _client, _initialized
-    if _client is not None:
-        try:
-            _client.shutdown()
-        except Exception:
-            logger.exception("Failed to shutdown PostHog client")
+    """Flush and close both clients. Call on app shutdown."""
+    global _client, _initialized, _telemetry_client, _telemetry_initialized
+    for client in (_client, _telemetry_client):
+        if client is not None:
+            try:
+                client.shutdown()
+            except Exception:
+                logger.exception("Failed to shutdown PostHog client")
     _client = None
     _initialized = False
+    _telemetry_client = None
+    _telemetry_initialized = False

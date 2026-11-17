@@ -95,6 +95,9 @@ class SBOMContext:
         signature_blob_key: S3 key for the stored cryptographic signature (if attached).
         signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
         provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
+        rerun_requested: True on the first attempt of a run a person asked for. A plugin that
+            keeps its work in an outside service can start over there, where it would
+            otherwise pick up what it left. False on every retry of that run.
     """
 
     sha256_hash: str | None = None
@@ -109,6 +112,7 @@ class SBOMContext:
     signature_blob_key: str | None = None
     signature_type: str | None = None
     provenance_blob_key: str | None = None
+    rerun_requested: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
 

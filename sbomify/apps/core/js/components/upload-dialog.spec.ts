@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
     bomTypeFromDetail,
     bomTypeFromHash,
@@ -9,13 +9,20 @@ import {
     type UploadTypeState,
 } from './upload-dialog';
 
-// bun runs these without a DOM; the dialog only reads location.hash.
+// bun runs these without a DOM; the dialog only reads location.hash. Each test
+// gets a window of its own: other spec files can leave one on globalThis, with
+// no location, and the order bun runs files in is not fixed.
 const page = globalThis as { window?: { location: { hash: string } } };
-const ownWindow = !page.window;
-page.window ??= { location: { hash: '' } };
+let previous: typeof page.window;
+beforeEach(() => {
+    previous = page.window;
+    page.window = { location: { hash: '' } };
+});
+afterEach(() => {
+    if (previous === undefined) delete page.window;
+    else page.window = previous;
+});
 const setHash = (hash: string) => { page.window!.location.hash = hash; };
-afterEach(() => setHash(''));
-afterAll(() => { if (ownWindow) delete page.window; });
 
 const openEvent = (detail?: unknown) => ({ detail }) as unknown as Event;
 
