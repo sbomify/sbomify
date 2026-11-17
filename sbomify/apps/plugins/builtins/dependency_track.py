@@ -60,7 +60,7 @@ class _UploadFailed(_UploadLost):
     """Dependency Track read the upload and could not process it."""
 
 
-def _is_unsupported_spec_version(error: Exception) -> bool:
+def _is_unsupported_spec_version(error: Exception | str) -> bool:
     """Whether Dependency Track refused the upload over its CycloneDX version.
 
     Matched on the server's message because that is the only place it says so:
@@ -123,7 +123,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
     - Subsequent retries: polls DT for vulnerability results
 
     Retries are bounded by the task framework (``RETRY_LATER_DELAYS_MS`` in
-    ``plugins/tasks``): at most 4 retries at 2min, 5min, 10min, 15min.
+    ``plugins/tasks``): 10 retries, doubling from 2 minutes up to an hour.
     After the last retry the framework records a graceful failure.
 
     Attributes:
@@ -261,6 +261,16 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if holder.upload_refused:
             if needs_conversion:
                 return self._create_unconvertible_result(holder.upload_refused)
+            if not _is_unsupported_spec_version(holder.upload_refused):
+                return self.create_skipped_result(
+                    finding_id="dependency-track:sbom-rejected",
+                    title="SBOM Rejected",
+                    description=(
+                        "Dependency Track rejected this SBOM as invalid, so sbomify skipped the vulnerability scan. "
+                        f"Fix what the server names and upload it again. Server response: {holder.upload_refused}"
+                    ),
+                    unsupported_input=True,
+                )
             return self.create_skipped_result(
                 finding_id="dependency-track:unsupported-spec-version",
                 title="Spec Version Not Supported",

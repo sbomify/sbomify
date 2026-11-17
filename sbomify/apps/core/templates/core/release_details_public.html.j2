@@ -140,7 +140,19 @@
                             <c-badges.severity class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <c-code-inline x-text="f.id" />
+                                    {# Linked to Insights where the id resolves; "" stays a plain chip. #}
+                                    <template x-if="f.url">
+                                        <a :href="f.url"
+                                           data-button
+                                           target="_blank"
+                                           rel="noopener"
+                                           class="no-underline hover:underline underline-offset-4">
+                                            <c-code-inline accent="primary" x-text="f.id" />
+                                        </a>
+                                    </template>
+                                    <template x-if="!f.url">
+                                        <c-code-inline x-text="f.id" />
+                                    </template>
                                     <span class="text-text-muted text-xs"
                                           x-show="f.component"
                                           x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
