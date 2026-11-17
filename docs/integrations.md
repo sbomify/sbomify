@@ -194,6 +194,10 @@ posted.
 `chat:write.public` lets the bot post to any public channel without being
 invited. A private channel is only listed once the app has been invited to it.
 
+Leave token rotation off in the app's OAuth settings. sbomify keeps the bot
+token Slack issues and never refreshes it, so a rotating token stops working
+after 12 hours and the connection then needs reconnecting.
+
 ### How delivery behaves
 
 Messages are posted by dramatiq tasks queued after the change that caused them
