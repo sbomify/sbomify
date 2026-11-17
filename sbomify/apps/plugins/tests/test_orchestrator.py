@@ -317,6 +317,29 @@ class TestPluginOrchestrator:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("run_reason", "retry", "requested"),
+    [(RunReason.MANUAL, False, True), (RunReason.MANUAL, True, False), (RunReason.ON_UPLOAD, False, False)],
+)
+def test_only_the_first_attempt_of_a_manual_run_asks_a_plugin_to_start_over(
+    test_sbom, mock_sbom_data, mocker, run_reason, retry, requested
+) -> None:
+    """A retry polls what the first attempt started. Told to start over again, a
+    plugin that uploads would upload on every poll and never read a result."""
+    mocker.patch("sbomify.apps.plugins.orchestrator.get_sbom_data_bytes", return_value=(test_sbom, mock_sbom_data))
+    assess = mocker.spy(MockPlugin, "assess")
+    orchestrator = PluginOrchestrator()
+    existing = None
+    if retry:
+        existing = orchestrator.run_assessment(sbom_id=test_sbom.id, plugin=MockPlugin(), run_reason=run_reason).id
+
+    orchestrator.run_assessment(
+        sbom_id=test_sbom.id, plugin=MockPlugin(), run_reason=run_reason, existing_run_id=existing
+    )
+
+    assert assess.call_args.kwargs["context"].rerun_requested is requested
+
+
 class TestDependencyChecking:
     """Tests for plugin dependency checking methods."""
 

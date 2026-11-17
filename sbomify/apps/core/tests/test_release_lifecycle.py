@@ -1204,6 +1204,31 @@ class TestReleaseEdits:
         assert list(ReleaseCLEEvent.objects.filter(release=old)) == [declared.value]
         assert _edge(declared.value).effective == first_date
 
+    @pytest.mark.parametrize("method", ["patch", "put"])
+    def test_sending_back_the_release_date_the_api_returned_republishes_nothing(
+        self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product, method: str
+    ) -> None:
+        # A date left blank on create is stored with microseconds, and the API
+        # answers it to the second, so that is what a client sends back.
+        client, token = authenticated_api_client
+        first_date = datetime(2025, 3, 1, 12, 0, 0, 654321, tzinfo=dt_timezone.utc)
+        old = _release(sample_product, "1.9", created_at=PAST, released_at=PAST)
+        new = _release(sample_product, "2.0", created_at=PAST, released_at=first_date)
+        declared = _supersede(old, "2.0", effective=first_date)
+        assert declared.ok and declared.value
+        read = client.get(f"/api/v1/releases/{new.pk}", **get_api_headers(token)).json()["released_at"]
+        assert read == "2025-03-01T12:00:00Z"
+        payload: dict[str, object] = {"released_at": read}
+        if method == "put":
+            payload.update({"name": "2.0", "version": "2.0", "is_prerelease": False})
+
+        response = self._send(client, token, method, new, payload)
+
+        assert response.status_code == 200, response.content
+        assert _fresh(new).released_at == first_date
+        assert list(ReleaseCLEEvent.objects.filter(release=old)) == [declared.value]
+        assert _edge(declared.value).effective == first_date
+
     def test_clearing_the_release_date_leaves_its_edges_alone(
         self, authenticated_api_client: tuple[Client, AccessToken], sample_product: Product
     ) -> None:

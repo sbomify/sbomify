@@ -96,6 +96,10 @@ class ReferenceType(models.TextChoices):
     EDB = "edb", "Exploit-DB"
     MSRC = "msrc", "Microsoft Security Response Center"
     JVNDB = "jvndb", "JVN iPedia"
+    GSD = "gsd", "Global Security Database"
+    HSEC = "hsec", "Haskell security advisory"
+    PSF = "psf", "Python Software Foundation advisory"
+    DRUPAL = "drupal", "Drupal security advisory"
     OTHER = "other", "Other"
 
 
@@ -122,6 +126,10 @@ _REFERENCE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("EDB-", ReferenceType.EDB),
     ("MSRC-", ReferenceType.MSRC),
     ("JVNDB-", ReferenceType.JVNDB),
+    ("GSD-", ReferenceType.GSD),
+    ("HSEC-", ReferenceType.HSEC),
+    ("PSF-", ReferenceType.PSF),
+    ("DRUPAL-", ReferenceType.DRUPAL),
 )
 
 

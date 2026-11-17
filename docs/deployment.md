@@ -201,6 +201,10 @@ BILLING=False
 
 # GitHub token for SBOM attestation lookups (see below)
 # GITHUB_API_TOKEN=github_pat_your_token
+
+# Anonymous usage telemetry: the number of users, workspaces, products and
+# components, and the sbomify version. On by default, off when CI is set.
+# TELEMETRY_ENABLED=False
 ```
 
 ### GitHub token for attestation checks

@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
+from django.db.models import Q
 from django.db.utils import DatabaseError, OperationalError
 from django.utils import timezone
 from tenacity import (
@@ -328,18 +329,12 @@ def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> se
     }
 
 
-# Retry delays for RetryLaterError (in milliseconds)
-# These delays give external systems time to process:
-# - 1st retry: 2 minutes
-# - 2nd retry: 5 minutes
-# - 3rd retry: 10 minutes
-# - 4th retry: 15 minutes
-RETRY_LATER_DELAYS_MS = [
-    2 * 60 * 1000,  # 2 minutes
-    5 * 60 * 1000,  # 5 minutes
-    10 * 60 * 1000,  # 10 minutes
-    15 * 60 * 1000,  # 15 minutes
-]
+# Retry delays for RetryLaterError (in milliseconds): doubling from 2 minutes up
+# to an hour, then hourly, about six hours in all. An external service under load,
+# such as a Dependency Track working through a backlog, can take far longer than
+# the half hour a shorter ladder gave it. Each wait is a delayed message, so no
+# worker is held while it runs down.
+RETRY_LATER_DELAYS_MS = [minutes * 60 * 1000 for minutes in (2, 4, 8, 16, 32, 60, 60, 60, 60, 60)]
 
 
 @dramatiq.actor(
@@ -374,7 +369,7 @@ def run_assessment_task(
 
     If a plugin raises RetryLaterError (e.g., attestation not yet available,
     external service still processing), the task will retry with increasing
-    delays: 2 min, 5 min, 10 min, 15 min, or longer when the service asks us to wait.
+    delays (``RETRY_LATER_DELAYS_MS``), or longer when the service asks us to wait.
 
     Args:
         sbom_id: The SBOM's primary key.
@@ -982,10 +977,9 @@ def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]
 
     Called by the ReleaseArtifact post_save signal handler. Finds the most
     recent completed run per plugin for the given SBOM and adds the release
-    to each run's ``releases`` M2M. For plugins that expose a
-    ``sync_release_tags`` hook (currently only Dependency Track), the task
-    also asks the plugin to update its downstream tag state — e.g. PATCH
-    the DT project version's tags so the new release shows up in DT.
+    to each run's ``releases`` M2M. It also calls each continuous plugin's
+    ``sync_release_tags`` hook, so one that keeps release-scoped state outside
+    sbomify can update it. No built-in plugin overrides the hook today.
 
     Race (Option A): if no completed run exists yet (the upload-triggered
     scan is still running), this task is a no-op. The orchestrator's
@@ -1132,11 +1126,11 @@ def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, An
     """Detach a removed release from AssessmentRuns for an SBOM (Stage 5 Issue A).
 
     Called by the ReleaseArtifact post_delete signal handler. Removes the
-    release from every AssessmentRun M2M for the SBOM and asks each plugin
-    that exposes a ``sync_release_tags`` hook to re-push the canonical tag
-    set (minus the just-removed release). Uses the same Q2=B "re-read full
-    canonical set" semantic as the attach path, so DT tag state converges
-    correctly regardless of ordering.
+    release from every AssessmentRun M2M for the SBOM and calls each
+    continuous plugin's ``sync_release_tags`` hook with the canonical set
+    (minus the just-removed release). It re-reads the full set, as the attach
+    path does, so the order of attach and detach does not matter. No built-in
+    plugin overrides the hook today.
 
     Args:
         sbom_id: The SBOM primary key.
@@ -1619,8 +1613,13 @@ def _run_scheduled_security_scans(
         cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
+                # A scan waiting out its retries is in flight however long ago it
+                # was created: its next attempt is due at retry_at. Without this the
+                # hourly sweep starts a second scan of the same SBOM. Only pending
+                # and running runs are read by retry_at, so both branches stay on
+                # the (status, created_at) index.
+                Q(created_at__gte=cutoff) | Q(status__in=["pending", "running"], retry_at__gte=cutoff),
                 plugin_name=plugin_name,
-                created_at__gte=cutoff,
                 status__in=["completed", "running", "pending"],
                 sbom__component__team_id__in=team_ids,
             ).values_list("sbom_id", flat=True)

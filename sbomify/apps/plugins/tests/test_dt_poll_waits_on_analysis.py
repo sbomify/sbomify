@@ -62,7 +62,6 @@ class TestPollWaitsOnAnalysis:
             version_row=version_row,
             sbom_id=str(version_row.sbom_id),
             project_name="dev-sbomify-component",
-            current_release_names=[],
         )
 
     @staticmethod

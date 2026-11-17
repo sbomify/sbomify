@@ -23,6 +23,9 @@ on the output; it is not routed anywhere.
     <c-tables.row tabindex="0" @click="open()">
     <c-tables.cell class="font-medium">Plain body cell</c-tables.cell>
     <c-tables.cell nowrap>Nowrap body cell</c-tables.cell>
+    <c-tables.cell nowrap>Stacked name
+    <div data-probe="stacked-description">A description long enough to run past the cap</div>
+    </c-tables.cell>
     <c-tables.cell date>10 Aug 2026</c-tables.cell>
     <c-tables.cell end hx-get="/probe">Right cell</c-tables.cell>
     <c-tables.cell muted>Muted cell</c-tables.cell>

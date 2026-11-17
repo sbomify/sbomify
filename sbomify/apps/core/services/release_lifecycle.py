@@ -131,25 +131,16 @@ def tracked_sboms(sboms: QuerySet[SBOM] | None = None, team_id: Any = None) -> Q
 
 
 def reconcile_after_removal(release_ids: Iterable[Any]) -> None:
-    """Queue, for once a delete of these releases commits, the reconciles its cascade does not.
+    """Queue, for once a delete of these releases commits, the sync of their workspace's Dependency-Track tree.
 
-    Their components may be shipped by nothing once they go, and the releases
-    they link to lose a reason to stay tracked. Call before the delete, while
-    the artifacts and links still exist.
+    The releases they link to lose a reason to stay tracked. Links never cross
+    workspaces, so one sync covers them. Call before the delete, while the
+    releases still exist.
     """
-    from sbomify.apps.vulnerability_scanning.tasks import reconcile_component_dt_scope
+    from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
-    ids = list(release_ids)
-    component_ids = set(
-        ReleaseArtifact.objects.filter(release_id__in=ids, sbom__isnull=False).values_list(
-            "sbom__component_id", flat=True
-        )
-    )
-    linked = set(Release.objects.filter(pk__in=releases_linked_from(ids)).values_list("product_id", flat=True))
-    for product_id in linked:
-        after_lifecycle_change(product_id)
-    for component_id in component_ids:
-        _after_commit(reconcile_component_dt_scope.send, str(component_id))
+    for team_id in set(Release.objects.filter(pk__in=list(release_ids)).values_list("product__team_id", flat=True)):
+        queue_sync(team_id)
 
 
 def broadcast_releases_updated(product: Product, releases: Iterable[Release]) -> None:
@@ -190,6 +181,25 @@ def backdated_takeover(predecessor: Release, successor: Release) -> str | None:
 def replacement_candidates(product_id: str) -> list[Release]:
     """The releases a new release of the product can supersede: named, still monitored, newest first."""
     return list(tracked_releases(Release.objects.filter(product_id=product_id, is_latest=False)))
+
+
+def replace_choices(product_id: str, release_ids: Iterable[str]) -> dict[str, Any]:
+    """What the edit dialog offers a release to replace, and the releases each of ``release_ids`` replaces now.
+
+    The options are the ones the new-release form offers. A release this one
+    already replaces on the same line is no longer monitored, so it is not
+    among them; the dialog adds a release's own predecessors back.
+    """
+    replaces: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    edges = ReleaseSupersession.objects.live().select_related("from_release")
+    for edge in edges.filter(to_release_id__in=list(release_ids)).order_by("pk"):
+        replaces[str(edge.to_release_id)].append(
+            {"id": edge.from_release_id, "name": edge.from_release.name, "drop_in": edge.drop_in}
+        )
+    return {
+        "options": [{"id": release.pk, "name": release.name} for release in replacement_candidates(product_id)],
+        "replaces": dict(replaces),
+    }
 
 
 def _predecessor_for(successor: Release, item: Any) -> ServiceResult[Release]:
@@ -418,6 +428,33 @@ def remove_supersession(release_id: str, edge_id: str, *, actor_id: Any = None) 
             )
         edge.refresh_from_db()
     return ServiceResult.success(edge)
+
+
+def set_supersedes(successor: Release, items: Iterable[Any], *, actor_id: Any = None) -> ServiceResult[bool]:
+    """Make ``items`` every release ``successor`` supersedes, and say whether any link changed.
+
+    A live link the items leave out is withdrawn, as Remove link does, and the
+    rest are declared. Withdrawing comes first, so moving a link to the other
+    line is not refused as a conflict with itself. Run it inside the
+    transaction that owns the edit: a failure leaves the caller to roll back.
+    """
+    items = list(items)
+    wanted = set()
+    for item in items:
+        found = _predecessor_for(successor, item)
+        if not found.ok or found.value is None:
+            return ServiceResult.failure(found.error or "Invalid supersession", status_code=found.status_code)
+        wanted.add((found.value.pk, item.drop_in))
+    live = list(ReleaseSupersession.objects.live().filter(to_release=successor))
+    for edge in live:
+        if (edge.from_release_id, edge.drop_in) not in wanted:
+            removed = remove_supersession(successor.pk, edge.pk, actor_id=actor_id)
+            if not removed.ok:
+                return ServiceResult.failure(removed.error or "Invalid supersession", status_code=removed.status_code)
+    declared = declare_supersedes(successor, items, actor_id=actor_id)
+    if not declared.ok:
+        return ServiceResult.failure(declared.error or "Invalid supersession", status_code=declared.status_code)
+    return ServiceResult.success({(edge.from_release_id, edge.drop_in) for edge in live} != wanted)
 
 
 def supersession_links(release_id: str) -> dict[str, list[ReleaseSupersession]]:
@@ -791,6 +828,19 @@ def _after_commit(func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     transaction.on_commit(call, robust=True)
 
 
+def _same_value(stored: Any, sent: Any) -> bool:
+    """Whether a value an edit sends is the one the release already has.
+
+    A date sent without an offset is read the way ``Release.save()`` reads it.
+    Dates are compared to the second, because the API answers them to the
+    second: a client sending back the date it read is not moving it.
+    """
+    sent = Release._as_aware(sent)
+    if isinstance(stored, datetime) and isinstance(sent, datetime):
+        return stored.replace(microsecond=0) == sent.replace(microsecond=0)
+    return bool(stored == sent)
+
+
 def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceResult[tuple[Release, bool]]:
     """Write a person's edit to a release, under the product lock and then the release lock.
 
@@ -817,9 +867,7 @@ def save_release_changes(release_id: str, changes: dict[str, Any]) -> ServiceRes
     if product is None or release is None:
         return ServiceResult.failure("Release not found", status_code=404)
 
-    # A date sent without an offset is read the way ``Release.save()`` reads it,
-    # so the stored instant sent again is not a change.
-    changed = [field for field, value in changes.items() if getattr(release, field) != Release._as_aware(value)]
+    changed = [field for field, value in changes.items() if not _same_value(getattr(release, field), value)]
     if not changed:
         return ServiceResult.success((release, False))
 
@@ -905,11 +953,12 @@ def after_lifecycle_change(product_id: Any) -> None:
     """Once the write commits, bring Dependency-Track in line with where the product's releases now stand.
 
     A broker error after the commit is logged, not raised: the write stands,
-    and ``dt_tracked_scope`` repairs what the lost message would have done.
+    and the daily ``dt_tracked_scope`` sweep, which syncs every workspace's
+    tree, repairs what the lost message would have done.
     """
-    from sbomify.apps.vulnerability_scanning.tasks import reconcile_product_dt_scope
+    from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
 
-    transaction.on_commit(lambda: reconcile_product_dt_scope.send(str(product_id)), robust=True)
+    queue_sync(Product.objects.filter(pk=product_id).values_list("team_id", flat=True).first())
 
 
 def audit(action: str, release: Release, actor_id: Any, **detail: Any) -> None:

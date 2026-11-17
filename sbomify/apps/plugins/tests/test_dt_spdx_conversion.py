@@ -14,14 +14,17 @@ from __future__ import annotations
 import dataclasses
 import json
 import uuid
+from contextlib import ExitStack
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
+from sbomify.apps.plugins.sdk.base import RetryLaterError
 from sbomify.apps.sboms.conversion import ConversionFailed
 
+TREE = "sbomify.apps.vulnerability_scanning.services.dt_release_tree"
 SPDX_2_3 = json.dumps({"spdxVersion": "SPDX-2.3", "name": "image", "packages": []})
 SPDX_3 = json.dumps({"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": []})
 CYCLONEDX = json.dumps({"bomFormat": "CycloneDX", "specVersion": "1.6", "version": 1})
@@ -145,42 +148,40 @@ class TestTheUploadCarriesTheConversion:
         path.write_text(SPDX_2_3)
         return sbom, path, server
 
-    def _assess_capturing_upload(self, plugin, scannable, convert_patch):
+    def _assess(self, plugin, scannable, *patches):
         sbom, path, server = scannable
-        captured: dict[str, Any] = {}
+        with ExitStack() as stack:
+            for each in (
+                patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
+                patch(f"{TREE}.workspace_server", return_value=server),
+                patch(f"{TREE}.queue_sync"),
+                *patches,
+            ):
+                stack.enter_context(each)
+            try:
+                return _as_dict(plugin.assess(str(sbom.id), path))
+            except RetryLaterError as retry:
+                return retry
 
-        def capture(**kwargs: Any) -> None:
-            captured["bytes"] = kwargs["sbom_bytes"]
-            raise RuntimeError("stop after the upload was handed its bytes")
+    def test_the_tree_uploads_cyclonedx_not_the_spdx(self, scannable) -> None:
+        from sbomify.apps.vulnerability_scanning.services.dt_release_tree import sbom_bytes
 
+        sbom, _, _ = scannable
         with (
-            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
-            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
-            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
-            patch.object(DependencyTrackPlugin, "_upload_new_sbom_version", side_effect=capture),
-            convert_patch,
+            patch("sbomify.apps.sboms.utils.get_sbom_data_bytes", return_value=(sbom, SPDX_2_3.encode())),
+            patch("sbomify.apps.sboms.conversion.to_cyclonedx", return_value=CONVERTED),
         ):
-            result = _as_dict(plugin.assess(str(sbom.id), path))
-        return captured, result
+            assert sbom_bytes(sbom) == CONVERTED
 
-    def test_the_upload_gets_cyclonedx_not_the_spdx(self, plugin: DependencyTrackPlugin, scannable) -> None:
-        convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
-            return_value=CONVERTED,
-        )
-        captured, _ = self._assess_capturing_upload(plugin, scannable, convert)
-
-        assert captured["bytes"] == CONVERTED
-        assert json.loads(captured["bytes"])["bomFormat"] == "CycloneDX"
-
-    def test_the_stored_document_is_left_alone(self, plugin: DependencyTrackPlugin, scannable) -> None:
+    def test_a_scan_waiting_on_the_tree_leaves_the_stored_document_alone(
+        self, plugin: DependencyTrackPlugin, scannable
+    ) -> None:
         _, path, _ = scannable
-        convert = patch(
-            "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
-            return_value=CONVERTED,
-        )
-        self._assess_capturing_upload(plugin, scannable, convert)
+        convert = patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx", return_value=CONVERTED)
 
+        outcome = self._assess(plugin, scannable, convert)
+
+        assert isinstance(outcome, RetryLaterError)
         assert path.read_text() == SPDX_2_3
 
     def test_a_document_that_cannot_be_expressed_is_a_skip_that_says_so(
@@ -192,7 +193,7 @@ class TestTheUploadCarriesTheConversion:
             "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
             side_effect=ConversionFailed("SPDX-3.0 document names no package to scan"),
         )
-        _, result = self._assess_capturing_upload(plugin, scannable, convert)
+        result = self._assess(plugin, scannable, convert)
 
         assert result["metadata"].get("skipped") is True
         assert "names no package to scan" in result["metadata"]["conversion_error"]
@@ -201,17 +202,24 @@ class TestTheUploadCarriesTheConversion:
         assert result["metadata"]["unsupported_input"] is True
 
     def test_a_poll_neither_converts_nor_needs_a_converter(self, plugin: DependencyTrackPlugin, scannable) -> None:
-        """The upload already happened, and a poll must return its findings.
+        """The tree already uploaded a copy, and a poll must return its findings.
 
-        A poll answers from what the upload already settled, so it never
-        derives another CycloneDX copy. It also records the provenance,
-        which is only known from the stored document.
+        A poll answers from that upload, so it never derives another CycloneDX
+        copy. It also records the provenance, which is only known from the
+        stored document.
         """
-        from sbomify.apps.vulnerability_scanning.models import SbomDependencyTrackProjectVersion
+        from sbomify.apps.vulnerability_scanning.models import DependencyTrackTreeProject
 
-        sbom, path, server = scannable
-        SbomDependencyTrackProjectVersion.objects.create(
-            sbom=sbom, dt_server=server, dt_project_version="1.0", dt_project_version_uuid=uuid.uuid4()
+        sbom, _, server = scannable
+        DependencyTrackTreeProject.objects.create(
+            dt_server=server,
+            team=sbom.component.team,
+            kind=DependencyTrackTreeProject.Kind.LATEST_COMPONENT,
+            component=sbom.component,
+            sbom=sbom,
+            dt_project_uuid=uuid.uuid4(),
+            dt_name="dev dtconvteam · DT Conv Component",
+            dt_version="latest",
         )
         captured: dict[str, Any] = {}
 
@@ -219,14 +227,8 @@ class TestTheUploadCarriesTheConversion:
             captured.update(kwargs)
             return MagicMock()
 
-        with (
-            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
-            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
-            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
-            patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert,
-            patch.object(DependencyTrackPlugin, "_poll_results", side_effect=fake_poll),
-        ):
-            plugin.assess(str(sbom.id), path)
+        with patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert:
+            self._assess(plugin, scannable, patch.object(DependencyTrackPlugin, "_poll_results", side_effect=fake_poll))
 
         convert.assert_not_called()
         assert captured["converted_from"] == "SPDX-2.3"
@@ -236,7 +238,7 @@ class TestTheUploadCarriesTheConversion:
             "sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx",
             side_effect=ConversionFailed("no SPDX document found"),
         )
-        _, result = self._assess_capturing_upload(plugin, scannable, convert)
+        result = self._assess(plugin, scannable, convert)
 
         assert result["metadata"].get("skipped") is True
         assert result["findings"][0]["id"] == "dependency-track:unsupported-format"
@@ -246,26 +248,18 @@ class TestTheUploadCarriesTheConversion:
 
 @pytest.mark.django_db
 class TestWhatIsNotConverted:
-    def test_cyclonedx_reaches_the_upload_unconverted(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
-        """Driven all the way to the upload, so this says more than "not yet"."""
-        sbom, path, server = _records(tmp_path, CYCLONEDX, "cyclonedx", "dtcdxteam", "sbom.cdx.json")
-        captured: dict[str, Any] = {}
+    def test_cyclonedx_reaches_the_tree_upload_unconverted(self, tmp_path) -> None:
+        from sbomify.apps.vulnerability_scanning.services.dt_release_tree import sbom_bytes
 
-        def capture(**kwargs: Any) -> None:
-            captured["bytes"] = kwargs["sbom_bytes"]
-            raise RuntimeError("stop after the upload was handed its bytes")
+        sbom, _, _ = _records(tmp_path, CYCLONEDX, "cyclonedx", "dtcdxteam", "sbom.cdx.json")
 
         with (
-            patch("sbomify.apps.plugins.builtins.dependency_track.to_cyclonedx") as convert,
-            patch.object(DependencyTrackPlugin, "_team_has_dt_enabled", return_value=True),
-            patch.object(DependencyTrackPlugin, "_select_dt_server", return_value=server),
-            patch.object(DependencyTrackPlugin, "_resolve_release_context", return_value=[]),
-            patch.object(DependencyTrackPlugin, "_upload_new_sbom_version", side_effect=capture),
+            patch("sbomify.apps.sboms.utils.get_sbom_data_bytes", return_value=(sbom, CYCLONEDX.encode())),
+            patch("sbomify.apps.sboms.conversion.to_cyclonedx") as convert,
         ):
-            plugin.assess(str(sbom.id), path)
+            assert sbom_bytes(sbom) == CYCLONEDX.encode()
 
         convert.assert_not_called()
-        assert captured["bytes"] == CYCLONEDX.encode()
 
     def test_conversion_waits_for_the_upload(self, plugin: DependencyTrackPlugin, tmp_path) -> None:
         """The gate runs on every poll, so it must not convert.

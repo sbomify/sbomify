@@ -377,6 +377,9 @@ class TestASkippedScanCanBeRerun:
         html = _page(_client_as(sample_sbom, sample_user, "owner"), sample_sbom)
 
         assert _rerun_url(sample_sbom) in html
+        # Nothing was sent to Dependency Track, so there is nothing to import again.
+        assert "Re\\u002Drun" in html
+        assert "Re\\u002Dimport" not in html
 
     def test_a_queued_scan_offers_none_until_it_settles(self, sample_sbom, sample_user, dt):
         AssessmentRun.objects.create(
