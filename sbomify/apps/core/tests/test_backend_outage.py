@@ -415,6 +415,20 @@ def test_the_console_drops_only_per_failure_outage_tracebacks(record: logging.Lo
     assert is_backend_outage_traceback(record) is dropped
 
 
+def test_sentry_drops_the_worker_line_for_an_attempt_that_will_be_retried(mocker) -> None:
+    """The worker logs "Failed to process message" before Retries decides, so a
+    first attempt carries no retry count. The integration's own event for that
+    attempt carries the verdict and is kept when the message is lost."""
+    mocker.patch.object(sentry_config, "_actor_max_retries", return_value=3)
+    first_attempt = {
+        "logger": "dramatiq.worker.WorkerThread",
+        "contexts": {"dramatiq": {"data": {"actor_name": "sync_integration", "options": {}}}},
+    }
+
+    assert throttle_self_healing_notices(first_attempt, _hint(RedisConnectionError("x"))) is None
+    assert throttle_self_healing_notices(first_attempt, _hint(ValueError("a bug"))) is not None
+
+
 # --- What the services actually raise -----------------------------------------
 # The cases above build their exceptions by hand. These provoke them: a port
 # nothing listens on, Django's and django-redis's real wrappers, the test server
