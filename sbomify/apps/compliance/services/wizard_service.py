@@ -331,7 +331,7 @@ def _build_step_1_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
             "is_radio_equipment": assessment.is_radio_equipment,
             "processes_personal_data": assessment.processes_personal_data,
             "handles_financial_value": assessment.handles_financial_value,
-            # EU establishment and the Authorised Representative (CRA Art. 22,
+            # EU establishment and the Authorised Representative (CRA Art. 18,
             # checklist 7.4). Tri-state: null is "not yet determined", which the
             # step records without refusing and the export path refuses.
             "is_eu_established": assessment.is_eu_established,
@@ -636,9 +636,8 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
     }
 
     # Overall ready: steps 1-4 complete, no unanswered controls, and the
-    # EU-representation block settled. Annex V item 2a is part of the
-    # declaration, so an assessment that cannot say whether an Authorised
-    # Representative is required is not ready to produce one.
+    # EU-representation block settled: the establishment question answered and
+    # any Authorised Representative that was started, finished.
     required_steps_done = all(s in assessment.completed_steps for s in [1, 2, 3, 4])
     overall_ready = required_steps_done and status_counts["unanswered"] == 0 and not eu_representation_problems
 
@@ -680,7 +679,7 @@ _STEP_1_DATE_FIELDS = ("support_period_end", "authorized_rep_mandate_date")
 # Validated on save rather than left to full_clean(), which this path skips.
 _STEP_1_EMAIL_FIELDS = frozenset({"authorized_rep_email"})
 
-# The Art. 22 gate fires only when the save touches one of these. Editing an
+# The AR completeness gate fires only when the save touches one of these. Editing an
 # unrelated Step 1 field must not be refused for the state of a block the
 # payload did not mention.
 _AR_GATED_FIELDS = frozenset(
@@ -1010,21 +1009,19 @@ def _save_step_1(
                 return ServiceResult.failure(f"{field} must be a boolean or null", status_code=400)
             setattr(assessment, field, raw)
 
-    # CRA Art. 22 makes an AR mandatory before market placement for a
-    # manufacturer with no EU establishment, so answering "not established"
-    # and leaving the block empty is a breach the step refuses to record.
-    # An *unanswered* determination is only incomplete evidence, and blocking
-    # on it would strand every assessment created before the question
-    # existed. That one surfaces on the publish and export path instead.
+    # Appointing an AR is optional (CRA Art. 18(1)), so an empty block saves
+    # whatever the establishment answer. A half-entered one cannot go on the
+    # declaration, so the step refuses to record it. An *unanswered*
+    # determination is only incomplete evidence, and blocking on it would
+    # strand every assessment created before the question existed. That one
+    # surfaces on the publish and export path instead.
     #
     # Only when the payload touches this block, though. The gate reads the
-    # whole assessment, so re-running it on every Step 1 save meant that once
-    # "not established" was recorded without an AR, every later partial save —
-    # adjusting the intended use, picking a market — was refused with an Art. 22
-    # error about fields it never sent, and the step could not be edited back
-    # into a valid state.
+    # whole assessment, so re-running it on every Step 1 save would refuse an
+    # unrelated partial save (adjusting the intended use, picking a market)
+    # with an error about fields it never sent.
     if _AR_GATED_FIELDS & data.keys():
-        if assessment.requires_authorized_representative and (problems := assessment.eu_representation_problems):
+        if problems := assessment.authorized_rep_problems:
             return ServiceResult.failure(problems[0], status_code=400)
 
     _mark_step_complete(assessment, 1)

@@ -289,9 +289,10 @@ class CRAAssessment(models.Model):
         ),
     )
 
-    # Step 1 — EU Authorized Representative (CRA Art. 22/25, checklist 7.4).
-    # A manufacturer without an EU establishment must appoint an AR *before*
-    # market placement, and the AR's details belong on the accompanying
+    # Step 1 — EU Authorized Representative (CRA Art. 18, checklist 7.4).
+    # Appointing an AR is optional: Art. 18(1) says a manufacturer *may* appoint
+    # one by written mandate, whether or not it is established in the Union.
+    # When one is appointed, its details belong on the accompanying
     # documentation. ``is_eu_established`` is nullable on purpose: NULL means
     # nobody has answered yet, which is a different state from "answered no",
     # and 7.4.1 asks for the determination to be recorded either way.
@@ -300,8 +301,7 @@ class CRAAssessment(models.Model):
         blank=True,
         help_text=(
             "Whether the manufacturer has an EU establishment (checklist 7.4.1). "
-            "False makes an Authorized Representative mandatory; NULL means the "
-            "determination has not been made."
+            "NULL means the determination has not been made."
         ),
     )
     authorized_rep_name = models.CharField(max_length=255, blank=True, default="")
@@ -381,14 +381,22 @@ class CRAAssessment(models.Model):
     )
 
     @property
-    def requires_authorized_representative(self) -> bool:
-        """Whether CRA Art. 22 obliges this assessment to name an AR.
+    def authorized_rep_is_recorded(self) -> bool:
+        """Whether any part of an AR has been entered.
 
-        Only an explicit "not EU-established" triggers the obligation; an
-        unanswered determination is surfaced as incomplete rather than
-        silently treated as compliant.
+        Appointing one is optional (CRA Art. 18(1)), so an empty block is
+        compliant. A started one has to be finished before it can go on the
+        declaration.
         """
-        return self.is_eu_established is False
+        return any(
+            [
+                self.authorized_rep_name.strip(),
+                self.authorized_rep_address.strip(),
+                self.authorized_rep_email.strip(),
+                self.authorized_rep_mandate_date is not None,
+                self.authorized_rep_mandate_reference.strip(),
+            ]
+        )
 
     @property
     def authorized_rep_is_complete(self) -> bool:
@@ -403,18 +411,9 @@ class CRAAssessment(models.Model):
         )
 
     @property
-    def eu_representation_problems(self) -> list[str]:
-        """Reasons the EU-representation block is not yet compliant.
-
-        Two different failures, deliberately not collapsed. An **unanswered**
-        determination is incomplete evidence (7.4.1) and surfaces on the
-        publish/export path, since blocking the wizard on it would strand
-        every assessment created before the question existed. A **missing AR
-        where one is required** is an Art. 22 breach, and that one blocks.
-        """
-        if self.is_eu_established is None:
-            return ["Record whether the manufacturer is established in the EU (CRA Art. 22, checklist 7.4.1)."]
-        if not self.requires_authorized_representative:
+    def authorized_rep_problems(self) -> list[str]:
+        """What a started but unfinished AR block still lacks."""
+        if not self.authorized_rep_is_recorded:
             return []
         missing = []
         if not self.authorized_rep_name.strip():
@@ -428,10 +427,23 @@ class CRAAssessment(models.Model):
         if not missing:
             return []
         return [
-            "A manufacturer without an EU establishment must appoint an Authorized "
-            "Representative before placing the product on the market (CRA Art. 22). "
-            "Missing: " + ", ".join(missing) + "."
+            "An Authorized Representative is optional (CRA Art. 18), but the one recorded here "
+            "is incomplete. Missing: " + ", ".join(missing) + "."
         ]
+
+    @property
+    def eu_representation_problems(self) -> list[str]:
+        """Reasons the EU-representation block is not yet complete.
+
+        Two different failures, deliberately not collapsed. An **unanswered**
+        determination is incomplete evidence (7.4.1) and surfaces on the
+        publish/export path, since blocking the wizard on it would strand
+        every assessment created before the question existed. A **half-entered
+        AR** cannot be put on the declaration, and that one blocks the save.
+        """
+        if self.is_eu_established is None:
+            return ["Record whether the manufacturer is established in the EU (checklist 7.4.1)."]
+        return self.authorized_rep_problems
 
     @property
     def is_signed(self) -> bool:
