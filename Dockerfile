@@ -1,6 +1,11 @@
 # Base Python version
 ARG PYTHON_VERSION=3.15-slim-trixie@sha256:8c13a3f37a6a5b71498228e902c4b9f51c1f7900d49fabf71f9a650c6120e0d0
 ARG BUILD_ENV=production # Default to production
+# osv-scanner comes from the osv bundle of an sbomify/sbom-tools release,
+# which builds it from source and attests the build. OSV_SCANNER_VERSION is
+# the osv-scanner version that release ships: the build checks the binary
+# reports it, and bin/generate_additional_packages.sh reads it for the SBOM.
+ARG SBOM_TOOLS_VERSION=v26.11.1
 ARG OSV_SCANNER_VERSION=v2.7.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
@@ -208,32 +213,43 @@ RUN if [ "${BUILD_ENV}" = "production" ]; then \
 
 ### Stage 5: Download pre-built binaries for OSV-Scanner and Cosign
 FROM alpine:3.24 AS binary-downloader
+ARG SBOM_TOOLS_VERSION
 ARG OSV_SCANNER_VERSION
 ARG COSIGN_VERSION
 ARG TARGETARCH
 
 RUN set -e && apk add --no-cache curl && \
     ARCH="${TARGETARCH}" && \
-    # Download osv-scanner and verify checksum
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${ARCH}" \
-        -o /usr/local/bin/osv-scanner && \
-    curl -fsSL "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_SHA256SUMS" \
-        -o /tmp/osv-scanner_SHA256SUMS && \
-    cd /usr/local/bin && \
-    grep "osv-scanner_linux_${ARCH}$" /tmp/osv-scanner_SHA256SUMS > /tmp/osv-checksum.txt && \
-    sed -i "s|osv-scanner_linux_${ARCH}|osv-scanner|" /tmp/osv-checksum.txt && \
-    sha256sum -c /tmp/osv-checksum.txt && \
-    chmod +x /usr/local/bin/osv-scanner && \
     # Download cosign and verify checksum
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${ARCH}" \
         -o /usr/local/bin/cosign && \
     curl -fsSL "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign_checksums.txt" \
         -o /tmp/cosign_checksums.txt && \
+    cd /usr/local/bin && \
     grep "cosign-linux-${ARCH}$" /tmp/cosign_checksums.txt > /tmp/cosign-checksum.txt && \
     sed -i "s|cosign-linux-${ARCH}|cosign|" /tmp/cosign-checksum.txt && \
     sha256sum -c /tmp/cosign-checksum.txt && \
     chmod +x /usr/local/bin/cosign && \
-    rm -f /tmp/osv-scanner_SHA256SUMS /tmp/osv-checksum.txt /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
+    # Download the osv bundle from sbom-tools and verify its build provenance.
+    # The identity pins the attestation to sbom-tools' build workflow at this
+    # release's tag, so a bundle built anywhere else fails here.
+    BUNDLE="osv-linux-${ARCH}.tar.gz" && \
+    curl -fsSL "https://github.com/sbomify/sbom-tools/releases/download/${SBOM_TOOLS_VERSION}/${BUNDLE}" \
+        -o "/tmp/${BUNDLE}" && \
+    curl -fsSL "https://github.com/sbomify/sbom-tools/releases/download/${SBOM_TOOLS_VERSION}/${BUNDLE}.sigstore.json" \
+        -o "/tmp/${BUNDLE}.sigstore.json" && \
+    cosign verify-blob-attestation \
+        --bundle "/tmp/${BUNDLE}.sigstore.json" \
+        --certificate-identity "https://github.com/sbomify/sbom-tools/.github/workflows/build.yml@refs/tags/${SBOM_TOOLS_VERSION}" \
+        --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+        --type slsaprovenance1 \
+        "/tmp/${BUNDLE}" && \
+    mkdir /tmp/osv && \
+    tar -xzf "/tmp/${BUNDLE}" -C /tmp/osv && \
+    install -m 0755 /tmp/osv/bin/osv-scanner /usr/local/bin/osv-scanner && \
+    # Fail the build if OSV_SCANNER_VERSION no longer matches what the release ships
+    osv-scanner --version | grep -qx "osv-scanner version: ${OSV_SCANNER_VERSION#v}" && \
+    rm -rf /tmp/osv "/tmp/${BUNDLE}" "/tmp/${BUNDLE}.sigstore.json" /tmp/cosign_checksums.txt /tmp/cosign-checksum.txt
 
 ### Stage 6: Python Application for Development (python-app-dev)
 FROM python-dependencies AS python-app-dev

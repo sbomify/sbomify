@@ -184,7 +184,7 @@
                 assessment starts in, and it is recorded rather than guessed.
                 The declaration cannot be exported while it is unanswered.
             {% endcomment %}
-            <c-layout.form-section stacked title="EU establishment" description="CRA Art. 22. A manufacturer without an establishment in the Union must appoint an Authorized Representative before placing the product on the market.">
+            <c-layout.form-section stacked title="EU establishment" description="CRA Art. 18. A manufacturer may appoint an Authorized Representative in the Union by written mandate. This is optional.">
             <div class="flex flex-col gap-4">
                 <fieldset>
                     <c-forms.label>Is the manufacturer established in the EU?</c-forms.label>
@@ -202,9 +202,10 @@
                 <div x-show="euEstablished === 'no'"
                      x-cloak
                      class="pt-2 border-t border-border space-y-4">
-                    <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation">
-                    An Authorized Representative is required. Name, address, contact email
-                    and mandate date must all be recorded before this step will save.
+                    <c-feedback.alert variant="info">
+                    An Authorized Representative is optional. Leave these fields empty if
+                    you have not appointed one. If you record one, add the name, address,
+                    contact email and mandate date.
                     </c-feedback.alert>
                     <div class="flex flex-col gap-4">
                         <div>

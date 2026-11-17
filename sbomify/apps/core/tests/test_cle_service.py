@@ -309,7 +309,7 @@ class TestRecomputeLifecycleDates:
             sample_product,
             "endOfSupport",
             datetime(2026, 3, 15, tzinfo=timezone.utc),
-            versions=[{"version": "1.x"}],
+            versions=[{"range": "vers:generic/*"}],
             support_id="standard",
         )
         sample_product.refresh_from_db()
@@ -321,7 +321,7 @@ class TestRecomputeLifecycleDates:
             sample_product,
             "endOfLife",
             datetime(2027, 6, 30, tzinfo=timezone.utc),
-            versions=[{"version": "1.x"}],
+            versions=[{"range": "vers:generic/*"}],
         )
         sample_product.refresh_from_db()
         assert sample_product.end_of_life is not None
