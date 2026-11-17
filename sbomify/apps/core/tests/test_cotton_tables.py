@@ -256,8 +256,21 @@ def test_nowrap_cell_holds_the_name_on_one_line_and_caps_it(rendered: str) -> No
     ending in an ellipsis.
     """
     cell = _element_holding(rendered, "td", "Nowrap body cell")
-    assert '<div class="truncate max-w-[24rem]">Nowrap body cell</div>' in cell
+    assert '<div class="truncate max-w-[24rem] *:truncate">Nowrap body cell</div>' in cell
     assert "whitespace-nowrap" not in cell
+
+
+def test_nowrap_cell_ends_every_stacked_line_in_its_own_ellipsis(rendered: str) -> None:
+    """A description under the name is its own block, so it needs its own ellipsis.
+
+    text-overflow only marks text overflowing the box it is set on. With the
+    truncation on the wrapper alone, a long description inherited nowrap, ran
+    past its block and was clipped mid letter by the wrapper with no ellipsis.
+    """
+    cell = _element_holding(rendered, "td", 'data-probe="stacked-description"')
+    wrapper = cell.split('<div class="truncate max-w-[24rem] *:truncate">', 1)
+    assert len(wrapper) == 2, "the nowrap wrapper does not give its children an ellipsis"
+    assert 'data-probe="stacked-description"' in wrapper[1]
 
 
 def test_name_line_lets_the_name_give_way_and_keeps_the_trail_whole(rendered: str) -> None:

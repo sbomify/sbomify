@@ -23,6 +23,25 @@
         </div>
     </div>
     <c-forms.checkbox x-model="form.is_prerelease">Mark as prerelease</c-forms.checkbox>
+    <c-forms.field label="Replaces" x-show="replacesLocked">
+    <c-forms.static x-text="replacesSummary()"></c-forms.static>
+    </c-forms.field>
+    <c-forms.field label="Release it replaces" for="release-replaces" hint="Choose None if this release replaces nothing." x-show="!replacesLocked && (form.replaces || replaceOptions().length)">
+    <c-forms.select id="release-replaces" x-model="form.replaces">
+    <option value="">None</option>
+    <template x-for="option in replaceOptions()" :key="option.id">
+        <option :value="option.id"
+                :selected="option.id === form.replaces"
+                x-text="option.name"></option>
+    </template>
+    </c-forms.select>
+    </c-forms.field>
+    <div x-show="!replacesLocked && form.replaces">
+        <c-layout.choice-group label="Line" hint="Same line stops monitoring the release it replaces. New line keeps monitoring it while you still support it.">
+        <c-layout.choice x_name="'release-replaces-line'" value="same" icon="fas fa-arrow-right" x_checked="form.replaces_line === 'same'" x_click="form.replaces_line = 'same'">Same line</c-layout.choice>
+        <c-layout.choice x_name="'release-replaces-line'" value="new" icon="fas fa-code-branch" x_checked="form.replaces_line === 'new'" x_click="form.replaces_line = 'new'">New line</c-layout.choice>
+        </c-layout.choice-group>
+    </div>
 </form>
 <c-slot name="footer">
 <c-buttons.secondary @click="closeModal()">Cancel</c-buttons.secondary>
