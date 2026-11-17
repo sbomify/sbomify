@@ -303,6 +303,48 @@ class TestDowngradingCycloneDX:
         with pytest.raises(ConversionFailed, match="not valid CycloneDX 1.6"):
             downgrade_cyclonedx(broken.encode(), "1.6")
 
+    # What Dependency-Track 5.2.1 answered when each was the only url in a BOM.
+    @pytest.mark.parametrize(
+        "url, accepted",
+        [
+            ("git@github.com:acme/auth.git", False),
+            ("https://example.com/a b", False),
+            ("https://example.com/{owner}/x", False),
+            ("https://example.com/%zz", False),
+            ("https://example.com/a|b", False),
+            ("https://example.com/a\\b", False),
+            ("https://example.com/a^b", False),
+            ("https://example.com/[x]", False),
+            ("git+ssh://git@github.com/acme/auth.git", True),
+            ("github:acme/auth", True),
+            ("https://github.com/acme/auth#readme", True),
+            ("", True),
+            ("https://example.com/ä", True),
+        ],
+    )
+    def test_a_copy_keeps_exactly_the_urls_dependency_track_accepts(self, url: str, accepted: bool) -> None:
+        references = [{"type": "website", "url": url}, {"type": "vcs", "url": "https://github.com/acme/auth"}]
+        component = {"type": "library", "name": "auth", "purl": "pkg:npm/auth@1", "externalReferences": references}
+        bom = {"bomFormat": "CycloneDX", "specVersion": "1.6", "components": [component]}
+
+        copy = json.loads(downgrade_cyclonedx(json.dumps(bom).encode(), "1.6"))
+
+        (kept,) = copy["components"]
+        assert kept["purl"] == "pkg:npm/auth@1"
+        assert [r["url"] for r in kept["externalReferences"]] == [url] * accepted + ["https://github.com/acme/auth"]
+
+    def test_a_url_list_loses_only_the_entry_that_is_not_an_iri(self) -> None:
+        supplier = {"name": "Acme", "url": ["https://acme.example", "git@github.com:acme/auth.git"]}
+        bom = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "components": [{"type": "library", "name": "auth", "supplier": supplier}],
+        }
+
+        copy = json.loads(downgrade_cyclonedx(json.dumps(bom).encode(), "1.6"))
+
+        assert copy["components"][0]["supplier"]["url"] == ["https://acme.example"]
+
     def test_only_cyclonedx_json_is_accepted(self) -> None:
         with pytest.raises(ConversionFailed):
             downgrade_cyclonedx(json.dumps({"spdxVersion": "SPDX-2.3"}).encode(), "1.6")

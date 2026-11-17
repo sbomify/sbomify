@@ -383,7 +383,16 @@
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-text-muted">Identifier</dt>
                         <dd class="text-text font-mono">
-                            {{ advisory.vulnerability_id|default:advisory.id }}
+                            {% with identifier_url=advisory.vulnerability_id|advisory_url %}
+                                {% if identifier_url %}
+                                    <a href="{{ identifier_url }}"
+                                       target="_blank"
+                                       rel="noopener"
+                                       class="text-primary hover:underline">{{ advisory.vulnerability_id }}</a>
+                                {% else %}
+                                    {{ advisory.vulnerability_id|default:advisory.id }}
+                                {% endif %}
+                            {% endwith %}
                         </dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
