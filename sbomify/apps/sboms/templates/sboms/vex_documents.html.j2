@@ -1,4 +1,4 @@
-{% load humanize %}
+{% load humanize advisory_tags %}
 {% comment %}
 VEX Documents card for the component detail page. Lists the VEX documents
 uploaded for the component (file uploader or API); the sbomify-triage overlay
@@ -50,7 +50,20 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                 <c-tables.cell>
                 {% if doc.statement_count %}
                     <div class="flex flex-wrap gap-1 items-center">
-                        {% for c in doc.cve_summary %}<c-badges.info title="{{ c.state }}">{{ c.id }}</c-badges.info>{% endfor %}
+                        {% for c in doc.cve_summary %}
+                            {% with c_url=c.id|advisory_url %}
+                                {% if c_url %}
+                                    <a href="{{ c_url }}"
+                                       target="_blank"
+                                       rel="noopener"
+                                       class="no-underline">
+                                        <c-badges.info title="{{ c.state }}">{{ c.id }}</c-badges.info>
+                                    </a>
+                                {% else %}
+                                    <c-badges.info title="{{ c.state }}">{{ c.id }}</c-badges.info>
+                                {% endif %}
+                            {% endwith %}
+                        {% endfor %}
                         {% if doc.extra_cve_count %}
                             <span class="text-text-muted text-xs">+{{ doc.extra_cve_count|intcomma }}</span>
                         {% endif %}
