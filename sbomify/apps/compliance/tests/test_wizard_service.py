@@ -928,8 +928,8 @@ class TestStepValidationEdgeCases:
 
 @pytest.mark.django_db
 class TestStep1EuRepresentation:
-    """The Art. 22 gate: answering "not EU-established" without naming an AR
-    is a breach the step refuses to record; leaving it unanswered is not."""
+    """An AR is optional (CRA Art. 18): "not EU-established" with no AR saves,
+    a half-entered AR does not, and an unanswered determination still saves."""
 
     def test_step_1_saves_a_complete_representative_block(self, assessment, sample_user):
         from sbomify.apps.compliance.services.wizard_service import save_step_data
@@ -971,14 +971,41 @@ class TestStep1EuRepresentation:
         assert result.status_code == 400
         assert "255" in (result.error or "")
 
-    def test_step_1_refuses_non_eu_without_a_representative(self, assessment, sample_user):
+    def test_step_1_saves_non_eu_without_a_representative(self, assessment, sample_user):
         from sbomify.apps.compliance.services.wizard_service import save_step_data
 
-        result = save_step_data(assessment, 1, {"is_eu_established": False}, sample_user)
+        result = save_step_data(
+            assessment,
+            1,
+            {
+                "is_eu_established": False,
+                "authorized_rep_name": "",
+                "authorized_rep_address": "",
+                "authorized_rep_email": "",
+                "authorized_rep_mandate_date": None,
+                "authorized_rep_mandate_reference": "",
+            },
+            sample_user,
+        )
+
+        assert result.ok, result.error
+        assessment.refresh_from_db()
+        assert assessment.is_eu_established is False
+        assert assessment.eu_representation_problems == []
+
+    def test_step_1_refuses_a_half_entered_representative(self, assessment, sample_user):
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(
+            assessment,
+            1,
+            {"is_eu_established": False, "authorized_rep_name": "Acme EU Compliance BV"},
+            sample_user,
+        )
 
         assert not result.ok
         assert result.status_code == 400
-        assert "Art. 22" in (result.error or "")
+        assert "Art. 18" in (result.error or "")
 
     def test_step_1_still_saves_when_the_determination_is_unanswered(self, assessment, sample_user):
         """Blocking here would strand every assessment created before the

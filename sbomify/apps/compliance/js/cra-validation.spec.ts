@@ -49,11 +49,19 @@ describe('CRA required-field guidance', () => {
     expect(step.canContinue).toBe(true);
   });
 
-  test('non-EU manufacturers see missing representative details before saving', () => {
+  test('non-EU manufacturers can continue without a representative', () => {
     const step = readyProfile();
     step.euEstablished = 'no';
+    expect(step.missingFields).toEqual([]);
+    expect(step.canContinue).toBe(true);
+  });
+
+  test('a started representative must be finished before saving', () => {
+    const step = readyProfile();
+    step.euEstablished = 'no';
+    step.authorizedRepMandateReference = 'MANDATE-1';
     expect(step.missingFields.map(field => field.target)).toEqual(['ar-name', 'ar-address', 'ar-email', 'ar-mandate-date']);
-    step.euEstablished = 'yes';
+    step.authorizedRepMandateReference = ' ';
     expect(step.canContinue).toBe(true);
   });
 

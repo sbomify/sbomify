@@ -4,6 +4,13 @@ The release's vulnerabilities, deduplicated across its SBOMs and with VEX
 applied: the same rollup the product page prints for this release. The first
 ten rows show by default; the rest wait behind a toggle so a release carrying
 hundreds does not push its artifacts off the page.
+
+A release sbomify no longer monitors is not scanned again, so its counts are as
+old as its last scan. The notice says why, with that reason's own date, and a
+zero reads as "at last scan", never as clean today. An SBOM with no scan results
+reads "without scan results", not "not scanned yet": an earlier scan may have
+run and left nothing usable. When some of its SBOMs are still scanned, the
+notice counts only the ones that stopped.
 {% endcomment %}
 <c-tables.shell id="release-vulnerabilities" x-data="{ expanded: false }">
 <c-tables.toolbar>
@@ -13,10 +20,25 @@ hundreds does not push its artifacts off the page.
 </h4>
 {% if vulnerabilities.unassessed %}
     <c-slot name="right">
-    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }} not scanned yet</span>
+    <span class="text-sm text-text-muted">{{ vulnerabilities.unassessed|intcomma }} SBOM{{ vulnerabilities.unassessed|pluralize }} {{ vulnerabilities.untracked|yesno:"without scan results,not scanned yet" }}</span>
     </c-slot>
 {% endif %}
 </c-tables.toolbar>
+{% if vulnerabilities.untracked %}
+    <div class="px-4 pt-4">
+        <c-feedback.alert standing icon="fas fa-clock-rotate-left" title="No longer monitored">
+        {{ vulnerabilities.untracked.reason }} on {{ vulnerabilities.untracked.on|date:"j M Y" }}.
+        {% if vulnerabilities.untracked.sboms %}
+            {{ vulnerabilities.untracked.stopped }} of its {{ vulnerabilities.untracked.sboms }} SBOMs {{ vulnerabilities.untracked.stopped|pluralize:"is,are" }} no longer scanned.
+            {% if vulnerabilities.last_scanned_at %}
+                The oldest scan in these counts ran on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
+            {% endif %}
+        {% elif vulnerabilities.last_scanned_at %}
+            These counts are from its last scan, on {{ vulnerabilities.last_scanned_at|date:"j M Y" }}.
+        {% endif %}
+        </c-feedback.alert>
+    </div>
+{% endif %}
 {% if vulnerabilities.assessed %}
     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 px-4 py-4">
         <c-layout.stat-card compact value="{{ vulnerabilities.counts.total }}" label="Open" />
@@ -61,9 +83,17 @@ hundreds does not push its artifacts off the page.
             </c-buttons.secondary>
         {% endif %}
         </c-tables.footer>
+    {% elif vulnerabilities.untracked.sboms %}
+        <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No vulnerabilities at last scan" message="sbomify no longer scans {{ vulnerabilities.untracked.stopped }} of the {{ vulnerabilities.untracked.sboms }} SBOMs in this release. A vulnerability published since then in {{ vulnerabilities.untracked.stopped|pluralize:'that one,those' }} would not show here." />
+    {% elif vulnerabilities.untracked %}
+        <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No vulnerabilities at last scan" message="sbomify no longer scans this release. A vulnerability published since then would not show here." />
     {% else %}
         <c-feedback.empty-state size="sm" icon="fas fa-check" title="No vulnerabilities found" message="The latest scans found no known vulnerabilities in this release." />
     {% endif %}
+{% elif vulnerabilities.untracked.sboms %}
+    <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No scan results" message="None of the {{ vulnerabilities.untracked.sboms }} SBOMs in this release has scan results yet, and sbomify no longer scans {{ vulnerabilities.untracked.stopped }} of them." />
+{% elif vulnerabilities.untracked %}
+    <c-feedback.empty-state size="sm" icon="fas fa-clock-rotate-left" icon_variant="neutral" title="No scan results" message="sbomify stopped monitoring this release before its SBOMs had scan results." />
 {% else %}
     <c-feedback.empty-state size="sm" icon="fas fa-hourglass-half" icon_variant="neutral" title="Not scanned yet" message="Scan results appear here once this release's SBOMs have been scanned." />
 {% endif %}

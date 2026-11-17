@@ -12,9 +12,12 @@ whose aliases include a CVE links to that CVE, and an id with no CVE behind it
 links to its own page. Insights answers 404 for an id it does not hold, which is
 what made each scheme in ``_INSIGHTS_SCHEMES`` checkable.
 
-SUSE and openSUSE updates have a page of their own there. The Debian, Ubuntu
-and CERT schemes have only an alias entry on the CVE's, so on their own they keep
-the external host below. Every
+SUSE and openSUSE updates have a page of their own there, as do the Global
+Security Database, Haskell (HSEC), Python Software Foundation (PSF) and Drupal
+advisories. Each was checked against the ids Insights lists in its sitemap. The
+Debian, Ubuntu, Red Hat, AlmaLinux and CERT schemes have only an alias entry on
+the CVE's: a bare ``DSA-5020-1`` answers 404, so on their own they keep the
+external host below, and with a CVE alias they reach Insights through it. Every
 external entry was checked against a live id **and** a deliberately invalid
 one, because two of the candidate hosts serve their pages client-side and answer
 200 for any path, which makes a naive reachability check meaningless. A scheme
@@ -67,6 +70,10 @@ _INSIGHTS_SCHEMES: frozenset[str] = frozenset(
         ReferenceType.RUSTSEC,
         ReferenceType.GO,
         ReferenceType.SUSE,
+        ReferenceType.GSD,
+        ReferenceType.HSEC,
+        ReferenceType.PSF,
+        ReferenceType.DRUPAL,
     }
 )
 

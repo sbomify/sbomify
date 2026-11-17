@@ -1,0 +1,22 @@
+{% extends "core/public_base.htmx.j2" %}
+{% block title %}Sign in to {{ workspace_name }}{% endblock %}
+{% block content %}
+    <div class="mx-auto flex w-full max-w-lg flex-col">
+        <c-branded.surface flush>
+        <c-feedback.empty-state icon="fas fa-right-to-bracket" icon_variant="neutral" title="Continue to {{ workspace_name }}" message="Sign in to the {{ workspace_name }} Trust Center at {{ host }} as {{ request.user.email }}.">
+        {% comment %}
+        A form, not a link: signing in on another host hands that host a
+        session, so it takes the reader's own click on a CSRF-protected POST.
+        A crafted link alone cannot do it for them.
+        {% endcomment %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <c-buttons.secondary type="submit">
+            <i class="fas fa-right-to-bracket" aria-hidden="true"></i>Continue
+            </c-buttons.secondary>
+        </form>
+        </c-feedback.empty-state>
+        </c-branded.surface>
+    </div>
+{% endblock %}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
@@ -17,6 +17,7 @@ from sbomify.apps.core.url_utils import (
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.services.trust_center_badges import public_certification_badges
 from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.plugins.services.access import plugins_within_plan
@@ -135,9 +136,22 @@ def _list_public_products(team: Workspace) -> list[dict[str, Any]]:
 
 def _list_public_global_components(team: Workspace, request: HttpRequest) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
-    components = Component.objects.filter(
-        team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
-    ).order_by("name")
+    #
+    # A component holding nothing but NDAs is where the access request flow
+    # keeps the workspace NDA (see ``get_or_create_company_wide_component``).
+    # Readers are shown the NDA when they request access; listed here it would
+    # read as a compliance artifact the workspace publishes.
+    workspace_documents = Document.objects.filter(component=OuterRef("pk"))
+    nda_only = Exists(workspace_documents.filter(document_type=Document.DocumentType.NDA)) & ~Exists(
+        workspace_documents.exclude(document_type=Document.DocumentType.NDA)
+    )
+    components = (
+        Component.objects.filter(
+            team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
+        )
+        .exclude(nda_only)
+        .order_by("name")
+    )
     return [
         {
             "id": component.id,

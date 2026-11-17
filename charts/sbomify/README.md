@@ -9,7 +9,7 @@ scheduler, and a migration step that runs before any of them serve traffic.
 Static assets are served by WhiteNoise from inside the app, so there is no
 separate static tier.
 
-It does **not** deploy PostgreSQL, Redis, object storage or Keycloak. You point
+It does **not** deploy PostgreSQL, Valkey (or Redis), object storage or Keycloak. You point
 it at ones you provide, and it refuses to render if you have not. See
 *Backing services* below.
 
@@ -24,7 +24,7 @@ an Ingress*.
 
 That creates a three-node [kind](https://kind.sigs.k8s.io/) cluster, applies
 [`deploy/local/dependencies.yaml`](../../deploy/local/dependencies.yaml),
-throwaway PostgreSQL, Redis, SeaweedFS and Keycloak for the laptop, and then
+throwaway PostgreSQL, Valkey, SeaweedFS and Keycloak for the laptop, and then
 installs this chart with `values-local.yaml` pointed at them. Caddy issues its
 own certificates from its internal CA, so there is nothing to pre-generate.
 
@@ -105,7 +105,7 @@ release away from your data.
 | Service | Value | Suggested |
 | --- | --- | --- |
 | PostgreSQL 17 | `database.*` | A managed service (RDS, Cloud SQL, Neon), or the [CloudNativePG](https://cloudnative-pg.io/) operator in-cluster |
-| Redis | `redis.*` | A managed service (ElastiCache, Upstash), or an operator |
+| Valkey or Redis | `redis.*` | A managed service (ElastiCache, Memorystore, Upstash), or an operator |
 | S3-compatible storage | `objectStorage.*` | S3, Cloudflare R2, Tigris, or a MinIO you operate |
 | Keycloak | `auth.keycloak.*` | The [Keycloak Operator](https://www.keycloak.org/guides) |
 

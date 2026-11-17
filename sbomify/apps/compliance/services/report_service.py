@@ -407,8 +407,16 @@ def delete_with_reports(parents: list[Any], key: str, refused: str) -> ServiceRe
     The reports are locked first, as ``_lock`` does, so a filing cannot land
     between the check and the delete, where the cascade would take it unseen.
     A report started meanwhile is not locked, and RESTRICT fails the delete.
+    Products are locked before anything else: a release edit locks its
+    product and then the release, and a cascade that reached the releases
+    first could deadlock against it. Advisories are not: ``record_filing``
+    locks the report and then checks its timeline event's advisory key.
     """
     with transaction.atomic():
+        if key == "product":
+            model = type(parents[0])
+            pks = [parent.pk for parent in parents]
+            list(model.objects.select_for_update().filter(pk__in=pks).order_by("pk").values_list("pk"))
         report_ids = list(
             CRAReport.objects.select_for_update().filter(**{f"{key}__in": parents}).values_list("pk", flat=True)
         )
