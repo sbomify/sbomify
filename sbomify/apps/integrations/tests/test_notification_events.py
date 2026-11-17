@@ -121,6 +121,32 @@ class TestQueuedOnCommit:
         assert queued == []
 
 
+    @pytest.mark.parametrize("task,event", [("notify_vex_submission", "vex"), ("notify_new_vulnerabilities", "new")])
+    def test_a_broker_that_cannot_be_reached_does_not_stop_the_commit(
+        self, component, connected_slack, monkeypatch, django_capture_on_commit_callbacks, task, event
+    ):
+        """An enqueue failure costs the message, not the work queued after it on the same commit."""
+        from django.db import transaction
+
+        _route(connected_slack, Event.VEX_SUBMISSIONS)
+        _route(connected_slack, Event.NEW_VULNERABILITIES)
+
+        def unreachable(*args):
+            raise ConnectionError("broker down")
+
+        monkeypatch.setattr(getattr(tasks, task), "send", unreachable)
+        later: list[str] = []
+
+        with django_capture_on_commit_callbacks(execute=True):
+            if event == "vex":
+                events.vex_submission_created("sub1", component.team_id)
+            else:
+                events.vulnerabilities_opened(component.id, component.team_id, ["CVE-1"])
+            transaction.on_commit(lambda: later.append("ran"))
+
+        assert later == ["ran"]
+
+
 class TestTheProducersCallIn:
     def test_a_new_submission_announces_itself(
         self, component, connected_slack, queued, django_capture_on_commit_callbacks
