@@ -227,15 +227,27 @@ def _finding_rows(query: str, team_id: Any, limit: int) -> Any:
     Matched on the component's name as well as the advisory id. The row already
     reads "CVE-x in component-y", so someone typing the component name and
     getting nothing was being told that component has no open findings.
+
+    The section is "Affected components", and the lifecycle stays open while
+    the scanner keeps reporting an advisory whatever a VEX says, so a
+    not_affected ruling is taken out here. A few spare candidates are read so
+    the ones taken out do not empty the section.
     """
     from sbomify.apps.plugins.models import VulnerabilityLifecycle
+    from sbomify.apps.teams.models import Workspace
+    from sbomify.apps.vulnerability_scanning.kpis import vex_suppressed_advisories
 
-    return (
+    candidates = list(
         VulnerabilityLifecycle.objects.filter(component__team_id=team_id, resolved_at__isnull=True)
         .filter(Q(advisory_id__icontains=query) | Q(component__name__icontains=query))
         .select_related("component")
-        .order_by("advisory_id", "component__name")[:limit]
+        .order_by("advisory_id", "component__name")[: limit * 4]
     )
+    if not candidates:
+        return []
+    workspace = Workspace.objects.filter(id=team_id).first()
+    suppressed = vex_suppressed_advisories(workspace, {row.component_id for row in candidates}) if workspace else set()
+    return [row for row in candidates if (str(row.component_id), row.advisory_id.lower()) not in suppressed][:limit]
 
 
 def _release_rows(query: str, team_id: Any, limit: int) -> Any:

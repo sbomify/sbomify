@@ -96,6 +96,10 @@ class ReferenceType(models.TextChoices):
     EDB = "edb", "Exploit-DB"
     MSRC = "msrc", "Microsoft Security Response Center"
     JVNDB = "jvndb", "JVN iPedia"
+    GSD = "gsd", "Global Security Database"
+    HSEC = "hsec", "Haskell security advisory"
+    PSF = "psf", "Python Software Foundation advisory"
+    DRUPAL = "drupal", "Drupal security advisory"
     OTHER = "other", "Other"
 
 
@@ -116,11 +120,16 @@ _REFERENCE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("ALSA-", ReferenceType.ALSA),
     ("ALAS-", ReferenceType.ALAS),
     ("SUSE-SU-", ReferenceType.SUSE),
+    ("OPENSUSE-SU-", ReferenceType.SUSE),
     ("VU#", ReferenceType.CERT_VU),
     ("ZDI-", ReferenceType.ZDI),
     ("EDB-", ReferenceType.EDB),
     ("MSRC-", ReferenceType.MSRC),
     ("JVNDB-", ReferenceType.JVNDB),
+    ("GSD-", ReferenceType.GSD),
+    ("HSEC-", ReferenceType.HSEC),
+    ("PSF-", ReferenceType.PSF),
+    ("DRUPAL-", ReferenceType.DRUPAL),
 )
 
 
@@ -1068,6 +1077,7 @@ class AdvisoryEvent(models.Model):
         # CRA Article 14 leaves a reporting trail the advisory has to evidence.
         CRA_EARLY_WARNING = "cra_early_warning", "CRA early warning submitted"
         CRA_NOTIFICATION = "cra_notification", "CRA notification submitted"
+        CRA_INTERMEDIATE_REPORT = "cra_intermediate_report", "CRA intermediate report submitted"
         CRA_FINAL_REPORT = "cra_final_report", "CRA final report submitted"
         USERS_NOTIFIED = "users_notified", "Impacted users notified"
         # A new body for an earlier message. The timeline is append-only, so an

@@ -222,9 +222,14 @@
             {% endif %}
         </section>
         {# ---- Compliance artifacts -------------------------------------------- #}
-        <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="compliance">
-            <c-branded.section-header title="Compliance artifacts" subtitle="Organization-wide certifications, attestations and policy documents." />
-            {% if global_components %}
+        {% comment %}
+        Hidden when there is nothing to show, like Certifications above: an
+        empty state here reads as an absence the workspace may simply not have
+        filled yet.
+        {% endcomment %}
+        {% if global_components %}
+            <section class="flex flex-col gap-4 scroll-mt-[4.5rem]" id="compliance">
+                <c-branded.section-header title="Compliance artifacts" subtitle="Organization-wide certifications, attestations and policy documents." />
                 {% comment %}
                 A card here is a panel holding one record, so it is a surface
                 and a row rather than a third shape with its own rules. The row
@@ -243,12 +248,8 @@
                         </c-branded.surface>
                     {% endfor %}
                 </div>
-            {% else %}
-                <c-feedback.empty-state icon="fas fa-award" icon_variant="neutral" title="No compliance artifacts">
-                Organization-wide certifications and attestations appear here once published.
-                </c-feedback.empty-state>
-            {% endif %}
-        </section>
+            </section>
+        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}

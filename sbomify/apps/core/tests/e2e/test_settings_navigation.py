@@ -6,6 +6,8 @@ from typing import Any
 import pytest
 from playwright.sync_api import Page, expect
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.teams.models import ContactProfile
 
 pytest_plugins = ["sbomify.apps.core.tests.e2e.fixtures"]
@@ -162,3 +164,28 @@ def test_settings_controls_and_navigation(
         page.get_by_role("region", name="API tokens settings").get_by_text("Browser test token", exact=True)
     ).to_have_count(0)
     assert not errors, "\n".join([*errors, *console])
+
+
+@pytest.mark.django_db
+def test_revoke_all_tokens_confirmation_revokes(
+    authenticated_page: Page, sample_user: Any, team_with_business_plan: Any
+) -> None:
+    workspace = team_with_business_plan
+    for description in ("First token", "Second token"):
+        AccessToken(
+            user=sample_user,
+            team=workspace,
+            description=description,
+            encoded_token=create_personal_access_token(sample_user),
+        ).save()
+    page = authenticated_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"/workspaces/{workspace.key}/settings/tokens")
+    page.get_by_role("button", name="Revoke all", exact=True).click()
+    revoke = page.get_by_role("alertdialog", name="Revoke all tokens", exact=True)
+    revoke.get_by_role("button", name="Revoke all", exact=True).click()
+    expect(revoke).to_be_hidden()
+    expect(page.get_by_text("No tokens yet", exact=True)).to_be_visible()
+    assert not AccessToken.objects.filter(user=sample_user, team=workspace).exists()
+    assert not errors

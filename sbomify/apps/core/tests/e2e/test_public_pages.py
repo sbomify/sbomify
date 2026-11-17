@@ -148,8 +148,9 @@ def test_many_affected_versions_fold_in_the_public_table(
     sample_user,  # noqa: F811
     width: int,
 ) -> None:
-    """The "Am I affected?" table lists each affected version on its own line
-    and folds past five, so a long list does not stretch the row."""
+    """"Am I affected?" lists each affected version as a chip and folds past
+    eight, so a long list does not stretch the row. Typing a version answers
+    for it, and the chip that matches shows even while folded."""
     from sbomify.apps.core.models import Release
 
     team = trust_center_product.team
@@ -175,8 +176,16 @@ def test_many_affected_versions_fold_in_the_public_table(
     items = versions.locator("li")
     expect(items).to_have_count(12)
     expect(items.first).to_have_text("9.0.0")
-    expect(items.nth(4)).to_be_visible()
-    expect(items.nth(5)).to_be_hidden()
+    expect(items.nth(7)).to_be_visible()
+    expect(items.nth(8)).to_be_hidden()
+
+    page.get_by_label("Check your version").fill("v9.10.0")
+    expect(page.get_by_text("v9.10.0 is affected", exact=True)).to_be_visible()
+    expect(items.nth(10)).to_be_visible()
+    expect(items.nth(9)).to_be_hidden()
+
+    page.get_by_label("Check your version").fill("9.12.0")
+    expect(page.get_by_text("9.12.0 is not affected", exact=True)).to_be_visible()
 
     page.get_by_text("Show all 12").click()
     expect(items.nth(11)).to_be_visible()

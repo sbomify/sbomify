@@ -22,6 +22,7 @@ from sbomify.apps.core.services.inventory_page import (
     build_inventory_snapshot,
     build_inventory_table,
 )
+from sbomify.apps.core.services.release_lifecycle import replace_choices
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.tea.mappers import get_product_tei_urn
 
@@ -78,6 +79,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
         "components": len(rows),
         "artifacts": sum(row["artifact_count"] for row in rows),
         "open": open_findings,
+        "suppressed": sum(row["counts"].get("suppressed", 0) for row in security_rows),
         "past_sla": past_sla,
         "unassessed": unassessed,
         # A zero we cannot stand behind. These counts read the newest SBOM per
@@ -113,6 +115,7 @@ def build_product_page_context(request: HttpRequest, product_id: str) -> Service
             "metrics": metrics,
             "has_sboms": any(row["has_sbom"] for row in rows),
             "release_editor_data": release_rows,
+            "release_replace_data": replace_choices(product_id, [row["id"] for row in release_rows]),
             "release_inventory": {
                 "kind": "releases",
                 "singular": "release",
@@ -203,6 +206,9 @@ def build_product_releases_context(request: HttpRequest, product_id: str) -> Ser
             **(result.value or {}),
             "product": product,
             "release_editor_data": (result.value or {})["inventory"]["rows"],
+            "release_replace_data": replace_choices(
+                product_id, [row["id"] for row in (result.value or {})["inventory"]["rows"]]
+            ),
             "breadcrumb_items": [
                 {"label": "Products", "url": reverse("core:products_dashboard")},
                 {"label": product["name"], "url": reverse("core:product_details", args=[product_id])},

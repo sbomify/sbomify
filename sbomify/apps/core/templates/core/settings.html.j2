@@ -35,7 +35,7 @@
                 <c-tables.row>
                 <c-tables.cell nowrap>
                 <div class="font-medium text-text" x-text="token.description"></div>
-                <div class="text-sm text-text-muted">Personal access token</div>
+                <div class="text-sm text-text-muted" x-text="token.scope_label"></div>
                 </c-tables.cell>
                 <c-tables.cell date>
                 <span class="text-text-muted text-sm" x-text="formatDate(token.created_at)"></span>

@@ -1,0 +1,13 @@
+{% comment %}
+The releases of other products this release ships with, on the Trust Center
+release page. Each row's url is the linked release's public page. The app's
+release page uses release_links_card.html.j2, which can also add and remove.
+{% endcomment %}
+{% if linked_releases %}
+    <section class="flex flex-col gap-4">
+        <c-branded.section-header title="Ships with" subtitle="Releases of other products included in this release." />
+        <c-branded.surface flush>
+        {% include 'core/components/release_links_table.html.j2' %}
+        </c-branded.surface>
+    </section>
+{% endif %}

@@ -99,6 +99,9 @@ def test_public_release_page_shows_vuln_posture(sample_team_with_owner_member):
     assert by_id["CVE-2026-1"]["suppressed"] is False
     assert by_id["CVE-2026-1-suppressed"]["suppressed"] is True
     assert by_id["CVE-2026-1-suppressed"]["state"] == "not_affected"
+    # Each id carries the Insights page the row links to.
+    assert by_id["CVE-2026-1"]["url"] == "https://insights.sbomify.com/CVE-2026-1/"
+    assert 'x-if="f.url"' in html
 
 
 @pytest.mark.django_db

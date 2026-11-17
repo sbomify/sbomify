@@ -47,12 +47,14 @@ workflow's OIDC identity and are valid for 15 minutes.
 </c-badges.secondary>
 </c-tables.cell>
 <c-tables.cell nowrap>
-<div class="flex items-center gap-2">
-<code class="text-sm font-medium">{{ binding.repository }}</code>
+<c-tables.name>
+<code class="text-sm font-medium" title="{{ binding.repository }}">{{ binding.repository }}</code>
+<c-slot name="trail">
 <a href="https://github.com/{{ binding.repository }}" target="_blank" rel="noopener noreferrer" class="text-text-muted hover:text-primary transition-colors" title="Open on GitHub">
 <i class="fas fa-arrow-up-right-from-square text-xs"></i>
 </a>
-</div>
+</c-slot>
+</c-tables.name>
 <div class="text-xs text-text-muted mt-1 font-mono" title="Immutable IDs used to defeat account-resurrection attacks. Pinned at setup for public repos; pinned from the first OIDC publish for private repos.">
 {% if binding.repository_id %}
 owner_id={{ binding.repository_owner_id }} ·

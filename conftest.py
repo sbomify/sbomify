@@ -67,6 +67,20 @@ def _clear_cache():
     cache.clear()
 
 
+@pytest.fixture(autouse=True)
+def _forget_installation_id():
+    """Drop the installation id ``posthog_service`` caches per process.
+
+    The row it was read from is rolled back with the test that created it, so
+    a cached id would follow later tests into their PostHog payloads.
+    """
+    from sbomify.apps.core import posthog_service
+
+    posthog_service._installation_id = ""
+    yield
+    posthog_service._installation_id = ""
+
+
 @pytest.fixture(scope="module")
 def anyio_backend():
     """Configure anyio to use asyncio backend only for async tests."""

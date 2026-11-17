@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpRequest, HttpResponse
@@ -204,7 +206,7 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "submitted_by": "Jane Doe",
             "submitted_via": "Claude fix agent",
             "summary": (
-                "1 ruling · hides 1 open vulnerability in current and released versions"
+                "3 rulings · hides 3 open vulnerabilities in current and released versions"
                 ' · Jane Doe via "Claude fix agent"'
             ),
             "context": "example-parser is only imported by the release script, which never ships.\n\nNo code change.",
@@ -213,10 +215,16 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-10001",
-                    "package": "example-parser@1.0.0",
                     "state": "Not affected",
                     "reason": "Code not reachable",
                     "detail": "Only the release script imports it.",
+                    "packages": [
+                        {"name": "example-parser", "versions": ["1.0.0"]},
+                        {
+                            "name": "@example-scope/instrumentation-example-database-driver",
+                            "versions": ["0.48.0", "0.49.1"],
+                        },
+                    ],
                 }
             ],
         },
@@ -241,10 +249,10 @@ def _vex_submission_demos() -> list[dict[str, object]]:
             "rulings": [
                 {
                     "vuln_id": "CVE-2026-20001",
-                    "package": "Whole component",
                     "state": "False positive",
                     "reason": "",
                     "detail": "",
+                    "packages": [{"name": "Whole component", "versions": []}],
                 }
             ],
         },
@@ -385,6 +393,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 },
             ],
             "overview_demo_counts": {"total": 6, "critical": 1, "high": 2, "medium": 2, "low": 1, "other": 3},
+            "overview_demo_last_scanned": date(2026, 3, 2),
             "overview_demo_sla": {"label": "3 days over", "overdue": True},
             "overview_demo_evidence": {"component_count": 3, "stale": 1, "missing_sboms": 1},
             "overview_demo_empty": {"is_first_visit": True, "metrics": {"open": 0}},
@@ -634,6 +643,52 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "2b4ac46",
             ],
             "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
+            # The version check: one product with a span and a pin, one with
+            # pinned commits that fold, and one that is not affected at all.
+            "demo_version_checks": {
+                "gateway": {
+                    "suppressed": False,
+                    "ranges": [
+                        {
+                            "label": "From 2.0.0, fixed in 2.4.1",
+                            "introduced": "2.0.0",
+                            "fixed": "2.4.1",
+                            "last_affected": "",
+                        },
+                        {"label": "1.9.3", "introduced": "1.9.3", "fixed": "", "last_affected": "1.9.3"},
+                    ],
+                },
+                "agent": {
+                    "suppressed": False,
+                    "ranges": [
+                        {"label": sha, "introduced": sha, "fixed": "", "last_affected": sha}
+                        for sha in (
+                            "6282ec8",
+                            "50c2c31",
+                            "2e9f06e",
+                            "c833c95",
+                            "52836e5",
+                            "ebb0cfb",
+                            "fc7f052",
+                            "2b4ac46",
+                            "9d1e0aa",
+                        )
+                    ],
+                },
+                "console": {"suppressed": True, "ranges": []},
+            },
+            "demo_version_labels_gateway": ["From 2.0.0, fixed in 2.4.1", "1.9.3"],
+            "demo_version_labels_agent": [
+                "6282ec8",
+                "50c2c31",
+                "2e9f06e",
+                "c833c95",
+                "52836e5",
+                "ebb0cfb",
+                "fc7f052",
+                "2b4ac46",
+                "9d1e0aa",
+            ],
             "demo_breadcrumbs": [
                 {"label": "Products", "url": "#"},
                 {"label": "Acme Widget", "url": "#"},

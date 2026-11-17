@@ -17,8 +17,9 @@ services:
       testnet:
         ipv4_address: 172.25.0.10
 
+  # REDIS_IMAGE=redis:8-alpine runs the suite against Redis instead.
   redis:
-    image: redis:8-alpine
+    image: ${REDIS_IMAGE:-valkey/valkey:9-alpine}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

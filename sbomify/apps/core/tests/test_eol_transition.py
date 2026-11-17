@@ -95,6 +95,44 @@ class TestReadiness:
         assert readiness.has_final_sbom is False
         assert "No SBOM" in readiness.problems[0]
 
+    def test_a_finding_a_vex_ruled_out_does_not_block(self, eol_product):
+        """The lifecycle stays open while the scanner keeps reporting the CVE,
+        whatever the VEX says. A not_affected ruling closes it for 6.1.6."""
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+        product, component = eol_product
+        release = _release_with(product, component)
+        sbom = release.artifacts.get().sbom
+        package = {"name": "openssl", "version": "1.1.1", "ecosystem": "deb"}
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {
+                        "id": "CVE-2026-200",
+                        "severity": "critical",
+                        "component": package,
+                        "analysis_state": "not_affected",
+                    },
+                    {"id": "CVE-2026-201", "severity": "high", "component": package},
+                ],
+                "summary": {"total_findings": 1, "suppressed_count": 1},
+            },
+        )
+        sync_findings(run)
+        _open_finding(component, "CVE-2026-200", "critical")
+        _open_finding(component, "CVE-2026-201", "high")
+
+        readiness = eol_readiness(product)
+
+        assert [row["advisory_id"] for row in readiness.unresolved_critical] == []
+        assert [row["advisory_id"] for row in readiness.unresolved_high] == ["CVE-2026-201"]
+        assert readiness.vex_suppressed_count == 1
+
     def test_medium_and_low_findings_do_not_block(self, eol_product):
         """6.1.6 names critical and high only."""
         product, component = eol_product
