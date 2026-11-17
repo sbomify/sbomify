@@ -776,6 +776,57 @@ class TestRetentionReclaimsTheStoredPayload:
         for run in superseded:
             assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{run.id}/")]
 
+    def test_each_prune_batch_deletes_its_own_objects(self, sbom, bucket):
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = [_run(sbom, days_ago=800 + index) for index in range(3)]
+        assert offload_assessment_results() == 3
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0, batch_size=2) == 3
+
+        assert bucket.batch_deletes == 2
+        for run in superseded:
+            assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{run.id}/")]
+
+    def test_a_prune_of_inline_runs_sends_no_delete(self, sbom, bucket):
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        _run(sbom, days_ago=800)
+
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+
+        assert bucket.batch_deletes == 0
+
+    def test_a_failed_batch_leaves_no_row_pointing_at_a_deleted_object(self, sbom, bucket):
+        """The batch that failed lost its rows and kept its objects, for the
+        orphan sweep. The batches after it were never started, so their rows
+        and objects are both still there for the next prune."""
+        from sbomify.apps.plugins.result_store import delete_orphaned_result_objects
+        from sbomify.apps.plugins.retention import prune_assessment_runs
+
+        _run(sbom, days_ago=400)
+        superseded = [_run(sbom, days_ago=800 + index) for index in range(2)]
+        assert offload_assessment_results() == 2
+
+        def unreachable(bucket_name: str, keys: list[str]) -> None:
+            raise ConnectionError("object store unreachable")
+
+        bucket.delete_objects = unreachable  # type: ignore[method-assign]
+        with pytest.raises(ConnectionError):
+            prune_assessment_runs(keep_per_plugin=1, min_age_days=0, batch_size=1)
+        del bucket.delete_objects
+
+        left = list(AssessmentRun.objects.filter(pk__in=[run.pk for run in superseded]))
+        assert len(left) == 1
+        assert left[0].result_object_key in bucket.objects
+
+        assert delete_orphaned_result_objects() == 1
+        assert prune_assessment_runs(keep_per_plugin=1, min_age_days=0) == 1
+        for run in superseded:
+            assert not [key for key in bucket.objects if key.startswith(f"{RESULT_PREFIX}{run.id}/")]
+
     def test_an_earlier_revision_of_a_pruned_run_is_left_to_the_orphan_sweep(self, sbom, bucket):
         """The row names only its current revision, so the prune deletes that
         one and the orphan sweep collects the rest by run id."""

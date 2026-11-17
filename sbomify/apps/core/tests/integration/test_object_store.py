@@ -226,6 +226,30 @@ class TestS3ObjectStoreClient:
         assert [len(call.kwargs["Delete"]["Objects"]) for call in calls] == [1000, 1]
         assert calls[1].kwargs["Delete"] == {"Objects": [{"Key": "k1000"}], "Quiet": True}
 
+    @pytest.mark.parametrize(("count", "requests"), [(0, []), (1, [1]), (1000, [1000])])
+    def test_delete_objects_fills_each_request_up_to_the_limit(self, s3_store, count, requests):
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.delete_objects.return_value = {}
+
+        store.delete_objects("my-bucket", [f"k{index}" for index in range(count)])
+
+        calls = mock_s3.Bucket.return_value.delete_objects.call_args_list
+        assert [len(call.kwargs["Delete"]["Objects"]) for call in calls] == requests
+
+    def test_delete_objects_stops_at_the_first_refused_request(self, s3_store):
+        """What is left goes to the caller's own retry: for retention, the orphan sweep."""
+        store, mock_s3 = s3_store
+        mock_s3.Bucket.return_value.delete_objects.side_effect = [
+            {},
+            {"Errors": [{"Key": "k1000", "Code": "InternalError"}]},
+            {},
+        ]
+
+        with pytest.raises(RuntimeError, match="1 of 1000 deletes failed, first k1000: InternalError"):
+            store.delete_objects("my-bucket", [f"k{index}" for index in range(2001)])
+
+        assert mock_s3.Bucket.return_value.delete_objects.call_count == 2
+
     def test_delete_objects_raises_when_a_key_is_refused(self, s3_store):
         store, mock_s3 = s3_store
         mock_s3.Bucket.return_value.delete_objects.return_value = {
