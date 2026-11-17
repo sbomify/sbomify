@@ -16,6 +16,8 @@ from ninja.throttling import SimpleRateThrottle
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from sbomify.backend_outage import report_backend_outage
+
 #: What a throttle treats as "the backend is unreachable": django-redis wraps
 #: the redis error in ConnectionInterrupted, but IGNORE_EXCEPTIONS is off on
 #: the throttle alias so the raw errors can surface too.
@@ -90,7 +92,7 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
             # for the same reason it is set there — one recovered request means
             # the backend is back for every instance, not just this one.
             type(self)._backend_refusal_until = 0.0
-        except _THROTTLE_BACKEND_ERRORS:
+        except _THROTTLE_BACKEND_ERRORS as exc:
             # The throttle alias raises on a Redis failure by design: a
             # swallowed failure reads as an empty window and hands every
             # caller a fresh budget exactly when Redis being unwell suggests
@@ -114,8 +116,16 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
             # request (its instances are not thread-safe to share), and an
             # instance attribute would start every one of those at zero and put
             # the storm back.
+            #
+            # An unreachable Redis is reported through the shared outage line,
+            # like every other caller, so it reaches Sentry only if it lasts.
+            # Anything else django-redis wrapped (an OOM, a read-only replica)
+            # is a fault in its own right and keeps its own report.
             cls = type(self)
-            if time.monotonic() >= cls._backend_refusal_until:
+            if (
+                time.monotonic() >= cls._backend_refusal_until
+                and report_backend_outage(exc, "API rate limiter") is None
+            ):
                 logger.exception(
                     "Throttle backend unreachable; refusing throttled requests with Retry-After %ss until it recovers",
                     _BACKEND_OUTAGE_RETRY_SECONDS,
