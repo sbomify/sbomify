@@ -248,7 +248,7 @@ class OSVPlugin(AssessmentPlugin):
                 scan_path = temp_copy
                 logger.debug(f"[OSV] Created temp copy with suffix {suffix}: {temp_copy}")
         except OSError as exc:
-            logger.error(f"[OSV] Could not stage SBOM {sbom_id} for scanning: {exc}")
+            logger.error("[OSV] Could not stage SBOM %s for scanning: %s", sbom_id, exc)
             if temp_copy is not None:
                 temp_copy.unlink(missing_ok=True)
             return self._create_error_result(f"Failed to prepare SBOM for scanning: {exc}")
@@ -287,7 +287,7 @@ class OSVPlugin(AssessmentPlugin):
             # first. Falling through here published "0 vulnerabilities found"
             # for SBOMs osv-scanner never actually scanned.
             if returncode not in self.SUCCESS_EXIT_CODES:
-                logger.error(f"[OSV] Scan of SBOM {sbom_id} failed with exit code {returncode}; reporting as error")
+                logger.error("[OSV] Scan of SBOM %s failed with exit code %s; reporting as error", sbom_id, returncode)
                 return self._create_error_result(
                     f"osv-scanner exited with code {returncode} without completing the scan. "
                     "No vulnerability result can be inferred from this run."
@@ -529,7 +529,7 @@ class OSVPlugin(AssessmentPlugin):
         if process.returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
             logger.warning(f"[OSV] Scanner found no package sources: {_collapse_for_log(process.stderr)}")
         elif process.returncode not in self.SUCCESS_EXIT_CODES and not _is_unsupported_spec_version(process.stderr):
-            logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
+            logger.error("[OSV] Scanner returned code %s: %s", process.returncode, _collapse_for_log(process.stderr))
 
         return process.stdout, process.stderr, process.returncode
 

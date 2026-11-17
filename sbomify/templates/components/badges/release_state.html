@@ -1,0 +1,15 @@
+{% comment %}
+Where a release stands, when that is anything other than monitored as usual.
+An active release renders nothing, so a caller can put this beside a name
+without a guard of its own.
+
+The variant follows how far the release is from being looked after: superseded
+and archived are routine and stay neutral, end of support warns, and end of
+life and withdrawn are the two a reader must not miss. The label belongs to the
+component, so every page names a state the same way. c-branded.release-state is
+the Trust Center's counterpart.
+{% endcomment %}
+<c-vars state size class />
+{% if state == 'superseded' or state == 'archived' or state == 'end_of_support' or state == 'end_of_life' or state == 'withdrawn' %}
+    <c-badges.dynamic variant="{% if state == 'end_of_support' %}warning{% elif state == 'end_of_life' or state == 'withdrawn' %}danger{% else %}secondary{% endif %}" size="{{ size }}" class="{{ class }}" :attrs="attrs">{% if state == 'superseded' %}Superseded{% elif state == 'archived' %}Archived{% elif state == 'end_of_support' %}End of support{% elif state == 'end_of_life' %}End of life{% else %}Withdrawn{% endif %}</c-badges.dynamic>
+{% endif %}

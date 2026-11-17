@@ -393,10 +393,11 @@ def posthog_context(request: Any) -> dict[str, Any]:
 
     from functools import cache, partial
 
-    from sbomify.apps.core.posthog_service import take_client_events
+    from sbomify.apps.core.posthog_service import get_installation_id, take_client_events
 
     return {
         "posthog_api_key": api_key,
+        "posthog_installation_id": get_installation_id(),
         "posthog_host": host,
         "posthog_dns_host": dns_host,
         "posthog_assets_host": assets_host,

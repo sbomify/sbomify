@@ -1,6 +1,6 @@
-Reset Your Password
+Reset your password
 
-Dear ${user.firstName!user.username},
+Hi ${user.firstName!user.username},
 
 We received a request to reset your password for your sbomify account. Click the link below to create a new password.
 
@@ -10,7 +10,7 @@ This link will expire in ${linkExpirationFormatter(linkExpiration)}. If it expir
 
 If you did not request a password reset, please ignore this email. Your password will remain unchanged.
 
-Regards,
+Cheers,
 The sbomify Team
 
 ------------------------------

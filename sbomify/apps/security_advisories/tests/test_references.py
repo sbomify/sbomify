@@ -27,6 +27,11 @@ class TestResolvedSchemes:
             ("OSV-2021-1234", "https://insights.sbomify.com/OSV-2021-1234/"),
             ("SUSE-SU-2015:0803-1", "https://insights.sbomify.com/SUSE-SU-2015-0803-1/"),
             ("openSUSE-SU-2016:2484-1", "https://insights.sbomify.com/openSUSE-SU-2016-2484-1/"),
+            ("GSD-2022-1007610", "https://insights.sbomify.com/GSD-2022-1007610/"),
+            ("HSEC-2023-0006", "https://insights.sbomify.com/HSEC-2023-0006/"),
+            ("PSF-2019-15", "https://insights.sbomify.com/PSF-2019-15/"),
+            ("DRUPAL-CONTRIB-2020-035", "https://insights.sbomify.com/DRUPAL-CONTRIB-2020-035/"),
+            ("DRUPAL-CORE-2018-001", "https://insights.sbomify.com/DRUPAL-CORE-2018-001/"),
             ("DSA-5020-1", "https://osv.dev/vulnerability/DSA-5020-1"),
             ("USN-5192-1", "https://osv.dev/vulnerability/USN-5192-1"),
         ],
@@ -42,6 +47,7 @@ class TestResolvedSchemes:
             ("mal-2024-9506", "https://insights.sbomify.com/MAL-2024-9506/"),
             ("OPENSUSE-SU-2016-2484-1", "https://insights.sbomify.com/openSUSE-SU-2016-2484-1/"),
             ("suse-su-2015-0803-1", "https://insights.sbomify.com/SUSE-SU-2015-0803-1/"),
+            ("drupal-contrib-2020-035", "https://insights.sbomify.com/DRUPAL-CONTRIB-2020-035/"),
         ],
     )
     def test_insights_path_is_the_id_as_insights_spells_it(self, identifier, expected):

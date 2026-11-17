@@ -27,7 +27,7 @@ from sbomify.apps.compliance.models import CRAReport, CRAReportFiling, CRAReport
 from sbomify.apps.compliance.reporting import DEADLINE_STAGES, Stage
 from sbomify.apps.compliance.services import report_service
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.models import Product, User
+from sbomify.apps.core.models import Product, Release, User
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.security_advisories.services import advisories as advisory_service
 from sbomify.apps.security_advisories.models import (
@@ -1664,6 +1664,34 @@ class TestFiledEvidenceOutlivesItsParents:
         locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and "compliance_cra_reports" in text)
         checked = next(i for i, text in enumerate(sql) if "compliance_cra_report_filings" in text)
         assert locked < checked
+
+    def test_the_product_is_locked_before_its_releases_go(self, team, owner, product):
+        # A release edit locks the product and then the release. A delete that
+        # cascaded through the releases first could deadlock against it.
+        Release.objects.create(product=product, name="1.0")
+
+        with CaptureQueriesContext(connection) as queries:
+            response = _client_for(team, owner).delete(
+                reverse("api-1:delete_product", kwargs={"product_id": product.id})
+            )
+
+        assert response.status_code == 204
+        sql = [query["sql"] for query in queries.captured_queries]
+        locked = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and Product._meta.db_table in text)
+        deleted = next(i for i, text in enumerate(sql) if text.startswith("DELETE") and Release._meta.db_table in text)
+        assert locked < deleted
+
+    def test_an_advisory_delete_locks_its_reports_before_the_advisory(self, team, report, advisory):
+        # record_filing locks the report and then checks the advisory key of its
+        # timeline event, so taking the advisory first could deadlock with it.
+        with CaptureQueriesContext(connection) as queries:
+            assert advisory_service.delete_advisory(team, advisory.id).ok
+
+        sql = [query["sql"] for query in queries.captured_queries]
+        reports = next(i for i, text in enumerate(sql) if "FOR UPDATE" in text and "compliance_cra_reports" in text)
+        table = SecurityAdvisory._meta.db_table
+        advisory_locks = [i for i, text in enumerate(sql) if "FOR UPDATE" in text and f'FROM "{table}"' in text]
+        assert all(i > reports for i in advisory_locks)
 
     def test_deleting_the_workspace_takes_its_filed_reports_with_it(self, team, owner, report):
         # Deleting the workspace is its owner erasing everything in it, account
