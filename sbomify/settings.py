@@ -1330,7 +1330,17 @@ OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "6
 ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = max(0, int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300")))
 
 # Object storage settings
-STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3")
+# "s3" for any S3-compatible service (AWS S3, R2, MinIO...), "gcs" for Google
+# Cloud Storage through Application Default Credentials (ADR-0007). Bucket
+# names come from the AWS_*_STORAGE_BUCKET_NAME settings either way.
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3").strip().lower()
+
+# GCS only. Project for the client; empty takes it from the credentials.
+GCS_PROJECT_ID = os.environ.get("GCS_PROJECT_ID", "")
+# GCS only. Service account that signs download URLs through IAM signBlob when
+# the credentials hold no private key (Workload Identity). Empty signs as the
+# workload's own service account.
+GCS_SIGNING_SERVICE_ACCOUNT = os.environ.get("GCS_SIGNING_SERVICE_ACCOUNT", "")
 
 # AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")

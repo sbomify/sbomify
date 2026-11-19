@@ -1,8 +1,10 @@
 """
 Object Storage
 
-Utilities for working with S3-compatible storage services.
-Supports optional credentials to enable cloud workload identity (IRSA, Pod Identity, ADC).
+Utilities for working with object storage: any S3-compatible service through
+boto3, or Google Cloud Storage natively. Credentials are optional on both, which
+is what enables cloud workload identity (IRSA, EKS Pod Identity, GKE Workload
+Identity through Application Default Credentials). See ADR-0007.
 """
 
 from __future__ import annotations
@@ -10,13 +12,14 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from typing import Any, Literal
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 
 log = logging.getLogger(__name__)
@@ -221,6 +224,237 @@ class S3ObjectStoreClient(ObjectStoreClient):
         return url
 
 
+class ObjectStoreUnavailableError(BotoCoreError):
+    """The storage service could not be reached or authenticated against.
+
+    A ``BotoCoreError`` so callers that already treat an unreachable S3 as
+    a transient failure treat an unreachable GCS the same way.
+    """
+
+    fmt = "Object storage unavailable: {detail}"
+
+
+def _gcs_client_error(exc: Exception, code: str, operation: str) -> ClientError:
+    """Express a GCS failure in the S3 error vocabulary the callers handle.
+
+    Every caller of the storage layer was written against boto3, and several
+    branch on ``ClientError`` codes (``NoSuchKey``, ``NoSuchBucket``). Raising
+    the same shape from the GCS backend keeps those callers backend-agnostic
+    without teaching each one a second exception hierarchy.
+    """
+    error = ClientError({"Error": {"Code": code, "Message": str(exc)}}, operation)
+    error.__cause__ = exc
+    return error
+
+
+# The response-header overrides S3 can sign into a GET URL, mapped onto the
+# keyword generate_signed_url takes for the same header. Only those the
+# application actually uses are listed; anything else is refused rather than
+# silently dropped from the URL.
+_GCS_RESPONSE_HEADER_KWARGS = {
+    "ResponseContentDisposition": "response_disposition",
+    "ResponseContentType": "response_type",
+}
+
+
+class GCSObjectStoreClient(ObjectStoreClient):
+    """Google Cloud Storage backend using google-cloud-storage.
+
+    Authenticates with Application Default Credentials: GKE Workload Identity,
+    a service account attached to a VM, ``GOOGLE_APPLICATION_CREDENTIALS``, or
+    the emulator named by ``STORAGE_EMULATOR_HOST``. No static keys are read.
+
+    Signed URLs need a signer. A service-account key signs locally. Workload
+    Identity and VM credentials hold no key, so the URL is signed through the
+    IAM Credentials ``signBlob`` API as the workload's own service account (or
+    ``signing_service_account`` when set), which needs
+    ``roles/iam.serviceAccountTokenCreator`` on that account.
+    """
+
+    # google-cloud-storage recommends a client per thread; the underlying
+    # HTTP session is not documented as thread-safe. Building one is not free
+    # (credential discovery may call the metadata server), so it is kept per
+    # thread rather than per StorageClient.
+    _local = threading.local()
+
+    def __init__(self, project: str | None = None, signing_service_account: str | None = None) -> None:
+        self._project = project
+        self._signing_service_account = signing_service_account
+        self._timeout = (
+            int(getattr(settings, "AWS_CONNECT_TIMEOUT", 10)),
+            int(getattr(settings, "AWS_READ_TIMEOUT", 30)),
+        )
+
+    def __repr__(self) -> str:
+        return f"GCSObjectStoreClient(project={self._project!r})"
+
+    @property
+    def _client(self) -> Any:
+        clients: dict[str | None, Any] = getattr(self._local, "clients", None) or {}
+        client = clients.get(self._project)
+        if client is None:
+            from google.auth.exceptions import GoogleAuthError
+            from google.cloud.storage import Client as GCSClient
+
+            try:
+                client = GCSClient(project=self._project)
+            except GoogleAuthError as e:
+                raise ObjectStoreUnavailableError(detail=str(e)) from e
+            clients[self._project] = client
+            self._local.clients = clients
+        return client
+
+    def _blob(self, bucket_name: str, key: str) -> Any:
+        return self._client.bucket(bucket_name).blob(key)
+
+    def _call(self, operation: str, fn: Any, *, missing_object: Any = ...) -> Any:
+        """Run ``fn``, translating GCS failures into S3-shaped errors.
+
+        ``missing_object`` is returned in place of raising when the *object*
+        is absent. A missing *bucket* is a misconfiguration, never absence, so
+        it always raises ``NoSuchBucket``, as S3 does.
+        """
+        from google.api_core import exceptions as gexc
+        from google.auth.exceptions import GoogleAuthError, TransportError
+
+        try:
+            return fn()
+        except gexc.NotFound as e:
+            if "bucket does not exist" in str(e).lower():
+                raise _gcs_client_error(e, "NoSuchBucket", operation) from e
+            if missing_object is not ...:
+                return missing_object
+            raise _gcs_client_error(e, "NoSuchKey", operation) from e
+        except gexc.Forbidden as e:
+            raise _gcs_client_error(e, "AccessDenied", operation) from e
+        except gexc.GoogleAPICallError as e:
+            raise _gcs_client_error(e, str(e.code or "InternalError"), operation) from e
+        except (GoogleAuthError, TransportError) as e:
+            raise ObjectStoreUnavailableError(detail=str(e)) from e
+        except gexc.RetryError as e:
+            raise ObjectStoreUnavailableError(detail=str(e)) from e
+
+    def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None:
+        # GCS would otherwise label raw bytes text/plain; S3 uses
+        # binary/octet-stream. Keep the neutral type when none is given.
+        blob = self._blob(bucket_name, key)
+        self._call(
+            "PutObject",
+            lambda: blob.upload_from_string(
+                data, content_type=content_type or "application/octet-stream", timeout=self._timeout
+            ),
+        )
+
+    def get_object(self, bucket_name: str, key: str) -> bytes | None:
+        blob = self._blob(bucket_name, key)
+        result: bytes | None = self._call(
+            "GetObject", lambda: blob.download_as_bytes(timeout=self._timeout), missing_object=None
+        )
+        return result
+
+    def delete_object(self, bucket_name: str, key: str) -> None:
+        # S3 DeleteObject succeeds on an absent key; match that so a retried
+        # cleanup does not fail on the second pass.
+        blob = self._blob(bucket_name, key)
+        self._call("DeleteObject", lambda: blob.delete(timeout=self._timeout), missing_object=None)
+
+    def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
+        return list(self.iter_objects(bucket_name, prefix))
+
+    def iter_objects(self, bucket_name: str, prefix: str) -> Iterator[str]:
+        # list_blobs pages lazily as it is walked, like the S3 collection.
+        blobs = self._call(
+            "ListObjects", lambda: self._client.list_blobs(bucket_name, prefix=prefix, timeout=self._timeout)
+        )
+
+        def _walk() -> Iterator[str]:
+            iterator = iter(blobs)
+            while True:
+                blob = self._call("ListObjects", lambda: next(iterator, None))
+                if blob is None:
+                    return
+                yield blob.name
+
+        return _walk()
+
+    def object_exists(self, bucket_name: str, key: str) -> bool:
+        # A metadata GET, not a listing: it needs storage.objects.get only.
+        blob = self._blob(bucket_name, key)
+
+        def _head() -> bool:
+            blob.reload(timeout=self._timeout)
+            return True
+
+        exists: bool = self._call("HeadObject", _head, missing_object=False)
+        return exists
+
+    def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
+        blob = self._blob(bucket_name, key)
+        self._call("PutObject", lambda: blob.upload_from_filename(file_path, timeout=self._timeout))
+
+    def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
+        blob = self._blob(bucket_name, key)
+        self._call("GetObject", lambda: blob.download_to_filename(file_path, timeout=self._timeout))
+
+    def _signing_kwargs(self) -> dict[str, Any]:
+        """How to sign: locally with a key, or through IAM signBlob without one."""
+        from google.auth import credentials as gcreds
+        from google.auth.transport.requests import Request
+
+        credentials = self._client._credentials
+        if isinstance(credentials, gcreds.Signing) and not self._signing_service_account:
+            return {}
+
+        # Keyless credentials (Workload Identity, a VM's attached account):
+        # hand generate_signed_url a fresh access token and the account to sign
+        # as, and it calls IAM signBlob instead of signing locally.
+        if not credentials.valid:
+            credentials.refresh(Request())
+        email = self._signing_service_account or getattr(credentials, "service_account_email", None)
+        if not email or email == "default":
+            raise ObjectStoreUnavailableError(
+                detail=(
+                    "cannot sign a GCS URL: the credentials hold no private key and name no service "
+                    "account. Set GCS_SIGNING_SERVICE_ACCOUNT."
+                )
+            )
+        return {"service_account_email": email, "access_token": credentials.token}
+
+    def generate_presigned_url(
+        self,
+        bucket_name: str,
+        key: str,
+        expires_in: int = 3600,
+        response_headers: dict[str, str] | None = None,
+    ) -> str:
+        from datetime import timedelta
+
+        if expires_in <= 0:
+            raise ValueError(f"expires_in must be positive, got {expires_in}")
+        kwargs: dict[str, Any] = {}
+        for header, value in (response_headers or {}).items():
+            if header not in _GCS_RESPONSE_HEADER_KWARGS:
+                raise ValueError(f"Unsupported response header override for GCS: {header!r}")
+            kwargs[_GCS_RESPONSE_HEADER_KWARGS[header]] = value
+
+        blob = self._blob(bucket_name, key)
+
+        def _sign() -> str:
+            # The credential lookup may refresh a token, so it sits inside the
+            # translated call along with the signBlob request itself.
+            url: str = blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(seconds=expires_in),
+                method="GET",
+                **kwargs,
+                **self._signing_kwargs(),
+            )
+            return url
+
+        signed: str = self._call("GetObject", _sign)
+        return signed
+
+
 _VALID_BUCKET_TYPES = ("MEDIA", "SBOMS", "DOCUMENTS")
 
 
@@ -237,7 +471,15 @@ def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> Object
             secret_key=getattr(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", None) or None,
         )
 
-    raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3'")
+    if settings.STORAGE_BACKEND == "gcs":
+        # One identity for every bucket: GCS access is granted per bucket in
+        # IAM, not per credential, so there are no per-bucket keys to pick.
+        return GCSObjectStoreClient(
+            project=getattr(settings, "GCS_PROJECT_ID", "") or None,
+            signing_service_account=getattr(settings, "GCS_SIGNING_SERVICE_ACCOUNT", "") or None,
+        )
+
+    raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3', 'gcs'")
 
 
 class StorageClient:

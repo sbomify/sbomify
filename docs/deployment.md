@@ -12,7 +12,7 @@ Deploy sbomify using Docker Compose with cryptographic image verification.
 **External Services:**
 
 - **Keycloak** (required) - Authentication provider, must be configured before deploying
-- **S3 Storage** (required) - AWS S3, MinIO, or compatible service with 2 buckets
+- **S3 Storage** (required) - AWS S3, MinIO, or compatible service with 2 buckets. On Google Cloud, set `STORAGE_BACKEND=gcs` to use Cloud Storage natively through Application Default Credentials (see `charts/sbomify/README.md`, *Keyless object storage*)
 
 **Included Services:**
 
