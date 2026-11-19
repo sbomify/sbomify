@@ -278,12 +278,18 @@ class GCSObjectStoreClient(ObjectStoreClient):
     _local = threading.local()
 
     def __init__(self, project: str | None = None, signing_service_account: str | None = None) -> None:
+        from google.cloud.storage.retry import DEFAULT_RETRY
+
         self._project = project
         self._signing_service_account = signing_service_account
         self._timeout = (
             int(getattr(settings, "AWS_CONNECT_TIMEOUT", 10)),
             int(getattr(settings, "AWS_READ_TIMEOUT", 30)),
         )
+        # The SDK checks its retry deadline before starting the next request.
+        # A 20s retry window plus one last 10s connect / 30s read leaves room
+        # for the rest of the VEX actor's work inside its 120s time limit.
+        self._retry = DEFAULT_RETRY.with_timeout(20)
 
     def __repr__(self) -> str:
         return f"GCSObjectStoreClient(project={self._project!r})"
@@ -341,14 +347,14 @@ class GCSObjectStoreClient(ObjectStoreClient):
         self._call(
             "PutObject",
             lambda: blob.upload_from_string(
-                data, content_type=content_type or "application/octet-stream", timeout=self._timeout
+                data, content_type=content_type or "application/octet-stream", timeout=self._timeout, retry=self._retry
             ),
         )
 
     def get_object(self, bucket_name: str, key: str) -> bytes | None:
         blob = self._blob(bucket_name, key)
         result: bytes | None = self._call(
-            "GetObject", lambda: blob.download_as_bytes(timeout=self._timeout), missing_object=None
+            "GetObject", lambda: blob.download_as_bytes(timeout=self._timeout, retry=self._retry), missing_object=None
         )
         return result
 
@@ -356,7 +362,7 @@ class GCSObjectStoreClient(ObjectStoreClient):
         # S3 DeleteObject succeeds on an absent key; match that so a retried
         # cleanup does not fail on the second pass.
         blob = self._blob(bucket_name, key)
-        self._call("DeleteObject", lambda: blob.delete(timeout=self._timeout), missing_object=None)
+        self._call("DeleteObject", lambda: blob.delete(timeout=self._timeout, retry=self._retry), missing_object=None)
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return list(self.iter_objects(bucket_name, prefix))
@@ -364,7 +370,8 @@ class GCSObjectStoreClient(ObjectStoreClient):
     def iter_objects(self, bucket_name: str, prefix: str) -> Iterator[str]:
         # list_blobs pages lazily as it is walked, like the S3 collection.
         blobs = self._call(
-            "ListObjects", lambda: self._client.list_blobs(bucket_name, prefix=prefix, timeout=self._timeout)
+            "ListObjects",
+            lambda: self._client.list_blobs(bucket_name, prefix=prefix, timeout=self._timeout, retry=self._retry),
         )
 
         def _walk() -> Iterator[str]:
@@ -382,7 +389,7 @@ class GCSObjectStoreClient(ObjectStoreClient):
         blob = self._blob(bucket_name, key)
 
         def _head() -> bool:
-            blob.reload(timeout=self._timeout)
+            blob.reload(timeout=self._timeout, retry=self._retry)
             return True
 
         exists: bool = self._call("HeadObject", _head, missing_object=False)
@@ -390,11 +397,11 @@ class GCSObjectStoreClient(ObjectStoreClient):
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
         blob = self._blob(bucket_name, key)
-        self._call("PutObject", lambda: blob.upload_from_filename(file_path, timeout=self._timeout))
+        self._call("PutObject", lambda: blob.upload_from_filename(file_path, timeout=self._timeout, retry=self._retry))
 
     def download_file(self, bucket_name: str, key: str, file_path: str) -> None:
         blob = self._blob(bucket_name, key)
-        self._call("GetObject", lambda: blob.download_to_filename(file_path, timeout=self._timeout))
+        self._call("GetObject", lambda: blob.download_to_filename(file_path, timeout=self._timeout, retry=self._retry))
 
     def _signing_kwargs(self) -> dict[str, Any]:
         """How to sign: locally with a key, or through IAM signBlob without one."""

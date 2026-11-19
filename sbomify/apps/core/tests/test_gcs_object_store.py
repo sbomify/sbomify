@@ -1,16 +1,19 @@
 """GCSObjectStoreClient: the native Google Cloud Storage backend (ADR-0007).
 
-The google-cloud-storage client is mocked; what is under test is the contract
-the rest of the application relies on: S3-shaped errors, absence reported as
-None/False, and signed URLs that work without a private key.
+Contract tests mock the client to check S3-shaped errors, absence reported as
+None/False, and keyless signed URLs. Retry tests use the real SDK with a fake
+transport and clock.
 """
 
 from datetime import timedelta
+from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
+from django.test import override_settings
 from google.api_core import exceptions as gexc
 from google.auth import credentials as gcreds
 from google.auth.exceptions import DefaultCredentialsError
@@ -252,3 +255,57 @@ class TestSignedUrls:
         with pytest.raises(ClientError) as exc:
             store.generate_presigned_url("bucket", "key", 60)
         assert exc.value.response["Error"]["Code"] == "AccessDenied"
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["get_object", "put_object", "object_exists", "delete_object", "list_objects", "upload_file", "download_file"],
+)
+def test_transfers_bound_sdk_retries(operation: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Repeated read timeouts must leave room inside the VEX actor's 120-second limit."""
+    import time
+
+    import requests
+    from google.cloud.storage import Client
+
+    sdk = Client.create_anonymous_client()
+    with override_settings(AWS_READ_TIMEOUT=5):
+        store = GCSObjectStoreClient(project="retry-test")
+    GCSObjectStoreClient._local.clients = {"retry-test": sdk}
+    elapsed = 0.0
+    attempts = 0
+    file_path = tmp_path / "artifact.json"
+    file_path.write_bytes(b"{}")
+
+    def timeout(*args: Any, **kwargs: Any) -> None:
+        nonlocal elapsed, attempts
+        elapsed += kwargs["timeout"][1]
+        attempts += 1
+        raise requests.exceptions.ReadTimeout("storage read timed out")
+
+    def sleep(delay: float) -> None:
+        nonlocal elapsed
+        elapsed += delay
+
+    args = {
+        "get_object": ("bucket", "key"),
+        "put_object": ("bucket", "key", b"{}"),
+        "object_exists": ("bucket", "key"),
+        "delete_object": ("bucket", "key"),
+        "list_objects": ("bucket", "prefix/"),
+        "upload_file": ("bucket", str(file_path), "key"),
+        "download_file": ("bucket", "key", str(file_path)),
+    }
+    try:
+        with monkeypatch.context() as patches:
+            patches.setattr(sdk._http, "request", timeout)
+            patches.setattr(time, "monotonic", lambda: elapsed)
+            patches.setattr(time, "sleep", sleep)
+            patches.setattr("random.uniform", lambda low, high: 1.0)
+            with pytest.raises(ObjectStoreUnavailableError):
+                getattr(store, operation)(*args[operation])
+        assert attempts > 1  # Transient failures are still retried.
+        assert elapsed < 60  # Leave at least half the actor's budget for other work.
+    finally:
+        GCSObjectStoreClient._local.__dict__.clear()
+        sdk.close()
