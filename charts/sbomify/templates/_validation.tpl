@@ -45,8 +45,8 @@ never sees the Secret.
 {{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate. On Google Cloud set objectStorage.backend=gcs instead." }}
 {{- end }}
 
-{{- if not .Values.auth.keycloak.serverUrl }}
-{{- fail "sbomify: auth.keycloak.serverUrl is required. This chart does not run Keycloak for you: deploy it with the Keycloak Operator (the project's official Kubernetes path) and point this at it. See charts/sbomify/README.md." }}
+{{- if and (not .Values.auth.keycloak.serverUrl) (not .Values.auth.oidc.discoveryUrl) }}
+{{- fail "sbomify: auth.keycloak.serverUrl or auth.oidc.discoveryUrl is required. This chart does not run an identity provider for you: deploy Keycloak with the Keycloak Operator (the project's official Kubernetes path), or point auth.oidc.discoveryUrl at another OIDC provider. See charts/sbomify/README.md." }}
 {{- end }}
 
 {{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.secretKey) }}
@@ -86,8 +86,8 @@ It stays a value because three templates need it, not because it is tunable.
 {{- fail "sbomify: caddy.healthPath must stay /UuPha8mu/. The application hardcodes that path in urls.py and SECURE_REDIRECT_EXEMPT, so changing it here only breaks the probes and the edge health route." }}
 {{- end }}
 
-{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}
-{{- fail "sbomify: set auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
+{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) (not .Values.auth.oidc.clientSecret) }}
+{{- fail "sbomify: set auth.oidc.clientSecret or auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
 {{- end }}
 
 {{- if and .Values.app.billing (not .Values.app.extraEnvFrom) (not .Values.app.extraEnv) }}

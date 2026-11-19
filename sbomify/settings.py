@@ -1094,10 +1094,46 @@ KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:808
 # Service name. Empty counts as unset so a blank Helm/Compose value falls back.
 KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+# The OIDC client's credentials, for Keycloak or any other provider.
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET are the provider-neutral names and win
+# when set; empty counts as unset, so an install that only sets the KEYCLOAK_*
+# names is unchanged.
+KEYCLOAK_CLIENT_ID = os.environ.get("OIDC_CLIENT_ID") or os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("OIDC_CLIENT_SECRET") or os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+
+# Generic OIDC overrides, for an identity provider other than Keycloak (Auth0,
+# Entra ID, Okta, Authentik, Zitadel, ...). An install that sets neither is
+# unchanged. Empty counts as unset so a blank Helm/Compose value falls back.
+#
+# OIDC_DISCOVERY_URL: the provider's .well-known/openid-configuration document.
+# When unset, the Keycloak realm's document is used.
+# OIDC_LOGOUT_URL: the browser-facing RP-initiated logout (end session)
+# endpoint. When unset, logout uses the discovery document's
+# end_session_endpoint if OIDC_DISCOVERY_URL is set, and the Keycloak realm's
+# endpoint under KEYCLOAK_PUBLIC_URL otherwise.
+OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
+OIDC_LOGOUT_URL = os.environ.get("OIDC_LOGOUT_URL", "")
+
+
+def _trusted_email(value: str) -> bool | list[str]:
+    """OIDC_TRUST_EMAIL as allauth's ``verified_email``: off, on, or a list of domains."""
+    value = value.strip()
+    if value.lower() in ("", "false", "0", "no"):
+        return False
+    if value.lower() in ("true", "1", "yes"):
+        return True
+    return [domain.strip().lower().lstrip("@") for domain in value.split(",") if domain.strip()]
+
+
+# Treat the provider's email addresses as confirmed even without an
+# email_verified claim (Entra ID sends none), like Keycloak's "Trust Email" on
+# an identity provider. Off by default. "true" trusts every address; a
+# comma-separated list of domains (example.com,example.org) trusts only those.
+# A confirmed address is linked to an existing account with the same address,
+# so only trust a provider that controls the addresses it issues.
+OIDC_TRUST_EMAIL = _trusted_email(os.environ.get("OIDC_TRUST_EMAIL", ""))
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
@@ -1108,7 +1144,9 @@ SOCIALACCOUNT_PROVIDERS = {
                 "client_id": KEYCLOAK_CLIENT_ID,
                 "secret": KEYCLOAK_CLIENT_SECRET,
                 "settings": {
-                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "server_url": OIDC_DISCOVERY_URL
+                    or f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "verified_email": OIDC_TRUST_EMAIL,
                 },
             }
         ]
