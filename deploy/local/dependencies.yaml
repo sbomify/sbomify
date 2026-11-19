@@ -366,7 +366,11 @@ spec:
             periodSeconds: 10
           resources:
             requests: {cpu: 200m, memory: 512Mi}
-            limits: {memory: 1Gi}
+            # start-dev rebuilds the server on every boot, and the JVM peaks at
+            # about 1.2GiB doing it. Under a 1Gi limit the kernel OOM-kills it
+            # before it opens the health port, so Keycloak crash-loops and
+            # sign-in never works.
+            limits: {memory: 2Gi}
           volumeMounts:
             - {name: data, mountPath: /opt/keycloak/data}
   volumeClaimTemplates:
