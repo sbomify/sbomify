@@ -1,7 +1,5 @@
 """The local sign-out landing page waits for an explicit sign-in action."""
 
-from pathlib import Path
-
 import pytest
 from django.urls import reverse
 from playwright.sync_api import Browser, expect
@@ -9,7 +7,7 @@ from playwright.sync_api import Browser, expect
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [576, 1920])
-def test_signed_out_page(browser: Browser, browser_base_url: str, width: int, tmp_path: Path) -> None:
+def test_signed_out_page(browser: Browser, browser_base_url: str, width: int) -> None:
     """The signed-out message and sign-in link remain visible after a reload."""
     context = browser.new_context(base_url=browser_base_url, viewport={"width": width, "height": 900})
     try:
@@ -22,6 +20,5 @@ def test_signed_out_page(browser: Browser, browser_base_url: str, width: int, tm
         page.reload()
         expect(page).to_have_url(browser_base_url + reverse("core:signed_out"))
         expect(sign_in).to_be_visible()
-        page.screenshot(path=tmp_path / f"signed-out-{width}.png")
     finally:
         context.close()
