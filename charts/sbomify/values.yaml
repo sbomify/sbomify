@@ -102,8 +102,8 @@ secrets:
 # -- OIDC / Keycloak client configuration (the app is the OIDC *client*).
 auth:
   keycloak:
-    # REQUIRED. Keycloak base URL the app talks to, with a trailing slash,
-    # e.g. https://sso.example.com/
+    # REQUIRED unless auth.oidc.discoveryUrl is set. Keycloak base URL the app
+    # talks to, with a trailing slash, e.g. https://sso.example.com/
     #
     # Usually the PUBLIC url rather than an in-cluster Service name: OIDC
     # discovery hands the *browser* whatever endpoints it finds here, so the
@@ -115,8 +115,20 @@ auth:
     # serverUrl is an address the browser cannot reach. Defaults to serverUrl.
     publicUrl: ""
     realm: "sbomify"
+    # The OIDC client's ID and secret, also when the provider is not Keycloak.
     clientId: "sbomify"
     clientSecret: ""
+  # Optional. Sign in through an OIDC provider other than Keycloak (Okta,
+  # Auth0, Entra ID, Authentik, Zitadel, ...). See docs/deployment.md.
+  oidc:
+    # The provider's discovery document, e.g.
+    # https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+    # When set, auth.keycloak.serverUrl is not needed.
+    discoveryUrl: ""
+    # The browser-facing logout endpoint. Only needed when the discovery
+    # document has no end_session_endpoint (Auth0 with RP-Initiated Logout
+    # off): https://<tenant>.auth0.com/oidc/logout
+    logoutUrl: ""
 
 # -- REQUIRED. Object storage, S3 compatible: AWS S3, Cloudflare R2, Tigris,
 # or a MinIO you operate.

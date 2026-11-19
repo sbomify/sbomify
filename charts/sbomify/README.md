@@ -9,7 +9,7 @@ scheduler, and a migration step that runs before any of them serve traffic.
 Static assets are served by WhiteNoise from inside the app, so there is no
 separate static tier.
 
-It does **not** deploy PostgreSQL, Valkey (or Redis), object storage or Keycloak. You point
+It does **not** deploy PostgreSQL, Valkey (or Redis), object storage or an identity provider. You point
 it at ones you provide, and it refuses to render if you have not. See
 *Backing services* below.
 
@@ -107,12 +107,18 @@ release away from your data.
 | PostgreSQL 17 | `database.*` | A managed service (RDS, Cloud SQL, Neon), or the [CloudNativePG](https://cloudnative-pg.io/) operator in-cluster |
 | Valkey or Redis | `redis.*` | A managed service (ElastiCache, Memorystore, Upstash), or an operator |
 | S3-compatible storage | `objectStorage.*` | S3, Cloudflare R2, Tigris, or a MinIO you operate |
-| Keycloak | `auth.keycloak.*` | The [Keycloak Operator](https://www.keycloak.org/guides) |
+| Keycloak, or another OIDC provider | `auth.keycloak.*`, `auth.oidc.*` | The [Keycloak Operator](https://www.keycloak.org/guides), or the provider you already run |
 
 On Keycloak: the project **deliberately does not publish an official Helm
 chart**. The Operator is its official Kubernetes path. Community charts exist
 (codecentric, Bitnami and others) if you prefer Helm, but they are not
 maintained by the Keycloak project.
+
+To sign in through another OIDC provider (Okta, Auth0, Entra ID, Authentik,
+Zitadel), set `auth.oidc.discoveryUrl` instead of `auth.keycloak.serverUrl`, and
+put the provider's client ID and secret in `auth.keycloak.clientId` and
+`auth.keycloak.clientSecret`. Per-provider notes, and what works only with
+Keycloak, are in [docs/deployment.md](../../docs/deployment.md#using-another-oidc-provider).
 
 Two constraints worth knowing:
 
@@ -439,7 +445,9 @@ See [`values.yaml`](values.yaml). Every key is commented. The most important:
 | `migrations.lockTimeout` | `""` | PostgreSQL `lock_timeout` for migrations, set this in production |
 | `networkPolicy.enabled` | `false` | Needs a CNI that enforces policies |
 | `database.*` / `redis.*` | required | Backing services you provide |
-| `objectStorage.*` / `auth.keycloak.*` | required | Backing services you provide |
+| `objectStorage.*` | required | Backing services you provide |
+| `auth.keycloak.serverUrl` or `auth.oidc.discoveryUrl` | required | The identity provider you provide |
+| `auth.oidc.logoutUrl` | `""` | Logout endpoint, when the discovery document has none |
 | `secrets.githubApiToken` | `""` | GitHub token for attestation lookups; raises the rate limit from 60 to 5,000 requests an hour |
 
 ## Verifying a release

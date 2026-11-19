@@ -41,8 +41,8 @@ never sees the Secret.
 {{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate" }}
 {{- end }}
 
-{{- if not .Values.auth.keycloak.serverUrl }}
-{{- fail "sbomify: auth.keycloak.serverUrl is required. This chart does not run Keycloak for you: deploy it with the Keycloak Operator (the project's official Kubernetes path) and point this at it. See charts/sbomify/README.md." }}
+{{- if and (not .Values.auth.keycloak.serverUrl) (not .Values.auth.oidc.discoveryUrl) }}
+{{- fail "sbomify: auth.keycloak.serverUrl or auth.oidc.discoveryUrl is required. This chart does not run an identity provider for you: deploy Keycloak with the Keycloak Operator (the project's official Kubernetes path), or point auth.oidc.discoveryUrl at another OIDC provider. See charts/sbomify/README.md." }}
 {{- end }}
 
 {{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.secretKey) }}

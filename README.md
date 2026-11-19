@@ -80,7 +80,8 @@ For full production deployment instructions, see [the deployment guide](docs/dep
 
 A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
 the application only. You provide PostgreSQL, Redis, S3-compatible storage and
-Keycloak.
+an identity provider: Keycloak, or another OIDC provider such as Okta, Auth0 or
+Entra ID.
 
 To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster
 (which also provisions throwaway versions of those four):

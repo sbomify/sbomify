@@ -11,7 +11,7 @@ Deploy sbomify using Docker Compose with cryptographic image verification.
 
 **External Services:**
 
-- **Keycloak** (required) - Authentication provider, must be configured before deploying
+- **Identity provider** (required) - Keycloak, or another OIDC provider such as Okta, Auth0 or Entra ID (see [Using another OIDC provider](#using-another-oidc-provider)). Configure it before deploying.
 - **S3 Storage** (required) - AWS S3, MinIO, or compatible service with 2 buckets
 
 **Included Services:**
@@ -73,6 +73,9 @@ KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
 # (e.g. the app reaches Keycloak at an internal address). Used for logout.
 # KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
+# Optional: use an OIDC provider other than Keycloak (see "Using another OIDC provider").
+# OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
+# OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
 
 # S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -161,6 +164,9 @@ KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: browser-facing Keycloak URL, if it differs from KEYCLOAK_SERVER_URL
 # (e.g. the app reaches Keycloak at an internal address). Used for logout.
 # KEYCLOAK_PUBLIC_URL=https://keycloak.example.com/
+# Optional: use an OIDC provider other than Keycloak (see "Using another OIDC provider").
+# OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
+# OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
 
 # S3
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -441,6 +447,53 @@ Configure before deploying sbomify:
    - Valid redirect URIs: `https://your-domain.com/*`
    - Valid web origins: `https://your-domain.com`
 3. **Get Client Secret**: From admin console → Clients → sbomify → Credentials
+
+## Using another OIDC provider
+
+sbomify signs in through a generic OpenID Connect client, so it can use a provider other
+than Keycloak, such as Auth0, Entra ID, Okta, Authentik or Zitadel. Leave `USE_KEYCLOAK`
+unset and point sbomify at the provider:
+
+```bash
+KEYCLOAK_CLIENT_ID=<client id at the provider>
+KEYCLOAK_CLIENT_SECRET=<client secret at the provider>
+OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
+# Only when the discovery document has no end_session_endpoint:
+# OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
+```
+
+- `OIDC_DISCOVERY_URL` is the provider's discovery document. When unset, sbomify uses
+  `{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration`.
+- `OIDC_LOGOUT_URL` is the browser-facing logout endpoint. When unset, sbomify uses the
+  discovery document's `end_session_endpoint`. If the provider has none, signing out ends
+  the sbomify session only. sbomify adds `client_id`, `post_logout_redirect_uri` and
+  `id_token_hint` to it, and keeps any query you put on it.
+
+At the provider, register `https://your-domain.com/accounts/oidc/keycloak/login/callback/`
+as a callback URL and `https://your-domain.com/accounts/oidc/keycloak/login/` as an allowed
+logout redirect. sbomify asks for the `openid email profile` scopes and needs the `email`
+claim. Without an `email_verified` claim set to true, the address counts as unconfirmed:
+the account cannot accept workspace invitations or document access sent to that address,
+and is not linked to an existing account with the same address.
+
+### Provider notes
+
+| Provider | Discovery URL | Logout |
+| --- | --- | --- |
+| Okta | `https://<org>.okta.com/oauth2/default/.well-known/openid-configuration`, or `https://<org>.okta.com/.well-known/openid-configuration` for the org server | Discovered. Okta needs `id_token_hint`, which sbomify sends. |
+| Auth0 | `https://<tenant>.auth0.com/.well-known/openid-configuration` | Turn on RP-Initiated Logout in the tenant settings, or set `OIDC_LOGOUT_URL=https://<tenant>.auth0.com/oidc/logout`. |
+| Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration`. Use the tenant ID: the `common` and `organizations` documents carry a placeholder issuer that fails ID token validation. | Discovered. |
+| Google | `https://accounts.google.com/.well-known/openid-configuration` | None. Signing out ends the sbomify session only. |
+
+Entra ID does not send `email_verified`, so its users count as unconfirmed (see above). It
+also leaves out `given_name` and `family_name` unless you add them as optional claims, in
+which case the name fields stay empty.
+
+Two features need Keycloak's Admin API and stay off with another provider:
+
+- Profile and email changes made at the provider are not synced. The claims are read when
+  the account is created, and `email_verified` is refreshed on each sign in.
+- Deleting an account in sbomify does not delete the user at the provider.
 
 ## S3 Storage Setup
 
