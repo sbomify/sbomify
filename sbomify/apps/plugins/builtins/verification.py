@@ -855,14 +855,25 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         return None
 
     def _extract_vcs_info_spdx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
-        # packages[0] is the document's subject by convention rather than by
-        # guarantee, so every return below is tagged package-derived for the
-        # same reason as the CycloneDX component fallback above.
         packages = sbom_data.get("packages", [])
         if not packages:
             return None
 
-        main_pkg = packages[0]
+        # The subject is the package the document DESCRIBES. syft lists it last,
+        # after every dependency, so packages[0] is only a fallback, and its
+        # answer is tagged package-derived like the CycloneDX component one.
+        document_id = sbom_data.get("SPDXID", "SPDXRef-DOCUMENT")
+        described = set(sbom_data.get("documentDescribes", [])) | {
+            rel.get("relatedSpdxElement")
+            for rel in sbom_data.get("relationships", [])
+            if rel.get("relationshipType") == "DESCRIBES" and rel.get("spdxElementId") == document_id
+        }
+        for pkg in packages:
+            if pkg.get("SPDXID") in described and (parsed := self._vcs_info_of_spdx_package(pkg)):
+                return {**parsed, "source": "document"}
+        return self._vcs_info_of_spdx_package(packages[0])
+
+    def _vcs_info_of_spdx_package(self, main_pkg: dict[str, Any]) -> dict[str, str] | None:
         download_location = main_pkg.get("downloadLocation", "")
         if download_location and download_location not in ("NOASSERTION", "NONE"):
             vcs_url = self._parse_spdx_download_location(download_location)
