@@ -254,14 +254,34 @@ a separate, more privileged identity for schema changes.
 Static storage keys can be dropped entirely where the platform can vouch for
 the workload.
 
-**AWS (EKS IRSA or Pod Identity):**
+The chart itself is cloud-agnostic: the same templates run on any Kubernetes,
+and the cloud only decides which storage backend and which identity the pods
+use. Two clouds are supported without keys:
+
+| | AWS (EKS) | Google Cloud (GKE) |
+| --- | --- | --- |
+| Backend | `s3` with `useWorkloadIdentity: true` | `gcs` |
+| Identity | IRSA or EKS Pod Identity | GKE Workload Identity |
+| ServiceAccount | annotate with `eks.amazonaws.com/role-arn` (IRSA), or add a Pod Identity association | annotate with `iam.gke.io/gcp-service-account` |
+| Signed download URLs | signed with the role's temporary credentials | signed through IAM signBlob |
+
+Everywhere else (on-premises, other clouds, R2, MinIO) use `s3` with access keys.
+
+**AWS (EKS, IRSA or Pod Identity):**
 
 ```yaml
 objectStorage:
+  backend: s3
   useWorkloadIdentity: true
+  endpointUrl: https://s3.eu-west-1.amazonaws.com
+  region: eu-west-1              # required: "auto" is rejected
+  media:
+    bucket: acme-sbomify-media   # public read: browsers load logos from it
+  sboms:
+    bucket: acme-sbomify-sboms   # private
 serviceAccount:
-  create: false
-  name: sbomify                # you manage it, annotated with the cloud role
+  annotations:                   # IRSA; omit for Pod Identity
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/sbomify
 ```
 
 The chart then omits every `AWS_*_ACCESS_KEY_ID` / `SECRET_ACCESS_KEY`
@@ -269,6 +289,34 @@ variable, which is what lets boto3 reach its default credential chain. Omitting
 them is the whole point: setting them to empty strings leaves boto3 holding
 blank credentials instead. Bucket names and the endpoint are still configured
 normally, only the credentials become implicit.
+
+The role needs this on both buckets:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": ["arn:aws:s3:::acme-sbomify-media/*", "arn:aws:s3:::acme-sbomify-sboms/*"]
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": ["arn:aws:s3:::acme-sbomify-media", "arn:aws:s3:::acme-sbomify-sboms"]
+    }
+  ]
+}
+```
+
+Its trust policy names the chart's ServiceAccount (`system:serviceaccount:sbomify:sbomify`
+for a release called `sbomify` in namespace `sbomify`), or, with Pod Identity,
+create the association for that namespace and ServiceAccount. Both the IRSA
+webhook and the Pod Identity agent inject their own projected token, so
+`serviceAccount.automountServiceAccountToken` can stay `false`. The media
+bucket needs a bucket policy allowing public `s3:GetObject`, with Block Public
+Access turned off for that bucket only.
 
 **Google Cloud (GKE Workload Identity):** use the native GCS backend. It talks
 to Cloud Storage through Application Default Credentials, so there is no
@@ -317,6 +365,29 @@ touch object storage, so it does not need the identity.
 
 `objectStorage.gcs.signingServiceAccount` names a different account to sign
 URLs as; leave it empty to sign as the workload's own.
+
+### The Caddy load balancer on each cloud
+
+Caddy terminates TLS itself, so the cloud load balancer must pass TCP through
+(layer 4) and keep the client's address, which the internal-API guard and rate
+limiting depend on. `caddy.service.externalTrafficPolicy: Local` does that on
+both clouds.
+
+- **GKE:** the default `LoadBalancer` is a passthrough network load balancer.
+  Reserve a regional static IP and set `caddy.service.loadBalancerIP`.
+- **EKS:** use a Network Load Balancer, not the classic ELB. With the AWS Load
+  Balancer Controller:
+
+  ```yaml
+  caddy:
+    service:
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: instance
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+  ```
+
+  For fixed addresses, add `service.beta.kubernetes.io/aws-load-balancer-eip-allocations`.
 
 ### Redis or Valkey with a private CA
 

@@ -168,7 +168,9 @@ objectStorage:
   region: "auto"
 
   # S3 only: authenticate with the workload's own cloud identity instead of
-  # static keys. (backend=gcs never takes keys, so it needs no switch.)
+  # static keys (EKS IRSA or Pod Identity). Needs a real AWS region in `region`
+  # above; "auto" is refused. (backend=gcs never takes keys, so it needs no
+  # switch.)
   #
   # When true the chart omits every AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY
   # variable, which is what lets boto3 reach its default credential chain.

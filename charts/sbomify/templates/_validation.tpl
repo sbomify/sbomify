@@ -44,6 +44,15 @@ never sees the Secret.
 {{- if and (eq $backend "s3") (not .Values.objectStorage.endpointUrl) }}
 {{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate. On Google Cloud set objectStorage.backend=gcs instead." }}
 {{- end }}
+{{/*
+Keyless S3 means an AWS role (IRSA, EKS Pod Identity), and boto3 exchanges it
+for credentials at STS in AWS_REGION. "auto" is Cloudflare R2's region, which
+only ever works with static keys, so with workload identity it fails at the
+first upload rather than at install time.
+*/}}
+{{- if and (eq $backend "s3") .Values.objectStorage.useWorkloadIdentity (has (.Values.objectStorage.region | default "" | lower) (list "" "auto")) }}
+{{- fail "sbomify: objectStorage.useWorkloadIdentity needs a real AWS region in objectStorage.region (for example eu-west-1), not \"auto\". The role is exchanged for credentials at STS in that region." }}
+{{- end }}
 
 {{- if and (not .Values.auth.keycloak.serverUrl) (not .Values.auth.oidc.discoveryUrl) }}
 {{- fail "sbomify: auth.keycloak.serverUrl or auth.oidc.discoveryUrl is required. This chart does not run an identity provider for you: deploy Keycloak with the Keycloak Operator (the project's official Kubernetes path), or point auth.oidc.discoveryUrl at another OIDC provider. See charts/sbomify/README.md." }}
