@@ -376,8 +376,8 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
             user.email_verified = _provider_confirmed_email(sociallogin)
 
             # Map Keycloak name fields directly to Django fields (try both possible keys)
-            user.first_name = data.get("given_name") or data.get("first_name", "")
-            user.last_name = data.get("family_name") or data.get("last_name", "")
+            user.first_name = data.get("given_name") or data.get("first_name") or ""
+            user.last_name = data.get("family_name") or data.get("last_name") or ""
 
             # Use preferred_username if available
             if "preferred_username" in data:
