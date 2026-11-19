@@ -193,6 +193,28 @@ def cached_openid_config(adapter: Any) -> dict[str, Any]:
     return config
 
 
+OIDC_ID_TOKEN_SESSION_KEY = "oidc_id_token"  # nosec B105 - a session key name, not a secret
+
+
+def keep_id_token(complete_login: Any) -> Any:
+    """Wrap allauth's ``complete_login`` to keep the raw ID token in the session.
+
+    Logout sends it back as ``id_token_hint``. Okta refuses an RP-initiated
+    logout without one, and Keycloak skips its "Do you want to log out?"
+    confirmation when it has one. allauth keeps only the decoded claims, so
+    this is the one place the raw token is still in hand. It is stored only
+    once allauth has validated it.
+    """
+
+    def wrapper(self: Any, request: HttpRequest, app: Any, token: Any, **kwargs: Any) -> Any:
+        login = complete_login(self, request, app, token, **kwargs)
+        if id_token := (kwargs.get("response") or {}).get("id_token"):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
+        return login
+
+    return wrapper
+
+
 class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     """Custom account adapter for username/password authentication."""
 

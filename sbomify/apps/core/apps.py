@@ -29,9 +29,10 @@ class CoreConfig(AppConfig):
         # form-urlencoding rules.
         from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
 
-        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client, cached_openid_config
+        from sbomify.apps.core.adapters import SpaceEncodedOAuth2Client, cached_openid_config, keep_id_token
 
         OpenIDConnectOAuth2Adapter.client_class = SpaceEncodedOAuth2Client
+        OpenIDConnectOAuth2Adapter.complete_login = keep_id_token(OpenIDConnectOAuth2Adapter.complete_login)
 
         # The same fixed adapter class leaves no seam for the discovery
         # document, which allauth re-reads from Keycloak on every single

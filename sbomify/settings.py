@@ -1099,6 +1099,19 @@ KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 
+# Generic OIDC overrides, for an identity provider other than Keycloak (Auth0,
+# Entra ID, Okta, Authentik, Zitadel, ...). An install that sets neither is
+# unchanged. Empty counts as unset so a blank Helm/Compose value falls back.
+#
+# OIDC_DISCOVERY_URL: the provider's .well-known/openid-configuration document.
+# When unset, the Keycloak realm's document is used.
+# OIDC_LOGOUT_URL: the browser-facing RP-initiated logout (end session)
+# endpoint. When unset, logout uses the discovery document's
+# end_session_endpoint if OIDC_DISCOVERY_URL is set, and the Keycloak realm's
+# endpoint under KEYCLOAK_PUBLIC_URL otherwise.
+OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
+OIDC_LOGOUT_URL = os.environ.get("OIDC_LOGOUT_URL", "")
+
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
         "APPS": [
@@ -1108,7 +1121,8 @@ SOCIALACCOUNT_PROVIDERS = {
                 "client_id": KEYCLOAK_CLIENT_ID,
                 "secret": KEYCLOAK_CLIENT_SECRET,
                 "settings": {
-                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "server_url": OIDC_DISCOVERY_URL
+                    or f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
                 },
             }
         ]

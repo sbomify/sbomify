@@ -43,3 +43,42 @@ def test_public_url_falls_back_to_server_url(public_url: str | None) -> None:
     if public_url is not None:
         env["KEYCLOAK_PUBLIC_URL"] = public_url
     assert _public_url(env) == SERVER_URL
+
+
+def _setting(name: str, env: dict[str, str]) -> str:
+    child_env = {k: v for k, v in os.environ.items() if not k.startswith(("KEYCLOAK_", "OIDC_"))}
+    child_env.update(env)
+    result = subprocess.run(
+        [sys.executable, "-c", f"import sbomify.settings as s; print(repr(s.{name}))"],
+        capture_output=True,
+        text=True,
+        env=child_env,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip().splitlines()[-1]
+
+
+PROVIDER_URL = "SOCIALACCOUNT_PROVIDERS['openid_connect']['APPS'][0]['settings']['server_url']"
+
+
+@pytest.mark.parametrize("discovery_url", [None, ""], ids=["unset", "empty"])
+def test_discovery_url_defaults_to_keycloak_realm(discovery_url: str | None) -> None:
+    env = {"KEYCLOAK_SERVER_URL": SERVER_URL, "KEYCLOAK_REALM": "acme"}
+    if discovery_url is not None:
+        env["OIDC_DISCOVERY_URL"] = discovery_url
+    expected = f"{SERVER_URL}realms/acme/.well-known/openid-configuration"
+    assert _setting(PROVIDER_URL, env) == repr(expected)
+    assert _setting("OIDC_DISCOVERY_URL", env) == repr("")
+
+
+def test_discovery_url_override_reaches_provider() -> None:
+    url = "https://tenant.auth0.com/.well-known/openid-configuration"
+    env = {"KEYCLOAK_SERVER_URL": SERVER_URL, "OIDC_DISCOVERY_URL": url}
+    assert _setting(PROVIDER_URL, env) == repr(url)
+
+
+def test_logout_url_read_from_environment() -> None:
+    url = "https://tenant.auth0.com/oidc/logout"
+    assert _setting("OIDC_LOGOUT_URL", {"OIDC_LOGOUT_URL": url}) == repr(url)
+    assert _setting("OIDC_LOGOUT_URL", {}) == repr("")
