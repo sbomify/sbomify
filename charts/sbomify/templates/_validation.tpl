@@ -82,8 +82,8 @@ It stays a value because three templates need it, not because it is tunable.
 {{- fail "sbomify: caddy.healthPath must stay /UuPha8mu/. The application hardcodes that path in urls.py and SECURE_REDIRECT_EXEMPT, so changing it here only breaks the probes and the edge health route." }}
 {{- end }}
 
-{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}
-{{- fail "sbomify: set auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
+{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) (not .Values.auth.oidc.clientSecret) }}
+{{- fail "sbomify: set auth.oidc.clientSecret or auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
 {{- end }}
 
 {{- if and .Values.app.billing (not .Values.app.extraEnvFrom) (not .Values.app.extraEnv) }}

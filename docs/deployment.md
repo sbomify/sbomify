@@ -76,6 +76,7 @@ KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: use an OIDC provider other than Keycloak (see "Using another OIDC provider").
 # OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
 # OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET may replace the KEYCLOAK_CLIENT_* names above.
 
 # S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -167,6 +168,7 @@ KC_HOSTNAME_URL=https://keycloak.example.com/
 # Optional: use an OIDC provider other than Keycloak (see "Using another OIDC provider").
 # OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
 # OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET may replace the KEYCLOAK_CLIENT_* names above.
 
 # S3
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -455,12 +457,18 @@ than Keycloak, such as Auth0, Entra ID, Okta, Authentik or Zitadel. Leave `USE_K
 unset and point sbomify at the provider:
 
 ```bash
-KEYCLOAK_CLIENT_ID=<client id at the provider>
-KEYCLOAK_CLIENT_SECRET=<client secret at the provider>
+OIDC_CLIENT_ID=<client id at the provider>
+OIDC_CLIENT_SECRET=<client secret at the provider>
 OIDC_DISCOVERY_URL=https://idp.example.com/.well-known/openid-configuration
 # Only when the discovery document has no end_session_endpoint:
-# OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout  # only if discovery has no end_session_endpoint
+# OIDC_LOGOUT_URL=https://idp.example.com/oidc/logout
+# Only when the provider sends no email_verified claim (Entra ID), see below:
+# OIDC_TRUST_EMAIL=example.com
 ```
+
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are the provider-neutral names for
+`KEYCLOAK_CLIENT_ID` and `KEYCLOAK_CLIENT_SECRET`. Either pair works for any provider;
+when both are set, the `OIDC_*` value wins.
 
 - `OIDC_DISCOVERY_URL` is the provider's discovery document. When unset, sbomify uses
   `{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration`.
@@ -485,9 +493,24 @@ and is not linked to an existing account with the same address.
 | Entra ID | `https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration`. Use the tenant ID: the `common` and `organizations` documents carry a placeholder issuer that fails ID token validation. | Discovered. |
 | Google | `https://accounts.google.com/.well-known/openid-configuration` | None. Signing out ends the sbomify session only. |
 
-Entra ID does not send `email_verified`, so its users count as unconfirmed (see above). It
-also leaves out `given_name` and `family_name` unless you add them as optional claims, in
-which case the name fields stay empty.
+Entra ID does not send `email_verified`, so its users count as unconfirmed (see above)
+unless you set `OIDC_TRUST_EMAIL`. It also leaves out `given_name` and `family_name` unless
+you add them as optional claims; without them the name fields stay empty.
+
+### Trusting the provider's email addresses
+
+`OIDC_TRUST_EMAIL` treats the addresses a provider issues as confirmed even without an
+`email_verified` claim, like **Trust Email** on a Keycloak identity provider. It is off by
+default.
+
+- `OIDC_TRUST_EMAIL=example.com,example.org` trusts addresses in those domains only.
+  Prefer this.
+- `OIDC_TRUST_EMAIL=true` trusts every address.
+
+A confirmed address signs in to an existing sbomify account with the same address, and
+claims invitations sent to it. Only trust a provider that controls the addresses it
+issues: with Entra ID, use your tenant-specific discovery URL and list only domains
+verified in that tenant, because an Entra user's `email` attribute is otherwise free text.
 
 Two features need Keycloak's Admin API and stay off with another provider:
 
