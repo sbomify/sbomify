@@ -316,9 +316,13 @@ def _iam_signing_types() -> tuple[type, type]:
                 signature: bytes = self._signer.sign(message)
             except TransportError as e:
                 # IAM refused (the account lacks roles/iam.serviceAccountTokenCreator,
-                # or the API is disabled): a misconfiguration, not an outage.
+                # the signing account does not exist, or the API is disabled): a
+                # misconfiguration, not an outage.
                 text = str(e)
-                if "PERMISSION_DENIED" in text or '"code": 403' in text or "SERVICE_DISABLED" in text:
+                if any(
+                    marker in text
+                    for marker in ("PERMISSION_DENIED", "NOT_FOUND", "SERVICE_DISABLED", '"code": 403', '"code": 404')
+                ):
                     forbidden: Any = gexc.Forbidden
                     raise forbidden(text) from e
                 raise

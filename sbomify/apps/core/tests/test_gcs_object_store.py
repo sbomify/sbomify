@@ -313,16 +313,18 @@ class TestKeylessSigningAgainstTheRealSDK:
         # Our connect/read timeouts, not google-auth's 120s default.
         assert calls[0]["timeout"] == (3, 7)
 
-    def test_missing_token_creator_role_is_access_denied(self, signed):
+    @pytest.mark.parametrize(
+        ("status", "reason"),
+        [
+            (403, "PERMISSION_DENIED"),  # no roles/iam.serviceAccountTokenCreator
+            (404, "NOT_FOUND"),  # GCS_SIGNING_SERVICE_ACCOUNT names no account
+        ],
+    )
+    def test_iam_refusal_is_access_denied(self, signed, status, reason):
+        # Bodies as IAM returns them, verified against a live project.
         store, _calls, responses = signed
-        denied = {
-            "error": {
-                "code": 403,
-                "message": "Permission 'iam.serviceAccounts.signBlob' denied",
-                "status": "PERMISSION_DENIED",
-            }
-        }
-        responses.append(_Response(403, json.dumps(denied).encode()))
+        body = {"error": {"code": status, "message": "refused", "status": reason}}
+        responses.append(_Response(status, json.dumps(body, indent=2).encode()))
         with pytest.raises(ClientError) as exc:
             store.generate_presigned_url("bucket", "key", 60)
         assert exc.value.response["Error"]["Code"] == "AccessDenied"
