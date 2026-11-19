@@ -444,7 +444,7 @@ def logout(request: HttpRequest) -> HttpResponse:
     )
     if not end_session_url:
         # The provider offers no RP-initiated logout: sign out of sbomify only.
-        return redirect(reverse("core:keycloak_login"))
+        return redirect("core:signed_out")
 
     # Keep any query the operator put on OIDC_LOGOUT_URL; ours wins on a clash.
     logout_url = urlsplit(end_session_url)

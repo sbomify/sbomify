@@ -217,7 +217,7 @@ def test_logout_is_local_when_provider_has_no_end_session(client: Client, sample
         KEYCLOAK_PUBLIC_URL="https://keycloak.example.com/",
     ):
         response = client.get(reverse("core:logout"))
-    assert response.url == reverse("core:keycloak_login")
+    assert response.url == reverse("core:signed_out")
     assert "_auth_user_id" not in client.session
 
 

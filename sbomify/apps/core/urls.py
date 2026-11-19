@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.urls import include, path, re_path
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 
@@ -42,6 +42,7 @@ urlpatterns = [
     path("settings/trust-centers/", TrustCenterAccessView.as_view(), name="trust_center_access"),
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
+    path("signed-out/", TemplateView.as_view(template_name="core/signed_out.html.j2"), name="signed_out"),
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
