@@ -20,12 +20,23 @@ AWS_SBOMS_STORAGE_BUCKET_NAME: {{ .Values.objectStorage.sboms.bucket | quote }}
 AWS_SBOMS_STORAGE_BUCKET_URL: {{ include "sbomify.s3SbomsBucketUrl" . | quote }}
 
 # OIDC / Keycloak
+{{- if .Values.auth.keycloak.serverUrl }}
 KEYCLOAK_SERVER_URL: {{ include "sbomify.keycloakServerUrl" . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.discoveryUrl }}
+OIDC_DISCOVERY_URL: {{ . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.logoutUrl }}
+OIDC_LOGOUT_URL: {{ . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.trustEmail }}
+OIDC_TRUST_EMAIL: {{ . | toString | quote }}
+{{- end }}
 {{- with .Values.auth.keycloak.publicUrl }}
 KEYCLOAK_PUBLIC_URL: {{ printf "%s/" (trimSuffix "/" .) | quote }}
 {{- end }}
 KEYCLOAK_REALM: {{ .Values.auth.keycloak.realm | quote }}
-KEYCLOAK_CLIENT_ID: {{ .Values.auth.keycloak.clientId | quote }}
+KEYCLOAK_CLIENT_ID: {{ .Values.auth.oidc.clientId | default .Values.auth.keycloak.clientId | quote }}
 
 {{- with .Values.app.posthog.apiKey }}
 POSTHOG_API_KEY: {{ . | quote }}

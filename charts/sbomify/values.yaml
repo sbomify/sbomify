@@ -102,8 +102,8 @@ secrets:
 # -- OIDC / Keycloak client configuration (the app is the OIDC *client*).
 auth:
   keycloak:
-    # REQUIRED. Keycloak base URL the app talks to, with a trailing slash,
-    # e.g. https://sso.example.com/
+    # REQUIRED unless auth.oidc.discoveryUrl is set. Keycloak base URL the app
+    # talks to, with a trailing slash, e.g. https://sso.example.com/
     #
     # Usually the PUBLIC url rather than an in-cluster Service name: OIDC
     # discovery hands the *browser* whatever endpoints it finds here, so the
@@ -115,8 +115,32 @@ auth:
     # serverUrl is an address the browser cannot reach. Defaults to serverUrl.
     publicUrl: ""
     realm: "sbomify"
+    # The OIDC client's ID and secret. auth.oidc.clientId and
+    # auth.oidc.clientSecret take precedence when set.
     clientId: "sbomify"
     clientSecret: ""
+  # Optional. Sign in through an OIDC provider other than Keycloak (Okta,
+  # Auth0, Entra ID, Authentik, Zitadel, ...). See docs/deployment.md.
+  oidc:
+    # The provider's discovery document, e.g.
+    # https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+    # When set, auth.keycloak.serverUrl is not needed.
+    discoveryUrl: ""
+    # The browser-facing logout endpoint. Only needed when the discovery
+    # document has no end_session_endpoint (Auth0 with RP-Initiated Logout
+    # off): https://<tenant>.auth0.com/oidc/logout
+    logoutUrl: ""
+    # The client's ID and secret at the provider. Provider-neutral names for
+    # auth.keycloak.clientId and auth.keycloak.clientSecret, which they
+    # override when set. The secret is stored under the same Secret key,
+    # KEYCLOAK_CLIENT_SECRET, so secrets.existingSecret is unchanged.
+    clientId: ""
+    clientSecret: ""
+    # Treat the provider's email addresses as confirmed without an
+    # email_verified claim (Entra ID sends none), like Keycloak's "Trust Email".
+    # "true", or a comma-separated list of domains such as "example.com".
+    # Only for a provider that controls the addresses it issues.
+    trustEmail: ""
 
 # -- REQUIRED. Object storage, S3 compatible: AWS S3, Cloudflare R2, Tigris,
 # or a MinIO you operate.

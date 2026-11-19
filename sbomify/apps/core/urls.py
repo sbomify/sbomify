@@ -42,6 +42,7 @@ urlpatterns = [
     path("settings/trust-centers/", TrustCenterAccessView.as_view(), name="trust_center_access"),
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
+    path("signed-out/", views.SignedOutView.as_view(), name="signed_out"),
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
