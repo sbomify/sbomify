@@ -1,43 +1,43 @@
 # Vulnerability / Incident Notification
-**CRA Article 14 — Within 72 hours of becoming aware**
+**CRA Article 14: within 72 hours of becoming aware**
 ---
 
 **Date:** {{ date }}
 **Manufacturer:** {{ manufacturer_name }}
 **Product:** {{ product_name }}
-**Reference:** [Link to Early Warning if applicable]
+**Reference:** [SRP reference of the early warning]
 
-## Product Information
+The portal does not repeat the early warning's fields here: the title, product, version, Member States and identifiers were filed with it. Field names follow ENISA's CRA SRP Glossary, version 1.6.
 
-**Product Name:** {{ product_name }}
-{% if product_description %}
-**Description:** {{ product_description }}
-{% endif %}
+## Required
 
-## Vulnerability / Incident Details
+**Actively exploited vulnerability, general information:** [Structured narrative of the vulnerability and its exploitation]
 
-**Nature of exploit or incident:** [Describe the nature of the vulnerability or incident]
+**Severe incident, general information about the nature of the incident:** [Structured narrative]
 
-**Severity Assessment:** [Critical / High / Medium / Low]
+**Severe incident, initial assessment:** [Initial assessment of the incident]
 
-**CVE Identifier:** [CVE-YYYY-NNNNN if assigned]
+## Carried over from the early warning, update if needed
 
-## Impact Assessment
+**Date and time the vulnerability was exploited (UTC):** [YYYY-MM-DD HH:MM]
 
-**Affected functionality:** [Describe what product functions are affected]
+**Incident is suspected of unlawful or malicious acts:** [Free text]
 
-**Sensitivity assessment:** [Describe the sensitivity of affected data or functions]
+## Optional
 
-## Corrective / Mitigating Measures
+**Considered sensitivity of information:** [Concise justification]
 
-**Measures available to users:**
-- [List corrective or mitigating actions users can take]
+**Corrective or mitigating measures taken:** [Required in the final report]
 
-**Security update status:** [ ] Available / [ ] In development / [ ] Planned
+**Corrective or mitigating measures that users can take:** [Required in the final report]
 
-## Affected Member States
+**Attack vector:** [Short description]
 
-{% if target_eu_markets %}{{ target_eu_markets|join:", " }}{% else %}[List affected Member States]{% endif %}
+**Date and time the incident occurred (UTC):** [YYYY-MM-DD HH:MM]
+
+**Severity and impact:** [Required in the final report]
+
+**Particularly Exceptional Circumstances (PEC):** [Only if Article 16(2) applies: the PEC option, the delay reason and further information]
 
 ## Contact Information
 
@@ -46,5 +46,5 @@
 {% endif %}
 
 ---
-> Submit via ENISA Single Reporting Platform (SRP).
+> Submit via the ENISA Single Reporting Platform (SRP).
 > This notification must be submitted within 72 hours of becoming aware of the vulnerability or incident.

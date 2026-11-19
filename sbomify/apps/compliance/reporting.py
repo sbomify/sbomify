@@ -4,9 +4,12 @@ ENISA's Single Reporting Platform (SRP) takes notifications through a web
 portal only, so sbomify does not submit anything. It prepares each field the
 way the portal asks for it, tracks the deadlines and records what was filed.
 
-The field list follows ENISA's "CRA SRP Glossary". Two of its 41 entries are
-left out because the manufacturer never fills them: the manufacturer name,
-which the portal shows read-only, and the CSIRT note, which is the CSIRT's.
+The field list follows ENISA's "CRA SRP Glossary", version 1.6 of 21 October
+2026. Three of its 42 entries are not fields here: the notification type is
+the report's kind, the manufacturer name is shown read-only by the portal, and
+the CSIRT note is the CSIRT's. Since 1.6 a later stage does not repeat the
+early warning: each field says what each stage does with it, and most early
+warning fields are not on the later forms at all.
 When ENISA changes the form, this list is the only thing to edit: report
 values live in one JSON column keyed by these ids, so no migration follows.
 """
@@ -124,98 +127,150 @@ def next_due(
     return None
 
 
+class Need:
+    """What the portal does with a field at one stage, in the glossary's words."""
+
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+    # "By default copied from previous step": on the form, prefilled from the last stage.
+    COPIED = "copied"
+    # Not on that stage's form. A later stage only carries what is new.
+    NOT_ASKED = "not_asked"
+
+
+_R, _O, _C, _NA = Need.REQUIRED, Need.OPTIONAL, Need.COPIED, Need.NOT_ASKED
+
+# The same three columns as the glossary: early warning, notification, final report.
+_EARLY_WARNING_ONLY = (_R, _NA, _NA)
+_EARLY_WARNING_IF_KNOWN = (_O, _NA, _NA)
+_NOTIFICATION_NEEDS = (_O, _R, _NA)
+_FINAL_REPORT_NEEDS = (_O, _O, _R)
+
+
 @dataclass(frozen=True)
 class SRPField:
     id: str
     label: str
     section: str  # "common", "vulnerability" or "incident"
+    # What each deadline stage does with it, in DEADLINE_STAGES order.
+    needs: tuple[str, str, str]
     kind: str = "text"  # "text", "longtext", "choice" or "datetime"
     max_length: int | None = None
-    # The first stage the portal requires it for; None when it never does.
-    required_from: str | None = None
     choices: tuple[str, ...] = ()
     # A report column rather than a JSON value: the dates drive the deadlines.
     column: str | None = None
 
+    def need_at(self, stage: str) -> str:
+        """An intermediate report has no column of its own, so it is read as the final report."""
+        return self.needs[_STAGE_ORDER.get(stage, len(DEADLINE_STAGES) - 1)]
+
+    def on_form(self, stage: str) -> bool:
+        return self.need_at(stage) != Need.NOT_ASKED
+
 
 _YES_NO = ("Yes", "No")
-_EW, _N, _FR = Stage.EARLY_WARNING, Stage.NOTIFICATION, Stage.FINAL_REPORT
+_STAGE_ORDER = {stage: index for index, stage in enumerate(DEADLINE_STAGES)}
 
 # In the portal's order, under ENISA's labels.
 SRP_FIELDS: tuple[SRPField, ...] = (
-    SRPField("title", "Title", "common", max_length=255, required_from=_EW),
-    SRPField("summary", "Summary", "common", "longtext", 4000, _EW),
-    SRPField("member_states", "Member States where product available (Concerned CSIRT)", "common", required_from=_EW),
-    SRPField("product_name", "Product Name", "common", max_length=255, required_from=_EW),
-    SRPField("product_version", "Product Version", "common", max_length=255, required_from=_EW),
+    SRPField("title", "Title", "common", _EARLY_WARNING_ONLY, max_length=255),
+    SRPField("summary", "Summary", "common", _EARLY_WARNING_ONLY, "longtext", 4000),
+    SRPField(
+        "member_states",
+        "Member States where product available (CSIRT Designated as Coordinator and Concerned CSIRTs)",
+        "common",
+        _EARLY_WARNING_ONLY,
+    ),
+    SRPField("product_name", "Product Name", "common", _EARLY_WARNING_ONLY, max_length=255),
+    SRPField("product_version", "Product Version", "common", _EARLY_WARNING_ONLY, max_length=255),
+    SRPField("additional_information", "Additional Information", "common", _EARLY_WARNING_IF_KNOWN, "longtext", 255),
     SRPField(
         "product_type",
         "Product Type (Default/Important/Critical)",
         "common",
+        _EARLY_WARNING_IF_KNOWN,
         "choice",
         choices=("Default", "Important Product with Digital Elements", "Critical Product with Digital Elements"),
     ),
-    SRPField("product_class", "Product class", "common", "choice", choices=("Class I", "Class II")),
-    SRPField("product_category", "Product category", "common", max_length=255),
-    SRPField("end_of_support", "End of support indicator", "common", "choice", choices=_YES_NO),
-    SRPField("component_name", "Component name", "common", max_length=255),
-    SRPField("measure_expected", "Mitigating measure expected shortly", "common", "choice", choices=_YES_NO),
-    SRPField("user_action", "User Action able to reduce impact", "common", "longtext", 4000),
-    SRPField("sensitivity", "Considered sensitivity of information", "common", max_length=255),
-    SRPField("measures_taken", "Corrective or mitigating measures taken", "common", "longtext", 2000, _FR),
     SRPField(
-        "measures_for_users", "Corrective or mitigating measures that users can take", "common", "longtext", 4000, _FR
+        "product_class", "Product class", "common", _EARLY_WARNING_IF_KNOWN, "choice", choices=("Class I", "Class II")
     ),
-    SRPField("attack_vector", "Attack vector", "common", max_length=255),
-    SRPField("cve_id", "CVE ID", "vulnerability", max_length=255),
-    SRPField("euvd_id", "EUVD ID", "vulnerability", max_length=255),
-    SRPField("general_information", "General information", "vulnerability", "longtext", 4000, _N),
+    SRPField("product_category", "Product category", "common", _EARLY_WARNING_IF_KNOWN, max_length=255),
+    SRPField(
+        "end_of_support", "End of the support indicator", "common", _EARLY_WARNING_IF_KNOWN, "choice", choices=_YES_NO
+    ),
+    SRPField("component_name", "Component name", "common", _EARLY_WARNING_IF_KNOWN, max_length=255),
+    SRPField(
+        "measure_expected",
+        "Mitigating measure expected shortly",
+        "common",
+        _EARLY_WARNING_IF_KNOWN,
+        "choice",
+        choices=_YES_NO,
+    ),
+    SRPField("user_action", "User Action able to reduce impact", "common", _EARLY_WARNING_IF_KNOWN, "longtext", 4000),
+    SRPField("sensitivity", "Considered sensitivity of information", "common", (_O, _O, _NA), max_length=255),
+    SRPField(
+        "measures_taken", "Corrective or mitigating measures taken", "common", _FINAL_REPORT_NEEDS, "longtext", 2000
+    ),
+    SRPField(
+        "measures_for_users",
+        "Corrective or mitigating measures that users can take",
+        "common",
+        _FINAL_REPORT_NEEDS,
+        "longtext",
+        4000,
+    ),
+    SRPField("attack_vector", "Attack vector", "common", (_NA, _O, _NA), max_length=255),
+    SRPField("cve_id", "CVE ID", "vulnerability", _EARLY_WARNING_IF_KNOWN, max_length=255),
+    SRPField("euvd_id", "EUVD ID", "vulnerability", _EARLY_WARNING_IF_KNOWN, max_length=255),
+    SRPField("general_information", "General information", "vulnerability", _NOTIFICATION_NEEDS, "longtext", 4000),
     SRPField(
         "measure_available_at",
         "Date when corrective or mitigating measure has been available",
         "vulnerability",
+        _FINAL_REPORT_NEEDS,
         "datetime",
-        required_from=_FR,
         column="measure_available_at",
     ),
     SRPField(
         "measure_details",
         "Details about the security update/corrective measure available",
         "vulnerability",
+        _FINAL_REPORT_NEEDS,
         "longtext",
         2000,
-        _FR,
     ),
     SRPField(
         "vulnerability_severity",
-        "Full description of the Severity of the vulnerability",
+        "Description of the severity of the vulnerability",
         "vulnerability",
+        _FINAL_REPORT_NEEDS,
         "longtext",
         4000,
-        _FR,
     ),
     SRPField(
         "vulnerability_impact",
-        "Full description of the Impact of the vulnerability",
+        "Description of the impact of the vulnerability",
         "vulnerability",
+        _FINAL_REPORT_NEEDS,
         "longtext",
         4000,
-        _FR,
     ),
     SRPField(
         "vulnerability_aware_at",
         "Date and time when you become aware of the Actively Exploited Vulnerability",
         "vulnerability",
+        _EARLY_WARNING_ONLY,
         "datetime",
-        required_from=_EW,
         column="aware_at",
     ),
     SRPField(
         "vulnerability_occurred_at",
         "Date and time when the Actively Exploited Vulnerability occurred (UTC time)",
         "vulnerability",
+        (_O, _C, _NA),
         "datetime",
-        required_from=_N,
         column="occurred_at",
     ),
     # The portal requires it at the final report "if available", so it is not
@@ -224,57 +279,83 @@ SRP_FIELDS: tuple[SRPField, ...] = (
         "malicious_actor",
         "Malicious actor that has exploited/is exploiting the vulnerability",
         "vulnerability",
+        (_O, _O, _O),
         max_length=100,
     ),
-    SRPField("pec", "Particularly Exceptional Circumstances (PEC)", "vulnerability", max_length=255),
-    SRPField("pec_delay_reason", "PEC Delay Reason", "vulnerability", max_length=255),
-    SRPField("further_information", "Please provide further information", "vulnerability", "longtext", 800),
+    SRPField("pec", "Particularly Exceptional Circumstances (PEC)", "vulnerability", (_NA, _O, _NA), max_length=255),
+    SRPField("pec_delay_reason", "PEC Delay Reason", "vulnerability", (_NA, _O, _NA), max_length=255),
+    SRPField(
+        "further_information", "Please provide further information", "vulnerability", (_NA, _O, _NA), "longtext", 800
+    ),
     SRPField(
         "suspected_unlawful",
         "Incident is suspected of unlawful or malicious acts",
         "incident",
+        (_R, _C, _NA),
         max_length=255,
-        required_from=_EW,
     ),
     SRPField(
-        "incident_nature", "General information, about the nature of the incident", "incident", "longtext", 4000, _N
+        "incident_nature",
+        "General information, about the nature of the incident",
+        "incident",
+        _NOTIFICATION_NEEDS,
+        "longtext",
+        4000,
     ),
-    SRPField("incident_mitigation", "Applied and ongoing mitigation measures", "incident", "longtext", 4000, _FR),
     SRPField(
-        "incident_severity", "Detailed description of the Severity of the incident", "incident", "longtext", 4000, _FR
+        "incident_mitigation",
+        "Applied and ongoing mitigation measures",
+        "incident",
+        _FINAL_REPORT_NEEDS,
+        "longtext",
+        4000,
     ),
     SRPField(
-        "incident_impact", "Detailed description of the Impact of the incident", "incident", "longtext", 4000, _FR
+        "incident_severity",
+        "Detailed description of the Severity of the incident",
+        "incident",
+        _FINAL_REPORT_NEEDS,
+        "longtext",
+        4000,
+    ),
+    SRPField(
+        "incident_impact",
+        "Detailed description of the Impact of the incident",
+        "incident",
+        _FINAL_REPORT_NEEDS,
+        "longtext",
+        4000,
     ),
     SRPField(
         "root_cause",
         "Type of Threat or root cause that is likely to have triggered incident",
         "incident",
+        _FINAL_REPORT_NEEDS,
         max_length=255,
-        required_from=_FR,
     ),
     SRPField(
         "incident_aware_at",
         "Date and time when you become aware of the incident (UTC time)",
         "incident",
+        _EARLY_WARNING_ONLY,
         "datetime",
-        required_from=_EW,
         column="aware_at",
     ),
     SRPField(
         "incident_occurred_at",
         "Date and time when the incident occurred (UTC time)",
         "incident",
+        (_O, _O, _NA),
         "datetime",
-        required_from=_N,
         column="occurred_at",
     ),
-    SRPField("initial_assessment", "Initial assessment of the incident", "incident", "longtext", 4000, _N),
-    SRPField("ar_note", "AR Note", "common", "longtext"),
+    SRPField(
+        "initial_assessment", "Initial assessment of the incident", "incident", _NOTIFICATION_NEEDS, "longtext", 4000
+    ),
+    SRPField("ar_note", "AR Note", "common", (_O, _O, _O), "longtext"),
 )
 
 FIELDS_BY_ID = {field.id: field for field in SRP_FIELDS}
-_STAGE_ORDER = {stage: index for index, stage in enumerate(DEADLINE_STAGES)}
 
 
 def fields_for(kind: str) -> list[SRPField]:
@@ -282,13 +363,8 @@ def fields_for(kind: str) -> list[SRPField]:
 
 
 def required_fields(kind: str, stage: str) -> list[SRPField]:
-    """What the portal needs at ``stage``, which includes every earlier stage's needs."""
-    limit = _STAGE_ORDER.get(stage, len(DEADLINE_STAGES) - 1)
-    return [
-        field
-        for field in fields_for(kind)
-        if field.required_from is not None and _STAGE_ORDER[field.required_from] <= limit
-    ]
+    """What the portal needs at ``stage`` itself. What an earlier stage needed was filed with it."""
+    return [field for field in fields_for(kind) if field.need_at(stage) == Need.REQUIRED]
 
 
 def missing_fields(kind: str, stage: str, values: dict[str, Any]) -> list[str]:
