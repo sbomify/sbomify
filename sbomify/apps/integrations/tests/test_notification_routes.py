@@ -7,6 +7,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
 from sbomify.apps.integrations.models import Integration, NotificationRoute
 from sbomify.apps.integrations.providers.slack import SLACK, SlackChannelError
@@ -39,6 +40,30 @@ class TestTheTokenIsNeverRefreshed:
 
         with pytest.raises(ProviderAuthError):
             connections.access_token(connected_slack, SLACK)
+
+
+class TestReconnecting:
+    @staticmethod
+    def _token_for(slack_workspace_id: str) -> oauth.TokenSet:
+        return oauth.TokenSet("xoxb-new", "", None, SLACK.scopes, account={"id": slack_workspace_id, "name": "Example"})
+
+    def test_the_same_slack_workspace_keeps_its_channels(self, connected_slack) -> None:
+        _route(connected_slack)
+
+        connections.save_connection(connected_slack.team, SLACK, self._token_for("T0001"), None)
+
+        assert NotificationRoute.objects.filter(integration=connected_slack).count() == 1
+
+    def test_another_slack_workspace_drops_the_channels(self, connected_slack) -> None:
+        """A channel id names a channel in one Slack workspace only, so every post would fail."""
+        _route(connected_slack)
+        _route(connected_slack, NotificationRoute.Event.DAILY_DIGEST)
+
+        integration = connections.save_connection(connected_slack.team, SLACK, self._token_for("T0002"), None)
+
+        assert integration.pk == connected_slack.pk
+        assert integration.account["id"] == "T0002"
+        assert not NotificationRoute.objects.exists()
 
 
 class TestSetRoute:

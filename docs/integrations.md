@@ -194,6 +194,10 @@ posted.
 `chat:write.public` lets the bot post to any public channel without being
 invited. A private channel is only listed once the app has been invited to it.
 
+Reconnecting to the same Slack workspace keeps every channel choice.
+Reconnecting to a different one clears them, because a channel id only names a
+channel in the Slack workspace that issued it.
+
 Leave token rotation off in the app's OAuth settings. sbomify keeps the bot
 token Slack issues and never refreshes it, so a rotating token stops working
 after 12 hours and the connection then needs reconnecting.
