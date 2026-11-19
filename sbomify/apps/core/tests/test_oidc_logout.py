@@ -8,6 +8,7 @@ from allauth.socialaccount.adapter import get_adapter
 from allauth.socialaccount.helpers import complete_social_login
 from allauth.socialaccount.models import SocialAccount, SocialToken
 from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
+from django.conf import settings
 from django.contrib.auth import login as django_login
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages.middleware import MessageMiddleware
@@ -43,7 +44,6 @@ def test_completed_login_retains_logout_hint(already_authenticated: bool, mocker
         sociallogin = adapter.complete_login(
             request, provider.app, SocialToken(token="access-token"), response={"id_token": "validated.raw.token"}
         )
-        assert OIDC_ID_TOKEN_SESSION_KEY not in request.session
         sociallogin.state = {"process": "login"}
         complete_social_login(request, sociallogin)
     assert request.user.pk == user.pk
@@ -53,6 +53,35 @@ def test_completed_login_retains_logout_hint(already_authenticated: bool, mocker
         response = logout(request)
     assert parse_qs(urlsplit(response["Location"]).query)["id_token_hint"] == ["validated.raw.token"]
     assert OIDC_ID_TOKEN_SESSION_KEY not in request.session
+
+
+@pytest.mark.django_db
+def test_login_finished_after_the_signup_form_retains_logout_hint(mocker: MockerFixture) -> None:
+    """A provider that sends no email stops at allauth's signup form, and login finishes in a later request."""
+    request = RequestFactory().get("/")
+    SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+    MessageMiddleware(lambda r: HttpResponse()).process_request(request)
+    request.user = AnonymousUser()
+    claims = {"sub": "no-email"}
+    mocker.patch.object(OpenIDConnectOAuth2Adapter, "_decode_id_token", return_value=claims)
+    mocker.patch.object(OpenIDConnectOAuth2Adapter, "_fetch_user_info", return_value=claims)
+    with request_context(request):
+        provider = get_adapter().get_provider(request, "keycloak")
+        adapter = OpenIDConnectOAuth2Adapter(request, "keycloak")
+        sociallogin = adapter.complete_login(
+            request, provider.app, SocialToken(token="access-token"), response={"id_token": "validated.raw.token"}
+        )
+        sociallogin.state = {"process": "login"}
+        response = complete_social_login(request, sociallogin)
+    assert response["Location"] == reverse("socialaccount_signup")
+    request.session.save()
+
+    client = Client()
+    client.cookies[settings.SESSION_COOKIE_NAME] = request.session.session_key
+    client.post(reverse("socialaccount_signup"), {"email": "late@example.com"})
+
+    assert "_auth_user_id" in client.session
+    assert client.session[OIDC_ID_TOKEN_SESSION_KEY] == "validated.raw.token"
 
 
 @pytest.mark.django_db

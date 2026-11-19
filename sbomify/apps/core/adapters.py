@@ -202,13 +202,19 @@ def keep_id_token(complete_login: Any) -> Any:
     Logout sends it back as ``id_token_hint``. Okta refuses an RP-initiated
     logout without one, and Keycloak skips its "Do you want to log out?"
     confirmation when it has one. allauth keeps only the decoded claims, so
-    this is the one place the raw token is still in hand. Keep the validated
-    token on the request until the account adapter establishes the new session.
+    this is the one place the raw token is still in hand, and it is stored only
+    once allauth has validated it.
+
+    It goes to two places. The session carries it when login finishes in a
+    later request, such as after allauth's signup form. The request carries
+    it past ``login()``, which flushes the session when someone signs in again
+    over an existing one; ``CustomAccountAdapter.login`` puts it back.
     """
 
     def wrapper(self: Any, request: HttpRequest, app: Any, token: Any, **kwargs: Any) -> Any:
         login = complete_login(self, request, app, token, **kwargs)
         if id_token := (kwargs.get("response") or {}).get("id_token"):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
             setattr(request, "_oidc_id_token", id_token)
         return login
 
