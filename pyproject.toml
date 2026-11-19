@@ -21,6 +21,10 @@ dependencies = [
     "django-ninja>=1.4.3,<2",
     "ruid>=0.1.2,<0.2",
     "boto3>=1.40.36,<2",
+    # Native Google Cloud Storage backend (STORAGE_BACKEND=gcs, ADR-0007).
+    # Reads Application Default Credentials, so GKE Workload Identity needs
+    # no static keys.
+    "google-cloud-storage>=3.0.0,<4",
     "dj-database-url>=3.0.1,<4",
     "django-vite>=3.1.0,<4",
     "django-health-check>=3.20.0,<5",
@@ -280,6 +284,7 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
+    "google.cloud.*",
     "anymail.*",
     "whitenoise.*",
     "health_check.*",

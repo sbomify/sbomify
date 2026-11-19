@@ -12,8 +12,18 @@ BILLING: {{ .Values.app.billing | ternary "True" "False" | quote }}
 TRUST_CENTER_DOMAIN: {{ .Values.app.trustCenterDomain | quote }}
 
 # Object storage
+STORAGE_BACKEND: {{ include "sbomify.storageBackend" . | quote }}
+{{- if eq (include "sbomify.storageBackend" .) "gcs" }}
+{{- with .Values.objectStorage.gcs.projectId }}
+GCS_PROJECT_ID: {{ . | quote }}
+{{- end }}
+{{- with .Values.objectStorage.gcs.signingServiceAccount }}
+GCS_SIGNING_SERVICE_ACCOUNT: {{ . | quote }}
+{{- end }}
+{{- else }}
 AWS_ENDPOINT_URL_S3: {{ include "sbomify.s3Endpoint" . | quote }}
 AWS_REGION: {{ .Values.objectStorage.region | quote }}
+{{- end }}
 AWS_MEDIA_STORAGE_BUCKET_NAME: {{ .Values.objectStorage.media.bucket | quote }}
 AWS_MEDIA_STORAGE_BUCKET_URL: {{ include "sbomify.s3MediaBucketUrl" . | quote }}
 AWS_SBOMS_STORAGE_BUCKET_NAME: {{ .Values.objectStorage.sboms.bucket | quote }}
