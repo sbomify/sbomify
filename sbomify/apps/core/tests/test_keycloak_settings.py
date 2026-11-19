@@ -82,3 +82,46 @@ def test_logout_url_read_from_environment() -> None:
     url = "https://tenant.auth0.com/oidc/logout"
     assert _setting("OIDC_LOGOUT_URL", {"OIDC_LOGOUT_URL": url}) == repr(url)
     assert _setting("OIDC_LOGOUT_URL", {}) == repr("")
+
+
+APP = "SOCIALACCOUNT_PROVIDERS['openid_connect']['APPS'][0]"
+
+
+@pytest.mark.parametrize(
+    "env,client_id,secret",
+    [
+        ({"KEYCLOAK_CLIENT_ID": "kc", "KEYCLOAK_CLIENT_SECRET": "kc-secret"}, "kc", "kc-secret"),
+        ({"OIDC_CLIENT_ID": "okta", "OIDC_CLIENT_SECRET": "okta-secret"}, "okta", "okta-secret"),
+        (
+            {"KEYCLOAK_CLIENT_ID": "kc", "KEYCLOAK_CLIENT_SECRET": "kc-secret", "OIDC_CLIENT_ID": "okta"},
+            "okta",
+            "kc-secret",
+        ),
+        ({"KEYCLOAK_CLIENT_ID": "kc", "OIDC_CLIENT_ID": "", "OIDC_CLIENT_SECRET": ""}, "kc", ""),
+        ({}, "sbomify", ""),
+    ],
+    ids=["keycloak-names", "oidc-names", "oidc-wins-per-variable", "empty-oidc-falls-back", "defaults"],
+)
+def test_client_credentials_accept_both_names(env: dict[str, str], client_id: str, secret: str) -> None:
+    assert _setting("KEYCLOAK_CLIENT_ID", env) == repr(client_id)
+    assert _setting("KEYCLOAK_CLIENT_SECRET", env) == repr(secret)
+    assert _setting(f"{APP}['client_id']", env) == repr(client_id)
+    assert _setting(f"{APP}['secret']", env) == repr(secret)
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (None, False),
+        ("", False),
+        ("false", False),
+        ("true", True),
+        ("True", True),
+        ("1", True),
+        ("example.com", ["example.com"]),
+        (" Example.com, @corp.example.org ,", ["example.com", "corp.example.org"]),
+    ],
+)
+def test_trust_email_reaches_allauth(value: str | None, expected: bool | list[str]) -> None:
+    env = {} if value is None else {"OIDC_TRUST_EMAIL": value}
+    assert _setting(f"{APP}['settings']['verified_email']", env) == repr(expected)

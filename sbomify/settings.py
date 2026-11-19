@@ -1094,8 +1094,12 @@ KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:808
 # Service name. Empty counts as unset so a blank Helm/Compose value falls back.
 KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+# The OIDC client's credentials, for Keycloak or any other provider.
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET are the provider-neutral names and win
+# when set; empty counts as unset, so an install that only sets the KEYCLOAK_*
+# names is unchanged.
+KEYCLOAK_CLIENT_ID = os.environ.get("OIDC_CLIENT_ID") or os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("OIDC_CLIENT_SECRET") or os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 
@@ -1112,6 +1116,25 @@ KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
 OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
 OIDC_LOGOUT_URL = os.environ.get("OIDC_LOGOUT_URL", "")
 
+
+def _trusted_email(value: str) -> bool | list[str]:
+    """OIDC_TRUST_EMAIL as allauth's ``verified_email``: off, on, or a list of domains."""
+    value = value.strip()
+    if value.lower() in ("", "false", "0", "no"):
+        return False
+    if value.lower() in ("true", "1", "yes"):
+        return True
+    return [domain.strip().lower().lstrip("@") for domain in value.split(",") if domain.strip()]
+
+
+# Treat the provider's email addresses as confirmed even without an
+# email_verified claim (Entra ID sends none), like Keycloak's "Trust Email" on
+# an identity provider. Off by default. "true" trusts every address; a
+# comma-separated list of domains (example.com,example.org) trusts only those.
+# A confirmed address is linked to an existing account with the same address,
+# so only trust a provider that controls the addresses it issues.
+OIDC_TRUST_EMAIL = _trusted_email(os.environ.get("OIDC_TRUST_EMAIL", ""))
+
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
         "APPS": [
@@ -1123,6 +1146,7 @@ SOCIALACCOUNT_PROVIDERS = {
                 "settings": {
                     "server_url": OIDC_DISCOVERY_URL
                     or f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "verified_email": OIDC_TRUST_EMAIL,
                 },
             }
         ]

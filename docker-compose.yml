@@ -129,6 +129,9 @@ services:
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
       OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL:-}
       OIDC_LOGOUT_URL: ${OIDC_LOGOUT_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_TRUST_EMAIL: ${OIDC_TRUST_EMAIL:-}
     # No ports exposed - all traffic goes through Caddy
     expose:
       - 8000
