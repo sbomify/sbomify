@@ -161,11 +161,38 @@ cache, task queue and websocket channels from this base URL.
 {{- .Values.objectStorage.endpointUrl -}}
 {{- end }}
 
+{{/*
+Where bucket URLs are built from when no bucketUrl is given: the S3 endpoint,
+or the public GCS endpoint, which serves every bucket under one host.
+*/}}
+{{- define "sbomify.bucketUrlBase" -}}
+{{- if eq (include "sbomify.storageBackend" .) "gcs" -}}
+https://storage.googleapis.com
+{{- else -}}
+{{- include "sbomify.s3Endpoint" . -}}
+{{- end -}}
+{{- end }}
+
+{{- define "sbomify.storageBackend" -}}
+{{- .Values.objectStorage.backend | default "s3" | lower -}}
+{{- end }}
+
+{{/*
+"true" when no static storage keys are wired in. GCS never takes any: the
+native backend only reads Application Default Credentials (GKE Workload
+Identity). For S3 it is the opt-in useWorkloadIdentity (IRSA, Pod Identity).
+*/}}
+{{- define "sbomify.storageKeyless" -}}
+{{- if or .Values.objectStorage.useWorkloadIdentity (eq (include "sbomify.storageBackend" .) "gcs") -}}
+true
+{{- end -}}
+{{- end }}
+
 {{- define "sbomify.s3MediaBucketUrl" -}}
 {{- if .Values.objectStorage.media.bucketUrl -}}
 {{- .Values.objectStorage.media.bucketUrl -}}
 {{- else -}}
-{{- printf "%s/%s" (include "sbomify.s3Endpoint" .) .Values.objectStorage.media.bucket -}}
+{{- printf "%s/%s" (include "sbomify.bucketUrlBase" .) .Values.objectStorage.media.bucket -}}
 {{- end -}}
 {{- end }}
 
@@ -173,7 +200,7 @@ cache, task queue and websocket channels from this base URL.
 {{- if .Values.objectStorage.sboms.bucketUrl -}}
 {{- .Values.objectStorage.sboms.bucketUrl -}}
 {{- else -}}
-{{- printf "%s/%s" (include "sbomify.s3Endpoint" .) .Values.objectStorage.sboms.bucket -}}
+{{- printf "%s/%s" (include "sbomify.bucketUrlBase" .) .Values.objectStorage.sboms.bucket -}}
 {{- end -}}
 {{- end }}
 
@@ -254,7 +281,7 @@ directly above, because the generic names are part of boto3's default credential
 chain and outrank IRSA, so once ADR-0007 makes credentials optional a stray pair
 here would quietly beat the workload's own identity.
 */}}
-{{- if not $ctx.Values.objectStorage.useWorkloadIdentity }}
+{{- if not (include "sbomify.storageKeyless" $ctx) }}
 - name: AWS_MEDIA_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:

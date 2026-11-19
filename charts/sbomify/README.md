@@ -63,7 +63,9 @@ helm install sbomify ./charts/sbomify \
 ```
 
 On AWS you can drop the four storage credentials by setting
-`objectStorage.useWorkloadIdentity=true`. See *Keyless object storage* below.
+`objectStorage.useWorkloadIdentity=true`. On Google Cloud set
+`objectStorage.backend=gcs` instead, which needs no endpoint and no keys. See
+*Keyless object storage* below.
 
 `secretKey` and `signedUrlSalt` are required. The chart will not invent them.
 Losing them logs out every user and invalidates every signed URL, so generate
@@ -106,7 +108,7 @@ release away from your data.
 | --- | --- | --- |
 | PostgreSQL 17 | `database.*` | A managed service (RDS, Cloud SQL, Neon), or the [CloudNativePG](https://cloudnative-pg.io/) operator in-cluster |
 | Valkey or Redis | `redis.*` | A managed service (ElastiCache, Memorystore, Upstash), or an operator |
-| S3-compatible storage | `objectStorage.*` | S3, Cloudflare R2, Tigris, or a MinIO you operate |
+| Object storage | `objectStorage.*` | S3, Cloudflare R2, Tigris, a MinIO you operate, or Google Cloud Storage (`backend: gcs`) |
 | Keycloak | `auth.keycloak.*` | The [Keycloak Operator](https://www.keycloak.org/guides) |
 
 On Keycloak: the project **deliberately does not publish an official Helm
@@ -146,7 +148,8 @@ rotation stays entirely in your system's hands.
 `KEYCLOAK_CLIENT_SECRET`, plus `AWS_MEDIA_ACCESS_KEY_ID`,
 `AWS_MEDIA_SECRET_ACCESS_KEY`, `AWS_SBOMS_ACCESS_KEY_ID` and
 `AWS_SBOMS_SECRET_ACCESS_KEY` unless `objectStorage.useWorkloadIdentity` is
-set, in which case the chart neither reads nor injects them.
+set or `objectStorage.backend` is `gcs`, in which case the chart neither reads
+nor injects them.
 
 `GITHUB_API_TOKEN` is optional. Supply it to give the SBOM Verification plugin
 an authenticated GitHub rate limit; leave it out and the pods start without it.
@@ -238,19 +241,14 @@ a separate, more privileged identity for schema changes.
 
 ### Keyless object storage
 
-> **Requires an image containing [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md)
-> phase 1**, which is in this branch. `object_store.py` now resolves the
-> credentials as `getattr(...) or None`, so an unset key becomes `None` and
-> boto3 reaches its default chain. Against an older image the application
-> passed `""` explicitly and boto3 read that empty string as a credential, so
-> the chain was never consulted.
-
 Static storage keys can be dropped entirely where the platform can vouch for
-the workload:
+the workload.
+
+**AWS (EKS IRSA or Pod Identity):**
 
 ```yaml
 objectStorage:
-  useWorkloadIdentity: true    # EKS IRSA or Pod Identity
+  useWorkloadIdentity: true
 serviceAccount:
   create: false
   name: sbomify                # you manage it, annotated with the cloud role
@@ -262,9 +260,75 @@ them is the whole point: setting them to empty strings leaves boto3 holding
 blank credentials instead. Bucket names and the endpoint are still configured
 normally, only the credentials become implicit.
 
-This works on AWS today, where boto3 discovers IRSA and Pod Identity
-credentials on its own. GCS support is phase 2 of the ADR and is not in this
-branch.
+**Google Cloud (GKE Workload Identity):** use the native GCS backend. It talks
+to Cloud Storage through Application Default Credentials, so there is no
+endpoint, no region and no key to set:
+
+```yaml
+objectStorage:
+  backend: gcs
+  media:
+    bucket: acme-sbomify-media   # public read: browsers load logos from it
+  sboms:
+    bucket: acme-sbomify-sboms   # private
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: sbomify@PROJECT.iam.gserviceaccount.com
+```
+
+Bucket URLs default to `https://storage.googleapis.com/<bucket>`. The Google
+service account needs:
+
+```bash
+GSA=sbomify@PROJECT.iam.gserviceaccount.com
+# Read and write both buckets
+gcloud storage buckets add-iam-policy-binding gs://acme-sbomify-sboms \
+  --member=serviceAccount:$GSA --role=roles/storage.objectUser
+gcloud storage buckets add-iam-policy-binding gs://acme-sbomify-media \
+  --member=serviceAccount:$GSA --role=roles/storage.objectUser
+# Media is served to browsers directly
+gcloud storage buckets add-iam-policy-binding gs://acme-sbomify-media \
+  --member=allUsers --role=roles/storage.objectViewer
+# Sign download URLs (CRA export bundles) through IAM signBlob: Workload
+# Identity credentials hold no private key to sign with locally
+gcloud iam service-accounts add-iam-policy-binding $GSA \
+  --member=serviceAccount:$GSA --role=roles/iam.serviceAccountTokenCreator
+# Let the Kubernetes ServiceAccount act as it (namespace/name of the KSA)
+gcloud iam service-accounts add-iam-policy-binding $GSA \
+  --member="serviceAccount:PROJECT.svc.id.goog[sbomify/sbomify]" \
+  --role=roles/iam.workloadIdentityUser
+```
+
+The cluster (or node pool) needs Workload Identity enabled
+(`--workload-pool=PROJECT.svc.id.goog`). The chart-created ServiceAccount works
+as-is: GKE serves the identity through its metadata server, so
+`automountServiceAccountToken` can stay `false`. The migration Job does not
+touch object storage, so it does not need the identity.
+
+`objectStorage.gcs.signingServiceAccount` names a different account to sign
+URLs as; leave it empty to sign as the workload's own.
+
+### Redis or Valkey with a private CA
+
+Managed Redis with in-transit encryption (Memorystore, ElastiCache) presents a
+certificate from its own CA. Mount the CA into every workload and point
+`REDIS_CA_CERTS` at it:
+
+```yaml
+redis:
+  tls: true
+app:
+  extraEnv:
+    - {name: REDIS_CA_CERTS, value: /etc/redis-ca/ca.pem}
+web: &redisCa
+  extraVolumes:
+    - {name: redis-ca, configMap: {name: redis-ca}}
+  extraVolumeMounts:
+    - {name: redis-ca, mountPath: /etc/redis-ca, readOnly: true}
+worker: *redisCa
+scheduler: *redisCa
+migrations: *redisCa
+```
 
 ### Supplemental variables
 

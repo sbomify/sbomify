@@ -37,8 +37,12 @@ never sees the Secret.
 {{- fail "sbomify: redis.host is required. This chart does not run Redis for you: point it at a managed instance or one provisioned separately. See charts/sbomify/README.md." }}
 {{- end }}
 
-{{- if not .Values.objectStorage.endpointUrl }}
-{{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate" }}
+{{- $backend := include "sbomify.storageBackend" . }}
+{{- if not (has $backend (list "s3" "gcs")) }}
+{{- fail (printf "sbomify: objectStorage.backend must be \"s3\" or \"gcs\", got %q" .Values.objectStorage.backend) }}
+{{- end }}
+{{- if and (eq $backend "s3") (not .Values.objectStorage.endpointUrl) }}
+{{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate. On Google Cloud set objectStorage.backend=gcs instead." }}
 {{- end }}
 
 {{- if not .Values.auth.keycloak.serverUrl }}
@@ -63,7 +67,7 @@ AWS_* variables, which fails at runtime in a way that points nowhere near the
 configuration. Either supply keys, or say you are using the workload's own
 identity.
 */}}
-{{- if and (not .Values.secrets.existingSecret) (not .Values.objectStorage.useWorkloadIdentity) }}
+{{- if and (not .Values.secrets.existingSecret) (not (include "sbomify.storageKeyless" .)) }}
 {{- if or (not .Values.objectStorage.sboms.accessKeyId) (not .Values.objectStorage.sboms.secretAccessKey) }}
 {{- fail "sbomify: objectStorage.sboms.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. Set objectStorage.useWorkloadIdentity=true to skip them and use the workload's own cloud identity instead." }}
 {{- end }}
@@ -98,8 +102,14 @@ It stays a value because three templates need it, not because it is tunable.
 {{- fail "sbomify: caddy.onDemandTLS.enabled requires caddy.onDemandTLS.ask. Without the ask endpoint Caddy will attempt issuance for ANY hostname pointed at it, which is an open door to ACME rate-limit exhaustion." }}
 {{- end }}
 
-{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.localCerts) (or (not .Values.caddy.acme.email) (eq .Values.caddy.acme.email "admin@example.com")) }}
-{{- fail "sbomify: set caddy.acme.email to a real address: Let's Encrypt sends expiry and revocation notices there. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
+{{/*
+Let's Encrypt refuses to register an account whose contact is on a reserved
+example domain (HTTP 400 invalidContact), and Caddy only finds out at the first
+TLS handshake, so the chart renders, every pod goes Ready, and the edge then
+serves no certificate at all. Catch the placeholder here instead.
+*/}}
+{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.localCerts) (or (not .Values.caddy.acme.email) (regexMatch "(?i)@([a-z0-9-]+\\.)*example\\.(com|net|org)$" .Values.caddy.acme.email)) }}
+{{- fail "sbomify: set caddy.acme.email to a real address. Let's Encrypt rejects example.com/.net/.org contacts, so no certificate would ever be issued. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
 {{- end }}
 
 {{- end -}}

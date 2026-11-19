@@ -57,7 +57,26 @@ jobs:
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
-            --set caddy.acme.email=ops@example.com
+            --set caddy.acme.email=ops@sbom.test
+
+      - name: helm lint (GCS with Workload Identity)
+        run: |
+          # No endpoint and no keys: the gcs backend reads Application Default
+          # Credentials, so the chart must render without either.
+          helm lint "$CHART" \
+            --set app.baseUrl=https://sbom.example.com \
+            --set database.host=10.0.0.3 \
+            --set database.password=hunter2 \
+            --set redis.host=10.0.0.4 \
+            --set objectStorage.backend=gcs \
+            --set objectStorage.media.bucket=acme-sbomify-media \
+            --set objectStorage.sboms.bucket=acme-sbomify-sboms \
+            --set-string 'serviceAccount.annotations.iam\.gke\.io/gcp-service-account=sbomify@acme.iam.gserviceaccount.com' \
+            --set auth.keycloak.serverUrl=https://sso.example.com/ \
+            --set auth.keycloak.clientSecret=secret \
+            --set secrets.secretKey=lint-only-not-a-real-key \
+            --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
+            --set caddy.acme.email=ops@sbom.test
 
       - name: Rendered manifests are valid Kubernetes objects
         run: |
