@@ -9,6 +9,7 @@ Identity through Application Default Credentials). See ADR-0007.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import logging
 import re
@@ -247,6 +248,85 @@ def _gcs_client_error(exc: Exception, code: str, operation: str) -> ClientError:
     return error
 
 
+# GCS answers with HTTP statuses; callers written against S3 read error codes.
+# 404 and 403 are handled separately (absence, NoSuchBucket, AccessDenied).
+# Anything unlisted keeps its numeric status as the code.
+_GCS_STATUS_TO_S3_CODE = {
+    400: "InvalidRequest",
+    401: "AccessDenied",
+    409: "OperationAborted",
+    412: "PreconditionFailed",
+    429: "SlowDown",
+    500: "InternalError",
+    502: "ServiceUnavailable",
+    503: "ServiceUnavailable",
+    504: "ServiceUnavailable",
+}
+
+
+@functools.cache
+def _iam_signing_types() -> tuple[type, type]:
+    """A time-bounded HTTP request and a Signing credential backed by IAM signBlob.
+
+    Built lazily so the google libraries are only imported by the GCS backend.
+
+    google-cloud-storage's own keyless path (``access_token`` +
+    ``service_account_email``) runs signBlob under ``DEFAULT_RETRY`` with
+    google-auth's 120s per-request timeout, on the web request that asked for
+    the URL, and reports a refusal as a bare ``TransportError``. Signing through
+    ``google.auth.iam.Signer`` with this request keeps every call inside the
+    backend's own connect/read timeouts (at most three attempts, retried only on
+    5xx), and lets a refusal be told apart from an outage.
+    """
+    from google.auth import credentials as gcreds
+    from google.auth import iam
+    from google.auth.exceptions import TransportError
+    from google.auth.transport.requests import Request
+
+    class BoundedRequest:
+        """google-auth's Request with our timeout on every call, whatever the caller asks for."""
+
+        def __init__(self, timeout: tuple[int, int]) -> None:
+            self._request = Request()
+            self._timeout = timeout
+
+        def __call__(self, url: str, method: str = "GET", body: Any = None, headers: Any = None, **kwargs: Any) -> Any:
+            kwargs["timeout"] = self._timeout
+            return self._request(url=url, method=method, body=body, headers=headers, **kwargs)
+
+    signer_factory: Any = iam.Signer
+
+    class IAMSigningCredentials(gcreds.Signing):
+        def __init__(self, request: Any, credentials: Any, email: str) -> None:
+            self._email = email
+            self._signer = signer_factory(request, credentials, email)
+
+        @property
+        def signer_email(self) -> str:
+            return self._email
+
+        @property
+        def signer(self) -> Any:
+            return self._signer
+
+        def sign_bytes(self, message: bytes) -> bytes:
+            from google.api_core import exceptions as gexc
+
+            try:
+                signature: bytes = self._signer.sign(message)
+            except TransportError as e:
+                # IAM refused (the account lacks roles/iam.serviceAccountTokenCreator,
+                # or the API is disabled): a misconfiguration, not an outage.
+                text = str(e)
+                if "PERMISSION_DENIED" in text or '"code": 403' in text or "SERVICE_DISABLED" in text:
+                    forbidden: Any = gexc.Forbidden
+                    raise forbidden(text) from e
+                raise
+            return signature
+
+    return BoundedRequest, IAMSigningCredentials
+
+
 # The response-header overrides S3 can sign into a GET URL, mapped onto the
 # keyword generate_signed_url takes for the same header. Only those the
 # application actually uses are listed; anything else is refused rather than
@@ -321,7 +401,7 @@ class GCSObjectStoreClient(ObjectStoreClient):
         it always raises ``NoSuchBucket``, as S3 does.
         """
         from google.api_core import exceptions as gexc
-        from google.auth.exceptions import GoogleAuthError, TransportError
+        from google.auth.exceptions import GoogleAuthError
 
         try:
             return fn()
@@ -334,10 +414,12 @@ class GCSObjectStoreClient(ObjectStoreClient):
         except gexc.Forbidden as e:
             raise _gcs_client_error(e, "AccessDenied", operation) from e
         except gexc.GoogleAPICallError as e:
-            raise _gcs_client_error(e, str(e.code or "InternalError"), operation) from e
-        except (GoogleAuthError, TransportError) as e:
-            raise ObjectStoreUnavailableError(detail=str(e)) from e
-        except gexc.RetryError as e:
+            code = _GCS_STATUS_TO_S3_CODE.get(int(e.code), str(e.code)) if e.code else "InternalError"
+            raise _gcs_client_error(e, code, operation) from e
+        except (GoogleAuthError, gexc.RetryError) as e:
+            # Unreachable, timed out after retries, or no usable credentials:
+            # the same family boto3 reports as BotoCoreError (including its
+            # NoCredentialsError).
             raise ObjectStoreUnavailableError(detail=str(e)) from e
 
     def put_object(self, bucket_name: str, key: str, data: bytes, content_type: str | None = None) -> None:
@@ -403,20 +485,20 @@ class GCSObjectStoreClient(ObjectStoreClient):
         blob = self._blob(bucket_name, key)
         self._call("GetObject", lambda: blob.download_to_filename(file_path, timeout=self._timeout, retry=self._retry))
 
-    def _signing_kwargs(self) -> dict[str, Any]:
-        """How to sign: locally with a key, or through IAM signBlob without one."""
+    def _signing_credentials(self) -> Any:
+        """Credentials that can sign: the key itself, or IAM signBlob without one."""
         from google.auth import credentials as gcreds
-        from google.auth.transport.requests import Request
 
         credentials = self._client._credentials
         if isinstance(credentials, gcreds.Signing) and not self._signing_service_account:
-            return {}
+            return credentials
 
-        # Keyless credentials (Workload Identity, a VM's attached account):
-        # hand generate_signed_url a fresh access token and the account to sign
-        # as, and it calls IAM signBlob instead of signing locally.
+        # Keyless credentials (Workload Identity, a VM's attached account) sign
+        # through IAM as the workload's own service account, or the configured one.
+        bounded_request, iam_signing_credentials = _iam_signing_types()
+        request = bounded_request(self._timeout)
         if not credentials.valid:
-            credentials.refresh(Request())
+            credentials.refresh(request)
         email = self._signing_service_account or getattr(credentials, "service_account_email", None)
         if not email or email == "default":
             raise ObjectStoreUnavailableError(
@@ -425,7 +507,7 @@ class GCSObjectStoreClient(ObjectStoreClient):
                     "account. Set GCS_SIGNING_SERVICE_ACCOUNT."
                 )
             )
-        return {"service_account_email": email, "access_token": credentials.token}
+        return iam_signing_credentials(request, credentials, email)
 
     def generate_presigned_url(
         self,
@@ -453,8 +535,8 @@ class GCSObjectStoreClient(ObjectStoreClient):
                 version="v4",
                 expiration=timedelta(seconds=expires_in),
                 method="GET",
+                credentials=self._signing_credentials(),
                 **kwargs,
-                **self._signing_kwargs(),
             )
             return url
 
@@ -482,8 +564,8 @@ def _create_store(bucket_type: Literal["MEDIA", "SBOMS", "DOCUMENTS"]) -> Object
         # One identity for every bucket: GCS access is granted per bucket in
         # IAM, not per credential, so there are no per-bucket keys to pick.
         return GCSObjectStoreClient(
-            project=getattr(settings, "GCS_PROJECT_ID", "") or None,
-            signing_service_account=getattr(settings, "GCS_SIGNING_SERVICE_ACCOUNT", "") or None,
+            project=settings.GCS_PROJECT_ID or None,
+            signing_service_account=settings.GCS_SIGNING_SERVICE_ACCOUNT or None,
         )
 
     raise ValueError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND!r}. Supported values: 's3', 'gcs'")

@@ -5,6 +5,8 @@ None/False, and keyless signed URLs. Retry tests use the real SDK with a fake
 transport and clock.
 """
 
+import base64
+import json
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -121,7 +123,22 @@ class TestDataOperations:
         _blob(client).download_as_bytes.side_effect = gexc.ServiceUnavailable("try later")
         with pytest.raises(ClientError) as exc:
             store.get_object("bucket", "key")
-        assert exc.value.response["Error"]["Code"] == "503"
+        assert exc.value.response["Error"]["Code"] == "ServiceUnavailable"
+
+    @pytest.mark.parametrize(
+        ("error", "code"),
+        [
+            (gexc.TooManyRequests, "SlowDown"),
+            (gexc.InternalServerError, "InternalError"),
+            (gexc.Conflict, "OperationAborted"),
+        ],
+    )
+    def test_statuses_map_to_s3_codes(self, gcs, error, code):
+        store, client, _ = gcs
+        _blob(client).download_as_bytes.side_effect = error("boom")
+        with pytest.raises(ClientError) as exc:
+            store.get_object("bucket", "key")
+        assert exc.value.response["Error"]["Code"] == code
 
     def test_delete_missing_object_is_not_an_error(self, gcs):
         store, client, _ = gcs
@@ -210,34 +227,32 @@ class TestSignedUrls:
         assert kwargs["expiration"] == timedelta(seconds=900)
         assert kwargs["response_disposition"] == 'attachment; filename="x.zip"'
         assert kwargs["response_type"] == "application/zip"
-        assert "access_token" not in kwargs
+        assert kwargs["credentials"] is client._credentials
 
     def test_workload_identity_signs_through_iam(self, gcs):
-        # Workload Identity credentials have no key: sign through IAM signBlob
-        # as the workload's own service account with a fresh access token.
+        # Workload Identity credentials have no key: the URL is signed through
+        # IAM signBlob as the workload's own service account.
         store, client, _ = gcs
         creds = MagicMock(spec=["valid", "refresh", "token", "service_account_email"])
         creds.valid = False
-        creds.token = "ya29.token"
         creds.service_account_email = "sbomify@acme.iam.gserviceaccount.com"
         client._credentials = creds
         store.generate_presigned_url("bucket", "key", 60)
         creds.refresh.assert_called_once()
-        kwargs = _blob(client).generate_signed_url.call_args.kwargs
-        assert kwargs["service_account_email"] == "sbomify@acme.iam.gserviceaccount.com"
-        assert kwargs["access_token"] == "ya29.token"
+        signing = _blob(client).generate_signed_url.call_args.kwargs["credentials"]
+        assert isinstance(signing, gcreds.Signing)
+        assert signing.signer_email == "sbomify@acme.iam.gserviceaccount.com"
 
-    def test_configured_signer_overrides_workload_account(self, mocker: MockerFixture, gcs):
+    def test_configured_signer_overrides_workload_account(self, gcs):
         _store, client, _ = gcs
         store = GCSObjectStoreClient(signing_service_account="signer@acme.iam.gserviceaccount.com")
         creds = MagicMock(spec=["valid", "refresh", "token", "service_account_email"])
         creds.valid = True
-        creds.token = "ya29.token"
         creds.service_account_email = "default"
         client._credentials = creds
         store.generate_presigned_url("bucket", "key", 60)
-        kwargs = _blob(client).generate_signed_url.call_args.kwargs
-        assert kwargs["service_account_email"] == "signer@acme.iam.gserviceaccount.com"
+        signing = _blob(client).generate_signed_url.call_args.kwargs["credentials"]
+        assert signing.signer_email == "signer@acme.iam.gserviceaccount.com"
 
     def test_unresolvable_signer_is_reported(self, gcs):
         store, client, _ = gcs
@@ -248,13 +263,76 @@ class TestSignedUrls:
         with pytest.raises(ObjectStoreUnavailableError, match="GCS_SIGNING_SERVICE_ACCOUNT"):
             store.generate_presigned_url("bucket", "key", 60)
 
-    def test_missing_token_creator_role_is_access_denied(self, gcs):
-        store, client, _ = gcs
-        client._credentials = _KeyedCredentials()
-        _blob(client).generate_signed_url.side_effect = gexc.Forbidden("iam.serviceAccounts.signBlob denied")
+
+class _Response:
+    def __init__(self, status: int, data: bytes) -> None:
+        self.status = status
+        self.data = data
+        self.headers: dict[str, str] = {}
+
+
+class TestKeylessSigningAgainstTheRealSDK:
+    """Real google-cloud-storage and google-auth; only the HTTP layer is fake."""
+
+    EMAIL = "sbomify@acme.iam.gserviceaccount.com"
+
+    @pytest.fixture
+    def signed(self, monkeypatch: pytest.MonkeyPatch):
+        from google.cloud.storage import Client
+
+        GCSObjectStoreClient._local.__dict__.clear()
+        sdk = Client.create_anonymous_client()
+        creds = MagicMock(spec=["valid", "token", "service_account_email", "before_request", "universe_domain"])
+        creds.valid = True
+        creds.service_account_email = self.EMAIL
+        creds.universe_domain = "googleapis.com"
+        sdk._credentials = creds
+        with override_settings(AWS_CONNECT_TIMEOUT=3, AWS_READ_TIMEOUT=7):
+            store = GCSObjectStoreClient(project="signing-test")
+        GCSObjectStoreClient._local.clients = {"signing-test": sdk}
+        calls: list[dict[str, Any]] = []
+        responses: list[_Response] = []
+
+        def fake_request(self: Any, url: str, method: str = "GET", body: Any = None, headers: Any = None, **kw: Any):
+            calls.append({"url": url, **kw})
+            return responses.pop(0)
+
+        monkeypatch.setattr("google.auth.transport.requests.Request.__call__", fake_request)
+        monkeypatch.setattr("google.auth._exponential_backoff.time.sleep", lambda _s: None)
+        yield store, calls, responses
+        GCSObjectStoreClient._local.__dict__.clear()
+        sdk.close()
+
+    def test_signs_with_bounded_timeout(self, signed):
+        store, calls, responses = signed
+        responses.append(_Response(200, json.dumps({"signedBlob": base64.b64encode(b"sig").decode()}).encode()))
+        url = store.generate_presigned_url("bucket", "key", 60)
+        assert f"X-Goog-Signature={b'sig'.hex()}" in url
+        assert "sbomify%40acme.iam.gserviceaccount.com" in url
+        assert calls[0]["url"].endswith(f"/serviceAccounts/{self.EMAIL}:signBlob")
+        # Our connect/read timeouts, not google-auth's 120s default.
+        assert calls[0]["timeout"] == (3, 7)
+
+    def test_missing_token_creator_role_is_access_denied(self, signed):
+        store, _calls, responses = signed
+        denied = {
+            "error": {
+                "code": 403,
+                "message": "Permission 'iam.serviceAccounts.signBlob' denied",
+                "status": "PERMISSION_DENIED",
+            }
+        }
+        responses.append(_Response(403, json.dumps(denied).encode()))
         with pytest.raises(ClientError) as exc:
             store.generate_presigned_url("bucket", "key", 60)
         assert exc.value.response["Error"]["Code"] == "AccessDenied"
+
+    def test_iam_outage_is_unavailable_after_three_tries(self, signed):
+        store, calls, responses = signed
+        responses.extend(_Response(503, b"unavailable") for _ in range(3))
+        with pytest.raises(ObjectStoreUnavailableError):
+            store.generate_presigned_url("bucket", "key", 60)
+        assert len(calls) == 3
 
 
 @pytest.mark.parametrize(
