@@ -109,3 +109,14 @@ def test_local_logout_waits_for_explicit_sign_in(client: Client, mocker: MockerF
         # Reloading the landing page also stays local and anonymous.
         assert client.get(reverse("core:signed_out")).status_code == 200
         discovery.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_signed_out_page_sends_a_signed_in_user_home(client: Client) -> None:
+    """Someone who is signed in is not told they are signed out."""
+    client.force_login(User.objects.create_user(username="present", email="present@example.com"))
+
+    response = client.get(reverse("core:signed_out"))
+
+    assert response.status_code == 302
+    assert response.url == reverse("core:home")
