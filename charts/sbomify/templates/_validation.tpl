@@ -113,12 +113,19 @@ It stays a value because three templates need it, not because it is tunable.
 
 {{/*
 Let's Encrypt refuses to register an account whose contact is on a reserved
-example domain (HTTP 400 invalidContact), and Caddy only finds out at the first
-TLS handshake, so the chart renders, every pod goes Ready, and the edge then
-serves no certificate at all. Catch the placeholder here instead.
+domain (HTTP 400 invalidContact): the example.com/.net/.org placeholders and the
+special-use TLDs. Caddy only finds out at the first TLS handshake, so the chart
+renders, every pod goes Ready, and the edge then serves no certificate at all.
+ACME is in play whenever certificates are not local: for on-demand TLS, and for
+any extraRoutes host served over https.
 */}}
-{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.localCerts) (or (not .Values.caddy.acme.email) (regexMatch "(?i)@([a-z0-9-]+\\.)*example\\.(com|net|org)$" .Values.caddy.acme.email)) }}
-{{- fail "sbomify: set caddy.acme.email to a real address. Let's Encrypt rejects example.com/.net/.org contacts, so no certificate would ever be issued. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
+{{- $acmeHosts := .Values.caddy.onDemandTLS.enabled }}
+{{- range .Values.caddy.extraRoutes }}
+{{- if eq (.scheme | default "https") "https" }}{{- $acmeHosts = true }}{{- end }}
+{{- end }}
+{{- $email := .Values.caddy.acme.email | default "" }}
+{{- if and $acmeHosts (not .Values.caddy.localCerts) (or (not $email) (regexMatch "(?i)@(([a-z0-9-]+\\.)*example\\.(com|net|org)|([a-z0-9-]+\\.)*[a-z0-9-]+\\.(test|invalid|localhost|example|local|internal))$" $email)) }}
+{{- fail "sbomify: set caddy.acme.email to a real address. Let's Encrypt rejects example.com/.net/.org and reserved-TLD (.test, .invalid, .local...) contacts, so no certificate would ever be issued. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
 {{- end }}
 
 {{- end -}}

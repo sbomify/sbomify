@@ -57,7 +57,7 @@ jobs:
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
-            --set caddy.acme.email=ops@sbom.test
+            --set caddy.acme.email=ops@sbomify.com
 
       - name: helm lint (S3 with EKS IRSA)
         run: |
@@ -75,7 +75,7 @@ jobs:
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
-            --set caddy.acme.email=ops@sbom.test
+            --set caddy.acme.email=ops@sbomify.com
 
       - name: helm lint (GCS with Workload Identity)
         run: |
@@ -94,7 +94,7 @@ jobs:
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
-            --set caddy.acme.email=ops@sbom.test
+            --set caddy.acme.email=ops@sbomify.com
 
       - name: Rendered manifests are valid Kubernetes objects
         run: |
