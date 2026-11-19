@@ -271,6 +271,14 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
             if integration is not None and provider.kind == "compliance"
             else []
         )
+        # Built before anything reads the connection's status: listing the
+        # channels is what finds a refused token, and it marks the connection
+        # revoked there and then.
+        notifications_panel = (
+            notifications.routes_panel(integration)
+            if integration is not None and provider.kind == "notifications"
+            else None
+        )
         cards.append(
             {
                 "provider": _provider_card(provider),
@@ -290,11 +298,7 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                     }
                     for catalog in catalogs
                 ],
-                "notifications": (
-                    notifications.routes_panel(integration)
-                    if integration is not None and provider.kind == "notifications"
-                    else None
-                ),
+                "notifications": notifications_panel,
             }
         )
     return cards
