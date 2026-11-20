@@ -53,6 +53,8 @@ def normalize_custom_metadata(raw: Any) -> dict[str, str]:
             raise CustomMetadataError(f"Value for '{raw_key}' must be a string")
         key = raw_key.strip()
         value = raw_value.strip()
+        if "\u0000" in key or "\u0000" in value:
+            raise CustomMetadataError("Custom metadata keys and values must not contain null characters")
         if not key:
             raise CustomMetadataError("Custom metadata keys must not be empty")
         if len(key) > MAX_KEY_LENGTH:

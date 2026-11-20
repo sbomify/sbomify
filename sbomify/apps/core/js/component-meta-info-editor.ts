@@ -343,7 +343,7 @@ export function registerComponentMetaInfoEditor() {
          * button waits on, matching the server's rules.
          */
         syncCustomMetadata() {
-            const result: Record<string, string> = {};
+            const result: Record<string, string> = Object.create(null);
             let error: string | null = null;
             for (const row of this.customMetadataRows) {
                 const key = row.key.trim();

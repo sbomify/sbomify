@@ -52,6 +52,8 @@ def test_normalize_treats_none_as_empty() -> None:
         {"owner": 1},
         {"owner": None},
         {"owner": {"nested": "no"}},
+        {"bad\u0000key": "value"},
+        {"owner": "bad\u0000value"},
         {"k" * 129: "v"},
         {"k": "v" * 1025},
         {"owner": "a", " owner": "b"},
@@ -159,7 +161,9 @@ def test_put_product_without_custom_metadata_keeps_it(
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("bad", [{"owner": 1}, {"owner": {"x": "y"}}, ["owner"], {"": "x"}])
+@pytest.mark.parametrize(
+    "bad", [{"owner": 1}, {"owner": {"x": "y"}}, ["owner"], {"": "x"}, {"owner": "bad\u0000value"}]
+)
 def test_patch_product_rejects_non_string_pairs(
     bad: object,
     sample_product: Product,  # noqa: F811
