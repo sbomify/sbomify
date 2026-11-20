@@ -392,9 +392,24 @@ def _build_product_response(
     response = _build_item_base(request, product, has_crud_permissions)
     response["is_public"] = product.is_public
     response["description"] = product.description
-    response["component_count"] = (
-        product.component_count if hasattr(product, "component_count") else product.components.count()
-    )
+
+    # A public product is readable by anyone, but its private components are not:
+    # to a caller who cannot read the workspace's internal inventory, a private
+    # component does not exist. Mirror the Trust Center component panel and
+    # _build_release_response — public and gated are listable, private is not —
+    # so an anonymous GET of a public product no longer enumerates the names and
+    # ids of the private components attached to it. ``components`` is prefetched
+    # by optimize_product_queryset(), so filtering in Python adds no query, and
+    # ``component_count`` is derived from the same list so the two never disagree.
+    components = list(product.components.all())
+    if not can(request, "component:read_internal", product):
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        components = [component for component in components if component.visibility in listable]
+        response["component_count"] = len(components)
+    else:
+        response["component_count"] = (
+            product.component_count if hasattr(product, "component_count") else len(components)
+        )
     response["components"] = [
         {
             "id": component.id,
@@ -405,7 +420,7 @@ def _build_product_response(
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
         }
-        for component in product.components.all()
+        for component in components
     ]
     response["identifiers"] = [
         {

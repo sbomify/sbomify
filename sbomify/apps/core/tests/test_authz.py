@@ -103,6 +103,20 @@ _MATRIX = {
         "team",
         {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
+    # CRA Declaration-of-Conformity wizard and compliance control catalogs are
+    # workspace governance: owner/admin only, both read and write.
+    "cra_assessment:read": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "cra_assessment:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "controls:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
     "workspace:delete": (
         "team",
         {"owner": True, "operator": False, "member": False, "admin": False, "guest": False, "bot": False},

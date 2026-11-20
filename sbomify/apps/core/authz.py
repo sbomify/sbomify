@@ -219,6 +219,20 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # CRA Article 14 reports go to ENISA and the national CSIRTs, so recording
     # one is the same outward act as publishing an advisory.
     "cra_report:manage": ADMINISTER,
+    # The CRA Declaration-of-Conformity assessment wizard. Reading and editing an
+    # assessment are both owner/admin today (the wizard is governance, not
+    # day-to-day contribution), so both sit at ADMINISTER. Split read from manage
+    # so a read-only token reads the assessment but cannot save steps, generate a
+    # document, or sign a DoC — the scope gate in can() enforces that split, which
+    # a bare role check (verify_item_access) cannot.
+    "cra_assessment:read": ADMINISTER,
+    "cra_assessment:manage": ADMINISTER,
+    # Compliance control catalogs are workspace-level framework configuration:
+    # activating, importing, editing status/mappings/evidence and running
+    # automation sync. Owner/admin, like the rest of workspace governance, and a
+    # named action so a scoped token (read-only / publish / agent) cannot write
+    # them just because its holder happens to be an admin.
+    "controls:manage": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
