@@ -50,6 +50,9 @@ from sbomify.apps.core.views.components_dashboard import ComponentCreateView as 
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
 from sbomify.apps.core.views.design_system import DesignSystemView as DesignSystemView
+from sbomify.apps.core.views.product_custom_metadata import (
+    ProductCustomMetadataView as ProductCustomMetadataView,
+)
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
 from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
 from sbomify.apps.core.views.product_identifiers import ProductIdentifiersView as ProductIdentifiersView

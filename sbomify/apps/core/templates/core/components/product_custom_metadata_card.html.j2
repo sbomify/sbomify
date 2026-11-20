@@ -1,0 +1,59 @@
+{{ custom_metadata_rows|json_script:"product-custom-metadata-data" }}
+<c-cards.card id="product-custom-metadata-card" class="shadow" x-data="{ editing: false, saving: false, rows: [], reset() { this.rows = window.parseJsonScript('product-custom-metadata-data') || []; }, startEdit() { this.reset(); if (this.rows.length === 0) this.rows.push({ key: '', value: '' }); this.editing = true; }, cancelEdit() { this.reset(); this.editing = false; } }" x-init="reset()">
+<c-slot name="header">
+<c-cards.header class="flex justify-between items-center gap-3">
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-tags text-primary" aria-hidden="true"></i>Custom metadata
+    <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+       x-tooltip="'Your own key/value pairs for this product. Visible to workspace members only.'"></i>
+</h4>
+{% if can_edit and custom_metadata %}
+    <template x-if="!editing">
+        <c-buttons.secondary @click="startEdit()">
+        <i class="fas fa-edit mr-1" aria-hidden="true"></i>Edit
+        </c-buttons.secondary>
+    </template>
+{% endif %}
+</c-cards.header>
+</c-slot>
+{# Display Mode #}
+<template x-if="!editing">
+    <div>
+        {% if custom_metadata %}
+            <c-lists.key-value :items="custom_metadata" label="Product custom metadata" />
+        {% elif can_edit %}
+            <c-feedback.empty-state icon="fas fa-tags" icon_size="sm" icon_variant="neutral" compact title="No custom metadata" message="Add your own key/value pairs, such as an owner, cost centre or tier">
+            <c-buttons.secondary size="sm" @click="startEdit()">Add fields</c-buttons.secondary>
+            </c-feedback.empty-state>
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-tags" icon_size="sm" icon_variant="neutral" compact title="No custom metadata" message="This product has no custom metadata" />
+        {% endif %}
+    </div>
+</template>
+{# Edit Mode #}
+{% if can_edit %}
+    <form x-show="editing"
+          x-cloak
+          class="flex flex-col gap-4"
+          hx-post="{% url 'core:product_custom_metadata' product.id %}"
+          hx-target="#product-custom-metadata-panel"
+          hx-swap="innerHTML"
+          @htmx:before-request="saving = true"
+          @htmx:after-request="saving = false">
+        {% csrf_token %}
+        <c-forms.key-value-editor model="rows" name="meta" label="Product custom metadata" />
+        <c-forms.hint>Keys must be unique. Values are plain text. Rows left blank are dropped.</c-forms.hint>
+        <div class="flex gap-2">
+            <c-buttons.primary type="submit" ::disabled="saving">
+            <template x-if="saving">
+                <c-feedback.spinner size="inline" message="Saving custom metadata">Saving...</c-feedback.spinner>
+            </template>
+            <template x-if="!saving">
+                <span><i class="fas fa-check mr-1" aria-hidden="true"></i>Save</span>
+            </template>
+            </c-buttons.primary>
+            <c-buttons.secondary @click="cancelEdit()" ::disabled="saving">Cancel</c-buttons.secondary>
+        </div>
+    </form>
+{% endif %}
+</c-cards.card>

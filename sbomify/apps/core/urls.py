@@ -96,6 +96,11 @@ urlpatterns = [
         name="product_lifecycle",
     ),
     path(
+        "product/<str:product_id>/custom-metadata/",
+        views.ProductCustomMetadataView.as_view(),
+        name="product_custom_metadata",
+    ),
+    path(
         "public/link/<str:link_id>/",
         views.ProductLinkRedirectView.as_view(),
         name="product_link_redirect",

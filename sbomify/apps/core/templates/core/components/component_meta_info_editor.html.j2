@@ -138,6 +138,24 @@
                         </template>
                     </div>
                     </c-cards.card>
+                    <!-- Custom Metadata -->
+                    <c-cards.card class="shadow">
+                    <c-slot name="header">
+                    <c-cards.header>
+                    <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                        Custom Metadata
+                        <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                           x-tooltip.bottom="'Your own key/value pairs, such as an owner or cost centre. Visible to workspace members only.'"></i>
+                    </h6>
+                    </c-cards.header>
+                    </c-slot>
+                    <div x-effect="JSON.stringify(customMetadataRows); syncCustomMetadata(); if (originalMetadata && JSON.stringify(JSON.parse(originalMetadata).custom_metadata || {}) !== JSON.stringify(metadata.custom_metadata)) hasUnsavedChanges = true;">
+                        <c-forms.key-value-editor model="customMetadataRows" label="Component custom metadata" />
+                        <template x-if="validationErrors.custom_metadata">
+                            <c-forms.error x-text="validationErrors.custom_metadata"></c-forms.error>
+                        </template>
+                    </div>
+                    </c-cards.card>
                     <!-- Licenses -->
                     <c-cards.card class="shadow licenses-card-container">
                     <c-slot name="header">
