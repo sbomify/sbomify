@@ -47,6 +47,7 @@ import requests
 from django.conf import settings
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+from sbomify.apps.plugins.builtins._spdx_shared import spdx2_root_spdxid
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
 from sbomify.apps.plugins.sdk.results import (
@@ -860,17 +861,15 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             return None
 
         # The subject is the package the document DESCRIBES. syft lists it last,
-        # after every dependency, so packages[0] is only a fallback, and its
-        # answer is tagged package-derived like the CycloneDX component one.
-        document_id = sbom_data.get("SPDXID", "SPDXRef-DOCUMENT")
-        described = set(sbom_data.get("documentDescribes", [])) | {
-            rel.get("relatedSpdxElement")
-            for rel in sbom_data.get("relationships", [])
-            if rel.get("relationshipType") == "DESCRIBES" and rel.get("spdxElementId") == document_id
-        }
-        for pkg in packages:
-            if pkg.get("SPDXID") in described and (parsed := self._vcs_info_of_spdx_package(pkg)):
-                return {**parsed, "source": "document"}
+        # after every dependency, so packages[0] is only a fallback for a
+        # document that names no subject, and its answer is tagged
+        # package-derived like the CycloneDX component one. A named subject
+        # with no GitHub reference names no repository: packages[0] would be a
+        # dependency, whose repository never attests this SBOM.
+        if (root := spdx2_root_spdxid(sbom_data)) is not None:
+            subject = next((pkg for pkg in packages if isinstance(pkg, dict) and pkg.get("SPDXID") == root), None)
+            parsed = self._vcs_info_of_spdx_package(subject) if subject is not None else None
+            return {**parsed, "source": "document"} if parsed else None
         return self._vcs_info_of_spdx_package(packages[0])
 
     def _vcs_info_of_spdx_package(self, main_pkg: dict[str, Any]) -> dict[str, str] | None:

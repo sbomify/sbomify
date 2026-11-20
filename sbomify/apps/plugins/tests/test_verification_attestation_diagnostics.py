@@ -396,3 +396,27 @@ class TestAnSpdxSubjectIsTheDescribedPackage:
             plugin.assess("sbom-1", path, context=SBOMContext(sha256_hash=hashlib.sha256(raw).hexdigest()))
 
         assert session.get.call_args.args[0].startswith(f"https://api.github.com/repos/{ORG}/{REPO}/attestations/")
+
+    @pytest.mark.parametrize("document_describes", [True, False])
+    def test_a_subject_with_no_github_reference_names_no_repository(self, document_describes: bool) -> None:
+        # packages[0] is a dependency, and its repository never attests this SBOM.
+        doc = _spdx_with_the_subject_last(document_describes=document_describes)
+        doc["packages"][1]["externalRefs"] = []
+
+        assert SBOMVerificationPlugin()._extract_vcs_info(doc) is None
+
+    @pytest.mark.parametrize("field", ["documentDescribes", "relationships"])
+    def test_a_null_subject_field_is_read_as_absent(self, field: str) -> None:
+        doc = _spdx_with_the_subject_last(document_describes=True)
+        doc[field] = None
+
+        assert SBOMVerificationPlugin()._extract_vcs_info(doc) == {"org": ORG, "repo": REPO, "source": "document"}
+
+    def test_a_describes_relationship_with_no_target_names_no_subject(self) -> None:
+        doc = _spdx_with_the_subject_last(document_describes=False)
+        del doc["packages"][0]["SPDXID"]
+        doc["relationships"] = [{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES"}]
+
+        info = SBOMVerificationPlugin()._extract_vcs_info(doc)
+
+        assert info == {"org": "psf", "repo": "requests", "source": "package"}
