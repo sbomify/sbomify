@@ -375,6 +375,20 @@ def _build_item_base(
     }
 
 
+def _visible_custom_metadata(request: HttpRequest, item: Any) -> dict[str, str]:
+    """Custom metadata is for signed-in readers only.
+
+    The endpoints serving a public product or component answer anonymous
+    callers too; those get an empty object. Any authenticated caller who can
+    read the item, by session or by a valid access token, gets the pairs.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return {}
+    # jsonb hands keys back in its own storage order; sort for a stable response.
+    return dict(sorted((item.custom_metadata or {}).items()))
+
+
 def _build_product_response(
     request: HttpRequest,
     product: Any,
@@ -446,6 +460,7 @@ def _build_product_response(
     response["release_date"] = product.release_date.isoformat() if product.release_date else None
     response["end_of_support"] = product.end_of_support.isoformat() if product.end_of_support else None
     response["end_of_life"] = product.end_of_life.isoformat() if product.end_of_life else None
+    response["custom_metadata"] = _visible_custom_metadata(request, product)
     return response
 
 
@@ -470,6 +485,7 @@ def _build_component_response(
         component.document_count if hasattr(component, "document_count") else component.document_set.count()
     )
     response["metadata"] = component.metadata
+    response["custom_metadata"] = _visible_custom_metadata(request, component)
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
@@ -982,6 +998,8 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.name = payload.name
             product.description = payload.description
             product.is_public = payload.is_public
+            if "custom_metadata" in payload.model_fields_set:
+                product.custom_metadata = payload.custom_metadata or {}
 
             product.save()
             # Lifecycle dates are CLE events, the one place they are stored. Only the
@@ -1091,6 +1109,9 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 for field in ("release_date", "end_of_support", "end_of_life")
                 if field in update_data
             }
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
@@ -2057,6 +2078,8 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
             component.metadata = payload.metadata
+            if "custom_metadata" in payload.model_fields_set:
+                component.custom_metadata = payload.custom_metadata or {}
 
             # Enforce scope exclusivity: a workspace-scoped (global) component
             # must not be attached to any product.
@@ -2201,6 +2224,10 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 if new_visibility != Component.Visibility.GATED:
                     component.gating_mode = None
                     component.nda_document = None
+
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
 
             # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
@@ -2408,6 +2435,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
         "vcs_url": component.vcs_url or None,
+        "custom_metadata": _visible_custom_metadata(request, component),
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -2523,6 +2551,10 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
 
         if "vcs_url" in meta_dict:
             component.vcs_url = meta_dict["vcs_url"] or ""
+
+        if "custom_metadata" in meta_dict:
+            # Replaces the whole set; an explicit null clears it.
+            component.custom_metadata = meta_dict["custom_metadata"] or {}
 
         # Handle licenses using native fields
         if "licenses" in meta_dict:

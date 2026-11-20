@@ -10,6 +10,7 @@ from typing import Any
 from ninja import Schema
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
+from sbomify.apps.core.custom_metadata import CustomMetadata
 from sbomify.apps.core.utils import set_values_if_not_empty
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
@@ -414,6 +415,8 @@ class ComponentMetaData(BaseModel):
 
     vcs_url: str | None = Field(default=None, description="Source control repository the component is built from")
 
+    custom_metadata: dict[str, str] = Field(default_factory=dict, description="String key/value pairs")
+
     @field_validator("authors", mode="before")
     @classmethod
     def clean_authors_contacts(cls, v: Any) -> Any:
@@ -579,6 +582,8 @@ class ComponentMetaDataUpdate(BaseModel):
 
     vcs_url: str | None = None
 
+    custom_metadata: CustomMetadata = Field(default_factory=dict)
+
     @field_validator("vcs_url", mode="before")
     @classmethod
     def validate_vcs_url(cls, v: Any) -> str | None:
@@ -620,6 +625,10 @@ class ComponentMetaDataPatch(BaseModel):
     end_of_life: date | None = None
 
     vcs_url: str | None = None
+
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
     @field_validator("vcs_url", mode="before")
     @classmethod
