@@ -32,6 +32,28 @@ WRITE_TOOLS = {
     "post_advisory_update",
     "submit_vex_for_approval",
     "withdraw_vex_submission",
+    "create_product",
+    "update_product",
+    "add_component_to_product",
+    "add_product_identifier",
+    "update_product_identifier",
+    "add_product_link",
+    "update_product_link",
+    "create_component",
+    "update_component",
+    "update_component_metadata",
+    "update_release",
+    "link_release",
+    "create_document",
+    "update_document",
+    "rerun_assessment",
+    "create_supplier",
+    "update_supplier",
+    "start_cra_assessment",
+    "save_cra_step",
+    "update_cra_finding",
+    "add_cra_observation",
+    "generate_cra_document",
 }
 
 
@@ -47,7 +69,7 @@ def test_all_tools_are_registered():
     """Pins the surface: adding or removing a tool is a deliberate change."""
     specs = registry.all_specs()
 
-    assert len(specs) == 38
+    assert len(specs) == 81
     assert WRITE_TOOLS <= set(specs)
     assert {spec.name for spec in specs.values() if spec.writes} == WRITE_TOOLS
 
@@ -191,6 +213,18 @@ async def test_idempotency_is_only_claimed_where_a_repeat_is_a_no_op():
     assert {name for name, hint in hints.items() if hint is True} == {
         "update_contact_profile",
         "assign_contact_profile",
+        "update_product",
+        "add_component_to_product",
+        "update_product_identifier",
+        "update_product_link",
+        "update_component",
+        "update_component_metadata",
+        "update_release",
+        "update_document",
+        "update_supplier",
+        "start_cra_assessment",
+        "save_cra_step",
+        "update_cra_finding",
     }
     # Every read leaves it unset rather than claiming True, which would be
     # meaningless against readOnlyHint.

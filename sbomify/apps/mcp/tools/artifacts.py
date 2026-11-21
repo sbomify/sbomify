@@ -35,6 +35,29 @@ def _get_artifact(principal: Principal, artifact_id: str) -> Any:
     return obj
 
 
+def _releases_holding(principal: Principal, component: Any, **artifact: Any) -> dict[str, Any]:
+    """The releases an artifact or document is in, as REST's release lists for one report them.
+
+    A token without ``release:read`` sees only the releases of public products,
+    the rule the REST endpoints apply.
+    """
+    from sbomify.apps.core.authz import can
+    from sbomify.apps.core.models import ReleaseArtifact
+
+    rows = (
+        ReleaseArtifact.objects.filter(**artifact)
+        .select_related("release")
+        .order_by("-release__released_at", "-release__created_at", "release_id")
+    )
+    if not can(principal.request, "release:read", component):
+        rows = rows.filter(release__product__is_public=True)
+    return serializers.capped(
+        [serializers.release(row.release) for row in rows[:DETAIL_COLLECTION_LIMIT]],
+        total=rows.count(),
+        limit=DETAIL_COLLECTION_LIMIT,
+    )
+
+
 def _bounded(value: Any, *, limit: int = 1024, depth: int = 0) -> Any:
     """Recursively truncate the strings inside a plugin-produced structure.
 
@@ -271,7 +294,7 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp_tool(mcp, "get_artifact", "sbom:read")
     async def get_artifact(principal: Principal, artifact_id: str) -> dict[str, Any]:
-        """Metadata for one BOM artifact: kind, format, version, hash, signing.
+        """Metadata for one BOM artifact: kind, format, version, hash, signing, and the releases it is in.
 
         Accepts any BOM kind; `bom_type` in the response says which one. Does
         not return the document itself, use `get_artifact_packages` for its
@@ -282,6 +305,7 @@ def register_tools(mcp: FastMCP) -> None:
             obj = _get_artifact(principal, artifact_id)
             data = serializers.sbom(obj, detail=True)
             data["component"] = {"id": obj.component.id, "name": obj.component.name}
+            data["releases"] = _releases_holding(principal, obj.component, sbom=obj)
             return serializers.compact(data)
 
         return await run_db(query)
@@ -429,7 +453,7 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp_tool(mcp, "get_document", "document:read")
     async def get_document(principal: Principal, document_id: str) -> dict[str, Any]:
-        """Metadata for one document: type, version, filename, size, hash.
+        """Metadata for one document: type, version, filename, size, hash, and the releases it is in.
 
         The document half of `get_artifact`. Does not return the file itself.
         """
@@ -444,6 +468,7 @@ def register_tools(mcp: FastMCP) -> None:
             require(principal, "document:read", obj.component)
             data = serializers.document(obj, detail=True)
             data["component"] = {"id": obj.component.id, "name": obj.component.name}
+            data["releases"] = _releases_holding(principal, obj.component, document=obj)
             return serializers.compact(data)
 
         return await run_db(query)

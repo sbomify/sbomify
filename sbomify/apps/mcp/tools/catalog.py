@@ -163,7 +163,7 @@ def register_tools(mcp: FastMCP) -> None:
             identifiers = obj.identifiers.all()
             data["identifiers"] = serializers.capped(
                 [
-                    serializers.compact({"type": i.identifier_type, "value": i.value})
+                    serializers.compact({"id": i.id, "type": i.identifier_type, "value": i.value})
                     for i in identifiers[:DETAIL_COLLECTION_LIMIT]
                 ],
                 total=identifiers.count(),
@@ -172,7 +172,7 @@ def register_tools(mcp: FastMCP) -> None:
             links = obj.links.all()
             data["links"] = serializers.capped(
                 [
-                    serializers.compact({"type": link.link_type, "url": link.url, "title": link.title})
+                    serializers.compact({"id": link.id, "type": link.link_type, "url": link.url, "title": link.title})
                     for link in links[:DETAIL_COLLECTION_LIMIT]
                 ],
                 total=links.count(),
@@ -290,9 +290,11 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp_tool(mcp, "get_release", "release:read")
     async def get_release(principal: Principal, release_id: str) -> dict[str, Any]:
-        """Full detail for one release, including every artifact tagged to it."""
+        """Full detail for one release, including every artifact tagged to it and the releases linked to it."""
 
         def query() -> dict[str, Any]:
+            from sbomify.apps.core.services.release_links import release_links
+
             obj = _get_release(principal, release_id)
             data = serializers.release(obj, detail=True)
             data["product"] = {"id": obj.product.id, "name": obj.product.name}
@@ -309,6 +311,25 @@ def register_tools(mcp: FastMCP) -> None:
                 # No more_with: list_artifacts pages a component's artifacts,
                 # not a release's, so there is no tool to point at. Saying the
                 # count and that it was cut is the honest half of the answer.
+            )
+            # Private products included: _get_release has already established
+            # this caller reads the workspace's releases.
+            links = release_links(obj, include_private=True)
+            data["linked_releases"] = serializers.capped(
+                [
+                    serializers.compact(
+                        {
+                            "id": link.linked_release.id,
+                            "name": link.linked_release.name,
+                            "version": link.linked_release.version,
+                            "product_id": link.linked_release.product_id,
+                            "product_name": link.linked_release.product.name,
+                        }
+                    )
+                    for link in links[:DETAIL_COLLECTION_LIMIT]
+                ],
+                total=len(links),
+                limit=DETAIL_COLLECTION_LIMIT,
             )
             return serializers.compact(data)
 
