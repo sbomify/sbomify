@@ -10,12 +10,15 @@ from typing import TYPE_CHECKING, Any
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
+from django.utils.module_loading import import_string
 
+from sbomify.apps.core.domain.exceptions import ExternalServiceError
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.exceptions import ProviderAuthError
 from sbomify.apps.integrations.models import Integration
-from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec
+from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec, get_provider
+from sbomify.apps.integrations.services import notifications
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -56,6 +59,7 @@ def save_connection(
             "refresh_token": token_set.refresh_token,
             "token_expires_at": token_set.expires_at,
             "scopes": list(token_set.scopes),
+            "account": token_set.account or {},
             "connected_by": user,
             "connected_at": timezone.now(),
         },
@@ -89,6 +93,14 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
     ``ProviderUnavailable`` and leaves the connection alone, so the next
     scheduled sync can pick it up.
     """
+    # A token that never expires has nothing to refresh. Slack's bot token is
+    # one, and it comes with no refresh token, so the usual path would revoke a
+    # working connection on its first use for lacking one.
+    if not provider.tokens_expire:
+        if not integration.access_token:
+            raise ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
+        return integration.access_token
+
     if not integration.token_is_stale:
         return integration.access_token
 
@@ -194,7 +206,7 @@ def _mark_revoked(integration: Integration, message: str) -> None:
         _copy_credential(current, integration)
 
 
-def disconnect(team: Workspace, provider_key: str) -> ServiceResult[None]:
+def disconnect(team: Workspace, provider_key: str) -> ServiceResult[bool]:
     """Drop the connection and take everything it published off the trust center.
 
     The synced frameworks and their controls are kept but unpublished. Keeping
@@ -206,6 +218,11 @@ def disconnect(team: Workspace, provider_key: str) -> ServiceResult[None]:
     connection looked up here. A reconnect that lands in between has replaced
     the credential, and deleting the row would throw away a connection somebody
     has just authorized, so the disconnect stops and changes nothing.
+
+    A provider with a ``revoke_path`` is then asked to revoke the credential
+    the transaction deleted, outside the row lock. The disconnect stands
+    whatever the provider answers. The value is True when the provider may
+    still accept the credential, because it could not be asked.
     """
     integration = get_integration(team, provider_key)
     if integration is None:
@@ -227,10 +244,33 @@ def disconnect(team: Workspace, provider_key: str) -> ServiceResult[None]:
         ControlCatalog.objects.filter(team=team, source=provider_key, is_published=True).update(
             is_published=False, updated_at=timezone.now()
         )
+        deleted_token = locked.access_token
         locked.delete()
 
     logger.info("Disconnected %s for workspace %s", provider_key, team.key)
-    return ServiceResult.success(None)
+    provider = get_provider(provider_key)
+    if provider is None or not provider.revoke_path or not deleted_token:
+        return ServiceResult.success(False)
+    # Two sbomify workspaces that install one Slack app into the same Slack
+    # workspace hold the same bot token, so revoking it here would cut the other
+    # one off. A reconnect that landed since the delete holds it too.
+    if Integration.objects.filter(provider=provider_key, access_token=deleted_token).exists():
+        logger.info("Kept the %s credential for workspace %s: another connection uses it", provider_key, team.key)
+        return ServiceResult.success(False)
+    return ServiceResult.success(not _revoke(provider, deleted_token, team))
+
+
+def _revoke(provider: ProviderSpec, access_token: str, team: Workspace) -> bool:
+    """Whether the provider no longer accepts ``access_token``. Never raises."""
+    try:
+        import_string(provider.revoke_path)(access_token)
+    except ProviderAuthError:
+        # The provider already refuses it, which is the state a revoke asks for.
+        logger.info("The %s credential for workspace %s was already revoked", provider.key, team.key)
+    except ExternalServiceError as exc:
+        logger.warning("Could not revoke the %s credential for workspace %s: %s", provider.key, team.key, exc)
+        return False
+    return True
 
 
 def provider_cards(team: Workspace) -> list[dict[str, Any]]:
@@ -258,7 +298,7 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                 .annotate(control_count=Count("controls"))
                 .order_by("name")
             )
-            if integration is not None
+            if integration is not None and provider.kind == "compliance"
             else []
         )
         cards.append(
@@ -280,6 +320,11 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                     }
                     for catalog in catalogs
                 ],
+                "notifications": (
+                    notifications.routes_panel(integration)
+                    if integration is not None and provider.kind == "notifications"
+                    else None
+                ),
             }
         )
     return cards
@@ -298,6 +343,9 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "tagline": provider.tagline,
         "icon": provider.icon,
         "docs_url": provider.docs_url,
+        "kind": provider.kind,
+        "syncs": provider.syncs,
+        "reads_intro": provider.reads_intro,
         "reads": provider.reads,
         "is_configured": provider.is_configured,
     }
@@ -312,6 +360,7 @@ def _sync_state(integration: Integration | None) -> dict[str, Any] | None:
         "last_sync_status": integration.last_sync_status,
         "last_sync_error": integration.last_sync_error,
         "connected_by": integration.connected_by,
+        "account_name": (integration.account or {}).get("name", ""),
     }
 
 
