@@ -463,7 +463,7 @@ def _display(report: CRAReport, field: Any) -> str:
 
 
 def srp_layout(report: CRAReport, stage: str) -> list[dict[str, Any]]:
-    """Every field of the portal's form for this report, in the portal's order."""
+    """Every field of this report in the portal's order, with what ``stage`` does with it."""
     required = {field.id for field in required_fields(report.kind, stage)}
     rows = []
     for field in fields_for(report.kind):
@@ -477,6 +477,7 @@ def srp_layout(report: CRAReport, stage: str) -> list[dict[str, Any]]:
                 "max_length": field.max_length,
                 "choices": list(field.choices),
                 "column": field.column,
+                "on_form": field.on_form(stage),
                 "required": field.id in required,
                 "missing": field.id in required and not value.strip(),
             }
@@ -492,8 +493,11 @@ def filing_layout(filing: CRAReportFiling) -> list[dict[str, Any]]:
         srp_fields=dict(snapshot.get("srp_fields", {})),
         **{name: datetime.fromisoformat(snapshot[name]) if snapshot.get(name) else None for name in _DATE_FIELDS},
     )
-    stage = filing.stage if filing.stage in DEADLINE_STAGES else Stage.FINAL_REPORT
-    return [row for row in srp_layout(as_filed, stage) if row["value"]]
+    if filing.stage not in DEADLINE_STAGES:
+        # No glossary column says what an intermediate report or users informed carried.
+        return [row for row in srp_layout(as_filed, Stage.FINAL_REPORT) if row["value"]]
+    # The snapshot keeps every value; the stage's form only took some of them.
+    return [row for row in srp_layout(as_filed, filing.stage) if row["value"] and row["on_form"]]
 
 
 def advisory_reporting(team: Any, advisory_pk: str) -> dict[str, Any]:

@@ -229,6 +229,8 @@ class SRPFieldSchema(Schema):
     label: str
     value: str
     max_length: int | None
+    # False when the portal does not show it at this stage.
+    on_form: bool
     required: bool
     missing: bool
 

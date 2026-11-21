@@ -1,30 +1,50 @@
 # Early Warning Notification
-**CRA Article 14 — Within 24 hours of becoming aware**
+**CRA Article 14: within 24 hours of becoming aware**
 ---
 
 **Date:** {{ date }}
 **Manufacturer:** {{ manufacturer_name }}
-**Product:** {{ product_name }}
 
-## Notification Details
+The early warning is the only stage that asks for the product and its identifiers. The 72-hour notification and the final report do not repeat these fields, so anything left out here cannot be added later. Field names follow ENISA's CRA SRP Glossary, version 1.6.
 
-**Type:** [ ] Actively Exploited Vulnerability / [ ] Severe Security Incident
+## Required
 
-**Affected EU Member States:** {% if target_eu_markets %}{{ target_eu_markets|join:", " }}{% else %}[List affected Member States]{% endif %}
+**Notification type:** [ ] Actively Exploited Vulnerability / [ ] Severe Incident
 
+**Title:** [Concise title, at most 255 characters]
+
+**Summary:** [Short paragraph on what happened and what is affected]
+
+**Member States where product available (CSIRT Designated as Coordinator and Concerned CSIRTs):** {% if target_eu_markets %}{{ target_eu_markets|join:", " }}{% else %}[List the Member States]{% endif %}
 {% if csirt_country %}
-**Responsible CSIRT Country:** {{ csirt_country }}
+**CSIRT designated as coordinator:** {{ csirt_country }}
 {% endif %}
 
-## Description
+**Product name:** {{ product_name }}
 
-[Provide a brief description of the vulnerability or incident]
+**Product version:** [Affected version or version range]
 
-## Suspected Cause
+**Date and time you became aware (UTC):** [YYYY-MM-DD HH:MM]
 
-[ ] Unlawful or malicious acts suspected
-[ ] No indication of unlawful or malicious acts
-[ ] Unknown at this time
+**Incident is suspected of unlawful or malicious acts (severe incidents only):** [Free text]
+
+## Optional, and only at this stage
+
+**Additional Information:** [At most 255 characters]
+
+**Product type, class and category:** [Default / Important / Critical, and its class and category]
+
+**End of the support indicator:** [ ] Yes / [ ] No
+
+**Component name:** [Affected component and version, from the SBOM]
+
+**CVE ID / EUVD ID (vulnerabilities only):** [CVE-YYYY-NNNNN / EUVD-YYYY-NNNNN]
+
+**Mitigating measure expected shortly:** [ ] Yes / [ ] No
+
+**User action able to reduce impact:** [What users can do now]
+
+**Date and time the vulnerability was exploited or the incident occurred (UTC):** [YYYY-MM-DD HH:MM]
 
 ## Contact Information
 
@@ -36,5 +56,5 @@
 {% endif %}
 
 ---
-> Submit via ENISA Single Reporting Platform (SRP) to the designated CSIRT and ENISA simultaneously.
+> Submit via the ENISA Single Reporting Platform (SRP), which makes it available to the CSIRT designated as coordinator and to ENISA.
 > This notification must be submitted within 24 hours of becoming aware of the vulnerability or incident.

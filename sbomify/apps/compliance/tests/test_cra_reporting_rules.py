@@ -127,15 +127,56 @@ def test_the_registry_leaves_out_what_the_manufacturer_does_not_fill():
     assert not ids & {"manufacturer_name", "csirt_note"}
 
 
-def test_each_stage_needs_what_it_and_every_earlier_stage_need():
-    early = {f.id for f in reporting.required_fields("vulnerability", Stage.EARLY_WARNING)}
-    notification = {f.id for f in reporting.required_fields("vulnerability", Stage.NOTIFICATION)}
-    final = {f.id for f in reporting.required_fields("vulnerability", Stage.FINAL_REPORT)}
+def _required(kind: str, stage: str) -> set[str]:
+    return {f.id for f in reporting.required_fields(kind, stage)}
 
-    assert {"title", "summary", "product_name"} <= early
-    assert "general_information" not in early and "general_information" in notification
-    assert early < notification < final
-    assert "measure_details" in final
+
+def test_each_stage_requires_what_glossary_1_6_requires_of_it():
+    common_early = {"title", "summary", "member_states", "product_name", "product_version"}
+    common_final = {"measures_taken", "measures_for_users"}
+
+    assert _required("vulnerability", Stage.EARLY_WARNING) == common_early | {"vulnerability_aware_at"}
+    assert _required("vulnerability", Stage.NOTIFICATION) == {"general_information"}
+    assert _required("vulnerability", Stage.FINAL_REPORT) == common_final | {
+        "measure_available_at",
+        "measure_details",
+        "vulnerability_severity",
+        "vulnerability_impact",
+    }
+    assert _required("incident", Stage.EARLY_WARNING) == common_early | {"incident_aware_at", "suspected_unlawful"}
+    assert _required("incident", Stage.NOTIFICATION) == {"incident_nature", "initial_assessment"}
+    assert _required("incident", Stage.FINAL_REPORT) == common_final | {
+        "incident_mitigation",
+        "incident_severity",
+        "incident_impact",
+        "root_cause",
+    }
+
+
+def test_a_later_stage_does_not_ask_again_for_the_early_warning():
+    for stage in (Stage.NOTIFICATION, Stage.FINAL_REPORT):
+        on_form = {f.id for f in reporting.fields_for("vulnerability") if f.on_form(stage)}
+
+        assert not on_form & {"title", "product_name", "member_states", "cve_id", "component_name"}
+
+
+def test_an_intermediate_report_reads_as_the_final_report():
+    assert _required("incident", Stage.INTERMEDIATE) == _required("incident", Stage.FINAL_REPORT)
+
+
+def test_a_copied_field_is_on_the_form_without_being_required():
+    occurred = reporting.FIELDS_BY_ID["vulnerability_occurred_at"]
+
+    assert occurred.need_at(Stage.NOTIFICATION) == reporting.Need.COPIED
+    assert occurred.on_form(Stage.NOTIFICATION)
+    assert "vulnerability_occurred_at" not in _required("vulnerability", Stage.NOTIFICATION)
+
+
+def test_additional_information_is_an_optional_early_warning_field():
+    field = reporting.FIELDS_BY_ID["additional_information"]
+
+    assert field.section == "common" and field.max_length == 255
+    assert field.needs == (reporting.Need.OPTIONAL, reporting.Need.NOT_ASKED, reporting.Need.NOT_ASKED)
 
 
 def test_missing_fields_names_only_the_empty_required_ones():
