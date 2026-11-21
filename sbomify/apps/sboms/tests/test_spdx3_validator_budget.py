@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from sbomify.apps.plugins.tests import spdx3_corpus as corpus
 from sbomify.apps.sboms import spdx3_validation
@@ -458,25 +459,38 @@ class TestTheMessagesStayBounded:
         ids=["empty objects", "objects of no class", "IRIs", "long integers"],
     )
     @pytest.mark.parametrize("where", ["element", "root"])
-    def test_a_part_inside_the_limits_stays_within_the_cpu_bound(
-        self, version: str, part: dict[str, Any], where: str
+    def test_a_part_inside_the_limits_stays_within_the_step_allowance(
+        self, version: str, part: dict[str, Any], where: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Each part here fits the value, nesting and text limits. Its messages
         are itemised within the fixed per-document step allowance under both
-        schemas, whatever the part holds."""
+        schemas, whatever the part holds.
+
+        The keywords are counted in jsonschema's own table, beneath the meter,
+        so the count is the work done whether the meter stops it or not. Without
+        the allowance, the 3.0.0 parts holding objects or IRIs take millions."""
+        evaluated = 0
+
+        def counted(keyword: Callable[..., Any]) -> Callable[..., Any]:
+            def count(*args: Any) -> Any:
+                nonlocal evaluated
+                evaluated += 1
+                return keyword(*args)
+
+            return count
+
+        for name, keyword in list(Draft202012Validator.VALIDATORS.items()):
+            monkeypatch.setitem(Draft202012Validator.VALIDATORS, name, counted(keyword))
         document = _valid(3, version)
         if where == "element":
             document["@graph"].append(part)
         else:
             document.update(part)
-        spdx3_schema_errors(_invalid(version), version)  # build the validators outside the measurement
 
-        started = time.process_time()
         errors = spdx3_schema_errors(document, version)
-        elapsed = time.process_time() - started
 
         assert errors
-        assert elapsed < 1, f"{elapsed:.1f} s of CPU to refuse one part"
+        assert evaluated <= spdx3_validation._ITEMISED_STEPS, f"{evaluated} keyword evaluations to refuse one part"
 
     def test_the_value_budget_is_spent_across_the_document(self, version: str) -> None:
         """Every itemised part draws on the one budget, so a part past it is
