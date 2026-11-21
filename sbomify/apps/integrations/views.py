@@ -24,7 +24,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import get_provider
-from sbomify.apps.integrations.services import connections
+from sbomify.apps.integrations.services import connections, notifications
 from sbomify.apps.integrations.tasks import sync_integration
 from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -72,6 +72,10 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             return self._sync(request, team)
         if action == "publish":
             return self._publish(request, team)
+        if action == "route":
+            return self._route(request, team)
+        if action == "test":
+            return self._test(request, team)
 
         return htmx_error_response("Unknown action")
 
@@ -85,10 +89,11 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
         if not result.ok:
             return htmx_error_response(result.error or "Could not disconnect")
 
-        return htmx_success_response(
-            f"Disconnected {provider.name}. Its frameworks are no longer on your Trust Center.",
-            triggers={"refreshIntegrations": True},
-        )
+        if provider.kind == "notifications":
+            message = f"Disconnected {provider.name}. sbomify no longer posts to it."
+        else:
+            message = f"Disconnected {provider.name}. Its frameworks are no longer on your Trust Center."
+        return htmx_success_response(message, triggers={"refreshIntegrations": True})
 
     def _sync(self, request: HttpRequest, team: Workspace) -> HttpResponse:
         provider_key = request.POST.get("provider", "")
@@ -99,6 +104,8 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
         integration = connections.get_integration(team, provider.key)
         if integration is None:
             return htmx_error_response(f"{provider.name} is not connected")
+        if not provider.syncs:
+            return htmx_error_response(f"{provider.name} has nothing to sync")
         if not provider.is_configured:
             return htmx_error_response(f"{provider.name} is not set up on this deployment")
         # The worker claims none of these, so queueing one would answer
@@ -127,6 +134,26 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             f"{result.value} is {verb} your Trust Center.",
             triggers={"refreshIntegrations": True},
         )
+
+    def _route(self, request: HttpRequest, team: Workspace) -> HttpResponse:
+        result = notifications.set_route(
+            team,
+            request.POST.get("provider", ""),
+            request.POST.get("event", ""),
+            request.POST.get("channel_id", ""),
+            request.POST.get("min_severity", ""),
+        )
+        if not result.ok:
+            return htmx_error_response(result.error or "Could not save the channel")
+        return htmx_success_response(result.value or "Saved", triggers={"refreshIntegrations": True})
+
+    def _test(self, request: HttpRequest, team: Workspace) -> HttpResponse:
+        # Sent in the request, unlike every other post: the point of a test is
+        # an answer now, and it is one message, not a sync.
+        result = notifications.send_test(team, request.POST.get("provider", ""), request.POST.get("event", ""))
+        if not result.ok:
+            return htmx_error_response(result.error or "Could not send the test message")
+        return htmx_success_response(result.value or "Sent", triggers={"refreshIntegrations": True})
 
 
 class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
@@ -199,10 +226,12 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
             return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
         integration = connections.save_connection(team, spec, token_set, user)
-        sync_integration.send(integration.id)
-
-        messages.success(
-            request,
-            f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
-        )
+        if spec.syncs:
+            sync_integration.send(integration.id)
+            messages.success(
+                request,
+                f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
+            )
+        else:
+            messages.success(request, f"Connected {spec.name}. Choose a channel for each message below.")
         return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
