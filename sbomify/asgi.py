@@ -17,10 +17,10 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "sbomify.settings")
 django_application = get_asgi_application()
 
 # Import channels after Django is initialized
-from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
+from sbomify.apps.core.ws_auth import ResilientAuthMiddlewareStack  # noqa: E402
 
 
 class LifespanApp:
@@ -52,7 +52,7 @@ application = LifespanApp(
     ProtocolTypeRouter(
         {
             "http": django_application,
-            "websocket": AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+            "websocket": ResilientAuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
         }
     )
 )
