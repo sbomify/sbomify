@@ -1,0 +1,62 @@
+# Narration for screencasts/vex_lifecycle.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is the VEX lifecycle in sbomify: from a scan finding to a statement
+      your customers can see.
+
+  latest_scan_component:
+    text: >-
+      The latest scan of this component found a critical, a high and a medium
+      vulnerability.
+
+  team_checks_critical:
+    text: >-
+      Your team checks the critical and finds the vulnerable code is never
+      reached.
+
+  write_vex_statement:
+    text: >-
+      So you write a VEX statement: this CVE is not affected, because the code is
+      not reachable.
+
+  upload_component_s:
+    text: >-
+      Back on the component, upload it from the actions menu with Upload VEX.
+
+  before_anything_stored:
+    text: >-
+      Before anything is stored, a preview shows what the VEX would suppress.
+
+  once_applied_critical:
+    text: >-
+      Once applied, the critical leaves the open list. Only the high and the
+      medium remain.
+
+  trust_center_shows:
+    text: >-
+      Your Trust Center shows the same thing. One vulnerability is suppressed by
+      VEX.
+
+  later_re_issue:
+    text: >-
+      Later you re-issue the VEX as version 2. It keeps the first statement and
+      also clears the high.
+
+  upload_same_way:
+    text: >-
+      Upload version 2 from the same actions menu. This time the preview counts
+      two suppressed vulnerabilities.
+
+  sbomify_always_applies:
+    text: >-
+      sbomify always applies the newest VEX, so version 2 replaces version 1. Only
+      the medium is left.
+
+  trust_center_two:
+    text: >-
+      On the Trust Center, two are now suppressed, and customers can download the
+      latest VEX.

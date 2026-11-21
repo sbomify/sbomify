@@ -1,0 +1,42 @@
+# Narration for screencasts/document_upload.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to upload a compliance document, such as a SOC 2 report, to
+      sbomify.
+
+  documents_live_component:
+    text: >-
+      Documents live in a component, just like SBOMs. Start by creating one.
+
+  pick_document_type:
+    text: >-
+      Pick Document as the type.
+
+  make_workspace_wide:
+    text: >-
+      Make it workspace-wide. It is not tied to one product, and it can earn a
+      badge on your Trust Center.
+
+  component_ready_upload:
+    text: >-
+      The component is ready. Now upload the report.
+
+  give_version_choose:
+    text: >-
+      Give it a version, then choose Compliance and the SOC 2 Type II subcategory.
+
+  drop_file_pdf:
+    text: >-
+      Drop in the file. PDF, Word, text and markdown all work.
+
+  report_stored_component:
+    text: >-
+      The report is stored on the component, with its type and version.
+
+  show_trust_center:
+    text: >-
+      To show it on your Trust Center, set the component to public or gated.

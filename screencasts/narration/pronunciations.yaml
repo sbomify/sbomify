@@ -1,0 +1,51 @@
+# Pronunciation map passed straight through to the xAI TTS API as `replace`.
+#
+# Matching is case-insensitive, on whole words, longest match first — so
+# "SBOM" does not match inside "SBOMs" and both need an entry.  Max 200
+# entries; keys <= 100 chars, values <= 128 chars.
+#
+# NEVER use hyphens in a value.  The synthesizer speaks them: "ess-bom" comes
+# out as "s dash bom".  Write the sounds joined ("essbomify") or use IPA
+# between slashes.
+#
+# Every entry below was checked by round-tripping it through synthesis and
+# speech-to-text.  Add nothing here on instinct — probe it first:
+#
+#   ./bin/record_screencasts.sh try SBOM "essbom" "/ˈɛsbɑm/"
+#   ./bin/record_screencasts.sh verify
+#
+# Terms deliberately absent because they are already correct unmapped:
+# CycloneDX ("cyclone D X"), SPDX ("S P D X"), NTIA ("N T I A"), VEX ("vex"),
+# OpenVEX, and libwebp — the last probed bare and came back as a word rather
+# than spelled out, which is the failure mode SBOM and CSAF both had.
+# Adding entries for those only creates a chance to break them.
+replace:
+  # "ESS-bom-ify", the same vowel as the SBOM entry below, extended.
+  # Neither "essbomify" nor "ess bom ify" survives: the first gets spelled out
+  # letter by letter, the second lands a hard B and says "bomb". The previous
+  # value here, "S bombify", was delivered as "s bombify" — audibly a bomb.
+  sbomify: "/ˈɛsbɑmify/"
+
+  # Said as a word, "ESS-bom", never spelled out. Bare, it comes out "S B O M".
+  SBOM: "/ˈɛsbɑm/"
+  SBOMs: "/ˈɛsbɑmz/"
+
+  # "SEE-SAF", one word. Bare it is spelled out, "c s a f". "seesaf" probes as
+  # "cissaf" — a short i, so "sis-saf" — which is why this is IPA rather than a
+  # respelling: the long e has to be stated.
+  CSAF: "/ˈsiːsæf/"
+
+  # "SIS-oh", one word, never spelled out.
+  #
+  # The vowel is a judgement call: the request was "CISO is pronounced SISO",
+  # and the same person wrote "SEE-SAF" for CSAF when they meant a long e, so
+  # the absence of it here is read as a short i. If it should be "SEE-so",
+  # change this to /ˈsiːsoʊ/ — but note the map is part of the cache key, so
+  # either way every clip in every screencast re-synthesizes.
+  CISO: "/ˈsɪsoʊ/"
+
+  # Verified and ready, deliberately NOT enabled: no narration says "CISA"
+  # yet, and this map is part of the cache key — adding an entry re-renders
+  # every clip in every screencast. Uncomment the moment some copy needs it.
+  #
+  #   CISA: "/ˈsɪsə/"    # "SISA"; round-trips as "sisa". Bare it is ambiguous.

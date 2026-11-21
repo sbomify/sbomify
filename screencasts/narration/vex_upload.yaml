@@ -1,0 +1,40 @@
+# Narration for screencasts/vex_upload.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to upload a VEX document, to tell sbomify and customers which
+      vulnerabilities do not affect you.
+
+  component_s_scan:
+    text: >-
+      This component's scan reports a critical in the requests package. Your team
+      found it is not reachable.
+
+  open_component_s:
+    text: >-
+      Open the component's actions menu and choose Upload VEX.
+
+  drop_cyclonedx_vex:
+    text: >-
+      Drop in a CycloneDX VEX, an OpenVEX file or a CSAF document.
+
+  nothing_stored_yet:
+    text: >-
+      Nothing is stored yet. The preview shows what the VEX would suppress.
+
+  if_looks_right:
+    text: >-
+      If it looks right, apply it.
+
+  critical_has_left:
+    text: >-
+      The critical has left the open list, and the latest version now lists its
+      VEX.
+
+  nothing_deleted_filter:
+    text: >-
+      Nothing is deleted. Filter to closed by a decision to see it, with the
+      reason attached.

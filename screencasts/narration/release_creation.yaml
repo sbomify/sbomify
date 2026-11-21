@@ -1,0 +1,36 @@
+# Narration for screencasts/release_creation.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to create a release in sbomify. A release ties a product version
+      to the artifacts it shipped with.
+
+  every_product_has:
+    text: >-
+      Every product has a latest release. sbomify keeps it current with the newest
+      artifact of each component.
+
+  version_ship_create:
+    text: >-
+      For a version you ship, create a release from the product menu.
+
+  product_already_picked:
+    text: >-
+      The product is already picked. Give the release a name, a version and a
+      short description of what changed, then create it.
+
+  release_starts_empty:
+    text: >-
+      The release starts empty. Add the artifacts that went into this version.
+
+  search_filter_list:
+    text: >-
+      Search or filter the list, or select every SBOM at once.
+
+  release_holds_sbom:
+    text: >-
+      The release now holds the SBOM of every component, as shipped in version
+      2.0.0.

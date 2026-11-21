@@ -4,8 +4,10 @@ This module is the source of truth for the marketplace walkthrough. It holds:
 
 * the Pied Piper seed (:func:`pied_piper_scanned`) — a workspace that already
   looks *lived in*, because an empty product tour sells nothing;
-* one ``chapter_*`` function per act of the story, each self-contained enough
-  to open on the dashboard and close on a stable frame;
+* one ``chapter_*`` function per act of the story (SBOMs in, vulnerabilities
+  triaged by an AI agent and decided by a person, CRA compliance, an advisory
+  an agent drafts and a person publishes, the Trust Center),
+  each self-contained enough to open inside the app and close on a stable frame;
 * a parametrized recording function that renders each chapter as its own short
   clip, for listings that cap video length.
 
@@ -20,44 +22,62 @@ already in it. Building four components, four SBOMs, and a month of scan
 history through the UI would burn the whole runtime before the tour reached
 anything worth showing.
 
-What the tour does perform, through the real UI, is the two moments that carry
-the pitch: the VEX upload in :func:`chapter_vulnerabilities` — dry-run preview
-and all, exercising the genuine parse and match path (see :func:`fake_s3`) —
-and flipping the product public in :func:`chapter_trust_center`.
+What the tour does perform for real is the moments that carry the pitch, and
+they are agent-first with a person in the loop. In :func:`chapter_vulnerabilities`
+an AI agent rules on libwebp through the actual triage API with an
+agent-preset token, is refused when it tries to apply the ruling itself, and
+sends it for review; a person approves it on the Review tab, and the genuine
+apply and re-apply path closes the finding (see :func:`fake_s3`). In
+:func:`chapter_trust_center` the agent drafts an advisory over the API and is
+refused publishing it; a person publishes it through the UI, turns on the
+Trust Center, and flips the product public. :func:`chapter_compliance`
+completes the CRA assessment through the UI.
 """
 
 import json
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable
 
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.test import Client
 from playwright.sync_api import Page
 
 from conftest import (
     PIED_PIPER_PRODUCT_NAME,
     auto_dismiss_toasts,
-    caption,
-    clear_caption,
-    click_into_row,
     dismiss_toasts,
     enable_and_configure_trust_center,
     hover_and_click,
-    navigate_to_components,
-    navigate_to_products,
+    narrate,
     navigate_to_trust_center_tab,
     pace,
+    rewrite_localhost_inputs,
     rewrite_localhost_urls,
+    settle,
     shot,
+    sidebar_link,
     smooth_scroll,
     start_on_dashboard,
 )
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.compliance.models import CRAAssessment, CRAScopeScreening, OSCALFinding
+from sbomify.apps.compliance.services.document_generation_service import regenerate_all
+from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
-from sbomify.apps.sboms.models import Component, ProductIdentifier, ProductLink
-from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
+from sbomify.apps.sboms.models import Component, Product, ProductIdentifier, ProductLink
+from sbomify.apps.security_advisories.models import AdvisoryEvent, AdvisoryProduct, SecurityAdvisory
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
+from sbomify.apps.vulnerability_scanning.findings import sync_findings
+from sbomify.apps.vulnerability_scanning.models import VexSubmission
+from sbomify.apps.vulnerability_scanning.services.vex_submissions import record_impact
+from sbomify.apps.vulnerability_scanning.tasks import reapply_vex_to_component_scans
 
 # ---------------------------------------------------------------------------
 # Seed data — Silicon Valley's Pied Piper, with a believable dependency tree
@@ -158,50 +178,24 @@ VEX_JUSTIFICATION_DETAIL = (
     "and preview rendering is disabled in all shipped builds."
 )
 
-# The hand-authored CycloneDX VEX the tour uploads. ``affects[].ref`` points at
-# the purl declared in ``components[]``, which is the package-scoped form
-# ``derive_vex_suppressions`` matches on — so the statement clears exactly the
-# one libwebp finding and leaves the other three core-library rows alone.
-VEX_DOCUMENT_BYTES = json.dumps(
-    {
-        "bomFormat": "CycloneDX",
-        "specVersion": "1.6",
-        "serialNumber": "urn:uuid:9f2c1d4e-6b3a-4f18-9c07-2e5d8a1b6f30",
-        "version": 1,
-        "metadata": {
-            "timestamp": "2026-02-24T09:15:00Z",
-            "component": {
-                "type": "application",
-                "bom-ref": "pkg:github/piedpiper/compression-core@2.4.0",
-                "name": "com.piedpiper/compression-core",
-                "version": "2.4.0",
-            },
-        },
-        "components": [
-            {
-                "type": "library",
-                "bom-ref": VEX_TARGET_PURL,
-                "name": VEX_TARGET_PACKAGE,
-                "version": VEX_TARGET_VERSION,
-                "purl": VEX_TARGET_PURL,
-            }
-        ],
-        "vulnerabilities": [
-            {
-                "id": VEX_TARGET_CVE,
-                "source": {"name": "NVD", "url": f"https://nvd.nist.gov/vuln/detail/{VEX_TARGET_CVE}"},
-                "ratings": [{"severity": "critical", "score": 8.8, "method": "CVSSv31"}],
-                "affects": [{"ref": VEX_TARGET_PURL}],
-                "analysis": {
-                    "state": "not_affected",
-                    "justification": "code_not_reachable",
-                    "detail": VEX_JUSTIFICATION_DETAIL,
-                },
-            }
-        ],
-    },
-    indent=2,
-).encode("utf-8")
+# What the agent tells the person who reviews its libwebp ruling. Markdown: the
+# Review tab renders it as the first thing under the row.
+AGENT_VEX_CONTEXT = (
+    "**Not affected.** I traced every call into libwebp from the compression core. "
+    "Only the thumbnail preview links it, and preview rendering is disabled in all "
+    "shipped builds, so the vulnerable Huffman decode is never reached."
+)
+
+# The advisory the agent drafts in chapter 5: the zlib finding seeded on the
+# core library, which unlike libwebp genuinely affects the product.
+AGENT_ADVISORY_CVE = "CVE-2023-45853"
+AGENT_ADVISORY_TITLE = "Integer overflow in bundled zlib minizip"
+AGENT_ADVISORY_DESCRIPTION = (
+    "The Compression Core Library bundles zlib 1.2.13, whose minizip "
+    "zipOpenNewFileInZip4_64 overflows on a long file name. Archive export is "
+    "affected. Upgrading to zlib 1.3 is in progress."
+)
+AGENT_TOKEN_DESCRIPTION = "Claude Code agent"
 
 
 def _security_result(component_name: str, scanned_at: datetime, finding_count: int | None = None) -> dict[str, Any]:
@@ -271,13 +265,14 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     The screencast compose stack runs no S3 service. The other recordings
     work around that by no-op'ing the *write* (``vex_upload.py``), which is
     enough to make an upload return 201 — but the bytes are gone, so nothing
-    that reads them back can work. This tour needs the round trip: the VEX it
-    uploads has to be re-read, parsed, and matched against the seeded findings
-    for the suppression to appear on screen.
+    that reads them back can work. This tour needs the round trip: approving
+    the agent's ruling writes a VEX that the re-apply job has to read back and
+    match against the seeded findings for the suppression to appear on
+    screen, and the CRA documents are generated into the store too.
 
     Storing the payload in a dict keyed by ``(bucket, object)`` gives us that
-    round trip while leaving every layer above the object store — the upload
-    endpoint, ``derive_vex_suppressions``, ``find_matching_statement`` — running
+    round trip while leaving every layer above the object store — the triage
+    writer, ``derive_vex_suppressions``, ``find_matching_statement`` — running
     for real. What you see suppressed on screen was genuinely suppressed by the
     matcher, not staged.
     """
@@ -294,7 +289,55 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     return store
 
 
-def _seed_published_advisory(team: Any) -> None:
+def _seed_cra_assessment(product: Any, user: AbstractBaseUser) -> None:
+    """A CRA assessment with steps 1 to 4 done and every document generated.
+
+    Chapter 4 opens it from the Compliance list and completes it on camera.
+    The wizard refuses a placeholder manufacturer, so the workspace Parties
+    gets a real one first. Documents are generated through the real service,
+    into the faked object store.
+    """
+    team = product.team
+    profile = ContactProfile.objects.create(team=team, name="Pied Piper", is_default=True)
+    entity = ContactEntity.objects.create(
+        profile=profile,
+        name="Pied Piper B.V.",
+        email="compliance@example.com",
+        address="Keizersgracht 100, 1015 AA Amsterdam, Netherlands",
+        is_manufacturer=True,
+        is_supplier=True,
+    )
+    ContactProfileContact.objects.create(
+        entity=entity, name="Richard Hendricks", email="security@example.com", is_security_contact=True
+    )
+    CRAScopeScreening.objects.create(product=product, team=team, has_data_connection=True)
+
+    assessment = get_or_create_assessment(product.id, user, team).value
+    assert assessment is not None
+    CRAAssessment.objects.filter(pk=assessment.pk).update(
+        intended_use="Middle-out compression for enterprise data pipelines.",
+        target_eu_markets=["AT", "BE", "DE", "DK", "ES", "FI", "FR", "IE", "IT", "NL", "PL", "SE"],
+        support_period_end=date(2031, 3, 15),
+        conformity_assessment_procedure="module_a",
+        is_eu_established=True,
+        csirt_country="NL",
+        acknowledgment_timeline_days=5,
+        update_frequency="as-needed",
+        update_method="Package manager",
+        support_email="security@example.com",
+        data_deletion_instructions="Remove the library from your build and delete its cache directory.",
+        completed_steps=[1, 2, 3, 4],
+        current_step=5,
+        status=CRAAssessment.WizardStatus.IN_PROGRESS,
+    )
+    assessment.refresh_from_db()
+    OSCALFinding.objects.filter(assessment_result=assessment.oscal_assessment_result).update(
+        status=OSCALFinding.FindingStatus.SATISFIED
+    )
+    regenerate_all(assessment)
+
+
+def _seed_published_advisory(team: Any, product: Any) -> None:
     """Publish one resolved security advisory for the workspace.
 
     The trust center now leads with a Security Advisories section, and with
@@ -323,6 +366,7 @@ def _seed_published_advisory(team: Any) -> None:
         made_public_at=now,
         tracking_id=SecurityAdvisory.allocate_tracking_id(team),
     )
+    AdvisoryProduct.objects.create(advisory=advisory, product=product, product_name=product.name)
     AdvisoryEvent.objects.create(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.PUBLISHED,
@@ -334,6 +378,7 @@ def _seed_published_advisory(team: Any) -> None:
 def pied_piper_scanned(
     sample_user: AbstractBaseUser,
     pied_piper_with_sboms: dict,
+    fake_s3: dict,
 ) -> dict:
     """Layer branding, product metadata, and completed scans over the hierarchy.
 
@@ -350,7 +395,11 @@ def pied_piper_scanned(
        of a product record that answers a procurement questionnaire, and the
        part the tour's chapter 1 lingers on.
     3. **Scans.** One completed ``security`` AssessmentRun per SBOM, which is
-       what lights up the dashboard digest and the component drill-down.
+       what lights up the dashboard digest and the component drill-down,
+       projected into the finding rows the vulnerability lists read.
+    4. **CRA.** A manufacturer in the workspace Parties and an assessment with
+       steps 1 to 4 done and every document generated, which chapter 4 opens
+       and completes.
 
     ``created_at`` is rewritten after insert because it is ``auto_now_add`` —
     without the rewrite every scan reads "scanned 0 minutes ago", which is
@@ -403,7 +452,7 @@ def pied_piper_scanned(
         visibility=Component.Visibility.PUBLIC,
     )
 
-    _seed_published_advisory(team)
+    _seed_published_advisory(team, product)
 
     now = datetime.now(tz=timezone.utc)
     last_day = len(SCAN_HISTORY_PROFILE) - 1
@@ -436,374 +485,513 @@ def pied_piper_scanned(
                 result_schema_version="1.0",
             )
             AssessmentRun.objects.filter(pk=run.pk).update(created_at=scanned_at)
+        # The vulnerability lists read a projection of each run's findings
+        # that scan completion maintains, not the run's stored result. Without
+        # it every list reads "Vulnerability details unavailable".
+        run.refresh_from_db()
+        sync_findings(run, fresh=True)
 
+    _seed_cra_assessment(product, sample_user)
+
+    # The token Richard made for his coding agent, with the "For an AI agent"
+    # preset. Chapters 3 and 5 drive the real API with it. Only its hash is
+    # stored, so the token itself is kept here for the chapters to send.
+    _AGENT_TOKEN["value"] = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        team=team,
+        encoded_token=_AGENT_TOKEN["value"],
+        description=AGENT_TOKEN_DESCRIPTION,
+        scopes=SCOPE_PRESETS["agent"],
+    )
     return pied_piper_with_sboms
 
 
 # ---------------------------------------------------------------------------
-# Chapter 1 — the product hierarchy
+# Shared steps
 # ---------------------------------------------------------------------------
 
+_AGENT_TOKEN: dict[str, str] = {}
 
-def _expand_product_panel(page: Page, header: str, card_selector: str, text: str, shot_name: str) -> None:
-    """Expand one of the product-record accordions and hold on its card.
 
-    The panels on the product page render collapsed with an
-    ``hx-trigger="click once from:previous button"`` body, so the card only
-    exists in the DOM after its header is clicked. Waiting on the card without
-    clicking first times out — which is exactly what a naive selector does here.
+def _agent_call(method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
+    """One request from the AI agent: the real API, with the agent-preset token.
+
+    In-process through Django's test client, like ``oidc_trusted_publishing``,
+    so the request does not have to cross the Docker network. Same URL, same
+    headers and body an agent's ``curl`` would send; nothing on the server
+    side is stubbed.
     """
-    toggle = page.locator(f"button:has-text('{header}')").first
-    toggle.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, toggle, 600)
-    hover_and_click(page, toggle)
+    response = getattr(Client(), method.lower())(
+        path,
+        data=json.dumps(body or {}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {_AGENT_TOKEN['value']}",
+    )
+    return response.status_code, response.json()
 
+
+_TERMINAL_ID = "__walkthrough-agent-terminal"
+
+
+def _agent_terminal(page: Page, lines: list[tuple[str, str]]) -> None:
+    """Show what the agent did as a terminal pinned to the bottom right.
+
+    The agent's calls are invisible, so the recording draws them. ``lines``
+    are ``(kind, text)`` with kind ``cmd`` (a request), ``ok``, ``refused`` or
+    ``note``. Rebuilt from scratch on each call, so a caller appends by
+    passing the longer list. Text is set with ``textContent``; all of it comes
+    from this script and the API's own responses.
+    """
+    page.evaluate(
+        """({id, lines}) => {
+            let el = document.getElementById(id);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = id;
+                el.style.cssText = `
+                    position: fixed; right: 28px; bottom: 28px; z-index: 10000;
+                    width: 760px; border-radius: 12px; overflow: hidden;
+                    background: #0d1117; color: #e6edf3;
+                    border: 1px solid rgba(255,255,255,0.12);
+                    box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+                    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                `;
+                const bar = document.createElement('div');
+                bar.style.cssText = 'display:flex; align-items:center; gap:8px; padding:10px 16px;' +
+                    ' background:#161b22; font: 600 14px ui-sans-serif, system-ui, sans-serif; color:#c9d1d9;';
+                for (const c of ['#ff5f56', '#ffbd2e', '#27c93f']) {
+                    const dot = document.createElement('span');
+                    dot.style.cssText = `width:11px; height:11px; border-radius:50%; background:${c};`;
+                    bar.appendChild(dot);
+                }
+                const name = document.createElement('span');
+                name.style.cssText = 'margin-left:10px;';
+                name.textContent = 'AI agent · token preset "For an AI agent"';
+                bar.appendChild(name);
+                el.appendChild(bar);
+                const body = document.createElement('div');
+                body.dataset.role = 'body';
+                body.style.cssText = 'padding:14px 18px 16px; font-size:15px; line-height:1.55;';
+                el.appendChild(body);
+                document.body.appendChild(el);
+            }
+            const body = el.querySelector('[data-role=body]');
+            while (body.firstChild) body.removeChild(body.firstChild);
+            const colours = {cmd: '#e6edf3', ok: '#3fb950', refused: '#ff7b72', note: '#8b949e'};
+            for (const [kind, text] of lines) {
+                const row = document.createElement('div');
+                row.style.cssText = `color:${colours[kind] || '#e6edf3'}; white-space:pre-wrap;` +
+                    ' overflow-wrap:anywhere;' + (kind === 'cmd' ? ' margin-top:6px;' : '');
+                row.textContent = (kind === 'cmd' ? '$ ' : '  ') + text;
+                body.appendChild(row);
+            }
+        }""",
+        {"id": _TERMINAL_ID, "lines": lines},
+    )
+
+
+def _hide_agent_terminal(page: Page) -> None:
+    page.evaluate(f"document.getElementById('{_TERMINAL_ID}')?.remove()")
+
+
+def _nav(page: Page, label: str) -> None:
+    """Follow a sidebar link with a short settle.
+
+    The conftest ``navigate_to_*`` helpers hold 1.2 s after each load, which
+    the narrated tour turns into dead air between lines.
+    """
+    hover_and_click(page, sidebar_link(page, label))
+    page.wait_for_load_state("networkidle")
+    pace(page, 300)
+
+
+def _open_product(page: Page) -> None:
+    _nav(page, "Products")
+    link = page.get_by_role("link", name=PIED_PIPER_PRODUCT_NAME, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 400)
+
+
+def _open_core_component(page: Page) -> None:
+    _nav(page, "Components")
+    link = page.get_by_role("link", name=CORE_COMPONENT, exact=True).first
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 400)
+
+
+def _product_detail_tab(page: Page, tab: str, card_selector: str) -> None:
+    """Open one of the product page's detail tabs and pan to its card.
+
+    Links and Identifiers load their card over HTMX on the first click, so the
+    card only exists after the tab is pressed.
+    """
+    tab_btn = page.get_by_role("tab", name=tab, exact=True)
+    smooth_scroll(page, tab_btn, 300)
+    hover_and_click(page, tab_btn)
     card = page.locator(card_selector)
     card.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, card, 800)
+    smooth_scroll(page, card, 400)
 
-    caption(page, text)
-    pace(page, 2600)
-    shot(page, shot_name)
-    clear_caption(page)
+
+# ---------------------------------------------------------------------------
+# Chapter 1 — SBOMs in: the product and what it is made of
+# ---------------------------------------------------------------------------
 
 
 def chapter_supply_chain(page: Page) -> None:
-    """Dashboard → Products → the product's full record.
+    """Dashboard → Products → the product's record.
 
-    Establishes the mental model the rest of the tour builds on: a workspace
-    holds products, a product holds components, and every product carries the
-    identifiers, links, and lifecycle dates a downstream consumer asks for.
+    Establishes the model the rest of the tour builds on: a workspace holds
+    products, a product holds components, and the product carries the
+    identifiers and lifecycle dates a customer or a regulator asks for.
     """
-    start_on_dashboard(page)
-    caption(page, "One workspace holds every product you ship.")
+    narrate(page, "supply_chain_intro")
+    start_on_dashboard(page, pause_ms=600)
     shot(page, "01-dashboard")
-    pace(page, 2200)
+    settle(page)
 
-    clear_caption(page)
-    navigate_to_products(page)
-    caption(page, "Products group the components that make up a shippable thing.")
+    narrate(page, "supply_chain_products_group_components")
+    _nav(page, "Products")
     shot(page, "02-products-list")
-    pace(page, 2400)
+    settle(page)
 
-    clear_caption(page)
-    product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
-    product_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 500)
-    hover_and_click(page, product_link)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1600)
-
-    caption(page, "Pied Piper's compression engine — four components under one product.")
+    narrate(page, "supply_chain_pied_piper_s")
+    _open_product(page)
     shot(page, "03-product-overview")
-    pace(page, 2600)
+    settle(page)
 
-    # The product-record accordions: identifiers, links, and lifecycle dates.
-    # This is the metadata that makes a product record answer a procurement
-    # questionnaire, and the part a marketplace viewer is least likely to guess
-    # at. Each panel lazily HTMX-loads its card on the first header click, so
-    # the expand is both the interaction and the fetch.
-    clear_caption(page)
-    _expand_product_panel(
-        page,
-        "Product identifiers",
-        "#product-identifiers-card",
-        "CPE, PURL and SKU identifiers, so scanners can match your product.",
-        "04-product-identifiers",
-    )
-    _expand_product_panel(
-        page,
-        "Lifecycle",
-        "#product-lifecycle-card",
-        "Lifecycle dates — release, end of support, end of life.",
-        "05-product-lifecycle",
-    )
+    narrate(page, "supply_chain_cpe_purl_sku")
+    _product_detail_tab(page, "Identifiers", "#product-identifiers-card")
+    shot(page, "04-product-identifiers")
+    settle(page)
 
-    page.mouse.wheel(0, -3000)
-    pace(page, 1000)
+    narrate(page, "supply_chain_lifecycle_dates_set")
+    _product_detail_tab(page, "Lifecycle", "#product-lifecycle-card")
+    shot(page, "05-product-lifecycle")
+    settle(page)
 
 
 # ---------------------------------------------------------------------------
-# Chapter 2 — artifacts and releases
+# Chapter 2 — every artifact, versioned
 # ---------------------------------------------------------------------------
 
 
 def chapter_inventory(page: Page) -> None:
-    """Components → a component's artifacts → the release that ships them.
-
-    The point of this chapter is that sbomify stores artifacts *immutably* and
-    organises them by release, so "what was in build 2.4.0" has an answer
-    years later.
-    """
-    navigate_to_components(page)
-    caption(page, "Every component tracks its own SBOMs, VEX, and documents.")
+    """Components → a component's versions → the release that ships them."""
+    narrate(page, "inventory_intro")
+    _nav(page, "Components")
     shot(page, "06-component-inventory")
-    pace(page, 2600)
+    settle(page)
 
-    clear_caption(page)
-    click_into_row(page, CORE_COMPONENT)
-
-    caption(page, "Artifacts are stored exactly as received — never rewritten.")
-    shot(page, "07-component-artifacts")
-    pace(page, 2800)
-    clear_caption(page)
-
-    # The releases list lives on the product, so hop back for the release story.
-    navigate_to_products(page)
-    product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
-    product_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 400)
-    hover_and_click(page, product_link)
+    narrate(page, "inventory_artifacts_stored_exactly")
+    link = page.get_by_role("link", name=CORE_COMPONENT, exact=True).first
+    hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
-    pace(page, 1400)
+    shot(page, "07-component-artifacts")
+    settle(page)
 
-    # "Latest releases" is a card on the product page; creating a release now
-    # lives behind the header meatball, so the card — not a Create button — is
-    # what the tour holds on.
-    releases_card = page.locator("h4:has-text('Latest releases')")
-    releases_card.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, releases_card, 1200)
-
-    caption(page, "Releases pin an exact set of artifacts to a version you shipped.")
+    narrate(page, "inventory_releases_pin_exact")
+    _open_product(page)
+    releases = page.get_by_role("heading", name="Releases", exact=True)
+    smooth_scroll(page, releases, 500)
     shot(page, "08-releases")
-    pace(page, 2800)
-    clear_caption(page)
+    settle(page)
 
-    # Open the release itself so the artifacts pinned to it are on screen —
-    # the "what exactly was in that build" answer this chapter is about.
-    # Matched on the href rather than the anchor's classes: the product page
-    # also carries hidden download anchors that share font-semibold/text-text,
-    # and `.first` on the class selector picks one of those instead.
     release_link = page.locator("a[href*='/release/']").first
     release_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 500)
+    narrate(page, "inventory_years_later_release")
     hover_and_click(page, release_link)
     page.wait_for_load_state("networkidle")
-    pace(page, 1800)
-
-    caption(page, "Every artifact in that build, frozen — years later it still resolves.")
     shot(page, "09-release-artifacts")
-    pace(page, 3000)
-    clear_caption(page)
+    settle(page)
 
 
 # ---------------------------------------------------------------------------
-# Chapter 3 — vulnerabilities and VEX
+# Chapter 3 — vulnerabilities, triaged by an agent, decided by a person
 # ---------------------------------------------------------------------------
+
+
+def _agent_rules_libwebp(page: Page) -> None:
+    """The agent's libwebp ruling, through the real triage API.
+
+    It tries to apply the ruling first, which an agent-preset token may not do
+    (``artifact:publish_vex`` is outside the preset), and the API's 403 says to
+    send it for review. The resend with ``review=true`` queues it: nothing
+    changes until a person approves it.
+    """
+    component = Component.objects.get(name=CORE_COMPONENT)
+    path = f"/api/v1/vulnerability-scanning/components/{component.id}/triage"
+    decision = {
+        "vuln_id": VEX_TARGET_CVE,
+        "purl": VEX_TARGET_PURL,
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "detail": VEX_JUSTIFICATION_DETAIL,
+    }
+    request_lines = [
+        ("cmd", f"POST {path}"),
+        ("note", f"{VEX_TARGET_CVE}  libwebp  not_affected  code_not_reachable"),
+    ]
+
+    narrate(page, "vulnerabilities_agent_rules")
+    _agent_terminal(page, request_lines)
+    pace(page, 2500)
+
+    status, body = _agent_call("POST", path, {"decisions": [decision]})
+    assert status == 403, (status, body)
+    lines = request_lines + [("refused", f"{status} {body['detail']}")]
+    narrate(page, "vulnerabilities_agent_refused")
+    _agent_terminal(page, lines)
+    pace(page, 3200)
+
+    status, body = _agent_call("POST", f"{path}?review=true", {"decisions": [decision], "context": AGENT_VEX_CONTEXT})
+    assert status == 202, (status, body)
+    # The impact count is filled in by a background task; the stack runs no worker.
+    record_impact(body["id"])
+    lines += [
+        ("cmd", f"POST {path}?review=true"),
+        ("ok", f"{status} status: {body['status']}, waiting for a person to approve"),
+    ]
+    _agent_terminal(page, lines)
+    settle(page)
 
 
 def chapter_vulnerabilities(page: Page) -> None:
-    """Dashboard posture → per-component findings → clear a false positive.
+    """Workspace vulnerabilities → trends → a component → an agent's ruling → a person approves.
 
-    The chapter closes on the VEX payoff: the critical libwebp row is still
-    listed (ADR-004 — nothing is deleted) but reads "Not affected · VEX" and
-    drops out of the counts that page your on-call.
+    The agent rules libwebp not affected over the real API, is refused when it
+    tries to apply the ruling itself, and sends it for review. A person
+    approves it on the Review tab. The chapter closes on the payoff: the
+    critical libwebp row leaves the open list, and is still there, with its
+    reason, under "Closed by a decision" (ADR-004: nothing is deleted).
     """
-    start_on_dashboard(page)
-    caption(page, "The dashboard leads with what actually needs attention.")
-    pace(page, 2600)
+    narrate(page, "vulnerabilities_intro")
+    _nav(page, "Vulnerabilities")
     shot(page, "10-vulnerability-posture")
+    settle(page)
 
-    # The trends widget loads via HTMX after the digest; give it a beat and
-    # capture the whole page so the chart lands in the still.
-    clear_caption(page)
-    page.mouse.wheel(0, 700)
-    pace(page, 2000)
-    caption(page, "Severity trends across every product, over time.")
-    pace(page, 2400)
-    shot(page, "11-vulnerability-trends")
-    clear_caption(page)
-    page.mouse.wheel(0, -1400)
-    pace(page, 800)
-
-    navigate_to_components(page)
-    click_into_row(page, CORE_COMPONENT)
-
-    vulns_card = page.locator("text=Vulnerabilities").first
-    vulns_card.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, vulns_card, 1400)
-
-    caption(page, "Drill into a component: advisory, package, fix version, status.")
-    shot(page, "12-vulnerability-drilldown")
-    pace(page, 3000)
-    clear_caption(page)
-
-    # ── The VEX upload ────────────────────────────────────────────────────
-    # This is the one flow the tour performs rather than seeds, and it runs
-    # entirely through the real UI: the ⋮ menu, the artifact-type select, the
-    # dropzone, the dry-run preview, and Apply. Nothing is stubbed above the
-    # object store (see the fake_s3 fixture), so the "would suppress: 1" the
-    # preview reports is the matcher's own answer.
-    caption(page, "Not every finding is exploitable. VEX says so, in a standard format.")
-    pace(page, 2600)
-    clear_caption(page)
-
-    # Role-based lookups, matching the convention the other recordings settled
-    # on: the meatball's contents move around, but its accessible names don't.
-    menu_btn = page.get_by_role("button", name="More actions")
-    menu_btn.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, menu_btn, 700)
-    hover_and_click(page, menu_btn)
-    pace(page, 800)
-
-    upload_item = page.get_by_role("menuitem", name="Upload artifact")
-    upload_item.wait_for(state="visible", timeout=10_000)
-    pace(page, 400)
-    hover_and_click(page, upload_item)
-
-    upload_modal = page.locator("#upload-sbom")
-    upload_modal.wait_for(state="visible", timeout=10_000)
-    pace(page, 1200)
-
-    # Switch the artifact type to VEX. The endpoint keys off this select, so
-    # this is a genuine UI choice rather than a query parameter we injected.
-    bom_type = page.locator("#upload-bom-type")
-    bom_type.wait_for(state="visible", timeout=10_000)
-    hover_and_click(page, bom_type)
-    pace(page, 400)
-    bom_type.select_option("vex")
-    pace(page, 1200)
-
-    caption(page, "Drop in a CycloneDX VEX — sbomify shows what it would change first.")
-    pace(page, 1800)
-    clear_caption(page)
-
-    # The dropzone proxies to a hidden <input type="file"> via $refs; setting
-    # files on it directly runs the same @change handler a real drop would.
-    file_input = page.locator("#upload-sbom input[type='file']")
-    with page.expect_response(
-        lambda r: "/vex-preview" in r.url,
-        timeout=25_000,
-    ):
-        file_input.set_input_files(
-            files=[
-                {
-                    "name": "compression-core-2.4.0.vex.cdx.json",
-                    "mimeType": "application/json",
-                    "buffer": VEX_DOCUMENT_BYTES,
-                }
-            ]
-        )
-
-    # ── The dry-run preview ───────────────────────────────────────────────
-    apply_btn = page.locator("button:has-text('Apply this VEX')")
-    apply_btn.wait_for(state="visible", timeout=20_000)
-    smooth_scroll(page, apply_btn, 1400)
-
-    caption(page, "A dry run: one finding would be suppressed, nothing stored yet.")
-    pace(page, 3000)
-    shot(page, "13-vex-preview")
-    clear_caption(page)
-
-    with page.expect_response(
-        lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
-        timeout=25_000,
-    ):
-        hover_and_click(page, apply_btn)
-
-    pace(page, 1500)
-    page.reload()
+    narrate(page, "vulnerabilities_trends_show_exposure")
+    _nav(page, "Overview")
+    trends = page.get_by_role("link", name="Trends", exact=True)
+    hover_and_click(page, trends)
     page.wait_for_load_state("networkidle")
-    pace(page, 1800)
+    shot(page, "11-vulnerability-trends")
+    settle(page)
 
-    # Land back on the vulnerabilities table. The suppressed row is now gone
-    # from the default view — the working list matches the open counts — and
-    # the footer accounts for it rather than silently dropping it.
-    vulns_card = page.locator("text=Vulnerabilities").first
-    vulns_card.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, vulns_card, 1200)
+    narrate(page, "vulnerabilities_component_each_vulnerability")
+    _open_core_component(page)
+    vulns = page.get_by_role("button", name="Vulnerabilities", exact=True).first
+    smooth_scroll(page, vulns, 500)
+    shot(page, "12-vulnerability-drilldown")
+    settle(page)
 
-    hidden_note = page.locator("text=suppressed hidden").first
-    hidden_note.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, hidden_note, 800)
+    # ── The agent's ruling, through the real API ──────────────────────────
+    _agent_rules_libwebp(page)
 
-    caption(page, "It drops straight out of your working list — and the count says so.")
-    pace(page, 3000)
+    # ── The Review tab: a person decides ──────────────────────────────────
+    narrate(page, "vulnerabilities_review_tab")
+    _hide_agent_terminal(page)
+    _nav(page, "Vulnerabilities")
+    hover_and_click(page, page.get_by_role("link", name=re.compile(r"^Review")))
+    page.wait_for_load_state("networkidle")
+    review = page.locator("#vex-review")
+    approve = review.get_by_role("button", name="Approve")
+    approve.wait_for(state="visible", timeout=15_000)
+    review.get_by_text("AI agent", exact=True).first.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, review.locator("li li").first, 500)
+    shot(page, "13-vex-preview")
+    settle(page)
+
+    narrate(page, "vulnerabilities_person_approves")
+    pace(page, 1200)
+    with page.expect_response(lambda r: "/review/decide/" in r.url, timeout=20_000):
+        hover_and_click(page, approve)
+    review.get_by_text("Nothing waiting").wait_for(state="visible", timeout=15_000)
+    assert VexSubmission.objects.filter(status=VexSubmission.Status.APPROVED).count() == 1
+    # Approval writes the VEX and queues the re-apply that annotates the
+    # stored scans. The screencast stack runs no worker, so run that job here.
+    reapply_vex_to_component_scans.fn(Component.objects.get(name=CORE_COMPONENT).id)
+    settle(page)
+
+    narrate(page, "vulnerabilities_applied_drops_out")
+    _open_core_component(page)
+    suppressed_badge = page.get_by_text("1 suppressed").first
+    suppressed_badge.wait_for(state="visible", timeout=15_000)
+    table = page.locator("#component-vulnerabilities-status")
+    smooth_scroll(page, table, 500)
     shot(page, "14-vex-suppressed-hidden")
-    clear_caption(page)
+    settle(page)
 
-    # Reveal it again: nothing was deleted, and the decision is auditable.
-    show_suppressed = page.get_by_text("Show suppressed").first
-    show_suppressed.wait_for(state="visible", timeout=10_000)
-    smooth_scroll(page, show_suppressed, 700)
-    hover_and_click(page, show_suppressed)
-    pace(page, 1400)
-
-    suppressed = page.locator("td:has-text('Not affected')").first
+    narrate(page, "vulnerabilities_nothing_deleted_vulnerability")
+    hover_and_click(page, table)
+    table.select_option("decided")
+    page.wait_for_load_state("networkidle")
+    suppressed = page.get_by_text("Not affected").first
     suppressed.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, suppressed, 800)
+    smooth_scroll(page, suppressed, 400)
     suppressed.hover()
-
-    caption(page, "Nothing is deleted — the finding is still there, with the reason attached.")
-    pace(page, 3200)
     shot(page, "15-vex-suppression")
-    clear_caption(page)
+    settle(page)
 
 
 # ---------------------------------------------------------------------------
-# Chapter 4 — the trust center
+# Chapter 4 — CRA compliance
 # ---------------------------------------------------------------------------
+
+
+def chapter_compliance(page: Page) -> None:
+    """Compliance list → the assessment's review step → mark it complete."""
+    narrate(page, "compliance_intro")
+    _nav(page, "Compliance")
+    shot(page, "18-cra-assessments")
+    settle(page)
+
+    narrate(page, "compliance_scope_screening_sbom")
+    hover_and_click(page, page.get_by_role("link", name="Continue").first)
+    page.wait_for_url("**/step/5/**", timeout=15_000)
+    page.wait_for_load_state("networkidle")
+    shot(page, "19-cra-summary")
+    settle(page)
+
+    documents = page.get_by_role("heading", name="Documents", exact=True)
+    narrate(page, "compliance_sbomify_writes_documents")
+    smooth_scroll(page, documents, 500)
+    settle(page)
+
+    complete_btn = page.get_by_role("button", name="Mark Assessment Complete")
+    smooth_scroll(page, complete_btn, 400)
+    narrate(page, "compliance_every_control_answered")
+    with page.expect_navigation():
+        hover_and_click(page, complete_btn)
+    page.wait_for_load_state("networkidle")
+    pace(page, 600)
+
+    narrate(page, "compliance_back_list_assessment")
+    hover_and_click(page, sidebar_link(page, "Compliance"))
+    page.wait_for_load_state("networkidle")
+    page.get_by_text("Complete", exact=True).first.wait_for(state="visible", timeout=10_000)
+    settle(page)
+
+
+# ---------------------------------------------------------------------------
+# Chapter 5 — security advisories and the Trust Center
+# ---------------------------------------------------------------------------
+
+
+def _agent_drafts_advisory(page: Page) -> str:
+    """The agent drafts the zlib advisory over the real API, then is refused publishing it.
+
+    ``advisory:manage`` is in the agent preset, so the draft is written at
+    once. ``advisory:publish`` is not: publishing, withdrawing and deleting
+    stay with a person, and the API answers 403. Returns the draft's id.
+    """
+    product = Product.objects.get(name=PIED_PIPER_PRODUCT_NAME)
+    draft = {
+        "title": AGENT_ADVISORY_TITLE,
+        "identifier": AGENT_ADVISORY_CVE,
+        "severity": "critical",
+        "cvss_score": 9.8,
+        "remediation_status": "fix_in_progress",
+        "description": AGENT_ADVISORY_DESCRIPTION,
+        "product_ids": [str(product.id)],
+    }
+    create_lines = [
+        ("cmd", "POST /api/v1/advisories/"),
+        ("note", f"{AGENT_ADVISORY_CVE}  critical 9.8  {PIED_PIPER_PRODUCT_NAME}"),
+    ]
+    _agent_terminal(page, create_lines)
+    status, body = _agent_call("POST", "/api/v1/advisories/", draft)
+    assert status == 201, (status, body)
+    advisory_id = body["id"]
+    lines = create_lines + [("ok", f"{status} status: {body['status']}")]
+    pace(page, 1500)
+    _agent_terminal(page, lines)
+    pace(page, 1500)
+
+    publish_path = f"/api/v1/advisories/{advisory_id}/publish"
+    lines += [("cmd", f"POST {publish_path}"), ("note", "visibility: public")]
+    narrate(page, "trust_center_agent_cannot_publish")
+    _agent_terminal(page, lines)
+    pace(page, 1500)
+    status, body = _agent_call("POST", publish_path, {"visibility": "public"})
+    assert status == 403, (status, body)
+    lines += [
+        ("refused", f"{status} {body['detail']}"),
+        ("note", "advisory:publish is not in the agent preset"),
+    ]
+    _agent_terminal(page, lines)
+    settle(page)
+    return advisory_id
 
 
 def chapter_trust_center(page: Page) -> None:
-    """Settings → enable the trust center → the public page customers see.
-
-    Closes the loop the whole tour has been building toward: the inventory and
-    the posture are only worth maintaining if you can hand them to a customer
-    without a spreadsheet and an NDA thread.
-    """
-    navigate_to_trust_center_tab(page)
+    """An agent drafts an advisory → a person publishes it → the Trust Center shows it."""
+    narrate(page, "trust_center_intro")
+    _nav(page, "Security advisories")
     pace(page, 600)
+    _agent_drafts_advisory(page)
 
-    caption(page, "Turn on a public trust center — no separate site to build.")
-    pace(page, 2400)
-    clear_caption(page)
+    narrate(page, "trust_center_draft_waits")
+    _hide_agent_terminal(page)
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    # The row navigates on click; the title itself is a plain span in it.
+    draft_link = page.locator("main").get_by_text(AGENT_ADVISORY_TITLE, exact=True).first
+    draft_link.wait_for(state="visible", timeout=15_000)
+    shot(page, "20-security-advisories")
+    hover_and_click(page, draft_link)
+    page.wait_for_url("**/security-advisories/*/", timeout=15_000)
+    page.wait_for_load_state("networkidle")
+    page.get_by_text("An AI agent drafted this advisory").first.wait_for(state="visible", timeout=15_000)
+    shot(page, "21-advisory-agent-draft")
+    settle(page)
 
+    narrate(page, "trust_center_person_publishes")
+    hover_and_click(page, page.get_by_role("button", name="Publish advisory").first)
+    modal = page.locator("#publishAdvisoryModal")
+    modal.get_by_role("button", name="Publish").wait_for(state="visible", timeout=10_000)
+    pace(page, 600)
+    hover_and_click(page, modal.locator("label:has(input[name='visibility'][value='public'])"))
+    pace(page, 600)
+    hover_and_click(page, modal.get_by_role("button", name="Publish"))
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("link", name="View in Trust Center").first.wait_for(state="visible", timeout=15_000)
+    dismiss_toasts(page)
+    settle(page)
+
+    narrate(page, "trust_center_turn_trust_center")
+    navigate_to_trust_center_tab(page)
     enable_and_configure_trust_center(page)
     rewrite_localhost_urls(page)
-
-    caption(page, "Serve it from your own domain: trust.piedpiper.com.")
+    rewrite_localhost_inputs(page)
+    narrate(page, "trust_center_serve_own_domain")
     shot(page, "16-trust-center-config")
-    pace(page, 2800)
-    clear_caption(page)
+    settle(page)
 
-    # Publish the product. Nothing reaches the trust center until you say so —
-    # showing the switch being thrown makes that explicit, and it is what fills
-    # the public page the chapter closes on.
-    navigate_to_products(page)
-    product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
-    product_link.wait_for(state="visible", timeout=15_000)
-    pace(page, 400)
-    hover_and_click(page, product_link)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1400)
-
-    caption(page, "You decide what goes public — per product, per component.")
-    pace(page, 2200)
-    clear_caption(page)
-
-    visibility = page.locator("select[aria-label='Product visibility']")
-    visibility.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, visibility, 700)
+    narrate(page, "trust_center_decide_what_goes")
+    _open_product(page)
+    visibility = page.get_by_role("button", name="Product visibility")
     hover_and_click(page, visibility)
-    pace(page, 400)
-    visibility.select_option("true")
+    pace(page, 500)
+    hover_and_click(page, page.get_by_role("menuitemradio", name="Public"))
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
-    pace(page, 1800)
+    pace(page, 1200)
 
-    # The public page is what a customer or auditor actually lands on, so the
-    # tour ends there rather than on an admin screen.
+    narrate(page, "trust_center_what_customers_see")
     page.goto("/public/workspace/")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
-    pace(page, 2000)
-
-    caption(page, "This is what your customers see — always current, no email thread.")
+    page.get_by_text(AGENT_ADVISORY_TITLE).first.wait_for(state="visible", timeout=15_000)
     shot(page, "17-trust-center-public")
-    pace(page, 3200)
-    clear_caption(page)
-    pace(page, 1200)
+    settle(page)
+    page.mouse.wheel(0, 700)
+    pace(page, 1500)
 
 
 # ---------------------------------------------------------------------------
@@ -814,9 +1002,10 @@ def chapter_trust_center(page: Page) -> None:
 # imports this to play the same chapters as one continuous tour.
 CHAPTERS: list[tuple[str, str, str, Callable[[Page], None]]] = [
     ("supply_chain", "Chapter 1", "Know what you ship", chapter_supply_chain),
-    ("inventory", "Chapter 2", "Every artifact, versioned", chapter_inventory),
-    ("vulnerabilities", "Chapter 3", "Know what's exploitable", chapter_vulnerabilities),
-    ("trust_center", "Chapter 4", "Share it with customers", chapter_trust_center),
+    ("inventory", "Chapter 2", "Every SBOM, versioned", chapter_inventory),
+    ("vulnerabilities", "Chapter 3", "Triage with an AI agent", chapter_vulnerabilities),
+    ("compliance", "Chapter 4", "Prove CRA compliance", chapter_compliance),
+    ("trust_center", "Chapter 5", "Disclose it to customers", chapter_trust_center),
 ]
 
 _CHAPTERS_BY_SLUG = {slug: (eyebrow, title, fn) for slug, eyebrow, title, fn in CHAPTERS}
@@ -836,12 +1025,9 @@ def walkthrough_chapters(recording_page: Page, chapter_slug: str) -> None:
     _, _, step = _CHAPTERS_BY_SLUG[chapter_slug]
 
     auto_dismiss_toasts(page)
-
-    # chapter_supply_chain and chapter_vulnerabilities open on the dashboard
-    # themselves; the other two assume they are already inside the app.
-    if step not in (chapter_supply_chain, chapter_vulnerabilities):
-        start_on_dashboard(page)
+    if step is not chapter_supply_chain:
+        start_on_dashboard(page, pause_ms=600)
 
     step(page)
     dismiss_toasts(page)
-    pace(page, 1200)
+    pace(page, 800)

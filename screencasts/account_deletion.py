@@ -1,88 +1,100 @@
 """Record the user account deletion screencast.
 
-Drives: Dashboard → sidebar Settings → Account tab → Danger Zone →
-Delete Account modal → type 'delete' → confirm → redirect to login.
-
-The account danger zone now lives in the team settings page under the
-"Account" tab, available to workspace owners.
+Drives: Dashboard → sidebar Settings → Account tab → Danger zone →
+Delete account modal → type 'delete' → confirm → redirect to sign in.
 """
 
 import playwright.sync_api
 import pytest
 from playwright.sync_api import Page
 
-from conftest import hover_and_click, navigate_to_settings, pace, start_on_dashboard, type_text
+from conftest import (
+    SPLASH_HTML,
+    hover_and_click,
+    mock_vuln_trends,
+    narrate,
+    navigate_to_settings,
+    navigate_to_settings_tab,
+    pace,
+    settle,
+    smooth_scroll,
+    start_on_dashboard,
+    type_text,
+)
+
+
+def _point_at(page: Page, locator) -> None:
+    """Glide the pointer onto a part of the page the voice is describing."""
+    locator.wait_for(state="visible", timeout=5_000)
+    box = locator.bounding_box()
+    if box is None:
+        raise AssertionError(f"nothing to point at: {locator}")
+    if box["y"] < 0 or box["y"] + box["height"] > page.evaluate("window.innerHeight"):
+        smooth_scroll(page, locator, 600)
+        box = locator.bounding_box()
+        if box is None:
+            raise AssertionError(f"nothing to point at: {locator}")
+    page.mouse.move(box["x"] + min(box["width"] / 2, 120), box["y"] + box["height"] / 2, steps=15)
+    pace(page, 300)
 
 
 @pytest.mark.django_db(transaction=True)
-def account_deletion(recording_page: Page) -> None:
+def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
-    # Start on the dashboard
-    start_on_dashboard(page)
+    # After deletion the app sends the browser to /login/, which hands off to
+    # the identity provider. The test stack has none, so the page would render
+    # blank white; show the branded splash in its place.
+    page.route("**/login/**", lambda route: route.fulfill(status=200, content_type="text/html", body=SPLASH_HTML))
+    mock_vuln_trends(page)
+    # The opening line plays over the splash and the dashboard load.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=300)
 
-    # Navigate to workspace Settings (the sidebar link)
+    narrate(page, "open_settings_account")
     navigate_to_settings(page)
+    navigate_to_settings_tab(page, "account")
 
-    # Click the "Account" tab in the settings sidebar
-    account_tab = page.locator("a[data-tab='account']")
-    hover_and_click(page, account_tab)
-    pace(page, 1000)
-
-    # Scroll to the Account Danger Zone section and expand it.
-    # There are two danger zone cards (workspace + account); target the account one.
-    danger_card = page.locator(".tw-dangerzone-card", has_text="Delete Account")
-    danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 600)
-
-    # Click the header to toggle the collapsible section open
-    danger_header = danger_card.locator(".tw-card-header")
-    hover_and_click(page, danger_header)
+    danger_band = page.get_by_role("button", name="Danger zone")
+    danger_band.wait_for(state="visible", timeout=15_000)
+    narrate(page, "account_deletion_sits")
+    smooth_scroll(page, danger_band, 600)
+    hover_and_click(page, danger_band)
     pace(page, 800)
 
-    # Click "Delete Account" to open the modal
-    delete_btn = danger_card.locator(".tw-btn-danger")
+    delete_btn = page.get_by_role("button", name="Delete your account")
     delete_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, delete_btn)
-    pace(page, 800)
 
-    # Type "delete" character-by-character for a human-like feel.
-    # The modal is teleported to <body> via x-teleport, so the input uses
-    # x-model bound to the parent Alpine component.
+    modal = page.locator("#deleteAccountModal")
     confirm_input = page.locator("#delete-account-confirm")
     confirm_input.wait_for(state="visible", timeout=5_000)
-    hover_and_click(page, confirm_input)
     pace(page, 400)
+    # The dialog is read out a part at a time, with the pointer on the part
+    # being spoken, so the picture follows the voice instead of holding still.
+    narrate(page, "dialog_lists_what")
+    _point_at(page, modal.get_by_text("Account deactivated (cannot sign in)").first)
+    pace(page, 2200)
+    _point_at(page, modal.get_by_text("Personal access tokens revoked").first)
+    narrate(page, "workspaces_where_only")
+    _point_at(page, modal.get_by_text("Workspaces where you are the sole member").first)
+    narrate(page, "have_14_days")
+    _point_at(page, modal.get_by_text("Account deleted for good").first)
+
+    narrate(page, "confirm_type_delete")
+    hover_and_click(page, confirm_input)
+    pace(page, 300)
     type_text(confirm_input, "delete", delay=120)
-    pace(page, 600)
+    pace(page, 500)
 
-    # Move cursor to the "Delete My Account" button for the visual effect,
-    # then trigger deletion via Alpine.  The sidebar overlaps the modal at
-    # this viewport size and the button stays :disabled until Alpine's
-    # reactive system processes confirmText, so we call deleteAccount()
-    # directly after ensuring the data is set.
-    confirm_delete_btn = page.get_by_role("button", name="Delete My Account")
-    box = confirm_delete_btn.bounding_box()
-    if box:
-        page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-        page.wait_for_timeout(250)
+    confirm_btn = modal.get_by_role("button", name="Delete my account")
+    hover_and_click(page, confirm_btn)
 
-    # Pause so the viewer sees the confirmation state before deletion fires
-    pace(page, 2000)
-
-    # Trigger the deletion via Alpine's API — ensures canConfirm is true.
-    # Don't await: the function sets window.location.href which triggers a
-    # navigation, and page.evaluate() can't resolve across navigations.
-    page.evaluate("""() => {
-        const root = document.querySelector('[x-data*="accountDangerZone"]');
-        const data = window.Alpine.$data(root);
-        data.confirmText = 'delete';
-        data.deleteAccount();
-    }""")
-
-    # Wait briefly for the deletion to process — the redirect lands on the
-    # login page which is blank in the test environment, so keep this short.
     try:
         page.wait_for_url("**/login/**", timeout=10_000)
     except playwright.sync_api.Error:
         pass
+    page.wait_for_load_state("networkidle")
+    narrate(page, "account_deleted_signed")
+    settle(page)
+    pace(page, 600)

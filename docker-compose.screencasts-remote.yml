@@ -1,0 +1,8 @@
+---
+# Overlay for recording against a browser on another machine (a GPU host):
+# the live server listens on a fixed port, published so that browser can load
+# it. See "Record with a GPU browser" in screencasts/README.md.
+services:
+  tests:
+    ports:
+      - "8099:8099"

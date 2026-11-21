@@ -1,0 +1,62 @@
+# Narration for screencasts/product_creation.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to set up a product in sbomify, with its components, lifecycle
+      dates, links and identifiers.
+
+  product_built_components:
+    text: >-
+      A product is built from components. Each component holds the SBOMs for one
+      part of it, so start in Components.
+
+  name_all_component:
+    text: >-
+      A name is all a component needs, and you land on its page. Go back to
+      Components and create a second one the same way, for the web dashboard.
+
+  open_products_create:
+    text: >-
+      Now open Products and create the product your customers buy.
+
+  product_name_description:
+    text: >-
+      Give the product a name and a short description of what it does, then
+      create it.
+
+  assign_components_make:
+    text: >-
+      Assign the components that make up the product. Pick each one from the
+      list, and it joins the product right away.
+
+  product_details_holds:
+    text: >-
+      Product details holds the rest. Lifecycle dates say when it shipped and how
+      long you support it.
+
+  links_point_people:
+    text: >-
+      Links point people to your website, source code and documentation. Open
+      the Links tab and add the first one.
+
+  each_link_has:
+    text: >-
+      Each link has a type, a title and an address. Add as many as you need.
+
+  identifiers_such_cpe:
+    text: >-
+      Identifiers such as CPE and PURL let scanners and buyers match your product
+      to its records. Open the Identifiers tab and add the CPE first.
+
+  purl_names_package:
+    text: >-
+      Then add the package URL, or PURL, which names the package the way
+      scanners look it up.
+
+  product_set_up:
+    text: >-
+      The product is set up, with its components and the details customers ask
+      about.

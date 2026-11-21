@@ -1,0 +1,60 @@
+# Narration for screencasts/trust_center_setup.py
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Here is how to set up a Trust Center, the public page where customers find
+      your security information.
+
+  lives_under_settings:
+    text: >-
+      It lives under Settings, on the Trust Center tab. Switch it on.
+
+  trust_center_live:
+    text: >-
+      Your Trust Center is live, with a public address you can share.
+
+  add_welcome_message:
+    text: >-
+      Add a welcome message for visitors. It is the first thing they read on
+      your Trust Center. Then save it.
+
+  turn_security_txt:
+    text: >-
+      Turn on security.txt so researchers know how to report a vulnerability.
+
+  upload_nda_visitors:
+    text: >-
+      Upload your NDA. Visitors sign it before they can download gated artifacts.
+
+  serve_own_address:
+    text: >-
+      To serve it from your own address, enter a custom domain and add the DNS
+      records shown.
+
+  sbomify_verifies_domain:
+    text: >-
+      sbomify verifies the domain automatically once DNS is in place.
+
+  next_choose_what:
+    text: >-
+      Next, choose what to share, one component at a time. Everything starts
+      private.
+
+  public_means_anyone:
+    text: >-
+      Public means anyone can view and download this component.
+
+  gated_keeps_listed:
+    text: >-
+      Gated keeps it listed, but downloads need your approval and a signed NDA.
+
+  what_customers_see:
+    text: >-
+      This is what your customers see, starting with your welcome message.
+
+  below_products_have:
+    text: >-
+      Below it are the products you have made public, and your NDA.
