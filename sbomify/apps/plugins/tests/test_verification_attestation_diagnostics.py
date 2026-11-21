@@ -315,3 +315,108 @@ class TestEveryFormatReportsItsSource:
 
         assert info is not None
         assert info["source"] == "document"
+
+
+def _spdx_with_the_subject_last(*, document_describes: bool) -> dict:
+    """The order syft writes: dependencies first, the described package last."""
+    doc: dict = {
+        "spdxVersion": "SPDX-2.3",
+        "SPDXID": "SPDXRef-DOCUMENT",
+        "packages": [
+            {
+                "SPDXID": "SPDXRef-Package-python-requests",
+                "name": "requests",
+                "downloadLocation": "NOASSERTION",
+                "externalRefs": [
+                    {
+                        "referenceCategory": "OTHER",
+                        "referenceType": "vcs",
+                        "referenceLocator": "git+https://github.com/psf/requests",
+                    }
+                ],
+            },
+            {
+                "SPDXID": "SPDXRef-DocumentRoot-Image-widget",
+                "name": "widget",
+                "downloadLocation": "NOASSERTION",
+                "externalRefs": [
+                    {
+                        "referenceCategory": "OTHER",
+                        "referenceType": "vcs",
+                        "referenceLocator": f"git+https://github.com/{ORG}/{REPO}@7da37e7fcc14d31248c38912920ebe09f2e952b1",
+                    }
+                ],
+            },
+        ],
+        "relationships": [
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relatedSpdxElement": "SPDXRef-DocumentRoot-Image-widget",
+                "relationshipType": "DESCRIBES",
+            }
+        ],
+    }
+    if document_describes:
+        doc["documentDescribes"] = ["SPDXRef-DocumentRoot-Image-widget"]
+    return doc
+
+
+class TestAnSpdxSubjectIsTheDescribedPackage:
+    """SPDX names its subject with DESCRIBES, not by listing it first.
+
+    syft writes the described package last, after every dependency, so reading
+    ``packages[0]`` asked a dependency's repository for the attestation of the
+    SBOM itself. GitHub answered 404 every time, and the run failed after its
+    retries although the subject's own repository held a valid attestation.
+    """
+
+    @pytest.mark.parametrize("document_describes", [True, False])
+    def test_the_described_package_names_the_repository(self, document_describes: bool) -> None:
+        info = SBOMVerificationPlugin()._extract_vcs_info(
+            _spdx_with_the_subject_last(document_describes=document_describes)
+        )
+
+        assert info == {"org": ORG, "repo": REPO, "source": "document"}
+
+    def test_the_lookup_goes_to_the_subjects_repository(self, tmp_path: Path) -> None:
+        import hashlib
+
+        raw = json.dumps(_spdx_with_the_subject_last(document_describes=True)).encode()
+        path = tmp_path / "sbom.spdx.json"
+        path.write_bytes(raw)
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
+        session.get.return_value = _response(404)
+
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+            pytest.raises(AttestationNotYetAvailableError),
+        ):
+            plugin.assess("sbom-1", path, context=SBOMContext(sha256_hash=hashlib.sha256(raw).hexdigest()))
+
+        assert session.get.call_args.args[0].startswith(f"https://api.github.com/repos/{ORG}/{REPO}/attestations/")
+
+    @pytest.mark.parametrize("document_describes", [True, False])
+    def test_a_subject_with_no_github_reference_names_no_repository(self, document_describes: bool) -> None:
+        # packages[0] is a dependency, and its repository never attests this SBOM.
+        doc = _spdx_with_the_subject_last(document_describes=document_describes)
+        doc["packages"][1]["externalRefs"] = []
+
+        assert SBOMVerificationPlugin()._extract_vcs_info(doc) is None
+
+    @pytest.mark.parametrize("field", ["documentDescribes", "relationships"])
+    def test_a_null_subject_field_is_read_as_absent(self, field: str) -> None:
+        doc = _spdx_with_the_subject_last(document_describes=True)
+        doc[field] = None
+
+        assert SBOMVerificationPlugin()._extract_vcs_info(doc) == {"org": ORG, "repo": REPO, "source": "document"}
+
+    def test_a_describes_relationship_with_no_target_names_no_subject(self) -> None:
+        doc = _spdx_with_the_subject_last(document_describes=False)
+        del doc["packages"][0]["SPDXID"]
+        doc["relationships"] = [{"spdxElementId": "SPDXRef-DOCUMENT", "relationshipType": "DESCRIBES"}]
+
+        info = SBOMVerificationPlugin()._extract_vcs_info(doc)
+
+        assert info == {"org": "psf", "repo": "requests", "source": "package"}
