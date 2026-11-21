@@ -375,6 +375,12 @@ def _is_recoverable_outage(event: Any, hint: Any) -> bool:
     exc = _event_exception(hint)
     if exc is None or unavailable_backend(exc) is None:
         return False
+    # The worker writes its "Failed to process message" line before Retries has
+    # decided, so a first attempt carries no retry count to read. The
+    # integration's event for the same attempt does, and is kept when the
+    # message is lost, so this copy is never the one worth reading.
+    if (event or {}).get("logger") == _DRAMATIQ_WORKER_LOGGER:
+        return True
     return _dramatiq_retry_pending(event) is not False
 
 

@@ -116,9 +116,11 @@ def _classify_one(exc: BaseException) -> Backend | None:
         psycopg2 = None  # type: ignore[assignment]
 
     if psycopg2 is not None:
-        # "connection already closed": the socket was gone before the query.
+        # "connection already closed": the socket was gone before the query. The
+        # same class says "cursor already closed" for a cursor used after close,
+        # which is a bug in the caller.
         if isinstance(exc, psycopg2.InterfaceError):
-            return "postgres"
+            return "postgres" if "connection already closed" in str(exc).casefold() else None
         if isinstance(exc, psycopg2.OperationalError):
             pgcode = getattr(exc, "pgcode", None)
             if pgcode is None:
