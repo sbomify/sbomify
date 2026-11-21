@@ -16,6 +16,7 @@ from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.exceptions import ProviderAuthError
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec
+from sbomify.apps.integrations.services import notifications
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -46,8 +47,15 @@ def save_connection(
     call has just replaced, so the reconnect ends it: the claim comes off, and
     the run the callback queues can take the connection straight away instead
     of waiting out a lease it would otherwise have just renewed.
+
+    A reconnect to a different account at the provider also drops the
+    notification routes. A Slack channel id names a channel in one Slack
+    workspace only, so every route kept from the old one would fail to post.
     """
-    integration, _created = Integration.objects.update_or_create(
+    previous_account = (
+        Integration.objects.filter(team=team, provider=provider.key).values_list("account", flat=True).first()
+    )
+    integration, created = Integration.objects.update_or_create(
         team=team,
         provider=provider.key,
         defaults={
@@ -56,10 +64,14 @@ def save_connection(
             "refresh_token": token_set.refresh_token,
             "token_expires_at": token_set.expires_at,
             "scopes": list(token_set.scopes),
+            "account": token_set.account or {},
             "connected_by": user,
             "connected_at": timezone.now(),
         },
     )
+
+    if not created and (previous_account or {}).get("id") != (token_set.account or {}).get("id"):
+        integration.routes.all().delete()
 
     if integration.last_sync_status == Integration.SyncStatus.RUNNING:
         integration.last_sync_status = Integration.SyncStatus.FAILED
@@ -89,6 +101,14 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
     ``ProviderUnavailable`` and leaves the connection alone, so the next
     scheduled sync can pick it up.
     """
+    # A token that never expires has nothing to refresh. Slack's bot token is
+    # one, and it comes with no refresh token, so the usual path would revoke a
+    # working connection on its first use for lacking one.
+    if not provider.tokens_expire:
+        if not integration.access_token:
+            raise ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
+        return integration.access_token
+
     if not integration.token_is_stale:
         return integration.access_token
 
@@ -258,7 +278,7 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                 .annotate(control_count=Count("controls"))
                 .order_by("name")
             )
-            if integration is not None
+            if integration is not None and provider.kind == "compliance"
             else []
         )
         cards.append(
@@ -280,6 +300,11 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                     }
                     for catalog in catalogs
                 ],
+                "notifications": (
+                    notifications.routes_panel(integration)
+                    if integration is not None and provider.kind == "notifications"
+                    else None
+                ),
             }
         )
     return cards
@@ -298,6 +323,9 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "tagline": provider.tagline,
         "icon": provider.icon,
         "docs_url": provider.docs_url,
+        "kind": provider.kind,
+        "syncs": provider.syncs,
+        "reads_intro": provider.reads_intro,
         "reads": provider.reads,
         "is_configured": provider.is_configured,
     }
@@ -312,6 +340,7 @@ def _sync_state(integration: Integration | None) -> dict[str, Any] | None:
         "last_sync_status": integration.last_sync_status,
         "last_sync_error": integration.last_sync_error,
         "connected_by": integration.connected_by,
+        "account_name": (integration.account or {}).get("name", ""),
     }
 
 
