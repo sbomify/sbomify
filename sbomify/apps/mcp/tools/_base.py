@@ -90,7 +90,21 @@ def narrow(queryset: Any, search: str | None, *fields: str) -> Any:
     return queryset.filter(condition)
 
 
-def _annotations(*, writes: bool, idempotent: bool | None) -> ToolAnnotations:
+# Words a tool's title spells in capitals. The rest of a title is sentence case.
+_ACRONYMS = {"cra": "CRA", "vex": "VEX", "eol": "EOL", "kpis": "KPIs"}
+
+
+def _title(name: str) -> str:
+    """A tool's display name, read off its name: ``get_cra_step`` is "Get CRA step".
+
+    A client shows this in place of the name, and connector directories refuse
+    a tool without one. Derived, so a new tool cannot ship without it.
+    """
+    title = " ".join(_ACRONYMS.get(word, word) for word in name.split("_"))
+    return title[0].upper() + title[1:]
+
+
+def _annotations(*, title: str, writes: bool, idempotent: bool | None) -> ToolAnnotations:
     """The behaviour hints a client reads before deciding whether to ask first.
 
     A client that knows a tool only reads can run it without interrupting the
@@ -108,6 +122,7 @@ def _annotations(*, writes: bool, idempotent: bool | None) -> ToolAnnotations:
     and the write throttle.
     """
     return ToolAnnotations(
+        title=title,
         readOnlyHint=not writes,
         destructiveHint=False,
         openWorldHint=False,
@@ -223,11 +238,15 @@ def mcp_tool(
         # detail rather than a parameter the agent is asked to supply.
         wrapper.__signature__ = signature.replace(parameters=params[1:])  # type: ignore[attr-defined]
 
+        # The title goes where each generation of client reads it: the tool's
+        # own field, and the annotation older clients and directories look at.
+        title = _title(name)
         mcp.add_tool(
             wrapper,
             name=name,
+            title=title,
             description=inspect.getdoc(fn),
-            annotations=_annotations(writes=writes, idempotent=idempotent),
+            annotations=_annotations(title=title, writes=writes, idempotent=idempotent),
         )
         # Return the wrapper, not the bare fn: if a tool is ever called by
         # name from Python, it must not silently skip authentication, the
