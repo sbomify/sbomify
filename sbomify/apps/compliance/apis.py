@@ -172,7 +172,7 @@ def create_or_get_assessment(request: HttpRequest, product_id: str) -> _Response
     except Product.DoesNotExist:
         return 404, ErrorResponse(error="Product not found", error_code="not_found")
 
-    if not can(request, "product:manage", product):
+    if not can(request, "cra_assessment:manage", product):
         return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
 
     if not check_cra_access(product.team):
