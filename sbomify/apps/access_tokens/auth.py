@@ -8,6 +8,7 @@ from typing import Any
 from django.http import HttpRequest, JsonResponse
 from ninja.security import HttpBearer
 
+from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.core.utils import get_client_ip
 
 from .utils import get_user_and_token_record
@@ -43,7 +44,7 @@ def _reject_invalid_bearer(func: Callable[..., Any]) -> Callable[..., Any]:
         if scheme.casefold() == "bearer":
             token = raw_token.strip()
             if not token or not PersonalAccessTokenAuth().authenticate(request, token):
-                return JsonResponse({"detail": "Unauthorized"}, status=401)
+                return JsonResponse({"detail": "Unauthorized", "error_code": ErrorCode.UNAUTHORIZED.value}, status=401)
         return func(request, *args, **kwargs)
 
     return wrapper

@@ -15,7 +15,7 @@ class TestEnterpriseContactTurnstile:
         client.force_login(sample_user)
         
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": "enterprise"}
         )
         

@@ -1,0 +1,17 @@
+{% comment %}The version select, and the SBOM the panel listens to scans of. Every results refresh swaps it out of band (oob), so after a new upload the rolling latest names the new SBOM, the selection follows it and the listener watches its scan. A pinned version renders the same options again and stays pinned.{% endcomment %}
+<div id="component-vulnerabilities-version-slot"
+     class="contents"
+     data-sbom="{{ vuln_data.selected_version.id|default:'' }}"
+     {% if not vuln_data.query.version %}data-rolling{% endif %}
+     {% if oob %}hx-swap-oob="true"{% endif %}>
+    <c-forms.select size="md" name="version" id="component-vulnerabilities-version" label="Filter by version" data-scope hx-get="{{ vuln_data.base_url }}" hx-trigger="change" hx-include="closest form" hx-params="not page" hx-target="#component-vulnerabilities-table" hx-swap="outerHTML show:none" hx-push-url="true">
+    {% for version in vuln_data.versions %}
+        <option value="{% if not version.is_latest or version.id == vuln_data.query.version %}{{ version.id }}{% endif %}"
+                {% if version.id == vuln_data.query.version or version.is_latest and not vuln_data.query.version %}selected{% endif %}>
+            {{ version.version|default:version.id }}
+            {% if version.is_latest %}(latest){% endif %}
+            · {{ version.created_at|date:"j M Y" }}
+        </option>
+    {% endfor %}
+    </c-forms.select>
+</div>

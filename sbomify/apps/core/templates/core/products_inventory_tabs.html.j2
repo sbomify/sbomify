@@ -1,0 +1,4 @@
+{% comment %}The inventory tab row. Its links are rendered one by one so a results swap can refresh them in place; see c-inventory.tab-link.{% endcomment %}
+<c-navigation.tabs links aria-label="Product inventory" hx-boost="true" hx-target="#inventory-panel" hx-push-url="true">
+{% for tab in inventory.tabs %}<c-inventory.tab-link :tab="tab" />{% endfor %}
+</c-navigation.tabs>

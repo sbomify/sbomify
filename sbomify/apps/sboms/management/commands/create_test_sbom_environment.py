@@ -5,17 +5,17 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 from django.http import HttpRequest
 
 from sbomify.apps.core.authz import Decision
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
-from sbomify.apps.teams.models import Team
+from sbomify.apps.sboms.services.sboms import deleting_sbom_files
+from sbomify.apps.teams.models import Workspace
 
 
 class Command(BaseCommand):
@@ -23,7 +23,7 @@ class Command(BaseCommand):
 
     def __init__(self) -> None:
         super().__init__()
-        self.s3 = S3Client(bucket_type="SBOMS")
+        self.s3 = StorageClient(bucket_type="SBOMS")
         self.sbom_bucket: str = settings.AWS_SBOMS_STORAGE_BUCKET_NAME
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -39,15 +39,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        team_key = options.get("team_key")
+        workspace_key = options.get("team_key")
         clean = options.get("clean")
 
         # Get or create team
-        team: Team
-        if team_key:
-            team = Team.objects.get(key=team_key)
+        team: Workspace
+        if workspace_key:
+            team = Workspace.objects.get(key=workspace_key)
         else:
-            first_team = Team.objects.first()
+            first_team = Workspace.objects.first()
             if not first_team:
                 self.stdout.write(self.style.ERROR("No workspace found. Please create a workspace first."))
                 return
@@ -62,7 +62,7 @@ class Command(BaseCommand):
         with transaction.atomic():
             self.create_test_environment(team)
 
-    def cleanup_test_data(self, team: Team) -> None:
+    def cleanup_test_data(self, team: Workspace) -> None:
         """Clean up existing test data for the workspace"""
         self.stdout.write(f"Cleaning up existing test data for workspace {team.key}...")
 
@@ -76,25 +76,11 @@ class Command(BaseCommand):
         test_sboms = SBOM.objects.filter(component__in=test_components)
         self.stdout.write(f"Found {test_sboms.count()} test SBOMs to delete")
 
-        # Delete SBOM files from S3
-        for sbom in test_sboms:
-            try:
-                # Check if object exists before trying to delete
-                try:
-                    self.s3.s3.Object(self.sbom_bucket, sbom.sbom_filename).load()
-                    self.s3.delete_object(self.sbom_bucket, sbom.sbom_filename)
-                    self.stdout.write(f"Deleted SBOM file from S3: {sbom.sbom_filename}")
-                except ClientError as e:
-                    if e.response["Error"]["Code"] == "404":
-                        self.stdout.write(f"SBOM file not found in S3: {sbom.sbom_filename}")
-                    else:
-                        raise
-            except Exception as e:
-                self.stdout.write(self.style.WARNING(f"Failed to delete SBOM file {sbom.sbom_filename}: {str(e)}"))
-
-        # Delete all test data in the correct order to handle foreign key constraints
+        # Delete all test data in the correct order to handle foreign key constraints.
+        # A stored file another SBOM still uses, in any workspace, stays.
         if test_sboms.exists():
-            test_sboms.delete()
+            with deleting_sbom_files(test_sboms.values_list("sbom_filename", flat=True)):
+                test_sboms.delete()
             self.stdout.write("Deleted test SBOMs from database")
 
         if test_components.exists():
@@ -107,7 +93,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Cleanup completed successfully"))
 
-    def create_test_environment(self, team: Team) -> None:
+    def create_test_environment(self, team: Workspace) -> None:
         """Create the test environment with all necessary data"""
         self.stdout.write("Creating test environment...")
 

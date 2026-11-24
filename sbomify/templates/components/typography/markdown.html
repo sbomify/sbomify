@@ -1,0 +1,20 @@
+{% comment %}
+A note someone wrote in Markdown, on an app page: an advisory's description, a
+timeline update. Pass the raw text as text (:text="advisory.description"); the
+component renders it with strict_markdown_flat, so callers never handle HTML
+and the text is escaped exactly once.
+
+Headings come out as bold paragraphs, because the note sits inside a page with
+its own outline. Spacing is a top margin on each block after the first, never a
+margin on both sides, so it adds up the same whether or not the parent collapses
+margins (a line-clamped parent does not). Preflight has already zeroed the
+margins and list styles of every element the renderer emits, so nothing here
+restates them. muted sets the note in the secondary ink, for supporting text.
+
+The trust centre has its own, c-branded.markdown, because the legacy public
+stylesheets need different class names.
+{% endcomment %}
+{% load markdown_tags %}
+<c-vars text muted class />
+<div class="min-w-0 [overflow-wrap:anywhere] text-sm leading-relaxed {% if muted %}text-text-muted{% else %}text-text{% endif %} [&>*+*]:mt-2 [&_strong]:font-semibold [&_strong]:text-text [&_em]:italic [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-6 [&_li_ul]:list-[circle] [&_li>:is(ul,ol)]:mt-1 [&_code]:rounded-[var(--radius-sm)] [&_code]:bg-surface-hover [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.8125rem] [&_code]:text-text [&_pre]:overflow-x-auto [&_pre]:rounded-[var(--radius-md)] [&_pre]:bg-surface-hover [&_pre]:px-3 [&_pre]:py-2.5 [&_pre_code]:bg-transparent [&_pre_code]:px-0 [&_blockquote]:border-l-2 [&_blockquote]:border-solid [&_blockquote]:border-border [&_blockquote]:pl-3 [&_hr]:border-border{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ text|strict_markdown_flat }}</div>

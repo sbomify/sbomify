@@ -8,14 +8,6 @@ mock.module('../../core/js/alpine-init', () => ({
     }
 }))
 
-mock.module('../../core/js/components/pagination-controls', () => ({
-    createPaginationData: mock().mockReturnValue({
-        currentPage: 1,
-        pageSize: 10,
-        totalItems: 0
-    })
-}))
-
 interface Sbom {
     id: string
     name: string

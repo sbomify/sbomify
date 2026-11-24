@@ -35,7 +35,7 @@ from sbomify.logging import getLogger
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 log = getLogger(__name__)
 
@@ -127,7 +127,7 @@ def parse_tei(tei: str) -> tuple[str, str, str]:
     return match.group(1).lower(), match.group(2), match.group(3)
 
 
-def _resolve_hash_tei(team: Team, hash_identifier: str) -> list[Release]:
+def _resolve_hash_tei(team: Workspace, hash_identifier: str) -> list[Release]:
     """Resolve a hash TEI to product releases by searching artifact content hashes.
 
     Parses the hash identifier as <algorithm>:<value>, queries SBOM and Document
@@ -227,7 +227,7 @@ def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
     return [r for r in releases if not r.is_latest or r.product_id not in products_with_versioned]
 
 
-def tea_tei_mapper(team: Team, tei: str) -> list[Release]:
+def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
     """
     Parse TEI URN and return matching product releases.
 
@@ -335,7 +335,7 @@ def tea_identifier_mapper(product: Product) -> list[TEAIdentifier]:
     return _build_identifier_list(product.identifiers.all())
 
 
-def build_product_tei_urn(product_uuid: uuid.UUID, team: Team, *, is_public: bool) -> str | None:
+def build_product_tei_urn(product_uuid: uuid.UUID, team: Workspace, *, is_public: bool) -> str | None:
     """
     Build a TEI URN for a product.
 
@@ -363,7 +363,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     delegates to :func:`build_product_tei_urn`.  Returns ``None`` if the
     team or product is not found, or TEI conditions are not met.
     """
-    from sbomify.apps.teams.models import Team as TeamModel
+    from sbomify.apps.teams.models import Workspace as TeamModel
 
     if team_id is None:
         return None
@@ -393,7 +393,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
 
 
 def build_tea_server_url(
-    team: Team,
+    team: Workspace,
     workspace_key: str | None = None,
     request: HttpRequest | None = None,
 ) -> str:

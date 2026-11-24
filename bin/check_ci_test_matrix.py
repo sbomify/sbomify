@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Check that CI runs every app's tests.
+"""Check that CI still runs every test exactly once.
 
-The ``tests`` job in ci-cd.yml runs an explicit allowlist of paths, and its runner
-maps pytest's "collected nothing" exit code to success. Between those two, an app
-nobody added to the matrix and a matrix path that no longer resolves both look
-exactly like a shard that passed. This notices instead.
+The ``tests`` job used to run an explicit allowlist of paths, so the thing worth
+checking was whether a new app had been added to it. It now runs pytest over the
+whole ``sbomify`` package, which makes that class of hole structurally
+impossible — but only for as long as the invocation keeps that shape. And the
+``e2e-tests`` job traded one serial job for a pytest-split matrix, which brings a
+new way to lose tests silently: if ``--splits`` and the job matrix disagree, the
+surplus groups collect nothing (which pytest-split reports as a pass) and the
+tests that should have been in them never run at all.
+
+So this checks the two properties the jobs now depend on:
+
+* ``tests`` collects from the package root and excludes only the e2e directory,
+* ``e2e-tests`` shards exactly that directory, with ``--splits`` equal to the
+  number of matrix groups, and the groups numbered ``1..splits``.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,14 +30,23 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci-cd.yml"
 APPS_DIR = REPO_ROOT / "sbomify" / "apps"
+E2E_DIR = "sbomify/apps/core/tests/e2e"
 # Where pytest finds an app's tests, per the python_files setting in pyproject.toml.
 TEST_LOCATIONS = ("tests", "tests.py")
 
 
-def _test_groups() -> list[dict[str, str]]:
-    workflow: dict[str, Any] = yaml.safe_load(WORKFLOW.read_text())
-    groups: list[dict[str, str]] = workflow["jobs"]["tests"]["strategy"]["matrix"]["test-group"]
-    return groups
+def _jobs() -> dict[str, Any]:
+    jobs: dict[str, Any] = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+    return jobs
+
+
+def _pytest_command(job: dict[str, Any], step_prefix: str) -> str:
+    """The `run:` body of the step whose name starts with step_prefix."""
+    for step in job["steps"]:
+        if step.get("name", "").startswith(step_prefix):
+            run: str = step["run"]
+            return run
+    raise SystemExit(f"no step named {step_prefix!r} in {WORKFLOW.relative_to(REPO_ROOT)}")
 
 
 def _apps_with_tests() -> list[str]:
@@ -39,39 +60,78 @@ def _apps_with_tests() -> list[str]:
 
 
 def main() -> int:
-    groups = _test_groups()
-    covered = {group["path"] for group in groups}
-    apps = _apps_with_tests()
+    jobs = _jobs()
+    problems: list[str] = []
 
-    # Checking the app prefix alone is not enough: an app with both tests.py and
-    # a tests/ directory would pass on a shard covering only one of them, and the
-    # other would never run. Each location has to be reachable from some path.
-    problems = []
-    for app in apps:
-        for location in TEST_LOCATIONS:
-            relative = f"sbomify/apps/{app}/{location}"
-            if not (APPS_DIR / app / location).exists():
-                continue
-            if not any(relative.startswith(path.rstrip("/")) for path in covered):
-                problems.append(f"  {app}: {location} is not run by any shard")
-    # A stale path silently collects nothing; a stale ignore silently stops
-    # excluding, which is how e2e tests would leak into the Core shard.
-    problems += [
-        f"  {group['name']}: {key} {value!r} does not exist"
-        for group in groups
-        for key in ("path", "ignore")
-        if (value := group.get(key)) and not (REPO_ROOT / value).exists()
-    ]
+    # --- the `tests` job collects every app ------------------------------
+    unit = _pytest_command(jobs["tests"], "Run tests")
+    # Bare `sbomify` as the target is what makes "a new app is covered
+    # automatically" true; an allowlist of paths would silently drop one.
+    if not re.search(r"^\s*sbomify\s*(?:\||$)", unit, re.MULTILINE):
+        problems.append(
+            "  tests: the pytest target is no longer the bare `sbomify` package, "
+            "so a newly added app may not be collected"
+        )
+    ignored = set(re.findall(r"--ignore=(\S+)", unit))
+    if ignored != {E2E_DIR}:
+        problems.append(f"  tests: expected to ignore exactly {{{E2E_DIR}}}, ignores {ignored or '{}'}")
+    if "-eq 5" in unit:
+        problems.append("  tests: pytest's 'collected nothing' exit code is being mapped to success again")
+
+    # --- the `e2e-tests` matrix and --splits agree -----------------------
+    e2e_job = jobs["e2e-tests"]
+    groups = e2e_job["strategy"]["matrix"]["group"]
+    e2e = _pytest_command(e2e_job, "Run E2E Tests")
+
+    splits = re.search(r"--splits\s+(\d+)", e2e)
+    if not splits:
+        problems.append("  e2e-tests: no --splits in the pytest invocation")
+    elif int(splits.group(1)) != len(groups):
+        problems.append(
+            f"  e2e-tests: --splits {splits.group(1)} but {len(groups)} matrix groups — "
+            f"{abs(int(splits.group(1)) - len(groups))} group(s) would run the wrong tests or none"
+        )
+    if sorted(groups) != list(range(1, len(groups) + 1)):
+        problems.append(f"  e2e-tests: matrix groups must be 1..{len(groups)}, got {groups}")
+    # --group has to come from the matrix. A literal there satisfies every other
+    # check in this file -- the splits still match the group count, the groups
+    # are still 1..N -- while every job in the matrix runs that one group and
+    # the rest of the suite is never collected by anyone.
+    if not re.search(r"--group\s+\$\{\{\s*matrix\.group\s*\}\}", e2e):
+        problems.append(
+            "  e2e-tests: --group is not wired to ${{ matrix.group }}, so every matrix job would run the same group"
+        )
+    # Substring-matching E2E_DIR here would accept a narrowed target: a single
+    # file under it, say, contains the directory as a prefix, and five of the six
+    # groups would then collect nothing. Require it to be the whole target.
+    if not re.search(rf"^\s*{re.escape(E2E_DIR)}/?\s*$", e2e, re.MULTILINE):
+        problems.append(f"  e2e-tests: the pytest target is not exactly {E2E_DIR}, so part of the suite would not run")
+
+    durations = re.search(r"--durations-path\s+(\S+)", e2e)
+    if not durations:
+        problems.append("  e2e-tests: no --durations-path, so the shards would split by test count only")
+    else:
+        path = REPO_ROOT / durations.group(1)
+        if not path.exists():
+            problems.append(f"  e2e-tests: durations file {durations.group(1)} does not exist")
+        else:
+            try:
+                json.loads(path.read_text())
+            except json.JSONDecodeError as exc:
+                problems.append(f"  e2e-tests: durations file {durations.group(1)} is not valid JSON ({exc})")
 
     if problems:
         sys.stderr.write(
-            "CI test matrix is out of step with the apps:\n\n"
+            "CI would no longer run every test exactly once:\n\n"
             + "\n".join(problems)
-            + f"\n\nFix by editing jobs.tests.strategy.matrix.test-group in {WORKFLOW.relative_to(REPO_ROOT)}.\n"
+            + f"\n\nFix by editing jobs.tests / jobs.e2e-tests in {WORKFLOW.relative_to(REPO_ROOT)}.\n"
         )
         return 1
 
-    sys.stdout.write(f"CI runs the tests of all {len(apps)} apps across {len(groups)} shards.\n")
+    apps = _apps_with_tests()
+    sys.stdout.write(
+        f"CI collects all {len(apps)} apps' tests in one job and shards {E2E_DIR} across {len(groups)} groups.\n"
+    )
     return 0
 
 

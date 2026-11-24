@@ -18,8 +18,8 @@ from sbomify.apps.sboms.models import SBOM
 def _release_with_components(team, *, is_public: bool):
     product = Product.objects.create(name="P", team=team, is_public=is_public)
     release = Release.objects.create(product=product, name="v1")
-    c1 = Component.objects.create(name="c1", team=team)
-    c2 = Component.objects.create(name="c2", team=team)
+    c1 = Component.objects.create(name="c1", team=team, visibility=Component.Visibility.PUBLIC)
+    c2 = Component.objects.create(name="c2", team=team, visibility=Component.Visibility.PUBLIC)
     return product, release, c1, c2
 
 
@@ -45,7 +45,7 @@ def _doc(ref: str) -> bytes:
 
 
 def _mock_s3(mocker, docs_by_filename: dict[str, bytes]):
-    s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+    s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
     s3.return_value.get_sbom_data.side_effect = lambda filename: docs_by_filename[filename]
     return s3
 
@@ -131,7 +131,7 @@ def test_build_release_cbom_skips_missing_s3_object(sample_team_with_owner_membe
     team = sample_team_with_owner_member.team
     _product, release, c1, _c2 = _release_with_components(team, is_public=True)
     ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c1, "gone.cbom.json"))
-    s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+    s3 = mocker.patch("sbomify.apps.core.object_store.StorageClient")
     s3.return_value.get_sbom_data.side_effect = ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
 
     assert build_release_cbom(release) is None
@@ -211,7 +211,7 @@ def _product_with_cbom_component(team, *, is_public: bool):
     """A product whose component carries a CBOM, linked so the rolling latest
     release picks the artifact up when the download endpoint resolves it."""
     product = Product.objects.create(name="P", team=team, is_public=is_public)
-    component = Component.objects.create(name="c1", team=team)
+    component = Component.objects.create(name="c1", team=team, visibility=Component.Visibility.PUBLIC)
     product.components.add(component)
     sbom = _cbom_sbom(component, "c1.cbom.json")
     return product, sbom

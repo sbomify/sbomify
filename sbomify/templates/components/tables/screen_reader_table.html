@@ -1,0 +1,17 @@
+{% comment %}
+A table only screen readers reach, for the numbers behind a chart. A canvas is
+a picture: its aria-label can name the chart, but nothing it plots reaches a
+screen reader. Put this beside the chart and build its rows from the data the
+chart draws, so the two cannot disagree.
+
+caption names the table. The slot holds the thead and tbody, with a scope on
+every th. The hiding class sits on a wrapper, not the table, because overflow
+does not reliably clip a table box.
+{% endcomment %}
+<c-vars caption />
+<div class="sr-only" {{ attrs }}>
+    <table>
+        {% if caption %}<caption>{{ caption }}</caption>{% endif %}
+        {{ slot }}
+    </table>
+</div>

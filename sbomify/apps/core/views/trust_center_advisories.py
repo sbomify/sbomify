@@ -13,16 +13,16 @@ list and the detail page cannot disagree about a given advisory.
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
-from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponsePermanentRedirect
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.url_utils import (
-    build_custom_domain_url,
+    custom_domain_redirect,
+    get_public_path,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
@@ -33,7 +33,7 @@ from sbomify.apps.security_advisories.services.trust_center import (
     parse_advisory_query,
 )
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 def _querystrings(request: HttpRequest, query: Any) -> dict[str, str]:
@@ -50,31 +50,12 @@ def _querystrings(request: HttpRequest, query: Any) -> dict[str, str]:
     return {"without_page": f"{encoded}&" if encoded else ""}
 
 
-def _public_hosts_for(team: Team) -> set[str]:
-    """Every host this workspace may legitimately be redirected to.
-
-    Mirrors the two branches of ``build_custom_domain_url``: a validated custom
-    domain, and the trust-center subdomain. Both are derived from the team rather
-    than from anything on the request, so the set cannot be widened by a visitor.
-    """
-    hosts: set[str] = set()
-    custom_domain = getattr(team, "custom_domain", "")
-    if custom_domain and getattr(team, "custom_domain_validated", False):
-        hosts.add(custom_domain.lower())
-
-    slug = getattr(team, "slug", None)
-    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
-    if slug and trust_center_domain:
-        hosts.add(f"{slug}.{trust_center_domain}".lower())
-    return hosts
-
-
 class _TrustCenterAdvisoryViewBase(View):
     """Shared workspace resolution and branding for the two advisory pages."""
 
-    def _resolve(self, request: HttpRequest, workspace_key: str | None) -> tuple[Team | None, HttpResponse | None]:
+    def _resolve(self, request: HttpRequest, workspace_key: str | None) -> tuple[Workspace | None, HttpResponse | None]:
         status_code, team_or_error = fetch_public_team(request, workspace_key)
-        if status_code != 200 or not isinstance(team_or_error, Team):
+        if status_code != 200 or not isinstance(team_or_error, Workspace):
             # A fixed string rather than the resolver's dict value: every failure
             # path it has returns this same message, so echoing the lookup back
             # gained nothing and put request-derived data on an error page for a
@@ -82,33 +63,13 @@ class _TrustCenterAdvisoryViewBase(View):
             return None, error_response(request, HttpResponseNotFound("Workspace not found"))
         return team_or_error, None
 
-    def _redirect_if_needed(self, request: HttpRequest, team: Team, path: str) -> HttpResponse | None:
-        """Send the reader to this workspace's own public domain, or nowhere.
-
-        The redirect host comes from ``team.custom_domain``, which a workspace
-        owner types in — a stored value that reaches a ``Location`` header. It is
-        meant to be constrained already: ``build_custom_domain_url`` only uses a
-        custom domain once ``custom_domain_validated`` is set. But that guard
-        lives in another module, and "the URL we are about to send you to is
-        safe because of a flag checked elsewhere" is exactly the kind of
-        reasoning that rots when one of the two sides is edited.
-
-        So the built URL is checked here against the hosts this team is actually
-        entitled to, recomputed from the same team. A target that is not one of
-        them is not redirected to at all, rather than trusted because of where it
-        came from.
-        """
+    def _redirect_if_needed(self, request: HttpRequest, team: Workspace, path: str) -> HttpResponse | None:
+        """Send the reader to this workspace's verified public domain when needed."""
         if not (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             return None
+        return custom_domain_redirect(team, path, request.is_secure())
 
-        target = build_custom_domain_url(team, path, request.is_secure())
-        if not target:
-            return None
-        if (urlparse(target).hostname or "").lower() not in _public_hosts_for(team):
-            return None
-        return HttpResponseRedirect(target)
-
-    def _base_context(self, request: HttpRequest, team: Team) -> dict[str, Any]:
+    def _base_context(self, request: HttpRequest, team: Workspace) -> dict[str, Any]:
         return {
             "brand": build_branding_context(team),
             "workspace": {"name": team.display_name, "key": team.key},
@@ -176,6 +137,24 @@ class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
         result = get_public_advisory(request, team, advisory_id)
         if not result.ok or result.value is None:
             return error_response(request, HttpResponseNotFound("Advisory not found"))
+
+        # The tracking id (ACME-SA-2026-0001) is the advisory's public address.
+        # The view still answers to the primary key so links shared before that
+        # was true keep working, but it sends them on rather than serving a
+        # second URL for the same page. Only reached for an advisory the reader
+        # may see, so the redirect confirms nothing a 404 was hiding. The target
+        # is built from the resolved workspace's key, not the raw URL segment, so
+        # nothing request-supplied ends up in the Location header.
+        canonical_id = result.value["id"]
+        if advisory_id != canonical_id:
+            return HttpResponsePermanentRedirect(
+                get_public_path(
+                    "advisory",
+                    quote(canonical_id, safe=""),
+                    is_custom_domain=getattr(request, "is_custom_domain", False),
+                    workspace_key=team.key if workspace_key else None,
+                )
+            )
 
         return render(
             request,

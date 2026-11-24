@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from typing import cast
+from typing import Any, cast
 from urllib.parse import quote
 
 from django.conf import settings
@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -23,19 +23,27 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import get_client_ip
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace, get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.services.access_emails import (
+    notify_access_approved,
+    notify_access_rejected,
+    notify_access_revoked,
+    notify_admins_of_access_request,
+)
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.queries import invitation_email
 from sbomify.apps.teams.utils import (
-    can_add_user_to_team,
+    find_invitation_by_token,
     switch_active_workspace,
     update_user_teams_session,
+    user_seat,
 )
 
 # Anyone already in the workspace, internal or external — they do not need to
@@ -45,7 +53,7 @@ ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 logger = logging.getLogger(__name__)
 
 
-def user_has_signed_current_nda(user: User, team: Team) -> bool:
+def user_has_signed_current_nda(user: User, team: Workspace) -> bool:
     """Check if user has signed the current company-wide NDA version.
 
     DEPRECATED: Use _user_has_signed_current_nda from core.services.access_control instead.
@@ -65,7 +73,7 @@ def user_has_signed_current_nda(user: User, team: Team) -> bool:
     return result
 
 
-def _invalidate_access_requests_cache(team: Team) -> None:
+def _invalidate_access_requests_cache(team: Workspace) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
 
@@ -74,7 +82,34 @@ def _invalidate_access_requests_cache(team: Team) -> None:
         cache.delete(cache_key)
 
 
-def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
+# What a moderation action leaves the request as, in the access_request_updated
+# message. A cleared rejection deletes the row, so the requester may ask again.
+ACTION_STATUS = {
+    "approve": "approved",
+    "reject": "rejected",
+    "revoke": "revoked",
+    "clear_rejection_done": "cleared",
+}
+
+
+def _broadcast_access_request_updated(team: Workspace, request_id: str, user_id: str, status: str) -> None:
+    """Tell the workspace's open pages an access request changed, once it is committed."""
+    if not team.key:
+        return
+    workspace_key = team.key
+    data = {"access_request_id": request_id, "user_id": user_id, "status": status, "action": status}
+
+    def _send() -> None:
+        broadcast_to_workspace(workspace_key=workspace_key, message_type="access_request_updated", data=data)
+        # The requester is not a member, so the workspace feed never reaches
+        # them; their own channel is how their open page learns the verdict.
+        if status != "pending":
+            broadcast_to_user(user_id, "access_request_updated", data)
+
+    transaction.on_commit(_send)
+
+
+def _get_pending_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get pending access requests for a team, filtering by NDA signature if required.
 
     Args:
@@ -101,7 +136,7 @@ def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
     return base_queryset
 
 
-def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def _get_approved_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get approved access requests for a team.
 
     Args:
@@ -118,7 +153,7 @@ def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
     )
 
 
-def _get_rejected_access_requests(team: Team) -> QuerySet[AccessRequest]:
+def _get_rejected_access_requests(team: Workspace) -> QuerySet[AccessRequest]:
     """Get rejected access requests for a team.
 
     Args:
@@ -160,7 +195,7 @@ def _annotate_nda_signature_status(requests: list[AccessRequest], company_nda: D
             req.has_current_nda_signature = True  # type: ignore[attr-defined]
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Workspace) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     # Check if there are any pending requests left
     pending_requests = _get_pending_access_requests(team)
@@ -175,77 +210,21 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         request.session.save()
 
 
-def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
-    """Send email notification to all owners and admins about a new access request."""
-    try:
-        # Get all owners and admins of the team
-        admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user")
-
-        if not admin_members.exists():
-            logger.warning(f"No admins found for team {team.key} to notify about access request {access_request.id}")
-            return
-
-        # Build email context
-        requester_name = (
-            f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
-        )
-        requester_email = access_request.user.email
-        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
-        review_link = f"{get_base_url()}{review_url}"
-
-        # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
-
-        # Send email to each admin/owner
-        for admin_member in admin_members:
-            try:
-                email_context = {
-                    "admin_user": admin_member.user,
-                    "team": team,
-                    "requester_name": requester_name,
-                    "requester_email": requester_email,
-                    "requested_at": access_request.requested_at.strftime("%B %d, %Y at %I:%M %p"),
-                    "requires_nda": requires_nda,
-                    "nda_signed": nda_signed,
-                    "review_link": review_link,
-                    "base_url": get_base_url(),
-                }
-
-                email = EmailMultiAlternatives(
-                    subject=f"New access request for {team.name}",
-                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[admin_member.user.email],
-                    # Reply-to the requester so an admin's reply reaches them, not our own inbox.
-                    reply_to=[requester_email or "hello@sbomify.com"],
-                )
-                email.attach_alternative(
-                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
-                    "text/html",
-                )
-                email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
-
-    except Exception as e:
-        logger.error(f"Error notifying admins of access request {access_request.id}: {e}")
-
-
 @method_decorator(never_cache, name="dispatch")
 class AccessRequestView(View):
     """View for creating access requests (supports both authenticated and unauthenticated users)."""
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Show access request form."""
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # Redirect unauthenticated users to login with redirect back to this page
         if not request.user.is_authenticated:
             login_url = reverse("core:keycloak_login")
-            redirect_url = reverse("documents:request_access", kwargs={"team_key": team_key})
+            redirect_url = reverse("documents:request_access", kwargs={"workspace_key": workspace_key})
             return redirect(f"{login_url}?next={quote(redirect_url)}")
 
         # Check if user already has access
@@ -254,7 +233,7 @@ class AccessRequestView(View):
                 member = Member.objects.get(team=team, user=request.user)
                 if member.role in ANY_MEMBER_ROLES:
                     messages.info(request, "You already have access to gated components in this workspace.")
-                    return redirect("core:workspace_public", workspace_key=team_key)
+                    return redirect("core:workspace_public", workspace_key=workspace_key)
             except Member.DoesNotExist:
                 # User is not a member, continue to check for access request
                 pass
@@ -265,7 +244,7 @@ class AccessRequestView(View):
             ).first()
             if approved_request:
                 messages.info(request, "You already have access to gated components in this workspace.")
-                return redirect("core:workspace_public", workspace_key=team_key)
+                return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # Check if there's a pending request
         if request.user.is_authenticated:
@@ -274,7 +253,13 @@ class AccessRequestView(View):
             ).first()
             if pending_request:
                 messages.info(request, "Your access request is pending approval.")
-                return redirect("core:workspace_public", workspace_key=team_key)
+                return redirect("core:workspace_public", workspace_key=workspace_key)
+
+        # A requester whose last request was rejected otherwise lands on a blank
+        # form with no sign anything happened; say so, and let them re-request.
+        was_rejected = AccessRequest.objects.filter(
+            team=team, user=request.user, status=AccessRequest.Status.REJECTED
+        ).exists()
 
         # Always check for company-wide NDA - if it exists, always require signing
         company_nda = team.get_company_nda_document()
@@ -291,55 +276,32 @@ class AccessRequestView(View):
                 "brand": brand,
                 "company_nda": company_nda,
                 "requires_nda": requires_nda,
+                "was_rejected": was_rejected,
                 "user": request.user if request.user.is_authenticated else None,
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Create access request."""
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
-        # Get or create user
-        UserModel = get_user_model()
-        user = None
-
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            email = request.POST.get("email")
-            if not email:
-                messages.error(request, "Email is required")
-                return redirect("documents:request_access", team_key=team_key)
-
-            name = request.POST.get("name", "")
-
-            # Check if user already exists
-            try:
-                user = UserModel.objects.get(email=email)
-            except UserModel.DoesNotExist:
-                # Create new user
-                username = email.split("@")[0]
-                base_username = username
-                counter = 1
-                while UserModel.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                user = UserModel.objects.create_user(
-                    username=username,
-                    email=email,
-                    first_name=name or "",
-                )
+        # The same rule as GET: the requester signs in and asks for themselves.
+        # A posted email address is not an identity.
+        if not request.user.is_authenticated:
+            login_url = reverse("core:keycloak_login")
+            redirect_url = reverse("documents:request_access", kwargs={"workspace_key": workspace_key})
+            return redirect(f"{login_url}?next={quote(redirect_url)}")
+        user = request.user
 
         # Check if user already has access
         try:
             member = Member.objects.get(team=team, user=user)
             if member.role in ANY_MEMBER_ROLES:
                 messages.info(request, "You already have access to gated components in this workspace.")
-                return redirect("core:workspace_public", workspace_key=team_key)
+                return redirect("core:workspace_public", workspace_key=workspace_key)
         except Member.DoesNotExist:
             # User is not a member, continue to check for access request
             pass
@@ -350,7 +312,7 @@ class AccessRequestView(View):
         ).first()
         if approved_request:
             messages.info(request, "You already have access to gated components in this workspace.")
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # Always check for company-wide NDA - if it exists, always require signing
         company_nda = team.get_company_nda_document()
@@ -366,10 +328,10 @@ class AccessRequestView(View):
                 has_signed = NDASignature.objects.live().filter(access_request=pending_request).exists()
                 if not has_signed:
                     # Request exists but NDA not signed - redirect to sign NDA page
-                    return redirect("documents:sign_nda", team_key=team_key, request_id=pending_request.id)
+                    return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=pending_request.id)
             # Request is complete (either no NDA required or NDA already signed)
             messages.info(request, "Your access request is already pending approval.")
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
         request_state_changed = False
@@ -382,21 +344,7 @@ class AccessRequestView(View):
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Rejection/revocation superseded the signature already; if a
-                    # live one survives (edge case), supersede it here so the
-                    # fresh request must sign again. Never deleted — the rows
-                    # are the record of what was accepted.
-                    existing_request.nda_signatures.live().update(superseded_at=timezone.now())
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
@@ -446,31 +394,38 @@ class AccessRequestView(View):
                     request,
                     "document:access_requested",
                     {"requires_nda": requires_nda},
-                    team_key=team_key,
+                    workspace_key=workspace_key,
                 )
             )
 
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
         if not requires_nda:
-            _notify_admins_of_access_request(access_request, team, requires_nda=False)
+            notify_admins_of_access_request(access_request, team, requires_nda=False)
+            _broadcast_access_request_updated(team, str(access_request.id), str(access_request.user_id), "pending")
             messages.success(request, "Access request submitted. You will be notified when it's approved.")
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # NDA is required - redirect to signing page
         # Request will remain pending until NDA is signed
-        return redirect("documents:sign_nda", team_key=team_key, request_id=access_request.id)
+        return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=access_request.id)
 
 
 @method_decorator(never_cache, name="dispatch")
 class NDASigningView(View):
     """View for signing NDA as part of access request."""
 
-    def get(self, request: HttpRequest, team_key: str, request_id: str) -> HttpResponse:
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        # Only the requester reads and signs their NDA, so they sign in first.
+        if not request.user.is_authenticated:
+            return redirect(f"{reverse('core:keycloak_login')}?next={quote(request.get_full_path())}")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request: HttpRequest, workspace_key: str, request_id: str) -> HttpResponse:
         """Show NDA document for signing."""
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         try:
@@ -479,20 +434,12 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="Access request not found"))
 
         # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
+        if access_request.user != request.user:
+            return error_response(request, HttpResponse(status=403, content="Forbidden"))
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
-            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
-            if not request.user.is_authenticated:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
@@ -505,7 +452,7 @@ class NDASigningView(View):
             return_url = request.session.get("nda_signing_return_url")
             if return_url:
                 return redirect(return_url)
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # Build branding context for the template
         brand = build_branding_context(team)
@@ -521,11 +468,11 @@ class NDASigningView(View):
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str, request_id: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str, request_id: str) -> HttpResponse:
         """Process NDA signature."""
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         try:
@@ -534,20 +481,12 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="Access request not found"))
 
         # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
+        if access_request.user != request.user:
+            return error_response(request, HttpResponse(status=403, content="Forbidden"))
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
         if not company_nda:
-            # For unauthenticated users, return 403 instead of 404 to avoid information disclosure
-            if not request.user.is_authenticated:
-                return error_response(request, HttpResponse(status=403, content="Forbidden"))
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
@@ -560,7 +499,7 @@ class NDASigningView(View):
             return_url = request.session.get("nda_signing_return_url")
             if return_url:
                 return redirect(return_url)
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         # Get form data
         signed_name = request.POST.get("signed_name", "").strip()
@@ -568,19 +507,19 @@ class NDASigningView(View):
 
         if not signed_name:
             messages.error(request, "Name is required")
-            return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+            return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=request_id)
 
         if not consent:
             messages.error(request, "You must consent to the NDA terms")
-            return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+            return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=request_id)
 
         try:
             # Get NDA document content and calculate hash
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
             if not document_data:
                 messages.error(request, "NDA document not found in storage")
-                return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+                return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=request_id)
             nda_content_hash = hashlib.sha256(document_data).hexdigest()
 
             # Verify document hasn't been modified (compare with stored content_hash)
@@ -592,7 +531,7 @@ class NDASigningView(View):
                     f"NDA document {company_nda.id} content hash mismatch during signing. "
                     f"Expected: {company_nda.content_hash}, Got: {nda_content_hash}"
                 )
-                return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+                return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=request_id)
 
             # Wrap NDA signing and related operations in a transaction
             with transaction.atomic():
@@ -614,14 +553,14 @@ class NDASigningView(View):
                 access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
                 # Inside the atomic block so transaction.on_commit deferral applies.
-                transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
+                transaction.on_commit(lambda: capture_for_request(request, "nda:signed", workspace_key=workspace_key))
 
             # Check if there's a pending invitation for this user (from trust center invite)
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
             if pending_invitation_token:
                 current_user = cast(User, request.user)
-                invitation = Invitation.objects.filter(token=pending_invitation_token, team=team).first()
-                if invitation and (current_user.email or "").lower() == invitation.email.lower():
+                invitation = find_invitation_by_token(pending_invitation_token, team=team)
+                if invitation and invitation_email(current_user).lower() == invitation.email.lower():
                     # Get inviter from cache if available
                     cache_key = f"invitation_inviter:{invitation.token}"
                     inviter_id = cache.get(cache_key)
@@ -631,76 +570,83 @@ class NDASigningView(View):
                     # Check if user is already a member
                     if not Member.objects.filter(team=team, user=current_user).exists():
                         # Complete invitation acceptance
-                        can_add, error_message = can_add_user_to_team(team, is_joining_via_invite=True)
-                        if can_add:
-                            has_default_team = Member.objects.filter(user=current_user, is_default_team=True).exists()
-                            Member.objects.create(
-                                team=team,
-                                user=current_user,
-                                role=invitation.role,
-                                is_default_team=not has_default_team,
-                            )
-                            update_user_teams_session(request, current_user)
-                            switch_active_workspace(request, team, invitation.role)
-
-                            # NDA-gated invitations bypass both accept_invite and the
-                            # login auto-accept signal; without this capture the
-                            # collaboration funnel undercounts invited users who had
-                            # to sign an NDA before joining.
-                            invitation_role = invitation.role
-                            transaction.on_commit(
-                                lambda: capture_for_request(
-                                    request,
-                                    "team:member_invitation_accepted",
-                                    {"role": invitation_role},
-                                    team_key=team_key,
+                        # Counted and taken under one lock, so an NDA signed at the same
+                        # moment as another acceptance cannot take the same last seat twice.
+                        with user_seat(team, is_joining_via_invite=True) as (can_add, error_message):
+                            if can_add:
+                                has_default_team = Member.objects.filter(
+                                    user=current_user, is_default_team=True
+                                ).exists()
+                                joined_role = invitation.granted_role
+                                Member.objects.create(
+                                    team=team,
+                                    user=current_user,
+                                    role=joined_role,
+                                    is_default_team=not has_default_team,
                                 )
-                            )
+                                update_user_teams_session(request, current_user)
+                                switch_active_workspace(request, team, joined_role)
 
-                            invitation.delete()
-
-                            # Auto-approve the access request since user has been invited and is now a member
-                            was_pending = access_request.status == AccessRequest.Status.PENDING
-                            access_request.status = AccessRequest.Status.APPROVED
-                            access_request.decided_at = timezone.now()
-                            # Set decided_by to the inviter if available, otherwise leave as None
-                            if inviter_id:
-                                try:
-                                    inviter = get_user_model().objects.get(id=inviter_id)
-                                    access_request.decided_by = inviter
-                                except get_user_model().DoesNotExist:
-                                    # Inviter user not found, continue without setting decided_by
-                                    pass
-                            access_request.save()
-
-                            # Only emit document:access_approved when this is genuinely a
-                            # trust-center invitation (signalled by the `invitation_inviter:`
-                            # cache key set in documents/views/access_requests.py at invite
-                            # send time). Regular workspace invites with a company NDA also
-                            # reach this branch and approve a freshly-created plumbing
-                            # AccessRequest; counting them would inflate the funnel.
-                            if was_pending and inviter_id:
+                                # NDA-gated invitations bypass both accept_invite and the
+                                # login auto-accept signal; without this capture the
+                                # collaboration funnel undercounts invited users who had
+                                # to sign an NDA before joining.
+                                invitation_role = joined_role
                                 transaction.on_commit(
-                                    lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
+                                    lambda: capture_for_request(
+                                        request,
+                                        "team:member_invitation_accepted",
+                                        {"role": invitation_role},
+                                        workspace_key=workspace_key,
+                                    )
                                 )
 
-                            # Invalidate cache after transaction commits
-                            transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+                                invitation.delete()
 
-                            messages.success(
-                                request,
-                                f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
-                            )
+                                # Auto-approve the access request since user has been invited and is now a member
+                                was_pending = access_request.status == AccessRequest.Status.PENDING
+                                access_request.status = AccessRequest.Status.APPROVED
+                                access_request.decided_at = timezone.now()
+                                # Set decided_by to the inviter if available, otherwise leave as None
+                                if inviter_id:
+                                    try:
+                                        inviter = get_user_model().objects.get(id=inviter_id)
+                                        access_request.decided_by = inviter
+                                    except get_user_model().DoesNotExist:
+                                        # Inviter user not found, continue without setting decided_by
+                                        pass
+                                access_request.save()
 
-                            # Check for return URL in session
-                            return_url = request.session.pop("nda_signing_return_url", None)
-                            if return_url:
-                                return redirect(return_url)
+                                # Only emit document:access_approved when this is genuinely a
+                                # trust-center invitation (signalled by the `invitation_inviter:`
+                                # cache key set in documents/views/access_requests.py at invite
+                                # send time). Regular workspace invites with a company NDA also
+                                # reach this branch and approve a freshly-created plumbing
+                                # AccessRequest; counting them would inflate the funnel.
+                                if was_pending and inviter_id:
+                                    transaction.on_commit(
+                                        lambda: capture_for_request(
+                                            request, "document:access_approved", workspace_key=workspace_key
+                                        )
+                                    )
 
-                            return redirect("core:dashboard")
-                        else:
-                            messages.error(request, error_message)
-                            return redirect("core:workspace_public", workspace_key=team_key)
+                                # Invalidate cache after transaction commits
+                                transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+                                messages.success(
+                                    request,
+                                    f"NDA signed successfully. You have joined {team.name} as {invitation.role}.",
+                                )
+
+                                # Check for return URL in session
+                                return_url = request.session.pop("nda_signing_return_url", None)
+                                if return_url:
+                                    return redirect(return_url)
+
+                                return redirect("core:dashboard")
+                            else:
+                                messages.error(request, error_message)
+                                return redirect("core:workspace_public", workspace_key=workspace_key)
                     else:
                         # User is already a member, just complete the invitation
                         # But still approve the access request if it's pending
@@ -741,7 +687,8 @@ class NDASigningView(View):
             # Now that NDA is signed, send notification to admins (request is now complete)
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
-            transaction.on_commit(lambda: _notify_admins_of_access_request(access_request, team, requires_nda=True))
+            transaction.on_commit(lambda: notify_admins_of_access_request(access_request, team, requires_nda=True))
+            _broadcast_access_request_updated(team, str(access_request.id), str(access_request.user_id), "pending")
 
             messages.success(
                 request, "NDA signed successfully. Your access request has been submitted and is pending approval."
@@ -752,12 +699,12 @@ class NDASigningView(View):
             if return_url:
                 return redirect(return_url)
 
-            return redirect("core:workspace_public", workspace_key=team_key)
+            return redirect("core:workspace_public", workspace_key=workspace_key)
 
         except Exception as e:
             logger.error(f"Error signing NDA: {e}")
             messages.error(request, "Failed to sign NDA. Please try again.")
-            return redirect("documents:sign_nda", team_key=team_key, request_id=request_id)
+            return redirect("documents:sign_nda", workspace_key=workspace_key, request_id=request_id)
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -766,13 +713,25 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """List pending access requests."""
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        """List pending access requests.
+
+        The template below is a section, not a page: it extends no base, so a
+        browser sent straight here got the markup with no stylesheet, no script
+        and nothing that works. The notification email pointed its "Review
+        request" button at this URL, so every admin reviewing a request landed
+        on that. Its real home is the trust-center tab of workspace settings,
+        which renders this same section inside the page, and a direct visit goes
+        there. htmx keeps getting the section, which is what the tab swaps.
+        """
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
+
+        if request.headers.get("HX-Request") != "true":
+            return redirect("workspaces:team_settings_tab", workspace_key=team.key, tab="trust-center")
 
         # Verify user is owner or admin
         try:
@@ -819,7 +778,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ).first()
                     if access_request and access_request.decided_by:
                         inviter_email = access_request.decided_by.email
-                except User.DoesNotExist:
+                except (User.DoesNotExist, User.MultipleObjectsReturned):
                     # Invited user not found, continue without inviter_email
                     pass
 
@@ -849,12 +808,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:  # noqa: C901
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:  # noqa: C901
         """Approve, reject, or revoke access request."""
         user = cast(User, request.user)
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
             return error_response(request, HttpResponse(status=404, content="Team not found"))
 
         # Verify user is owner or admin
@@ -876,11 +835,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Invalid invitation ID")
                 if active_tab == "trust-center":
                     response: HttpResponse = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
             try:
                 invitation = Invitation.objects.get(id=invitation_id, team=team)
@@ -891,7 +850,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 cache_key = f"invitation_inviter:{invitation.token}"
                 cache.delete(cache_key)
 
-                messages.success(request, f"Invitation to {email} has been cancelled")
+                messages.success(request, f"Invitation to {email} has been canceled")
 
                 # For HTMX requests, return the updated access request queue
                 if request.headers.get("HX-Request") == "true":
@@ -931,7 +890,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                                 ).first()
                                 if access_request and access_request.decided_by:
                                     inviter_email = access_request.decided_by.email
-                            except User.DoesNotExist:
+                            except (User.DoesNotExist, User.MultipleObjectsReturned):
                                 # Invited user not found, continue without inviter_email
                                 pass
 
@@ -959,21 +918,21 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
             except Invitation.DoesNotExist:
                 messages.error(request, "Invitation not found")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
         # Handle invite action (doesn't require request_id)
         if action == "invite":
@@ -982,26 +941,27 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Email is required")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
             # Check if user is already a member
             UserModel = get_user_model()
             try:
-                user = UserModel.objects.get(email__iexact=email)
-                if Member.objects.filter(team=team, user=user).exists():
+                invitee = UserModel.objects.get(email__iexact=email)
+                if Member.objects.filter(team=team, user=invitee).exists():
                     messages.error(request, f"{email} is already a member of this workspace")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
-            except UserModel.DoesNotExist:
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
+            except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be created when they accept invitation
                 pass
 
@@ -1014,11 +974,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, f"Invitation already sent to {email}")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
             # Create invitation
             invitation = Invitation.objects.create(team=team, email=email, role="guest")
@@ -1028,9 +989,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"invitation_inviter:{invitation.token}"
             cache.set(cache_key, user.id, timeout=60 * 60 * 24 * 7)  # 7 days (same as invitation expiry)
 
-            # If user already exists, create/update AccessRequest with inviter set as decided_by
+            # If user already exists, create/update AccessRequest with inviter set as decided_by.
+            # Only an account that confirmed the address counts as its holder.
             try:
-                invited_user = User.objects.get(email__iexact=email)
+                invited_user = UserModel.objects.get(email__iexact=email, email_verified=True)
                 access_request, created = AccessRequest.objects.get_or_create(
                     team=team,
                     user=invited_user,
@@ -1043,7 +1005,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 if not created and not access_request.decided_by:
                     access_request.decided_by = user
                     access_request.save(update_fields=["decided_by"])
-            except User.DoesNotExist:
+            except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                 # User doesn't exist yet, will be handled when they accept invitation
                 pass
 
@@ -1144,18 +1106,22 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return response
 
             if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+                response = redirect(
+                    reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
+                )
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
-            return redirect("documents:access_request_queue", team_key=team_key)
+            return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
         if not action or not request_id:
             messages.error(request, "Invalid request")
             if active_tab == "trust-center":
-                response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+                response = redirect(
+                    reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
+                )
                 response["HX-Trigger"] = "refreshAccessRequests"
                 return response
-            return redirect("documents:access_request_queue", team_key=team_key)
+            return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
         with transaction.atomic():
             # Lock the access request row to prevent race conditions
@@ -1169,11 +1135,15 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Access request not found")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
+
+            # Read before clear_rejection deletes the row.
+            ws_request_id = str(access_request.id)
+            ws_user_id = str(access_request.user_id)
 
             if action == "approve":
                 # Check status inside transaction after locking
@@ -1181,11 +1151,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
                 access_request.status = AccessRequest.Status.APPROVED
                 access_request.decided_by = user
@@ -1205,11 +1176,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not pending")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
                 # Supersede the live signature so a re-request must sign again;
                 # the row itself is the record of what was accepted and survives.
@@ -1226,11 +1198,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not approved")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
                 # Supersede the live signature so a re-request must sign again;
                 # the row itself is the record of what was accepted and survives.
@@ -1254,11 +1227,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     messages.error(request, "Access request is not rejected")
                     if active_tab == "trust-center":
                         response = redirect(
-                            reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
+                            + f"#{active_tab}"
                         )
                         response["HX-Trigger"] = "refreshAccessRequests"
                         return response
-                    return redirect("documents:access_request_queue", team_key=team_key)
+                    return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
                 # Store user email before deleting
                 user_email = access_request.user.email
@@ -1275,14 +1249,18 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 messages.error(request, "Invalid action")
                 if active_tab == "trust-center":
                     response = redirect(
-                        reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}"
+                        reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
                     )
                     response["HX-Trigger"] = "refreshAccessRequests"
                     return response
-                return redirect("documents:access_request_queue", team_key=team_key)
+                return redirect("documents:access_request_queue", workspace_key=workspace_key)
 
         # Invalidate cache after transaction commits
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+        # The queue and the bell on every other open page follow the decision,
+        # as they do when it is made through the API.
+        _broadcast_access_request_updated(team, ws_request_id, ws_user_id, ACTION_STATUS[action])
 
         # Handle post-transaction actions based on action type
         if action == "approve":
@@ -1294,46 +1272,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # the event only ships if the approval transaction commits. In
             # autocommit mode (current prod) this fires immediately; if the
             # view ever runs under ``ATOMIC_REQUESTS`` it stays correct.
-            transaction.on_commit(lambda: capture_for_request(request, "document:access_approved", team_key=team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "document:access_approved", workspace_key=workspace_key)
+            )
 
-            # Send email notification to user
-            try:
-                login_url = reverse("core:keycloak_login")
-                redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": team.key})
-                login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
-
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                    "login_link": login_link,
-                }
-
-                # Render templates first to catch template errors
-                try:
-                    plain_message = render_to_string("documents/emails/access_approved.txt", email_context)
-                    html_message = render_to_string("documents/emails/access_approved.html.j2", email_context)
-                except Exception as template_error:
-                    logger.error(
-                        f"Failed to render access approval email templates for "
-                        f"{access_request.user.email}: {template_error}",
-                        exc_info=True,
-                    )
-                    raise
-
-                # Send email
-                approval_email = EmailMultiAlternatives(
-                    subject=f"Access approved for {team.name}",
-                    body=plain_message,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                approval_email.attach_alternative(html_message, "text/html")
-                result = approval_email.send(fail_silently=False)
-                logger.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
-            except Exception as e:
-                logger.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
+            notify_access_approved(access_request)
 
             messages.success(
                 request,
@@ -1344,29 +1287,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         elif action == "reject":
             # Mirror the approve branch above: defer via ``on_commit`` so the
             # event only ships if the reject transaction committed.
-            transaction.on_commit(lambda: capture_for_request(request, "document:access_denied", team_key=team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "document:access_denied", workspace_key=workspace_key)
+            )
 
-            # Send email notification to user
-            try:
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                }
-
-                rejection_email = EmailMultiAlternatives(
-                    subject=f"Access request update for {team.name}",
-                    body=render_to_string("documents/emails/access_rejected.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                rejection_email.attach_alternative(
-                    render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
-                )
-                rejection_email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
+            notify_access_rejected(access_request)
 
             messages.success(request, "Access request rejected.")
 
@@ -1375,27 +1300,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-            # Send email notification to user
-            try:
-                email_context = {
-                    "user": access_request.user,
-                    "team": team,
-                    "base_url": get_base_url(),
-                }
-
-                revocation_email = EmailMultiAlternatives(
-                    subject=f"Access update for {team.name}",
-                    body=render_to_string("documents/emails/access_revoked.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[access_request.user.email],
-                    reply_to=["hello@sbomify.com"],
-                )
-                revocation_email.attach_alternative(
-                    render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
-                )
-                revocation_email.send()
-            except Exception as e:
-                logger.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
+            notify_access_revoked(access_request)
 
             messages.success(request, f"Access revoked for {access_request.user.email}.")
 
@@ -1438,7 +1343,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         ).first()
                         if ar and ar.decided_by:
                             inviter_email = ar.decided_by.email
-                    except UserModel.DoesNotExist:
+                    except (UserModel.DoesNotExist, UserModel.MultipleObjectsReturned):
                         pass
 
                 invitations_with_inviter.append(
@@ -1465,7 +1370,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if active_tab == "trust-center":
             # Redirect to trust center tab and trigger refresh of access requests
-            response = redirect(reverse("teams:team_settings", kwargs={"team_key": team_key}) + f"#{active_tab}")
+            response = redirect(
+                reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + f"#{active_tab}"
+            )
             response["HX-Trigger"] = "refreshAccessRequests"
             return response
-        return redirect("documents:access_request_queue", team_key=team_key)
+        return redirect("documents:access_request_queue", workspace_key=workspace_key)

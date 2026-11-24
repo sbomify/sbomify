@@ -12,7 +12,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
     get_api_headers,
 )
 from sbomify.apps.documents.models import Document
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 User = get_user_model()
 
@@ -29,7 +29,7 @@ class TestDocumentTaggingAPI(AuthenticationTestMixin):
         self.guest_user = guest_user
 
         # Create second team for cross-team testing
-        self.team2 = Team.objects.create(name="Test Team 2")
+        self.team2 = Workspace.objects.create(name="Test Team 2")
 
         # Create products
         self.product1 = Product.objects.create(name="Test Product 1", team=self.team1)

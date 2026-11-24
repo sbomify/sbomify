@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_release
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Product
+from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.services.release_links import release_link_rows
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
-    build_custom_domain_url,
+    custom_domain_redirect,
     get_public_path,
+    get_release_public_slugs,
     get_workspace_public_url,
     resolve_product_identifier,
     resolve_release_identifier,
@@ -56,23 +58,54 @@ class ReleaseDetailsPublicView(View):
                 product_slug=product_obj.slug,
                 release_slug=release_obj.slug,
             )
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
 
         # Get workspace public URL for breadcrumbs
         workspace_public_url = get_workspace_public_url(request, team)
 
-        # Vulnerability posture for the release, with and without its VEX applied,
-        # so the Trust Center can show the effect of the VEX as a toggle.
+        # The release's VEX-applied posture, published only where the workspace
+        # has asked for it to be. A Trust Center is readable by anyone holding
+        # the link, so which vulnerabilities a workspace is carrying stays the
+        # workspace's own to disclose. This page shows what the public sees, to
+        # members too: they read the full posture inside the app.
+        from sbomify.apps.core.services.release_lifecycle import untracked_notice
         from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_posture
 
-        vuln_posture = build_release_vuln_posture(release_obj)
+        if team and team.publish_vulnerability_posture:
+            vuln_posture = build_release_vuln_posture(release_obj)
+        else:
+            vuln_posture = {"has_data": False}
+
+        is_custom_domain = bool(getattr(request, "is_custom_domain", False))
+
+        def public_url(linked: Release) -> str:
+            product_identifier = linked.product.slug or linked.product_id
+            if is_custom_domain:
+                slug_owner = resolve_product_identifier(request, product_identifier, require_public=True)
+                if slug_owner is None or slug_owner.id != linked.product_id:
+                    product_identifier = linked.product_id
+            return get_public_path(
+                "release",
+                linked.id,
+                is_custom_domain=is_custom_domain,
+                product_id=linked.product_id,
+                product_slug=product_identifier,
+                release_slug=get_release_public_slugs(linked.product).get(linked.id, linked.id),
+            )
 
         context = {
             "brand": brand,
             "release": release,
+            # The public page shows what the public sees, to members too.
+            "linked_releases": release_link_rows(release_obj, include_private=False, url_for=public_url),
             "vuln_posture": vuln_posture,
+            # A release sbomify no longer monitors keeps the posture of its last
+            # scan, and the page says how old that is.
+            "untracked": untracked_notice(release_obj, public_only=True) if vuln_posture.get("has_data") else None,
             # `product` is consumed by the breadcrumb tag so the release page
             # gets a `Trust Center > Product` breadcrumb consistent with the
             # releases list and component pages. The current release isn't
@@ -81,5 +114,23 @@ class ReleaseDetailsPublicView(View):
             "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)
+
+        # Use slugs only where they resolve to the same product and release.
+        # Products whose slug is empty or resolves elsewhere retain their ID.
+        if getattr(request, "is_custom_domain", False):
+            product_slug = product_obj.slug
+            slug_owner = (
+                resolve_product_identifier(request, product_slug, require_public=True) if product_slug else None
+            )
+            product_identifier = product_slug if slug_owner and slug_owner.id == product_obj.id else product_obj.id
+            canonical_path = get_public_path(
+                "release",
+                resolved_release_id,
+                is_custom_domain=True,
+                product_id=product_obj.id,
+                product_slug=product_identifier,
+                release_slug=get_release_public_slugs(product_obj).get(resolved_release_id, resolved_release_id),
+            )
+            context["canonical_url"] = request.build_absolute_uri(canonical_path)
 
         return render(request, "core/release_details_public.html.j2", context)

@@ -136,6 +136,52 @@ class TestMarkdownToPdf:
                 assert markdown_to_pdf("# x", title="x") is None
 
 
+_ENTITY_XML = b'<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaa">]><svg xmlns="http://www.w3.org/2000/svg">&a;</svg>'
+
+
+class TestRasterOnlyUrlFetcher:
+    def test_returns_raster_images_labelled_with_their_type(self):
+        from sbomify.apps.compliance.services.pdf_service import _raster_only_url_fetcher
+
+        response = _raster_only_url_fetcher()(_TINY_PNG_DATA_URL)
+        assert response.content_type == "image/png"
+        assert response.read() == _TINY_PNG_BYTES
+
+    @pytest.mark.parametrize("content_type", ["image/svg+xml", "image/png", "application/xml"])
+    def test_refuses_xml_whatever_the_declared_type(self, content_type):
+        from sbomify.apps.compliance.services.pdf_service import _raster_only_url_fetcher
+
+        from PIL import UnidentifiedImageError
+
+        url = f"data:{content_type};base64," + base64.b64encode(_ENTITY_XML).decode("ascii")
+        with pytest.raises(UnidentifiedImageError):
+            _raster_only_url_fetcher()(url)
+
+    def test_refuses_file_urls(self):
+        from sbomify.apps.compliance.services.pdf_service import _raster_only_url_fetcher
+
+        with pytest.raises(ValueError):
+            _raster_only_url_fetcher()("file:///etc/hostname")
+
+    def test_remote_xml_image_never_reaches_the_xml_parser(self):
+        """A markdown image on an ``https`` URL that serves XML must be
+        dropped before WeasyPrint's SVG fallback hands it to expat."""
+        from weasyprint.urls import URLFetcher, URLFetcherResponse
+
+        def serve_xml(self, url, headers=None):
+            return URLFetcherResponse(url, _ENTITY_XML, {"Content-Type": "image/png"})
+
+        with (
+            patch.object(URLFetcher, "fetch", serve_xml),
+            patch("weasyprint.images.ElementTree.fromstring") as fromstring,
+        ):
+            pdf = markdown_to_pdf("# Doc\n\n![Logo](https://example.com/logo.png)", title="Doc")
+
+        assert pdf is not None
+        assert pdf.startswith(b"%PDF-")
+        fromstring.assert_not_called()
+
+
 @pytest.fixture
 def product(sample_team_with_owner_member):
     team = sample_team_with_owner_member.team
@@ -155,7 +201,7 @@ def assessment_with_docs(sample_team_with_owner_member, sample_user, product):
     )
     result = get_or_create_assessment(product.id, sample_user, team)
     assert result.ok
-    with patch("sbomify.apps.core.object_store.S3Client"):
+    with patch("sbomify.apps.core.object_store.StorageClient"):
         regenerate_all(result.value)
     return result.value
 
@@ -176,7 +222,7 @@ def capturing_s3():
         def get_sbom_data(self, filename):
             return b""
 
-    with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+    with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
         mock_s3_cls.return_value = _Capture()
         yield captured
 
@@ -209,14 +255,14 @@ class TestDownloadDocumentPdfEndpoint:
         )
         product = Product.objects.create(name="Download Test", team=team)
         ares = get_or_create_assessment(product.id, sample_user, team)
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
 
         client = Client()
         client.force_login(sample_user)
         setup_authenticated_client_session(client, team, sample_user)
 
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             resp = client.get(
                 f"/api/v1/compliance/cra/{ares.value.id}/documents/declaration_of_conformity/download"
             )
@@ -255,7 +301,7 @@ class TestDownloadDocumentPdfEndpoint:
         )
         product = Product.objects.create(name="Download 503", team=team)
         ares = get_or_create_assessment(product.id, sample_user, team)
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
 
         client = Client()
@@ -263,7 +309,7 @@ class TestDownloadDocumentPdfEndpoint:
         setup_authenticated_client_session(client, team, sample_user)
 
         with patch("sbomify.apps.compliance.services.pdf_service.markdown_to_pdf", return_value=None):
-            with patch("sbomify.apps.core.object_store.S3Client"):
+            with patch("sbomify.apps.core.object_store.StorageClient"):
                 resp = client.get(
                     f"/api/v1/compliance/cra/{ares.value.id}/documents/declaration_of_conformity/download"
                 )

@@ -1,0 +1,13 @@
+{% comment %}
+A pointer from something on an advisory's page to the change an AI agent
+proposed for it, in the review list. The dashed outline is the same "not on
+the record yet" mark the proposed timeline entry carries, in the violet the
+AI agent badge uses. The slot is the sentence; href is the proposal's anchor.
+{% endcomment %}
+<c-vars href class />
+<a href="{{ href }}"
+   class="inline-flex w-fit items-center gap-1.5 rounded-full border border-dashed border-[color-mix(in_oklab,var(--color-accent)_55%,transparent)] px-2.5 py-0.5 text-xs text-accent-ink hover:underline{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>
+    <i class="fas fa-robot text-[10px]" aria-hidden="true"></i>
+    {{ slot }}
+</a>

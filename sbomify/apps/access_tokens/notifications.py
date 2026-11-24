@@ -77,12 +77,12 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     # Live Member row and the tier, not the session cache and a role literal:
     # this decides whether someone is shown the workspace's bot tokens, so a
     # demoted admin would keep seeing them until the 300s cache turned over.
-    team_key = (request.session.get("current_team") or {}).get("key")
-    if team_key and get_member_role_by_key(request.user, team_key) in ADMINISTER:
-        bot_user_ids = Member.objects.filter(team__key=team_key, role="bot").values_list("user_id", flat=True)
+    workspace_key = (request.session.get("current_workspace") or {}).get("key")
+    if workspace_key and get_member_role_by_key(request.user, workspace_key) in ADMINISTER:
+        bot_user_ids = Member.objects.filter(team__key=workspace_key, role="bot").values_list("user_id", flat=True)
         tokens.extend(
             AccessToken.objects.filter(
-                user_id__in=bot_user_ids, team__key=team_key, expires_at__gt=now, expires_at__lte=cutoff
+                user_id__in=bot_user_ids, team__key=workspace_key, expires_at__gt=now, expires_at__lte=cutoff
             ).select_related("team")
         )
 
@@ -91,6 +91,14 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         if token.expires_at is None:
             continue
         days = days_until(token.expires_at, now)
+        lifetime = lifetime_days(token)
+        # A token that lives under a day is born inside its final day, so the
+        # final-day carve-out below would keep it on the bell for its whole
+        # life. The OIDC publish exchange mints a 15-minute token per CI run,
+        # which piled up one "expires tomorrow" badge per publish. Expiring
+        # that soon is the token's design, not an event.
+        if lifetime is not None and lifetime <= 1:
+            continue
         # Keep the final day for short-lived tokens: silence for the whole life
         # would let a pipeline start failing with no notice at all.
         if days > 1 and is_short_lived(token):
@@ -98,7 +106,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days} days")
         action_url = None
         if token.team is not None:
-            action_url = reverse("teams:team_settings", kwargs={"team_key": token.team.key}) + "#tokens"
+            action_url = reverse("workspaces:team_settings", kwargs={"workspace_key": token.team.key}) + "#tokens"
         notifications.append(
             NotificationSchema(
                 # Day-resolution id: dismissing today's warning keeps it away

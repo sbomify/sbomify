@@ -10,8 +10,8 @@
         as <strong>{{ invitation.role }}</strong>.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ base_url }}{% url 'teams:accept_invite' invitation.token %}"
-           class="button">Accept Invitation</a>
+        <a href="{{ base_url }}{% url 'workspaces:accept_invite' invitation.token %}"
+           class="button">Accept invitation</a>
     </p>
     <p class="text-secondary">This invitation expires on {{ invitation.expires_at|date:"F d, Y" }}.</p>
 {% endblock %}

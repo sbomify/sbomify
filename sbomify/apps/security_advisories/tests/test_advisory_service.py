@@ -56,7 +56,7 @@ class TestTheTwoStatusAxes:
             sample_team,
             remediation_status="fix_in_progress",
             status="published",
-            tracking_id="OSPN-2026-0001",
+            tracking_id="ACME-SA-2026-0001",
             published_at=timezone.now(),
         )
 
@@ -75,9 +75,9 @@ class TestTheTwoStatusAxes:
 
 class TestDisplayId:
     def test_the_tracking_id_is_shown_when_set(self, sample_team):
-        _advisory(sample_team, status="published", tracking_id="OSPN-2026-0034", published_at=timezone.now())
+        _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0034", published_at=timezone.now())
 
-        assert list_advisories(sample_team).value[0]["id"] == "OSPN-2026-0034"
+        assert list_advisories(sample_team).value[0]["id"] == "ACME-SA-2026-0034"
 
     def test_a_draft_falls_back_to_its_primary_key(self, sample_team):
         """The model assigns a tracking id at publication, so a draft has none
@@ -195,9 +195,9 @@ class TestProducts:
 class TestScoping:
     def test_the_list_shows_only_this_workspaces_advisories(self, sample_team, guest_user):
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Other Workspace")
+        other = Workspace.objects.create(name="Other Workspace")
         other.key = number_to_random_token(other.pk)
         other.save(update_fields=["key"])
         _advisory(sample_team, title="Ours")
@@ -207,9 +207,9 @@ class TestScoping:
 
     def test_another_workspaces_advisory_reads_as_absent(self, sample_team):
         from sbomify.apps.core.utils import number_to_random_token
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Other Workspace")
+        other = Workspace.objects.create(name="Other Workspace")
         other.key = number_to_random_token(other.pk)
         other.save(update_fields=["key"])
         theirs = _advisory(other, title="Theirs")
@@ -235,7 +235,7 @@ class TestSearchAndCounts:
             sample_team,
             remediation_status="resolved",
             status="published",
-            tracking_id="OSPN-2026-0002",
+            tracking_id="ACME-SA-2026-0002",
             published_at=timezone.now(),
         )
 
@@ -247,20 +247,21 @@ class TestSearchAndCounts:
 class TestLookup:
     def test_it_resolves_by_tracking_id_as_well_as_pk(self, sample_team):
         """The tracking id is what the list links and what a person pastes."""
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0099", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0099", published_at=timezone.now())
 
-        assert get_advisory(sample_team, "OSPN-2026-0099").value["id"] == "OSPN-2026-0099"
+        assert get_advisory(sample_team, "ACME-SA-2026-0099").value["id"] == "ACME-SA-2026-0099"
         assert get_advisory(sample_team, advisory.id).ok
 
     def test_it_takes_one_query_either_way(self, sample_team, django_assert_num_queries):
         """Two sequential lookups would rebuild the prefetches and re-run them
         for anything found by tracking id."""
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0100", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0100", published_at=timezone.now())
         AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-0100", severity="high")
 
-        # One for the advisory, then one per prefetched relation.
-        with django_assert_num_queries(5):
-            get_advisory(sample_team, "OSPN-2026-0100")
+        # One for the advisory, then one per prefetched relation, the product
+        # status rows included.
+        with django_assert_num_queries(6):
+            get_advisory(sample_team, "ACME-SA-2026-0100")
 
 
 def test_the_display_id_is_always_a_string(sample_team):
@@ -366,9 +367,9 @@ class TestUpdateAdvisory:
         assert advisory.severity == "low"
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team, guest_user, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other, title="Not yours")
 
         result = update_advisory(sample_team, sample_user, advisory.id, title="Mine now")
@@ -604,6 +605,20 @@ class TestPublishAdvisory:
         assert second.tracking_id.endswith("-0002")
         assert first.tracking_id[:-4] == second.tracking_id[:-4]
 
+    def test_the_id_follows_numbering_saved_after_the_caller_loaded_the_workspace(self, sample_team, sample_user):
+        """A prefix or floor saved while a publish is under way governs the id it
+        allocates, rather than the caller's stale copy of the workspace."""
+        from sbomify.apps.teams.models import Workspace
+
+        advisory = self._publishable(sample_team)
+        Workspace.objects.filter(pk=sample_team.pk).update(advisory_id_prefix="PSIRT", advisory_id_start_at=43)
+        assert sample_team.advisory_id_prefix == ""
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        assert advisory.tracking_id == f"PSIRT-{timezone.now().year}-0043"
+
     def test_publishing_lands_on_the_timeline(self, sample_team, sample_user):
         advisory = self._publishable(sample_team)
 
@@ -652,9 +667,9 @@ class TestPublishAdvisory:
         assert advisory.tracking_id == first_id
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team, sample_user):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other)
 
         result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
@@ -679,17 +694,17 @@ class TestDelete:
         assert not AdvisoryVulnerability.objects.filter(id=vulnerability.id).exists()
 
     def test_it_resolves_by_tracking_id_too(self, sample_team):
-        advisory = _advisory(sample_team, status="published", tracking_id="OSPN-2026-0001", published_at=timezone.now())
+        advisory = _advisory(sample_team, status="published", tracking_id="ACME-SA-2026-0001", published_at=timezone.now())
 
-        result = delete_advisory(sample_team, "OSPN-2026-0001")
+        result = delete_advisory(sample_team, "ACME-SA-2026-0001")
 
         assert result.ok
         assert not SecurityAdvisory.objects.filter(id=advisory.id).exists()
 
     def test_another_workspaces_advisory_is_not_found(self, sample_team):
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        other = Team.objects.create(name="Someone else")
+        other = Workspace.objects.create(name="Someone else")
         advisory = _advisory(other)
 
         result = delete_advisory(sample_team, advisory.id)

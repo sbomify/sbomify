@@ -53,11 +53,11 @@ def trigger_assessments_for_existing_sboms(sender: Any, instance: Any, created: 
     try:
         team = instance.team
         team_id = str(team.id)
-        team_key = team.key  # Capture primitive values for safe use in the deferred on-commit callback
+        workspace_key = team.key  # Capture primitive values for safe use in the deferred on-commit callback
         plugin_configs = instance.plugin_configs or {}
 
         logger.info(
-            f"Plugins enabled for team {team_key} ({team_id}). "
+            f"Plugins enabled for team {workspace_key} ({team_id}). "
             f"Dispatching background task to assess recent SBOMs. Enabled plugins: {enabled_plugins}"
         )
 
@@ -67,7 +67,7 @@ def trigger_assessments_for_existing_sboms(sender: Any, instance: Any, created: 
                 enabled_plugins=enabled_plugins,
                 plugin_configs=plugin_configs,
             )
-            logger.debug(f"Dispatched bulk assessment task for team {team_key}")
+            logger.debug(f"Dispatched bulk assessment task for team {workspace_key}")
 
         # Defer until transaction commits to ensure settings are saved
         run_on_commit(_dispatch_bulk_task)

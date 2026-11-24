@@ -17,7 +17,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.utils.html import strip_tags
 
+from sbomify.apps.core.tests.shared_fixtures import register_plugin
 from sbomify.apps.vulnerability_scanning.utils import result_scanned_nothing
 
 SKIPPED = {"summary": {"total_findings": 1, "warning_count": 1}, "metadata": {"skipped": True}}
@@ -42,33 +44,54 @@ class TestThePredicate:
         assert result_scanned_nothing(value) is False
 
 
+@pytest.mark.django_db
 class TestTheRowStatus:
-    """The product page's single filterable status per component."""
+    """Product and workspace tables share the same assessment state."""
 
-    def _status(self, vuln: dict[str, Any] | None) -> str:
-        from sbomify.apps.core.services.product_page import _row_status
+    def _row(self, workspace: Any, results: list[dict[str, Any]]) -> dict[str, Any]:
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.core.services.inventory_page import build_inventory_snapshot
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
-        return _row_status(vuln)
+        component = Component.objects.create(name="Library", team=workspace)
+        sbom = SBOM.objects.create(name="bom", component=component, format="cyclonedx")
+        for index, result in enumerate(results):
+            register_plugin(f"scanner-{index}")
+            run = AssessmentRun.objects.create(
+                sbom=sbom, plugin_name=f"scanner-{index}", category="security", status="completed", result=result
+            )
+            sync_findings(run)
+        return build_inventory_snapshot(workspace, "components")["rows"][0]
 
-    def test_no_run_is_not_scanned(self) -> None:
-        assert self._status(None) == "not_scanned"
+    def test_no_run_is_not_scanned(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [])
 
-    def test_a_skipped_run_is_its_own_state(self) -> None:
-        counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "scanned_nothing": True}
+        assert row["scan_label"] == "Not assessed"
+        assert row["assessed"] is False
 
-        assert self._status(counts) == "scanned_nothing"
+    def test_a_skipped_run_is_its_own_state(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [SKIPPED])
 
-    def test_a_clean_run_is_clean(self) -> None:
-        counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "scanned_nothing": False}
+        assert row["scan_label"] == "Nothing scanned"
+        assert row["assessed"] is False
 
-        assert self._status(counts) == "clean"
+    def test_a_clean_run_is_clean(self, sample_team_with_owner_member) -> None:
+        row = self._row(sample_team_with_owner_member.team, [CLEAN])
 
-    def test_findings_outrank_everything(self) -> None:
-        """A skipped provider alongside one that found something must not hide
-        the finding — severity wins."""
-        counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0, "scanned_nothing": True}
+        assert row["scan_label"] == "Scanned"
+        assert row["assessed"] is True
+        assert row["vulnerabilities"] == 0
 
-        assert self._status(counts) == "high"
+    def test_findings_outrank_everything(self, sample_team_with_owner_member) -> None:
+        """A skipped provider must not hide another provider's vulnerability."""
+        result = {"findings": [{"id": "CVE-2026-0001", "severity": "high", "component": {"name": "pkg"}}]}
+        row = self._row(sample_team_with_owner_member.team, [SKIPPED, result])
+
+        assert row["assessed"] is True
+        assert row["scan_label"] == "Scanned"
+        assert row["counts"]["high"] == 1
 
 
 @pytest.mark.django_db
@@ -104,6 +127,7 @@ class TestOnlyWhenEveryProviderSkipped:
         from sbomify.apps.plugins.models import AssessmentRun
         from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
+        register_plugin(plugin_name)
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name=plugin_name,
@@ -130,3 +154,96 @@ class TestOnlyWhenEveryProviderSkipped:
     def test_no_runs_at_all_stays_none(self, sbom) -> None:
         """Distinct from both: the table reads this as "Not scanned"."""
         assert self._counts(sbom.component.id, sbom.id) is None
+
+
+@pytest.mark.django_db
+class TestTheSbomPage:
+    """The same three states on the SBOM's own page.
+
+    The scan summary at the top of the page must not read as a clean bill of
+    health when nothing was scanned, and the assessment card must not say
+    "Pending" for a skip: waiting helps with "Not scanned" alone. A skip repeats
+    until someone fixes its reason, and a clean scan has finished.
+    """
+
+    NO_PACKAGES = "None of the packages in this SBOM could be matched against an advisory source."
+    NO_PRODUCT = "Dependency Track only scans components that belong to a product."
+
+    def _run(self, sbom, plugin_name: str, result: dict[str, Any] | None) -> None:
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
+
+        register_plugin(plugin_name)
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name=plugin_name,
+            plugin_version="1.0.0",
+            plugin_config_hash="test-config-hash",
+            run_reason=RunReason.MANUAL,
+            category="security",
+            status=RunStatus.COMPLETED.value,
+            result=result,
+        )
+
+    def _skipped(self, finding_id: str, description: str) -> dict[str, Any]:
+        finding = {"id": finding_id, "title": "Skipped", "description": description, "status": "warning"}
+        return {**SKIPPED, "findings": [finding]}
+
+    def _text(self, sbom) -> str:
+        """The SBOM page as a reader sees it, tags stripped."""
+        from django.test import Client
+        from django.urls import reverse
+
+        from sbomify.apps.sboms.tests.test_views import setup_test_session
+
+        client = Client()
+        setup_test_session(client, sbom.component.team, sbom.component.team.members.first())
+        url = reverse(
+            "core:component_item",
+            kwargs={"component_id": sbom.component.id, "item_type": "sboms", "item_id": sbom.id},
+        )
+        response = client.get(url)
+        assert response.status_code == 200
+        return " ".join(strip_tags(response.content.decode()).split())
+
+    def test_every_provider_skipped_reports_no_scan(self, sample_sbom) -> None:
+        self._run(sample_sbom, "osv", self._skipped("osv:no-packages", self.NO_PACKAGES))
+        self._run(sample_sbom, "dependency-track", self._skipped("dependency-track:no-product", self.NO_PRODUCT))
+
+        text = self._text(sample_sbom)
+
+        # Nothing was scanned, so there is no scan to summarise or date.
+        assert "Vulnerability scan" not in text
+        assert "0 vulnerabilities" not in text
+
+    def test_a_clean_scan_says_nothing_was_found(self, sample_sbom) -> None:
+        self._run(sample_sbom, "osv", CLEAN)
+
+        text = self._text(sample_sbom)
+
+        assert "Vulnerability scan 0 vulnerabilities · " in text
+        assert "· OSV" in text
+
+    def test_no_runs_at_all_reports_no_scan(self, sample_sbom) -> None:
+        text = self._text(sample_sbom)
+
+        assert "Vulnerability scan" not in text
+        assert "0 vulnerabilities" not in text
+
+    def test_one_skipped_one_clean_is_clean(self, sample_sbom) -> None:
+        self._run(sample_sbom, "dependency-track", self._skipped("dependency-track:no-product", self.NO_PRODUCT))
+        self._run(sample_sbom, "osv", CLEAN)
+
+        text = self._text(sample_sbom)
+
+        assert "Vulnerability scan 0 vulnerabilities · " in text
+        # Only the scanner that scanned is credited with the result.
+        assert "· OSV" in text
+        assert "Dependency-Track" not in text
+
+    def test_the_assessment_card_does_not_say_pending(self, sample_sbom) -> None:
+        self._run(sample_sbom, "osv", self._skipped("osv:no-packages", self.NO_PACKAGES))
+
+        text = self._text(sample_sbom)
+
+        assert "Assessments Pending" not in text

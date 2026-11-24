@@ -8,10 +8,10 @@ from sbomify.apps.core.services.results import ServiceResult
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
-def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
+def get_public_controls(team: Workspace) -> ServiceResult[dict[str, Any]]:
     """Get public compliance controls summary for a team's first active catalog.
 
     Returns failure if no active catalog exists.
@@ -23,12 +23,18 @@ def get_public_controls(team: Team) -> ServiceResult[dict[str, Any]]:
     return ServiceResult.success(result.value[0])
 
 
-def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
+def get_public_controls_list(team: Workspace) -> ServiceResult[list[dict[str, Any]]]:
     """Get public compliance controls for all active catalogs.
 
     Returns a list of catalog data dicts, each with catalog info, summary, and categories.
     """
-    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True))
+    # Both flags, because they answer different questions. is_active is whether
+    # the workspace tracks the framework at all; is_published is whether it has
+    # asked for the score to appear on a page its customers read. Tracking SOC 2
+    # internally is not consent to publish it, and a catalogue the workspace has
+    # stopped tracking should not stay on the page because it was published once.
+    # See the field notes on ControlCatalog.
+    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True, is_published=True))
     if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
 
@@ -42,6 +48,12 @@ def get_public_controls_list(team: Team) -> ServiceResult[list[dict[str, Any]]]:
             "catalog": {
                 "name": catalog.name,
                 "version": catalog.version,
+                # Who keeps this catalogue up to date. A visitor reading a
+                # score wants to know whether a human typed it or a compliance
+                # tool is answering for it, so the public page says which.
+                "source": catalog.source,
+                "source_label": catalog.get_source_display(),
+                "is_synced": catalog.is_integration_owned,
             },
             **summary_result.value,
         }
@@ -77,7 +89,7 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
     otherwise falls back to the global (product=None) ControlStatus.
     """
     team = product.team
-    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True))
+    active_catalogs = list(ControlCatalog.objects.filter(team=team, is_active=True, is_published=True))
     if not active_catalogs:
         return ServiceResult.failure("No active catalog", status_code=404)
 
@@ -91,6 +103,12 @@ def get_public_product_controls_list(product: Product) -> ServiceResult[list[dic
             "catalog": {
                 "name": catalog.name,
                 "version": catalog.version,
+                # Who keeps this catalogue up to date. A visitor reading a
+                # score wants to know whether a human typed it or a compliance
+                # tool is answering for it, so the public page says which.
+                "source": catalog.source,
+                "source_label": catalog.get_source_display(),
+                "is_synced": catalog.is_integration_owned,
             },
             "product": {
                 "id": product.id,

@@ -13,18 +13,18 @@ exactly as it did before there were icons.
 <nav aria-label="Breadcrumb"
      {% if class %}class="{{ class }}"{% endif %}
      {{ attrs }}>
-    <ol class="flex items-center gap-2 text-sm">
+    <ol class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         {% for item in items %}
-            <li class="flex items-center gap-2">
-                {% if not forloop.first %}<i class="{{ separator }} text-xs text-text-muted" aria-hidden="true"></i>{% endif %}
+            <li class="flex items-center gap-2 min-w-0 max-w-full [overflow-wrap:anywhere]">
+                {% if not forloop.first %}<i class="{{ separator }} shrink-0 text-xs text-text-muted" aria-hidden="true"></i>{% endif %}
                 {% if item.url and not forloop.last %}
                     <a href="{{ item.url }}"
-                       class="text-text-muted hover:text-text transition-colors{% if item.icon %} flex items-center gap-1{% endif %}"
+                       class="min-w-0 text-text-muted hover:text-text transition-colors{% if item.icon %} flex items-center gap-1{% endif %}"
                        {% if item.title %}title="{{ item.title }}"{% endif %}>
                         {% if item.icon %}<i class="{{ item.icon }} opacity-80" aria-hidden="true"></i>{% endif %}
                     {{ item.label }}</a>
                 {% else %}
-                    <span class="text-text{% if forloop.last %} font-medium{% endif %}{% if item.icon %} flex items-center gap-1{% endif %}"
+                    <span class="min-w-0 text-text{% if forloop.last %} font-medium{% endif %}{% if item.icon %} flex items-center gap-1{% endif %}"
                           {% if forloop.last %}aria-current="page"{% endif %}
                           {% if item.title %}title="{{ item.title }}"{% endif %}>
                         {% if item.icon %}<i class="{{ item.icon }} opacity-80" aria-hidden="true"></i>{% endif %}

@@ -1,20 +1,21 @@
 {# CRA Wizard Step Progress Bar #}
 {# Expects: step (int), step_names (dict), completed_steps (list), assessment_id (str) #}
 {# A completed step is a link back to it: the anchor wraps the step, because a #}
-{# step is not a link everywhere else the rail is used. #}
-<nav aria-label="Wizard progress" class="mb-8">
+{# step is not a link everywhere else the rail is used. Captions are sr-only on #}
+{# phones rather than hidden, because they are the only name those links have. #}
+<nav aria-label="Wizard progress">
     <c-navigation.stepper>
     {% for step_num, step_label in step_names.items %}
         {% if step_num in completed_steps and step_num != step %}
             <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step_num %}">
-                <c-navigation.stepper-step state="completed" label="{{ step_label }}" label_class="hidden sm:inline">
+                <c-navigation.stepper-step state="completed" label="{{ step_label }}" label_class="sr-only sm:not-sr-only">
                 <i class="fas fa-check text-xs" aria-hidden="true"></i>
                 </c-navigation.stepper-step>
             </a>
         {% elif step_num == step %}
-            <c-navigation.stepper-step state="active" label="{{ step_label }}" label_class="hidden sm:inline" aria-current="step">{{ step_num }}</c-navigation.stepper-step>
+            <c-navigation.stepper-step state="active" label="{{ step_label }}" label_class="sr-only sm:not-sr-only" aria-current="step">{{ step_num }}</c-navigation.stepper-step>
         {% else %}
-            <c-navigation.stepper-step label="{{ step_label }}" label_class="hidden sm:inline">{{ step_num }}</c-navigation.stepper-step>
+            <c-navigation.stepper-step label="{{ step_label }}" label_class="sr-only sm:not-sr-only">{{ step_num }}</c-navigation.stepper-step>
         {% endif %}
         {% if not forloop.last %}
             {% if step_num in completed_steps %}

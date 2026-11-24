@@ -1,0 +1,9 @@
+<c-navigation.tabs links aria-label="CRA compliance sections">
+{% for tab in tabs %}
+    {% if tab.active %}
+        <c-navigation.tab href="{{ tab.href }}" active>{{ tab.label }}</c-navigation.tab>
+    {% else %}
+        <c-navigation.tab href="{{ tab.href }}">{{ tab.label }}</c-navigation.tab>
+    {% endif %}
+{% endfor %}
+</c-navigation.tabs>

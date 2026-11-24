@@ -1,6 +1,16 @@
 {% load static %}
-<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
-     x-init="loadArtifacts()">
+{# The @ws:message handler repaints when someone pins or unpins in another tab or session. #}
+<div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], routes: { sbom: '{% url 'core:component_item' '__COMPONENT__' 'sboms' '__ARTIFACT__' %}', cbom: '{% url 'core:component_item' '__COMPONENT__' 'cbom' '__ARTIFACT__' %}', vex: '{% url 'core:component_item' '__COMPONENT__' 'vex' '__ARTIFACT__' %}', document: '{% url 'core:component_item' '__COMPONENT__' 'documents' '__ARTIFACT__' %}', component: '{% url 'core:component_details' '__COMPONENT__' %}' }, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }}, vulnerabilitiesScriptId: 'release-artifact-vulnerabilities' })"
+     @ws:message.window="if ($event.detail.type === 'resync' || ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}')) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => loadArtifacts(), 500); } if ($event.detail.type === 'resync' || ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id in vulnerabilities) || ($event.detail.type === 'vex_reapplied' && artifacts.some((a) => (a.component_id || a.sbom?.component?.id) === $event.detail.component_id))) { clearTimeout($el._wsVulnDebounce); $el._wsVulnDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-release-artifact-vulnerabilities')), 500); }">
+    {# Scan counts are rendered with the page, so a finished scan or a re-applied VEX re-reads them from it. #}
+    <div hidden
+         hx-get="{{ request.get_full_path }}"
+         hx-trigger="refresh-release-artifact-vulnerabilities from:body"
+         hx-select="#release-artifact-vulnerabilities"
+         hx-swap="innerHTML"
+         @htmx:after-settle="vulnerabilities = window.parseJsonScript('release-artifact-vulnerabilities') ?? {}">
+        {{ artifact_vulnerabilities|default:None|json_script:"release-artifact-vulnerabilities" }}
+    </div>
     {# The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
     <c-tables.toolbar>
@@ -22,7 +32,7 @@
     </c-slot>
     </c-tables.toolbar>
     {# Loading State #}
-    <c-feedback.loading message="Loading artifacts..." x-show="isLoading" />
+    <c-feedback.loading-table nested message="Loading artifacts..." x-show="isLoading" x-cloak />
     {# Empty State #}
     <div x-show="!isLoading && artifacts.length === 0">
         <c-feedback.empty-state icon="fas fa-puzzle-piece" icon_variant="neutral" icon_size="sm" title="No artifacts yet" message="Add artifacts to this release to get started">
@@ -42,19 +52,20 @@
         <c-tables.shell nested>
         {# Search and Filter Controls #}
         <c-tables.toolbar>
-        <c-tables.search id="artifact-search" label="Search artifacts" placeholder="Search artifacts by name, component, or format..." x-model="search" @input.debounce="handleSearch()" />
-        <c-tables.select id="artifact-type-filter" label="Filter by type" x-model="typeFilter" @change="handleTypeFilter()">
+        <c-forms.search-input size="sm" id="artifact-search" label="Search artifacts" placeholder="Search artifacts by name, component, or format..." x-model="search" @input.debounce="handleSearch()" />
+        <c-forms.select size="md" id="artifact-type-filter" label="Filter by type" x-model="typeFilter" @change="handleTypeFilter()">
         <option value="">All Types</option>
         <option value="sbom">SBOMs Only</option>
+        <option value="cbom">CBOMs Only</option>
         <option value="vex">VEX Only</option>
         <option value="document">Documents Only</option>
-        </c-tables.select>
-        <c-tables.select id="artifact-component-filter" label="Filter by component" x-model="componentFilter" @change="handleComponentFilter()">
+        </c-forms.select>
+        <c-forms.select size="md" id="artifact-component-filter" label="Filter by component" x-model="componentFilter" @change="handleComponentFilter()">
         <option value="">All Components</option>
         <template x-for="comp in uniqueComponents" :key="comp">
             <option :value="comp" x-text="comp"></option>
         </template>
-        </c-tables.select>
+        </c-forms.select>
         <c-slot name="right">
         <c-tables.page-size id="artifact-page-size" x-model="pageSize" @change="currentPage = 1">
         <option value="10">10</option>
@@ -65,14 +76,15 @@
         </c-slot>
         </c-tables.toolbar>
         {# Artifacts Table #}
-        <c-tables.table>
+        <c-tables.table sized variant_class="min-w-304" aria-label="Release artifacts">
         <c-tables.head>
-        <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
+        <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
         <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-        <c-tables.header-cell sort="component">Component</c-tables.header-cell>
-        <c-tables.header-cell sort="format">Format</c-tables.header-cell>
-        <c-tables.header-cell sort="version">Version</c-tables.header-cell>
-        <c-tables.header-cell sort="created_at" date class="w-28">Created</c-tables.header-cell>
+        <c-tables.header-cell sort="component" class="w-40">Component</c-tables.header-cell>
+        <c-tables.header-cell sort="format" class="w-36">Format</c-tables.header-cell>
+        <c-tables.header-cell sort="version" class="w-28">Version</c-tables.header-cell>
+        <c-tables.header-cell class="w-56">Vulnerabilities</c-tables.header-cell>
+        <c-tables.header-cell sort="created_at" date class="w-40">Created</c-tables.header-cell>
         {% if can_edit and not is_latest %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
         </c-tables.head>
         <tbody>
@@ -85,14 +97,17 @@
                 </div>
                 </c-tables.cell>
                 <c-tables.cell nowrap>
-                <div class="flex items-center gap-2">
-                    <a :href="getArtifactUrl(artifact)"
-                       class="text-primary font-medium hover:underline"
-                       x-text="getArtifactName(artifact)"></a>
-                    <span class="px-2 py-0.5 text-xs font-medium rounded-full"
-                          :class="getArtifactBadgeClass(artifact)"
-                          x-text="getArtifactType(artifact).toUpperCase()"></span>
-                </div>
+                <c-tables.name>
+                <a :href="getArtifactUrl(artifact)"
+                   class="text-primary font-medium hover:underline"
+                   :title="getArtifactName(artifact)"
+                   x-text="getArtifactName(artifact)"></a>
+                <c-slot name="trail">
+                <span class="px-2 py-0.5 text-xs font-medium rounded-full"
+                      :class="getArtifactBadgeClass(artifact)"
+                      x-text="getArtifactType(artifact).toUpperCase()"></span>
+                </c-slot>
+                </c-tables.name>
                 </c-tables.cell>
                 <c-tables.cell>
                 <a :href="getComponentUrl(artifact)"
@@ -109,12 +124,52 @@
                       x-text="getArtifactFormat(artifact)"></span>
                 <c-badges.format class="text-text-muted bg-border/20 border" style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)" x-show="!isArtifactTypeSbom(artifact)" x-text="getArtifactFormat(artifact)" />
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <span x-show="getArtifactVersion(artifact)"
                       class="text-text"
                       :title="getArtifactVersion(artifact)"
                       x-text="truncateText(getArtifactVersion(artifact) || '', 20)"></span>
                 <span x-show="!getArtifactVersion(artifact)" class="text-text-muted">—</span>
+                </c-tables.cell>
+                <c-tables.cell>
+                {% comment %}
+                    An SBOM's own latest scan, VEX applied, linking to its full
+                    report. Nothing scanned is not nothing found, as on the
+                    component's artifact table.
+                {% endcomment %}
+                <template x-if="getArtifactVulnerabilities(artifact) === undefined">
+                    <span class="text-text-muted">—</span>
+                </template>
+                <template x-if="getArtifactVulnerabilities(artifact) === null">
+                    <span class="text-text-muted text-sm">Not scanned</span>
+                </template>
+                <template x-if="getArtifactVulnerabilities(artifact)">
+                    <a :href="getArtifactVulnerabilities(artifact).url"
+                       class="inline-flex items-center gap-1.5 flex-wrap no-underline"
+                       :aria-label="'View vulnerabilities for ' + getArtifactName(artifact)">
+                        <template x-if="getArtifactVulnerabilities(artifact).total === 0 && getArtifactVulnerabilities(artifact).scanned_nothing">
+                            <c-badges.warning>Nothing scanned</c-badges.warning>
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).total === 0 && !getArtifactVulnerabilities(artifact).scanned_nothing">
+                            <c-badges.success>Clean</c-badges.success>
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).critical > 0">
+                            <c-badges.severity level="critical" x-text="$number(getArtifactVulnerabilities(artifact).critical) + ' Critical'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).high > 0">
+                            <c-badges.severity level="high" x-text="$number(getArtifactVulnerabilities(artifact).high) + ' High'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).medium > 0">
+                            <c-badges.severity level="medium" x-text="$number(getArtifactVulnerabilities(artifact).medium) + ' Medium'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).low > 0">
+                            <c-badges.severity level="low" x-text="$number(getArtifactVulnerabilities(artifact).low) + ' Low'" />
+                        </template>
+                        <template x-if="getArtifactVulnerabilities(artifact).suppressed > 0">
+                            <c-forms.hint compact x-text="$number(getArtifactVulnerabilities(artifact).suppressed) + ' suppressed by VEX'" />
+                        </template>
+                    </a>
+                </template>
                 </c-tables.cell>
                 <c-tables.cell date>
                 <span class="text-text-muted text-sm" x-text="getArtifactDate(artifact)"></span>
@@ -135,7 +190,7 @@
         {# Pagination #}
         <c-tables.footer>
         <c-tables.info>
-        Showing <strong x-text="filteredArtifacts.length"></strong> of <strong x-text="artifacts.length"></strong> artifacts
+        Showing <strong x-text="$number(filteredArtifacts.length)"></strong> of <strong x-text="$number(artifacts.length)"></strong> artifacts
         </c-tables.info>
         <div x-show="totalPages > 1">
             <c-tables.pager />
@@ -159,6 +214,7 @@
                     <c-forms.select id="modal-artifact-type-filter" x-model="availableTypeFilter">
                     <option value="">All Types</option>
                     <option value="sbom">SBOMs Only</option>
+                    <option value="cbom">CBOMs Only</option>
                     <option value="vex">VEX Only</option>
                     <option value="document">Documents Only</option>
                     </c-forms.select>
@@ -174,7 +230,7 @@
                 </div>
             </div>
             {# Loading State #}
-            <c-feedback.loading message="Loading artifacts..." x-show="isLoadingAvailable" />
+            <c-feedback.loading-list message="Loading artifacts..." x-show="isLoadingAvailable" x-cloak />
             {# No Results #}
             <div x-show="!isLoadingAvailable && availableArtifacts.length === 0">
                 <c-feedback.empty-state icon="fas fa-inbox" icon_variant="neutral" icon_size="sm" title="No artifacts available" message="All artifacts have already been added to this release" />
@@ -195,8 +251,8 @@
                 <span class="text-text-muted text-sm flex items-center gap-2">
                     <i class="fas fa-list" aria-hidden="true"></i>
                     <span class="font-semibold text-text"
-                          x-text="filteredAvailableArtifacts.length"></span>
-                    of <span x-text="availableArtifacts.length"></span> artifacts
+                          x-text="$number(filteredAvailableArtifacts.length)"></span>
+                    of <span x-text="$number(availableArtifacts.length)"></span> artifacts
                 </span>
                 <c-badges.primary class="gap-1.5" x-show="selectedArtifacts.size > 0">
                 <i class="fas fa-check-circle" aria-hidden="true"></i>
@@ -211,23 +267,25 @@
                         x-text="allFilteredSelected ? 'Deselect All' : 'Select All Visible'"></button>
                 </c-slot>
                 </c-tables.toolbar>
-                <c-tables.table class="max-h-[50vh] overflow-y-auto">
+                {# Expose the picker's own sort state through the shared table contract. #}
+                <c-tables.table sized variant_class="min-w-256" class="max-h-[50vh] overflow-y-auto" aria-label="Available artifacts" x-data="{ get sortColumn() { return availableSortColumn }, get sortDirection() { return availableSortDirection }, sort(column) { setAvailableSort(column) } }">
                 <c-tables.head>
-                <c-tables.header-cell class="w-12">
-                <c-forms.checkbox aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
+                {# The picker keeps its own selection state, so it borrows select-cell's gutter rather than the component. #}
+                <c-tables.header-cell variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" data-cell-select>
+                <c-forms.checkbox-input class="align-middle" aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
                 </c-tables.header-cell>
-                <c-tables.header-cell sort="type" class="w-16">Type</c-tables.header-cell>
+                <c-tables.header-cell sort="type" class="w-28">Type</c-tables.header-cell>
                 <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
-                <c-tables.header-cell sort="component">Component</c-tables.header-cell>
-                <c-tables.header-cell sort="format">Format</c-tables.header-cell>
-                <c-tables.header-cell sort="version">Version</c-tables.header-cell>
-                <c-tables.header-cell sort="created" date class="w-28">Created</c-tables.header-cell>
+                <c-tables.header-cell sort="component" class="w-40">Component</c-tables.header-cell>
+                <c-tables.header-cell sort="format" class="w-36">Format</c-tables.header-cell>
+                <c-tables.header-cell sort="version" class="w-28">Version</c-tables.header-cell>
+                <c-tables.header-cell sort="created" date class="w-40">Created</c-tables.header-cell>
                 </c-tables.head>
                 <tbody>
                     <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
                         <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" ::class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'" tabindex="0" @click="toggleArtifactSelection(artifact.id)" @keydown.enter.prevent="toggleArtifactSelection(artifact.id)" @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
-                        <c-tables.cell nowrap>
-                        <c-forms.checkbox ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
+                        <c-tables.cell variant_class="w-12 first:pl-4 first:pr-0 max-sm:px-2" data-cell-select>
+                        <c-forms.checkbox-input class="align-middle" ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
                         </c-tables.cell>
                         <c-tables.cell>
                         <div class="w-8 h-8 rounded-lg flex items-center justify-center"
@@ -254,7 +312,7 @@
                               x-text="getAvailableArtifactFormat(artifact)"></span>
                         <c-badges.format class="text-text-muted bg-border/20 border" style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)" x-show="!isArtifactSbom(artifact)" x-text="getAvailableArtifactFormat(artifact)" />
                         </c-tables.cell>
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <span x-show="artifact.version"
                               class="text-text font-mono text-sm"
                               :title="artifact.version"

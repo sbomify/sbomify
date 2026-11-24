@@ -6,10 +6,11 @@ Plugins are responsible for analyzing SBOMs and returning normalized results.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .results import AssessmentResult, PluginMetadata
+from .results import AssessmentResult, AssessmentSummary, Finding, PluginMetadata
 
 
 class RetryLaterError(Exception):
@@ -33,18 +34,35 @@ class RetryLaterError(Exception):
     Attributes:
         message: Human-readable description of why retry is needed.
         assessment_run_id: Optional ID of the AssessmentRun (set by orchestrator).
+        title: Optional finding title shown to the user if the retries run out.
+        retry_after_seconds: Optional minimum delay before the next attempt.
     """
 
-    def __init__(self, message: str = "", assessment_run_id: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str = "",
+        assessment_run_id: str | None = None,
+        *,
+        title: str | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
         """Initialize RetryLaterError.
 
         Args:
-            message: Human-readable description of why retry is needed.
+            message: Human-readable description of why retry is needed. If the
+                retries run out it becomes the finding's description, so write
+                it for the user.
             assessment_run_id: Optional ID of the AssessmentRun. This is typically
                 set by the orchestrator when re-raising the exception.
+            title: Finding title shown to the user if the retries run out. The
+                orchestrator falls back to a generic one when this is omitted.
+            retry_after_seconds: Minimum delay requested by the external service.
+                The framework uses the larger of this and its normal backoff.
         """
         super().__init__(message)
         self.assessment_run_id = assessment_run_id
+        self.title = title
+        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass
@@ -77,6 +95,9 @@ class SBOMContext:
         signature_blob_key: S3 key for the stored cryptographic signature (if attached).
         signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
         provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
+        rerun_requested: True on the first attempt of a run a person asked for. A plugin that
+            keeps its work in an outside service can start over there, where it would
+            otherwise pick up what it left. False on every retry of that run.
     """
 
     sha256_hash: str | None = None
@@ -91,6 +112,7 @@ class SBOMContext:
     signature_blob_key: str | None = None
     signature_type: str | None = None
     provenance_blob_key: str | None = None
+    rerun_requested: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -112,6 +134,13 @@ class AssessmentPlugin(ABC):
     - sbom_path: A Path to the SBOM file on disk (temporary, managed by framework)
     - context: Optional SBOMContext with pre-computed metadata (sha256_hash, etc.)
     - config: Optional plugin-specific configuration via __init__
+
+    Bump ``VERSION`` whenever a change could alter a verdict: a check added,
+    removed or loosened, a field read differently, a new identifier spelling
+    accepted. Every stored run records the version that produced it, and the
+    artifact page marks a result from an older version as out of date and
+    offers a re-run. A scoring change shipped under the same version leaves
+    every existing result looking current.
 
     Example:
         >>> class MyPlugin(AssessmentPlugin):
@@ -200,6 +229,131 @@ class AssessmentPlugin(ABC):
             Any exception will be caught by the framework and recorded
             as a failed assessment run with the error message.
         """
+
+    def build_single_finding_result(
+        self,
+        *,
+        finding_id: str,
+        title: str,
+        description: str,
+        status: str,
+        severity: str,
+        metadata: dict[str, Any],
+        pass_count: int = 0,
+        fail_count: int = 0,
+        warning_count: int = 0,
+        error_count: int = 0,
+    ) -> AssessmentResult:
+        """Construct an AssessmentResult carrying a single status marker.
+
+        For the results that say something about the run rather than about the
+        artifact: an operational failure, or a precondition the plugin could not
+        meet. Plugin name, version, category and timestamp are read from
+        ``get_metadata()``, so every plugin's markers come out the same shape
+        and a change here reaches all of them.
+
+        Args:
+            finding_id: Stable identifier, namespaced with the plugin slug
+                (e.g. ``"osv:unsupported-spec-version"``). That namespace is
+                what ``vulnerability_scanning.utils.is_vulnerability`` reads to
+                keep a marker out of the CVE rows and severity counts.
+            title: Human-readable title.
+            description: What happened, in terms the operator can act on.
+            status: Finding status ("warning" for a skip, "error" for a failure).
+            severity: Finding severity.
+            metadata: Result-level metadata (e.g. ``{"skipped": True}``).
+            pass_count: Summary pass count.
+            fail_count: Summary fail count.
+            warning_count: Summary warning count.
+            error_count: Summary error count.
+
+        Returns:
+            AssessmentResult with exactly one finding.
+        """
+        finding = Finding(
+            id=finding_id,
+            title=title,
+            description=description,
+            status=status,
+            severity=severity,
+        )
+        # The status marker rides the findings array so the run panel can show
+        # why nothing was scanned, but it is not a vulnerability: the summary
+        # must not count it, or a skipped run reads as "1 finding".
+        summary = AssessmentSummary(
+            total_findings=0,
+            pass_count=pass_count,
+            fail_count=fail_count,
+            warning_count=warning_count,
+            error_count=error_count,
+        )
+        plugin_metadata = self.get_metadata()
+        return AssessmentResult(
+            plugin_name=plugin_metadata.name,
+            plugin_version=plugin_metadata.version,
+            category=plugin_metadata.category.value,
+            assessed_at=datetime.now(timezone.utc).isoformat(),
+            summary=summary,
+            findings=[finding],
+            metadata=metadata,
+        )
+
+    def create_skipped_result(
+        self,
+        *,
+        finding_id: str,
+        title: str,
+        description: str,
+        unsupported_input: bool = False,
+        extra_metadata: dict[str, Any] | None = None,
+    ) -> AssessmentResult:
+        """Create a non-failing result indicating the assessment was skipped.
+
+        For when the plugin's preconditions aren't met but the situation is not
+        an error: an SBOM with no release association, an artifact the scanner
+        cannot read, a spec version the scanner has not caught up to. A
+        capability gap is not a fault, and recording one as an error puts a
+        high-severity Scan Error on a valid artifact, again on every sweep.
+
+        The returned finding uses status="warning" with severity="info", and
+        the top-level AssessmentResult metadata contains {"skipped": True}.
+        API consumers that aggregate plugin results into an overall posture
+        MUST check metadata["skipped"] to distinguish "assessment was skipped"
+        from "assessment ran and reported a real warning finding". A raw
+        status check alone is not sufficient.
+
+        Args:
+            finding_id: Stable identifier for the finding.
+            title: Human-readable title.
+            description: Detailed reason the assessment was skipped.
+            unsupported_input: True when the skip is because the scanner could
+                not read the artifact at all, rather than because a per-run
+                precondition was unmet. Re-running such an SBOM on the next
+                sweep repeats the rejection verbatim, so the scheduled task
+                backs it off; see ``UNSUPPORTED_INPUT_SKIP_HOURS``.
+            extra_metadata: Further result-level keys to merge in, for plugins
+                that record how they stood down.
+
+        Returns:
+            AssessmentResult with a single warning finding and metadata
+            containing ``skipped: True``, plus ``unsupported_input: True`` when
+            that argument is set. Consumers should test for the keys they care
+            about rather than compare the dict, since this shape grows.
+        """
+        metadata: dict[str, Any] = {"skipped": True}
+        if unsupported_input:
+            metadata["unsupported_input"] = True
+        if extra_metadata:
+            metadata.update(extra_metadata)
+        return self.build_single_finding_result(
+            finding_id=finding_id,
+            title=title,
+            description=description,
+            status="warning",
+            severity="info",
+            metadata=metadata,
+            warning_count=1,
+        )
 
     def sync_release_tags(self, *, sbom_id: str, run_id: str, release: Any) -> None:
         """Reconcile downstream release state after the AssessmentRun.releases M2M changes.

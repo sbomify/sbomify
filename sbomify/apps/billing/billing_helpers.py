@@ -17,7 +17,7 @@ from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 logger = getLogger(__name__)
@@ -27,7 +27,7 @@ RATE_LIMIT = 5
 RATE_LIMIT_PERIOD = 60
 
 
-def require_billing_manager(team: Team, user: Any) -> tuple[bool, str]:
+def require_billing_manager(team: Workspace, user: Any) -> tuple[bool, str]:
     """Check if user may manage the team's billing.
 
     Billing is the ``ADMINISTER`` tier (owners and admins), not owner-only:
@@ -71,7 +71,7 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     return f"{prefix}_noid_{deterministic_hash}"
 
 
-def notify_billing_managers(team: Team, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+def notify_billing_managers(team: Workspace, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
     """Send a notification to everyone who can act on it — owners and admins.
 
     Notifications follow the capability: admins control the subscription, so a
@@ -120,21 +120,93 @@ def check_rate_limit(key: str, limit: int = 5, period: int = 60) -> bool:
     return count > limit
 
 
-def handle_community_downgrade_visibility(team: Team) -> None:
-    """Set all components to PUBLIC when downgrading to community plan.
+def handle_community_downgrade_visibility(team: Workspace) -> None:
+    """Set all components and products to PUBLIC when downgrading to community plan.
 
     Logs an audit trail of the visibility change for traceability.
     """
-    from sbomify.apps.sboms.models import Component
+    from sbomify.apps.sboms.models import Component, Product
+    from sbomify.apps.security_advisories.signals import track_component_changes
 
-    affected = Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC).count()
+    components = Component.objects.filter(team=team).exclude(visibility=Component.Visibility.PUBLIC)
+    with track_component_changes(components.values_list("pk", flat=True)):
+        affected = components.update(visibility=Component.Visibility.PUBLIC)
     if affected > 0:
-        Component.objects.filter(team=team).update(visibility=Component.Visibility.PUBLIC)
         logger.warning(
             "Community downgrade: set %d component(s) to PUBLIC for team %s",
             affected,
             team.key,
         )
+
+    # One save each, not a bulk update: the CSAF feed marker listens on product saves.
+    private_products = list(Product.objects.filter(team=team, is_public=False))
+    for product in private_products:
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+    if private_products:
+        logger.warning(
+            "Community downgrade: set %d product(s) to PUBLIC for team %s",
+            len(private_products),
+            team.key,
+        )
+
+
+def apply_community_downgrade(team: Workspace) -> None:
+    """Apply Community's rules to a workspace that has just left a paid plan.
+
+    ``team`` must already carry the Community plan: the plugins it keeps are the
+    ones that plan includes.
+    """
+    from sbomify.apps.plugins.utils import drop_plugins_outside_plan
+
+    handle_community_downgrade_visibility(team)
+    dropped = drop_plugins_outside_plan(team)
+    if dropped:
+        logger.info("Community downgrade: disabled %s for team %s", ", ".join(dropped), team.key)
+
+
+def downgrade_ended_subscription(team_pk: int, subscription_id: str | None = None) -> bool:
+    """Move a workspace whose subscription ended onto Community.
+
+    Every path that learns a subscription ended calls this, so none of them can
+    leave the workspace on the paid plan it no longer pays for. Enterprise plans
+    are set by hand rather than by Stripe, so they stay put. Returns whether the
+    plan changed.
+
+    ``subscription_id`` is the subscription the caller saw end. When given, a
+    workspace that stores a different one is left alone: a checkout replaced it
+    while the caller was asking Stripe, and the new one may be live.
+    """
+    from django.db import transaction
+
+    from sbomify.apps.teams.models import Workspace
+
+    from .models import BillingPlan
+
+    with transaction.atomic():
+        team = Workspace.objects.select_for_update().get(pk=team_pk)
+        if (
+            subscription_id is not None
+            and (team.billing_plan_limits or {}).get("stripe_subscription_id") != subscription_id
+        ):
+            return False
+        if team.billing_plan in (BillingPlan.KEY_COMMUNITY, BillingPlan.KEY_ENTERPRISE):
+            return False
+        limits = (team.billing_plan_limits or {}).copy()
+        limits.update(get_community_plan_limits())
+        # The downgrade a scheduled cancel was waiting for has now happened.
+        limits.pop("scheduled_downgrade_plan", None)
+        limits["cancel_at_period_end"] = False
+        team.billing_plan = BillingPlan.KEY_COMMUNITY
+        team.billing_plan_limits = limits
+        team.save()
+        # Under the same row lock as the plan change: a new subscription landing in
+        # between would restore the paid plan, and publishing afterwards would
+        # then act on a workspace that pays again.
+        apply_community_downgrade(team)
+
+    logger.info("Subscription ended: moved workspace %s to Community", team.key)
+    return True
 
 
 def get_community_plan_limits() -> dict[str, int | None]:
@@ -162,17 +234,17 @@ def get_community_plan_limits() -> dict[str, int | None]:
 CHECKOUT_LOCK_TTL = 300  # 5 minutes
 
 
-def acquire_checkout_lock(team_key: str) -> bool:
+def acquire_checkout_lock(workspace_key: str) -> bool:
     """Acquire a cache-based lock to prevent concurrent checkout sessions for a team.
 
     Returns True if lock acquired, False if another checkout is already in progress.
     """
-    return cache.add(f"checkout_lock:{team_key}", 1, CHECKOUT_LOCK_TTL)
+    return cache.add(f"checkout_lock:{workspace_key}", 1, CHECKOUT_LOCK_TTL)
 
 
-def release_checkout_lock(team_key: str) -> None:
+def release_checkout_lock(workspace_key: str) -> None:
     """Release the checkout session lock for a team."""
-    cache.delete(f"checkout_lock:{team_key}")
+    cache.delete(f"checkout_lock:{workspace_key}")
 
 
 # ---------------------------------------------------------------------------

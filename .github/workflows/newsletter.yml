@@ -29,7 +29,7 @@ jobs:
           echo "Download the \`newsletter\` artifact from this run. Upload the \`.mjml\` file to Mailjet (its template import only accepts MJML); the \`.html\` is for previewing or non-Mailjet use." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload newsletter artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: newsletter
           path: dist/newsletter/

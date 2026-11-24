@@ -4,11 +4,10 @@ import uuid
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from django.apps import apps
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinLengthValidator, RegexValidator
-from django.db import models
+from django.core.validators import MaxValueValidator, MinLengthValidator, MinValueValidator, RegexValidator
+from django.db import models, transaction
 from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
@@ -65,7 +64,7 @@ def generate_unique_slug(name: str, exclude_pk: int | None = None) -> str:
     suffix = 2
     while True:
         if candidate not in RESERVED_SLUGS:
-            qs = Team.objects.filter(slug=candidate)
+            qs = Workspace.objects.filter(slug=candidate)
             if exclude_pk is not None:
                 qs = qs.exclude(pk=exclude_pk)
             if not qs.exists():
@@ -153,14 +152,15 @@ def default_patch_sla_days() -> dict[str, int | None]:
     return dict(CRA_DEFAULT_PATCH_SLA_DAYS)
 
 
-class Team(models.Model):
+class Workspace(models.Model):
     class Plan(models.TextChoices):
         COMMUNITY = "community", "Community"
         BUSINESS = "business", "Business"
         ENTERPRISE = "enterprise", "Enterprise"
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_teams"
+        # The app label is still teams, so the table name is pinned.
+        db_table = "workspaces_workspaces"
         indexes = [
             models.Index(fields=["key"]),
             models.Index(fields=["slug"]),
@@ -233,6 +233,12 @@ class Team(models.Model):
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
     onboarding_goal = models.TextField(blank=True, default="")
+    default_support_period_years = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(5), MaxValueValidator(100)],
+        help_text="Default support period for new product assessments. Product support dates take precedence.",
+    )
     is_public = models.BooleanField(
         default=True, help_text="Controls whether the workspace Trust Center is publicly accessible."
     )
@@ -247,6 +253,39 @@ class Team(models.Model):
         default=False,
         help_text="Enable Transparency Exchange API (TEA) for this workspace",
     )
+    publish_vulnerability_posture = models.BooleanField(
+        default=False,
+        help_text=(
+            "Publish the vulnerability posture of a release on the public Trust Center. "
+            "Off by default: which vulnerabilities a workspace is carrying is its own to "
+            "disclose, and a Trust Center is readable by anyone holding the link."
+        ),
+    )
+    csaf_feed_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=(
+            "When this workspace's CSAF TLP:WHITE distribution last changed. Bumped whenever a "
+            "public advisory is written or deleted, because a marker aggregated from the advisories "
+            "still present would move backwards when one is removed and a polling aggregator would "
+            "miss the removal."
+        ),
+    )
+    # The workspace's own advisory numbering, for a team that already publishes
+    # under a scheme or is moving from a platform that issued numbers in it.
+    # Blank keeps the generated ``<NAME>-SA`` prefix.
+    advisory_id_prefix = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Prefix for new security advisory ids, e.g. ACME-SA. Blank uses one derived from the name.",
+    )
+    advisory_id_start_at = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(999_999)],
+        help_text="Lowest number a new security advisory id may take in each year's sequence.",
+    )
     security_txt_config = models.JSONField(
         default=dict,
         blank=True,
@@ -254,10 +293,27 @@ class Team(models.Model):
         "contact_id (str), policy_url (str), encryption_urls (list[str]), encryption_url (str, legacy), "
         "acknowledgments_url (str), canonical_url (str), hiring_url (str), preferred_languages (str)",
     )
-    members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
+    # Pinned to the names the Team model gave them, so user.team_set and a
+    # filter(team=...) on users read the same after the rename.
+    members: models.ManyToManyField[User, Any] = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="Member", related_name="team_set", related_query_name="team"
+    )
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pk})"
+
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
+        """Lock the workspace's products, in key order, before Django collects anything to delete.
+
+        A release edit locks its product and then the release, and the
+        products' own pre_delete handlers lock rows of theirs, so the products
+        are locked before any of that runs.
+        """
+        from sbomify.apps.sboms.models import Product
+
+        with transaction.atomic():
+            list(Product.objects.select_for_update().filter(team=self).order_by("pk").values_list("pk"))
+            return super().delete(*args, **kwargs)
 
     @property
     def display_name(self) -> str:
@@ -317,9 +373,9 @@ class Team(models.Model):
         if not plan:
             return False
 
-        allowed_plans = {choice.value for choice in Team.Plan}
+        allowed_plans = {choice.value for choice in Workspace.Plan}
         if plan in allowed_plans:
-            return plan != Team.Plan.COMMUNITY
+            return plan != Workspace.Plan.COMMUNITY
 
         # Custom plan keys that exist in BillingPlan are treated as paid/allowed
         if BillingPlan.objects.filter(key__iexact=plan).exists():
@@ -372,7 +428,7 @@ class Team(models.Model):
         is_new = self.pk is None
         current_plan = (self.billing_plan or "").strip().lower()
 
-        is_paid_plan = bool(current_plan) and current_plan != Team.Plan.COMMUNITY
+        is_paid_plan = bool(current_plan) and current_plan != Workspace.Plan.COMMUNITY
 
         # Default paid plans to private only at creation time (opt-in later for upgrades)
         if is_new and is_paid_plan and self.is_public:
@@ -393,10 +449,10 @@ class Team(models.Model):
         old_slug = None
         if not is_new:
             try:
-                old_instance = Team.objects.only("custom_domain", "slug").get(pk=self.pk)
+                old_instance = Workspace.objects.only("custom_domain", "slug").get(pk=self.pk)
                 old_custom_domain = old_instance.custom_domain
                 old_slug = old_instance.slug
-            except Team.DoesNotExist:
+            except Workspace.DoesNotExist:
                 pass
 
         super().save(*args, **kwargs)
@@ -502,10 +558,10 @@ class Team(models.Model):
 
 class Member(models.Model):
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_members"
+        db_table = "workspaces_members"
         unique_together = ("user", "team")
         indexes = [
-            models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
+            models.Index(fields=["team", "role"], name="workspace_member_role_idx"),
         ]
         constraints = [
             # ``choices`` is not enforced by the database and ``save()`` skips
@@ -515,15 +571,15 @@ class Member(models.Model):
             # three files. This constraint is what stops another one appearing:
             # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_SUPPORTED_ROLES]),
                 name="member_role_is_supported",
             ),
         ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
-    role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
-    is_default_team = models.BooleanField(default=False)
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_SUPPORTED_ROLES)
+    is_default_team = models.BooleanField(default=False, db_column="is_default_workspace")
     joined_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -536,7 +592,7 @@ def calculate_invitation_expiry() -> Any:
 
 class Invitation(models.Model):
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_invitations"
+        db_table = "workspaces_invitations"
         unique_together = ("team", "email")
         indexes = [
             models.Index(fields=["email"]),
@@ -552,12 +608,12 @@ class Invitation(models.Model):
             # fixtures, admin — that bypasses full_clean(). The clean() below
             # gives the normal form flow a friendlier ValidationError first.
             models.CheckConstraint(
-                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.WORKSPACE_INVITABLE_ROLES]),
                 name="invitation_role_is_invitable",
             ),
         ]
 
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, db_column="workspace_id")
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
     # Invitable roles only — ``bot`` is reserved for synthetic OIDC
@@ -565,10 +621,36 @@ class Invitation(models.Model):
     # above + Python clean() below). ``guest`` IS valid here because
     # the trust-center auto-accept flow creates guest-role invitations.
     # InviteUserForm UI further restricts choices but the model layer
-    # allows the broader set so non-UI flows work.
-    role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
+    # allows the broader set so non-UI flows work. ``operator`` is invited
+    # like any other internal role and needs no special handling.
+    role = models.CharField(max_length=255, choices=settings.WORKSPACE_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
+    # Who issued it, read again at accept time: an owner invitation only makes
+    # someone an owner while its issuer is still an owner. Null on rows written
+    # before this was recorded, and on trust-center guest invitations.
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    @property
+    def granted_role(self) -> str:
+        """The role accepting this invitation gives.
+
+        An owner invitation whose issuer is no longer an owner, or is unknown,
+        gives admin instead.
+        """
+        from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_OWNER, can
+
+        if self.role != ROLE_OWNER:
+            return self.role
+        if self.invited_by is not None and can(self.invited_by, "member:grant_owner", self.team):
+            return ROLE_OWNER
+        return ROLE_ADMIN
+
+    def get_granted_role_display(self) -> str:
+        role = self.granted_role
+        return str(dict(settings.WORKSPACE_INVITABLE_ROLES).get(role, role))
 
     def clean(self) -> None:
         # Friendly Python-level guard, invoked by Django forms and any
@@ -615,7 +697,7 @@ class ContactProfile(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_profiles"
+        db_table = "workspaces_contact_profiles"
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(
@@ -632,7 +714,9 @@ class ContactProfile(models.Model):
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="contact_profiles")
+    team = models.ForeignKey(
+        Workspace, on_delete=models.CASCADE, related_name="contact_profiles", db_column="workspace_id"
+    )
     name = models.CharField(max_length=255)
     is_default = models.BooleanField(default=False)
     is_component_private = models.BooleanField(
@@ -674,7 +758,7 @@ class ContactEntity(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_entities"
+        db_table = "workspaces_contact_entities"
         unique_together = ("profile", "name")
         ordering = ["name"]
 
@@ -768,7 +852,7 @@ class ContactProfileContact(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_contact_profile_contacts"
+        db_table = "workspaces_contact_profile_contacts"
         unique_together = ("entity", "name", "email")
         ordering = ["order", "name"]
         indexes = [
@@ -860,7 +944,7 @@ class Supplier(models.Model):
     """
 
     class Meta:
-        db_table = apps.get_app_config("teams").label + "_suppliers"
+        db_table = "workspaces_suppliers"
         ordering = ["name"]
         constraints = [
             # On Lower(name), not the raw column. clean() rejects a case variant
@@ -871,11 +955,11 @@ class Supplier(models.Model):
             models.UniqueConstraint(Lower("name"), "team", name="unique_supplier_name_per_team"),
         ]
         indexes = [
-            models.Index(fields=["team", "name"], name="teams_supplier_team_name_idx"),
+            models.Index(fields=["team", "name"], name="workspace_supplier_name_idx"),
         ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers")
+    team = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="suppliers", db_column="workspace_id")
     name = models.CharField(max_length=255, help_text="The vendor organization's name")
     contact_name = models.CharField(
         max_length=255,

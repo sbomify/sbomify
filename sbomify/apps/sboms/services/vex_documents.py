@@ -57,6 +57,7 @@ def build_component_vex_context(request: HttpRequest, component_id: str) -> Serv
         return ServiceResult.failure("Forbidden", status_code=403)
 
     from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.utils import state_label
     from sbomify.apps.vulnerability_scanning.vex import (
         TRIAGE_SOURCE,
         _document_from_vex_sbom,
@@ -80,7 +81,9 @@ def build_component_vex_context(request: HttpRequest, component_id: str) -> Serv
         for statement in statements:
             for vuln_id in statement.get("ids") or []:
                 pairs.setdefault(vuln_id.upper(), statement.get("state"))
-        cve_summary = [{"id": vuln_id, "state": state} for vuln_id, state in list(pairs.items())[:5]]
+        # The state is the chip's tooltip, so it is worded here rather than
+        # handed to the template as the enum the document carries.
+        cve_summary = [{"id": vuln_id, "state": state_label(state)} for vuln_id, state in list(pairs.items())[:5]]
         documents.append(
             {
                 "id": row.id,

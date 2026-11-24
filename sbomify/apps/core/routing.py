@@ -6,12 +6,33 @@ This module defines the URL patterns for WebSocket connections.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.urls import re_path
 
 from . import consumers
+from .user_consumer import UserConsumer
 
-websocket_urlpatterns = [
+# ``django.urls.re_path`` returns a ``URLPattern``; channels' ``URLRouter`` is
+# annotated against its own ``_ExtendedURLPattern``. The two are interchangeable
+# at runtime — channels re-wraps whatever it is given — but mypy cannot see
+# that. Typed loosely here so the mismatch is explained once, rather than every
+# consumer of this list (``sbomify/asgi.py``) carrying its own ignore.
+websocket_urlpatterns: list[Any] = [
     # Workspace-scoped WebSocket for real-time updates
     # URL: ws://host/ws/workspace/<workspace_key>/
     re_path(r"ws/workspace/(?P<workspace_key>[\w-]+)/$", consumers.WorkspaceConsumer.as_asgi()),  # type: ignore[arg-type]
+    # The signed-in user's own messages, for people outside the workspace the
+    # news is about, such as a trust-center visitor whose request was decided.
+    re_path(r"ws/user/$", UserConsumer.as_asgi()),  # type: ignore[arg-type]
+    # Anything else. Channels raises ValueError when no pattern matches, which
+    # escapes as an unhandled ASGI exception and reaches the error tracker as a
+    # fault of ours, though it only ever means a client asked for something we
+    # do not have — automated scanners probe paths like /wsproxy constantly.
+    # A path we do not serve is a verdict about the client, so it is refused the
+    # same way an unauthorised workspace socket is.
+    #
+    # Last in the list, and the only pattern without an anchor, so it is reached
+    # only after every real route has failed to match.
+    re_path(r"", consumers.UnknownPathConsumer.as_asgi()),  # type: ignore[arg-type]
 ]

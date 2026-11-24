@@ -16,6 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from django.core.cache import cache
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,7 +28,7 @@ from sbomify.apps.core.tests.shared_fixtures import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Invitation, Member
 
 
 @pytest.fixture
@@ -53,8 +55,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -86,7 +87,7 @@ class TestAccessRequestCreation:
 
     def test_create_access_request_view_unauthenticated(self, client, team_with_business_plan):
         """Test that unauthenticated users cannot create access requests."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         response = client.post(url, {})
         assert response.status_code in [302, 401, 403]  # Redirect to login or forbidden
 
@@ -94,12 +95,12 @@ class TestAccessRequestCreation:
         self, authenticated_web_client, team_with_business_plan, guest_user
     ):
         """Test creating an access request via view."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         
         # Switch to guest user
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": None,  # Not a member yet
             "name": team_with_business_plan.name,
@@ -115,21 +116,23 @@ class TestAccessRequestCreation:
         ).exists()
 
     def test_create_access_request_api(
-        self, authenticated_api_client, team_with_business_plan, guest_user
+        self, team_with_business_plan, guest_user
     ):
         """Test creating an access request via API."""
-        client, access_token = authenticated_api_client
+        # The requester asks for themselves, on their own session, sending its
+        # CSRF token as a browser does.
+        token = get_token(RequestFactory().get("/"))
+        client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+        client.cookies["csrftoken"] = token
         client.force_login(guest_user)
         
         # API endpoint is /api/v1/teams/{team_key}/access-request
         url = f"/api/v1/teams/{team_with_business_plan.key}/access-request"
-        headers = get_api_headers(access_token)
         
         response = client.post(
             url,
             {},
             content_type="application/json",
-            **headers,
         )
         
         assert response.status_code in [200, 201]
@@ -147,7 +150,7 @@ class TestAccessRequestCreation:
         self, authenticated_web_client, team_with_business_plan, guest_user, pending_access_request
     ):
         """Test that creating a request when one already exists updates it."""
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.force_login(guest_user)
         
         response = authenticated_web_client.post(url, {})
@@ -173,7 +176,7 @@ class TestAccessRequestCreation:
         
         # Try to create a new request
         authenticated_web_client.force_login(guest_user)
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(url, {})
         
         assert response.status_code in [200, 302]
@@ -184,6 +187,28 @@ class TestAccessRequestCreation:
 
 
 @pytest.mark.django_db
+class TestTrustCenterInvitation:
+    """Test inviting an address to the trust center."""
+
+    def test_inviting_an_existing_account_records_the_admin_as_inviter(
+        self, authenticated_web_client, team_with_business_plan, sample_user, guest_user
+    ):
+        """The invited account's request and the invitation name the admin who sent it."""
+        guest_user.email_verified = True
+        guest_user.save(update_fields=["email_verified"])
+        setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
+
+        authenticated_web_client.post(
+            reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"action": "invite", "email": guest_user.email},
+        )
+
+        invitation = Invitation.objects.get(team=team_with_business_plan, email=guest_user.email)
+        assert AccessRequest.objects.get(team=team_with_business_plan, user=guest_user).decided_by == sample_user
+        assert cache.get(f"invitation_inviter:{invitation.token}") == sample_user.id
+
+
+@pytest.mark.django_db
 class TestNDASigning:
     """Test NDA signing functionality."""
 
@@ -191,12 +216,12 @@ class TestNDASigning:
         """Test that unauthenticated users cannot sign NDAs."""
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_valid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, 
         company_nda_document, pending_access_request, guest_user
@@ -212,7 +237,7 @@ class TestNDASigning:
         
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
         # Submit NDA signing form with name and consent
@@ -231,7 +256,7 @@ class TestNDASigning:
         assert signature.nda_document == company_nda_document
         assert signature.nda_content_hash == company_nda_document.content_hash
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_with_invalid_hash(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -247,7 +272,7 @@ class TestNDASigning:
         
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
         
         # Submit NDA signing form - should fail due to hash mismatch
@@ -264,7 +289,7 @@ class TestNDASigning:
         # Verify signature was NOT created
         assert not NDASignature.objects.filter(access_request=pending_access_request).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_captures_correct_ip_with_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -280,7 +305,7 @@ class TestNDASigning:
 
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
 
         # Submit NDA signing form with X-Real-IP header (set by reverse proxy)
@@ -299,7 +324,7 @@ class TestNDASigning:
         assert signature is not None
         assert signature.ip_address == "203.0.113.42"
 
-    @patch("sbomify.apps.documents.views.access_requests.S3Client")
+    @patch("sbomify.apps.documents.views.access_requests.StorageClient")
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan,
         company_nda_document, pending_access_request, guest_user
@@ -315,7 +340,7 @@ class TestNDASigning:
 
         url = reverse(
             "documents:sign_nda",
-            kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            kwargs={"workspace_key": team_with_business_plan.key, "request_id": pending_access_request.id},
         )
 
         # Submit NDA signing form without X-Real-IP header
@@ -345,7 +370,7 @@ class TestAccessRequestApproval:
         """Test approving an access request via view."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -369,7 +394,7 @@ class TestAccessRequestApproval:
             role="guest",
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_approve_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
@@ -377,7 +402,7 @@ class TestAccessRequestApproval:
         """Test that approval sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -426,7 +451,7 @@ class TestAccessRequestApproval:
             team=team_with_business_plan, user=pending_access_request.user
         ).exists()
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -452,7 +477,7 @@ class TestAccessRequestApproval:
         cache_key = f"user_teams_invalidate:{pending_access_request.user.id}"
         cache.set(cache_key, True, timeout=600)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -476,7 +501,7 @@ class TestAccessRequestRejection:
         """Test rejecting an access request via view."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -493,7 +518,7 @@ class TestAccessRequestRejection:
         assert pending_access_request.status == AccessRequest.Status.REJECTED
         assert pending_access_request.decided_by == sample_user
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_reject_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
@@ -501,7 +526,7 @@ class TestAccessRequestRejection:
         """Test that rejection sends email notification."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -560,7 +585,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -588,7 +613,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -619,7 +644,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -655,7 +680,7 @@ class TestAccessRequestClearRejection:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -677,7 +702,7 @@ class TestAccessRequestClearRejection:
         """Test that clearing a non-existent request returns error."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -713,7 +738,7 @@ class TestAccessRequestRevocation:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -734,7 +759,7 @@ class TestAccessRequestRevocation:
             team=team_with_business_plan, user=guest_user
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_revoke_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         sample_user, guest_user
@@ -754,7 +779,7 @@ class TestAccessRequestRevocation:
 
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
 
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -796,7 +821,7 @@ class TestAccessRequestRevocation:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -845,7 +870,7 @@ class TestAccessRequestRevocation:
         
         # Revoke access
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -882,7 +907,7 @@ class TestNotificationSystem:
         request = factory.get("/")
         request.user = sample_user
         request.session = {}
-        request.session["current_team"] = {
+        request.session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "owner",
             "name": team_with_business_plan.name,
@@ -899,7 +924,7 @@ class TestNotificationSystem:
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
         # Approve the only pending request
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(
             url,
             {
@@ -926,7 +951,7 @@ class TestGatedComponentAccess:
         response = client.get(url)
         assert response.status_code == 200
 
-    @patch("sbomify.apps.documents.views.document_download.S3Client")
+    @patch("sbomify.apps.documents.views.document_download.StorageClient")
     def test_gated_component_download_requires_access(
         self, mock_s3_client, client, gated_component, team_with_business_plan, guest_user
     ):
@@ -964,7 +989,7 @@ class TestGatedComponentAccess:
         client.force_login(guest_user)
         # Set up session for proper access check
         session = client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
@@ -980,7 +1005,7 @@ class TestGatedComponentAccess:
 class TestNDADocumentVersioning:
     """Test NDA document versioning functionality."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_nda_versioning_creates_new_version(
         self, mock_s3_client, authenticated_web_client, team_with_business_plan, company_nda_document, sample_user
     ):
@@ -992,7 +1017,7 @@ class TestNDADocumentVersioning:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("workspaces:team_settings", kwargs={"workspace_key": team_with_business_plan.key})
         
         from django.core.files.uploadedfile import SimpleUploadedFile
         new_nda = SimpleUploadedFile("new_nda.pdf", b"New NDA Content v2", content_type="application/pdf")
@@ -1011,8 +1036,7 @@ class TestNDADocumentVersioning:
         # Verify new document was created (versioning creates a new document)
         all_ndas = Document.objects.filter(
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
         ).order_by("-created_at")
         
         # Should have at least 2 documents now (original + new version)
@@ -1079,7 +1103,7 @@ class TestAccessRequestQueueView:
 
     def test_access_request_queue_requires_auth(self, client, team_with_business_plan):
         """Test that queue view requires authentication."""
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = client.get(url)
         assert response.status_code in [302, 401, 403]
 
@@ -1089,14 +1113,14 @@ class TestAccessRequestQueueView:
         """Test that queue view requires admin/owner role."""
         authenticated_web_client.force_login(guest_user)
         session = authenticated_web_client.session
-        session["current_team"] = {
+        session["current_workspace"] = {
             "key": team_with_business_plan.key,
             "role": "guest",
             "name": team_with_business_plan.name,
         }
         session.save()
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.get(url)
         # TeamRoleRequiredMixin may redirect to recover workspace session if user is not a member
         assert response.status_code in [302, 403, 404]
@@ -1104,11 +1128,16 @@ class TestAccessRequestQueueView:
     def test_access_request_queue_shows_pending_requests(
         self, authenticated_web_client, team_with_business_plan, pending_access_request, sample_user
     ):
-        """Test that queue view shows pending requests."""
+        """Test that queue view shows pending requests.
+
+        Fetched the way the trust-center tab fetches it. The template is a
+        section with no page around it, so a plain browser GET is sent to the
+        tab that renders it instead.
+        """
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content
@@ -1119,8 +1148,8 @@ class TestAccessRequestQueueView:
         """Test that queue view supports partial rendering for HTMX."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url, {"partial": "true"})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         # Should render the partial template
@@ -1140,8 +1169,8 @@ class TestAccessRequestQueueView:
             signed_name="Test User"
         )
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
-        response = authenticated_web_client.get(url)
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
+        response = authenticated_web_client.get(url, headers={"hx-request": "true"})
         
         assert response.status_code == 200
         assert str(pending_access_request.user.email).encode() in response.content
@@ -1194,7 +1223,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = guest_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "guest",
                 "name": team_with_business_plan.name,
@@ -1227,7 +1256,7 @@ class TestAccessRequestNotificationProvider:
         request = factory.get("/")
         request.user = sample_user
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,
@@ -1268,7 +1297,7 @@ class TestAccessRequestNotificationProvider:
         request.user = sample_user
         notification_id = f"access_request_pending_{team_with_business_plan.key}"
         request.session = {
-            "current_team": {
+            "current_workspace": {
                 "key": team_with_business_plan.key,
                 "role": "owner",
                 "name": team_with_business_plan.name,
@@ -1303,7 +1332,7 @@ class TestAccessRequestEdgeCases:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -1331,7 +1360,7 @@ class TestAccessRequestEdgeCases:
         
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -1350,7 +1379,7 @@ class TestAccessRequestEdgeCases:
         """Test that revoking a non-approved request fails."""
         setup_authenticated_client_session(authenticated_web_client, team_with_business_plan, sample_user)
         
-        url = reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:access_request_queue", kwargs={"workspace_key": team_with_business_plan.key})
         response = authenticated_web_client.post(
             url,
             {
@@ -1448,22 +1477,23 @@ def test_access_request_notification_replies_to_requester(team_with_business_pla
     not to hello@sbomify.com, so admins reply to the person asking for access."""
     from django.core import mail
 
-    from sbomify.apps.documents.access_apis import (
-        _notify_admins_of_access_request as notify_api,
-    )
-    from sbomify.apps.documents.views.access_requests import (
-        _notify_admins_of_access_request as notify_view,
-    )
+    from sbomify.apps.documents import access_apis
+    from sbomify.apps.documents.services.access_emails import notify_admins_of_access_request
+    from sbomify.apps.documents.views import access_requests as access_views
+
+    # The API and the views used to carry a copy of this each, and the copies had
+    # drifted apart on how they select admins. Both now reference the one function.
+    assert access_apis.notify_admins_of_access_request is notify_admins_of_access_request
+    assert access_views.notify_admins_of_access_request is notify_admins_of_access_request
 
     Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
     access_request = AccessRequest.objects.create(
         team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.PENDING
     )
 
-    for notify in (notify_view, notify_api):
-        mail.outbox = []
-        notify(access_request, team_with_business_plan)
-        assert mail.outbox, "expected an admin notification email"
-        message = mail.outbox[0]
-        assert message.to == [sample_user.email]
-        assert message.reply_to == [guest_user.email]
+    mail.outbox = []
+    notify_admins_of_access_request(access_request, team_with_business_plan)
+    assert mail.outbox, "expected an admin notification email"
+    message = mail.outbox[0]
+    assert message.to == [sample_user.email]
+    assert message.reply_to == [guest_user.email]

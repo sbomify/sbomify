@@ -6,13 +6,13 @@ from django.urls import reverse
 
 from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
 def public_team():
     """Create a public team for testing."""
-    return Team.objects.create(name="Public Test Team", is_public=True)
+    return Workspace.objects.create(name="Public Test Team", is_public=True)
 
 
 @pytest.fixture
@@ -325,8 +325,8 @@ def test_product_details_hides_links_when_empty(public_team, public_product):
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Links panel should not be shown when empty (panel title is "Resources & links")
-    assert "Resources &amp; links" not in content
+    # Links panel should not be shown when empty (panel title is "Resources and links")
+    assert "Resources and links" not in content
 
 
 @pytest.mark.django_db

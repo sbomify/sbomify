@@ -97,6 +97,7 @@ class TestPublicSBOMAccess:
         """Test that SBOMs can be listed for public components without authentication."""
         # Make component public
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PUBLIC
         sample_component.save()
 
@@ -118,6 +119,7 @@ class TestPublicSBOMAccess:
         """Test that SBOMs cannot be listed for private components without authentication."""
         # Ensure component is private
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
@@ -139,6 +141,7 @@ class TestPublicSBOMAccess:
         """Test that SBOMs can be listed for private components with proper authentication."""
         # Ensure component is private
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
@@ -174,6 +177,7 @@ class TestPublicDocumentAccess:
         """Test that documents can be listed for public components without authentication."""
         # Make component public
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PUBLIC
         sample_component.save()
 
@@ -195,6 +199,7 @@ class TestPublicDocumentAccess:
         """Test that documents cannot be listed for private components without authentication."""
         # Ensure component is private
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
@@ -216,6 +221,7 @@ class TestPublicDocumentAccess:
         """Test that documents can be listed for private components with proper authentication."""
         # Ensure component is private
         from sbomify.apps.sboms.models import Component
+
         sample_component.visibility = Component.Visibility.PRIVATE
         sample_component.save()
 
@@ -262,6 +268,7 @@ class TestPublicAccessConsistency:
         """Test that private items consistently require authentication."""
         # Ensure items are private
         from sbomify.apps.sboms.models import Component
+
         sample_product.is_public = False
         sample_product.save()
         sample_component.visibility = Component.Visibility.PRIVATE

@@ -64,6 +64,29 @@ class TestCatalogActivation:
 
         assert response.status_code == 404
 
+    def test_read_only_scoped_token_cannot_activate(self, authenticated_api_client, sample_team_with_owner_member):
+        """A read-only token must not perform an admin write, even for an owner.
+
+        The catalog writes authorize through can("controls:manage"), so the token
+        action-scope gate runs: a bare role check let a read-only token through.
+        """
+        from sbomify.apps.core.authz import SCOPE_PRESETS
+
+        client, access_token = authenticated_api_client
+        access_token.scopes = SCOPE_PRESETS["read_only"]
+        access_token.save(update_fields=["scopes"])
+        headers = get_api_headers(access_token)
+
+        response = client.post(
+            "/api/v1/controls/catalogs/activate/",
+            data=json.dumps({"catalog_name": "soc2-type2"}),
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 403
+        assert not ControlCatalog.objects.filter(team=sample_team_with_owner_member.team).exists()
+
 
 @pytest.mark.django_db
 class TestListCatalogs:
@@ -337,7 +360,11 @@ class TestPublicSummary:
         from django.test import Client
 
         team = sample_team_with_owner_member.team
-        activate_builtin_catalog(team, "soc2-type2")
+        result = activate_builtin_catalog(team, "soc2-type2")
+        # Activating tracks the framework; the public endpoint needs the
+        # separate decision to publish it.
+        result.value.is_published = True
+        result.value.save(update_fields=["is_published"])
 
         client = Client()
         response = client.get(f"/api/v1/controls/public/{team.key}/")
@@ -348,7 +375,9 @@ class TestPublicSummary:
         assert data["total"] > 0
         assert "by_status" in data
         assert "categories" in data
-        assert response["Cache-Control"] == "public, max-age=3600"
+        # A minute rather than an hour: taking a framework down promises the
+        # score goes with it, and the cache window is how long that can be a lie.
+        assert response["Cache-Control"] == "public, max-age=60"
 
     def test_public_summary_no_catalog(self, sample_team_with_owner_member):
         from django.test import Client

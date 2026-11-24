@@ -11,7 +11,7 @@ Class-based views
     1. Add an import:  from other_app.views import Home
     2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
 Including another URLconf
-    1. Import the include() function: from django.urls import include, path
+    1. Import the include() function: from django.urls import include, path, re_path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 
 Custom Domain Routing:
@@ -21,12 +21,20 @@ The views check request.is_custom_domain to determine appropriate behavior.
 """
 
 from django.conf import settings
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
-from sbomify.apis import api
+from sbomify.apis import api, api_v2
 from sbomify.apps.billing.views import PublicEnterpriseContactView
 from sbomify.apps.core.admin import admin_site
+from sbomify.apps.core.views.liveness import liveness
+from sbomify.apps.mcp.views import ProtectedResourceMetadataView
+from sbomify.apps.ops.views import StaffOnlyOverviewRedirectView
+from sbomify.apps.security_advisories.wellknown import (
+    ProviderMetadataView,
+    WhiteDocumentView,
+    WhiteFeedView,
+)
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.wellknown import TEAWellKnownView
 from sbomify.apps.teams.urls import domain_check
@@ -35,6 +43,20 @@ from sbomify.apps.teams.views.security_txt import SecurityTxtView
 urlpatterns = [
     # Favicon redirect for browsers requesting /favicon.ico at root
     path("favicon.ico", RedirectView.as_view(url="/static/img/favicons/favicon.ico", permanent=True)),
+    path("ops/", include("sbomify.apps.ops.urls")),
+    # Every alias of the overview is staff-gated like the overview itself, so
+    # none of them can answer a customer where /ops/ would 404. That includes
+    # the slashless spellings: APPEND_SLASH decides its 301 from the URLconf
+    # before any view runs, so without a route of their own they announce the
+    # surface to anybody who guesses the path.
+    re_path(r"^ops$", StaffOnlyOverviewRedirectView.as_view()),
+    # The ops dashboard used to live at /admin/dashboard/. Anyone who
+    # bookmarked it keeps working, with or without the trailing slash.
+    re_path(r"^admin/dashboard/?$", StaffOnlyOverviewRedirectView.as_view()),
+    re_path(
+        r"^admin/dashboard/(?:billing|growth|funnel|health)/?$",
+        StaffOnlyOverviewRedirectView.as_view(),
+    ),
     path("admin/", admin_site.urls),
     # Redirect old accounts/login to our Keycloak login
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
@@ -42,25 +64,46 @@ urlpatterns = [
     path("enterprise-contact/", PublicEnterpriseContactView.as_view(), name="public_enterprise_contact"),
     path(".well-known/security.txt", SecurityTxtView.as_view(), name="security_txt_wellknown"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
+    # RFC 9728 discovery for /mcp, where its 401 points. No root document: RFC
+    # 9728 3.3 has a client reject one whose resource is not the origin.
+    path(
+        ".well-known/oauth-protected-resource/mcp",
+        ProtectedResourceMetadataView.as_view(),
+        name="mcp_protected_resource_metadata",
+    ),
+    # CSAF 2.0 discovery. provider-metadata.json is the entry point security.txt's
+    # CSAF field points at; the white/ tree below it is the TLP:WHITE distribution.
+    path(".well-known/csaf/provider-metadata.json", ProviderMetadataView.as_view(), name="csaf_provider_metadata"),
+    path(".well-known/csaf/white/feed-tlp-white.json", WhiteFeedView.as_view(), name="csaf_white_feed"),
+    path(
+        ".well-known/csaf/white/<str:year>/<str:filename>",
+        WhiteDocumentView.as_view(),
+        name="csaf_white_document",
+    ),
     # TEA (Transparency Exchange API) .well-known endpoint for server discovery
     path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),
     # TEA API endpoints - for custom domains
     path(f"tea/v{TEA_API_VERSION}/", include("sbomify.apps.tea.urls")),
     # Standard URLs (includes /public/* patterns and private pages)
     path("", include("sbomify.apps.core.urls")),
-    # Keep the legacy prefix but avoid clashing namespaces with the primary teams URLs
-    path("workspace/", include(("sbomify.apps.teams.urls", "teams"), namespace="teams-legacy")),
+    # Keep the legacy prefix but avoid clashing namespaces with the primary workspaces URLs
+    path("workspace/", include(("sbomify.apps.teams.urls", "workspaces"), namespace="teams-legacy")),
     path("workspaces/", include("sbomify.apps.teams.urls")),
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
     path("onboarding/", include("sbomify.apps.onboarding.urls")),
     path("billing/", include("sbomify.apps.billing.urls")),
     path("controls/", include("sbomify.apps.controls.urls")),
+    path("integrations/", include("sbomify.apps.integrations.urls")),
     path("plugins/", include("sbomify.apps.plugins.urls")),
     path("compliance/", include("sbomify.apps.compliance.urls")),
     path("", include("sbomify.apps.vulnerability_scanning.urls")),
     path("", include("sbomify.apps.oidc.urls")),
     path("api/v1/", api.urls, name="api-1"),
+    path("api/v2/", api_v2.urls, name="api-2"),
+    # Liveness for the reverse proxy: answers without touching the database, so a
+    # database outage does not take every backend out of rotation with it.
+    path("UuPha8mu/live/", liveness, name="liveness"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string
 ]
 

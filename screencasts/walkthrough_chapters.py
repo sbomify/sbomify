@@ -53,7 +53,7 @@ from conftest import (
     smooth_scroll,
     start_on_dashboard,
 )
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import Component, ProductIdentifier, ProductLink
@@ -266,7 +266,7 @@ def _security_result(component_name: str, scanned_at: datetime, finding_count: i
 
 @pytest.fixture
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
-    """Back :class:`S3Client` with an in-process dict instead of a bucket.
+    """Back :class:`StorageClient` with an in-process dict instead of a bucket.
 
     The screencast compose stack runs no S3 service. The other recordings
     work around that by no-op'ing the *write* (``vex_upload.py``), which is
@@ -283,14 +283,14 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     """
     store: dict[tuple[str, str], bytes] = {}
 
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
+    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
         store[(bucket_name, object_name)] = data
 
-    def _get(self: S3Client, bucket_name: str, object_name: str) -> bytes | None:
+    def _get(self: StorageClient, bucket_name: str, object_name: str) -> bytes | None:
         return store.get((bucket_name, object_name))
 
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
+    monkeypatch.setattr(StorageClient, "get_file_data", _get)
     return store
 
 

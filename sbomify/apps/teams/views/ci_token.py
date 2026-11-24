@@ -20,7 +20,7 @@ from django.utils import timezone
 from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.access_tokens.utils import create_personal_access_token, hash_token
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -51,13 +51,13 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def post(self, request: HttpRequest, team_key: str) -> JsonResponse:
-        status_code, team = get_team(request, team_key)
+    def post(self, request: HttpRequest, workspace_key: str) -> JsonResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
         # Authorize against the workspace in the URL, which is the one being
-        # minted for. TeamRoleRequiredMixin above reads session["current_team"],
+        # minted for. TeamRoleRequiredMixin above reads session["current_workspace"],
         # so on its own it answers a different question: whether the caller is
         # an owner or admin of whatever workspace they happen to have selected.
         #
@@ -68,7 +68,7 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # ADMINISTER — unlike a personal token, it is not tied to one person's
         # own capabilities and does not expire with their membership.
         user = cast(User, request.user)
-        if not Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles).exists():
+        if not Member.objects.filter(user=user, team__key=workspace_key, role__in=self.allowed_roles).exists():
             return JsonResponse({"detail": "Forbidden"}, status=403)
 
         from sbomify.apps.core.authz import SCOPE_PRESETS
@@ -77,21 +77,21 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         expires_at = timezone.now() + timedelta(days=CI_TOKEN_LIFETIME_DAYS)
 
         AccessToken.objects.create(
-            encoded_token=raw_token,
+            token_hash=hash_token(raw_token),
             user=user,
             # Named so it is identifiable in the token list, where revoking it
             # is the one action someone may want and would otherwise be
             # guessing which row this was.
             description=f"CI/CD setup ({timezone.now():%d %b %Y})",
-            team_id=token_to_number(team_key),
+            team_id=token_to_number(workspace_key),
             expires_at=expires_at,
             scopes=SCOPE_PRESETS[CI_SCOPE_PRESET],
         )
 
-        capture_for_request(request, "api_token:created", team_key=team_key)
+        capture_for_request(request, "api_token:created", workspace_key=workspace_key)
 
-        # Returned once and never stored anywhere we can read back — the row
-        # holds the encoded form, same as every other token.
+        # Returned once and never stored anywhere we can read back: the row
+        # holds only its hash, same as every other token.
         response = JsonResponse(
             {
                 "token": raw_token,

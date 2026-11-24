@@ -28,8 +28,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -134,7 +133,7 @@ class TestCacheInvalidation:
 
         # Create access request via view
         authenticated_web_client.force_login(guest_user)
-        url = reverse("documents:request_access", kwargs={"team_key": team_with_business_plan.key})
+        url = reverse("documents:request_access", kwargs={"workspace_key": team_with_business_plan.key})
         authenticated_web_client.post(url, {})
 
         # Verify request was created
@@ -173,7 +172,7 @@ class TestCacheInvalidation:
         authenticated_web_client.force_login(sample_user)
         url = reverse(
             "documents:access_request_queue",
-            kwargs={"team_key": team_with_business_plan.key},
+            kwargs={"workspace_key": team_with_business_plan.key},
         )
         response = authenticated_web_client.post(
             url, {"action": "approve", "request_id": access_request.id}

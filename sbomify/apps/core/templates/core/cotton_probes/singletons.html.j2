@@ -34,7 +34,7 @@ element.
 <c-avatar initials="ON" status="online" data-probe="avatar-online" />
 <c-avatar initials="BS" status="busy" data-probe="avatar-busy" />
 <c-avatar initials="OF" status="offline" style="--avatar-accent: var(--color-warning)" data-probe="avatar-offline" />
-<c-progress value="72" label_text="Coverage" data-probe="progress-labelled" />
+<c-progress value="72" label_text="Coverage" data-probe="progress-labeled" />
 <c-progress value="100" variant="success" data-probe="progress-success" />
 <c-progress value="45" variant="warning" data-probe="progress-warning" />
 <c-progress value="15" variant="danger" data-probe="progress-danger" />
@@ -49,7 +49,7 @@ element.
 <c-token-display token="sbom_pat_visible" data-probe="token-plain" />
 <c-token-display token="sbom_pat_nocopy" copyable="false" class="mt-2" data-probe="token-nocopy" />
 <c-copy-button value="https://sbomify.com/t/acme" data-probe="copy-default" />
-<c-copy-button value="DLyQjCBkNJkB" label="Copy ID" copied_text="Copied ID" class="ml-2" @click.stop="track()" data-probe="copy-labelled" />
+<c-copy-button value="DLyQjCBkNJkB" label="Copy ID" copied_text="Copied ID" class="ml-2" @click.stop="track()" data-probe="copy-labeled" />
 <c-inline-copy x-data="copyableValue({ value: 'DLyQjCBkNJkB' })" ::data-copied="copied" @click="copyToClipboard()" data-probe="inline-copy">
 <span x-text="value" class="min-w-0 break-all">DLyQjCBkNJkB</span>
 </c-inline-copy>

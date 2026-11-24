@@ -10,179 +10,87 @@
     {% endif %}
 {% endblock %}
 {% block content %}
-    <div class="container mx-auto px-4 py-8">
-        <div class="flex justify-center">
-            <div class="w-full max-w-3xl">
-                <!-- Page Header -->
-                <div class="text-center mb-10">
-                    <h1 class="text-4xl font-bold text-primary mb-4">Contact Support</h1>
-                    <p class="text-lg text-text-muted">
-                        Need help? We're here to assist you. Fill out the form below and we'll get back to you within 1-2 business days.
-                    </p>
-                </div>
-                {% if messages %}
-                    {% for message in messages %}
-                        <div x-data="{ show: true }"
-                             x-show="show"
-                             x-transition
-                             class="p-4 rounded-lg mb-4 flex items-center justify-between {% if message.tags == 'success' %}bg-success/10 text-success{% elif message.tags == 'error' %}bg-danger/10 text-danger{% else %}bg-info/10 text-info{% endif %}"
-                             role="alert">
-                            {{ message }}
-                            <button type="button"
-                                    class="p-1 text-current opacity-70 hover:opacity-100"
-                                    @click="show = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-                {# flush: the form sits on a deeper inset than the card body band. #}
-                <c-cards.card flush>
-                <form method="post" novalidate class="p-8">
-                    {% csrf_token %}
-                    <!-- Contact Information Section -->
-                    <div class="mb-8">
-                        <div class="flex items-center mb-6 pb-4 border-b border-border">
-                            <div class="w-10 h-10 bg-primary text-white rounded-lg flex items-center justify-center mr-3">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold text-text m-0">Contact Information</h3>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <c-forms.label for="{{ form.first_name.id_for_label }}" required>{{ form.first_name.label }}</c-forms.label>
-                                <c-forms.input id="{{ form.first_name.id_for_label }}" name="{{ form.first_name.html_name }}" value="{{ form.first_name.value|default:'' }}" placeholder="Your first name" maxlength="100" required />
-                                {% if form.first_name.errors %}<c-forms.error>{{ form.first_name.errors.0 }}</c-forms.error>{% endif %}
-                            </div>
-                            <div>
-                                <c-forms.label for="{{ form.last_name.id_for_label }}" required>{{ form.last_name.label }}</c-forms.label>
-                                <c-forms.input id="{{ form.last_name.id_for_label }}" name="{{ form.last_name.html_name }}" value="{{ form.last_name.value|default:'' }}" placeholder="Your last name" maxlength="100" required />
-                                {% if form.last_name.errors %}<c-forms.error>{{ form.last_name.errors.0 }}</c-forms.error>{% endif %}
-                            </div>
-                            <div class="md:col-span-2">
-                                <c-forms.label for="{{ form.email.id_for_label }}" required>{{ form.email.label }}</c-forms.label>
-                                <c-forms.input type="email" id="{{ form.email.id_for_label }}" name="{{ form.email.html_name }}" value="{{ form.email.value|default:'' }}" placeholder="your.email@example.com" required />
-                                {% if form.email.errors %}<c-forms.error>{{ form.email.errors.0 }}</c-forms.error>{% endif %}
-                                <c-forms.hint>We'll use this email to respond to your support request.</c-forms.hint>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Support Request Details Section -->
-                    <div class="mb-8">
-                        <div class="flex items-center mb-6 pb-4 border-b border-border">
-                            <div class="w-10 h-10 bg-primary text-white rounded-lg flex items-center justify-center mr-3">
-                                <i class="fas fa-headset"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold text-text m-0">Support Request Details</h3>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <c-forms.label for="{{ form.support_type.id_for_label }}" required>{{ form.support_type.label }}</c-forms.label>
-                                <c-forms.select id="{{ form.support_type.id_for_label }}" name="{{ form.support_type.html_name }}" required>
-                                {% for value, label in form.support_type.field.choices %}
-                                    <option value="{{ value }}"
-                                            {% if form.support_type.value|stringformat:'s' == value %}selected{% endif %}>
-                                        {{ label }}
-                                    </option>
-                                {% endfor %}
-                                </c-forms.select>
-                                {% if form.support_type.errors %}<c-forms.error>{{ form.support_type.errors.0 }}</c-forms.error>{% endif %}
-                            </div>
-                            <div>
-                                <c-forms.label for="{{ form.browser_info.id_for_label }}">{{ form.browser_info.label }}</c-forms.label>
-                                <c-forms.input id="{{ form.browser_info.id_for_label }}" name="{{ form.browser_info.html_name }}" value="{{ form.browser_info.value|default:'' }}" placeholder="e.g., Chrome 120, Safari 17, etc." maxlength="500" />
-                                {% if form.browser_info.errors %}<c-forms.error>{{ form.browser_info.errors.0 }}</c-forms.error>{% endif %}
-                                <c-forms.hint>{{ form.browser_info.help_text }}</c-forms.hint>
-                            </div>
-                            <div class="md:col-span-2">
-                                <c-forms.label for="{{ form.subject.id_for_label }}" required>{{ form.subject.label }}</c-forms.label>
-                                <c-forms.input id="{{ form.subject.id_for_label }}" name="{{ form.subject.html_name }}" value="{{ form.subject.value|default:'' }}" placeholder="Brief description of your issue" maxlength="200" required />
-                                {% if form.subject.errors %}<c-forms.error>{{ form.subject.errors.0 }}</c-forms.error>{% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    <!-- Message Section -->
-                    <div class="mb-8">
-                        <div class="flex items-center mb-6 pb-4 border-b border-border">
-                            <div class="w-10 h-10 bg-primary text-white rounded-lg flex items-center justify-center mr-3">
-                                <i class="fas fa-comment-alt"></i>
-                            </div>
-                            <h3 class="text-lg font-semibold text-text m-0">Describe Your Issue</h3>
-                        </div>
-                        <div>
-                            <c-forms.label for="{{ form.message.id_for_label }}" required>{{ form.message.label }}</c-forms.label>
-                            <c-forms.textarea id="{{ form.message.id_for_label }}" name="{{ form.message.html_name }}" rows="6" value="{{ form.message.value|default:'' }}" placeholder="Please describe your issue or question in detail. Include any relevant information that might help us assist you better." required />
-                            {% if form.message.errors %}<c-forms.error>{{ form.message.errors.0 }}</c-forms.error>{% endif %}
-                            <c-forms.hint>
-                            Please provide as much detail as possible about your issue or question. This helps us provide better support.
-                            </c-forms.hint>
-                        </div>
-                    </div>
-                    <!-- Turnstile CAPTCHA Section -->
-                    {% if turnstile_site_key and not debug %}
-                        <div class="mb-6">
-                            <div class="flex items-center mb-4 pb-3 border-b border-border">
-                                <div class="w-10 h-10 bg-primary text-white rounded-lg flex items-center justify-center mr-3">
-                                    <i class="fas fa-shield-alt"></i>
-                                </div>
-                                <h3 class="text-lg font-semibold text-text m-0">Security Verification</h3>
-                            </div>
-                            <div class="cf-turnstile"
-                                 data-sitekey="{{ turnstile_site_key }}"
-                                 data-callback="turnstileCallback"
-                                 data-error-callback="turnstileErrorCallback"></div>
-                            {% render_field form.cf_turnstile_response %}
-                            {% if form.cf_turnstile_response.errors %}
-                                <c-forms.error>{{ form.cf_turnstile_response.errors.0 }}</c-forms.error>
-                            {% endif %}
-                        </div>
-                    {% else %}
-                        <!-- Development Mode Warning -->
-                        <div class="flex items-center gap-2 p-4 rounded-lg bg-warning/10 mb-6">
-                            <i class="fas fa-exclamation-triangle text-warning"></i>
-                            <span class="text-text"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
-                        </div>
-                        {% render_field form.cf_turnstile_response %}
-                    {% endif %}
-                    <!-- Support Information -->
-                    <div class="flex items-start gap-3 p-4 rounded-lg bg-info/10 mb-6">
-                        <i class="fas fa-info-circle text-info mt-1"></i>
-                        <div class="text-text">
-                            <strong>Support Information:</strong>
-                            <ul class="m-0 mt-2 pl-4 list-disc">
-                                <li>We typically respond within 1-2 business days</li>
-                                <li>You'll receive a confirmation email once we receive your request</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <!-- Submit Section -->
-                    <div class="flex flex-row justify-between items-center gap-4 pt-6 border-t border-border">
-                        <c-buttons.secondary href="{% url 'core:dashboard' %}">
-                        <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
-                        </c-buttons.secondary>
-                        <c-buttons.primary type="submit" size="lg">
-                        <i class="fas fa-paper-plane mr-2"></i>Send Support Request
-                        </c-buttons.primary>
-                    </div>
-                </form>
-                </c-cards.card>
+    <main id="main-content" class="max-w-4xl mx-auto px-4 py-8">
+        <c-layout.frame>
+        <c-layout.page-header title="Contact support" subtitle="Tell us what you need help with. We usually respond within 1-2 business days." />
+        {% include 'core/components/messages.html.j2' %}
+        <c-cards.card>
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <c-layout.form-section title="Contact information" icon="fas fa-user">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <c-forms.field label="{{ form.first_name.label }}" for="{{ form.first_name.id_for_label }}" required error="{{ form.first_name.errors.0 }}">
+                <c-forms.input id="{{ form.first_name.id_for_label }}" name="{{ form.first_name.html_name }}" value="{{ form.first_name.value|default:'' }}" placeholder="Your first name" maxlength="100" required />
+                </c-forms.field>
+                <c-forms.field label="{{ form.last_name.label }}" for="{{ form.last_name.id_for_label }}" required error="{{ form.last_name.errors.0 }}">
+                <c-forms.input id="{{ form.last_name.id_for_label }}" name="{{ form.last_name.html_name }}" value="{{ form.last_name.value|default:'' }}" placeholder="Your last name" maxlength="100" required />
+                </c-forms.field>
+                <c-forms.field class="md:col-span-2" label="{{ form.email.label }}" for="{{ form.email.id_for_label }}" required error="{{ form.email.errors.0 }}" hint="We'll use this email to respond to your support request.">
+                <c-forms.input type="email" id="{{ form.email.id_for_label }}" name="{{ form.email.html_name }}" value="{{ form.email.value|default:'' }}" placeholder="your.email@example.com" required />
+                </c-forms.field>
             </div>
-        </div>
-    </div>
+            </c-layout.form-section>
+            <c-layout.form-section title="Support request" icon="fas fa-headset">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <c-forms.field label="{{ form.support_type.label }}" for="{{ form.support_type.id_for_label }}" required error="{{ form.support_type.errors.0 }}">
+                <c-forms.select id="{{ form.support_type.id_for_label }}" name="{{ form.support_type.html_name }}" required>
+                {% for value, label in form.support_type.field.choices %}
+                    <option value="{{ value }}"
+                            {% if form.support_type.value|stringformat:'s' == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+                </c-forms.select>
+                </c-forms.field>
+                <c-forms.field label="{{ form.browser_info.label }}" for="{{ form.browser_info.id_for_label }}" error="{{ form.browser_info.errors.0 }}" hint="{{ form.browser_info.help_text }}">
+                <c-forms.input id="{{ form.browser_info.id_for_label }}" name="{{ form.browser_info.html_name }}" value="{{ form.browser_info.value|default:'' }}" placeholder="e.g., Chrome, Safari" maxlength="500" />
+                </c-forms.field>
+                <c-forms.field class="md:col-span-2" label="{{ form.subject.label }}" for="{{ form.subject.id_for_label }}" required error="{{ form.subject.errors.0 }}">
+                <c-forms.input id="{{ form.subject.id_for_label }}" name="{{ form.subject.html_name }}" value="{{ form.subject.value|default:'' }}" placeholder="Brief description of your issue" maxlength="200" required />
+                </c-forms.field>
+            </div>
+            </c-layout.form-section>
+            <c-layout.form-section title="Describe your issue" icon="fas fa-comment-alt">
+            <c-forms.field label="{{ form.message.label }}" for="{{ form.message.id_for_label }}" required error="{{ form.message.errors.0 }}" hint="Include any details that will help us understand the issue.">
+            <c-forms.textarea id="{{ form.message.id_for_label }}" name="{{ form.message.html_name }}" rows="6" value="{{ form.message.value|default:'' }}" placeholder="Describe your issue or question" required />
+            </c-forms.field>
+            </c-layout.form-section>
+            {% if turnstile_site_key and not debug %}
+                <c-layout.form-section title="Security verification" icon="fas fa-shield-alt">
+                <div class="cf-turnstile"
+                     data-sitekey="{{ turnstile_site_key }}"
+                     data-callback="turnstileCallback"
+                     data-error-callback="turnstileErrorCallback"></div>
+                {% render_field form.cf_turnstile_response %}
+                {% if form.cf_turnstile_response.errors %}
+                    <c-forms.error>{{ form.cf_turnstile_response.errors.0 }}</c-forms.error>
+                {% endif %}
+                </c-layout.form-section>
+            {% else %}
+                {% render_field form.cf_turnstile_response %}
+            {% endif %}
+            <div class="flex flex-col gap-5">
+                <c-feedback.alert>You'll receive a confirmation email once we receive your request.</c-feedback.alert>
+                <div class="flex flex-wrap justify-between gap-3">
+                    <c-buttons.secondary href="{% url 'core:dashboard' %}">Back to dashboard</c-buttons.secondary>
+                    <c-buttons.primary type="submit">Send support request</c-buttons.primary>
+                </div>
+            </div>
+        </form>
+        </c-cards.card>
+        </c-layout.frame>
+    </main>
 {% endblock %}
 {% block scripts %}
     {% if turnstile_site_key and not debug %}
         <script>
-// Turnstile callback functions
-function turnstileCallback(token) {
-    document.getElementById('id_cf_turnstile_response').value = token;
-}
-
-function turnstileErrorCallback() {
-    document.getElementById('id_cf_turnstile_response').value = '';
-    console.error('Turnstile error occurred');
-}
+            function turnstileCallback(token) {
+                document.getElementById('id_cf_turnstile_response').value = token;
+            }
+            function turnstileErrorCallback() {
+                document.getElementById('id_cf_turnstile_response').value = '';
+                console.error('Turnstile error occurred');
+            }
         </script>
     {% endif %}
 {% endblock %}

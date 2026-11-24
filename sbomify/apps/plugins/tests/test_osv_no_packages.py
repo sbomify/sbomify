@@ -88,11 +88,23 @@ class TestTheResultItProduces:
         assert is_vulnerability(finding) is False
 
     def test_it_says_why(self, plugin: OSVPlugin) -> None:
-        """An operator seeing this has to be able to act on it, and the cause
-        is a PURL type the scanner does not know."""
+        """An operator seeing this has to be able to act on it.
+
+        The cause is the identifier the packages carry. OSV matches on purl,
+        and a Yocto document names its packages by CPE and nothing else: all
+        108 external references in the Yocto Project's own 5.0.5 release SBOM
+        are cpe23Type, and its 5.1.4 SPDX 3 document carries no purl at all.
+        """
         finding = _as_dict(plugin._create_no_packages_result())["findings"][0]
 
-        assert "pkg:yocto" in finding["description"]
+        assert "purl" in finding["description"]
+        assert "CPE" in finding["description"]
+
+    def test_it_names_the_scanner_that_can(self, plugin: OSVPlugin) -> None:
+        """Dependency Track matches CPEs against NVD, which is how a Yocto SBOM gets findings."""
+        finding = _as_dict(plugin._create_no_packages_result())["findings"][0]
+
+        assert "Dependency Track matches packages by CPE" in finding["description"]
 
 
 @pytest.mark.django_db

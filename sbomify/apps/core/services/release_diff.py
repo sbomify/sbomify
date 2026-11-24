@@ -18,7 +18,7 @@ from sbomify.apps.sboms.models import SBOM
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Release
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 def _release_sboms(release: Release) -> list[SBOM]:
@@ -61,7 +61,7 @@ def _package_versions(release: Release) -> tuple[dict[str, set[str]], list[str]]
     return versions, sorted(unreadable)
 
 
-def _live_findings(team: Team, release: Release) -> dict[str, dict[str, Any]]:
+def _live_findings(team: Workspace, release: Release) -> dict[str, dict[str, Any]]:
     """Alias-merged live findings for the release, keyed by advisory id.
 
     VEX-suppressed findings are excluded on both sides, so a finding the
@@ -103,7 +103,7 @@ def _live_findings(team: Team, release: Release) -> dict[str, dict[str, Any]]:
             for finding in merged.get("findings") or []
             if isinstance(finding, dict) and is_vulnerability(finding)
         ]
-        statements = load_vex_suppressions(sbom_runs[0].sbom.component_id, cache=vex_cache)
+        statements = load_vex_suppressions(sbom_runs[0].sbom.component_id, sbom_runs[0].sbom.version, cache=vex_cache)
         for row in extract_finding_rows(merged, statements):
             if row.get("vex_suppressed"):
                 continue
@@ -127,7 +127,7 @@ def _release_summary(release: Release) -> dict[str, Any]:
     }
 
 
-def diff_releases(team: Team, from_release: Release, to_release: Release) -> ServiceResult[dict[str, Any]]:
+def diff_releases(team: Workspace, from_release: Release, to_release: Release) -> ServiceResult[dict[str, Any]]:
     """The delta from ``from_release`` to ``to_release`` of one product."""
     if from_release.product.team_id != team.id or to_release.product.team_id != team.id:
         return ServiceResult.failure("Release not found", status_code=404)
@@ -182,7 +182,7 @@ def diff_releases(team: Team, from_release: Release, to_release: Release) -> Ser
 
 
 def build_diff_page_context(
-    team: Team, product_id: str, release_id: str, other_release_id: str
+    team: Workspace, product_id: str, release_id: str, other_release_id: str
 ) -> ServiceResult[dict[str, Any]]:
     """Everything the diff page renders: the two releases, the delta, and the
     product's sibling releases for the baseline selector."""

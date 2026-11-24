@@ -10,15 +10,19 @@ if typing.TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 from allauth.socialaccount.models import SocialAccount
+from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.posthog_service import capture_for_request
-from sbomify.apps.teams.models import Invitation, Member, Team
-from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
+from sbomify.apps.teams.broadcasts import broadcast_invitation_updated, broadcast_member_updated
+from sbomify.apps.teams.models import Invitation, Member, Workspace
+from sbomify.apps.teams.queries import invitation_email
+from sbomify.apps.teams.utils import get_user_teams, update_user_teams_session, user_seat
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +38,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     Returns a list of dicts with accepted invitation metadata (team_key, invitation_id)
     to drive session selection and downstream flows.
     """
-    if not user.email:
+    email = invitation_email(user)
+    if not email:
         return []
 
     # Skip auto-accept for existing users who already have workspaces
@@ -47,8 +52,8 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
     accepted: list[dict[str, Any]] = []
     has_default = Member.objects.filter(user=user, is_default_team=True).exists()
 
-    pending_invites = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).select_related(
-        "team"
+    pending_invites = Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).select_related(
+        "team", "invited_by"
     )
 
     for invitation in pending_invites:
@@ -57,39 +62,68 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             invitation.delete()
             continue
 
-        can_add, error_msg = can_add_user_to_team(invitation.team, is_joining_via_invite=True)
-        if not can_add:
-            logger.warning(
-                "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
-            )
-            continue
+        # Counted and taken under one lock. Several invitations can be accepted
+        # for one workspace at the same moment, here and from the accept views,
+        # and separate statements let them all pass the same count.
+        with user_seat(invitation.team, is_joining_via_invite=True) as (can_add, error_msg):
+            if not can_add:
+                logger.warning(
+                    "Skipping invitation %s for user %s due to limit: %s", invitation.id, user.username, error_msg
+                )
+                continue
 
-        membership = Member.objects.create(
-            user=user,
-            team=invitation.team,
-            role=invitation.role,
-            is_default_team=not has_default,
-        )
+            membership = Member.objects.create(
+                user=user,
+                team=invitation.team,
+                role=invitation.granted_role,
+                is_default_team=not has_default,
+            )
+            # Inside the lock with the membership. The count is members plus
+            # pending invitations, so between creating one and deleting the
+            # other this user occupies two seats, and a concurrent acceptance
+            # would be refused a seat that is actually free. Taking a seat and
+            # releasing the invitation that reserved it is one transition.
+            #
+            # Read what the deferred capture needs first: the row is gone after
+            # this and the lambda reads these by closure.
+            captured_role = membership.role
+            captured_team_key = invitation.team.key
+            captured_invitation_id = invitation.id
+            captured_token = str(invitation.token)
+            captured_team_name = invitation.team.name
+            invitation.delete()
         has_default = has_default or membership.is_default_team
+        # Accepting deletes the invitation, so the pending-invitation
+        # notification has nothing left to show and the user is put in a
+        # workspace without being told. The accept-invite view announces it
+        # only for someone who arrives through the emailed link.
+        #
+        # Whether it lands is recorded rather than assumed: a login can reach
+        # here with no message storage, and the accept-invite view reads this
+        # flag to decide whether it still has to say so itself.
+        announced = False
+        if request is not None and hasattr(request, "_messages"):
+            messages.info(request, f"You have joined {captured_team_name} as {captured_role}")
+            announced = True
+
         accepted.append(
-            {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
+            {
+                "team_key": captured_team_key,
+                "invitation_id": captured_invitation_id,
+                "invitation_token": captured_token,
+                "announced": announced,
+            }
         )
 
         if request is not None:
-            # Capture into locals BEFORE invitation.delete() below; the
-            # deferred ``on_commit`` lambda reads these by closure.
-            captured_role = invitation.role
-            captured_team_key = invitation.team.key
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
                     "team:member_invitation_accepted",
                     {"role": captured_role},
-                    team_key=captured_team_key,
+                    workspace_key=captured_team_key,
                 )
             )
-
-        invitation.delete()
 
     if request is not None and accepted:
         request.session["auto_accepted_invites"] = accepted
@@ -185,6 +219,7 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
     from sbomify.apps.core.posthog_service import capture
 
     workspace_key = instance.team.key or ""
+    broadcast_member_updated(workspace_key, instance.user_id, "role_changed")
     distinct_id = workspace_key or "system"
     captured_old_role = old_role
     captured_new_role = instance.role
@@ -196,6 +231,109 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
             groups={"workspace": workspace_key} if workspace_key else None,
         )
     )
+
+
+@receiver(post_save, sender=Member)
+def retire_access_requests_on_internal_promotion(sender: type, instance: Member, created: bool, **kwargs: Any) -> None:
+    """Retire a trust-center access request once its holder joins the workspace.
+
+    A guest reaches gated components through the access-request/NDA path. The
+    moment they hold an internal role that path is redundant: their access now
+    comes from the role. Leaving the request behind keeps a stale row in the
+    admin queue and an approval that outlives the reason it was granted.
+
+    Superseded, not deleted. The obvious implementation is
+    ``AccessRequest.objects.filter(...).delete()``, but ``NDASignature`` points
+    at the request with ``on_delete=CASCADE``, so deleting would take the signed
+    NDA rows with it. Rejection and revocation both go out of their way to keep
+    those ("it is the legal record of what was accepted"), and a promotion is no
+    more entitled to erase them.
+
+    Deliberately does not read the pre_save role snapshot. ``capture_role_change``
+    pops it unconditionally, so a receiver registered after it would always see
+    nothing, and depending on receiver order for correctness is a trap. The
+    condition here needs no history: an internal member with a live access
+    request has a stale row whatever they were before. That also means this
+    self-heals rows left by promotions that happened before this handler
+    existed.
+    """
+    if created:
+        return
+
+    if instance.role not in READ_INTERNAL:
+        return
+
+    try:
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
+
+        stale = AccessRequest.objects.filter(team=instance.team, user=instance.user).exclude(
+            status=AccessRequest.Status.REVOKED
+        )
+        if not stale.exists():
+            return
+
+        now = timezone.now()
+        for access_request in stale:
+            access_request.nda_signatures.live().update(superseded_at=now)
+        retired = stale.update(status=AccessRequest.Status.REVOKED, revoked_at=now)
+
+        logger.info(
+            "Retired %s trust-center access request(s) for user %s in team %s after promotion to %s",
+            retired,
+            instance.user_id,
+            instance.team.key,
+            instance.role,
+        )
+        transaction.on_commit(lambda: _invalidate_access_requests_cache(instance.team))
+    except Exception:
+        # A promotion must not fail because the trust-center tidy-up did.
+        logger.exception(
+            "Could not retire access requests for user %s in team %s after promotion",
+            instance.user_id,
+            instance.team_id,
+        )
+
+
+def _workspace_key_of(instance: Member | Invitation) -> str | None:
+    try:
+        return instance.team.key
+    except Workspace.DoesNotExist:
+        return None
+
+
+@receiver(post_save, sender=Member)
+def broadcast_member_added(sender: type, instance: Member, created: bool, **kwargs: Any) -> None:
+    """Every way into a workspace creates a Member row, so this is the one place that sees them all."""
+    if created:
+        broadcast_member_updated(_workspace_key_of(instance), instance.user_id, "added")
+
+
+@receiver(post_delete, sender=Member)
+def broadcast_member_removed(sender: type, instance: Member, **kwargs: Any) -> None:
+    """Every way out deletes the row. The removed member's own socket closes on this message."""
+    broadcast_member_updated(_workspace_key_of(instance), instance.user_id, "removed")
+
+
+@receiver(post_save, sender=Invitation)
+def broadcast_invitation_created(sender: type, instance: Invitation, created: bool, **kwargs: Any) -> None:
+    if created:
+        broadcast_invitation_updated(_workspace_key_of(instance), instance.pk, "created")
+
+
+@receiver(post_delete, sender=Invitation)
+def broadcast_invitation_removed(sender: type, instance: Invitation, **kwargs: Any) -> None:
+    """Accepting and withdrawing both delete the row; the membership tells them apart.
+
+    Every acceptance path creates the Member before deleting the invitation, so
+    a member with the invited address means it was accepted. Anything else,
+    withdrawn by an admin, declined, or replaced once expired, is ``revoked``.
+    """
+    workspace_key = _workspace_key_of(instance)
+    if not workspace_key:
+        return
+    accepted = Member.objects.filter(team_id=instance.team_id, user__email__iexact=instance.email).exists()
+    broadcast_invitation_updated(workspace_key, instance.pk, "accepted" if accepted else "revoked")
 
 
 @receiver(post_save, sender=Invitation)
@@ -221,19 +359,19 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
     # Get user teams and store them in session
     user_teams = update_user_teams_session(request, user)
 
-    if request.session.get("current_team", None) is None and user_teams:
+    if request.session.get("current_workspace", None) is None and user_teams:
         # Prefer an explicit default workspace; otherwise fall back to first
         default_team_key = next((key for key, data in user_teams.items() if data.get("is_default_team")), None)
         active_team_key = (
             (joined_invites[0]["team_key"] if joined_invites else None) or default_team_key or next(iter(user_teams))
         )
-        request.session["current_team"] = {"key": active_team_key, **user_teams[active_team_key]}
+        request.session["current_workspace"] = {"key": active_team_key, **user_teams[active_team_key]}
         request.session.modified = True
 
     # Fallback safety net: Ensure every user has a team
     # Note: This should rarely be needed now that both adapters create teams during signup.
     # This exists only for edge cases (manual user creation, data migrations, etc.)
-    if not Team.objects.filter(members=user).exists():
+    if not Workspace.objects.filter(members=user).exists():
         has_pending_invite = Invitation.objects.filter(email__iexact=user.email, expires_at__gt=timezone.now()).exists()
 
         if has_pending_invite and not joined_invites:
@@ -252,9 +390,9 @@ def user_logged_in_handler(sender: type, user: User, request: HttpRequest, **kwa
         created_team = create_user_team_and_subscription(user)
         if created_team and created_team.key:
             user_teams = get_user_teams(user)
-            request.session["user_teams"] = user_teams
+            request.session["user_workspaces"] = user_teams
             if user_teams:
-                request.session["current_team"] = {
+                request.session["current_workspace"] = {
                     "key": created_team.key,
                     **user_teams.get(created_team.key, {}),
                 }

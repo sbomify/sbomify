@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -31,13 +31,13 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     notifications = []
 
     # Check if user has an active team in session
-    if "current_team" not in request.session:
+    if "current_workspace" not in request.session:
         return []
 
     try:
-        team_key = request.session["current_team"]["key"]
-        team = Team.objects.get(key=team_key)
-    except (Team.DoesNotExist, KeyError, TypeError):
+        workspace_key = request.session["current_workspace"]["key"]
+        team = Workspace.objects.get(key=workspace_key)
+    except (Workspace.DoesNotExist, KeyError, TypeError):
         return []
 
     # Only show notifications to owners and admins
@@ -68,7 +68,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
 
     pending_count = pending_requests.count()
 
-    notification_id = f"access_request_pending_{team_key}"
+    notification_id = f"access_request_pending_{workspace_key}"
 
     if pending_count > 0:
         # Get the oldest pending request to use its timestamp
@@ -81,7 +81,9 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         request_timestamp = oldest_request.requested_at.isoformat()
 
         # Create notification with link to trust center tab
-        trust_center_url = reverse("teams:team_settings", kwargs={"team_key": team_key}) + "#trust-center"
+        trust_center_url = (
+            reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key}) + "#trust-center"
+        )
 
         message = f"You have {pending_count} pending access request{'s' if pending_count > 1 else ''} to review."
 

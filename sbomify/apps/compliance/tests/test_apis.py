@@ -152,11 +152,11 @@ class TestGetAssessment:
         assessment IDs exist across tenants."""
         from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
         from sbomify.apps.core.models import Product
-        from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Team
+        from sbomify.apps.teams.models import ContactEntity, ContactProfile, Member, Workspace
 
         # Build a parallel team+product+assessment owned by ``guest_user``
         # (which has no membership in the authenticated client's team).
-        other_team = Team.objects.create(name="OtherTeam", key="OT01")
+        other_team = Workspace.objects.create(name="OtherTeam", key="OT01")
         Member.objects.create(user=guest_user, team=other_team, role="owner")
         profile = ContactProfile.objects.create(name="Default", team=other_team, is_default=True)
         ContactEntity.objects.create(
@@ -396,7 +396,7 @@ class TestCreateObservation:
 
 
 class TestGenerateDocument:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_vdp(self, mock_s3_cls, authenticated_api_client, assessment_with_contacts):
         client, token = authenticated_api_client
 
@@ -447,8 +447,8 @@ class TestPreviewDocument:
 
 
 class TestCreateExport:
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_creates_export_package(
         self, mock_get_content, mock_s3_cls, mock_export_s3_cls, authenticated_api_client, assessment_with_contacts

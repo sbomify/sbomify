@@ -10,7 +10,8 @@
             <meta charset="utf-8">
             {# Critical: Apply theme before any content renders to prevent flash #}
             {# NOTE: Storage key 'sbomify-theme' must match STORAGE_KEY in theme-manager.ts #}
-            <script>
+            {# data-cfasync="false" keeps Cloudflare Rocket Loader from deferring it past first paint #}
+            <script data-cfasync="false">
                 (function() {
                     var theme;
                     try { theme = localStorage.getItem('sbomify-theme'); } catch(e) { /* blocked storage */ }
@@ -19,7 +20,10 @@
                     if (theme === 'system') {
                         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                     }
-                    document.documentElement.classList.add(effectiveTheme);
+                    // Set native controls, canvas and scrollbar geometry before external assets arrive.
+                    document.documentElement.classList.add(effectiveTheme, 'no-transitions');
+                    document.documentElement.style.colorScheme = effectiveTheme;
+                    document.documentElement.style.scrollbarGutter = 'stable';
                 })();
             </script>
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -81,27 +85,15 @@
                   rel="stylesheet">
             <!-- Icons -->
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
-            {% comment %}
-                Critical: paint the root in the theme's colour before any
-                stylesheet resolves, so a navigation never flashes the
-                browser's default canvas.
-
-                Do NOT gate the body on opacity here. Hiding it until
-                DOMContentLoaded pushes first contentful paint behind the
-                fonts, the icon sheet and the app bundle. Chromium and WebKit
-                hide that by holding the previous page's pixels until the new
-                one paints something; Firefox only suppresses painting for a
-                fixed 250ms and then paints what exists, which is the dark
-                root and an invisible body. That is the black flash between
-                every page. The stylesheets below are render blocking and
-                [x-cloak] covers Alpine, so nothing needs the gate.
-            {% endcomment %}
+            {# Critical: Prevent flash of unstyled content #}
             <style>
                 [x-cloak] { display: none !important; }
+                /* Critical inline styles to prevent layout flash */
                 html.dark { background-color: #151724; color: #fff; }
                 html.light { background-color: #ffffff; color: #25293F; }
                 html { min-height: 100%; }
                 body { min-height: 100vh; }
+                html { --sidebar-width: 15rem; }
             </style>
             {% block styles %}{% endblock %}
             <link rel="stylesheet"
@@ -125,12 +117,12 @@
         <!-- Global Modals -->
         <div id="global-modal-container">
             {% if add_workspace_form %}
-                {% url 'teams:teams_dashboard' as teams_dashboard_url %}
+                {% url 'workspaces:teams_dashboard' as teams_dashboard_url %}
                 {% include "components/modals/form_modal.html.j2" with modal_id="add-workspace-modal" modal_title="Add Workspace" form=add_workspace_form form_action=teams_dashboard_url submit_text="Add Workspace" icon="fa-plus" %}
             {% endif %}
         </div>
         <!-- Global Toast Notifications -->
-        {% include "components/tw/toast_container.html.j2" %}
+        <c-feedback.toast-container />
         <!-- Global Confirmation Modal -->
         {% include "components/tw/confirm_modal.html.j2" %}
         <!-- Analytics Consent Banner -->
@@ -150,17 +142,32 @@
             <!-- PostHog analytics -->
             {{ posthog_api_key|json_script:"posthog-api-key" }}
             {{ posthog_host|json_script:"posthog-host" }}
+            {{ posthog_installation_id|json_script:"posthog-installation-id" }}
             {% if posthog_identify %}{{ posthog_identify|json_script:"posthog-identify" }}{% endif %}
+            {% with posthog_events=posthog_client_events %}
+                {% if posthog_events %}{{ posthog_events|json_script:"posthog-events" }}{% endif %}
+            {% endwith %}
             <script>
                 !function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init zr Wr fi Br Gr ci Nr Hr capture Ui calculateEventProperties Kr register register_once register_for_session unregister unregister_for_session Zr getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey cancelPendingSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Xr Jr createPersonProfile Qr jr ts opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Vr debug O Yr getPageViewId captureTraceFeedback captureTraceMetric Or".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
                 (function() {
                     var apiKey = JSON.parse(document.getElementById('posthog-api-key').textContent);
                     var apiHost = JSON.parse(document.getElementById('posthog-host').textContent);
+                    var installationId = JSON.parse(document.getElementById('posthog-installation-id').textContent);
                     posthog.init(apiKey, {
                         api_host: apiHost,
+                        /* Tag every event with the installation, as the server does */
+                        before_send: function(event) {
+                            if (event && installationId) {
+                                event.properties = event.properties || {};
+                                event.properties.installation_id = installationId;
+                            }
+                            return event;
+                        },
                         defaults: '2026-01-30',
                         person_profiles: 'identified_only',
                         opt_out_capturing_by_default: true,
+                        /* A cookie on .sbomify.com, not localStorage: the server and sbomify.com read the same decision */
+                        opt_out_capturing_persistence_type: 'cookie',
                         respect_dnt: true,
                     });
                     /* Identify, group, and session cookie only after explicit opt-in */
@@ -174,6 +181,13 @@
                             if (identity.workspace_key) {
                                 posthog.group('workspace', identity.workspace_key);
                             }
+                        }
+                        /* Person-scoped events the server queued, e.g. user:signed_up, sent after identify */
+                        var eventsEl = document.getElementById('posthog-events');
+                        if (eventsEl) {
+                            JSON.parse(eventsEl.textContent).forEach(function(queued) {
+                                posthog.capture(queued.event, queued.properties);
+                            });
                         }
                         posthog.onSessionId(function(sessionId) {
                             var secure = location.protocol === 'https:' ? ';Secure' : '';

@@ -1,5 +1,4 @@
 import Alpine from 'alpinejs';
-import JsBarcode from 'jsbarcode';
 
 /** Maps identifier types to JsBarcode format names */
 const FORMAT_MAP: Record<string, string> = {
@@ -69,6 +68,9 @@ export function registerProductIdentifiersBarcodes(): void {
         if (!value || value.trim() === '') {
           throw new Error('Empty barcode value');
         }
+
+        const { default: JsBarcode } = await import('jsbarcode');
+        if (!svg.isConnected) return;
 
         // Render the barcode
         JsBarcode(svg, value, {

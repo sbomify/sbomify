@@ -22,6 +22,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
+    AdvisoryReference,
     AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
@@ -66,9 +67,7 @@ def listed_ids(request: HttpRequest, team: object) -> list[str]:
 def public_product(team):
     """A product the trust center lists: public, with a public component."""
     product = Product.objects.create(name="Acme Gateway", team=team, is_public=True)
-    component = Component.objects.create(
-        name="gateway-core", team=team, visibility=Component.Visibility.PUBLIC
-    )
+    component = Component.objects.create(name="gateway-core", team=team, visibility=Component.Visibility.PUBLIC)
     product.components.add(component)
     return product
 
@@ -77,9 +76,7 @@ def public_product(team):
 def gated_product(team):
     """Public product whose only component is gated — NDA holders only."""
     product = Product.objects.create(name="Acme Vault", team=team, is_public=True)
-    component = Component.objects.create(
-        name="vault-core", team=team, visibility=Component.Visibility.GATED
-    )
+    component = Component.objects.create(name="vault-core", team=team, visibility=Component.Visibility.GATED)
     product.components.add(component)
     return product
 
@@ -98,9 +95,7 @@ def advisory_for(team, product, *, visibility: str, title: str = "Advisory") -> 
 
 def grant_gated_access(team, user) -> None:
     """An external customer approved for the workspace, with no NDA configured."""
-    AccessRequest.objects.create(
-        team=team, user=user, status=AccessRequest.Status.APPROVED, decided_at=timezone.now()
-    )
+    AccessRequest.objects.create(team=team, user=user, status=AccessRequest.Status.APPROVED, decided_at=timezone.now())
 
 
 # --- the three visibilities --------------------------------------------------
@@ -153,9 +148,7 @@ def test_gated_advisory_is_visible_to_a_workspace_owner(team, public_product, sa
 # --- the per-product half of the gate ----------------------------------------
 
 
-def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(
-    team, unlisted_product, guest_user
-):
+def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(team, unlisted_product, guest_user):
     """The grant is workspace-wide; the advisory is not.
 
     An approved customer holds access to what the trust center shows them. An
@@ -167,9 +160,7 @@ def test_gated_advisory_on_an_unlisted_product_is_hidden_from_a_customer(
     assert listed_ids(make_request(guest_user), team) == []
 
 
-def test_gated_advisory_on_an_unlisted_product_is_visible_to_an_owner(
-    team, unlisted_product, sample_user
-):
+def test_gated_advisory_on_an_unlisted_product_is_visible_to_an_owner(team, unlisted_product, sample_user):
     """The people who wrote it can still read it; nobody else can."""
     advisory = advisory_for(team, unlisted_product, visibility=SecurityAdvisory.Visibility.GATED)
     assert listed_ids(make_request(sample_user), team) == [advisory.id]
@@ -186,9 +177,7 @@ def test_one_reachable_product_is_enough(team, public_product, unlisted_product,
     assert listed_ids(make_request(guest_user), team) == [advisory.id]
 
 
-def test_products_the_reader_cannot_see_are_not_named(
-    team, public_product, unlisted_product, guest_user
-):
+def test_products_the_reader_cannot_see_are_not_named(team, public_product, unlisted_product, guest_user):
     """Passing the gate on one product does not disclose the others' names."""
     advisory = SecurityAdvisory.objects.create(team=team, title="Multi-product")
     AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
@@ -267,6 +256,29 @@ def test_internal_comments_never_reach_the_timeline(team, public_product, sample
     assert "Do not tell customers yet" not in notes
 
 
+def test_a_withdrawn_advisory_is_marked_withdrawn_on_the_browse_list(team, public_product, client):
+    """The list is the surface a reader scans, and it has two row variants.
+
+    An advisory naming affected product rows lands on one, an advisory naming
+    none lands on the other, and only the first carried the badge. A retracted
+    advisory that reads as current on the list is worse than one that is
+    missing, so both variants have to say so.
+    """
+    from django.urls import reverse
+
+    naming_no_product = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryProduct.objects.filter(advisory=naming_no_product).delete()
+    naming_no_product.status = SecurityAdvisory.Status.WITHDRAWN
+    naming_no_product.withdrawn_at = timezone.now()
+    naming_no_product.withdrawal_reason = "Reissued."
+    naming_no_product.save()
+
+    response = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+
+    assert response.status_code == 200
+    assert "Withdrawn" in response.content.decode()
+
+
 def test_withdrawn_advisories_stay_readable(team, public_product):
     """Retracting a disclosure means saying so, not deleting the page."""
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
@@ -278,6 +290,29 @@ def test_withdrawn_advisories_stay_readable(team, public_product):
     result = get_public_advisory(make_request(), team, advisory.id)
     assert result.ok
     assert result.value["is_withdrawn"]
+
+
+def test_a_withdrawn_header_says_withdrawn_instead_of_a_live_status(team, public_product, client):
+    """A retracted advisory has no "where is this now", so Withdrawn replaces
+    the status rather than sitting beside it, and the facts the header carries
+    are not repeated down the side."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    advisory.remediation_status = SecurityAdvisory.RemediationStatus.INVESTIGATING
+    advisory.status = SecurityAdvisory.Status.WITHDRAWN
+    advisory.withdrawn_at = timezone.now()
+    advisory.withdrawal_reason = "Reissued."
+    advisory.save()
+
+    url = reverse(
+        "core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id}
+    )
+    page = client.get(url).content.decode()
+
+    assert re.search(r"border-dashed[^>]*>\s*<i class=\"fas fa-rotate-left\"[^>]*></i>Withdrawn", page)
+    assert "Investigating" not in page
+    assert ">Details<" not in page
 
 
 # --- viewer scope and the landing-page summary -------------------------------
@@ -345,9 +380,7 @@ def test_summary_counts_what_it_shows_and_what_it_withholds(team, public_product
 
 def test_summary_limit_does_not_change_the_total(team, public_product):
     for index in range(5):
-        advisory_for(
-            team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC, title=f"Advisory {index}"
-        )
+        advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC, title=f"Advisory {index}")
 
     summary = public_advisory_summary(make_request(), team, limit=3)
     assert len(summary["recent"]) == 3
@@ -359,9 +392,7 @@ def test_summary_limit_does_not_change_the_total(team, public_product):
 
 def severities(team, public_product, values):
     for index, severity in enumerate(values):
-        advisory = SecurityAdvisory.objects.create(
-            team=team, title=f"Advisory {index}", severity=severity
-        )
+        advisory = SecurityAdvisory.objects.create(team=team, title=f"Advisory {index}", severity=severity)
         AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
         publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
 
@@ -450,8 +481,8 @@ def test_detail_cvss_chips_label_their_version_or_fall_back_to_plain_cvss(team, 
 
     detail = get_public_advisory(make_request(), team, advisory.id).value
     assert detail["vulnerabilities"][0]["cvss_scores"] == [
-        {"label": "CVSS 3.1", "base_score": 9.8},
-        {"label": "CVSS", "base_score": 7.5},
+        {"label": "CVSS 3.1", "base_score": 9.8, "version": "3.1", "vector": "CVSS:3.1/AV:N"},
+        {"label": "CVSS", "base_score": 7.5, "version": "", "vector": ""},
     ]
 
 
@@ -539,16 +570,12 @@ def backdate(event: AdvisoryEvent, when) -> None:
     save() nor update() can do this — the test writes the column directly.
     """
     with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE security_advisories_events SET created_at = %s WHERE id = %s", [when, event.id]
-        )
+        cursor.execute("UPDATE security_advisories_events SET created_at = %s WHERE id = %s", [when, event.id])
 
 
 def test_each_event_kind_gets_its_own_icon(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
-    )
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out.")
     AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
 
     icons = {entry["kind"]: entry["icon"] for entry in timeline_for(team, advisory)}
@@ -575,12 +602,8 @@ def test_a_status_change_borrows_the_icon_of_the_state_it_moved_to(team, public_
 
 def test_the_gap_measures_against_the_previous_entry(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    first = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
-    )
-    second = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    first = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out.")
+    second = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     now = timezone.now()
     backdate(first, now - timedelta(days=14))
     backdate(second, now - timedelta(days=3))
@@ -607,9 +630,7 @@ def test_a_sub_minute_gap_reads_as_words_not_as_zero(team, public_product):
 
 def test_a_timeline_entry_carries_both_absolute_and_relative_time(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    event = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    event = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     backdate(event, timezone.now() - timedelta(days=2))
 
     entry = timeline_for(team, advisory)[0]
@@ -620,9 +641,7 @@ def test_a_timeline_entry_carries_both_absolute_and_relative_time(team, public_p
 
 def test_the_advisory_reports_how_stale_it_is(team, public_product):
     advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
-    event = AdvisoryEvent.objects.create(
-        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
-    )
+    event = AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
     backdate(event, timezone.now() - timedelta(days=11))
 
     result = get_public_advisory(make_request(), team, advisory.id)
@@ -664,6 +683,56 @@ def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
     assert quote(hostile, safe="") in captured["path"]
 
 
+def test_the_trust_center_links_an_advisory_by_its_tracking_id(team, public_product, client):
+    """The address a reader sees and shares is the id they would quote, not the primary key."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    page = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+    content = page.content.decode()
+
+    assert f"/advisories/{advisory.tracking_id}/" in content
+    assert f"/advisories/{advisory.id}/" not in content
+
+
+@pytest.mark.parametrize("scoped", [True, False])
+def test_a_primary_key_link_redirects_to_the_tracking_id(team, public_product, client, scoped):
+    """Links shared before tracking ids were the address keep working, and land on the one URL."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    if scoped:
+        old = reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+        new = f"/public/workspace/{team.key}/advisories/{advisory.tracking_id}/"
+    else:
+        session = client.session
+        session["current_workspace"] = {"key": team.key}
+        session.save()
+        old = reverse("core:advisory_details_public_current", kwargs={"advisory_id": advisory.id})
+        new = f"/advisories/{advisory.tracking_id}/"
+
+    response = client.get(old)
+
+    assert response.status_code == 301
+    assert response["Location"] == new
+    assert client.get(new).status_code == 200
+
+
+def test_a_hidden_advisory_does_not_redirect_by_primary_key(team, public_product, client):
+    """A redirect would confirm the advisory exists, which is what the 404 keeps quiet."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.GATED)
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.id})
+    )
+
+    assert response.status_code == 404
+
+
 # --- the redirect target -----------------------------------------------------
 #
 # The redirect host comes from team.custom_domain, which an owner types in and
@@ -674,17 +743,11 @@ def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
 def test_only_a_validated_custom_domain_is_redirected_to(team):
     from django.test import RequestFactory
 
-    from sbomify.apps.core.views.trust_center_advisories import (
-        TrustCenterAdvisoriesView,
-        _public_hosts_for,
-    )
+    from sbomify.apps.core.views.trust_center_advisories import TrustCenterAdvisoriesView
 
     team.custom_domain = "evil.example.com"
     team.custom_domain_validated = False
     team.save()
-
-    # Not validated, so it is not a host this workspace may be sent to.
-    assert "evil.example.com" not in _public_hosts_for(team)
 
     request = RequestFactory().get("/")
     request.user = _AnonymousUser()  # type: ignore[assignment]
@@ -692,18 +755,20 @@ def test_only_a_validated_custom_domain_is_redirected_to(team):
 
 
 def test_a_validated_custom_domain_is_an_allowed_host(team):
-    from sbomify.apps.core.views.trust_center_advisories import _public_hosts_for
+    from sbomify.apps.core.url_utils import custom_domain_redirect
 
     team.custom_domain = "trust.acme.example"
     team.custom_domain_validated = True
     team.save()
 
-    assert "trust.acme.example" in _public_hosts_for(team)
+    response = custom_domain_redirect(team, "/advisories/")
+    assert response is not None
+    assert response.url == "https://trust.acme.example/advisories/"
 
 
 def test_allowed_hosts_come_from_the_team_not_the_request(team):
     """A visitor cannot widen the set: nothing in it is read off the request."""
-    from sbomify.apps.core.views.trust_center_advisories import _public_hosts_for
+    from sbomify.apps.core.url_utils import custom_domain_redirect
 
     team.custom_domain = ""
     team.custom_domain_validated = False
@@ -711,4 +776,220 @@ def test_allowed_hosts_come_from_the_team_not_the_request(team):
 
     # With no custom domain and no TRUST_CENTER_DOMAIN configured in tests,
     # there is nowhere this workspace may redirect to at all.
-    assert _public_hosts_for(team) == set()
+    assert custom_domain_redirect(team, "/advisories/") is None
+
+
+def test_a_timeline_note_renders_as_markdown_on_the_trust_center(team, public_product, client):
+    """The note arrives as Markdown and the page renders it, escaping any raw HTML."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.UPDATE,
+        body="**Patched** in `1.4.3`.\n\n- [Notes](https://example.com/notes?a=1&b=2)\n\n<script>alert(1)</script>",
+    )
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    )
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "<strong>Patched</strong> in <code>1.4.3</code>." in content
+    assert '<li><a href="https://example.com/notes?a=1&amp;b=2"' in content
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in content
+    assert "<script>alert(1)</script>" not in content
+
+
+def test_the_description_and_vulnerability_text_render_as_markdown_on_the_trust_center(team, public_product, client):
+    """Advisories drafted from triage carry Markdown bodies; the page renders them, escaping any raw HTML."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(
+        team=team,
+        title="Markdown",
+        description="## Summary\n\nUpgrade **now**.\n\n- `pkg:pypi/uv@0.12.19`\n\n<script>alert(1)</script>",
+    )
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-30007",
+        description="### Impact\n\nA *crafted* path.",
+        recommendation="- Upgrade to `1.4.3`",
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    )
+
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "<h2>Summary</h2>" in content
+    assert "<p>Upgrade <strong>now</strong>.</p>" in content
+    assert "<li><code>pkg:pypi/uv@0.12.19</code></li>" in content
+    assert "<h3>Impact</h3>" in content
+    assert "<p>A <em>crafted</em> path.</p>" in content
+    assert "<li>Upgrade to <code>1.4.3</code></li>" in content
+    assert "## Summary" not in content
+    assert "<script>alert(1)</script>" not in content
+
+
+def test_affected_versions_name_a_pinned_commit_once_and_fold_a_long_list(team, public_product, client):
+    """Triage records each affected commit as a range pinned to itself; the table
+    names it once, and dozens of them fold behind a count rather than run down the page."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Pinned")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30008")
+    status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability, advisory_product=advisory_product, status=AdvisoryProductStatus.Status.EXPLOITABLE
+    )
+    commits = [f"c0ffee{i}" for i in range(9)]
+    for commit in commits:
+        AdvisoryVersionRange.objects.create(product_status=status, introduced=commit, last_affected=commit)
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="2.0.0", fixed="2.4.1")
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["statuses"][0]["affected_versions"] == [*commits, ">= 2.0.0, < 2.4.1"]
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    )
+    content = response.content.decode()
+    assert response.status_code == 200
+    assert "Show all 10" in content
+    assert "[c0ffee0, c0ffee0]" not in content
+
+
+def test_a_recommended_version_without_ranges_still_names_the_affected_versions(team, public_product, client):
+    """With no ranges, the recommendation is all that says what is affected.
+    The table reads it as "Before 2.0.0" rather than showing nothing."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Recommended only")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30010")
+    AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability,
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.EXPLOITABLE,
+        recommended_version="2.0.0",
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["statuses"][0]["version_labels"] == ["Before 2.0.0"]
+
+    response = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    )
+    assert "Before 2.0.0" in response.content.decode()
+
+
+def test_the_version_check_gets_the_bounds_behind_each_label(team, public_product, client):
+    """The page tests a typed version in the browser, so each row sends the
+    bounds behind its labels, one per label and in the same order. A row that is
+    not affected says so rather than sending nothing to match against."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Checkable")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    exploitable = AdvisoryProductStatus.objects.create(
+        vulnerability=AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30011"),
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.EXPLOITABLE,
+    )
+    AdvisoryVersionRange.objects.create(product_status=exploitable, introduced="2.0.0", fixed="2.4.1")
+    AdvisoryVersionRange.objects.create(product_status=exploitable, introduced="6282ec8", last_affected="6282ec8")
+    not_affected = AdvisoryProductStatus.objects.create(
+        vulnerability=AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30012"),
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.NOT_AFFECTED,
+        justification=AdvisoryProductStatus.Justification.CODE_NOT_PRESENT,
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    checks = detail["version_checks"]
+    row = next(r for r in detail["statuses"] if r["id"] == exploitable.id)
+    assert [r["label"] for r in checks[exploitable.id]["ranges"]] == row["version_labels"]
+    assert {"label": "From 2.0.0, fixed in 2.4.1", "introduced": "2.0.0", "fixed": "2.4.1", "last_affected": ""} in (
+        checks[exploitable.id]["ranges"]
+    )
+    assert checks[exploitable.id]["suppressed"] is False
+    assert checks[not_affected.id] == {"suppressed": True, "ranges": []}
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    ).content.decode()
+    assert 'id="advisory-version-checks"' in content
+    assert "versionCheck('advisory-version-checks')" in content
+
+
+def test_the_index_lists_versions_one_per_range(team, public_product):
+    """The index used to print every range on one unbreakable line; it now
+    lists them, names a pinned commit once and claims no unaffected version for it."""
+    advisory = SecurityAdvisory.objects.create(team=team, title="Pinned index")
+    advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    vulnerability = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30009")
+    status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability, advisory_product=advisory_product, status=AdvisoryProductStatus.Status.EXPLOITABLE
+    )
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="6282ec8", last_affected="6282ec8")
+    AdvisoryVersionRange.objects.create(product_status=status, introduced="2.0.0", fixed="2.4.1")
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    row = (list_public_advisories(make_request(), team).value or {})["advisories"][0]["affected_rows"][0]
+    assert row["affected_versions"] == ["6282ec8", ">= 2.0.0, < 2.4.1"]
+    assert row["unaffected_versions"] == [">= 2.4.1"]
+    # The API reads the joined strings, which keep their old shape.
+    assert row["affected"] == ">= 6282ec8, <= 6282ec8, >= 2.0.0, < 2.4.1"
+
+
+def test_a_zero_cvss_score_renders_rather_than_reading_as_unscored(team, public_product, client):
+    """0.0 is a real score. A truthiness check would print it as the dash an
+    unscored advisory gets, and drop the CVSS fact from the detail page."""
+    from django.urls import reverse
+
+    advisory = SecurityAdvisory.objects.create(team=team, title="Informational")
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory, cve_id="CVE-2026-30007", cvss_scores=[{"version": "3.1", "base_score": 0.0}]
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    index = client.get(reverse("core:workspace_advisories_public", kwargs={"workspace_key": team.key}))
+    detail = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    )
+
+    assert re.search(r"tabular-nums[^>]*>\s*0\.0\s*<", index.content.decode())
+    assert re.search(r"CVSS.{0,400}?>\s*0\.0\s*<", detail.content.decode(), re.S)
+
+
+def test_cve_ids_and_references_link_to_insights_on_the_trust_center(team, public_product, client):
+    """A CVE on the page links to its Insights page, and so does a reference whose id Insights
+    publishes, even when it stored another URL. A reference Insights does not cover keeps its own."""
+    from django.urls import reverse
+
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-30020")
+    AdvisoryReference.objects.create(
+        advisory=advisory, external_id="GHSA-6q48-6c7w-9gw2", url="https://github.com/advisories/GHSA-6q48-6c7w-9gw2"
+    )
+    AdvisoryReference.objects.create(advisory=advisory, external_id="CVE-2026-30021")
+    AdvisoryReference.objects.create(advisory=advisory, external_id="DSA-5020-1", url="https://example.com/dsa-5020-1")
+
+    content = client.get(
+        reverse("core:advisory_details_public", kwargs={"workspace_key": team.key, "advisory_id": advisory.tracking_id})
+    ).content.decode()
+
+    assert 'href="https://insights.sbomify.com/CVE-2026-30020/"' in content
+    assert 'href="https://insights.sbomify.com/GHSA-6q48-6c7w-9gw2/"' in content
+    assert 'href="https://insights.sbomify.com/CVE-2026-30021/"' in content
+    assert 'href="https://example.com/dsa-5020-1"' in content
+    assert "github.com/advisories" not in content

@@ -8,7 +8,7 @@ component's VEX Documents card.
 
 Infrastructure note: the screencast compose stack does not run an S3
 service, so a real upload would fail at the ``put_object`` call. We
-monkeypatch ``S3Client.upload_data_as_file`` to a no-op for the
+monkeypatch ``StorageClient.upload_data_as_file`` to a no-op for the
 duration of the recording so the upload-file endpoint succeeds
 end-to-end and writes the SBOM record; the recording then reloads
 explicitly to land on the post-upload state.
@@ -26,9 +26,9 @@ from conftest import (
     pace,
     start_on_dashboard,
 )
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 COMPONENT_NAME = "Pied Piper Compression Core"
 
@@ -70,7 +70,7 @@ VEX_FILE_BYTES = json.dumps(
 
 
 @pytest.fixture
-def component_with_sbom(deletable_team: Team) -> dict:
+def component_with_sbom(deletable_team: Workspace) -> dict:
     """Seed a component with one CycloneDX SBOM but no VEX yet.
 
     The screencast uploads the VEX through the UI, so the starting
@@ -103,7 +103,7 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     record write succeed and the front-end ``sbom-uploaded`` event
     fire, which is what the screencast needs to show.
     """
-    monkeypatch.setattr(S3Client, "upload_data_as_file", lambda *args, **kwargs: None)
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", lambda *args, **kwargs: None)
 
 
 @pytest.mark.django_db(transaction=True)

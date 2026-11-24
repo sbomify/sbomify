@@ -13,13 +13,17 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db.models import Model
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
+
+from sbomify.apps.teams.validators import validate_custom_domain
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product, Release
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.sboms.models import Component as BaseComponent
+    from sbomify.apps.teams.models import Workspace
 
 
 def normalize_base_url(url: str) -> str:
@@ -37,7 +41,7 @@ def get_base_url() -> str:
     return normalize_base_url(getattr(settings, "APP_BASE_URL", ""))
 
 
-def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
+def get_public_url_base(request: HttpRequest, team: Workspace | None = None) -> str:
     """
     Get the base URL for public pages.
 
@@ -71,7 +75,7 @@ def get_public_url_base(request: HttpRequest, team: Team | None = None) -> str:
     return get_base_url()
 
 
-def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
+def _build_trust_center_base_url(team: Workspace | None, secure: bool = True) -> str:
     """Build the trust center subdomain base URL for a team, or empty string."""
     if not team:
         return ""
@@ -85,7 +89,7 @@ def _build_trust_center_base_url(team: Team | None, secure: bool = True) -> str:
     return f"{protocol}://{slug}.{trust_center_domain}"
 
 
-def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> str:
+def build_trust_center_url(team: Workspace, path: str = "/", secure: bool = True) -> str:
     """Build a full URL using the team's trust center subdomain.
 
     Returns empty string if TRUST_CENTER_DOMAIN is not configured or team has no slug.
@@ -98,7 +102,7 @@ def build_trust_center_url(team: Team, path: str = "/", secure: bool = True) -> 
     return f"{base}{path}"
 
 
-def should_redirect_to_custom_domain(request: HttpRequest, team: Team) -> bool:
+def should_redirect_to_custom_domain(request: HttpRequest, team: Workspace) -> bool:
     """
     Check if the request should be redirected to the team's preferred public domain.
 
@@ -181,7 +185,7 @@ def should_redirect_to_clean_url(request: HttpRequest) -> bool:
     return path.startswith("/public/")
 
 
-def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
+def build_custom_domain_url(team: Workspace, path: str, secure: bool = True) -> str:
     """
     Build a full URL using the team's preferred public domain.
 
@@ -222,6 +226,54 @@ def build_custom_domain_url(team: Team, path: str, secure: bool = True) -> str:
         return f"{protocol}://{slug}.{trust_center_domain}{path}"
 
     return ""
+
+
+def custom_domain_redirect(team: Workspace, path: str, secure: bool = True) -> HttpResponseRedirect | None:
+    """Redirect only to a valid, verified public host belonging to this workspace."""
+    allowed_hosts = set()
+    if team.custom_domain and team.custom_domain_validated:
+        if validate_custom_domain(team.custom_domain)[0]:
+            allowed_hosts.add(team.custom_domain)
+
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if team.slug and trust_center_domain:
+        host = f"{team.slug}.{trust_center_domain}"
+        if validate_custom_domain(host)[0]:
+            allowed_hosts.add(host)
+
+    target = build_custom_domain_url(team, path, secure)
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts=allowed_hosts, require_https=secure):
+        return None
+    return HttpResponseRedirect(target)
+
+
+def get_component_public_slug(component: BaseComponent, request: HttpRequest) -> str:
+    """Choose a collision-safe gated identifier with one scan per workspace/request."""
+    from sbomify.apps.core.models import Component
+
+    if not component.slug:
+        return component.id
+    if component.visibility != Component.Visibility.GATED:
+        return component.slug
+    cache = getattr(request, "_component_slug_owners", None)
+    if cache is None:
+        cache = {}
+        setattr(request, "_component_slug_owners", cache)
+    if component.team_id not in cache:
+        owners: dict[str, str] = {}
+        public_slugs: set[str] = set()
+        for component_id, name, visibility in Component.objects.filter(
+            team_id=component.team_id,
+            visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED),
+        ).values_list("id", "name", "visibility"):
+            slug = slugify(name, allow_unicode=True)
+            if visibility == Component.Visibility.PUBLIC and slug not in public_slugs:
+                owners[slug] = component_id
+                public_slugs.add(slug)
+            elif slug not in owners:
+                owners[slug] = component_id
+        cache[component.team_id] = owners
+    return component.slug if cache[component.team_id].get(component.slug) == component.id else component.id
 
 
 def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool = False, **kwargs: Any) -> str:
@@ -329,7 +381,7 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
 
 
 def get_back_url_from_referrer(
-    request: HttpRequest, team: "Team | None", fallback_url: str | None = None
+    request: HttpRequest, team: "Workspace | None", fallback_url: str | None = None
 ) -> str | None:
     """
     Get the back URL from HTTP_REFERER header if it's a valid page from the same workspace.
@@ -411,7 +463,7 @@ def get_back_url_from_referrer(
         return fallback_url
 
 
-def get_workspace_public_url(request: HttpRequest, team: "Team | None") -> str:
+def get_workspace_public_url(request: HttpRequest, team: "Workspace | None") -> str:
     """
     Generate the workspace public URL based on the request context.
 
@@ -458,7 +510,7 @@ def is_public_url_path(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in public_prefixes)
 
 
-def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"]:
+def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Workspace | None"]:
     """
     Extract custom domain context from a request.
 
@@ -468,6 +520,29 @@ def get_custom_domain_context(request: HttpRequest) -> tuple[bool, "Team | None"
     is_custom_domain = getattr(request, "is_custom_domain", False)
     team = getattr(request, "custom_domain_team", None) if is_custom_domain else None
     return is_custom_domain, team
+
+
+def get_public_custom_domain_workspace(request: HttpRequest) -> "Workspace | None":
+    """
+    The workspace a public custom-domain request may read from, if any.
+
+    The middleware attaches ``custom_domain_team`` to whichever workspace owns
+    the BYOD domain, public or not, and the landing page then 404s a non-public
+    one. Nothing below the landing page repeated that check, so the workspace's
+    own front door said "not found" while ``/component/<slug>/`` answered with a
+    branded page — the artifact announced a workspace that had chosen not to
+    publish. Every public resolver asks here first, and a non-public workspace
+    resolves to nothing. Trust center subdomains already resolve public
+    workspaces only; this closes the same hole on BYOD domains.
+    """
+    if not getattr(request, "is_custom_domain", False):
+        return None
+
+    team: "Workspace | None" = getattr(request, "custom_domain_team", None)
+    if team is None or not team.is_public:
+        return None
+
+    return team
 
 
 def verify_custom_domain_ownership(
@@ -519,7 +594,7 @@ def verify_custom_domain_ownership(
 def add_custom_domain_to_context(
     request: HttpRequest,
     context: dict[str, Any],
-    team: "Team | None" = None,
+    team: "Workspace | None" = None,
 ) -> dict[str, Any]:
     """
     Add custom domain context variables to a template context dict.
@@ -567,9 +642,16 @@ def resolve_product_identifier(
     from sbomify.apps.core.models import Product
 
     is_custom_domain = getattr(request, "is_custom_domain", False)
-    custom_domain_team = getattr(request, "custom_domain_team", None)
+    custom_domain_team = get_public_custom_domain_workspace(request)
 
-    if is_custom_domain and custom_domain_team:
+    if is_custom_domain:
+        # A custom domain answers for one published workspace or for none at
+        # all. Falling through to the main-app branch here would look up the
+        # identifier across every workspace, which is the opposite of what
+        # being on this domain means.
+        if custom_domain_team is None:
+            return None
+
         # On custom domain: find by slug within the team
         # Slugify the identifier to normalize it
         slug = slugify(identifier, allow_unicode=True)
@@ -620,22 +702,50 @@ def resolve_component_identifier(
     from sbomify.apps.core.models import Component
 
     is_custom_domain = getattr(request, "is_custom_domain", False)
-    custom_domain_team = getattr(request, "custom_domain_team", None)
+    custom_domain_team = get_public_custom_domain_workspace(request)
 
-    if is_custom_domain and custom_domain_team:
+    if is_custom_domain:
+        # Before either lookup: a non-public workspace publishes nothing here,
+        # and a custom domain never widens into the main-app ID lookup.
+        if custom_domain_team is None:
+            return None
+
+        # Generated ID-based links must not be shadowed by a component name.
+        component = Component.objects.filter(pk=identifier, team=custom_domain_team).first()
+        if component is not None:
+            return component
+
         # On custom domain: find by slug within the team
         slug = slugify(identifier, allow_unicode=True)
 
-        # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for component in Component.objects.filter(team=custom_domain_team, visibility=Component.Visibility.PUBLIC):
-            if slugify(component.name, allow_unicode=True) == slug:
-                return component
+        # Same listable predicate the rest of the public surface uses: public and
+        # gated are both published, private is not. Matching only PUBLIC here made
+        # a gated component unreachable on a custom domain — the Trust Center
+        # landing page and the product page both list it, but the slug it links to
+        # resolved to nothing and the page 404'd, so a reader never saw the
+        # "Request Access" gate the component page renders. Private stays out of
+        # the slug scan; exact ID matches above are still access-checked by callers.
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
 
-        # Fallback: try by ID within the team
-        try:
-            return Component.objects.get(pk=identifier, team=custom_domain_team)
-        except Component.DoesNotExist:
-            pass
+        # Public wins a tie. Names are unique per workspace, the slugs derived
+        # from them are not — "Foo Bar" and "Foo-Bar" are two components sharing
+        # one URL — so widening this scan puts gated components in a contest they
+        # were not in before. A link that already resolved to the public one must
+        # keep resolving to it; the gated component takes the slug only when no
+        # public component answers to it, and is reachable by id either way.
+        gated_match = None
+
+        # NOTE: O(n) scan - see resolve_product_identifier for rationale
+        for component in Component.objects.filter(team=custom_domain_team, visibility__in=listable):
+            if slugify(component.name, allow_unicode=True) != slug:
+                continue
+            if component.visibility == Component.Visibility.PUBLIC:
+                return component
+            if gated_match is None:
+                gated_match = component
+
+        if gated_match is not None:
+            return gated_match
 
         return None
     else:
@@ -644,6 +754,28 @@ def resolve_component_identifier(
             return Component.objects.get(pk=identifier)
         except Component.DoesNotExist:
             return None
+
+
+def get_release_public_slugs(product: "Product") -> dict[str, str]:
+    """Map each release ID of a product to the identifier its custom-domain URL should use.
+
+    A release is reachable by slug and by ID. The slug is used only where
+    ``resolve_release_identifier`` would map it back to the same release: two
+    releases whose names slugify alike share one slug URL, which serves the
+    first, so the others keep their ID.
+    """
+    from sbomify.apps.core.models import Release
+
+    slugs = {
+        release.id: slugify(release.name, allow_unicode=True)
+        for release in Release.objects.filter(product=product).only("id", "name")
+    }
+    owners: dict[str, str] = {}
+    for release_id, slug in slugs.items():
+        owners.setdefault(slug, release_id)
+    return {
+        release_id: slug if slug and owners[slug] == release_id else release_id for release_id, slug in slugs.items()
+    }
 
 
 def resolve_release_identifier(
@@ -715,9 +847,12 @@ def resolve_document_identifier(
     from sbomify.apps.documents.models import Document
 
     is_custom_domain = getattr(request, "is_custom_domain", False)
-    custom_domain_team = getattr(request, "custom_domain_team", None)
+    custom_domain_team = get_public_custom_domain_workspace(request)
 
-    if is_custom_domain and custom_domain_team:
+    if is_custom_domain:
+        if custom_domain_team is None:
+            return None
+
         # On custom domain: find by slug within the team's public components
         slug = slugify(identifier, allow_unicode=True)
 

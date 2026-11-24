@@ -1,0 +1,64 @@
+{{- include "sbomify.validateValues" . -}}
+{{/*
+The data block is a named template because the pre-install migrations hook
+needs its own short-lived copy of it. See job-migrations-hookenv.yaml.
+*/}}
+{{- define "sbomify.configMapData" -}}
+APP_BASE_URL: {{ .Values.app.baseUrl | quote }}
+WEBSITE_BASE_URL: {{ .Values.app.baseUrl | quote }}
+DEBUG: {{ .Values.app.debug | ternary "True" "False" | quote }}
+LOG_LEVEL: {{ .Values.app.logLevel | quote }}
+BILLING: {{ .Values.app.billing | ternary "True" "False" | quote }}
+TRUST_CENTER_DOMAIN: {{ .Values.app.trustCenterDomain | quote }}
+
+# Object storage
+STORAGE_BACKEND: {{ include "sbomify.storageBackend" . | quote }}
+{{- if eq (include "sbomify.storageBackend" .) "gcs" }}
+{{- with .Values.objectStorage.gcs.projectId }}
+GCS_PROJECT_ID: {{ . | quote }}
+{{- end }}
+{{- with .Values.objectStorage.gcs.signingServiceAccount }}
+GCS_SIGNING_SERVICE_ACCOUNT: {{ . | quote }}
+{{- end }}
+{{- else }}
+AWS_ENDPOINT_URL_S3: {{ include "sbomify.s3Endpoint" . | quote }}
+AWS_REGION: {{ .Values.objectStorage.region | quote }}
+{{- end }}
+AWS_MEDIA_STORAGE_BUCKET_NAME: {{ .Values.objectStorage.media.bucket | quote }}
+AWS_MEDIA_STORAGE_BUCKET_URL: {{ include "sbomify.s3MediaBucketUrl" . | quote }}
+AWS_SBOMS_STORAGE_BUCKET_NAME: {{ .Values.objectStorage.sboms.bucket | quote }}
+AWS_SBOMS_STORAGE_BUCKET_URL: {{ include "sbomify.s3SbomsBucketUrl" . | quote }}
+
+# OIDC / Keycloak
+{{- if .Values.auth.keycloak.serverUrl }}
+KEYCLOAK_SERVER_URL: {{ include "sbomify.keycloakServerUrl" . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.discoveryUrl }}
+OIDC_DISCOVERY_URL: {{ . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.logoutUrl }}
+OIDC_LOGOUT_URL: {{ . | quote }}
+{{- end }}
+{{- with .Values.auth.oidc.trustEmail }}
+OIDC_TRUST_EMAIL: {{ . | toString | quote }}
+{{- end }}
+{{- with .Values.auth.keycloak.publicUrl }}
+KEYCLOAK_PUBLIC_URL: {{ printf "%s/" (trimSuffix "/" .) | quote }}
+{{- end }}
+KEYCLOAK_REALM: {{ .Values.auth.keycloak.realm | quote }}
+KEYCLOAK_CLIENT_ID: {{ .Values.auth.oidc.clientId | default .Values.auth.keycloak.clientId | quote }}
+
+{{- with .Values.app.posthog.apiKey }}
+POSTHOG_API_KEY: {{ . | quote }}
+{{- end }}
+POSTHOG_HOST: {{ .Values.app.posthog.host | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sbomify.configMapName" . }}
+  labels:
+    {{- include "sbomify.labels" . | nindent 4 }}
+data:
+  {{- include "sbomify.configMapData" . | nindent 2 }}

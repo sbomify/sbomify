@@ -16,7 +16,7 @@ from sbomify.apps.teams.models import (
     ContactEntity,
     ContactProfile,
     ContactProfileContact,
-    Team,
+    Workspace,
 )
 from sbomify.apps.teams.services.contacts import (
     contact_belongs_to_team,
@@ -26,11 +26,11 @@ from sbomify.apps.teams.services.contacts import (
 )
 
 
-def _make_team(name: str) -> Team:
-    return Team.objects.create(name=name)
+def _make_team(name: str) -> Workspace:
+    return Workspace.objects.create(name=name)
 
 
-def _make_profile(team: Team, name: str = "Default", *, private: bool = False) -> ContactProfile:
+def _make_profile(team: Workspace, name: str = "Default", *, private: bool = False) -> ContactProfile:
     return ContactProfile.objects.create(team=team, name=name, is_component_private=private)
 
 

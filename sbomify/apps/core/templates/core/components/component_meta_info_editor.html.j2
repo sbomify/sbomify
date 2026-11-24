@@ -1,5 +1,5 @@
 {% load static %}
-<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', metadata: null, contactProfiles: [] })"
+<div x-data="componentMetaInfoEditor({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_workspace.key }}', metadata: null, contactProfiles: [] })"
      class="component-meta-info-editor">
     <!-- Main Card (title lives on the modal header) -->
     <div>
@@ -65,10 +65,7 @@
                                  x-init="$nextTick(() => htmx.process($el))"
                                  @cancel-custom-form.window="window.dispatchEvent(new CustomEvent('close-metadata-editor'))"
                                  class="custom-contact-form">
-                                <div class="text-center py-6">
-                                    <c-feedback.spinner size="inline" class="mr-2" />
-                                    <span class="text-text-muted">Loading contact form...</span>
-                                </div>
+                                <c-feedback.loading message="Loading contact form..." />
                             </div>
                         </template>
                     </div>
@@ -110,25 +107,53 @@
                         <div class="space-y-3"
                              x-data="{ prevRelease: metadata.release_date, prevEos: metadata.end_of_support, prevEol: metadata.end_of_life }"
                              x-effect=" if (prevRelease !== metadata.release_date) { hasUnsavedChanges = true; prevRelease = metadata.release_date; } if (prevEos !== metadata.end_of_support) { hasUnsavedChanges = true; prevEos = metadata.end_of_support; } if (prevEol !== metadata.end_of_life) { hasUnsavedChanges = true; prevEol = metadata.end_of_life; } ">
-                            <c-forms.label>Key Dates</c-forms.label>
+                            <c-forms.label>Key dates</c-forms.label>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <!-- Release Date -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">Release Date</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' placeholder='Set date...' %}
-                                </div>
-                                <!-- End of Support -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">End of Support</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' placeholder='Set date...' %}
-                                </div>
-                                <!-- End of Life -->
-                                <div class="p-3 rounded-lg bg-border/10 border border-border/30">
-                                    <div class="text-xs font-medium text-text-muted mb-2">End of Life</div>
-                                    {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' placeholder='Set date...' %}
-                                </div>
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.release_date' label='Release date' %}
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_support' label='End of support' %}
+                                {% include 'components/date_picker.html.j2' with value_binding='metadata.end_of_life' label='End of life' %}
                             </div>
                         </div>
+                    </div>
+                    </c-cards.card>
+                    <!-- Source Control -->
+                    <c-cards.card class="shadow">
+                    <c-slot name="header">
+                    <c-cards.header>
+                    <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                        Source Control
+                        <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                           x-tooltip.bottom="'The repository this component is built from'"></i>
+                    </h6>
+                    </c-cards.header>
+                    </c-slot>
+                    <div>
+                        <c-forms.label for="metadata-vcs-url">Repository URL</c-forms.label>
+                        <c-forms.input type="url" id="metadata-vcs-url" placeholder="https://github.com/example/repo" x-model="metadata.vcs_url" @input="hasUnsavedChanges = true; validateVcsUrl()" ::data-state="validationErrors.vcs_url ? 'error' : ''" ::aria-invalid="validationErrors.vcs_url ? 'true' : 'false'" aria-describedby="metadata-vcs-url-help" />
+                        <template x-if="validationErrors.vcs_url">
+                            <c-forms.error x-text="validationErrors.vcs_url"></c-forms.error>
+                        </template>
+                        <template x-if="!validationErrors.vcs_url">
+                            <c-forms.hint id="metadata-vcs-url-help">Shows where this component's SBOMs come from.</c-forms.hint>
+                        </template>
+                    </div>
+                    </c-cards.card>
+                    <!-- Custom Metadata -->
+                    <c-cards.card class="shadow">
+                    <c-slot name="header">
+                    <c-cards.header>
+                    <h6 class="text-base font-semibold text-text m-0 flex items-center gap-2">
+                        Custom Metadata
+                        <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+                           x-tooltip.bottom="'Your own key/value pairs, such as an owner or cost centre. Visible to signed-in readers who can access the component.'"></i>
+                    </h6>
+                    </c-cards.header>
+                    </c-slot>
+                    <div x-effect="JSON.stringify(customMetadataRows); syncCustomMetadata(); if (originalMetadata && JSON.stringify(JSON.parse(originalMetadata).custom_metadata || {}) !== JSON.stringify(metadata.custom_metadata)) hasUnsavedChanges = true;">
+                        <c-forms.key-value-editor model="customMetadataRows" label="Component custom metadata" />
+                        <template x-if="validationErrors.custom_metadata">
+                            <c-forms.error x-text="validationErrors.custom_metadata"></c-forms.error>
+                        </template>
                     </div>
                     </c-cards.card>
                     <!-- Licenses -->

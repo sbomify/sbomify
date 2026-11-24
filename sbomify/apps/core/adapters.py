@@ -1,20 +1,235 @@
 from __future__ import annotations
 
+import hashlib
 import logging
+import time
 from typing import Any
+from urllib.parse import parse_qsl, quote, urlencode
 
 from allauth.account.adapter import DefaultAccountAdapter
-from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from allauth.socialaccount.adapter import DefaultSocialAccountAdapter, get_adapter
 from allauth.socialaccount.models import SocialLogin
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+def _provider_confirmed_email(sociallogin: SocialLogin) -> bool:
+    """Whether the identity provider confirmed the address this login carries.
+
+    allauth fills ``email_addresses`` from the provider's claims, and its own
+    email login trusts nothing else. The claim is not at the top of
+    ``extra_data``: since allauth 65.11 OpenID Connect keeps it under
+    ``userinfo`` and ``id_token``.
+    """
+    email = (sociallogin.user.email or "").lower()
+    return bool(email) and any(a.verified and a.email.lower() == email for a in sociallogin.email_addresses)
+
+
+def _account_owns_its_email(user: Any) -> bool:
+    """Whether an account's address belongs to whoever signs in to it.
+
+    The identity provider confirmed the address, or nobody can have signed in
+    to the account yet: no login and no password, as with one the
+    access-request form made. allauth's own confirmation does not count: its
+    link binds the address to whichever account asked for it, not to the
+    person who clicked.
+    """
+    return bool(user.email_verified or (user.last_login is None and not user.has_usable_password()))
+
+
+class SpaceEncodedOAuth2Client(OAuth2Client):  # type: ignore[misc]
+    """An authorize URL whose spaces are ``%20``, not ``+``.
+
+    ``urlencode`` writes a space as ``+``, which reads back as a space only
+    under form-urlencoding rules. A generic URI reader follows RFC 3986,
+    where ``+`` is a literal character, so any hop that decodes this query
+    and re-encodes it conservatively escapes the scope separators to
+    ``%2B``. Keycloak then reads all three scopes as one unknown scope
+    named ``openid+email+profile`` and refuses the login.
+
+    That is the shape of the failures: the value is correct when it leaves
+    here, most logins work, and a minority arrive escaped. ``%20`` means a
+    space to both readers and comes back unchanged from a decode/encode
+    round trip, so the ambiguity the mangling relies on is gone.
+
+    Nothing else about the URL moves. A literal ``+``, which a PKCE
+    challenge can contain, is ``%2B`` either way.
+    """
+
+    def get_redirect_url(self, authorization_url: str, scope: Any, extra_params: dict[str, Any]) -> str:
+        url: str = super().get_redirect_url(authorization_url, scope, extra_params)
+        base, separator, query = url.partition("?")
+        if not separator:
+            return url
+        # Re-encode what the base class built rather than rebuilding the
+        # parameters here, so a parameter allauth adds later still travels.
+        pairs = parse_qsl(query, keep_blank_values=True)
+        return f"{base}?{urlencode(pairs, quote_via=quote)}"
+
+
+# How long a discovery document is served before we go and ask again. The
+# document is deployment configuration rather than per-login state, so this
+# only governs how quickly a Keycloak reconfiguration is picked up.
+OIDC_CONFIG_REFRESH_AFTER = 60 * 60
+
+# How long the cached copy survives in total. It outlives the refresh interval
+# by a long way on purpose: its whole job is to still be there on the day
+# Keycloak is the thing that is down.
+OIDC_CONFIG_CACHE_TTL = 30 * 24 * 60 * 60
+
+# How long to stop asking after a refresh fails. Without this, a stale entry
+# plus an unreachable provider means every single login re-attempts the same
+# request and waits out its timeout before falling back to the copy it already
+# held -- the cache removed the 500 but not the delay, and turned one slow
+# login into a request per sign-in against a provider that is already
+# struggling. Short, because the point is to ride out a blip rather than to
+# stop noticing a reconfiguration: the refresh resumes a minute later.
+OIDC_CONFIG_RETRY_AFTER_FAILURE = 60
+
+# Without these allauth cannot build an authorize or token URL, so a 200
+# carrying anything less is not a document worth remembering.
+_REQUIRED_OIDC_ENDPOINTS = ("authorization_endpoint", "token_endpoint")
+
+
+def _oidc_config_cache_key(server_url: str) -> str:
+    """A key that is per-provider but safe for every cache backend.
+
+    The server URL is what distinguishes one provider's document from
+    another's, and it is also full of characters a memcached key may not
+    contain, so it is hashed rather than embedded.
+    """
+    digest = hashlib.sha256(server_url.encode("utf-8")).hexdigest()
+    return f"oidc-discovery:{digest}"
+
+
+def _fetch_openid_config(server_url: str) -> dict[str, Any]:
+    """Read the discovery document the way allauth does.
+
+    Going through allauth's own session keeps whatever it configures there --
+    proxies, headers, timeouts -- applied to this request too.
+    """
+    with get_adapter().get_requests_session() as session:
+        response = session.get(server_url)
+        response.raise_for_status()
+        config = response.json()
+
+    if not isinstance(config, dict) or any(not config.get(name) for name in _REQUIRED_OIDC_ENDPOINTS):
+        raise ValueError(f"{server_url} did not return a usable OpenID Connect discovery document")
+    return config
+
+
+def cached_openid_config(adapter: Any) -> dict[str, Any]:
+    """``OpenIDConnectOAuth2Adapter.openid_config``, backed by the shared cache.
+
+    Upstream memoises the document on the adapter instance, and allauth builds
+    a fresh adapter for every request, so each individual sign-in blocked on a
+    live round trip to Keycloak. Anything that interrupted that round trip --
+    a 521 from the CDN in front of it, a read timeout -- surfaced as a 500 on
+    ``/accounts/oidc/<provider>/login/``, and nobody could log in until the
+    blip passed.
+
+    The document is static configuration, so almost all of those round trips
+    bought nothing. Caching it means a provider blip is invisible to the
+    people signing in: a cached copy that is merely stale is still a correct
+    set of endpoints, and serving it is strictly better than refusing a login.
+    """
+    # Several properties read this within one request; keep upstream's
+    # per-instance memo so they share a single lookup.
+    if hasattr(adapter, "_openid_config"):
+        return adapter._openid_config  # type: ignore[no-any-return]
+
+    server_url = adapter.get_provider().server_url
+    key = _oidc_config_cache_key(server_url)
+    entry = cache.get(key)
+    now = time.time()
+
+    config: dict[str, Any]
+    cached = entry if isinstance(entry, dict) else None
+    # Two reasons to serve what we hold without asking again: it is still
+    # fresh, or a refresh just failed and we agreed to wait before retrying.
+    # The second is what keeps a provider outage from costing every login a
+    # timeout -- see OIDC_CONFIG_RETRY_AFTER_FAILURE.
+    serve_cached = cached is not None and (
+        now - cached.get("fetched_at", 0) < OIDC_CONFIG_REFRESH_AFTER or now < cached.get("retry_after", 0)
+    )
+
+    if cached is not None and serve_cached:
+        config = cached["config"]
+    else:
+        try:
+            config = _fetch_openid_config(server_url)
+        except Exception as exc:
+            # Only a copy we already hold can rescue the login; with nothing
+            # cached there is no endpoint to send the user to.
+            if cached is None:
+                raise
+            logger.warning(
+                "OpenID Connect discovery at %s failed (%s); serving the cached copy instead",
+                server_url,
+                exc,
+            )
+            # Hold off the next attempt, without extending how long this copy
+            # survives in total: the remaining TTL is measured from the last
+            # successful fetch, so a long outage still lets the entry expire
+            # on its original schedule rather than pinning a stale document
+            # in the cache for as long as the provider stays down.
+            remaining = OIDC_CONFIG_CACHE_TTL - (now - cached.get("fetched_at", 0))
+            if remaining > 0:
+                cache.set(
+                    key,
+                    {**cached, "retry_after": now + OIDC_CONFIG_RETRY_AFTER_FAILURE},
+                    remaining,
+                )
+            config = cached["config"]
+        else:
+            cache.set(key, {"config": config, "fetched_at": now}, OIDC_CONFIG_CACHE_TTL)
+
+    adapter._openid_config = config
+    return config
+
+
+OIDC_ID_TOKEN_SESSION_KEY = "oidc_id_token"  # nosec B105 - a session key name, not a secret
+
+
+def keep_id_token(complete_login: Any) -> Any:
+    """Wrap allauth's ``complete_login`` to keep the raw ID token in the session.
+
+    Logout sends it back as ``id_token_hint``. Okta refuses an RP-initiated
+    logout without one, and Keycloak skips its "Do you want to log out?"
+    confirmation when it has one. allauth keeps only the decoded claims, so
+    this is the one place the raw token is still in hand, and it is stored only
+    once allauth has validated it.
+
+    It goes to two places. The session carries it when login finishes in a
+    later request, such as after allauth's signup form. The request carries
+    it past ``login()``, which flushes the session when someone signs in again
+    over an existing one; ``CustomAccountAdapter.login`` puts it back.
+    """
+
+    def wrapper(self: Any, request: HttpRequest, app: Any, token: Any, **kwargs: Any) -> Any:
+        login = complete_login(self, request, app, token, **kwargs)
+        if id_token := (kwargs.get("response") or {}).get("id_token"):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
+            setattr(request, "_oidc_id_token", id_token)
+        return login
+
+    return wrapper
+
+
 class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     """Custom account adapter for username/password authentication."""
+
+    def login(self, request: HttpRequest, user: Any) -> None:
+        """Keep the logout hint after allauth replaces an existing session."""
+        super().login(request, user)
+        if id_token := getattr(request, "_oidc_id_token", None):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
+            delattr(request, "_oidc_id_token")
 
     def save_user(self, request: HttpRequest, user: Any, form: Any, commit: Any = True) -> Any:
         """
@@ -120,21 +335,35 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         existing_user = sociallogin.user
         if existing_user.id is None and existing_user.email:
             # Block soft-deleted users from re-authenticating via SSO
-            if User.objects.filter(email=existing_user.email, deleted_at__isnull=False).exists():
+            if User.objects.filter(email__iexact=existing_user.email, deleted_at__isnull=False).exists():
                 from allauth.exceptions import ImmediateHttpResponse
                 from django.shortcuts import render
 
-                return ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))  # type: ignore[no-any-return]
+                raise ImmediateHttpResponse(render(request, "account/account_deactivated.html.j2", status=403))
 
+            holders = User.objects.filter(email__iexact=existing_user.email, is_active=True, deleted_at__isnull=True)
             try:
-                existing_user = User.objects.get(
-                    email=existing_user.email,
-                    is_active=True,
-                    deleted_at__isnull=True,
-                )
-                sociallogin.connect(request, existing_user)
+                existing_user = holders.get()
+                # Only an address the provider confirmed may claim an existing account, and only an
+                # account that owns that address too.
+                if _provider_confirmed_email(sociallogin) and _account_owns_its_email(existing_user):
+                    sociallogin.connect(request, existing_user)
             except User.DoesNotExist:
                 pass
+            except User.MultipleObjectsReturned:
+                ids = sorted(holders.values_list("id", flat=True))
+                logger.warning("Social sign-in refused: accounts %s share one email address", ids)
+                from allauth.core.exceptions import ImmediateHttpResponse
+                from django.shortcuts import render
+
+                raise ImmediateHttpResponse(
+                    render(
+                        request,
+                        "socialaccount/authentication_error.html.j2",
+                        {"error_message": "More than one account uses this email address. Contact support to sign in."},
+                        status=409,
+                    )
+                )
 
         # Sync email_verified status from social provider on every login
         extra_data = sociallogin.account.extra_data or {}
@@ -142,7 +371,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
 
         # Extract email_verified from provider-specific field
         if provider == "keycloak":
-            email_verified = extra_data.get("email_verified", False)
+            email_verified = _provider_confirmed_email(sociallogin)
         elif provider == "github":
             email_verified = extra_data.get("email_verified", False)
         elif provider == "google":
@@ -179,11 +408,11 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
         if sociallogin.account.provider == "keycloak":
             # Set email verification status
             user.is_active = True  # Keycloak handles activation
-            user.email_verified = data.get("email_verified", False)
+            user.email_verified = _provider_confirmed_email(sociallogin)
 
             # Map Keycloak name fields directly to Django fields (try both possible keys)
-            user.first_name = data.get("given_name") or data.get("first_name", "")
-            user.last_name = data.get("family_name") or data.get("last_name", "")
+            user.first_name = data.get("given_name") or data.get("first_name") or ""
+            user.last_name = data.get("family_name") or data.get("last_name") or ""
 
             # Use preferred_username if available
             if "preferred_username" in data:

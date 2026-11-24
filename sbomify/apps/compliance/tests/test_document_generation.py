@@ -72,7 +72,7 @@ def assessment(sample_team_with_owner_member, sample_user, product):
 class TestGenerateDocument:
     """Test document generation for each kind."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_vdp(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
 
@@ -84,7 +84,7 @@ class TestGenerateDocument:
         assert doc.content_hash
         assert doc.storage_key.endswith(".md")
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_security_txt(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.SECURITY_TXT)
 
@@ -93,7 +93,7 @@ class TestGenerateDocument:
         assert doc.document_kind == "security_txt"
         assert doc.storage_key.endswith(".txt")
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_risk_assessment(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.RISK_ASSESSMENT)
 
@@ -101,7 +101,7 @@ class TestGenerateDocument:
         doc = result.value
         assert doc.document_kind == "risk_assessment"
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_declaration_of_conformity(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
 
@@ -109,7 +109,7 @@ class TestGenerateDocument:
         doc = result.value
         assert doc.document_kind == "declaration_of_conformity"
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_all_9_kinds(self, mock_s3_cls, assessment):
         for kind, _ in CRAGeneratedDocument.DocumentKind.choices:
             result = generate_document(assessment, kind)
@@ -120,7 +120,7 @@ class TestGenerateDocument:
         assert not result.ok
         assert result.status_code == 400
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_s3_upload_failure_surfaces_502(self, mock_s3_cls, assessment):
         """Covers the ``except Exception`` path in ``generate_document``
         where the upload to S3 throws after the template renders. Must
@@ -147,7 +147,7 @@ class TestGenerateDocument:
 class TestVersioning:
     """Test document version increments and stale flag resets."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_version_increments_on_regeneration(self, mock_s3_cls, assessment):
         result1 = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         assert result1.ok
@@ -158,7 +158,7 @@ class TestVersioning:
         assert result2.value.version == 2
         assert result2.value.id == result1.value.id  # Same record, updated
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_stale_flag_resets_on_regeneration(self, mock_s3_cls, assessment):
         result = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         assert result.ok
@@ -173,7 +173,7 @@ class TestVersioning:
         assert result2.ok
         assert result2.value.is_stale is False
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_content_hash_changes_when_data_changes(self, mock_s3_cls, assessment):
         result1 = generate_document(assessment, CRAGeneratedDocument.DocumentKind.VDP)
         hash1 = result1.value.content_hash
@@ -891,7 +891,7 @@ class TestRegenerateAllFailurePath:
     uncovered because happy-path tests short-circuit before the
     else branch."""
 
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_partial_failure_reports_failed_kinds(self, mock_s3_cls, assessment):
         from sbomify.apps.compliance.services.document_generation_service import regenerate_all
 
@@ -975,7 +975,7 @@ class TestRiskAssessment:
 
 @pytest.mark.django_db
 class TestRegenerateAll:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_generates_all_document_kinds(self, mock_s3_cls, assessment):
         result = regenerate_all(assessment)
 
@@ -986,7 +986,7 @@ class TestRegenerateAll:
 
 @pytest.mark.django_db
 class TestRegenerateStale:
-    @patch("sbomify.apps.core.object_store.S3Client")
+    @patch("sbomify.apps.core.object_store.StorageClient")
     def test_regenerates_only_stale_documents(self, mock_s3_cls, assessment):
         # Generate all
         regenerate_all(assessment)
@@ -1347,10 +1347,11 @@ class TestManufacturerPolicyParity:
 
 @pytest.mark.django_db
 class TestDeclarationAuthorisedRepresentative:
-    """The Art. 22 wording is a legal claim, so it has to follow the
-    determination rather than the mere presence of a representative."""
+    """Appointing a representative is optional under CRA Art. 18, so the
+    declaration names one when it was recorded and never claims it was
+    required."""
 
-    def test_art_22_wording_only_when_the_manufacturer_is_not_eu_established(self, assessment):
+    def test_a_recorded_representative_cites_art_18(self, assessment):
         assessment.is_eu_established = False
         assessment.authorized_rep_name = "Acme EU Compliance BV"
         assessment.authorized_rep_email = "ar@acme-eu.example"
@@ -1360,21 +1361,22 @@ class TestDeclarationAuthorisedRepresentative:
         result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
 
         assert result.ok
-        assert "under CRA Art. 22 because the manufacturer is not established in the Union" in result.value
+        assert "Acme EU Compliance BV" in result.value
+        assert "written mandate under CRA Art. 18" in result.value
+        assert "Art. 22" not in result.value
 
-    def test_a_voluntary_representative_does_not_claim_art_22(self, assessment):
-        """An EU-established manufacturer may still name a representative.
-        Declaring it was appointed because they are not EU-established would
-        be a false statement in a signed declaration."""
-        assessment.is_eu_established = True
-        assessment.authorized_rep_name = "Acme EU Compliance BV"
+    def test_a_non_eu_manufacturer_without_a_representative_is_not_flagged(self, assessment):
+        """The declaration used to warn that it MUST NOT be signed until a
+        representative was named. Art. 18(1) makes the appointment optional,
+        so section 2a is simply left out."""
+        assessment.is_eu_established = False
         assessment.save()
 
         result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
 
         assert result.ok
-        assert "because the manufacturer is not established in the Union" not in result.value
-        assert "Acme EU Compliance BV" in result.value
+        assert "2a. Authorized Representative" not in result.value
+        assert "MUST NOT be signed" not in result.value
 
     def test_the_representative_email_is_escaped(self, assessment):
         """The AR block is typed into the wizard and reaches the document

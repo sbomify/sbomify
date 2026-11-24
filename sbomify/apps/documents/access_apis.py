@@ -1,51 +1,66 @@
 import hashlib
 import logging
-from typing import Any
-from urllib.parse import quote
+from typing import Any, cast
 
-from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
-from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils import timezone
 from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST, can
+from sbomify.apps.core.models import User
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.core.utils import broadcast_to_user, broadcast_to_workspace, get_client_ip
+from sbomify.apps.teams.models import Member, Workspace
 
 from .access_models import AccessRequest, NDASignature
 from .access_schemas import (
-    AccessRequestCreateRequest,
     AccessRequestListResponse,
     AccessRequestResponse,
     NDASignatureResponse,
     NDASignRequest,
 )
 from .content_safety import apply_safe_download_headers
+from .services.access_emails import (
+    notify_access_approved,
+    notify_access_rejected,
+    notify_access_revoked,
+    notify_admins_of_access_request,
+)
 
 # Anyone already in the workspace, internal or external — they do not need to
 # ask for access they already have.
 ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
-User = get_user_model()
 log = logging.getLogger(__name__)
 
 router = Router(tags=["Access Requests"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
-def _invalidate_access_requests_cache(team: Team) -> None:
+def _announce_decision(access_request: AccessRequest, status: str) -> None:
+    """Tell the workspace's admins, and the requester on their own channel, how a request was decided.
+
+    The requester is not a workspace member, so the workspace feed never
+    reaches them; their own channel is how their open public page learns.
+    """
+    data = {
+        "access_request_id": str(access_request.id),
+        "user_id": str(access_request.user_id),
+        "status": status,
+        "action": status,
+    }
+    if access_request.team.key:
+        broadcast_to_workspace(workspace_key=access_request.team.key, message_type="access_request_updated", data=data)
+    broadcast_to_user(access_request.user_id, "access_request_updated", data)
+
+
+def _invalidate_access_requests_cache(team: Workspace) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
     admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
 
@@ -54,7 +69,7 @@ def _invalidate_access_requests_cache(team: Team) -> None:
         cache.delete(cache_key)
 
 
-def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Team) -> None:
+def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, team: Workspace) -> None:
     """Dismiss the access request notification if there are no more pending requests."""
     # Check if there are any pending requests left
     company_nda = team.get_company_nda_document()
@@ -77,110 +92,36 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         request.session.save()
 
 
-def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, requires_nda: bool = False) -> None:
-    """Send email notification to all owners and admins about a new access request."""
-    try:
-        # Get all owners and admins of the team
-        admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).select_related("user")
-
-        if not admin_members.exists():
-            log.warning(f"No admins found for team {team.key} to notify about access request {access_request.id}")
-            return
-
-        # Build email context
-        requester_name = (
-            f"{access_request.user.first_name} {access_request.user.last_name}".strip() or access_request.user.username
-        )
-        requester_email = access_request.user.email
-        review_url = reverse("documents:access_request_queue", kwargs={"team_key": team.key})
-        review_link = f"{get_base_url()}{review_url}"
-
-        # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
-
-        # Send email to each admin/owner
-        for admin_member in admin_members:
-            try:
-                email_context = {
-                    "admin_user": admin_member.user,
-                    "team": team,
-                    "requester_name": requester_name,
-                    "requester_email": requester_email,
-                    "requested_at": access_request.requested_at.strftime("%B %d, %Y at %I:%M %p"),
-                    "requires_nda": requires_nda,
-                    "nda_signed": nda_signed,
-                    "review_link": review_link,
-                    "base_url": get_base_url(),
-                }
-
-                email = EmailMultiAlternatives(
-                    subject=f"New access request for {team.name}",
-                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[admin_member.user.email],
-                    # Reply-to the requester so an admin's reply reaches them, not our own inbox.
-                    reply_to=[requester_email or "hello@sbomify.com"],
-                )
-                email.attach_alternative(
-                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
-                    "text/html",
-                )
-                email.send()
-            except Exception as e:
-                log.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
-
-    except Exception as e:
-        log.error(f"Error notifying admins of access request {access_request.id}: {e}")
-
-
 @router.post(
     "/teams/{team_key}/access-request",
-    response={200: dict, 201: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,  # Allow unauthenticated users to request access
+    response={
+        200: dict,
+        201: AccessRequestResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
 )
 def create_access_request(
     request: HttpRequest,
     team_key: str,
-    payload: AccessRequestCreateRequest | None = None,
 ) -> Any:
     """Create a blanket access request for all gated components in a team.
 
-    Supports both authenticated and unauthenticated users.
-    For unauthenticated users, creates a user account from email.
+    The caller must be signed in and asks for themselves.
     """
     try:
         # Get team
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
-        # Get or create user
-        user = None
-        if request.user.is_authenticated:
-            user = request.user
-        else:
-            if not payload or not payload.email:
-                return 400, {"detail": "Email is required for unauthenticated users"}
+        if not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
 
-            # Check if user already exists
-            try:
-                user = User.objects.get(email=payload.email)
-            except User.DoesNotExist:
-                # Create new user
-                username = payload.email.split("@")[0]
-                # Ensure username is unique
-                base_username = username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-
-                user = User.objects.create_user(
-                    username=username,
-                    email=payload.email,
-                    first_name=payload.name or "",
-                )
+        user = cast(User, request.user)
 
         # Check if user already has access
         try:
@@ -233,20 +174,7 @@ def create_access_request(
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # Note: Old NDA signature remains linked to the old document version.
-                    # It will be replaced (not archived) when user signs the current NDA version
-                    # due to OneToOneField constraint. For full audit history, consider
-                    # changing the model to allow multiple signatures per access_request.
-
-                    # Update existing request to PENDING status
-                    existing_request.status = AccessRequest.Status.PENDING
-                    existing_request.requested_at = timezone.now()
-                    existing_request.decided_at = None
-                    existing_request.decided_by = None
-                    existing_request.revoked_at = None
-                    existing_request.revoked_by = None
-                    existing_request.notes = ""
-                    existing_request.save()
+                    existing_request.reopen()
                     access_request = existing_request
                     request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
@@ -295,14 +223,28 @@ def create_access_request(
                         request,
                         "document:access_requested",
                         {"requires_nda": requires_nda},
-                        team_key=team_key,
+                        workspace_key=team_key,
                     )
                 )
 
             # Only send notification if NDA is not required (request is complete)
             # If NDA is required, notification will be sent after NDA is signed
             if not requires_nda:
-                _notify_admins_of_access_request(access_request, team, requires_nda=False)
+                notify_admins_of_access_request(access_request, team, requires_nda=False)
+            if not requires_nda and team.key:
+                ws_team_key, ws_request_id, ws_user_id = team.key, str(access_request.id), str(access_request.user_id)
+                transaction.on_commit(
+                    lambda: broadcast_to_workspace(
+                        workspace_key=ws_team_key,
+                        message_type="access_request_updated",
+                        data={
+                            "access_request_id": ws_request_id,
+                            "user_id": ws_user_id,
+                            "status": "pending",
+                            "action": "requested",
+                        },
+                    )
+                )
 
             # If NDA is required, return info that NDA signing is needed
             if requires_nda:
@@ -340,15 +282,25 @@ def create_access_request(
 
 @router.get(
     "/teams/{team_key}/access-request/{request_id}/nda",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
+    # 200 is the NDA file itself, an HttpResponse ninja passes through
+    # unvalidated. 400 and 500 are the two catch-alls at the bottom of the
+    # body: undeclared, ninja raised ConfigError on them and the caller got an
+    # opaque 500 instead of the status the handler chose.
+    response={
+        200: None,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) -> Any:
     """Get NDA document for signing."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -356,20 +308,10 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request or is admin
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                # Check if user is admin/owner
-                try:
-                    member = Member.objects.get(team=team, user=request.user)
-                    if member.role not in ADMINISTER:
-                        return 403, {"detail": "Forbidden"}
-                except Member.DoesNotExist:
-                    return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, we can't verify - allow if request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return 403, {"detail": "Forbidden"}
+        # Only the requester, or an owner or admin of the workspace, reads the NDA
+        action = "access_request:submit" if access_request.user == request.user else "access_request:read"
+        if not can(request, action, team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -378,7 +320,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
         # Return NDA document for download
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
 
             if document_data:
@@ -406,15 +348,22 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
 @router.post(
     "/teams/{team_key}/access-request/{request_id}/sign-nda",
-    response={200: NDASignatureResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
+    response={
+        200: NDASignatureResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        # Storage is unreachable or the NDA will not read back.
+        500: ErrorResponse,
+    },
 )
 def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDASignRequest) -> Any:
     """Sign NDA for access request."""
     try:
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(key=team_key)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Team not found"}
 
         try:
@@ -422,14 +371,9 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user owns the request
-        if request.user.is_authenticated:
-            if access_request.user != request.user:
-                return 403, {"detail": "Forbidden"}
-        else:
-            # For unauthenticated, verify request is pending
-            if access_request.status != AccessRequest.Status.PENDING:
-                return 403, {"detail": "Forbidden"}
+        # Only the requester signs, for themselves
+        if access_request.user != request.user or not can(request, "access_request:submit", team):
+            return 403, {"detail": "Forbidden"}
 
         # Get company-wide NDA
         company_nda = team.get_company_nda_document()
@@ -438,7 +382,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
 
         # Get NDA document content and calculate hash
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
             if not document_data:
                 return 404, {"detail": "NDA document not found in storage"}
@@ -480,7 +424,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
             transaction.on_commit(
-                lambda: _notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
+                lambda: notify_admins_of_access_request(access_request, access_request.team, requires_nda=True)
             )
 
             # Broadcast to workspace for real-time UI updates (admins see new pending request)
@@ -524,9 +468,11 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
         return 403, {"detail": "Authentication required"}
 
     # Get teams where user is owner or admin
-    member_teams = Member.objects.filter(user=request.user, role__in=("owner", "admin")).values_list(
-        "team_id", flat=True
-    )
+    member_teams = [
+        member.team_id
+        for member in Member.objects.filter(user=request.user, role__in=ADMINISTER).select_related("team")
+        if can(request, "access_request:read", member.team)
+    ]
 
     if not member_teams:
         return 403, {"detail": "Access denied"}
@@ -537,10 +483,10 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     teams_requiring_nda = []
     for team_id in member_teams:
         try:
-            team = Team.objects.get(pk=team_id)
+            team = Workspace.objects.get(pk=team_id)
             if team.get_company_nda_document():
                 teams_requiring_nda.append(team_id)
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             # Team no longer exists, skip it
             pass
 
@@ -607,12 +553,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -640,61 +581,13 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-    # Send email notification to user (outside transaction)
-    try:
-        login_url = reverse("core:keycloak_login")
-        redirect_url = reverse("core:workspace_public", kwargs={"workspace_key": access_request.team.key})
-        login_link = f"{get_base_url()}{login_url}?next={quote(redirect_url)}"
-
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-            "login_link": login_link,
-        }
-
-        # Render templates first to catch template errors
-        try:
-            plain_message = render_to_string("documents/emails/access_approved.txt", email_context)
-            html_message = render_to_string("documents/emails/access_approved.html.j2", email_context)
-        except Exception as template_error:
-            log.error(
-                f"Failed to render access approval email templates for {access_request.user.email}: {template_error}",
-                exc_info=True,
-            )
-            raise
-
-        # Send email
-        email = EmailMultiAlternatives(
-            subject=f"Access approved for {access_request.team.name}",
-            body=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(html_message, "text/html")
-        result = email.send(fail_silently=False)
-        log.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
-    except Exception as e:
-        log.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
+    notify_access_approved(access_request)
 
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
-    # Broadcast to workspace for real-time UI updates
-    # This notifies both:
-    # 1. The requester's browser to update their access status on public pages
-    # 2. Admins' browsers to update the access request queue
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "approved",
-            "action": "approved",
-        },
-    )
+    # Admins' queues and the requester's open public page both follow it.
+    _announce_decision(access_request, "approved")
 
     return 200, AccessRequestResponse(
         id=access_request.id,
@@ -712,7 +605,8 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/reject",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not pending" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     """Reject access request (admin/owner only)."""
@@ -726,12 +620,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -751,42 +640,13 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
     # Invalidate cache after transaction commits
     transaction.on_commit(lambda: _invalidate_access_requests_cache(access_request.team))
 
-    # Send email notification to user
-    try:
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-        }
-
-        email = EmailMultiAlternatives(
-            subject=f"Access request update for {access_request.team.name}",
-            body=render_to_string("documents/emails/access_rejected.txt", email_context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(
-            render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
-        )
-        email.send()
-    except Exception as e:
-        log.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
+    notify_access_rejected(access_request)
 
     # Dismiss notification if no more pending requests
     _dismiss_access_request_notification_if_no_pending(request, access_request.team)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "rejected",
-            "action": "rejected",
-        },
-    )
+    _announce_decision(access_request, "rejected")
 
     return 200, AccessRequestResponse(
         id=access_request.id,
@@ -804,7 +664,8 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
 
 @router.post(
     "/access-requests/{request_id}/revoke",
-    response={200: AccessRequestResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 400 is "not approved" below.
+    response={200: AccessRequestResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
 )
 def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     """Revoke access request and remove guest membership (admin/owner only)."""
@@ -818,12 +679,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         except AccessRequest.DoesNotExist:
             return 404, {"detail": "Access request not found"}
 
-        # Verify user is owner or admin of the team
-        try:
-            member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ADMINISTER:
-                return 403, {"detail": "Access denied"}
-        except Member.DoesNotExist:
+        if not can(request, "access_request:decide", access_request.team):
             return 403, {"detail": "Access denied"}
 
         # Check status inside transaction after locking
@@ -856,39 +712,10 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
     cache_key = f"user_teams_invalidate:{access_request.user.id}"
     cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-    # Send email notification to user
-    try:
-        email_context = {
-            "user": access_request.user,
-            "team": access_request.team,
-            "base_url": get_base_url(),
-        }
-
-        email = EmailMultiAlternatives(
-            subject=f"Access update for {access_request.team.name}",
-            body=render_to_string("documents/emails/access_revoked.txt", email_context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[access_request.user.email],
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(
-            render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
-        )
-        email.send()
-    except Exception as e:
-        log.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
+    notify_access_revoked(access_request)
 
     # Broadcast to workspace for real-time UI updates
-    broadcast_to_workspace(
-        workspace_key=access_request.team.key,  # type: ignore[arg-type]
-        message_type="access_request_updated",
-        data={
-            "access_request_id": str(access_request.id),
-            "user_id": str(access_request.user.id),
-            "status": "revoked",
-            "action": "revoked",
-        },
-    )
+    _announce_decision(access_request, "revoked")
 
     return 200, AccessRequestResponse(
         id=access_request.id,

@@ -120,10 +120,10 @@ class TestDiffEndpoint:
     def test_foreign_release_is_not_found(self, authenticated_api_client, two_releases, guest_user):
         client, token = authenticated_api_client
         from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         _, _, old, _ = two_releases
-        foreign_team = Team.objects.create(name="Foreign")
+        foreign_team = Workspace.objects.create(name="Foreign")
         Member.objects.create(user=guest_user, team=foreign_team, role="owner")
         foreign_product = Product.objects.create(name="FP", team=foreign_team)
         foreign_release = Release.objects.create(product=foreign_product, name="vF")

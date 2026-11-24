@@ -27,16 +27,16 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from sbomify.apps.sboms.models import Component, Product, ProductComponent
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def two_teams(db) -> tuple[Team, Team]:
-    return Team.objects.create(name="Team A"), Team.objects.create(name="Team B")
+def two_teams(db) -> tuple[Workspace, Workspace]:
+    return Workspace.objects.create(name="Team A"), Workspace.objects.create(name="Team B")
 
 
 @pytest.fixture
-def cross_tenant_pair(two_teams: tuple[Team, Team]) -> tuple[Product, Component]:
+def cross_tenant_pair(two_teams: tuple[Workspace, Workspace]) -> tuple[Product, Component]:
     team_a, team_b = two_teams
     product = Product.objects.create(name="A's Product", team=team_a)
     component = Component.objects.create(name="B's Component", team=team_b)
@@ -44,7 +44,7 @@ def cross_tenant_pair(two_teams: tuple[Team, Team]) -> tuple[Product, Component]
 
 
 @pytest.fixture
-def same_tenant_pair(two_teams: tuple[Team, Team]) -> tuple[Product, Component]:
+def same_tenant_pair(two_teams: tuple[Workspace, Workspace]) -> tuple[Product, Component]:
     team_a, _ = two_teams
     product = Product.objects.create(name="A's Product", team=team_a)
     component = Component.objects.create(name="A's Component", team=team_a)

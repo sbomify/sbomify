@@ -40,7 +40,7 @@ def update_teams_on_plan_change(sender: type[BillingPlan], instance: BillingPlan
         if not apps.is_installed("teams"):
             return
         # Verify Team model is available
-        apps.get_model("teams", "Team")
+        apps.get_model("teams", "Workspace")
     except (LookupError, ValueError):
         # Model not available during migrations
         return

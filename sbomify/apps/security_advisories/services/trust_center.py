@@ -30,22 +30,26 @@ to the workspace-level grant alone; there is nothing narrower to test it against
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from math import ceil
+from types import SimpleNamespace
 from typing import Any
 
-from django.db.models import Prefetch, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.utils.timesince import timesince
 
 from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.security_advisories.expressions import csaf_filename_expression, csaf_year_expression
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
     AdvisoryReference,
+    AdvisoryVersionRange,
     AdvisoryVulnerability,
     SecurityAdvisory,
 )
@@ -53,8 +57,12 @@ from sbomify.apps.security_advisories.services.advisories import (
     PUBLICATION_VARIANTS,
     REMEDIATION_META,
     SEVERITY_RANK,
+    STATUS_VARIANTS,
     display_date,
     display_id,
+    latest_edits,
+    status_subject,
+    version_range_label,
     worst_cvss,
     worst_severity,
 )
@@ -121,21 +129,16 @@ EVENT_META: dict[str, dict[str, str]] = {
 }
 _DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle-info"}
 
+# What the readable queryset loads of the timeline: the public kinds, and the
+# edits made to them. An edit to an internal comment never leaves the workspace.
+_PUBLIC_EVENTS = Q(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES) | Q(
+    event_type=AdvisoryEvent.EventType.MESSAGE_EDITED,
+    payload__event_type__in=sorted(AdvisoryEvent.PUBLIC_EVENT_TYPES),
+)
+
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
 _EPOCH = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
-
-# How a per-product VEX assertion reads on a public page. Same values as
-# ``AdvisoryProductStatus.Status``; the labels are the model's own. Keyed by the
-# plain string the column stores, not the enum, so a lookup on ``status.status``
-# (a ``str``) is the same type going in as coming out.
-STATUS_VARIANTS: dict[str, str] = {
-    AdvisoryProductStatus.Status.EXPLOITABLE: "danger",
-    AdvisoryProductStatus.Status.IN_TRIAGE: "warning",
-    AdvisoryProductStatus.Status.NOT_AFFECTED: "success",
-    AdvisoryProductStatus.Status.FALSE_POSITIVE: "secondary",
-    AdvisoryProductStatus.Status.RESOLVED: "success",
-}
 
 
 @dataclass(frozen=True)
@@ -231,6 +234,67 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     )
 
 
+def anonymous_viewer_scope(team: Any) -> ViewerScope:
+    """The scope every anonymous reader shares: public products only.
+
+    A CSAF TLP:WHITE distribution serves one document per URL to everybody, so
+    it must not be built from the requesting reader's scope. Doing that would
+    vary a cacheable, TLP-labelled URL by identity, and an aggregator that
+    fetched it while holding a grant would republish gated content as WHITE.
+    This resolves the same three-tier rule against nobody, so the answer does
+    not depend on who is asking.
+    """
+    return resolve_viewer_scope(SimpleNamespace(), team)
+
+
+def public_advisories(team: Any) -> Any:
+    """Advisories a CSAF TLP:WHITE distribution may carry, with the graph loaded.
+
+    ``_readable_queryset`` already drops PRIVATE and anything not published or
+    withdrawn. GATED goes too: its whole point is that a reader has to be known
+    to see it, and nobody is known here.
+
+    This one prefetches the whole advisory graph, so it is for rendering a
+    document. Listing wants ``public_advisory_index``.
+    """
+    return _readable_queryset(team).filter(visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+
+def public_advisory_index(team: Any) -> Any:
+    """The same advisories as scalar rows, for listing and for resolving a filename.
+
+    Same three filters, none of the prefetches: a feed prints an id, a title and
+    two timestamps, so pulling vulnerabilities, product statuses, version ranges,
+    references and events for every advisory would load the entire disclosure
+    history of a workspace to render a list of links.
+    """
+    public = SecurityAdvisory.objects.filter(
+        team=team,
+        status__in=_READABLE_STATUSES,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+    ).alias(_csaf_filename=csaf_filename_expression(), _csaf_year=csaf_year_expression())
+    collisions = public.filter(_csaf_filename=OuterRef("_csaf_filename"), _csaf_year=OuterRef("_csaf_year")).exclude(
+        pk=OuterRef("pk")
+    )
+    # Imported tracking IDs can normalize to the same URL. Do not advertise
+    # either ambiguous document, matching white_document's 404 behavior.
+    return (
+        public.filter(~Exists(collisions))
+        .only("id", "tracking_id", "title", "published_at", "created_at", "updated_at")
+        .order_by("-published_at", "-created_at")
+    )
+
+
+def anonymous_projection(team: Any, advisory: SecurityAdvisory) -> dict[str, Any]:
+    """The detail projection an anonymous reader would be given for one advisory.
+
+    The caller has already restricted itself to ``public_advisories``; this
+    supplies the matching scope so product chips and version rows are filtered
+    to what the world may see, not to what the requester may see.
+    """
+    return _public_projection(advisory, anonymous_viewer_scope(team), detail=True)
+
+
 def _readable_queryset(team: Any) -> Any:
     """Externally-visible advisories with the rows a public projection reads.
 
@@ -251,9 +315,7 @@ def _readable_queryset(team: Any) -> Any:
             "vulnerabilities__product_statuses__version_ranges",
             Prefetch(
                 "events",
-                queryset=AdvisoryEvent.objects.filter(event_type__in=AdvisoryEvent.PUBLIC_EVENT_TYPES).order_by(
-                    "created_at"
-                ),
+                queryset=AdvisoryEvent.objects.filter(_PUBLIC_EVENTS).order_by("created_at"),
                 to_attr="public_events",
             ),
         )
@@ -264,19 +326,30 @@ def _readable_queryset(team: Any) -> Any:
     )
 
 
+def product_link_is_readable(link: AdvisoryProduct, scope: ViewerScope) -> bool:
+    """Whether this reader may be shown the product this row names.
+
+    A NULL ``product`` is not proof that the name is external: it is also what a
+    deleted product leaves behind. ``public_name_snapshot`` is the difference,
+    and without it retiring a private product would publish its name.
+    """
+    if link.product_id is not None:
+        return str(link.product_id) in scope.product_ids
+    return link.public_name_snapshot or scope.is_insider
+
+
 def _visible_products(advisory: SecurityAdvisory, scope: ViewerScope) -> tuple[list[dict[str, Any]], int]:
     """Product chips the reader may see, plus a count of the ones withheld.
 
     An advisory can name several products, and passing the gate on one of them is
-    not permission to learn the names of the others. Rows with no ``product`` FK
-    are a workspace naming something it does not track in sbomify — there is no
-    product to hold a permission against, so they are shown as plain text.
+    not permission to learn the names of the others. A row with no ``product`` FK
+    needs explicit external provenance; see ``product_link_is_readable``.
     """
     chips: list[dict[str, Any]] = []
     withheld = 0
     for advisory_product in advisory.products.all():
         product = advisory_product.product
-        if product is not None and str(product.id) not in scope.product_ids:
+        if not product_link_is_readable(advisory_product, scope):
             withheld += 1
             continue
         chips.append(
@@ -305,7 +378,14 @@ def _cvss_chips(entries: Any) -> list[dict[str, Any]]:
         except (KeyError, TypeError, ValueError):
             continue
         version = str(entry.get("version") or "").strip()
-        chips.append({"label": f"CVSS {version}" if version else "CVSS", "base_score": score})
+        chips.append(
+            {
+                "label": f"CVSS {version}" if version else "CVSS",
+                "base_score": score,
+                "version": version,
+                "vector": str(entry.get("vector") or "").strip(),
+            }
+        )
     return chips
 
 
@@ -362,7 +442,9 @@ def _gap_phrase(earlier: Any, later: Any) -> str:
     return f"{humanised} later" if (humanised := _humanise(earlier, later)) else "moments later"
 
 
-def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None) -> dict[str, Any]:
+def _public_event(
+    event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None, edit: AdvisoryEvent | None = None
+) -> dict[str, Any]:
     """One timeline entry: what happened, when, and how long after the last one.
 
     The workspace timeline renders an actor and a raw payload. Neither belongs on
@@ -388,7 +470,8 @@ def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None
         "label": meta.get("label") or fallback["label"],
         "variant": meta.get("variant") or fallback["variant"],
         "icon": meta.get("icon") or fallback["icon"],
-        "note": event.body,
+        "note": edit.body if edit else event.body,
+        "edited_display": display_date(edit.created_at) if edit else "",
         # Three complementary readings of the same instant: the date to cite,
         # the time for same-day ordering, and the relative age to feel.
         "date_display": display_date(event.created_at),
@@ -416,28 +499,128 @@ def _version_expressions(status: AdvisoryProductStatus) -> tuple[str, str]:
     affected: list[str] = []
     unaffected: list[str] = []
     for version_range in status.version_ranges.all():
-        introduced = version_range.introduced
-        fixed = version_range.fixed
-        last = version_range.last_affected
-
-        if fixed:
-            affected.append(f">= {introduced}, < {fixed}" if introduced else f"< {fixed}")
-            unaffected.append(f">= {fixed}")
-        elif last:
-            affected.append(f">= {introduced}, <= {last}" if introduced else f"<= {last}")
-            unaffected.append(f"> {last}")
-        elif introduced:
-            # Open-ended: everything from here up is affected, so there is no
-            # unaffected version to name yet.
-            affected.append(f">= {introduced}")
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        # A single pinned version names no unaffected one, for the reason
+        # ``_version_lists`` gives: "> 6282ec8" would clear every later commit,
+        # and CSAF would list it as the fix.
+        pinned = version_range.introduced and version_range.introduced == version_range.last_affected
+        if range_unaffected and not pinned:
+            unaffected.append(range_unaffected)
 
     # No ranges recorded, but a fix was named — that is enough to answer the
     # question, and it is the common shape for an advisory written in a hurry.
     if not affected and status.recommended_version:
         affected.append(f"< {status.recommended_version}")
         unaffected.append(f">= {status.recommended_version}")
+    # Affected versions were pinned and the fix only recommended: on a fixed
+    # row, the recommendation is the version that is no longer affected.
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
 
     return ", ".join(affected) or "—", ", ".join(unaffected) or "—"
+
+
+def _mentions_version(text: str, version: str) -> bool:
+    """Whether ``text`` names ``version`` as a whole version, not as part of a longer one.
+
+    "Upgrade to 1.2.3" does not name 1.2, and "v10" does not name v1. A full
+    stop after the version ends the sentence rather than continuing it. A bare
+    number is never taken as named: "restart within 2 hours" is not about 2.
+    """
+    if not version or version.isdigit():
+        return False
+    return re.search(rf"(?<![\w.-]){re.escape(version)}(?![\w-]|\.\w)", text) is not None
+
+
+def _range_expressions(version_range: AdvisoryVersionRange) -> tuple[str, str]:
+    """One stored range as its ("affected", "unaffected") comparison strings, either possibly empty."""
+    introduced = version_range.introduced
+    fixed = version_range.fixed
+    last = version_range.last_affected
+
+    if fixed:
+        return (f">= {introduced}, < {fixed}" if introduced else f"< {fixed}"), f">= {fixed}"
+    if last:
+        return (f">= {introduced}, <= {last}" if introduced else f"<= {last}"), f"> {last}"
+    # Open-ended: everything from here up is affected, so there is no
+    # unaffected version to name yet.
+    return (f">= {introduced}" if introduced else ""), ""
+
+
+def _version_lists(status: AdvisoryProductStatus) -> tuple[list[str], list[str]]:
+    """The ("affected", "unaffected") versions a table lists, one entry per stored range.
+
+    A range pinned to a single version, which is how a triage records each
+    affected commit, is that version alone: ">= 6282ec8, <= 6282ec8" says the
+    same thing twice. It names no unaffected version either, because "> 6282ec8"
+    would claim every later commit is clean. A range never carries both
+    ``fixed`` and ``last_affected`` (a check constraint), so equal ``introduced``
+    and ``last_affected`` is exactly the pinned case.
+    """
+    affected: list[str] = []
+    unaffected: list[str] = []
+    for version_range in status.version_ranges.all():
+        if version_range.introduced and version_range.introduced == version_range.last_affected:
+            affected.append(version_range.introduced)
+            continue
+        range_affected, range_unaffected = _range_expressions(version_range)
+        if range_affected:
+            affected.append(range_affected)
+        if range_unaffected:
+            unaffected.append(range_unaffected)
+    if not affected and status.recommended_version:
+        affected.append(f"< {status.recommended_version}")
+        unaffected.append(f">= {status.recommended_version}")
+    elif not unaffected and status.recommended_version and status.status == AdvisoryProductStatus.Status.RESOLVED:
+        unaffected.append(f">= {status.recommended_version}")
+    return affected, unaffected
+
+
+def _affected_versions(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions the detail table lists. A suppressing status lists
+    nothing, because no version is affected."""
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    return _version_lists(status)[0]
+
+
+def _version_checks(status: AdvisoryProductStatus) -> list[dict[str, str]]:
+    """The affected ranges with their words, as the detail page lists them.
+
+    Each entry keeps the bounds next to its label so the page can test a
+    reader's version against the range a label names. A suppressing status
+    lists nothing, because no version is affected. With no ranges, a
+    recommended version still says what is affected, the same fallback
+    ``_version_lists`` takes.
+    """
+    if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+        return []
+    checks = [
+        {
+            "label": version_range_label(r),
+            "introduced": r.introduced,
+            "fixed": r.fixed,
+            "last_affected": r.last_affected,
+        }
+        for r in status.version_ranges.all()
+    ]
+    if not checks and status.recommended_version:
+        checks.append(
+            {
+                "label": f"Before {status.recommended_version}",
+                "introduced": "",
+                "fixed": status.recommended_version,
+                "last_affected": "",
+            }
+        )
+    return checks
+
+
+def _version_labels(status: AdvisoryProductStatus) -> list[str]:
+    """The affected versions in words, one per entry of ``_version_checks``."""
+    return [check["label"] for check in _version_checks(status)]
 
 
 def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[str, Any]]:
@@ -452,20 +635,27 @@ def _affected_rows(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dict[
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
-            advisory_product = status.advisory_product
-            product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
                 continue
-            if advisory_product is None:
-                label = "All products"
-            else:
-                label = advisory_product.product_name or (product.name if product else "")
+            advisory_product = status.advisory_product
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
+                continue
+            label = status_subject(status)
             affected, unaffected = _version_expressions(status)
+            if status.status in AdvisoryProductStatus.SUPPRESSING_STATES:
+                affected_versions, unaffected_versions = ["None"], ["All"]
+            else:
+                affected_versions, unaffected_versions = _version_lists(status)
             rows.append(
                 {
                     "product": label,
                     "affected": affected,
                     "unaffected": unaffected,
+                    "affected_versions": affected_versions,
+                    "unaffected_versions": unaffected_versions,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
@@ -485,6 +675,13 @@ def _cvss_score(advisory: SecurityAdvisory) -> float | None:
     return float(entry["base_score"]) if entry else None
 
 
+def _is_public_event(event: AdvisoryEvent) -> bool:
+    if event.event_type == AdvisoryEvent.EventType.MESSAGE_EDITED:
+        payload = event.payload if isinstance(event.payload, dict) else {}
+        return payload.get("event_type") in AdvisoryEvent.PUBLIC_EVENT_TYPES
+    return event.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES
+
+
 def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail: bool = False) -> dict[str, Any]:
     severity = worst_severity(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, {})
@@ -492,11 +689,15 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
     # ``public_events`` is the to_attr from _readable_queryset; falling back to
     # the relation keeps the function usable on an advisory fetched some other
     # way, filtering by hand so the fallback cannot be the leaky path.
-    events = getattr(advisory, "public_events", None)
-    if events is None:
-        events = [e for e in advisory.events.all() if e.event_type in AdvisoryEvent.PUBLIC_EVENT_TYPES]
+    readable = getattr(advisory, "public_events", None)
+    if readable is None:
+        readable = [e for e in advisory.events.all() if _is_public_event(e)]
+    # An edit to a public update shows as that update's text, never as an entry
+    # of its own; the text it replaced stays in the workspace.
+    edits = latest_edits(readable)
+    events = [e for e in readable if e.event_type != AdvisoryEvent.EventType.MESSAGE_EDITED]
     products, withheld = _visible_products(advisory, scope)
-    updated_at = max((e.created_at for e in events), default=advisory.published_at or advisory.updated_at)
+    updated_at = max((e.created_at for e in readable), default=advisory.published_at or advisory.updated_at)
 
     projection: dict[str, Any] = {
         "id": str(display_id(advisory)),
@@ -511,6 +712,8 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         "status_label": remediation.get("label", ""),
         "status_variant": remediation.get("variant", "secondary"),
         "status_icon": remediation.get("icon", "fas fa-circle"),
+        # The header's status badge: Resolved is the one status in colour.
+        "status_tone": "success" if advisory.remediation_status == SecurityAdvisory.RemediationStatus.RESOLVED else "",
         "is_open": advisory.remediation_status not in SecurityAdvisory.CLOSED_REMEDIATION_STATUSES,
         "publication_status": advisory.status,
         "publication_label": advisory.get_status_display(),
@@ -549,6 +752,7 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
                 "external_id": r.external_id,
                 "url": r.url,
                 "summary": r.summary,
+                "category": r.category,
             }
             for r in advisory.references.all()
         ]
@@ -557,11 +761,26 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         # the pairing walks the reversed list one step behind.
         newest_first = sorted(events, key=lambda e: e.created_at, reverse=True)
         projection["timeline"] = [
-            _public_event(event, previous=newest_first[index + 1] if index + 1 < len(newest_first) else None)
+            _public_event(
+                event,
+                previous=newest_first[index + 1] if index + 1 < len(newest_first) else None,
+                edit=edits.get(event.id),
+            )
             for index, event in enumerate(newest_first)
         ]
         projection["acknowledgments"] = advisory.acknowledgments or []
         projection["statuses"] = _public_statuses(advisory, scope)
+        # What the version check on the page tests a typed version against,
+        # keyed by status row. Only the bounds go to the browser, not the rows.
+        projection["version_checks"] = {
+            row["id"]: {"suppressed": row["is_suppressed"], "ranges": row["version_checks"]}
+            for row in projection["statuses"]
+        }
+        # Only the CSAF renderer reads these: the trust centre shows a timeline,
+        # a machine consumer needs a version that moves for every rendered
+        # change. See ``signals.py`` for where they are advanced.
+        projection["csaf_revision"] = advisory.csaf_revision
+        projection["csaf_revision_at"] = advisory.csaf_revision_at
     return projection
 
 
@@ -569,33 +788,54 @@ def _public_statuses(advisory: SecurityAdvisory, scope: ViewerScope) -> list[dic
     """The "is my version affected" table: one row per vulnerability x product.
 
     Rows for products the reader may not see are dropped for the same reason
-    their chips are, and a portfolio-wide row (``advisory_product`` NULL) is kept
+    their chips are, and a portfolio-wide row (both subject FKs NULL) is kept
     because it names nothing.
     """
     rows: list[dict[str, Any]] = []
     for vulnerability in advisory.vulnerabilities.all():
         for status in vulnerability.product_statuses.all():
+            # A component-scoped status describes one component, and this
+            # projection carries no component scope to check it against. Falling
+            # through would publish it as the portfolio-wide "All products".
+            if status.advisory_component_id is not None:
+                continue
             advisory_product = status.advisory_product
             product = advisory_product.product if advisory_product else None
-            if product is not None and str(product.id) not in scope.product_ids:
+            if advisory_product is not None and not product_link_is_readable(advisory_product, scope):
                 continue
-            if advisory_product is None:
-                scope_label = "All products"
-            else:
-                scope_label = advisory_product.product_name or (product.name if product else "")
+            scope_label = status_subject(status)
+            affected, unaffected = _version_expressions(status)
             rows.append(
                 {
                     "id": status.id,
                     "vulnerability": vulnerability.cve_id or vulnerability.title,
                     "product": scope_label,
+                    "product_id": product.id if product else None,
+                    # The version expressions the index shows, placeholders and
+                    # all. This projection is what the page renders; the API
+                    # strips the placeholders before sending them, so the two
+                    # are deliberately not the same string.
+                    "affected": affected,
+                    "unaffected": unaffected,
                     "status": status.status,
                     "status_label": status.get_status_display(),
                     "status_variant": STATUS_VARIANTS.get(status.status, "secondary"),
                     "justification": status.get_justification_display() if status.justification else "",
+                    "justification_value": status.justification,
                     "impact_statement": status.impact_statement,
                     "action_statement": status.action_statement,
+                    "response": status.response,
                     "recommended_version": status.recommended_version,
+                    # The page says "Upgrade to X." unless the instructions
+                    # already do, which would print it twice.
+                    "action_names_recommendation": _mentions_version(
+                        status.action_statement, status.recommended_version
+                    ),
                     "version_ranges": [str(r) for r in status.version_ranges.all()],
+                    "affected_versions": _affected_versions(status),
+                    "version_labels": _version_labels(status),
+                    "is_suppressed": status.status in AdvisoryProductStatus.SUPPRESSING_STATES,
+                    "version_checks": _version_checks(status),
                 }
             )
     return rows

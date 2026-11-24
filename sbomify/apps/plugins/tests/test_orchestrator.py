@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.plugins.apis import _is_run_failing
 from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.orchestrator import (
@@ -23,7 +24,8 @@ from sbomify.apps.plugins.sdk.results import (
 )
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.utils import SBOMDataError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
+from sbomify.apps.vulnerability_scanning.utils import reconstruct_result_summary
 
 
 class MockPlugin(AssessmentPlugin):
@@ -81,7 +83,7 @@ class FailingPlugin(AssessmentPlugin):
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     """Create a test team."""
     BillingPlan.objects.get_or_create(
         key="community",
@@ -92,13 +94,13 @@ def test_team(db) -> Team:
             "max_users": 2,
         },
     )
-    team = Team.objects.create(name="Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Test Team", billing_plan="community")
     yield team
     team.delete()
 
 
 @pytest.fixture
-def test_component(test_team: Team):
+def test_component(test_team: Workspace):
     """Create a test component."""
     component = Component.objects.create(team=test_team, name="Test Component")
     yield component
@@ -317,6 +319,29 @@ class TestPluginOrchestrator:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("run_reason", "retry", "requested"),
+    [(RunReason.MANUAL, False, True), (RunReason.MANUAL, True, False), (RunReason.ON_UPLOAD, False, False)],
+)
+def test_only_the_first_attempt_of_a_manual_run_asks_a_plugin_to_start_over(
+    test_sbom, mock_sbom_data, mocker, run_reason, retry, requested
+) -> None:
+    """A retry polls what the first attempt started. Told to start over again, a
+    plugin that uploads would upload on every poll and never read a result."""
+    mocker.patch("sbomify.apps.plugins.orchestrator.get_sbom_data_bytes", return_value=(test_sbom, mock_sbom_data))
+    assess = mocker.spy(MockPlugin, "assess")
+    orchestrator = PluginOrchestrator()
+    existing = None
+    if retry:
+        existing = orchestrator.run_assessment(sbom_id=test_sbom.id, plugin=MockPlugin(), run_reason=run_reason).id
+
+    orchestrator.run_assessment(
+        sbom_id=test_sbom.id, plugin=MockPlugin(), run_reason=run_reason, existing_run_id=existing
+    )
+
+    assert assess.call_args.kwargs["context"].rerun_requested is requested
+
+
 class TestDependencyChecking:
     """Tests for plugin dependency checking methods."""
 
@@ -677,7 +702,7 @@ class TestFinalizeRetryExhausted:
         run.refresh_from_db()
         assert run.status == RunStatus.COMPLETED.value
         assert run.completed_at is not None
-        assert run.error_message and "Retry budget exhausted" in run.error_message
+        assert run.error_message and run.error_message.startswith("Retry budget exhausted: ")
 
         # Synthesised payload shape — exactly what BSI's gate consumes.
         assert run.result is not None
@@ -694,9 +719,11 @@ class TestFinalizeRetryExhausted:
 
         finding = run.result["findings"][0]
         assert finding["id"] == "sbom-verification:retry-exhausted"
+        assert finding["title"] == "Check did not finish"
         assert finding["status"] == "error"
         assert "GitHub returned 404" in finding["description"]
-        assert finding["metadata"]["retry_exhausted"] is True
+        assert finding["metadata"] == {"retry_exhausted": True, "last_error": "GitHub returned 404 for sha256:abc..."}
+        assert run.result["metadata"] == {"retry_exhausted": True}
 
     def test_finalised_run_satisfies_check_one_of_query(self, test_sbom, db) -> None:
         """After finalising, BSI's ``_check_one_of`` sees the run as failed_plugins.
@@ -730,6 +757,52 @@ class TestFinalizeRetryExhausted:
         assert after["failed_plugins"] == ["sbom-verification"]
         assert after["passing_plugins"] == []
 
+    @pytest.mark.parametrize("finalize", ["finalize_retry_exhausted", "finalize_stranded"])
+    def test_finalised_run_reads_as_failing_without_its_blob(self, test_sbom, db, finalize) -> None:
+        """Readers that skip the blob see the same failure as readers of it.
+
+        The artifact list rebuilds ``result`` from the ``result_summary``
+        column instead of loading the blob. Finalising is a queryset
+        ``update()``, which bypasses the ``save()`` that fills that column,
+        so it stayed NULL: the list showed an attestation check that never
+        finished as "pass" with 0 findings, while the product page, which
+        reads the blob, rightly showed no badge.
+        """
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="sbom-verification",
+            plugin_version="2.0.0",
+            category="attestation",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+
+        getattr(PluginOrchestrator(), finalize)(str(run.id), "GitHub returned 404 for sha256:abc...")
+
+        run.refresh_from_db()
+        assert run.result_summary == run.result["summary"]
+        assert run.result_skipped is None
+        run.result = reconstruct_result_summary(run)
+        assert _is_run_failing(run)
+
+    def test_finalised_security_run_is_left_out_of_the_trend(self, test_sbom, db) -> None:
+        """The trend reads the columns alone. A scan that never finished looked
+        at nothing, so it must not count as a clean scan with no vulnerabilities."""
+        from sbomify.apps.vulnerability_scanning.services.trends import examined_runs
+
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+
+        PluginOrchestrator().finalize_retry_exhausted(str(run.id), "Dependency-Track did not answer")
+
+        assert not examined_runs(AssessmentRun.objects.filter(pk=run.pk)).exists()
+
     def test_finalize_is_idempotent_on_terminal_state(self, test_sbom, db) -> None:
         """A run that's already COMPLETED/FAILED is left untouched."""
         run = AssessmentRun.objects.create(
@@ -759,6 +832,60 @@ class TestFinalizeRetryExhausted:
         orchestrator = PluginOrchestrator()
         result = orchestrator.finalize_retry_exhausted("00000000-0000-0000-0000-000000000000", "nope")
         assert result is None
+
+    def _settle(self, test_sbom, message: str, **kwargs) -> dict:
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="sbom-verification",
+            plugin_version="2.0.0",
+            category="attestation",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+        PluginOrchestrator().finalize_retry_exhausted(str(run.id), message, **kwargs)
+        run.refresh_from_db()
+        return run.result["findings"][0]
+
+    def test_a_plugin_can_name_what_the_user_reads(self, test_sbom, db) -> None:
+        """The plugin knows what a check that never settled means; the orchestrator does not."""
+        finding = self._settle(test_sbom, "GitHub returned no attestation.", title="No attestation found")
+
+        assert finding["title"] == "No attestation found"
+
+    def test_the_finding_reads_as_copy_not_as_internals(self, test_sbom, db) -> None:
+        """This finding renders on the compliance page, so it follows the copy rules."""
+        finding = self._settle(test_sbom, "Dependency Track still processing SBOM")
+        text = f"{finding['title']} {finding['description']}"
+
+        for word in ("budget", "transient", "plugin", "e.g."):
+            assert word not in text.lower()
+        assert "\u2014" not in text and "\u2013" not in text
+        assert finding["description"].startswith("Dependency Track still processing SBOM. ")
+        assert "checked again several times before stopping" in finding["description"]
+
+
+@pytest.mark.django_db
+def test_the_task_hands_the_plugins_title_to_the_settled_finding(test_sbom, mocker) -> None:
+    """Once the last retry is spent, the task layer finalises the run with the title the plugin raised."""
+    from sbomify.apps.plugins.builtins.verification import AttestationNotYetAvailableError
+    from sbomify.apps.plugins.tasks import RETRY_LATER_DELAYS_MS, run_assessment_task
+
+    orchestrator = mocker.patch("sbomify.apps.plugins.tasks.PluginOrchestrator").return_value
+    orchestrator.run_assessment_by_name.side_effect = AttestationNotYetAvailableError(
+        "GitHub returned no attestation.", assessment_run_id="run-1", title="No attestation found"
+    )
+
+    response = run_assessment_task.fn(
+        sbom_id=str(test_sbom.id),
+        plugin_name="sbom-verification",
+        run_reason=RunReason.ON_UPLOAD.value,
+        _retry_later_count=len(RETRY_LATER_DELAYS_MS),
+    )
+
+    assert response["status"] == "retry_exhausted"
+    orchestrator.finalize_retry_exhausted.assert_called_once_with(
+        "run-1", "GitHub returned no attestation.", title="No attestation found"
+    )
 
 
 @pytest.mark.django_db
@@ -845,3 +972,32 @@ class TestSkippedPluginPendingCleanup:
 
         assert result["status"] == "skipped"
         assert not AssessmentRun.objects.filter(id=run_id).exists()
+
+
+@pytest.mark.django_db
+def test_a_reused_pending_row_records_the_version_that_ran(test_sbom, mock_sbom_data, mocker) -> None:
+    """The eager row copies the registry's version. The page compares the run's
+    version with the current one, so it must name the code that produced it."""
+    mocker.patch(
+        "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+        return_value=(test_sbom, mock_sbom_data),
+    )
+    pending = AssessmentRun.objects.create(
+        sbom=test_sbom,
+        plugin_name="mock-plugin",
+        plugin_version="0.9.0",
+        category="compliance",
+        run_reason=RunReason.ON_UPLOAD.value,
+        status=RunStatus.PENDING.value,
+    )
+
+    run = PluginOrchestrator().run_assessment(
+        sbom_id=test_sbom.id,
+        plugin=MockPlugin(),
+        run_reason=RunReason.ON_UPLOAD,
+        existing_run_id=str(pending.id),
+    )
+
+    assert run is not None
+    run.refresh_from_db()
+    assert run.plugin_version == "1.0.0"

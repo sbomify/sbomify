@@ -2,8 +2,13 @@
 A body row. The whole row tints on hover, and the last row drops its cells'
 bottom rule so the table ends on the shell's edge rather than on a hairline.
 The cells carry the ink and the padding; the row only reacts to the pointer.
+
+A row holding a checked c-tables.select-cell box takes a stronger tint. It
+reads from :has(:checked), so it cannot fall out of step with the box, and the
+:has() selector outranks the hover one, so a selected row stays selected under
+the pointer.
 {% endcomment %}
 <c-vars class />
-<tr class="transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] last:[&_td]:border-b-0{% if class %} {{ class }}{% endif %}"
+<tr class="transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] last:[&_td]:border-b-0{% if class %} {{ class }}{% endif %}"
     {{ attrs }}>{{ slot }}
 </tr>

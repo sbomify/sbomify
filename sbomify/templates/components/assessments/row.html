@@ -1,0 +1,76 @@
+{% comment %}
+One assessment as a row in the artifact's assessment list: its verdict, name,
+outcome bar and a reason, with its checks opening directly underneath. The
+list is the only frame. Rows are divided by hairlines and the details are not
+boxed again, so the section reads as one document rather than cards in cards.
+
+tone (danger, warning, info, success, neutral) picks the verdict's icon and
+ink; label is the verdict in words, so colour never carries it alone. caption
+is the short reason beside the bar ("6 of 7 checks passed", "1 critical, 2
+high", why a run was skipped). segments and bar_label go to c-assessments.bar.
+stale is the plugin's current version, set when the run came from an older
+one: it adds "Out of date", and the badge names the version to re-run on.
+
+state is the Alpine expression that reads true while the row is open, the
+same contract as c-cards.collapsible-trigger: it drives aria-expanded, turns
+the chevron and shows the details slot. The caller supplies the click handler,
+since only it knows whether one row or many may be open. Attributes land on
+the trigger button, which is where an id or a click handler belongs.
+
+Without state the row does not open: it renders the same line as plain text
+and the named action slot takes the chevron's place, for an assessment that
+has nothing to show yet (queued, or never run here) and a Run control instead.
+A button cannot hold another button, so the two cannot share an element.
+
+anchor is the row's own id, for links such as #plugin-ntia that land on it.
+
+The details run flush to the list's edges, as a table does in c-tables.shell:
+the toolbar, table and footer inside carry their own gutters and bands, and
+anything else placed there brings its own padding. A hairline separates them
+from the row that opened them.
+{% endcomment %}
+<c-vars state anchor name tone label caption segments bar_label stale class />
+<li class="list-none{% if class %} {{ class }}{% endif %}"{% if anchor %} id="{{ anchor }}"{% endif %}>
+    {% with line_class="flex w-full items-center gap-4 px-5 py-4 text-left" %}
+        {% if state %}
+            <button type="button"
+                    class="{{ line_class }} cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                    aria-expanded="false"
+                    :aria-expanded="{{ state }}"
+                    {{ attrs }}>
+            {% else %}
+                <div class="{{ line_class }}" {{ attrs }}>
+                {% endif %}
+                <i class="fas {% if tone == 'danger' %}fa-circle-xmark text-danger{% elif tone == 'warning' %}fa-triangle-exclamation text-warning{% elif tone == 'success' %}fa-circle-check text-success{% elif tone == 'info' %}fa-clock text-info{% else %}fa-circle-minus text-text-muted{% endif %} w-4 shrink-0 text-center"
+                   aria-hidden="true"></i>
+                <span class="flex min-w-0 flex-1 flex-col gap-1.5 md:flex-row md:items-center md:gap-6">
+                    <span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                        <span class="text-sm font-semibold text-text">{{ name }}</span>
+                        {% if stale %}<c-badges.secondary class="whitespace-nowrap" title="Produced by an older version. The latest is v{{ stale }}.">Out of date</c-badges.secondary>{% endif %}
+                    </span>
+                    <span class="flex min-w-0 items-center gap-3 md:w-80 md:shrink-0">
+                        <c-assessments.bar :segments="segments" label="{{ bar_label }}" class="w-20 shrink-0" />
+                        <span class="min-w-0 truncate text-xs text-text-muted" title="{{ caption }}">{{ caption }}</span>
+                    </span>
+                    <span class="text-sm font-medium md:w-36 md:shrink-0 md:text-right {% if tone == 'danger' %}text-danger{% elif tone == 'warning' %}text-warning{% elif tone == 'success' %}text-success{% elif tone == 'info' %}text-info{% else %}text-text-muted{% endif %}">{{ label }}</span>
+                </span>
+                {% if state %}
+                    <i class="fas fa-chevron-down w-4 shrink-0 text-center text-xs text-text-muted transition-transform duration-200"
+                       :class="{{ state }} ? 'rotate-180' : ''"
+                       aria-hidden="true"></i>
+                </button>
+            {% else %}
+                {% if action %}
+                    <span class="shrink-0">{{ action }}</span>
+                {% else %}
+                    <span class="w-4 shrink-0" aria-hidden="true"></span>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    {% if state %}
+        <div class="overflow-hidden" x-show="{{ state }}" x-collapse x-cloak>
+            <div class="flex flex-col border-t border-solid border-[color-mix(in_oklab,var(--color-border)_70%,transparent)]">{{ details }}</div>
+        </div>
+    {% endif %}
+</li>

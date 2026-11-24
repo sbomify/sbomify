@@ -13,12 +13,12 @@ from typing import Any
 from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
-from .billing_helpers import parse_cancel_at
+from .billing_helpers import downgrade_ended_subscription, parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
-from .stripe_client import StripeError, StripeResourceMissingError, get_stripe_client
+from .stripe_client import TERMINAL_SUBSCRIPTION_STATUSES, StripeError, StripeResourceMissingError, get_stripe_client
 
 logger = getLogger(__name__)
 
@@ -39,7 +39,7 @@ def _is_missing_subscription(error: StripeError) -> bool:
     return "no such subscription" in error_str or "resource_missing" in error_str
 
 
-def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> bool:
+def reconcile_missing_subscription(team: Workspace, stripe_sub_id: str | None) -> bool:
     """Settle a workspace whose stored subscription no longer exists at Stripe.
 
     Re-reads the row under ``select_for_update`` rather than writing back a
@@ -73,7 +73,7 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
 
     reconciled = False
     with db_transaction.atomic():
-        locked = Team.objects.select_for_update().get(pk=team.pk)
+        locked = Workspace.objects.select_for_update().get(pk=team.pk)
         billing_limits = locked.billing_plan_limits or {}
         current = billing_limits.get("stripe_subscription_id")
         if current != stripe_sub_id:
@@ -110,6 +110,9 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
             billing_limits["last_updated"] = timezone.now().isoformat()
             locked.billing_plan_limits = billing_limits
             locked.save()
+            # Under the lock that checked the id: it is cleared now, so there is
+            # nothing left for the downgrade to compare against.
+            downgrade_ended_subscription(team.pk)
             reconciled = True
 
     # Only for the id actually settled, and only when both halves of the key
@@ -122,7 +125,7 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
     return reconciled
 
 
-def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
+def sync_subscription_from_stripe(team: Workspace, force_refresh: bool = False) -> bool:
     """
     Sync subscription data from Stripe to database.
 
@@ -164,21 +167,21 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
             except (ValueError, AttributeError):
                 pass  # If we can't parse, just use normal flow
 
-        team_key: str = team.key or ""
+        workspace_key: str = team.key or ""
 
         # Fetch subscription from Stripe (uses cache unless force_refresh)
         if should_force_refresh:
-            invalidate_subscription_cache(stripe_sub_id, team_key)
+            invalidate_subscription_cache(stripe_sub_id, workspace_key)
             subscription = stripe_client.get_subscription(stripe_sub_id)
             if subscription:
-                set_cached_subscription(stripe_sub_id, team_key, subscription)
+                set_cached_subscription(stripe_sub_id, workspace_key, subscription)
             logger.debug("Force refreshed subscription")
         else:
-            subscription = get_cached_subscription(stripe_sub_id, team_key)
+            subscription = get_cached_subscription(stripe_sub_id, workspace_key)
             if not subscription:
                 subscription = stripe_client.get_subscription(stripe_sub_id)
                 if subscription:
-                    set_cached_subscription(stripe_sub_id, team_key, subscription)
+                    set_cached_subscription(stripe_sub_id, workspace_key, subscription)
 
         if not subscription:
             logger.warning("Could not fetch subscription")
@@ -199,6 +202,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         if parse_cancel_at(cancel_at) is not None:
             real_cancel_at_period_end = True
             logger.debug("cancel_at is set, treating as scheduled cancellation")
+        # Stripe keeps both fields after the subscription ends, as a record of how it
+        # ended. Nothing is left to schedule or reverse then, so what is stored stands.
+        if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+            real_cancel_at_period_end = current_cancel_at_period_end
 
         logger.debug("Checking cancel status")
 
@@ -244,7 +251,7 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     updated_fields.append("scheduled_downgrade_plan (set)")
                     logger.info("Detected cancellation, set scheduled_downgrade_plan to community")
                 # Invalidate cache to ensure fresh data on next fetch
-                invalidate_subscription_cache(stripe_sub_id, team_key)
+                invalidate_subscription_cache(stripe_sub_id, workspace_key)
 
             # Handle reactivation (cancellation reversal)
             elif current_cancel_at_period_end and not real_cancel_at_period_end:
@@ -308,8 +315,16 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
 
             with db_transaction.atomic():
                 # Use select_for_update to prevent race conditions
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = team.billing_plan_limits or {}
+                # The changes above describe the subscription fetched from Stripe. A
+                # checkout that completed meanwhile stored a new one, which must not be
+                # overwritten.
+                if billing_limits.get("stripe_subscription_id") != stripe_sub_id:
+                    logger.info(
+                        "Workspace %s changed subscription while Stripe was queried; leaving it alone", team.key
+                    )
+                    return True
                 # Preserve existing customer_id and subscription_id to satisfy valid_billing_relationship constraint
                 existing_customer_id = billing_limits.get("stripe_customer_id")
                 existing_subscription_id = billing_limits.get("stripe_subscription_id")
@@ -375,10 +390,18 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
                     billing_limits.pop("stripe_customer_id", None)
                 team.billing_plan_limits = billing_limits
                 team.save()
+                # After the write and under its lock. Run before it, the downgrade's
+                # cleared cancel fields would be written back over the Community plan.
+                if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+                    downgrade_ended_subscription(team.pk, stripe_sub_id)
 
                 logger.info(f"Synced subscription data: {', '.join(updated_fields)}")
             return True
 
+        # Checked on every sync, not only on a change: this is also what moves a
+        # workspace whose ended subscription left it on the paid plan.
+        if real_sub_status in TERMINAL_SUBSCRIPTION_STATUSES:
+            downgrade_ended_subscription(team.pk, stripe_sub_id)
         return True  # No update needed, but sync was successful
 
     except StripeError as e:
@@ -403,13 +426,32 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         return False
 
 
+def current_period_end(subscription: Any) -> int | None:
+    """When the subscription's current period ends, as a Unix timestamp.
+
+    API version 2025-03-31 moved ``current_period_end`` from the subscription onto
+    each of its items. Requests use the pinned version, but webhook payloads follow
+    the endpoint's own, so both shapes arrive. Items can renew on different dates,
+    and the earliest end is the next renewal.
+    """
+
+    def field(obj: Any, name: str) -> Any:
+        # A StripeObject is a dict, so ``subscription.items`` is the dict method, not the items.
+        return obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+
+    if period_end := field(subscription, "current_period_end"):
+        return int(period_end)
+    items = field(field(subscription, "items"), "data") or []
+    return min((int(end) for item in items if (end := field(item, "current_period_end"))), default=None)
+
+
 def get_period_end_from_subscription(subscription: Any, subscription_id: str) -> str | None:
     """
     Extract period_end from subscription object, trying multiple methods.
 
     Priority:
     1. If cancel_at is set (subscription scheduled to cancel), use cancel_at
-    2. Otherwise, use current_period_end from subscription (dict or attribute access)
+    2. Otherwise, use current_period_end from the subscription or its items
     3. If not available, try to get from upcoming invoice (for next billing date)
     4. As last resort, use period_end from latest invoice (but this is past period)
 
@@ -432,12 +474,9 @@ def get_period_end_from_subscription(subscription: Any, subscription_id: str) ->
         period_end = cancel_at_value
         logger.debug("Using cancel_at as period_end")
 
-    # Priority 2: Try to get current_period_end from subscription
-    # Try both attribute access and dictionary access
+    # Priority 2: current_period_end, from the subscription or its items
     if not period_end:
-        period_end = getattr(subscription, "current_period_end", None)
-        if not period_end and isinstance(subscription, dict):
-            period_end = subscription.get("current_period_end")
+        period_end = current_period_end(subscription)
         if period_end:
             logger.debug("Using current_period_end")
 

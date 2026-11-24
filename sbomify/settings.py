@@ -15,22 +15,38 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
 import redis
 import sentry_sdk
 from django.contrib import messages
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import find_dotenv, load_dotenv
+from redis.asyncio.retry import Retry as AsyncRedisRetry
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry as RedisRetry
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
-from sbomify.logging_filters import is_benign_shielded_future_error
-from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
+from sbomify.logging_filters import (
+    is_backend_outage_traceback,
+    is_benign_shielded_future_error,
+    is_on_demand_tls_ask_denial,
+    redact_access_log_secrets,
+)
+from sbomify.sentry_config import (
+    is_repeat_self_healing_notice,
+    resolve_environment,
+    should_warn_missing_dsn,
+    throttle_self_healing_notices,
+)
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -75,11 +91,6 @@ SIGNED_URL_SALT = os.environ.get("SIGNED_URL_SALT", "django-insecure-signed-url-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-if DEBUG:
-    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-else:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-
 # Local development mode (separate from DEBUG for security)
 LOCAL_DEV = os.environ.get("LOCAL_DEV", "False").lower() == "true"
 
@@ -88,6 +99,26 @@ def _env_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default
     return value.lower() in ("true", "1", "yes")
+
+
+def _env_positive_float(value: str | None, default: float) -> float:
+    """A positive, finite number from the environment, else the default.
+
+    Used for timeouts, where the value reaches a client library that raises on
+    a negative one and waits forever on an infinite one. A typo in deployment
+    config should fall back to the default rather than take startup down or
+    quietly disable the bound it was meant to set.
+    """
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    # NaN fails every comparison, so this rejects it too.
+    if not (0 < parsed < float("inf")):
+        return default
+    return parsed
 
 
 # Request timing logging is disabled by default to avoid performance impact
@@ -126,8 +157,47 @@ TRUSTED_PROXIES = [
     if cidr.strip()
 ]
 
-# Allow larger request bodies for OSCAL catalog imports (default is 2.5 MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # 20 MB
+
+def _megabytes_from_env(name: str, default_mb: int) -> int:
+    """Bytes from a megabyte-valued env var, falling back on anything unusable.
+
+    These are read at import, so bad config would fail the boot rather than one
+    request. A value that is not a positive integer, such as "100MB" or a stray
+    space, and a zero or negative one that would refuse every request body, both
+    fall back to the default instead.
+    """
+    raw = (os.environ.get(name) or "").strip()
+    megabytes = int(raw) if raw.isdigit() else 0
+    return (megabytes if megabytes > 0 else default_mb) * 1024 * 1024
+
+
+# The ceiling on a request body Django will read into memory (its own default is
+# 2.5 MB). SBOM uploads are the large bodies here: a Yocto SPDX 3 image SBOM runs
+# to tens of megabytes, because SPDX 3 makes every relationship a standalone
+# element rather than an entry in an array.
+#
+# Keep this at or above sbomify.apps.sboms.apis.SBOM_MAX_UPLOAD_SIZE. Below it,
+# the endpoint's own limit never runs and never reports: Django raises
+# RequestDataTooBig while reading the body, so a document inside the advertised
+# cap is refused with no message naming a size. That is what this setting sitting
+# at 20 MB under a 100 MB endpoint cap did.
+DATA_UPLOAD_MAX_MEMORY_SIZE = _megabytes_from_env("DATA_UPLOAD_MAX_MEMORY_SIZE_MB", 100)
+
+# What any artifact upload may weigh: SBOM, CBOM, HBOM, AI BOM, SaaSBOM, VEX and
+# documents. One number so the formats cannot drift apart, and so a document is
+# not held to a different limit from the SBOM beside it.
+#
+# Documents arrive as multipart file uploads, which Django does not measure
+# against DATA_UPLOAD_MAX_MEMORY_SIZE, so that path enforces this itself.
+ARTIFACT_MAX_UPLOAD_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+
+# Optional: hold BOMs to something smaller than the shared ceiling. Clamped to
+# it, because a cap above the body ceiling is unreachable, Django refuses the
+# body first and the caller never sees this limit's message.
+SBOM_MAX_UPLOAD_SIZE = min(
+    _megabytes_from_env("SBOM_MAX_UPLOAD_SIZE_MB", ARTIFACT_MAX_UPLOAD_SIZE // (1024 * 1024)),
+    ARTIFACT_MAX_UPLOAD_SIZE,
+)
 
 # Prevent browsers from MIME-sniffing responses away from their declared
 # Content-Type — defense-in-depth for user-uploaded artifact downloads.
@@ -208,11 +278,48 @@ INSTALLED_APPS = [
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
     "sbomify.apps.security_advisories",
+    "sbomify.apps.ops",
+    "sbomify.apps.integrations",
+    "sbomify.apps.mcp",
 ]
 
 
+# /api/v1/ deprecation, announced per RFC 9745 and RFC 8594 by
+# ApiVersionDeprecationMiddleware. v2 renames the SBOM-era prefixes and the
+# team vocabulary; v1 keeps serving until the sunset below.
+#
+# Deprecation is announced; a retirement date is not. v1 stays up for a long
+# time, and a Sunset header is a promise of a date, so none is sent until one
+# is deliberately set here or in the environment.
+#
+# Both read from the environment as YYYY-MM-DD, with "none" meaning unset.
+# When a sunset is eventually committed to, give the action's users a long
+# runway: it runs in other people's CI and some of them pin a version and
+# forget it.
+
+
+def _sunset_date(name: str, default: str) -> datetime | None:
+    raw = os.environ.get(name, default).strip()
+    if raw.lower() in ("", "none", "never"):
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError as exc:
+        raise ImproperlyConfigured(f"{name} must be YYYY-MM-DD or 'none', got {raw!r}") from exc
+
+
+API_V1_DEPRECATED_ON = _sunset_date("API_V1_DEPRECATED_ON", "2026-08-26")
+API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Turns a 500 caused by an unreachable Postgres or Redis into a 503 with
+    # Retry-After. Outside the stale cache so a Trust Center page is replayed
+    # first, and only what that cannot answer becomes a 503.
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
+    # Outermost of the rest: the database errors it answers for are raised in the
+    # middleware below as well as in views.
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
     # stashed on the request onto X-RateLimit-* headers.
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
@@ -222,21 +329,26 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "sbomify.apps.core.middleware.RenamedSessionKeysMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "django.middleware.common.CommonMiddleware",
     # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
     # CSRF enforcement can run (Ninja's check_csrf and CsrfViewMiddleware both honour it).
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "sbomify.apps.core.middleware.ContentSecurityPolicyMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
 
-GZIP_REQUEST_MAX_SIZE = 200 * 1024 * 1024  # 200 MB – safety limit for decompressed request bodies
+# A compressed body inflates no further than an uncompressed one may weigh.
+GZIP_REQUEST_MAX_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
 
 if REQUEST_TIMING_LOGGING_ENABLED:
     MIDDLEWARE.insert(
@@ -286,13 +398,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "sbomify.apps.core.context_processors.version_context",
-                "sbomify.apps.core.context_processors.pending_invitations_context",
-                "sbomify.apps.core.context_processors.pending_access_requests_context",
-                "sbomify.apps.core.context_processors.global_modals_context",
-                "sbomify.apps.core.context_processors.team_context",
-                "sbomify.apps.core.context_processors.sentry_context",
-                "sbomify.apps.core.context_processors.posthog_context",
+                "sbomify.apps.core.context_processors.app_context",
             ],
         },
     },
@@ -430,7 +536,61 @@ else:
         db_config_dict["OPTIONS"] = db_options
 
 
-DATABASES = {"default": db_config_dict}
+def apply_db_resilience(config: dict[str, Any]) -> dict[str, Any]:
+    """Add connection resilience to a database config, in place.
+
+    Applied to whichever branch above produced the config, because the two are
+    the same database reached two ways and resilience only one of them gets is
+    resilience the deployment may not have. ``DATABASE_URL`` is the production
+    form and ``dj_database_url`` sets none of this.
+
+    A function rather than inline statements so a test can read back what the
+    running app is really configured with, the way ``build_redis_caches`` is.
+    """
+    # Defaults to 0 — a connection per request, which is what this has always
+    # done. Raising it is an operational decision about the Postgres connection
+    # budget, so it is left to the environment rather than changed here.
+    config["CONN_MAX_AGE"] = int(os.environ.get("DATABASE_CONN_MAX_AGE", "0"))
+    # Only does anything once CONN_MAX_AGE is non-zero, and then it is what
+    # makes a reused connection safe: Django pings it at the start of a request
+    # and opens a fresh one if the server has gone away, instead of handing the
+    # view a socket that died during a restart or a failover.
+    config["CONN_HEALTH_CHECKS"] = True
+
+    # Everything below is libpq, and reaches psycopg as connection keywords
+    # verbatim — sqlite3 answers one with
+    # ``TypeError: 'connect_timeout' is an invalid keyword argument``, on the
+    # first query rather than at startup. ``DATABASE_URL`` is parsed by
+    # dj_database_url, which resolves sqlite:// and mysql:// just as happily as
+    # postgres://, so the engine has to be checked rather than assumed.
+    #
+    # The two settings above are Django's own and apply to any backend, so they
+    # stay outside this gate.
+    if not str(config.get("ENGINE", "")).endswith(("postgresql", "postgresql_psycopg2", "postgis")):
+        return config
+
+    # TCP keepalives, so a connection killed on the far side (a restart, a
+    # failover, an idle connection dropped by something in between) is detected
+    # within a minute — 30s idle, then three probes 10s apart — rather than
+    # blocking on a read that will never return. Long-lived worker connections
+    # are the ones that need it. ``connect_timeout`` bounds the other end of the
+    # same problem: a connect to a host that is up but not answering used to
+    # hang for the OS default.
+    #
+    # setdefault throughout, so an explicit value from the environment wins.
+    options: dict[str, Any] = dict(config.get("OPTIONS") or {})
+    options.setdefault("connect_timeout", int(os.environ.get("DATABASE_CONNECT_TIMEOUT", "10")))
+    options.setdefault("keepalives", 1)
+    options.setdefault("keepalives_idle", 30)
+    options.setdefault("keepalives_interval", 10)
+    options.setdefault("keepalives_count", 3)
+    config["OPTIONS"] = options
+    return config
+
+
+# ``dj_database_url.parse`` is typed as returning a TypedDict, which mypy will
+# not pass where a mutable dict is wanted even though that is what it is.
+DATABASES = {"default": apply_db_resilience(cast("dict[str, Any]", db_config_dict))}
 
 # Redis Configuration
 # REDIS_URL is the base connection URL (no database number, no query params):
@@ -477,6 +637,25 @@ if REDIS_CA_CERTS and not _redis_is_tls:
     )
 
 
+# How many connections one cache alias may hold open to Redis at once, and how
+# long a caller waits for one of them to come free before giving up.
+#
+# The ceiling has to cover the threads that can be inside a cache command at the
+# same time in one process. Under the ASGI worker that is every thread Django
+# runs a sync view on, plus the channels consumers, plus the explicit
+# ``ThreadPoolExecutor`` fan-outs in the SBOM builder and the compliance
+# service — comfortably more than the 10 this used to allow. A pool is lazy, so
+# this is a ceiling rather than an allocation: a quiet process still opens one
+# connection, and the cost of the headroom is only paid under the load that
+# needs it.
+REDIS_CACHE_MAX_CONNECTIONS = int(os.environ.get("REDIS_CACHE_MAX_CONNECTIONS", "50"))
+
+# Two seconds is roughly a thousand times a healthy cache command, so a wait
+# this long means the pool is genuinely saturated rather than briefly busy, and
+# refusing is then the honest answer.
+REDIS_CACHE_POOL_TIMEOUT = int(os.environ.get("REDIS_CACHE_POOL_TIMEOUT", "2"))
+
+
 # Cache Configuration
 def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
     """The two Redis cache aliases, which differ in one option only.
@@ -488,11 +667,34 @@ def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str,
     Both point at the same Redis. ``default`` swallows connection failures;
     ``throttle`` does not, and nothing else about them may drift apart.
     """
-    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    pool_kwargs: dict[str, Any] = {
+        "max_connections": REDIS_CACHE_MAX_CONNECTIONS,
+        "timeout": REDIS_CACHE_POOL_TIMEOUT,
+    }
     if ca_certs:
         pool_kwargs["ssl_ca_certs"] = ca_certs
     options: dict[str, Any] = {
         "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        # redis-py's plain ConnectionPool refuses the moment every connection is
+        # checked out: it raises MaxConnectionsError rather than waiting for one
+        # of the in-flight commands to return its connection, which they do in
+        # milliseconds. Neither alias below can tell that refusal apart from
+        # Redis being unreachable, because it arrives wrapped as the same
+        # django-redis ConnectionInterrupted — so a full pool was read as an
+        # outage while Redis was perfectly healthy.
+        #
+        # On ``default`` that cost the request its cache. On ``throttle`` it
+        # cost the user the request: the throttle treats a backend error as
+        # "refuse and retry shortly", and latches that refusal for a few seconds
+        # across the whole process, so one momentary pool exhaustion answered
+        # every throttled API call with a 429 it had not earned.
+        #
+        # BlockingConnectionPool waits for a free connection instead, up to
+        # ``timeout``. A busy pool then costs a caller the milliseconds it takes
+        # for a slot to open, and only a pool that stays full for seconds still
+        # raises — at which point the refusal is a true overload signal and the
+        # throttle shedding load is the right behaviour.
+        "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
         "SOCKET_CONNECT_TIMEOUT": 5,
         "SOCKET_TIMEOUT": 5,
         "RETRY_ON_TIMEOUT": True,
@@ -559,11 +761,61 @@ _redis_resilience: dict[str, Any] = {
     "socket_connect_timeout": 5,
 }
 
+# The two errors that mean the connection went away rather than the command
+# being wrong: a broker restart, a failover, an idle socket the network reaped.
+# Nothing about the request is wrong, so it is worth another attempt on a fresh
+# connection — which is what redis-py's retry does, reconnecting first.
+_REDIS_TRANSIENT_ERRORS = [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError]
+
+
+def _redis_retry(asyncio: bool = False) -> Any:
+    """Reconnect-and-retry policy for one Redis client.
+
+    redis-py defaults to ``Retry(NoBackoff(), 0)`` — no retry at all — so every
+    client below re-raised the first refused or dropped connection at its
+    caller. For the channel layer and the task broker that meant a restart of
+    Redis surfaced as a failure per in-flight operation, when waiting a moment
+    and reconnecting would have served every one of them.
+
+    Three retries, sleeping 0.2s, 0.4s then 0.8s between them: long enough to
+    cover a restart or a failover, short enough that a caller is not left
+    hanging when Redis is genuinely gone. Built fresh per client because
+    ``Retry`` is mutable and redis-py updates the error list on the instance it
+    is handed.
+
+    The async client needs the async class — the sync one's ``call_with_retry``
+    is not awaitable, so sharing a single object between the two would break
+    the channel layer on its first retry rather than on none.
+    """
+    backoff = ExponentialBackoff(cap=1.0, base=0.1)
+    if asyncio:
+        return AsyncRedisRetry(backoff, 3)
+    return RedisRetry(backoff, 3)
+
+
+def build_redis_client_kwargs(*, ca_certs: str = "", asyncio: bool = False) -> dict[str, Any]:
+    """Every per-connection setting a Redis client of ours should be built with.
+
+    One function for the channel layer and the task broker, because the two
+    want the same treatment and had drifted: whatever is added here reaches
+    both, and a test can read back what either one really got.
+    """
+    kwargs: dict[str, Any] = {
+        **_redis_resilience,
+        "retry": _redis_retry(asyncio=asyncio),
+        "retry_on_error": list(_REDIS_TRANSIENT_ERRORS),
+    }
+    if ca_certs:
+        kwargs["ssl_ca_certs"] = ca_certs
+    return kwargs
+
+
 # The dict host form is how channels-redis forwards client kwargs (the CA
 # path already relied on it); the resilience kwargs ride the same way.
-_channels_host: dict[str, Any] = {"address": REDIS_CHANNELS_URL, **_redis_resilience}
-if REDIS_CA_CERTS:
-    _channels_host["ssl_ca_certs"] = REDIS_CA_CERTS
+_channels_host: dict[str, Any] = {
+    "address": REDIS_CHANNELS_URL,
+    **build_redis_client_kwargs(ca_certs=REDIS_CA_CERTS, asyncio=True),
+}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -576,21 +828,35 @@ CHANNEL_LAYERS = {
     },
 }
 
-# Pass a pre-built client because Dramatiq's RedisBroker creates a
-# ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
-_dramatiq_redis_options: dict[str, Any] = (
-    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS, **_redis_resilience)}
-    if REDIS_CA_CERTS
-    else {"url": REDIS_WORKER_URL, **_redis_resilience}
-)
+
+def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str, Any]:
+    """The broker's Redis client, always pre-built.
+
+    Dramatiq's ``RedisBroker``, given ``url``, builds the pool with
+    ``ConnectionPool.from_url(url)`` — no extra kwargs — and passes everything
+    else to ``redis.Redis(**parameters)``, which ignores per-connection kwargs
+    whenever a pool is supplied. So the url form silently dropped the whole
+    resilience set: no keepalive, no health check, no connect timeout, no retry,
+    on exactly the deployments that do not use TLS. Passing a client built here
+    is the only form that delivers them.
+
+    The pre-built client was already used for the TLS branch, because
+    ``ssl_ca_certs`` failed the same way and that failure was visible. The rest
+    failed quietly beside it.
+    """
+    return {"client": redis.Redis.from_url(location, **build_redis_client_kwargs(ca_certs=ca_certs))}
+
+
+_dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
-    "BROKER": "dramatiq.brokers.redis.RedisBroker",
+    "BROKER": "sbomify.dramatiq_broker.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -667,12 +933,41 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_benign_shielded_future_error(record),
         },
+        # These two run on every console record, so both bail on a cheap
+        # attribute check before formatting a message. Between them they are
+        # most of what made the production log stream unreadable: a third of it
+        # was one repeated 404 path, and the error-level portion was dominated
+        # by faults that had already recovered.
+        "suppress_on_demand_tls_ask_denials": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_on_demand_tls_ask_denial(record),
+        },
+        # A request or task that failed because Postgres or Redis was
+        # unreachable writes its own traceback, once per request in flight. The
+        # shared outage line already said it, throttled, so these are dropped.
+        "suppress_backend_outage_tracebacks": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_backend_outage_traceback(record),
+        },
+        # Keeps the first line of each distinct fault per five-minute window and
+        # drops the repeats, so an outage that lasts is still reported for as
+        # long as it lasts. Same throttle the Sentry before_send hook applies,
+        # with its own window.
+        "throttle_self_healing_notices": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_repeat_self_healing_notice(record),
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+            "filters": [
+                "suppress_on_demand_tls_ask_denials",
+                "suppress_backend_outage_tracebacks",
+                "throttle_self_healing_notices",
+            ],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
@@ -724,6 +1019,15 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # CRA audit trail (sbomify.compliance.audit). Pinned for the same reason:
+        # scope-screening answers, step 1 classification and finding status changes
+        # back legally binding exports, and every emitter logs at INFO, so without
+        # this the whole trail vanishes the moment LOG_LEVEL is raised to WARNING.
+        "sbomify.compliance.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
@@ -751,6 +1055,11 @@ LOGGING = {
         # },
     },
 }
+
+# uvicorn (and gunicorn's UvicornWorker) install the access logger's handlers
+# before the app loads. Naming the logger in LOGGING would make dictConfig strip
+# those handlers, so the filter is attached to the logger directly instead.
+logging.getLogger("uvicorn.access").addFilter(redact_access_log_secrets)
 
 
 # Feature flags
@@ -780,12 +1089,54 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
+# Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
+# directly (logout) rather than via OIDC discovery, and as the issuer /mcp
+# expects in OAuth tokens, so it must be Keycloak's KC_HOSTNAME_URL. Only needs
+# setting when the app reaches Keycloak at an address the browser cannot, e.g.
+# an in-cluster Service name. Empty counts as unset so a blank Helm/Compose
+# value falls back.
+KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+# The OIDC client's credentials, for Keycloak or any other provider.
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET are the provider-neutral names and win
+# when set; empty counts as unset, so an install that only sets the KEYCLOAK_*
+# names is unchanged.
+KEYCLOAK_CLIENT_ID = os.environ.get("OIDC_CLIENT_ID") or os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("OIDC_CLIENT_SECRET") or os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
-KEYCLOAK_WEBHOOK_SECRET = os.environ.get("KEYCLOAK_WEBHOOK_SECRET", "")
+
+# Generic OIDC overrides, for an identity provider other than Keycloak (Auth0,
+# Entra ID, Okta, Authentik, Zitadel, ...). An install that sets neither is
+# unchanged. Empty counts as unset so a blank Helm/Compose value falls back.
+#
+# OIDC_DISCOVERY_URL: the provider's .well-known/openid-configuration document.
+# When unset, the Keycloak realm's document is used.
+# OIDC_LOGOUT_URL: the browser-facing RP-initiated logout (end session)
+# endpoint. When unset, logout uses the discovery document's
+# end_session_endpoint if OIDC_DISCOVERY_URL is set, and the Keycloak realm's
+# endpoint under KEYCLOAK_PUBLIC_URL otherwise.
+OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
+OIDC_LOGOUT_URL = os.environ.get("OIDC_LOGOUT_URL", "")
+
+
+def _trusted_email(value: str) -> bool | list[str]:
+    """OIDC_TRUST_EMAIL as allauth's ``verified_email``: off, on, or a list of domains."""
+    value = value.strip()
+    if value.lower() in ("", "false", "0", "no"):
+        return False
+    if value.lower() in ("true", "1", "yes"):
+        return True
+    return [domain.strip().lower().lstrip("@") for domain in value.split(",") if domain.strip()]
+
+
+# Treat the provider's email addresses as confirmed even without an
+# email_verified claim (Entra ID sends none), like Keycloak's "Trust Email" on
+# an identity provider. Off by default. "true" trusts every address; a
+# comma-separated list of domains (example.com,example.org) trusts only those.
+# A confirmed address is linked to an existing account with the same address,
+# so only trust a provider that controls the addresses it issues.
+OIDC_TRUST_EMAIL = _trusted_email(os.environ.get("OIDC_TRUST_EMAIL", ""))
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
@@ -796,7 +1147,9 @@ SOCIALACCOUNT_PROVIDERS = {
                 "client_id": KEYCLOAK_CLIENT_ID,
                 "secret": KEYCLOAK_CLIENT_SECRET,
                 "settings": {
-                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "server_url": OIDC_DISCOVERY_URL
+                    or f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "verified_email": OIDC_TRUST_EMAIL,
                 },
             }
         ]
@@ -805,10 +1158,36 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
+
+# Extra Host header values accepted by the MCP endpoint (comma-separated), on
+# top of APP_BASE_URL's hostname and loopback. The MCP app bypasses Django's
+# middleware, so DynamicHostValidationMiddleware does not guard /mcp; the MCP
+# SDK's own DNS-rebinding check does, and it needs to know the real hostname.
+# See sbomify/apps/mcp/server.py.
+MCP_ALLOWED_HOSTS = os.environ.get("MCP_ALLOWED_HOSTS", "")
+
+# Resource caps for the MCP endpoint. The caller there is an LLM whose inputs are
+# frequently attacker-influenced, so these bound what a coerced agent can consume.
+# See sbomify/apps/mcp/limits.py.
+MCP_MAX_UPLOAD_BYTES = int(os.environ.get("MCP_MAX_UPLOAD_BYTES", DATA_UPLOAD_MAX_MEMORY_SIZE))
+# Parsing an SBOM takes two to four times its size in memory, so this bounds one
+# call at roughly a hundred megabytes. See enforce_parse_size in mcp/limits.py.
+MCP_MAX_ARTIFACT_PARSE_BYTES = int(os.environ.get("MCP_MAX_ARTIFACT_PARSE_BYTES", 25 * 1024 * 1024))
+MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 1024))
+# Largest request body from a caller whose token cannot upload an artifact. A tool
+# call is a few kilobytes; only an upload carries more. See MCPRouter in asgi.py.
+MCP_MAX_REQUEST_BYTES = int(os.environ.get("MCP_MAX_REQUEST_BYTES", 1024 * 1024))
+# MCP requests in flight per worker process, each holding an executor thread and
+# a database connection. Two workers at the default use 16 connections, well
+# inside PostgreSQL's default of 100. See MCPRouter in sbomify/asgi.py.
+MCP_MAX_CONCURRENT_REQUESTS = int(os.environ.get("MCP_MAX_CONCURRENT_REQUESTS", 8))
+# Of those, how many may carry a body over MCP_MAX_REQUEST_BYTES. The transport buffers up to
+# three times MCP_MAX_UPLOAD_BYTES per request, so this bounds a worker's memory.
+MCP_MAX_CONCURRENT_UPLOADS = int(os.environ.get("MCP_MAX_CONCURRENT_UPLOADS", 2))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:
@@ -819,6 +1198,13 @@ if _trust_center_raw:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
     # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
     TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
+
+# How long a public Trust Center page is kept to be served while the database is
+# unavailable (see core/stale_cache.py). 0 turns it off.
+TRUST_CENTER_STALE_CACHE_TTL = int(os.environ.get("TRUST_CENTER_STALE_CACHE_TTL", "86400"))
+# At most one rewrite of a page's stored copy per this many seconds.
+TRUST_CENTER_STALE_CACHE_REFRESH = int(os.environ.get("TRUST_CENTER_STALE_CACHE_REFRESH", "60"))
+TRUST_CENTER_STALE_CACHE_MAX_BYTES = int(os.environ.get("TRUST_CENTER_STALE_CACHE_MAX_BYTES", str(1024 * 1024)))
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
@@ -840,9 +1226,15 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "False").lower() == "true"
 EMAIL_USE_SSL = os.environ.get("EMAIL_USE_SSL", "False").lower() == "true"
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@sbomify.com")
-SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)  # For system-generated emails
-EMAIL_SUBJECT_PREFIX = "[sbomify] "
+# Every sender in the app resolves to this, so the fallback is what goes out
+# whenever a process starts without the variable set. It has to be an address
+# people can reply to, not a black hole, because every template invites a reply.
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "hello@sbomify.com")
+# Django uses this only for the error mail it sends to ADMINS/MANAGERS, which
+# are unset, so nothing reads it today. It stays because Sentry, not email, is
+# the error channel, and a future ADMINS entry should not fall back to the
+# Django default of "root@localhost".
+SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 
 
 logger = logging.getLogger(__name__)
@@ -911,6 +1303,7 @@ sentry_sdk.init(
         DramatiqIntegration(),
         LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
     ],
+    before_send=throttle_self_healing_notices,
     traces_sampler=_sentry_traces_sampler,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     # CancelledError is expected under ASGI when clients disconnect mid-request.
@@ -926,10 +1319,11 @@ sentry_sdk.init(
 # The ``bot`` role is reserved for synthetic identities provisioned by
 # OIDC Trusted Publishing bindings (see ``sbomify.apps.oidc``); it should
 # NEVER appear in invite or role-change UIs presented to humans.
-TEAMS_SUPPORTED_ROLES = [
+WORKSPACE_SUPPORTED_ROLES = [
     ("owner", "Owner"),
     ("admin", "Admin"),
     ("member", "Member"),
+    ("operator", "Operator"),
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]
@@ -942,7 +1336,7 @@ TEAMS_SUPPORTED_ROLES = [
 # The InviteUserForm UI further excludes guest from its choices since
 # admins shouldn't invite guests directly (they self-serve), but the
 # model-level constraint stays permissive.
-TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k != "bot"]
+WORKSPACE_INVITABLE_ROLES = [(k, v) for k, v in WORKSPACE_SUPPORTED_ROLES if k != "bot"]
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
@@ -999,7 +1393,20 @@ OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "6
 # every request rewrite the field.
 ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = max(0, int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300")))
 
-# Localstack and AWS/S3 related settings
+# Object storage settings
+# "s3" for any S3-compatible service (AWS S3, R2, MinIO...), "gcs" for Google
+# Cloud Storage through Application Default Credentials (ADR-0007). Bucket
+# names come from the AWS_*_STORAGE_BUCKET_NAME settings either way.
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3").strip().lower()
+
+# GCS only. Project for the client; empty takes it from the credentials.
+GCS_PROJECT_ID = os.environ.get("GCS_PROJECT_ID", "")
+# GCS only. Service account that signs download URLs through IAM signBlob when
+# the credentials hold no private key (Workload Identity). Empty signs as the
+# workload's own service account.
+GCS_SIGNING_SERVICE_ACCOUNT = os.environ.get("GCS_SIGNING_SERVICE_ACCOUNT", "")
+
+# AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
 AWS_ENDPOINT_URL_S3 = os.environ.get("AWS_ENDPOINT_URL_S3", "")
 
@@ -1068,6 +1475,23 @@ STRIPE_SECRET_KEY = STRIPE_API_KEY
 STRIPE_PUBLISHABLE_KEY = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_BILLING_URL = os.environ.get("STRIPE_BILLING_URL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+# Pin the version our requests are made against, so a library upgrade cannot
+# quietly move it. Event payloads follow the account's own version, which is a
+# dashboard setting; this pins the half we control.
+#
+# The value is the installed stripe library's own current version, so it is one
+# Stripe accepts rather than a string somebody typed. test_stripe_api_version.py
+# compares the two, so bumping the library fails there until a person decides
+# whether to move the pin with it.
+STRIPE_API_VERSION = os.environ.get("STRIPE_API_VERSION", "2025-11-17.clover")
+
+# How long any one Stripe request may take. The library's own default is 80
+# seconds, and workspace settings reaches Stripe while rendering, twice: once
+# in TeamSettingsView and again through TeamPricingService. Unreachable Stripe
+# therefore held the page for longer than the edge would wait, and every tab of
+# the section answered 504 rather than rendering without fresh billing data.
+# Sync already fails soft, so a bounded wait degrades to slightly stale limits.
+STRIPE_TIMEOUT_SECONDS = _env_positive_float(os.environ.get("STRIPE_TIMEOUT_SECONDS"), 10.0)
 
 # Trial period settings
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))
@@ -1077,9 +1501,11 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.compliance.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
+    "sbomify.apps.vulnerability_scanning.notifications.get_vex_submission_notifications",
 ]
 
 # Optionally override refresh interval
@@ -1103,3 +1529,54 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 # PostHog analytics
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
+
+# Installation telemetry: the installation usage report goes to its own PostHog
+# project, never the user analytics one above. The key is a write-only project
+# key, hardcoded so every installation reports to the same place without a
+# self-hoster configuring anything. TELEMETRY_ENABLED=False turns it off.
+TELEMETRY_POSTHOG_API_KEY = "phc_tt6dpYfx2yVK876BTJCBP5Xd6uZ95mrxmEyHvyE2UGq5"
+TELEMETRY_POSTHOG_HOST = "https://us.i.posthog.com"
+
+
+def telemetry_enabled(environ: Mapping[str, str]) -> bool:
+    """On unless TELEMETRY_ENABLED says otherwise. Off by default in CI, which sets CI."""
+    return _env_bool(environ.get("TELEMETRY_ENABLED") or None, not _env_bool(environ.get("CI"), False))
+
+
+TELEMETRY_ENABLED = telemetry_enabled(os.environ)
+
+# Integrations
+#
+# One OAuth client per provider, registered by whoever runs this deployment.
+# Without both halves the provider's tile renders disabled rather than hidden,
+# so a self-hoster can see the feature exists and what it wants.
+#
+# The redirect URI to register is /integrations/oauth/<provider>/callback on
+# whichever hostname the app is served from.
+
+VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
+VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
+
+# Vanta serves its API from one host for every region, but consent happens on
+# the customer's own regional app host: app.eu.vanta.com for EU accounts,
+# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
+# overrides the authorize URL.
+VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
+VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Slack is written to, not read from: the workspace installs the sbomify app
+# and picks a channel for each kind of message. Bot tokens do not expire, so
+# there is no refresh and nothing to sync.
+SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
+SLACK_OAUTH_AUTHORIZE_URL = os.environ.get("SLACK_OAUTH_AUTHORIZE_URL", "https://slack.com/oauth/v2/authorize")
+SLACK_OAUTH_TOKEN_URL = os.environ.get("SLACK_OAUTH_TOKEN_URL", "https://slack.com/api/oauth.v2.access")
+SLACK_API_BASE_URL = os.environ.get("SLACK_API_BASE_URL", "https://slack.com/api")
+
+# Token for the GitHub API calls the SBOM Verification plugin makes to fetch
+# attestations. Optional: without it every lookup shares GitHub's unauthenticated
+# limit of 60 requests an hour, which one release uploading several SBOMs can
+# use up. A fine-grained token with no repository access is enough, because the
+# attestations it reads belong to public repositories.
+GITHUB_API_TOKEN = os.environ.get("GITHUB_API_TOKEN", "")

@@ -76,6 +76,47 @@ def _sboms_url(component_id: str) -> str:
 
 
 @pytest.mark.django_db
+def test_the_recent_scan_flag_reads_one_row_per_sbom(sample_component, component_sboms):  # noqa: F811
+    """``distinct()`` on the SBOM id holds only without a sort: AssessmentRun's
+    default ``-created_at`` ordering joins the DISTINCT, so an SBOM rescanned
+    hourly came back once per scan of the last 24 hours."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from sbomify.apps.plugins.models import AssessmentRun
+
+    scanned = component_sboms["tagged_cdx"]
+    for _ in range(3):
+        AssessmentRun.objects.create(
+            sbom=scanned,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="0" * 64,
+            category="security",
+            run_reason="manual",
+            status="completed",
+        )
+    _make_public(sample_component)
+
+    with CaptureQueriesContext(connection) as queries:
+        response = Client().get(_sboms_url(sample_component.id))
+
+    assert response.status_code == 200
+    flags = {item["sbom"]["id"]: item["has_vulnerabilities_report"] for item in response.json()["items"]}
+    assert flags[scanned.id] is True
+    assert flags[component_sboms["untagged"].id] is False
+    flag_reads = [
+        query["sql"]
+        for query in queries
+        if query["sql"].startswith("SELECT DISTINCT ")
+        and not query["sql"].startswith("SELECT DISTINCT ON")
+        and "plugins_assessment_runs" in query["sql"]
+    ]
+    assert flag_reads
+    assert all("ORDER BY" not in sql for sql in flag_reads)
+
+
+@pytest.mark.django_db
 class TestComponentSbomFilters:
     """Test version/format filtering on the component SBOMs list endpoint."""
 

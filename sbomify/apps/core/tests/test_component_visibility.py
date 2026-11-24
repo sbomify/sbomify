@@ -6,7 +6,8 @@ from django.urls import reverse
 from sbomify.apps.core.tests.shared_fixtures import (
     setup_authenticated_client_session,
 )
-from sbomify.apps.documents.access_models import AccessRequest
+from sbomify.apps.documents.access_models import AccessRequest, NDASignature
+from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.models import Member
 
@@ -129,3 +130,78 @@ class TestComponentVisibility:
         # Should show 'Access Granted' or simply render content without restriction overlay
         # Note: The specific UI verify depends on template implementation
         assert response.context["user_has_gated_access"] is True
+
+
+@pytest.mark.django_db
+class TestAPendingRequestAndTheCurrentNDA:
+    """A workspace that replaces its NDA leaves the old signatures live, by design.
+
+    The pending-request block on the public component page reads liveness to
+    decide whether it still owes the reader a signature. Scoped to the current
+    NDA now: reading liveness alone reported a reader as done with a document
+    they had never seen, and left the page with nothing to offer them.
+    """
+
+    def _nda(self, team, name: str):
+        """A document the workspace can point `company_nda_document_id` at."""
+        component = Component.objects.create(
+            name=f"{name} holder",
+            team=team,
+            component_type=Component.ComponentType.DOCUMENT,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        return Document.objects.create(
+            component=component,
+            name=name,
+            document_filename=f"{name}.pdf",
+            content_type="application/pdf",
+            source="manual_upload",
+        )
+
+    def _require(self, team, nda):
+        team.branding_info = {**(team.branding_info or {}), "company_nda_document_id": nda.id}
+        team.save(update_fields=["branding_info"])
+
+    def _sign(self, access_request, nda):
+        return NDASignature.objects.create(
+            access_request=access_request,
+            nda_document=nda,
+            nda_content_hash="0" * 64,
+            signed_name="Guest User",
+            ip_address="203.0.113.1",
+        )
+
+    def _pending(self, team, user):
+        return AccessRequest.objects.create(team=team, user=user, status=AccessRequest.Status.PENDING)
+
+    def test_a_signature_on_a_superseded_nda_still_owes_the_current_one(
+        self, client, team_with_business_plan, gated_component, guest_user
+    ):
+        old_nda = self._nda(team_with_business_plan, "NDA v1")
+        pending = self._pending(team_with_business_plan, guest_user)
+        self._sign(pending, old_nda)
+        self._require(team_with_business_plan, self._nda(team_with_business_plan, "NDA v2"))
+
+        client.force_login(guest_user)
+        url = reverse("core:component_details_public", kwargs={"component_id": gated_component.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.context["pending_request_needs_nda"] is True
+        assert b"NDA Required" in response.content
+
+    def test_a_signature_on_the_current_nda_asks_for_nothing_further(
+        self, client, team_with_business_plan, gated_component, guest_user
+    ):
+        current_nda = self._nda(team_with_business_plan, "NDA v1")
+        pending = self._pending(team_with_business_plan, guest_user)
+        self._sign(pending, current_nda)
+        self._require(team_with_business_plan, current_nda)
+
+        client.force_login(guest_user)
+        url = reverse("core:component_details_public", kwargs={"component_id": gated_component.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+        assert response.context["pending_request_needs_nda"] is False
+        assert b"NDA Required" not in response.content

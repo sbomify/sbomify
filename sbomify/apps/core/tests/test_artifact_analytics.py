@@ -68,7 +68,7 @@ class TestDownloadEvents:
 
         row = _store_row(component, "vex", "manual_upload", "1.0.0")
         mocker.patch(
-            "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+            "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
             return_value=json.dumps({"bomFormat": "CycloneDX"}).encode(),
         )
         # The owner's session already grants access via check_component_access;
@@ -97,7 +97,7 @@ class TestDownloadEvents:
         row.name = "evil\r\nSet-Cookie: x=y.json"
         row.save(update_fields=["name"])
         mocker.patch(
-            "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+            "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
             return_value=json.dumps({"bomFormat": "CycloneDX"}).encode(),
         )
 
@@ -120,7 +120,7 @@ class TestDeleteEvents:
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 
         row = _store_row(component, "vex", "manual_upload", "1.0.0")
-        mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object", return_value=None)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object", return_value=None)
         mocker.patch("sbomify.apps.sboms.services.sboms.schedule_vex_reapply", return_value=None)
         capture_for_request = mocker.patch("sbomify.apps.core.posthog_service.capture_for_request")
 
@@ -165,7 +165,7 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_sbom:downloaded"
         assert args[2]["format"] == "cyclonedx"
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key
 
     def test_release_vex_download_captures_vendor_scoped_event(
         self, component, sample_user, mocker, sample_team_with_owner_member
@@ -185,7 +185,7 @@ class TestReleaseDownloadEvents:
         vex_row = _store_row(component, "vex", "manual_upload", "1.0.0")
         ReleaseArtifact.objects.create(release=release, sbom=vex_row)
         mocker.patch(
-            "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+            "sbomify.apps.core.object_store.StorageClient.get_sbom_data",
             return_value=json.dumps(
                 {"bomFormat": "CycloneDX", "specVersion": "1.6", "version": 1, "vulnerabilities": []}
             ).encode(),
@@ -200,7 +200,7 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_vex:downloaded"
         assert args[2]["release_id"] == str(release.id)
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key
 
     def test_release_cbom_download_captures_vendor_scoped_event(
         self, component, sample_user, mocker, sample_team_with_owner_member
@@ -231,4 +231,4 @@ class TestReleaseDownloadEvents:
         args, kwargs = capture_for_request.call_args
         assert args[1] == "release_cbom:downloaded"
         assert args[2]["release_id"] == str(release.id)
-        assert kwargs["team_key"] == team.key
+        assert kwargs["workspace_key"] == team.key

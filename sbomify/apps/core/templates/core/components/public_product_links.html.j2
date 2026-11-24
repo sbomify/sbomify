@@ -1,22 +1,21 @@
-{# Public Product Links — a sidebar tc-panel, one row per resource. #}
+{# Public Product Links: a side panel, one fact per resource. #}
 {% if product_links %}
-    <div class="tc-panel">
-        <h2 class="tc-panel-title">Resources &amp; links</h2>
-        <div class="tc-facts">
-            {% for link in product_links %}
-                <div>
-                    <p class="tc-fact-label">{{ link.link_type_display }}</p>
-                    <a class="text-sm break-words"
-                       href="{% url 'core:product_link_redirect' link_id=link.id %}"
-                       target="_blank"
-                       rel="noopener noreferrer">
-                        {{ link.title }}
-                        <i class="fas fa-arrow-up-right-from-square text-xs ml-1"
-                           aria-hidden="true"></i>
-                    </a>
-                    {% if link.description %}<p class="text-xs opacity-70 mt-1 mb-0">{{ link.description }}</p>{% endif %}
-                </div>
-            {% endfor %}
-        </div>
-    </div>
+    <c-branded.panel title="Resources and links">
+    <c-branded.facts>
+    {% for link in product_links %}
+        <c-branded.fact label="{{ link.link_type_display }}" stacked>
+        <a class="inline-flex items-center gap-1.5 font-medium text-text no-underline hover:underline underline-offset-4 [overflow-wrap:anywhere]"
+           data-button
+           href="{% url 'core:product_link_redirect' link_id=link.id %}"
+           target="_blank"
+           rel="noopener noreferrer">
+            {{ link.title }}
+            <i class="fas fa-arrow-up-right-from-square text-xs text-text-muted"
+               aria-hidden="true"></i>
+        </a>
+        {% if link.description %}<p class="text-xs text-text-muted my-0">{{ link.description }}</p>{% endif %}
+        </c-branded.fact>
+    {% endfor %}
+    </c-branded.facts>
+    </c-branded.panel>
 {% endif %}

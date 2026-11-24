@@ -261,9 +261,9 @@ class BillingPlan(models.Model):
         Uses bulk_update for efficiency when updating multiple teams.
         Only updates teams whose limits actually changed (idempotent).
         """
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
-        teams = Team.objects.filter(billing_plan=self.key)
+        teams = Workspace.objects.filter(billing_plan=self.key)
         team_count = teams.count()
 
         if team_count == 0:
@@ -297,7 +297,7 @@ class BillingPlan(models.Model):
 
         # Use bulk_update for better performance
         if teams_to_update:
-            Team.objects.bulk_update(teams_to_update, ["billing_plan_limits"], batch_size=100)
+            Workspace.objects.bulk_update(teams_to_update, ["billing_plan_limits"], batch_size=100)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """

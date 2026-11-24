@@ -10,7 +10,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.tests.s3_fixtures import (
-    MockS3Client,
+    MockStorageClient,
     create_documents_api_mock,
     create_s3_method_mock,
 )
@@ -19,12 +19,12 @@ from sbomify.apps.core.tests.s3_fixtures import (
 class TestS3FixturesUsage:
     """Example tests showing different ways to use S3 fixtures."""
 
-    def test_basic_s3_mock_usage(self, s3_mock: MockS3Client) -> None:
+    def test_basic_s3_mock_usage(self, s3_mock: MockStorageClient) -> None:
         """Example: Basic usage of the s3_mock fixture."""
-        # The S3Client is already mocked at the class level
-        from sbomify.apps.core.object_store import S3Client
+        # The StorageClient is already mocked at the class level
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         # Upload some data
         filename = client.upload_sbom(b'{"bomFormat": "CycloneDX"}')
@@ -37,11 +37,11 @@ class TestS3FixturesUsage:
         retrieved = client.get_sbom_data(filename)
         assert retrieved == b'{"bomFormat": "CycloneDX"}'
 
-    def test_documents_specific_mock(self, s3_documents_mock: MockS3Client) -> None:
+    def test_documents_specific_mock(self, s3_documents_mock: MockStorageClient) -> None:
         """Example: Using the documents-specific mock with pre-populated data."""
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("DOCUMENTS")
+        client = StorageClient("DOCUMENTS")
 
         # The mock comes pre-populated with test documents
         assert client.get_document_data("test_document.pdf") == b"test document content"
@@ -51,11 +51,11 @@ class TestS3FixturesUsage:
         filename = client.upload_document(b"new document content")
         assert client.get_document_data(filename) == b"new document content"
 
-    def test_sboms_specific_mock(self, s3_sboms_mock: MockS3Client) -> None:
+    def test_sboms_specific_mock(self, s3_sboms_mock: MockStorageClient) -> None:
         """Example: Using the SBOM-specific mock with pre-populated data."""
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         # The mock comes pre-populated with test SBOMs
         sbom_data = client.get_sbom_data("test_sbom.json")
@@ -70,11 +70,11 @@ class TestS3FixturesUsage:
         legacy_parsed = json.loads(legacy_data.decode())
         assert legacy_parsed["specVersion"] == "1.5"
 
-    def test_error_scenarios(self, s3_error_mock: MockS3Client) -> None:
+    def test_error_scenarios(self, s3_error_mock: MockStorageClient) -> None:
         """Example: Testing error scenarios."""
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         # All operations should raise exceptions
         with pytest.raises(Exception, match="S3 service unavailable"):
@@ -83,11 +83,11 @@ class TestS3FixturesUsage:
         with pytest.raises(Exception, match="S3 service unavailable"):
             client.get_sbom_data("test.json")
 
-    def test_configurable_mock_behavior(self, s3_mock: MockS3Client) -> None:
+    def test_configurable_mock_behavior(self, s3_mock: MockStorageClient) -> None:
         """Example: Configuring mock behavior during test."""
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         # Initially works fine
         filename = client.upload_sbom(b'{"test": "data"}')
@@ -104,13 +104,13 @@ class TestS3FixturesUsage:
         assert client.get_sbom_data(filename) == b'{"test": "data"}'
 
     def test_method_specific_mocking(self, mocker: MockerFixture) -> None:
-        """Example: Mocking only specific S3Client methods."""
+        """Example: Mocking only specific StorageClient methods."""
         # Mock only the get_sbom_data method
         mock_get = create_s3_method_mock(mocker, "get_sbom_data", return_value=b'{"mocked": "data"}')
 
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         result = client.get_sbom_data("any_filename")
         assert result == b'{"mocked": "data"}'
@@ -120,9 +120,9 @@ class TestS3FixturesUsage:
         """Example: Mocking method to raise specific errors."""
         mock_upload = create_s3_method_mock(mocker, "upload_sbom", side_effect=Exception("Upload failed"))
 
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        client = S3Client("SBOMS")
+        client = StorageClient("SBOMS")
 
         with pytest.raises(Exception, match="Upload failed"):
             client.upload_sbom(b'{"test": "data"}')
@@ -146,13 +146,13 @@ class TestS3FixturesUsage:
         # In real tests, this would be called by the API endpoint being tested
 
 
-class TestMockS3ClientDirectly:
-    """Test the MockS3Client class directly to ensure it works correctly."""
+class TestMockStorageClientDirectly:
+    """Test the MockStorageClient class directly to ensure it works correctly."""
 
     def test_mock_client_bucket_validation(self) -> None:
-        """Test that MockS3Client validates bucket types correctly."""
-        sbom_client = MockS3Client("SBOMS")
-        doc_client = MockS3Client("DOCUMENTS")
+        """Test that MockStorageClient validates bucket types correctly."""
+        sbom_client = MockStorageClient("SBOMS")
+        doc_client = MockStorageClient("DOCUMENTS")
 
         # SBOM client can't do document operations
         with pytest.raises(ValueError, match="only for DOCUMENTS bucket"):
@@ -163,8 +163,8 @@ class TestMockS3ClientDirectly:
             doc_client.upload_sbom(b"test")
 
     def test_mock_client_file_storage(self) -> None:
-        """Test that MockS3Client properly stores and retrieves files."""
-        client = MockS3Client("SBOMS")
+        """Test that MockStorageClient properly stores and retrieves files."""
+        client = MockStorageClient("SBOMS")
 
         # Upload and retrieve
         filename = client.upload_sbom(b'{"test": "data"}')
@@ -176,8 +176,8 @@ class TestMockS3ClientDirectly:
         assert client.uploaded_files[filename] == b'{"test": "data"}'
 
     def test_mock_client_deletion(self) -> None:
-        """Test that MockS3Client handles file deletion."""
-        client = MockS3Client("SBOMS")
+        """Test that MockStorageClient handles file deletion."""
+        client = MockStorageClient("SBOMS")
 
         # Upload a file
         filename = client.upload_sbom(b'{"test": "data"}')
@@ -191,8 +191,8 @@ class TestMockS3ClientDirectly:
         assert client.get_sbom_data(filename) is None
 
     def test_mock_client_error_configuration(self) -> None:
-        """Test MockS3Client error configuration."""
-        client = MockS3Client("SBOMS")
+        """Test MockStorageClient error configuration."""
+        client = MockStorageClient("SBOMS")
 
         # Configure to raise errors
         client.configure_error(True, "Test error")

@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.billing.stripe_client import StripeClient, StripeError
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
@@ -98,7 +98,7 @@ class TestMetadataPropagation:
     def test_team_subscription_relationship(self):
         """Test that team and subscription relationship is maintained."""
         # Create test data
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             key="test_team",
             name="Test Team",
             billing_plan="business",
@@ -111,13 +111,13 @@ class TestMetadataPropagation:
         )
 
         # Verify team can be found by subscription ID
-        found_team = Team.objects.get(
+        found_team = Workspace.objects.get(
             billing_plan_limits__stripe_subscription_id="sub_123"
         )
         assert found_team.id == team.id
 
         # Verify team can be found by customer ID
-        found_team = Team.objects.get(
+        found_team = Workspace.objects.get(
             billing_plan_limits__stripe_customer_id="cus_123"
         )
         assert found_team.id == team.id

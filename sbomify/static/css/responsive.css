@@ -185,36 +185,9 @@
     padding: 1.25rem !important;
   }
 
-  /* Better mobile typography */
-  h1,
-  .h1 {
-    font-size: 1.75rem !important;
-  }
-
-  h2,
-  .h2 {
-    font-size: 1.5rem !important;
-  }
-
-  h3,
-  .h3 {
-    font-size: 1.25rem !important;
-  }
-
-  h4,
-  .h4 {
-    font-size: 1.1rem !important;
-  }
-
-  h5,
-  .h5 {
-    font-size: 1rem !important;
-  }
-
-  h6,
-  .h6 {
-    font-size: 0.9rem !important;
-  }
+  /* Heading sizes are left to the page's own components. A blanket
+     h1-h6 override here used to beat them with !important, which turned the
+     Trust Center's small uppercase panel titles into 24px headings. */
 
   /* Row and column improvements */
   .row {

@@ -13,11 +13,22 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.middleware.csrf import get_token
+from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.teams.models import Member
+
+
+def _session_client(user) -> Client:
+    """Sign `user` in on a session that sends its CSRF token, as a browser does."""
+    token = get_token(RequestFactory().get("/"))
+    client = Client(enforce_csrf_checks=True, headers={"X-CSRFToken": token})
+    client.cookies["csrftoken"] = token
+    client.force_login(user)
+    return client
 
 
 @pytest.fixture
@@ -30,8 +41,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -75,9 +85,7 @@ class TestListAccessRequestsAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test listing pending access requests."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -98,9 +106,7 @@ class TestListAccessRequestsAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
     ):
         """Test listing approved access requests."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -119,17 +125,17 @@ class TestListAccessRequestsAPI:
         # Approved request should not be in pending list
         assert not any(item["id"] == str(approved_access_request.id) for item in data)
 
-    def test_list_requires_admin(
-        self, authenticated_api_client, team_with_business_plan, guest_user
-    ):
+    def test_list_requires_admin(self, authenticated_api_client, team_with_business_plan, guest_user):
         """Test that listing requires admin role."""
         # Guest user might not have access token, so create one
         from sbomify.apps.access_tokens.models import AccessToken
         from sbomify.apps.access_tokens.utils import create_personal_access_token
-        
+
         token_str = create_personal_access_token(guest_user)
-        access_token = AccessToken.objects.create(user=guest_user, encoded_token=token_str, description="Test API Token")
-        
+        access_token = AccessToken.objects.create(
+            user=guest_user, encoded_token=token_str, description="Test API Token"
+        )
+
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
         client, _ = authenticated_api_client
@@ -151,9 +157,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test approving a pending access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -177,9 +181,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user, guest_user
     ):
         """Test that approving creates a guest member."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -203,9 +205,7 @@ class TestApproveAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
     ):
         """Test that approving a non-pending request fails."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -230,9 +230,7 @@ class TestRejectAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
     ):
         """Test rejecting a pending access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -261,9 +259,7 @@ class TestRevokeAccessRequestAPI:
         self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user, guest_user
     ):
         """Test revoking an approved access request."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
 
         client, access_token = authenticated_api_client
@@ -288,16 +284,58 @@ class TestRevokeAccessRequestAPI:
         member = Member.objects.filter(team=team_with_business_plan, user=guest_user).first()
         assert member is None
 
+    def test_revoking_a_request_that_is_not_approved_is_a_400(
+        self, authenticated_api_client, team_with_business_plan, pending_access_request, sample_user
+    ):
+        """The handler's own 400, not a 500 from an undeclared status.
+
+        ninja validates the status code a handler returns against the
+        ``response`` map on the decorator. 400 was missing there, so the
+        "not approved" branch raised ConfigError and the caller saw an
+        opaque 500 with no detail.
+        """
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+
+        client, access_token = authenticated_api_client
+        client.force_login(sample_user)
+
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        url = reverse("api-1:revoke_access_request", kwargs={"request_id": pending_access_request.id})
+
+        response = client.post(url, {}, content_type="application/json", **headers)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Access request is not approved"
+
+        pending_access_request.refresh_from_db()
+        assert pending_access_request.status == AccessRequest.Status.PENDING
+
+    def test_rejecting_a_request_that_is_not_pending_is_a_400(
+        self, authenticated_api_client, team_with_business_plan, approved_access_request, sample_user
+    ):
+        """Same undeclared-status bug on the reject endpoint."""
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+
+        client, access_token = authenticated_api_client
+        client.force_login(sample_user)
+
+        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        url = reverse("api-1:reject_access_request", kwargs={"request_id": approved_access_request.id})
+
+        response = client.post(url, {}, content_type="application/json", **headers)
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Access request is not pending"
+
 
 @pytest.mark.django_db
 class TestSignNDAAPI:
     """Test sign NDA API."""
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_with_valid_hash(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -308,10 +346,8 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
-
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -324,7 +360,6 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": True}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 200
@@ -337,11 +372,10 @@ class TestSignNDAAPI:
         assert signature is not None
         assert signature.nda_document == company_nda_document
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_with_invalid_hash(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -351,11 +385,9 @@ class TestSignNDAAPI:
         mock_s3 = MagicMock()
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
-        
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
 
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -368,16 +400,14 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": False}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 400
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_captures_correct_ip_with_proxy(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -388,11 +418,9 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
+        client = _session_client(guest_user)
 
         headers = {
-            "HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}",
             "HTTP_X_REAL_IP": "203.0.113.42",  # Client IP set by reverse proxy
         }
         url = reverse(
@@ -417,11 +445,10 @@ class TestSignNDAAPI:
         assert signature is not None
         assert signature.ip_address == "203.0.113.42"
 
-    @patch("sbomify.apps.documents.access_apis.S3Client")
+    @patch("sbomify.apps.documents.access_apis.StorageClient")
     def test_sign_nda_falls_back_to_remote_addr_without_proxy(
         self,
         mock_s3_client,
-        authenticated_api_client,
         team_with_business_plan,
         pending_access_request,
         company_nda_document,
@@ -432,10 +459,8 @@ class TestSignNDAAPI:
         mock_s3_client.return_value = mock_s3
         mock_s3.get_document_data.return_value = b"Test NDA Content"
 
-        client, access_token = authenticated_api_client
-        client.force_login(guest_user)
-
-        headers = {"HTTP_AUTHORIZATION": f"Bearer {access_token.encoded_token}"}
+        # The requester signs for themselves, on their own session.
+        client = _session_client(guest_user)
         url = reverse(
             "api-1:sign_nda",
             kwargs={
@@ -448,7 +473,6 @@ class TestSignNDAAPI:
             url,
             json.dumps({"signed_name": "Test User", "consent": True}),
             content_type="application/json",
-            **headers,
         )
 
         assert response.status_code == 200

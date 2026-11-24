@@ -2,7 +2,7 @@ You're invited!
 
 {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.email }}{% endif %} has invited you to join the workspace {{ team.name }} on sbomify as {{ invitation.role }}.
 
-Accept the invitation: {{ base_url }}{% url 'teams:accept_invite' invitation.token %}
+Accept the invitation: {{ base_url }}{% url 'workspaces:accept_invite' invitation.token %}
 
 This invitation expires on {{ invitation.expires_at|date:"F d, Y" }}.
 

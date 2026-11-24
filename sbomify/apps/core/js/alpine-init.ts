@@ -7,9 +7,12 @@ import intersect from '@alpinejs/intersect';
 import collapse from '@alpinejs/collapse';
 import anchor from '@alpinejs/anchor';
 import { parseJsonScript } from './utils';
+import { formatNumber } from './number-format';
 import { registerWebSocketStore } from './components/websocket-store';
+import { registerOpenAssessmentsStore } from './components/open-assessments-store';
 import { registerTooltipDirective } from './alpine-tooltip';
 import { registerConfirmModal } from './components/confirm-modal';
+import { registerAllComponents } from './alpine-components';
 
 let initializationPromise: Promise<void> | null = null;
 
@@ -40,15 +43,19 @@ Alpine.plugin(intersect);
 Alpine.plugin(collapse);
 Alpine.plugin(anchor);
 
+Alpine.magic('number', () => formatNumber);
+
 // Register custom directives
 registerTooltipDirective(Alpine);
 
 // Register global stores before Alpine starts
 registerWebSocketStore();
 
-// Register components required by base template (confirm_modal.html.j2).
-// This must happen here (not in individual entry points) because child bundles
-// call initializeAlpine() before the core bundle's registerAllComponents() runs.
+// Which assessment cards are open, kept out of the DOM so a refresh that
+// morphs the artifact page cannot close them.
+registerOpenAssessmentsStore();
+
+// The base confirmation modal is available to every entry point.
 registerConfirmModal();
 
 if (!window.Alpine) {
@@ -62,6 +69,9 @@ export function initializeAlpine(): Promise<void> {
   }
 
   initializationPromise = Promise.resolve().then(() => {
+    // Any page bundle may reach startup first. Register shared components
+    // here so the chrome never initializes against an incomplete registry.
+    registerAllComponents();
     window.Alpine.start();
   });
 
@@ -73,5 +83,4 @@ export function isAlpineInitialized(): boolean {
 }
 
 export default window.Alpine || Alpine;
-
 

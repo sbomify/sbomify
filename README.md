@@ -31,6 +31,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 | Plugin                                  | Type        | Standard                                                                                                                                         |
 | --------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | NTIA Minimum Elements (2021)            | Compliance  | [NTIA Minimum Elements for SBOM](https://www.ntia.gov/report/2021/minimum-elements-software-bill-materials-sbom)                                 |
+| CISA Minimum Elements (2026)            | Compliance  | [2026 Minimum Elements for an SBOM](https://www.cisa.gov/resources-tools/resources/2026-minimum-elements-software-bill-materials-sbom)           |
 | CISA Minimum Elements (2025 Draft)      | Compliance  | [CISA 2025 SBOM Minimum Elements](https://www.cisa.gov/sites/default/files/2025-08/2025_CISA_SBOM_Minimum_Elements.pdf) _(Public Comment Draft)_ |
 | BSI TR-03183-2 v2.1 (EU CRA)            | Compliance  | [BSI TR-03183-2: Cyber Resilience Requirements](https://bsi.bund.de/dok/TR-03183-en)                                                             |
 | FDA Medical Device Cybersecurity (2025) | Compliance  | [FDA Cybersecurity in Medical Devices](https://www.fda.gov/media/119933/download)                                                                |
@@ -57,6 +58,12 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Standardized SBOM discovery via `.well-known/tea` endpoints
 - Enables automated discovery and retrieval of SBOMs across the supply chain
 
+### MCP server (AI agents)
+
+- Query your workspace from AI agents over the [Model Context Protocol](https://modelcontextprotocol.io), served at `/mcp`
+- Authenticated with scoped personal access tokens: the tools an agent is offered follow its token's scopes
+- See [docs/mcp.md](docs/mcp.md) for connecting a client, the settings, and troubleshooting
+
 ## Architecture Decision Records (ADRs)
 
 We use Architecture Decision Records (ADRs) to document significant architectural decisions made in this project. ADRs provide context and rationale for decisions, helping current and future contributors understand why certain approaches were chosen.
@@ -74,6 +81,21 @@ For detailed information about the deployment process, including:
 See [docs/deployment.md](docs/deployment.md).
 
 For full production deployment instructions, see [the deployment guide](docs/deployment.md).
+
+### Kubernetes
+
+A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
+the application only. You provide PostgreSQL, Redis, S3-compatible storage and
+an identity provider: Keycloak, or another OIDC provider such as Okta, Auth0 or
+Entra ID.
+
+To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster
+(which also provisions throwaway versions of those four):
+
+```bash
+./bin/kind-up.sh          # create the cluster and deploy
+./bin/kind-up.sh --down   # tear it down
+```
 
 ## Local Development
 
@@ -137,8 +159,39 @@ bun install
 
 The API documentation is available at:
 
-- Interactive API docs (Swagger UI): `http://localhost:8000/api/v1/docs`
-- OpenAPI specification: `http://localhost:8000/api/v1/openapi.json`
+- Interactive API docs (Swagger UI): `http://localhost:8000/api/v2/docs`
+- OpenAPI specification: `http://localhost:8000/api/v2/openapi.json`
+
+#### API versions
+
+v2 serves the v1 operations in the product's own words, apart from the
+internal routes the app uses for itself, which stay on v1 only. If you call v1
+from a script, SDK or CI job, nothing breaks: v1 stays byte for byte as it is,
+and its docs are still at `/api/v1/docs`. The main changes when you move to v2
+are below; the v2 OpenAPI document at `/api/v2/openapi.json` is the full list.
+
+- **Paths:** the `/sboms` prefix becomes `/artifacts`, and the `/sbom/` and
+  `/artifact/` segments under it drop away. An artifact's releases move from
+  `/sboms/{sbom_id}/releases` to `/artifacts/{artifact_id}/releases`, and the
+  access request routes move from `/teams/{team_key}/access-request` to
+  `/workspaces/{workspace_key}/access-request`, with their `/nda` and
+  `/sign-nda` children.
+- **Path parameters:** `team_key` becomes `workspace_key` and `sbom_id` becomes
+  `artifact_id`. A hand-written URL keeps the same shape; a generated client's
+  argument names change.
+- **Request and response fields:** `team_id`, `team_key`, `team_name` and
+  `is_default_team` become `workspace_id`, `workspace_key`, `workspace_name` and
+  `is_default_workspace`, in both directions. v1 already sends
+  `is_default_workspace` beside `is_default_team`.
+- **Error codes:** `NO_CURRENT_TEAM`, `TEAM_NOT_FOUND` and `TEAM_MISMATCH`
+  become `NO_CURRENT_WORKSPACE`, `WORKSPACE_NOT_FOUND` and `WORKSPACE_MISMATCH`.
+- **Schema names:** every schema with `Team` in its name says `Workspace`
+  instead, for example `TeamSchema` becomes `WorkspaceSchema` and
+  `TeamPatchSchema` becomes `WorkspacePatchSchema`.
+
+Every v1 response carries a `Deprecation` header and a `Link` to the v2 docs.
+No date for retiring v1 has been set yet. When there is one, v1 responses will
+carry a `Sunset` header with it.
 
 The API provides endpoints for managing:
 
@@ -280,7 +333,7 @@ Persistent storage for Keycloak is managed by Docker using a named volume (`keyc
 
 ##### Keycloak Bootstrapping
 
-Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**—just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
+Keycloak is automatically bootstrapped using the script at `bin/keycloak-bootstrap.sh` when you start the development environment with Docker Compose. This script uses environment variables (such as `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ADMIN_USERNAME`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, etc.) to configure the realm, client, and credentials. **You do not need to edit the script itself**. Just set the appropriate environment variables in your Docker Compose configuration to control the bootstrap process.
 
 When running in development mode (using `docker-compose.dev.yml`), the bootstrap script automatically:
 
@@ -390,8 +443,31 @@ To integrate with Dependency Track, you need to create an API token with the fol
 - `PROJECT_CREATION_UPLOAD`
 - `VIEW_PORTFOLIO`
 - `VIEW_VULNERABILITY`
+- `PORTFOLIO_MANAGEMENT`, so sbomify can group projects into collections and retire the versions it no longer tracks. Without it scans still work, and projects stay flat and active.
 
 You can create a token under **Administration → Access Management** in your Dependency Track instance (use the workspace management interface there).
+
+##### Project Layout and Tracked Versions
+
+Each SBOM sbomify sends to Dependency Track is a project version named `{prefix}-sbomify-{component-id}`, with the SBOM's ID as the version. sbomify groups them as a tree:
+
+- `{prefix}-sbomify-workspace-{workspace-key}`: a collection for the workspace, holding
+- `{prefix}-sbomify-component-{component-id}`: a collection for each component, holding that component's SBOM versions.
+
+Collections carry no BOM; Dependency Track sums their children.
+
+sbomify tracks the newest SBOM of each format for a component and every SBOM a release it still monitors ships, including the releases those link to. A release stops counting once it is withdrawn, archived, replaced by a release on the same line, or past its end of support or end of life. Tracked versions stay active, and the newest of them is marked latest. Every other version is set inactive, never deleted: Dependency Track stops analysing it and keeps its findings and audit history. A version comes back when a release that sbomify monitors ships it again. The scheduled scans cover the same SBOMs.
+
+Each change to a release, its links or its artifacts queues an update of the component versions it touches. If Dependency Track is unreachable, sbomify retries for about four hours. After a longer outage, run the backfill below.
+
+New uploads land in the tree as they arrive. To bring projects uploaded before this in line, run the backfill, first as a dry run:
+
+```bash
+python manage.py dt_tracked_scope --dry-run
+python manage.py dt_tracked_scope
+```
+
+`--server=<name>` and `--workspace=<key>` limit it. It is safe to run again.
 
 ##### DT Configuration
 

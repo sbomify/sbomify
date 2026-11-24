@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings as django_settings
 from django.utils.text import slugify
 
+from sbomify.apps.compliance import audit
 from sbomify.apps.compliance.models import (
     CRAExportPackage,
     CRAGeneratedDocument,
@@ -25,7 +26,7 @@ from sbomify.apps.compliance.services._reference_data import (
 from sbomify.apps.compliance.services.oscal_service import serialize_assessment_results
 from sbomify.apps.compliance.services.pdf_service import markdown_to_pdf
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.services.contacts import get_manufacturer
@@ -122,7 +123,7 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "  is benign.\n\n"
         "This CRA export bundle ships with two integrity primitives:\n\n"
         "- `metadata/manifest.json` — per-file SHA-256 hashes for every "
-        "artefact listed in its `files` array. `metadata/manifest.json`, "
+        "artifact listed in its `files` array. `metadata/manifest.json`, "
         "`metadata/manifest.sha256`, and this `metadata/INTEGRITY.md` are "
         "NOT listed (they are the integrity primitives themselves — "
         "listing them would be circular).\n"
@@ -137,7 +138,7 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "```\n\n"
         "Expected output: `metadata/manifest.json: OK`.\n\n"
         f"Expected digest (from `metadata/manifest.sha256`): `{manifest_sha256}`\n\n"
-        "## 2. Verifying every individual artefact\n\n"
+        "## 2. Verifying every individual artifact\n\n"
         "Again from the extracted bundle root:\n\n"
         "```sh\n"
         'jq -r \'.files[] | "\\(.sha256)  \\(.path | sub("^cra-package-[^/]*/"; ""))"\' \\\n'
@@ -148,13 +149,29 @@ def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
         "since export. The `jq` `sub` expression strips the "
         "`cra-package-<slug>/` prefix so `sha256sum` resolves paths "
         "against the current working directory (the bundle root).\n\n"
-        "## 3. About signatures\n\n"
-        "sbomify does not sign the bundle itself. Operators who need a "
-        "stronger integrity / provenance guarantee for regulatory filings "
-        "should sign the whole ZIP downstream with `cosign sign-blob` "
-        "or `gpg --detach-sign` and distribute the detached signature "
-        "alongside the bundle. The self-hash above bounds the manifest's "
-        "integrity; a downstream signature bounds the whole package.\n\n"
+        "## 3. Signing the bundle\n\n"
+        "sbomify does not sign the bundle and holds no signing key. Sign "
+        "the ZIP yourself, keyless, with cosign 3 or later and your own "
+        "identity: a person signing in with GitHub, Google or Microsoft, "
+        "or a CI workflow signing with its own identity token. Run it "
+        "against the ZIP as exported, not the extracted folder:\n\n"
+        "```sh\n"
+        "cosign sign-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json\n"
+        "```\n\n"
+        "cosign records the signer's identity and the ZIP's SHA-256 in "
+        "Sigstore's public transparency log. The bundle's contents stay "
+        "private. Upload the `.sigstore.json` file to sbomify on the "
+        "export step so it is kept beside this ZIP.\n\n"
+        "A recipient verifies the signature with the identity and OIDC "
+        "issuer it was made under:\n\n"
+        "```sh\n"
+        "cosign verify-blob <bundle>.zip --bundle <bundle>.zip.sigstore.json \\\n"
+        "  --certificate-identity <signer> \\\n"
+        "  --certificate-oidc-issuer <issuer>\n"
+        "```\n\n"
+        "It prints `Verified OK`. Get the expected signer and issuer from "
+        "the manufacturer, not from these files: whoever can replace the "
+        "ZIP can also replace the signature beside it.\n\n"
         "## 4. Retention obligation\n\n"
         "Article 13(15) of Regulation (EU) 2024/2847 requires this evidence "
         "to be kept for ten years from placing the product on the market, or "
@@ -203,35 +220,37 @@ def _article_14_reporting_readme() -> str:
         "Article 16 designates ENISA to operate the Single Reporting Platform "
         "(SRP). The SRP consumes the notifications above and routes them to "
         "the competent CSIRTs automatically. Submission interface:\n\n"
-        "- EC portal: https://digital-strategy.ec.europa.eu/en/policies/cra-reporting\n\n"
-        "sbomify does not yet auto-submit on the operator's behalf — templates "
-        "are provided for manual filing. An automated pipeline will land once "
-        "the SRP technical interface is publicly documented (tracked against "
-        "the 2026-09-11 obligation date).\n"
+        "- EC portal: https://digital-strategy.ec.europa.eu/en/policies/cra-reporting\n"
+        "- ENISA portal: https://portal.cra-srp.enisa.europa.eu/\n\n"
+        "The SRP accepts notifications through its web portal only, so sbomify "
+        "does not submit on the operator's behalf. In sbomify, CRA reports "
+        "(Compliance, Reports) lay each notification out field by field as the "
+        "portal asks for it, track the deadlines above and record each filing "
+        "with its ENISA reference.\n"
     )
 
 
-def _get_generated_doc_content(doc: CRAGeneratedDocument, s3_client: S3Client | None = None) -> bytes | None:
-    """Fetch document content from S3."""
+def _get_generated_doc_content(doc: CRAGeneratedDocument, storage_client: StorageClient | None = None) -> bytes | None:
+    """Fetch document content from object storage."""
     try:
-        if s3_client is None:
-            s3_client = S3Client("DOCUMENTS")
-        return s3_client.get_file_data(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, doc.storage_key)
+        if storage_client is None:
+            storage_client = StorageClient("DOCUMENTS")
+        return storage_client.get_file_data(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, doc.storage_key)
     except Exception:
-        logger.exception("Failed to fetch document %s from S3", doc.storage_key)
+        logger.exception("Failed to fetch document %s from storage", doc.storage_key)
         return None
 
 
-def _get_sbom_content(sbom: SBOM, s3_client: S3Client | None = None) -> bytes | None:
-    """Fetch SBOM content from S3."""
+def _get_sbom_content(sbom: SBOM, storage_client: StorageClient | None = None) -> bytes | None:
+    """Fetch SBOM content from object storage."""
     if not sbom.sbom_filename:
         return None
     try:
-        if s3_client is None:
-            s3_client = S3Client("SBOMS")
-        return s3_client.get_sbom_data(sbom.sbom_filename)
+        if storage_client is None:
+            storage_client = StorageClient("SBOMS")
+        return storage_client.get_sbom_data(sbom.sbom_filename)
     except Exception:
-        logger.exception("Failed to fetch SBOM %s from S3", sbom.sbom_filename)
+        logger.exception("Failed to fetch SBOM %s from storage", sbom.sbom_filename)
         return None
 
 
@@ -280,9 +299,9 @@ def build_export_package(
     # Spool to disk if ZIP exceeds 10MB to avoid OOM on large products
     buf = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
 
-    # Create S3 clients once for reuse across all fetches
-    docs_s3 = S3Client("DOCUMENTS")
-    sboms_s3 = S3Client("SBOMS")
+    # Create storage clients once for reuse across all fetches
+    docs_storage = StorageClient("DOCUMENTS")
+    sboms_storage = StorageClient("SBOMS")
 
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         # 1. OSCAL catalog
@@ -303,7 +322,7 @@ def build_export_package(
             zip_path = _DOC_PATH_MAP.get(doc.document_kind)
             if not zip_path:
                 continue
-            content = _get_generated_doc_content(doc, s3_client=docs_s3)
+            content = _get_generated_doc_content(doc, storage_client=docs_storage)
             if content:
                 cra_ref = _DOC_CRA_REF.get(doc.document_kind, "")
                 full_path = f"{prefix}/{zip_path}"
@@ -336,7 +355,7 @@ def build_export_package(
             latest_sbom = sboms_by_id.get(component.latest_sbom_id) if component.latest_sbom_id else None
             if not latest_sbom:
                 continue
-            sbom_content = _get_sbom_content(latest_sbom, s3_client=sboms_s3)
+            sbom_content = _get_sbom_content(latest_sbom, storage_client=sboms_storage)
             if sbom_content:
                 ext = _FORMAT_EXT_MAP.get(latest_sbom.format, "json")
                 sbom_path = f"{prefix}/sboms/{slugify(component.name)}-{component.id}.{ext}"
@@ -436,18 +455,18 @@ def build_export_package(
     # Read entire ZIP into memory for hashing and upload. This is acceptable because
     # CRA export packages are typically <1MB (documents + SBOMs). The SpooledTemporaryFile
     # already spills to disk above 10MB, and we need the full bytes for SHA-256 hashing
-    # and the subsequent S3 upload anyway — streaming would require two passes.
+    # and the subsequent storage upload anyway — streaming would require two passes.
     buf.seek(0)
     zip_bytes = buf.read()
     buf.close()
     content_hash = hashlib.sha256(zip_bytes).hexdigest()
     storage_key = f"compliance/exports/{assessment.id}/{content_hash}.zip"
 
-    # Upload to S3 (reuse the docs_s3 client)
+    # Upload to object storage (reuse the docs_storage client)
     try:
-        docs_s3.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, zip_bytes)
+        docs_storage.upload_data_as_file(django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME, storage_key, zip_bytes)
     except Exception:
-        logger.exception("Failed to upload export package to S3")
+        logger.exception("Failed to upload export package to storage")
         return ServiceResult.failure("Failed to upload export package to storage", status_code=502)
 
     package = CRAExportPackage.objects.create(
@@ -459,6 +478,13 @@ def build_export_package(
         # Pinned at creation: the Art. 13(15) floor must survive later
         # changes to the product's declared support period.
         retain_until=retain_until,
+    )
+    audit.log_export_created(
+        user=user,
+        assessment_id=assessment.id,
+        team_id=assessment.team_id,
+        package_id=package.id,
+        content_hash=content_hash,
     )
 
     return ServiceResult.success(package)
@@ -520,8 +546,27 @@ def _write_md_with_pdf(
 _PRESIGNED_URL_EXPIRY_SECONDS = 900
 
 
+def export_file_name(package: CRAExportPackage) -> str:
+    """``cra-package-<product-slug>-<hash12>.zip``, so auditors can tell bundles apart on disk."""
+    product_slug = slugify(package.assessment.product.name) or package.assessment.product.id
+    return f"cra-package-{product_slug}-{package.content_hash[:12]}.zip"
+
+
+def _presigned_url(package: CRAExportPackage, storage_key: str, suffix: str, content_type: str) -> str:
+    """A short-lived URL that downloads ``storage_key`` as the bundle's file name plus ``suffix``."""
+    return StorageClient("DOCUMENTS").generate_presigned_url(
+        django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
+        storage_key,
+        expires_in=_PRESIGNED_URL_EXPIRY_SECONDS,
+        response_headers={
+            "ResponseContentDisposition": f'attachment; filename="{export_file_name(package)}{suffix}"',
+            "ResponseContentType": content_type,
+        },
+    )
+
+
 def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
-    """Generate a presigned S3 URL for the CRA bundle ZIP.
+    """Generate a presigned URL for the CRA bundle ZIP.
 
     Returns a short-lived URL (see ``_PRESIGNED_URL_EXPIRY_SECONDS``)
     with a forced ``Content-Disposition: attachment`` header so the
@@ -531,28 +576,25 @@ def get_download_url(package: CRAExportPackage) -> ServiceResult[str]:
     name + short hash so auditors can tell bundles apart on disk.
     """
     try:
-        import boto3
-
-        s3_client = boto3.client(
-            "s3",
-            region_name=django_settings.AWS_REGION,
-            endpoint_url=django_settings.AWS_ENDPOINT_URL_S3,
-            aws_access_key_id=django_settings.AWS_DOCUMENTS_ACCESS_KEY_ID,
-            aws_secret_access_key=django_settings.AWS_DOCUMENTS_SECRET_ACCESS_KEY,
-        )
-        product_slug = slugify(package.assessment.product.name) or package.assessment.product.id
-        filename = f"cra-package-{product_slug}-{package.content_hash[:12]}.zip"
-        url: str = s3_client.generate_presigned_url(
-            "get_object",
-            Params={
-                "Bucket": django_settings.AWS_DOCUMENTS_STORAGE_BUCKET_NAME,
-                "Key": package.storage_key,
-                "ResponseContentDisposition": f'attachment; filename="{filename}"',
-                "ResponseContentType": "application/zip",
-            },
-            ExpiresIn=_PRESIGNED_URL_EXPIRY_SECONDS,
-        )
-        return ServiceResult.success(url)
+        return ServiceResult.success(_presigned_url(package, package.storage_key, "", "application/zip"))
     except Exception:
         logger.exception("Failed to generate presigned URL")
         return ServiceResult.failure("Failed to generate download URL", status_code=500)
+
+
+def get_signature_url(package: CRAExportPackage) -> ServiceResult[str | None]:
+    """A presigned URL for the manufacturer's Sigstore bundle, or None while the ZIP is unsigned."""
+    if not package.signed_by:
+        return ServiceResult.success(None)
+    try:
+        return ServiceResult.success(
+            _presigned_url(package, signature_storage_key(package), ".sigstore.json", "application/json")
+        )
+    except Exception:
+        logger.exception("Failed to generate presigned signature URL")
+        return ServiceResult.failure("Failed to generate signature download URL", status_code=500)
+
+
+def signature_storage_key(package: CRAExportPackage) -> str:
+    """Where the manufacturer's Sigstore bundle is kept, beside the ZIP it signs."""
+    return f"{package.storage_key}.sigstore.json"

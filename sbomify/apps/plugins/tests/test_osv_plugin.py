@@ -511,8 +511,10 @@ class TestSPDX3Handling:
 
         assert OSVPlugin._is_spdx3(spdx2_content) is False
 
-    def test_spdx3_returns_unsupported_format_result(self) -> None:
-        """Test that SPDX 3.0 SBOMs get an unsupported format warning instead of scanning."""
+    def test_spdx3_is_scanned_through_a_derived_copy(self) -> None:
+        """SPDX 3.0 used to come back as a warning telling the uploader to
+        convert the file themselves. It is converted and scanned now, and the
+        result says so."""
         plugin = OSVPlugin()
         spdx3_sbom = json.dumps(
             {
@@ -529,15 +531,14 @@ class TestSPDX3Handling:
             sbom_path = Path(f.name)
 
         try:
-            result = plugin.assess("test-sbom-id", sbom_path)
+            with patch.object(plugin, "_execute_scanner", return_value=('{"results": []}', "", 0)) as scanner:
+                result = plugin.assess("test-sbom-id", sbom_path)
+
             assert isinstance(result, AssessmentResult)
-            assert result.metadata["unsupported_format"] is True
-            assert result.metadata["sbom_format"] == "spdx3"
-            assert len(result.findings) == 1
-            assert result.findings[0].id == "osv:unsupported-format"
-            assert result.findings[0].status == "warning"
-            assert "SPDX 3.0" in result.findings[0].title
-            assert result.summary.warning_count == 1
+            scanner.assert_called_once()
+            assert result.metadata["sbom_format"] == "spdx3", "the format reported is the one that was uploaded"
+            assert result.metadata["converted_from"] == "SPDX-3.0"
+            assert result.metadata.get("unsupported_format") is not True
         finally:
             sbom_path.unlink(missing_ok=True)
 

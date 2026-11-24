@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from sbomify.apps.teams.schemas import BrandingInfo
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ def _apply_lightness_transform(hex_color: str, transform: Callable[[float], floa
         return hex_color
 
 
-def build_branding_context(team: Team | None) -> dict[str, Any]:
+def build_branding_context(team: Workspace | None) -> dict[str, Any]:
     """
     Return a template-friendly branding payload for public views.
 

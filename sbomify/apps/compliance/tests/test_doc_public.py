@@ -99,9 +99,9 @@ def _attach_doc(assessment: CRAAssessment) -> CRAGeneratedDocument:
 
 
 def _stub_s3_get_document(content: str = _DOC_MARKDOWN):
-    """Patch ``S3Client.get_document_data`` so the view does not hit real S3."""
+    """Patch ``StorageClient.get_document_data`` so the view does not hit real S3."""
     return patch(
-        "sbomify.apps.core.object_store.S3Client.get_document_data",
+        "sbomify.apps.core.object_store.StorageClient.get_document_data",
         return_value=content.encode("utf-8"),
     )
 
@@ -164,7 +164,7 @@ class TestProductDoCPublicView:
         _attach_doc(assessment)
 
         with patch(
-            "sbomify.apps.core.object_store.S3Client.get_document_data",
+            "sbomify.apps.core.object_store.StorageClient.get_document_data",
             return_value=None,
         ):
             response = Client().get(reverse("compliance:product_doc_public", kwargs={"product_id": public_product.id}))

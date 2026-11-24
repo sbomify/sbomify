@@ -30,14 +30,14 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM, Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     BillingPlan.objects.get_or_create(
         key="community",
         defaults={
@@ -47,13 +47,13 @@ def test_team(db) -> Team:
             "max_users": 2,
         },
     )
-    team = Team.objects.create(name="Dep-Trigger Test Team", billing_plan="community")
+    team = Workspace.objects.create(name="Dep-Trigger Test Team", billing_plan="community")
     yield team
     team.delete()
 
 
 @pytest.fixture
-def test_component(test_team: Team):
+def test_component(test_team: Workspace):
     component = Component.objects.create(team=test_team, name="Dep-Trigger Test Component")
     yield component
     component.delete()

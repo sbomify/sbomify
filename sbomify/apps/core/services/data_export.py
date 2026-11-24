@@ -17,12 +17,14 @@ def export_user_data(user: User) -> dict[str, Any]:
     Returns a dict containing user profile, workspace memberships,
     API token metadata, SBOMs, and documents from user's workspaces.
 
-    Note: SBOM and document metadata is included from all workspaces the user
-    belongs to. This is intentional -- GDPR Article 20 covers data the user
-    has access to, not just data they created. Workspace-level artifacts are
-    included as metadata only (no binary content).
+    Note: SBOM and document metadata comes from the workspaces the user works
+    in, where they hold an internal role. A trust-center guest membership is
+    listed with the others but contributes no artifacts: it grants reading a
+    vendor's gated components, not the vendor's inventory. Workspace-level
+    artifacts are included as metadata only (no binary content).
     """
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.core.authz import READ_INTERNAL
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.models import SBOM, Component
     from sbomify.apps.teams.models import Member
@@ -50,7 +52,7 @@ def export_user_data(user: User) -> dict[str, Any]:
     tokens = AccessToken.objects.filter(user=user)
     token_data = [{"description": t.description, "created_at": t.created_at.isoformat()} for t in tokens]
 
-    team_ids = [m.team_id for m in memberships]
+    team_ids = [m.team_id for m in memberships if m.role in READ_INTERNAL]
 
     component_ids = Component.objects.filter(team_id__in=team_ids).values_list("id", flat=True)
 

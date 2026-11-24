@@ -1,4 +1,6 @@
 # Configure Dramatiq to use StubBroker for tests
+from datetime import UTC, datetime
+
 import dramatiq
 from dramatiq.brokers.stub import StubBroker
 from dramatiq.results import Results
@@ -25,6 +27,7 @@ os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 
 # Disable PostHog analytics in tests
 os.environ["POSTHOG_API_KEY"] = ""
+os.environ["TELEMETRY_ENABLED"] = "False"
 
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
@@ -57,6 +60,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -97,10 +101,21 @@ else:
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# PBKDF2 at Django's default work factor costs 0.13 s per hash on CI hardware,
+# and the fixtures set a password for nearly every user they build. That is the
+# single largest line item in a suite run: measured against the real hasher the
+# same 769 tests spend minutes doing key stretching that proves nothing about
+# this application. Tests need a hash that round-trips, not one that resists an
+# offline attack, so use the cheapest one Django ships.
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
 # Override signed URL salt for testing (required)
 SIGNED_URL_SALT = "test-signed-url-salt-unique-per-installation"
 
 SECRET_KEY = "django-insecure-test-key-do-not-use-in-production"  # nosec B105 - This is a test-only key
+
+# Object storage settings
+STORAGE_BACKEND = "s3"
 
 # Mock AWS settings for testing
 AWS_REGION = "test-region"
@@ -133,13 +148,27 @@ STORAGES = {
     },
 }
 
-# Django Vite test settings
+# Django Vite test settings.
+#
+# ``manifest.json`` is a ``bun run build`` artifact and is gitignored, so a clean
+# checkout does not have one. With ``dev_mode: False`` and no manifest, every
+# test that renders a template fails with ``DjangoViteAssetNotFoundError`` —
+# around 200 of them, spread across billing, compliance, core, teams, sboms and
+# documents, all with an error that says nothing about the real cause.
+#
+# So: use the built manifest when it exists (CI builds assets, and that path
+# exercises what production actually serves), and fall back to dev mode when it
+# does not. Dev mode emits dev-server URLs without consulting a manifest, which
+# is enough for tests that assert on rendered content — no test asserts on
+# asset URLs. The suite is then green straight from a clone.
+_VITE_MANIFEST = BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"
+
 DJANGO_VITE = {
     "default": {
-        "dev_mode": False,  # Always False for tests
+        "dev_mode": not _VITE_MANIFEST.exists(),
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"),
+        "manifest_path": str(_VITE_MANIFEST),
         "static_url_prefix": "dist/",
     }
 }
@@ -147,6 +176,8 @@ DJANGO_VITE = {
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
     "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
     "sbomify.apps.core.middleware.CustomDomainContextMiddleware",
@@ -154,14 +185,26 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.GzipRequestDecompressionMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "sbomify.apps.core.middleware.RenamedSessionKeysMiddleware",
     "django.middleware.common.CommonMiddleware",
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "sbomify.apps.core.middleware.IdentityProviderUnavailableMiddleware",
 ]
+
+# This module builds its own MIDDLEWARE rather than importing the real one, so
+# anything added there has to be added here too or it goes untested. The v1
+# sunset dates are fixed rather than copied from settings for the same reason a
+# test never reads the clock: the assertion should not change meaning on the
+# day the real sunset is moved.
+API_V1_DEPRECATED_ON = datetime(2026, 8, 26, tzinfo=UTC)
+API_V1_SUNSET = None
 
 # Configure ALLOWED_HOSTS for tests
 # Use wildcard - DynamicHostValidationMiddleware handles validation

@@ -36,7 +36,7 @@
                     <span class="flex items-center"
                           :class="activeContactsCount === 0 ? 'text-danger font-medium' : ''">
                         <i class="fas fa-users mr-1.5 text-xs opacity-60"></i>
-                        <span x-text="activeContactsCount + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
+                        <span x-text="$number(activeContactsCount) + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
                         <i class="fas fa-exclamation-circle ml-1 text-xs"
                            x-show="activeContactsCount === 0"></i>
                     </span>
@@ -153,10 +153,10 @@ https://example.com" x-model="websites" class="font-mono" />
                         <i class="fas fa-users text-text-muted mr-1.5"></i>Contacts
                     </h6>
                     <span class="text-danger text-xs">*</span>
-                    <c-badges.badge size="sm" x-text="activeContactsCount">0</c-badges.badge>
+                    <c-badges.badge size="sm" x-text="$number(activeContactsCount)">0</c-badges.badge>
                 </div>
                 <c-buttons.secondary size="sm" @click="addContact" title="Add a contact person">
-                <i class="fas fa-plus mr-1"></i>Add Contact
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add contact
                 </c-buttons.secondary>
             </div>
             {# Contact warnings #}
@@ -167,7 +167,7 @@ https://example.com" x-model="websites" class="font-mono" />
             Missing contacts: add at least one contact person.
             </c-feedback.alert>
             {# Contacts list — contacts-list is a JS hook: addContactRow appends into it. #}
-            <div class="contacts-list bg-background/50 rounded-lg border border-border overflow-hidden"
+            <div class="contacts-list border-t border-border"
                  x-show="activeContactsCount > 0">
                 {% if contacts_formset %}
                     {{ contacts_formset.management_form }}
@@ -179,10 +179,12 @@ https://example.com" x-model="websites" class="font-mono" />
         </div>
         {# Editor Actions #}
         <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-border">
-            <c-buttons.secondary size="sm" @click="cancelEdit()">Cancel</c-buttons.secondary>
-            <c-buttons.primary size="sm" @click="saveEdit()">
-            <i class="fas fa-check mr-1"></i>Done
-            </c-buttons.primary>
+            {% comment %}Neither saves anything: they close this entity's editor. The profile is saved
+            once, by the form's own button, so that stays the only primary action on the page.{% endcomment %}
+            <c-buttons.ghost size="sm" @click="cancelEdit()">Discard changes</c-buttons.ghost>
+            <c-buttons.secondary size="sm" @click="saveEdit()">
+            <i class="fas fa-check mr-1" aria-hidden="true"></i>Done
+            </c-buttons.secondary>
         </div>
     </div>
 </div>

@@ -1,0 +1,11 @@
+{% comment %}The "Add product" dialog's affected releases, swapped in once a product is picked so the page never carries every release in the workspace.{% endcomment %}
+{% if releases %}
+    <fieldset class="space-y-2">
+        <c-forms.label as="legend">Affected releases</c-forms.label>
+        {% for release in releases %}
+            <c-forms.checkbox name="affected_releases" value="{{ release.id }}">
+            {{ release.label }}
+            </c-forms.checkbox>
+        {% endfor %}
+    </fieldset>
+{% endif %}

@@ -9,7 +9,7 @@ from sbomify.apps.controls.services.catalog_service import (
     get_active_catalogs,
     import_oscal_catalog,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.utils import number_to_random_token
 
 
@@ -93,7 +93,7 @@ class TestDeleteCatalog:
         assert not ControlCatalog.objects.filter(id=catalog_id).exists()
 
     def test_wrong_team_returns_failure(self, sample_catalog) -> None:
-        other_team = Team.objects.create(name="other team")
+        other_team = Workspace.objects.create(name="other team")
         other_team.key = number_to_random_token(other_team.pk)
         other_team.save()
         result = delete_catalog(sample_catalog.id, other_team)
@@ -215,9 +215,7 @@ class TestImportOscalCatalog:
 
     def test_rejects_empty_groups(self, sample_team_with_owner_member) -> None:
         team = sample_team_with_owner_member.team
-        result = import_oscal_catalog(team, {
-            "catalog": {"metadata": {"title": "Empty"}, "groups": []}
-        })
+        result = import_oscal_catalog(team, {"catalog": {"metadata": {"title": "Empty"}, "groups": []}})
         assert not result.ok
         assert result.status_code == 400
 
@@ -227,3 +225,116 @@ class TestImportOscalCatalog:
         result = import_oscal_catalog(team, SAMPLE_OSCAL_CATALOG)
         assert not result.ok
         assert result.status_code == 409
+
+
+@pytest.mark.django_db
+class TestBuiltinCatalogData:
+    """The data directory is glob-registered, so a bad file ships silently.
+
+    ``_BUILTIN_CATALOGS`` picks up whatever ``*.json`` is present, and nothing
+    reads those files until a customer activates one. A malformed or empty
+    catalogue would therefore first surface as a failed activation in
+    production rather than at CI.
+    """
+
+    def test_every_builtin_catalogue_is_well_formed(self) -> None:
+        import json
+
+        from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS, _DATA_DIR
+
+        assert _BUILTIN_CATALOGS, "no built-in catalogues were discovered"
+
+        for slug, filename in _BUILTIN_CATALOGS.items():
+            data = json.loads((_DATA_DIR / filename).read_text(encoding="utf-8"))
+            assert data.get("name"), f"{slug}: missing name"
+            assert data.get("version"), f"{slug}: missing version"
+            assert data.get("groups"), f"{slug}: no groups"
+
+            seen: set[str] = set()
+            for group in data["groups"]:
+                assert group.get("name"), f"{slug}: a group has no name"
+                assert group.get("controls"), f"{slug}: group {group.get('name')!r} has no controls"
+                for control in group["controls"]:
+                    control_id = control.get("control_id")
+                    assert control_id, f"{slug}: a control in {group['name']!r} has no id"
+                    assert control_id not in seen, f"{slug}: duplicate control {control_id}"
+                    seen.add(control_id)
+                    assert control.get("title"), f"{slug}: control {control_id} has no title"
+
+    def test_800_171_carries_all_110_requirements(self, sample_team_with_owner_member) -> None:
+        """Rev. 2 is 110 requirements over 14 families, and CMMC L2 is the same set.
+
+        The two catalogues are the same requirements under different
+        identifiers — ``3.1.1`` here, ``AC.L2-3.1.1`` there — so if they ever
+        stop agreeing, one of them has been edited in isolation.
+        """
+        team = sample_team_with_owner_member.team
+
+        result = activate_builtin_catalog(team, "nist-800-171-r2")
+        assert result.ok
+        catalog = result.value
+        assert catalog is not None
+        assert catalog.name == "NIST SP 800-171"
+        assert catalog.version == "Rev. 2"
+        assert catalog.controls.count() == 110
+        assert catalog.controls.values("group").distinct().count() == 14
+
+        cmmc = activate_builtin_catalog(team, "cmmc-2")
+        assert cmmc.ok and cmmc.value is not None
+        derived = {cid.split("-", 1)[1] for cid in cmmc.value.controls.values_list("control_id", flat=True)}
+        assert derived == set(catalog.controls.values_list("control_id", flat=True))
+
+
+def test_every_builtin_catalogue_has_a_tile_in_settings() -> None:
+    """The catalogue tiles are hand-kept; the catalogues themselves are globbed.
+
+    Dropping a file into ``controls/data`` registers it for the API but not for
+    the UI, so a catalogue can ship fully working and be unreachable for every
+    admin — which is exactly what happened to NIST SP 800-171. Comparing the two
+    lists is the only thing that notices.
+    """
+    from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS
+    from sbomify.apps.controls.services.page_context import BUILTIN_CATALOG_TILES
+
+    tiles = {slug for slug, _name, _label, _icon in BUILTIN_CATALOG_TILES}
+
+    assert tiles == set(_BUILTIN_CATALOGS), (
+        f"catalogues with no tile: {sorted(set(_BUILTIN_CATALOGS) - tiles)}; "
+        f"tiles with no catalogue: {sorted(tiles - set(_BUILTIN_CATALOGS))}"
+    )
+
+
+@pytest.mark.django_db
+class TestAFrameworkYouMaintainYourselfStaysPublic:
+    """``is_active`` was the trust center switch before ``is_published`` existed.
+
+    The public controls endpoints and the public product page both read it, and
+    deactivating a catalog is documented as hiding it from the trust center. The
+    opt-in the new flag adds belongs to synced frameworks, where a workspace is
+    republishing what somebody else's tool says, so a framework it maintains
+    itself has to keep going public when it is activated.
+    """
+
+    def test_activating_a_builtin_publishes_it(self, sample_team_with_owner_member) -> None:
+        catalog = activate_builtin_catalog(sample_team_with_owner_member.team, "soc2-type2").value
+
+        assert catalog is not None
+        assert catalog.is_published is True
+
+    def test_reactivating_publishes_it_again(self, sample_team_with_owner_member) -> None:
+        team = sample_team_with_owner_member.team
+        activate_builtin_catalog(team, "soc2-type2")
+        ControlCatalog.objects.filter(team=team).update(is_active=False, is_published=False)
+
+        activate_builtin_catalog(team, "soc2-type2")
+
+        catalog = ControlCatalog.objects.get(team=team)
+        assert catalog.is_active is True
+        assert catalog.is_published is True
+
+    def test_an_imported_oscal_catalog_is_published(self, sample_team_with_owner_member) -> None:
+        result = import_oscal_catalog(sample_team_with_owner_member.team, SAMPLE_OSCAL_CATALOG)
+
+        assert result.ok
+        assert result.value is not None
+        assert result.value.is_published is True

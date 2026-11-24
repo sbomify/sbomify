@@ -34,6 +34,7 @@ import importlib.metadata
 import json
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Collection
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
@@ -75,6 +76,59 @@ class SBOMVersion(str, Enum):
     SPDX_3_0 = "3.0"
 
 
+def _is_spdx3(sbom_data: dict[str, Any]) -> bool:
+    """The shared SPDX 3 detector, lazily imported to keep this module free
+    of an import-time edge into the plugins app."""
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    return is_spdx3(sbom_data)
+
+
+def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, str | None] | None:
+    """(name, version, supplier) of an SPDX 3 document's primary package.
+
+    Shared by both release builders, which carried this block in duplicate —
+    and both picked ``packages[0]`` before looking at ``rootElement``, so the
+    aggregate could name the component after whichever package happened to
+    serialise first. Order: the SpdxDocument's rootElement (how SPDX 3
+    declares the BOM subject), then a ``describes`` relationship, then the
+    first package.
+    """
+    from sbomify.apps.plugins.builtins._spdx_shared import iter_spdx3_elements, spdx3_document_subjects
+
+    # The shared iterator, not a raw .get: it falls back from a malformed
+    # @graph to a valid elements alias, the same reading every plugin uses.
+    elements = list(iter_spdx3_elements(sbom_data))
+    packages = [e for e in elements if e.get("type") == "software_Package"]
+    if not packages:
+        return None
+
+    pkg = None
+    _, root_element_ids = spdx3_document_subjects({"@graph": elements})
+    for p in packages:
+        if p.get("spdxId") in root_element_ids:
+            pkg = p
+            break
+
+    if pkg is None:
+        for rel in elements:
+            if isinstance(rel, dict) and rel.get("type") == "Relationship":
+                if rel.get("relationshipType") == "describes":
+                    target_ids = rel.get("to", [])
+                    # JSON-LD compact form: a one-element set may serialise as
+                    # a bare string; indexing it would yield one character.
+                    if isinstance(target_ids, str):
+                        target_ids = [target_ids]
+                    if isinstance(target_ids, list) and target_ids:
+                        pkg = next((p for p in packages if p.get("spdxId") == target_ids[0]), None)
+                        if pkg:
+                            break
+
+    if pkg is None:
+        pkg = packages[0]
+    return pkg.get("name", "Unknown"), pkg.get("software_packageVersion"), None
+
+
 class SBOMBuilderProtocol(Protocol):
     """Protocol defining the interface for SBOM builders."""
 
@@ -91,7 +145,13 @@ class BaseSBOMBuilder(ABC):
     in different formats (CycloneDX, SPDX) and versions.
     """
 
-    def __init__(self, entity: Any = None, user: Any = None, include_non_public: bool = False):
+    def __init__(
+        self,
+        entity: Any = None,
+        user: Any = None,
+        include_non_public: bool = False,
+        readable_product_ids: Collection[str] | None = None,
+    ):
         """
         Initialize the builder.
 
@@ -101,10 +161,13 @@ class BaseSBOMBuilder(ABC):
             include_non_public: Include gated/private members in the aggregate.
                 Only set for a requester the view layer has already authorized;
                 such a build must never land in the public aggregate cache.
+            readable_product_ids: Products whose linked releases include_non_public
+                reaches. None means every product, the reader holding workspace read.
         """
         self.entity = entity
         self.user = user
         self.include_non_public = include_non_public
+        self.readable_product_ids = readable_product_ids
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
         # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
@@ -169,13 +232,13 @@ class BaseSBOMBuilder(ABC):
         Returns:
             Tuple of (Path to downloaded file, SBOM ID) or None
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
 
         try:
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
@@ -196,7 +259,7 @@ class BaseSBOMBuilder(ABC):
 
         Parallelizes only the S3 I/O; callers still iterate members serially to
         build the aggregate deterministically. ``download_sbom_file`` is safe to
-        run across threads: it constructs a fresh ``S3Client`` per call, touches
+        run across threads: it constructs a fresh ``StorageClient`` per call, touches
         no ORM, and its only shared writes (``temp_files.append`` /
         ``had_member_fetch_error``) are GIL-atomic. Output files are named by
         ``sbom.sbom_filename``, which is the content sha256, so two members can
@@ -213,30 +276,17 @@ class BaseSBOMBuilder(ABC):
     def _members_with_files(self, release: Any) -> tuple[list[Any], dict[str, tuple[Path, str] | None]]:
         """Filtered release members paired with their concurrently-fetched files.
 
-        Centralizes the access-control filter (a public release hides non-public
-        members) and the parallel prefetch shared by every release builder, so the
-        rules can't drift between the CycloneDX and SPDX builders. Returns
+        Centralizes the members, linked releases' included, the access-control
+        filter (a public release hides non-public members) and the parallel prefetch
+        shared by every release builder, so the rules can't drift between the
+        CycloneDX and SPDX builders. Returns
         ``(members, {str(sbom.id): (path, id) | None})``.
         """
-        from sbomify.apps.core.models import Component
-        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
 
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
-            # select_related joins the whole sbom -> component -> team FK chain in
-            # one query; a prefetch_related on the same path would just add a
-            # redundant query.
-            .select_related("sbom__component", "sbom__component__team")
-            # Stable order so a content-addressed aggregate serializes identically
-            # across rebuilds (the cache key is the artifact-set fingerprint).
-            .order_by("sbom_id")
+        members = aggregate_sbom_artifacts(
+            release, include_non_public=self.include_non_public, readable_product_ids=self.readable_product_ids
         )
-        members = [
-            artifact
-            for artifact in sbom_artifacts
-            if self.include_non_public
-            or not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
-        ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
         return members, fetched
 
@@ -715,26 +765,10 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                 return name, str(version) if version else None, supplier
 
         # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif "@graph" in sbom_data or (
-            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
-        ):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+        elif _is_spdx3(sbom_data):
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # Try SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
@@ -1050,27 +1084,10 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                 return name, str(version) if version else None, supplier
 
         # SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif "@graph" in sbom_data or (
-            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
-        ):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                # Try to find the described package via relationships
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+        elif _is_spdx3(sbom_data):
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
@@ -1122,6 +1139,7 @@ def get_sbom_builder(
     entity: Any = None,
     user: Any = None,
     include_non_public: bool = False,
+    readable_product_ids: Collection[str] | None = None,
 ) -> BaseSBOMBuilder:
     """
     Factory function to get the appropriate SBOM builder.
@@ -1167,7 +1185,9 @@ def get_sbom_builder(
             f"version={version.value}. Supported: {supported}"
         )
 
-    return builder_class(entity=entity, user=user, include_non_public=include_non_public)
+    return builder_class(
+        entity=entity, user=user, include_non_public=include_non_public, readable_product_ids=readable_product_ids
+    )
 
 
 def get_supported_output_formats() -> dict[str, list[str]]:

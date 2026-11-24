@@ -25,9 +25,9 @@ def other_team():
     fixtures cannot supply two distinct teams.
     """
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    team = Team.objects.create(name="other workspace")
+    team = Workspace.objects.create(name="other workspace")
     team.key = number_to_random_token(team.pk)
     team.save()
     return team

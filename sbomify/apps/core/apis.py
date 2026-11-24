@@ -1,46 +1,63 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
+from django.utils.text import get_text_list
 from ninja import Query, Router
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
 from pydantic import BaseModel, ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth, optional_token_auth
+from sbomify.apps.billing.billing_processing import RESOURCE_TYPE_TO_LIMIT_FIELD, get_resource_limit
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
+from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
 from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
-from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.cle import set_product_dates
+from sbomify.apps.core.services.release_lifecycle import (
+    declare_supersedes,
+    link_pending_supersessions,
+    reconcile_after_removal,
+    save_release_changes,
+    set_release_state,
+    set_supersedes,
+    supersession_links,
+    undeclared_supersedes,
+)
+from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.services.validation_response import validation_error_response
+from sbomify.apps.core.url_utils import get_component_public_slug
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
 from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
+from sbomify.apps.sboms.services.sboms import deleting_sbom_files
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
-from sbomify.apps.teams.models import ContactProfile, Team
+from sbomify.apps.teams.models import ContactProfile, Workspace
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Release, ReleaseArtifact, User
+from .models import Component, Product, Release, ReleaseArtifact, ReleaseSupersession, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -78,6 +95,9 @@ from .schemas import (
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
     ReleaseCreateSchema,
+    ReleaseLifecycleSchema,
+    ReleaseLinkCreateSchema,
+    ReleaseLinkSchema,
     ReleasePatchSchema,
     ReleaseResponseSchema,
     ReleaseUpdateSchema,
@@ -113,6 +133,53 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict[str, An
             data=data,
         )
     )
+
+
+def _broadcast_release_updated(release: Release) -> None:
+    """Tell the workspace a release moved: its fields or its artifact set.
+
+    Sends the ``release_updated`` message the release tables already listen
+    for, so an edit, a pin or an unpin repaints every open view instead of
+    waiting for someone to reload.
+    """
+    workspace_key = release.product.team.key
+    if not workspace_key:
+        return
+    schedule_broadcast(
+        workspace_key,
+        "release_updated",
+        {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+    )
+
+
+def _broadcast_linked_releases_updated(linked: Release) -> None:
+    """Tell the workspace a link to ``linked`` was added. Removing one sends the same from the link's own delete.
+
+    A linked release stays monitored while a live release links to it, and so
+    do the releases it links on and the releases shipping their SBOMs, so their
+    pages repaint as well.
+    """
+    from sbomify.apps.core.services.release_lifecycle import releases_linked_from
+
+    reached = {linked.pk, *releases_linked_from([linked.pk])}
+    shipped = ReleaseArtifact.objects.filter(release_id__in=reached, sbom__isnull=False).values("sbom_id")
+    moved = Release.objects.filter(Q(pk__in=reached) | Q(artifacts__sbom_id__in=shipped)).distinct()
+    for release in moved.select_related("product__team"):
+        _broadcast_release_updated(release)
+
+
+def _broadcast_product_updated(product: Product) -> None:
+    """Tell the workspace a product was edited, so open inventories repaint it."""
+    if product.team.key:
+        schedule_broadcast(product.team.key, "product_updated", {"product_id": str(product.id), "name": product.name})
+
+
+def _broadcast_component_updated(component: Component) -> None:
+    """Tell the workspace a component was edited, so open inventories repaint it."""
+    if component.team.key:
+        schedule_broadcast(
+            component.team.key, "component_updated", {"component_id": str(component.id), "name": component.name}
+        )
 
 
 @dataclass(frozen=True)
@@ -157,12 +224,55 @@ def _is_guest_member(request: HttpRequest, team_id: str | None = None) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    return Member.objects.filter(user=request.user, team_id=resolved_team_id, role="guest").exists()
+    return Member.objects.filter(user=request.user, team_id=int(resolved_team_id), role="guest").exists()
 
 
 def _is_internal_member(request: HttpRequest) -> bool:
     """Check if user can access internal workspace data (authenticated and not a guest)."""
     return bool(request.user and request.user.is_authenticated and not _is_guest_member(request))
+
+
+def _enforce_limit_under_lock(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:
+    """Re-count under a workspace row lock, for a caller about to insert.
+
+    The plan, suspension and scheduled-downgrade checks live in
+    ``_check_billing_limits`` and run before the transaction opens, because that
+    path can reach Stripe and a transaction should not stay open across a network
+    round trip. This does only the part that has to be serialized with the
+    insert: lock the workspace, count, compare.
+
+    Must be called inside ``transaction.atomic``, and the insert must follow in
+    the same transaction, or the lock buys nothing. No effect on SQLite, which
+    has no row locks.
+    """
+    if not is_billing_enabled():
+        return True, "", None
+
+    team = Workspace.objects.select_for_update().filter(id=team_id).first()
+    if team is None:
+        return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
+
+    try:
+        plan = BillingPlan.objects.get(key=team.billing_plan)
+    except BillingPlan.DoesNotExist:
+        return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
+
+    if resource_type not in RESOURCE_TYPE_TO_LIMIT_FIELD:
+        return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+    max_allowed = get_resource_limit(plan, resource_type)
+
+    if plan.key == "enterprise" or max_allowed is None:
+        return True, "", None
+
+    current_count = get_team_asset_count(team_id, resource_type)
+    if (current_count + 1) > max_allowed:
+        return (
+            False,
+            f"You have reached the maximum {max_allowed} {resource_type}s allowed by your plan. "
+            f"You currently have {current_count} {resource_type}s.",
+            ErrorCode.BILLING_LIMIT_EXCEEDED,
+        )
+    return True, "", None
 
 
 def _get_user_team_id(request: HttpRequest) -> str | None:
@@ -188,8 +298,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
         if default_team_id:
             return str(default_team_id)
 
-        # If no default workspace is set, fall back to first workspace
-        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        # If no default workspace is set, fall back to first workspace.
+        # Ordered so the fallback is deterministic: an unordered .first() could
+        # hand two requests from the same user different workspaces (and let
+        # REST and MCP resolve the same legacy token to different workspaces).
+        first_membership = Member.objects.filter(user=request.user).select_related("team").order_by("pk").first()
         if first_membership:
             return str(first_membership.team.id)
 
@@ -203,7 +316,7 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
 
     from sbomify.apps.teams.models import Member
 
-    member = Member.objects.filter(user=request.user, team_id=team_id).only("role").first()
+    member = Member.objects.filter(user=request.user, team_id=int(team_id)).only("role").first()
     if not member:
         return False
 
@@ -213,11 +326,11 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     return member.role in MANAGE
 
 
-def _private_items_allowed(team: Team) -> bool:
+def _private_items_allowed(team: Workspace) -> bool:
     return team.can_be_private()
 
 
-def _gated_visibility_allowed(team: Team) -> bool:
+def _gated_visibility_allowed(team: Workspace) -> bool:
     """Check if gated visibility is allowed for the team (Business or Enterprise plans)."""
     return team.can_be_private()  # Same restriction as private items
 
@@ -256,13 +369,27 @@ def _build_item_base(
     return {
         "id": item.id,
         "name": item.name,
-        "slug": item.slug,
+        "slug": get_component_public_slug(item, request) if isinstance(item, Component) else item.slug,
         "team_id": str(item.team_id),
         "created_at": item.created_at.isoformat(),
         "has_crud_permissions": (
             has_crud_permissions if has_crud_permissions is not None else can(request, manage_action, item).allowed
         ),
     }
+
+
+def _visible_custom_metadata(request: HttpRequest, item: Any) -> dict[str, str]:
+    """Custom metadata is for signed-in readers only.
+
+    The endpoints serving a public product or component answer anonymous
+    callers too; those get an empty object. Any authenticated caller who can
+    read the item, by session or by a valid access token, gets the pairs.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return {}
+    # jsonb hands keys back in its own storage order; sort for a stable response.
+    return dict(sorted((item.custom_metadata or {}).items()))
 
 
 def _build_product_response(
@@ -282,20 +409,35 @@ def _build_product_response(
     response = _build_item_base(request, product, has_crud_permissions)
     response["is_public"] = product.is_public
     response["description"] = product.description
-    response["component_count"] = (
-        product.component_count if hasattr(product, "component_count") else product.components.count()
-    )
+
+    # A public product is readable by anyone, but its private components are not:
+    # to a caller who cannot read the workspace's internal inventory, a private
+    # component does not exist. Mirror the Trust Center component panel and
+    # _build_release_response — public and gated are listable, private is not —
+    # so an anonymous GET of a public product no longer enumerates the names and
+    # ids of the private components attached to it. ``components`` is prefetched
+    # by optimize_product_queryset(), so filtering in Python adds no query, and
+    # ``component_count`` is derived from the same list so the two never disagree.
+    components = list(product.components.all())
+    if not can(request, "component:read_internal", product):
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        components = [component for component in components if component.visibility in listable]
+        response["component_count"] = len(components)
+    else:
+        response["component_count"] = (
+            product.component_count if hasattr(product, "component_count") else len(components)
+        )
     response["components"] = [
         {
             "id": component.id,
             "name": component.name,
-            "slug": component.slug,
+            "slug": get_component_public_slug(component, request),
             "visibility": component.visibility,
             "is_global": component.is_global,
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
         }
-        for component in product.components.all()
+        for component in components
     ]
     response["identifiers"] = [
         {
@@ -321,6 +463,7 @@ def _build_product_response(
     response["release_date"] = product.release_date.isoformat() if product.release_date else None
     response["end_of_support"] = product.end_of_support.isoformat() if product.end_of_support else None
     response["end_of_life"] = product.end_of_life.isoformat() if product.end_of_life else None
+    response["custom_metadata"] = _visible_custom_metadata(request, product)
     return response
 
 
@@ -345,6 +488,7 @@ def _build_component_response(
         component.document_count if hasattr(component, "document_count") else component.document_set.count()
     )
     response["metadata"] = component.metadata
+    response["custom_metadata"] = _visible_custom_metadata(request, component)
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
@@ -466,6 +610,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     Check if team has reached billing limits for the given resource type.
     Also checks for suspended accounts due to payment failure.
 
+    Args:
     Returns:
         (can_create, error_message, error_code): Tuple of boolean, error message, and error code
     """
@@ -474,8 +619,8 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         return True, "", None
 
     try:
-        team = Team.objects.get(id=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(id=team_id)
+    except Workspace.DoesNotExist:
         return False, "Workspace not found", ErrorCode.TEAM_NOT_FOUND
 
     # Check for payment failure / suspended account
@@ -535,18 +680,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             except BillingPlan.DoesNotExist:
                 log.warning("Target plan not found for scheduled downgrade, skipping check")
             else:
-                # Get current usage
-                if resource_type == "product":
-                    current_count = get_team_asset_count(team_id, "product")
-                    max_allowed = target_plan.max_products
-                elif resource_type == "component":
-                    current_count = get_team_asset_count(team_id, "component")
-                    max_allowed = target_plan.max_components
-                else:
-                    max_allowed = None
+                max_allowed = get_resource_limit(target_plan, resource_type)
 
                 # Check if creating this resource would exceed target plan limits
-                if max_allowed is not None and (current_count + 1) > max_allowed:
+                if max_allowed is not None and (get_team_asset_count(team_id, resource_type) + 1) > max_allowed:
                     error_message = (
                         f"You cannot create this {resource_type} because your scheduled downgrade to "
                         f"{target_plan.name} would exceed the plan limit of {max_allowed} {resource_type}s. "
@@ -581,14 +718,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         return False, "Invalid billing plan", ErrorCode.INVALID_BILLING_PLAN
 
     # Get current count and limits
-    if resource_type == "product":
-        current_count = get_team_asset_count(team_id, "product")
-        max_allowed = plan.max_products
-    elif resource_type == "component":
-        current_count = get_team_asset_count(team_id, "component")
-        max_allowed = plan.max_components
-    else:
+    if resource_type not in RESOURCE_TYPE_TO_LIMIT_FIELD:
         return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA
+    current_count = get_team_asset_count(team_id, resource_type)
+    max_allowed = get_resource_limit(plan, resource_type)
 
     # Enterprise plan or None (unlimited) values have no limits
     if plan.key == "enterprise" or max_allowed is None:
@@ -614,7 +747,7 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
 
 @router.post(
     "/products",
-    response={201: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={201: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
 )
 def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     """Create a new product."""
@@ -626,23 +759,31 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
     can_create, error_msg, error_code = _check_billing_limits(team_id, "product")
     if not can_create:
         return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
-        # Check if user has permission to create products in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "product:create", team):
-            return 403, {
-                "detail": "You don't have permission to create products in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "product")
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create products in this team
+            team = Workspace.objects.get(id=team_id)
+            if not can(request, "product:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create products in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             product = Product.objects.create(
                 name=payload.name,
                 description=payload.description,
@@ -667,7 +808,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
                 request,
                 "product:created",
                 {"product_id": captured_product_id, "is_public": captured_is_public},
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -678,16 +819,16 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating product: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products",
-    response={200: PaginatedProductsResponse, 403: ErrorResponse},
+    response={200: PaginatedProductsResponse, 403: ErrorResponse, 500: ErrorResponse},
 )
 def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List products for the authenticated user's workspace."""
@@ -709,11 +850,11 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         # product:read is the READ_INTERNAL tier, which every internal member
         # already satisfies; it only adds the token action-scope gate.
         # Guests hold no read tier and are denied here, by design.
-        team = Team.objects.filter(id=team_id).first()
+        team = Workspace.objects.filter(id=team_id).first()
         if team is not None and not can(request, "product:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
+        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=int(team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         # Apply pagination
@@ -729,9 +870,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         ]
 
         return 200, PaginatedProductsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing products: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing products")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 def _get_product_with_instance(
@@ -755,7 +896,7 @@ def _get_product_with_instance(
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response_payload = _build_item_response(request, product, "product")
@@ -801,7 +942,7 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
     # wrong here. Readiness lists the product's unresolved critical and high
     # findings by advisory id, which is internal remediation state and not
     # something being publicly listed makes public.
-    if not can(request, "product:manage", result.instance):
+    if not can(request, "product:read", result.instance):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     readiness = eol_readiness(result.instance)
@@ -818,7 +959,13 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
 
 @router.put(
     "/products/{product_id}",
-    response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def update_product(request: HttpRequest, product_id: str, payload: ProductUpdateSchema) -> Any:
     """Update a product."""
@@ -845,19 +992,33 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
 
     try:
         with transaction.atomic():
+            # Locked and read again: saving the copy loaded above would put back
+            # dates an edit committed since, while their events kept the new ones.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             if payload.is_public is False and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
             product.name = payload.name
             product.description = payload.description
             product.is_public = payload.is_public
-
-            # Update lifecycle event fields (aligned with Common Lifecycle Enumeration)
-            product.release_date = payload.release_date
-            product.end_of_support = payload.end_of_support
-            product.end_of_life = payload.end_of_life
+            if "custom_metadata" in payload.model_fields_set:
+                product.custom_metadata = payload.custom_metadata or {}
 
             product.save()
+            # Lifecycle dates are CLE events, the one place they are stored. Only the
+            # ones the client sent: a date left out is not a null, which withdraws its events.
+            dated = set_product_dates(
+                product,
+                {
+                    field: getattr(payload, field)
+                    for field in ("release_date", "end_of_support", "end_of_life")
+                    if field in payload.model_fields_set
+                },
+            )
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
+            _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
 
@@ -866,14 +1027,20 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/products/{product_id}",
-    response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSchema) -> Any:
     """Partially update a product."""
@@ -891,6 +1058,8 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
     try:
         with transaction.atomic():
+            # Locked and read again, as in the PUT above.
+            product = Product.objects.select_for_update().get(pk=product.pk)
             # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
             component_ids = update_data.pop("component_ids", None)
@@ -937,10 +1106,23 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
                 product.components.set(components_qs)
 
-            # Update simple fields
+            # Update simple fields. Lifecycle dates are CLE events, the one place they are stored.
+            dates = {
+                field: update_data.pop(field)
+                for field in ("release_date", "end_of_support", "end_of_life")
+                if field in update_data
+            }
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
+            dated = set_product_dates(product, dates)
+            if not dated.ok:
+                transaction.set_rollback(True)
+                return 400, {"detail": dated.error, "error_code": ErrorCode.INVALID_DATA}
+            _broadcast_product_updated(product)
 
         return 200, _build_item_response(request, product, "product")
 
@@ -949,14 +1131,14 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             "detail": "A product with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error patching product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product(request: HttpRequest, product_id: str) -> Any:
     """Delete a product."""
@@ -970,23 +1152,37 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:delete", product):
-        return 403, {"detail": "Only owners can delete products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete products",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = product.team.key
     product_name = product.name
 
+    from sbomify.apps.compliance.services.report_service import delete_with_reports
+
     try:
-        product.delete()
+        with transaction.atomic():
+            reconcile_after_removal(product.releases.values_list("pk", flat=True))
+            deleted = delete_with_reports(
+                [product], "product", "This product has a filed CRA report, kept as evidence, so it cannot be deleted."
+            )
+            if not deleted.ok:
+                # Drops the reconciles queued above: nothing was removed.
+                transaction.set_rollback(True)
+        if not deleted.ok:
+            return deleted.status_code, {"detail": deleted.error, "error_code": ErrorCode.CONFLICT}
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
             schedule_broadcast(workspace_key, "product_deleted", {"product_id": product_id, "name": product_name})
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product {product_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product {product_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -996,7 +1192,13 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
 
 @router.post(
     "/products/{product_id}/identifiers",
-    response={201: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        201: ProductIdentifierSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def create_product_identifier(request: HttpRequest, product_id: str, payload: ProductIdentifierCreateSchema) -> Any:
     """Create a new product identifier."""
@@ -1053,14 +1255,14 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error creating product identifier: {e}")
-        return 400, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product identifier")
+        return 500, {"detail": "Failed to create identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products/{product_id}/identifiers",
-    response={200: PaginatedProductIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductIdentifiersResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1084,7 +1286,7 @@ def list_product_identifiers(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1104,14 +1306,20 @@ def list_product_identifiers(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product identifiers: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing product identifiers")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/identifiers/{identifier_id}",
-    response={200: ProductIdentifierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ProductIdentifierSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def update_product_identifier(
     request: HttpRequest, product_id: str, identifier_id: str, payload: ProductIdentifierUpdateSchema
@@ -1142,10 +1350,10 @@ def update_product_identifier(
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1172,14 +1380,14 @@ def update_product_identifier(
         }
     except DjangoValidationError as e:
         return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error updating product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product identifier {identifier_id}")
+        return 500, {"detail": "Failed to update identifier", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}/identifiers/{identifier_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product_identifier(request: HttpRequest, product_id: str, identifier_id: str) -> Any:
     """Delete a product identifier."""
@@ -1208,10 +1416,10 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
             "error_code": ErrorCode.BILLING_LIMIT_EXCEEDED,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductIdentifier
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductIdentifier
 
+    try:
         identifier = ProductIdentifier.objects.get(pk=identifier_id, product=product)
     except ProductIdentifier.DoesNotExist:
         return 404, {"detail": "Product identifier not found"}
@@ -1219,14 +1427,20 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
     try:
         identifier.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product identifier {identifier_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product identifier {identifier_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/identifiers",
-    response={200: list[ProductIdentifierSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: list[ProductIdentifierSchema],
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def bulk_update_product_identifiers(
     request: HttpRequest,
@@ -1292,9 +1506,9 @@ def bulk_update_product_identifiers(
             "detail": "One or more identifiers already exist in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product identifiers: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error bulk updating product identifiers")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1304,7 +1518,7 @@ def bulk_update_product_identifiers(
 
 @router.post(
     "/products/{product_id}/links",
-    response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={201: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def create_product_link(request: HttpRequest, product_id: str, payload: ProductLinkCreateSchema) -> Any:
     """Create a new product link."""
@@ -1345,20 +1559,20 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError creating product link: {e}")
-        return 400, {
+    except IntegrityError:
+        log.exception("IntegrityError creating product link")
+        return 500, {
             "detail": "Failed to create link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error creating product link: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating product link")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/products/{product_id}/links",
-    response={200: PaginatedProductLinksResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedProductLinksResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
 )
 @decorate_view(optional_token_auth)
@@ -1377,7 +1591,7 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     try:
@@ -1399,14 +1613,14 @@ def list_product_links(request: HttpRequest, product_id: str, page: int = Query(
         ]
 
         return 200, {"items": items, "pagination": pagination_meta}
-    except Exception as e:
-        log.error(f"Error listing product links: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing product links")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/links/{link_id}",
-    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: ProductLinkSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def update_product_link(request: HttpRequest, product_id: str, link_id: str, payload: ProductLinkUpdateSchema) -> Any:
     """Update a product link."""
@@ -1425,10 +1639,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -1450,20 +1664,20 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
             "created_at": link.created_at.isoformat(),
         }
 
-    except IntegrityError as e:
-        log.error(f"IntegrityError updating product link {link_id}: {e}")
-        return 400, {
+    except IntegrityError:
+        log.exception(f"IntegrityError updating product link {link_id}")
+        return 500, {
             "detail": "Failed to update link due to data integrity issue",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
-    except Exception as e:
-        log.error(f"Error updating product link {link_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating product link {link_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/products/{product_id}/links/{link_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
 )
 def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> Any:
     """Delete a product link."""
@@ -1482,10 +1696,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
             "error_code": ErrorCode.FORBIDDEN,
         }
 
-    try:
-        # Import here to avoid issues
-        from sbomify.apps.sboms.models import ProductLink
+    # Import here to avoid issues
+    from sbomify.apps.sboms.models import ProductLink
 
+    try:
         link = ProductLink.objects.get(pk=link_id, product=product)
     except ProductLink.DoesNotExist:
         return 404, {"detail": "Product link not found"}
@@ -1493,14 +1707,20 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
     try:
         link.delete()
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting product link {link_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting product link {link_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.put(
     "/products/{product_id}/links",
-    response={200: list[ProductLinkSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: list[ProductLinkSchema],
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
 )
 def bulk_update_product_links(request: HttpRequest, product_id: str, payload: ProductLinkBulkUpdateSchema) -> Any:
     """Bulk update product links - replaces all existing links."""
@@ -1556,9 +1776,9 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
             "detail": "One or more links already exist for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error bulk updating product links: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error bulk updating product links")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -1570,7 +1790,7 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 
 @router.post(
     "/components",
-    response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
+    response={201: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> Any:
@@ -1583,29 +1803,37 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     if not team_id:
         return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
-    # Check billing limits
+    # Plan state, suspension and the Stripe-backed downgrade path, all outside
+    # the transaction: none of it should hold one open across a network call.
     can_create, error_msg, error_code = _check_billing_limits(team_id, "component")
     if not can_create:
         return 403, {"detail": error_msg, "error_code": error_code}
 
     try:
-        # Check if user has permission to create components in this team
-        team = Team.objects.get(id=team_id)
-        if not can(request, "component:create", team):
-            return 403, {
-                "detail": "You don't have permission to create components in this workspace",
-                "error_code": ErrorCode.FORBIDDEN,
-            }
-
-        if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
-            return 400, {
-                "detail": "Only document components can be marked as workspace-wide",
-                "error_code": ErrorCode.INVALID_DATA,
-            }
-
-        allow_private = _private_items_allowed(team)
-
         with transaction.atomic():
+            # The count that decides, under a row lock and in the same
+            # transaction as the insert. The check above can go stale between
+            # the two, which is the race this closes.
+            can_create, error_msg, error_code = _enforce_limit_under_lock(team_id, "component")
+            if not can_create:
+                return 403, {"detail": error_msg, "error_code": error_code}
+
+            # Check if user has permission to create components in this team
+            team = Workspace.objects.get(id=team_id)
+            if not can(request, "component:create", team):
+                return 403, {
+                    "detail": "You don't have permission to create components in this workspace",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
+            if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
+                return 400, {
+                    "detail": "Only document components can be marked as workspace-wide",
+                    "error_code": ErrorCode.INVALID_DATA,
+                }
+
+            allow_private = _private_items_allowed(team)
+
             # Set visibility based on is_public (for backward compatibility)
             # Community plan users can only create public components
             initial_visibility = Component.Visibility.PUBLIC if (not allow_private) else Component.Visibility.PRIVATE
@@ -1625,7 +1853,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                 return validation_error_response(ve, "component")
 
             # Assign default contact profile after validation passes
-            default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
+            default_profile = ContactProfile.objects.filter(team_id=int(team_id), is_default=True).first()
             if default_profile:
                 component.contact_profile = default_profile
 
@@ -1653,7 +1881,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
                     "component_type": captured_component_type,
                     "visibility": captured_visibility,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -1664,16 +1892,16 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Team.DoesNotExist:
+    except Workspace.DoesNotExist:
         return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating component: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error creating component")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components",
-    response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse},
+    response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def list_components(
@@ -1701,11 +1929,13 @@ def list_components(
         # component:read_internal is the READ_INTERNAL tier, which every internal
         # member already satisfies; it only adds the token action-scope gate.
         # Guests hold no read tier and are denied here, by design.
-        team = Team.objects.filter(id=team_id).first()
+        team = Workspace.objects.filter(id=team_id).first()
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
+        components_queryset = with_latest_sbom(
+            optimize_component_queryset(Component.objects.filter(team_id=int(team_id)))
+        )
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -1727,9 +1957,9 @@ def list_components(
         ]
 
         return 200, PaginatedComponentsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing components: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing components")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
@@ -1756,7 +1986,7 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
     if not request.user or not request.user.is_authenticated:
         return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-    if not can(request, "component:manage", component):
+    if not can(request, "component:read_internal", component):
         return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     response = component if return_instance else _build_item_response(request, component, "component")
@@ -1765,7 +1995,13 @@ def get_component(request: HttpRequest, component_id: str, return_instance: bool
 
 @router.put(
     "/components/{component_id}",
-    response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ComponentResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Components"],
 )
 def update_component(request: HttpRequest, component_id: str, payload: ComponentUpdateSchema) -> Any:
@@ -1845,6 +2081,8 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
             component.metadata = payload.metadata
+            if "custom_metadata" in payload.model_fields_set:
+                component.custom_metadata = payload.custom_metadata or {}
 
             # Enforce scope exclusivity: a workspace-scoped (global) component
             # must not be attached to any product.
@@ -1863,6 +2101,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                 return validation_error_response(ve, "component")
 
             component.save()
+            _broadcast_component_updated(component)
 
         return 200, _build_item_response(request, component, "component")
 
@@ -1871,14 +2110,20 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error updating component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/components/{component_id}",
-    response={200: ComponentResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ComponentResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Components"],
 )
 def patch_component(request: HttpRequest, component_id: str, payload: ComponentPatchSchema) -> Any:
@@ -1962,17 +2207,16 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
 
                 nda_document_id = update_data.pop("nda_document_id")
                 if nda_document_id:
-                    try:
-                        # NDA document must belong to a component in the same team
-                        nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
-                        if not nda_document or nda_document.component.team_id != component.team_id:
-                            return 400, {
-                                "detail": "NDA document not found or belongs to different team",
-                                "error_code": ErrorCode.NOT_FOUND,
-                            }
-                        component.nda_document = nda_document
-                    except Document.DoesNotExist:
-                        return 400, {"detail": "NDA document not found", "error_code": ErrorCode.NOT_FOUND}
+                    # NDA document must belong to a component in the same team.
+                    # filter().first() returns None rather than raising, so the
+                    # missing-document case is the branch below, not an except.
+                    nda_document = Document.objects.filter(id=nda_document_id).select_related("component").first()
+                    if not nda_document or nda_document.component.team_id != component.team_id:
+                        return 400, {
+                            "detail": "NDA document not found or belongs to different team",
+                            "error_code": ErrorCode.NOT_FOUND,
+                        }
+                    component.nda_document = nda_document
                 else:
                     component.nda_document = None
 
@@ -1983,6 +2227,10 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 if new_visibility != Component.Visibility.GATED:
                     component.gating_mode = None
                     component.nda_document = None
+
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
 
             # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
@@ -2005,6 +2253,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 return validation_error_response(ve, "component")
 
             component.save()
+            _broadcast_component_updated(component)
 
         return 200, _build_item_response(request, component, "component")
 
@@ -2013,14 +2262,14 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             "detail": "A component with this name already exists in this team",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error patching component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error patching component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/components/{component_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     tags=["Components"],
 )
 def delete_component(request: HttpRequest, component_id: str) -> Any:
@@ -2035,26 +2284,19 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:delete", component):
-        return 403, {"detail": "Only owners can delete components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete components",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Capture data for broadcast before deletion
     workspace_key = component.team.key
     component_name = component.name
 
     try:
-        # Delete associated SBOMs from S3 storage
-        sboms = component.sbom_set.all()
-        s3 = S3Client("SBOMS") if sboms.exists() else None
-
-        for sbom in sboms:
-            if sbom.sbom_filename and s3:
-                try:
-                    s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, sbom.sbom_filename)
-                except Exception as e:
-                    log.warning(f"Failed to delete SBOM file {sbom.sbom_filename} from S3: {str(e)}")
-
-        # Delete the component (CASCADE will handle related objects)
-        component.delete()
+        # CASCADE removes the SBOM rows; their stored files go only when no other row uses them.
+        with deleting_sbom_files(component.sbom_set.values_list("sbom_filename", flat=True)):
+            component.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
@@ -2065,9 +2307,9 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2195,6 +2437,8 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "release_date": component.release_date,
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
+        "vcs_url": component.vcs_url or None,
+        "custom_metadata": _visible_custom_metadata(request, component),
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -2208,6 +2452,8 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        422: ErrorResponse,
+        500: ErrorResponse,
     },
     tags=["Components"],
 )
@@ -2217,7 +2463,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
     if _is_guest_member(request):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    log.debug("Incoming metadata payload for component %s: %s", component_id, request.body)
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -2306,6 +2552,13 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
         if "end_of_life" in meta_dict:
             component.end_of_life = meta_dict["end_of_life"]
 
+        if "vcs_url" in meta_dict:
+            component.vcs_url = meta_dict["vcs_url"] or ""
+
+        if "custom_metadata" in meta_dict:
+            # Replaces the whole set; an explicit null clears it.
+            component.custom_metadata = meta_dict["custom_metadata"] or {}
+
         # Handle licenses using native fields
         if "licenses" in meta_dict:
             # Clear existing licenses
@@ -2355,19 +2608,20 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
 
         log.debug(f"Final component to be saved: {component.__dict__}")
         component.save()
+        _broadcast_component_updated(component)
         return 204, None
     except ValidationError as ve:
         log.error(f"Pydantic validation error for component {component_id}: {ve.errors()}")
         log.error(f"Failed validation data: {metadata.model_dump()}")
         return 422, {"detail": str(ve.errors())}
-    except Exception as e:
-        log.error(f"Error updating component metadata for {component_id}: {e}", exc_info=True)
-        return 400, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error updating component metadata for {component_id}")
+        return 500, {"detail": "Failed to update component metadata", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/releases",
-    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
@@ -2394,7 +2648,7 @@ def list_component_releases(
                 "detail": "Authentication required for private components",
                 "error_code": ErrorCode.UNAUTHORIZED,
             }
-        if not can(request, "component:manage", component):
+        if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Whether the caller is internal to THIS component's workspace. Distinct from
@@ -2446,6 +2700,7 @@ def list_component_releases(
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
 
         response_data = []
+        reads_internal = _release_internal_readers(request)
         for release in paginated_releases:
             # Count artifacts for this release
             artifact_count = release.artifacts.count()
@@ -2471,14 +2726,15 @@ def list_component_releases(
                         "id": str(release.product.id),
                         "name": release.product.name,
                     },
+                    **_release_lifecycle_fields(release, internal=reads_internal(release.product)),
                 }
             )
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing releases for component {component_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error listing releases for component {component_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
@@ -2488,7 +2744,7 @@ def list_component_releases(
 
 @router.get(
     "/dashboard/summary",
-    response={200: DashboardStatsResponse, 403: ErrorResponse},
+    response={200: DashboardStatsResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,
     tags=["Components"],
 )
@@ -2547,7 +2803,7 @@ def get_dashboard_summary(
         # a vendor's still had that vendor's private product/component counts and
         # latest-upload names summed into their dashboard. The can() gate below
         # only authorizes the *session* workspace, so it cannot catch this.
-        user_teams_qs = Team.objects.filter(member__user=current_user, member__role__in=READ_INTERNAL)
+        user_teams_qs = Workspace.objects.filter(member__user=current_user, member__role__in=READ_INTERNAL)
         # A workspace-scoped API token must only see its own workspace's data:
         # without this, a token bound to workspace A would still aggregate the
         # user's other workspaces (B, C, …) into the dashboard. Sessions (no
@@ -2563,7 +2819,7 @@ def get_dashboard_summary(
         # every internal member already satisfies; it only adds the token
         # scope gate. Guests hold no read tier and are denied, by design.
         team_id = _get_user_team_id(request)
-        team = Team.objects.filter(id=team_id).first() if team_id else None
+        team = Workspace.objects.filter(id=team_id).first() if team_id else None
         if team is not None and not can(request, "workspace:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
         # Base querysets for the user's teams
@@ -2571,7 +2827,7 @@ def get_dashboard_summary(
         components_qs = Component.objects.filter(team__in=user_teams_qs)
     else:
         # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
-        user_teams_qs = Team.objects.none()
+        user_teams_qs = Workspace.objects.none()
         products_qs = Product.objects.none()
         components_qs = Component.objects.none()
 
@@ -2649,7 +2905,7 @@ def download_product_sbom(
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     # Normalize format early
@@ -2674,8 +2930,8 @@ def download_product_sbom(
     except ValueError as e:
         # Format/version validation errors
         return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
-    except Exception as e:
-        log.error(f"Error generating product SBOM {product_id}: {e}")
+    except Exception:
+        log.exception(f"Error generating product SBOM {product_id}")
         return 500, {"detail": "Error generating product SBOM"}
 
 
@@ -2704,11 +2960,14 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
     if not product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "product:manage", product):
+        if not can(request, "product:read", product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     release = Release.get_or_create_latest_release(product)
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
 
@@ -2720,7 +2979,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(product.id)},
-        team_key=product.team.key or "",
+        workspace_key=product.team.key or "",
     )
     return response
 
@@ -2732,7 +2991,7 @@ def download_product_cbom(request: HttpRequest, product_id: str, version: str = 
 
 @router.get(
     "/releases",
-    response={200: PaginatedReleasesResponse, 403: ErrorResponse},
+    response={200: PaginatedReleasesResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
@@ -2775,7 +3034,7 @@ def list_all_releases(
                     # tokens — release:read is the READ_INTERNAL tier every
                     # internal member already satisfies; it only adds the
                     # token scope gate.
-                    team = Team.objects.filter(id=team_id).first()
+                    team = Workspace.objects.filter(id=team_id).first()
                     if team is not None and not can(request, "release:read", team):
                         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
@@ -2805,12 +3064,12 @@ def list_all_releases(
             # full/unscoped tokens — release:read is the READ_INTERNAL tier
             # every internal member already satisfies; it only adds the
             # token scope gate.
-            team = Team.objects.filter(id=team_id).first()
+            team = Workspace.objects.filter(id=team_id).first()
             if team is not None and not can(request, "release:read", team):
                 return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
             # Build the base query for releases belonging to the user's team
-            query = Release.objects.filter(product__team_id=team_id).select_related("product")
+            query = Release.objects.filter(product__team_id=int(team_id)).select_related("product")
 
             # Ensure latest releases exist for all team products when listing all releases
             team_products = Product.objects.filter(team__id=team_id)
@@ -2828,6 +3087,7 @@ def list_all_releases(
 
         # Build response items
         response_data = []
+        reads_internal = _release_internal_readers(request)
         for release in paginated_releases:
             try:
                 # Count artifacts for this release
@@ -2860,6 +3120,7 @@ def list_all_releases(
                             "id": str(release.product.id),
                             "name": release.product.name,
                         },
+                        **_release_lifecycle_fields(release, internal=reads_internal(release.product)),
                     }
                 )
             except Exception as e:
@@ -2868,9 +3129,79 @@ def list_all_releases(
 
         return 200, {"items": response_data, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing all releases: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing all releases")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+def _release_internal_readers(request: HttpRequest) -> Callable[[Product], bool]:
+    """Whether this request may read a release's internal fields, product by product.
+
+    The workspace decision is the same for every product in it, so a page asks
+    it once per workspace. An OIDC bot is also held to the products it
+    publishes to, as ``_can_read_release`` holds it.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    by_workspace: dict[Any, bool] = {}
+    by_product: dict[Any, bool] = {}
+
+    def reads(product: Product) -> bool:
+        if product.pk not in by_product:
+            if product.team_id not in by_workspace:
+                by_workspace[product.team_id] = can(request, "release:read", product).allowed
+            by_product[product.pk] = by_workspace[product.team_id] and is_authorised_for_product(request, product)
+        return by_product[product.pk]
+
+    return reads
+
+
+def _release_lifecycle_fields(release: Release, *, internal: bool) -> dict[str, Any]:
+    """Where the release stands, for every response that describes one.
+
+    Why a release was withdrawn is internal: the Trust Center only says that it
+    was, so a reader outside the workspace gets ``withdrawn_reason`` as null.
+    """
+    state = release.lifecycle_state
+    return {
+        "lifecycle_state": state,
+        "is_tracked": state == Release.LifecycleState.ACTIVE,
+        "superseded_at": release.superseded_at,
+        "end_of_support": release.end_of_support,
+        "end_of_life": release.end_of_life,
+        "effective_end_of_support": release.effective_end_of_support,
+        "effective_end_of_life": release.effective_end_of_life,
+        "withdrawn_at": release.withdrawn_at,
+        "withdrawn_reason": release.withdrawn_reason if internal else None,
+        "archived_at": release.archived_at,
+    }
+
+
+def _release_edges(release: Release) -> dict[str, list[dict[str, Any]]]:
+    """Every live supersession edge into and out of the release. A release can have several of each."""
+    links = supersession_links(release.pk)
+    return {
+        "predecessors": [
+            {
+                "release_id": edge.from_release_id,
+                "name": edge.from_release.name,
+                "version": edge.from_release.version or None,
+                "drop_in": edge.drop_in,
+                "effective": edge.effective,
+            }
+            for edge in links["predecessors"]
+        ],
+        "successors": [
+            {
+                "release_id": edge.to_release_id,
+                "name": edge.to_release.name if edge.to_release else edge.successor_label,
+                "version": (edge.to_release.version or None) if edge.to_release else edge.successor_label,
+                "drop_in": edge.drop_in,
+                "effective": edge.effective,
+            }
+            for edge in links["successors"]
+        ],
+    }
 
 
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
@@ -2928,6 +3259,8 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
             "slug": release.product.slug,
         },
         "has_crud_permissions": has_crud_permissions,
+        **_release_lifecycle_fields(release, internal=_can_read_release(request, release.product)),
+        **_release_edges(release),
     }
 
     if include_artifacts:
@@ -3013,14 +3346,56 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     ``sboms.utils._is_duplicate_integrity_error``: message text is
     driver-dependent, and getting this wrong would silently turn a real version
     conflict into an idempotent 200.
+
+    Falling through to the message needs both drivers' forms, because they do
+    not agree on what a uniqueness violation mentions. Postgres names the
+    constraint; SQLite names the columns —
+
+        UNIQUE constraint failed: core_releases.product_id, core_releases.version
+
+    — so matching the constraint name alone missed it there, and a duplicate
+    version was reported to the caller as "Internal server error".
+
+    Both fallbacks match the column pair *structurally*, and that is the whole
+    care of this function. Postgres puts the offending **values** in the message
+    too:
+
+        DETAIL:  Key (product_id, name)=(abc123def456, Version 1.0) already exists.
+
+    so a bare ``"version" in message`` reads a release *named* "Version 1.0" as a
+    version collision. That is an ordinary thing to call a release, this branch
+    runs before the name check, and the caller would get "A release with this
+    version already exists" — naming the wrong field, and losing the idempotent
+    200 that keeps two CI jobs tagging the same release from failing each
+    other's build. The value can never contain ``core_releases.product_id`` and
+    ``core_releases.version`` (SQLite writes no values at all) nor the
+    ``Key (product_id, version)=`` that precedes the values on Postgres.
     """
     cause = exc.__cause__
     if cause is not None:
         diag = getattr(cause, "diag", None)
         if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
             return True
-    # Postgres without diag, and SQLite, both name the constraint in the message.
-    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+    msg = str(exc).lower()
+    if _RELEASE_VERSION_CONSTRAINT in msg:
+        return True
+
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    table = Release._meta.db_table.lower()
+    names_the_columns = f"{table}.product_id" in msg and f"{table}.version" in msg
+    details_the_columns = "key (product_id, version)=" in msg
+    return names_the_columns or details_the_columns
+
+
+def _supersedes_error(result: ServiceResult[Any]) -> tuple[int, dict[str, Any]]:
+    """A refused ``supersedes``: 409 when it contradicts a live edge, as the CLE endpoint answers, else 400."""
+    if result.status_code == 409:
+        return 409, {"detail": result.error, "error_code": ErrorCode.CONFLICT}
+    return 400, {"detail": result.error, "error_code": ErrorCode.VALIDATION_ERROR}
 
 
 @router.post(
@@ -3033,6 +3408,8 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
         400: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
     },
     tags=["Releases"],
 )
@@ -3052,9 +3429,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     # unset (full), so this is the only thing keeping it from creating releases on unrelated
     # products. Fail closed for OIDC requests (an orphan bot with no binding must be denied,
     # not treated as a no-op); a plain no-op only for non-OIDC (PAT/session) requests.
-    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
 
-    if request_is_oidc_authed(request):
+    if not is_authorised_for_product(request, product):
         bound_component_id = bound_component_id_for_request(request)
         # Distinct wording per cause. These two share both a status and a call site with the
         # role denial above, so one shared message leaves a CI log no way to tell which check
@@ -3069,15 +3446,26 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 ),
                 "error_code": ErrorCode.FORBIDDEN,
             }
-        if not product.components.filter(id=bound_component_id).exists():
-            return 403, {
-                "detail": (
-                    f"Component {bound_component_id} is not part of product {product.id}, so this "
-                    "OIDC token cannot create releases for it. Add the component to the product, "
-                    "then retry."
-                ),
-                "error_code": ErrorCode.FORBIDDEN,
-            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {product.id}, so this "
+                "OIDC token cannot create releases for it. Add the component to the product, "
+                "then retry."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # A drop-in edge stops sbomify monitoring the release it names, so every
+    # supersession write needs release:manage. Publishing alone does not cover it,
+    # on create or on the retry that returns an existing release.
+    if payload.supersedes and not can(request, "release:manage", product):
+        return 403, {
+            "detail": (
+                "Naming the releases this one replaces needs permission to manage releases. "
+                "Create the release without supersedes, or use a token that can manage releases."
+            ),
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -3091,6 +3479,9 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
 
     try:
         with transaction.atomic():
+            # The product lock comes first, as for every lifecycle writer: an edit holding it can be waiting
+            # on this release's name, so taking it after the insert would deadlock against that edit.
+            Product.objects.select_for_update().filter(pk=product.pk).first()
             created_at = payload.created_at or timezone.now()
             released_at = payload.released_at or created_at
             release = Release.objects.create(
@@ -3103,6 +3494,16 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 created_at=created_at,
                 released_at=released_at,
             )
+            linked = link_pending_supersessions(release)
+            if not linked.ok:
+                transaction.set_rollback(True)
+                return _release_edit_refused(linked.status_code, linked.error)
+            declared = declare_supersedes(release, payload.supersedes, actor_id=request.user.pk)
+            if not declared.ok:
+                transaction.set_rollback(True)
+                return _supersedes_error(declared)
+            # Its lifecycle columns were derived on other copies of the row.
+            release.refresh_from_db()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if product.team.key:
@@ -3127,7 +3528,7 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                     "product_id": captured_product_id,
                     "is_prerelease": captured_is_prerelease,
                 },
-                team_key=captured_team_key,
+                workspace_key=captured_team_key,
             )
         )
 
@@ -3155,17 +3556,65 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             # dressing it up as a duplicate. Re-raising would escape the sibling
             # except Exception below and 500, so this mirrors that branch.
             log.error(f"Unexpected IntegrityError creating release: {e}")
-            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-        existing = Release.objects.filter(product=product, name=payload.name).first()
+            return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.select_related("product").filter(product=product, name=payload.name).first()
         if existing is not None:
+            # A retry may only confirm the edges the release already has. Writing
+            # new ones here would let a name typed by mistake retire whatever
+            # release the form had preselected.
+            missing = undeclared_supersedes(existing, payload.supersedes)
+            if not missing.ok:
+                return _supersedes_error(missing)
+            if missing.value:
+                return 409, {
+                    "detail": (
+                        f"A release named {existing.name} already exists and does not replace "
+                        f"{get_text_list(missing.value, 'and')}. Choose another name."
+                    ),
+                    "error_code": ErrorCode.CONFLICT,
+                }
             return 200, _build_release_response(request, existing, include_artifacts=True)
         return 400, {
             "detail": "A release with this name already exists for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
-    except Exception as e:
-        log.error(f"Error creating release: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except DjangoValidationError as e:
+        # A release whose date the model rejects is the caller's input, not a
+        # fault: reporting it as "Internal server error" told them nothing to
+        # act on, and put a plain 400 in the error tracker on every attempt.
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
+    except Exception:
+        log.exception("Error creating release")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.post(
+    "/releases/{release_id}/lifecycle",
+    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Releases"],
+)
+def set_release_lifecycle(request: HttpRequest, release_id: str, payload: ReleaseLifecycleSchema) -> Any:
+    """Withdraw, archive or reactivate a release.
+
+    A withdrawn or archived release stops being monitored, and reactivate clears
+    both. To undo a supersession or a support date, withdraw its CLE event.
+    """
+    release = Release.objects.select_related("product__team").filter(pk=release_id).first()
+    if release is None:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+    if not can(request, "release:manage", release.product):
+        return 403, {"detail": "You do not have permission to change this release", "error_code": ErrorCode.FORBIDDEN}
+
+    result = set_release_state(release, payload.action, reason=payload.reason, actor_id=request.user.pk)
+    if not result.ok or result.value is None:
+        status = result.status_code or 400
+        code = ErrorCode.RELEASE_NOT_FOUND if status == 404 else ErrorCode.VALIDATION_ERROR
+        return status, {"detail": result.error, "error_code": code}
+
+    # The releases it links to, and those shipping the same SBOMs, may have
+    # been monitored only through it.
+    _broadcast_linked_releases_updated(release)
+    return 200, _build_release_response(request, result.value)
 
 
 @router.get(
@@ -3186,15 +3635,46 @@ def get_release(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:manage", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_release_response(request, release, include_artifacts=True)
 
 
+def _release_edit_refused(status_code: int | None, error: str | None) -> tuple[int, dict[str, Any]]:
+    if status_code == 404:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+    if status_code == 409:
+        return 409, {"detail": error or "Conflicting supersession", "error_code": ErrorCode.CONFLICT}
+    return 400, {"detail": error or "Invalid release", "error_code": ErrorCode.VALIDATION_ERROR}
+
+
+def _release_integrity_error(error: IntegrityError, release_id: str) -> tuple[int, dict[str, Any]]:
+    """A name or version taken by another release is the caller's mistake; any other constraint is ours."""
+    if _is_release_version_conflict(error):
+        return 400, {
+            "detail": "A release with this version already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    if _is_release_name_conflict(error):
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
+    log.exception(f"Error saving release {release_id}")
+    return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
 @router.put(
     "/releases/{release_id}",
-    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdateSchema) -> Any:
@@ -3232,43 +3712,47 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
     try:
         with transaction.atomic():
-            release.name = payload.name
-            release.version = payload.version or ""
-            release.description = payload.description or ""
-            release.is_prerelease = payload.is_prerelease
+            changes: dict[str, Any] = {
+                "name": payload.name,
+                "version": payload.version or "",
+                "description": payload.description or "",
+                "is_prerelease": payload.is_prerelease,
+            }
             if payload.created_at is not None:
-                release.created_at = payload.created_at
+                changes["created_at"] = payload.created_at
             if payload.released_at is not None:
-                release.released_at = payload.released_at
-            release.save()
+                changes["released_at"] = payload.released_at
+            saved = save_release_changes(release.pk, changes)
+            if not saved.ok or saved.value is None:
+                transaction.set_rollback(True)
+                return _release_edit_refused(saved.status_code, saved.error)
+            release = saved.value[0]
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
-            schedule_broadcast(
-                release.product.team.key,
-                "release_updated",
-                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
-            )
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error updating release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return _release_integrity_error(e, release_id)
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
+    except Exception:
+        log.exception(f"Error updating release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.patch(
     "/releases/{release_id}",
-    response={200: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSchema) -> Any:
@@ -3296,7 +3780,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
     try:
         with transaction.atomic():
-            update_data = payload.model_dump(exclude_unset=True)
+            update_data = payload.model_dump(exclude_unset=True, exclude={"supersedes"})
 
             # Prevent renaming to "latest"
             if "name" in update_data and update_data["name"].lower() == LATEST_RELEASE_NAME.lower():
@@ -3311,46 +3795,44 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
             # Normalize nullable fields that can't be NULL in the DB
             if "description" in update_data and update_data["description"] is None:
                 update_data["description"] = ""
+            if "version" in update_data and update_data["version"] is None:
+                update_data["version"] = ""
+            if "is_prerelease" in update_data and update_data["is_prerelease"] is None:
+                del update_data["is_prerelease"]
 
-            # Update only fields that have actually changed to avoid unnecessary unique constraint checks
-            changed = False
-            for field, value in update_data.items():
-                current_value = getattr(release, field)
-                if current_value != value:
-                    setattr(release, field, value)
-                    changed = True
-
-            # Only save if something actually changed
-            if changed:
-                release.save()
+            # Writes only the fields that changed, from the locked row.
+            saved = save_release_changes(release.pk, update_data)
+            if not saved.ok or saved.value is None:
+                transaction.set_rollback(True)
+                return _release_edit_refused(saved.status_code, saved.error)
+            release, changed = saved.value
+            # After the dates, so the same-line rule reads the ones this edit sets.
+            if payload.supersedes is not None:
+                linked = set_supersedes(release, payload.supersedes, actor_id=request.user.pk)
+                if not linked.ok:
+                    transaction.set_rollback(True)
+                    return _supersedes_error(linked)
+                changed = changed or bool(linked.value)
+                release.refresh_from_db()
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
-            schedule_broadcast(
-                release.product.team.key,
-                "release_updated",
-                {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
-            )
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
-    except Exception as e:
-        log.error(f"Error patching release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        return _release_integrity_error(e, release_id)
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
+    except Exception:
+        log.exception(f"Error patching release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.delete(
     "/releases/{release_id}",
-    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     tags=["Releases"],
 )
 def delete_release(request: HttpRequest, release_id: str) -> Any:
@@ -3367,7 +3849,10 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:delete", release.product):
-        return 403, {"detail": "Only owners can delete releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "Only workspace owners and admins can delete releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent deleting latest releases
     if release.is_latest:
@@ -3382,7 +3867,51 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
     release_name = release.name
 
     try:
-        release.delete()
+        with transaction.atomic():
+            # A CLE event is written under the product lock, so one written
+            # while this delete waited for it is counted below.
+            Product.objects.select_for_update().filter(pk=release.product_id).first()
+
+            # A release's CLE records are its published lifecycle history, exported over
+            # TEA, and both foreign keys cascade. Deleting the release takes the trail
+            # with it and says nothing.
+            #
+            # PROTECT on those keys is not the fix. Workspace deletion cascades through
+            # product to release, so it would block account deletion, and a nullable key
+            # would push a release-less event into every reader. Refusing here is the
+            # same shape as the `latest` refusal above, and deleting the product still
+            # removes a product's history deliberately rather than by accident.
+            lifecycle_records = release.cle_events.count() + release.cle_support_definitions.count()
+            if lifecycle_records:
+                return 400, {
+                    "detail": (
+                        f"Cannot delete release '{release.name}'. It carries {lifecycle_records} lifecycle "
+                        f"record(s) that sbomify publishes, and deleting the release would destroy them. "
+                        f"Delete the product if you mean to remove its history as well."
+                    ),
+                    "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+                }
+
+            # Deleting a successor would quietly turn each drop-in edge into one
+            # to a release outside sbomify, which still retires its predecessor.
+            # The product lock keeps a new edge from landing between the check
+            # and the delete.
+            replaced = sorted(
+                set(
+                    ReleaseSupersession.objects.live()
+                    .filter(to_release=release, drop_in=True)
+                    .values_list("from_release__name", flat=True)
+                )
+            )
+            if replaced:
+                links = "that link" if len(replaced) == 1 else "those links"
+                names = get_text_list(replaced, "and")
+                return 400, {
+                    "detail": f"Release {release.name} replaces {names}. Remove {links} on its Lifecycle card first.",
+                    "error_code": ErrorCode.RELEASE_DELETION_NOT_ALLOWED,
+                }
+            reconcile_after_removal([release.pk])
+            release.delete()
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if workspace_key:
@@ -3393,14 +3922,42 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
             )
 
         return 204, None
-    except Exception as e:
-        log.error(f"Error deleting release {release_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception(f"Error deleting release {release_id}")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 # =============================================================================
 # RELEASE DOWNLOAD ENDPOINT
 # =============================================================================
+
+
+def _can_read_release(request: HttpRequest, product: Product) -> bool:
+    """``release:read`` on ``product``, with an OIDC bot confined to the products it publishes to.
+
+    The bot holds ``release:read`` across its workspace so the publish workflow can list releases
+    and see whether one exists. The endpoints that serve what a release contains ask this instead,
+    which also requires the product to hold the bot's bound component, the rule ``create_release``
+    applies to the bot's writes.
+    """
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    return can(request, "release:read", product).allowed and is_authorised_for_product(request, product)
+
+
+def _readable_linked_product_ids(request: HttpRequest, release: Release) -> set[str] | None:
+    """The linked releases' products this reader may read in full, or None for all of them.
+
+    Only an OIDC bot is confined to some products; anyone else holding read on
+    the release holds it across the workspace the links stay inside.
+    """
+    from sbomify.apps.core.services.release_links import linked_release_ids
+    from sbomify.apps.oidc.permissions import request_is_oidc_authed
+
+    if not request_is_oidc_authed(request):
+        return None
+    products = Product.objects.filter(releases__id__in=linked_release_ids(release)).distinct()
+    return {str(product.id) for product in products if _can_read_release(request, product)}
 
 
 def _download_filename(product_name: str, release_name: str, extension: str) -> str:
@@ -3452,20 +4009,8 @@ def download_release(
 
         # Non-public product: internal members only. Guests hold no read tier;
         # public products already returned above.
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    # Get all SBOM artifacts in the release
-    from sbomify.apps.sboms.models import SBOM
-
-    sbom_artifacts = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).select_related(
-        "sbom"
-    )
-
-    if not sbom_artifacts.exists():
-        return HttpResponse(
-            status=500, content='{"detail": "Error generating release SBOM"}', content_type="application/json"
-        )
 
     # Normalize format early
     format_lower = output_format.lower()
@@ -3474,10 +4019,22 @@ def download_release(
     # aggregate, gated and private members included; everyone else gets the
     # public view. The authorized build bypasses the public aggregate cache.
     include_non_public = bool(
-        getattr(request, "user", None)
-        and request.user.is_authenticated
-        and can(request, "release:read", release.product)
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
+    # Linked releases reach that full view only on products this reader may read in
+    # full: an OIDC bot gets the rest of them as the public does.
+    readable_product_ids = _readable_linked_product_ids(request, release) if include_non_public else None
+
+    from sbomify.apps.core.services.release_links import aggregate_sbom_artifacts
+    from sbomify.apps.sboms.models import SBOM
+
+    # Preserve downloads for releases with their own SBOMs. A release
+    # without any can still download the linked members its reader sees.
+    has_own_sboms = release.artifacts.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM).exists()
+    if not has_own_sboms and not aggregate_sbom_artifacts(
+        release, include_non_public=include_non_public, readable_product_ids=readable_product_ids
+    ):
+        return 404, {"detail": "This release has no SBOMs to download", "error_code": ErrorCode.NOT_FOUND}
 
     try:
         # Use the SBOM package generator with user for signed URLs
@@ -3490,6 +4047,7 @@ def download_release(
                 output_format=format_lower,
                 version=version,
                 include_non_public=include_non_public,
+                readable_product_ids=readable_product_ids,
             )
 
             # Read the generated SBOM file
@@ -3513,7 +4071,7 @@ def download_release(
                     "product_id": str(release.product_id),
                     "format": format_lower,
                 },
-                team_key=release.product.team.key or "",
+                workspace_key=release.product.team.key or "",
             )
             return response
 
@@ -3551,25 +4109,39 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.models import SBOM
     from sbomify.apps.vulnerability_scanning import vex as vex_module
+    from sbomify.apps.vulnerability_scanning.vex_formats import MAX_VEX_STATEMENTS
 
-    # The merge fans out one S3 fetch per pinned VEX and the endpoint is open for
-    # public products, so cache the built document. The key carries the slot state
-    # (count + newest artifact), invalidating naturally when the release changes.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.VEX).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
+    # A member reading a public product's release gets the whole VEX, gated and
+    # private components included. Everyone else gets the public view, matching
+    # what the aggregate SBOM download hands the same caller: a statement names
+    # a package and a version, so publishing one for a withheld component would
+    # disclose through the side door what the inventory refuses at the front.
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
     )
-    cache_key = f"release-vex:{release.id}:{slot_state['n']}:{slot_state['newest']}"
+    # The merge fans out one S3 fetch per VEX it reads and the endpoint is open for
+    # public products, so cache the built document. The key fingerprints the rows
+    # this audience's build reads, and the build merges that same list, so any change
+    # to what it reads, a component's visibility included, builds a fresh document.
+    rows = vex_module.release_vex_rows(release, include_non_public=include_non_public)
+    fingerprint = hashlib.sha256(",".join(sorted(row.id for row in rows)).encode()).hexdigest()
+    # The flag stays in the key although the rows already differ wherever the two
+    # audiences' documents do: should the build ever read the audience beyond its
+    # rows, one shared entry would hand a member's document to the public.
+    scope = "all" if include_non_public else "public"
+    # Formats other than CycloneDX are derived under the statement limit, so it is in the key too.
+    cache_key = f"release-vex:{release.id}:{scope}:{MAX_VEX_STATEMENTS}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = vex_module.build_release_vex(release) or {"__absent__": True}
+        document = vex_module.build_release_vex(release, include_non_public=include_non_public, rows=rows) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No VEX available for this release", "error_code": ErrorCode.NOT_FOUND}
@@ -3584,30 +4156,33 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
         request,
         events.RELEASE_VEX_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 
 
-def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
-    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+def _release_cbom_document(release: Release, version: str, *, include_non_public: bool) -> dict[str, Any] | None:
+    """The merged CBOM for a release, cached on the CBOMs it merges, or None when it has no CBOM.
 
-    Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    The merge fans out one S3 fetch per pinned CBOM and the endpoints serving it are
+    open for public products. The key fingerprints the CBOMs this audience's build
+    reads, so any change to that set, a component's visibility included, builds a
+    fresh document. The audience is part of the key, so a member's full document
+    never answers a caller who gets the public view.
     """
     from django.core.cache import cache
-    from django.db.models import Count, Max
 
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.cbom import build_release_cbom, release_cbom_artifacts
 
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    cbom_ids = release_cbom_artifacts(release, include_non_public=include_non_public).values_list("sbom_id", flat=True)
+    fingerprint = hashlib.sha256(",".join(cbom_ids.order_by("sbom_id")).encode()).hexdigest()
+    scope = "all" if include_non_public else "public"
+    cache_key = f"release-cbom:{release.id}:{scope}:{version}:{fingerprint}"
     document = cache.get(cache_key)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        document = build_release_cbom(release, spec_version=version, include_non_public=include_non_public) or {
+            "__absent__": True
+        }
         cache.set(cache_key, document, 900)
     return None if document.get("__absent__") else document
 
@@ -3639,10 +4214,13 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
     if not release.product.is_public:
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    document = _release_cbom_document(release, version)
+    include_non_public = bool(
+        getattr(request, "user", None) and request.user.is_authenticated and _can_read_release(request, release.product)
+    )
+    document = _release_cbom_document(release, version, include_non_public=include_non_public)
     if document is None:
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
@@ -3654,7 +4232,7 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         request,
         events.RELEASE_CBOM_DOWNLOADED,
         {"release_id": str(release.id), "product_id": str(release.product_id)},
-        team_key=release.product.team.key or "",
+        workspace_key=release.product.team.key or "",
     )
     return response
 
@@ -3693,13 +4271,29 @@ def list_release_artifacts(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        if not can(request, "release:read", release.product):
+        if not _can_read_release(request, release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # The same rule as _build_release_response: to anyone who cannot manage the
+    # release, a private component's artifact is not listed.
+    can_manage = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:manage", release.product)
+    )
 
     if mode == "existing":
         # Return artifacts that are already in this release
+        existing_artifacts_queryset = ReleaseArtifact.objects.filter(release=release)
+        if not can_manage:
+            listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+            existing_artifacts_queryset = existing_artifacts_queryset.filter(
+                Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+            )
         existing_artifacts_queryset = (
-            ReleaseArtifact.objects.filter(release=release).select_related("sbom", "document").order_by("-created_at")
+            # component is read for every row below, so it belongs in the join:
+            # page_size=-1 turns a missing one into a query per artifact.
+            existing_artifacts_queryset.select_related("sbom__component", "document__component").order_by("-created_at")
         )
 
         # Extract pagination parameters properly
@@ -3727,7 +4321,7 @@ def list_release_artifacts(
                         "bom_type": artifact.sbom.bom_type,
                         "document_type": None,
                         "document_version": None,
-                        "component_slug": artifact.sbom.component.slug,
+                        "component_slug": get_component_public_slug(artifact.sbom.component, request),
                     }
                 )
             elif artifact.document:
@@ -3744,15 +4338,19 @@ def list_release_artifacts(
                         "sbom_version": None,
                         "document_type": artifact.document.document_type,
                         "document_version": artifact.document.version or "",
-                        "component_slug": artifact.document.component.slug,
+                        "component_slug": get_component_public_slug(artifact.document.component, request),
                     }
                 )
 
         return {"items": artifacts, "pagination": pagination_meta}
 
     else:  # mode == "available" (default)
+        # The release editor's picker lists every artifact the product's
+        # components hold, so it answers only someone who can edit the release.
+        if not can_manage:
+            return 403, {"detail": "You don't have permission to edit this release", "error_code": ErrorCode.FORBIDDEN}
+
         # Return artifacts that can be added to this release (existing logic)
-        from sbomify.apps.core.models import Component
         from sbomify.apps.documents.models import Document
         from sbomify.apps.sboms.models import SBOM
 
@@ -3832,16 +4430,26 @@ def list_release_artifacts(
         page_size_num = page_size if isinstance(page_size, int) else int(request.GET.get("page_size", 15))
 
         page_num = max(1, page_num)  # Ensure page is at least 1
-        page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
-
-        start_index = (page_num - 1) * page_size_num
-        end_index = start_index + page_size_num
-        paginated_artifacts = available_artifacts[start_index:end_index]
+        if page_size_num == -1:
+            # Same contract as _paginate_queryset, which the existing-mode branch
+            # uses: -1 means every row, on page 1, in one page. Clamping it to 1
+            # here would hand the caller a single artifact and call it the whole
+            # list, and leaving page_num alone would report page 2 of 1.
+            page_num = 1
+            page_size_num = total_items
+            paginated_artifacts = available_artifacts
+        else:
+            page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
+            start_index = (page_num - 1) * page_size_num
+            end_index = start_index + page_size_num
+            paginated_artifacts = available_artifacts[start_index:end_index]
 
         # Create pagination metadata
         from sbomify.apps.core.schemas import PaginationMeta
 
-        total_pages = (total_items + page_size_num - 1) // page_size_num  # Ceiling division
+        # page_size_num is 0 only when -1 met an empty list, and _paginate_queryset
+        # calls that one page, not zero.
+        total_pages = (total_items + page_size_num - 1) // page_size_num if page_size_num else 1
 
         pagination_meta = PaginationMeta(
             total=total_items,
@@ -3863,6 +4471,7 @@ def list_release_artifacts(
         403: ErrorResponse,
         404: ErrorResponse,
         409: ErrorResponse,
+        500: ErrorResponse,
     },
     auth=None,
     tags=["Releases"],
@@ -3878,6 +4487,29 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     if not can(request, "release:tag", release.product):
         return 403, {
             "detail": "You do not have permission to add artifacts to this release",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # Confine an OIDC bot to releases of products that contain its bound component: the rule and
+    # the per-cause wording create_release uses. Fail closed for an orphan bot with no binding.
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, is_authorised_for_product
+
+    if not is_authorised_for_product(request, release.product):
+        bound_component_id = bound_component_id_for_request(request)
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot add artifacts to releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        return 403, {
+            "detail": (
+                f"Component {bound_component_id} is not part of product {release.product_id}, so this "
+                "OIDC token cannot add artifacts to its releases. Add the component to the product, "
+                "then retry."
+            ),
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -3904,7 +4536,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, sbom.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -3912,10 +4544,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                         "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
-                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.BAD_REQUEST}
             artifact = result["artifact"]
-
-            return 201, {
+            created = {
                 "id": str(artifact.id),
                 "artifact_type": "sbom",
                 "artifact_name": artifact.sbom.name,
@@ -3927,11 +4558,19 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": artifact.sbom.version or "",
                 "document_type": None,
                 "document_version": None,
-                "component_slug": artifact.sbom.component.slug,
+                "component_slug": get_component_public_slug(artifact.sbom.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
-        except Exception as e:
-            log.error(f"Error processing SBOM: {e}")
-            return 400, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
+        except Exception:
+            log.exception("Error processing SBOM")
+            return 500, {"detail": "Error processing SBOM", "error_code": ErrorCode.INTERNAL_ERROR}
+
+        # Outside the try on purpose: the row is committed by here, and letting a
+        # broadcast failure fall into the handler above would report a successful
+        # pin as a 400.
+        _broadcast_release_updated(release)
+        return 201, created
 
     # Handle Document
     if payload.document_id:
@@ -3947,7 +4586,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            result = add_artifact_to_release(release, document=document, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -3955,10 +4594,9 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                         "detail": "Artifact already in this release",
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
-                return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
+                return 400, {"detail": result["error"], "error_code": ErrorCode.BAD_REQUEST}
             artifact = result["artifact"]
-
-            return 201, {
+            created = {
                 "id": str(artifact.id),
                 "artifact_type": "document",
                 "artifact_name": artifact.document.name,
@@ -3969,11 +4607,19 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "sbom_version": None,
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
-                "component_slug": artifact.document.component.slug,
+                "component_slug": get_component_public_slug(artifact.document.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
-        except Exception as e:
-            log.error(f"Error processing document: {e}")
-            return 400, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
+        except Exception:
+            log.exception("Error processing document")
+            return 500, {"detail": "Error processing document", "error_code": ErrorCode.INTERNAL_ERROR}
+
+        # Outside the try on purpose: the row is committed by here, and letting a
+        # broadcast failure fall into the handler above would report a successful
+        # pin as a 400.
+        _broadcast_release_updated(release)
+        return 201, created
 
     return 400, {"detail": "Either sbom_id or document_id must be provided", "error_code": ErrorCode.BAD_REQUEST}
 
@@ -4011,6 +4657,151 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         }
 
     artifact.delete()
+    _broadcast_release_updated(release)
+    return 204, None
+
+
+# =============================================================================
+# LINKED RELEASES - A RELEASE THAT SHIPS WITH ANOTHER PRODUCT'S RELEASE
+# =============================================================================
+
+
+def _release_link_response(link: Any) -> dict[str, Any]:
+    linked = link.linked_release
+    return {
+        "id": str(linked.id),
+        "name": linked.name,
+        "version": linked.version,
+        "product_id": str(linked.product_id),
+        "product_name": linked.product.name,
+        "is_prerelease": linked.is_prerelease,
+        "linked_at": link.created_at,
+    }
+
+
+_LINK_ERROR_CODES = {
+    400: ErrorCode.BAD_REQUEST,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+}
+
+
+@router.get(
+    "/releases/{release_id}/links",
+    response={200: list[ReleaseLinkSchema], 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def list_release_links(request: HttpRequest, release_id: str) -> Any:
+    """List the releases of other products this release links to."""
+    from sbomify.apps.core.services.release_links import release_links
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    signed_in = bool(getattr(request, "user", None) and request.user.is_authenticated)
+    if not release.product.is_public and not (signed_in and _can_read_release(request, release.product)):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # A reader from outside the workspace, on a public product, sees links to public products only.
+    include_private = signed_in and _can_read_release(request, release.product)
+    return 200, [_release_link_response(link) for link in release_links(release, include_private=include_private)]
+
+
+@router.post(
+    "/releases/{release_id}/links",
+    response={
+        201: ReleaseLinkSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def link_release_to_release(request: HttpRequest, release_id: str, payload: ReleaseLinkCreateSchema) -> Any:
+    """Link a release of another product, by its id or by product and version.
+
+    The linked release is listed with this one, and its SBOMs are included in this
+    release's aggregate SBOM. Linking does not move or copy any artifact.
+    """
+    from sbomify.apps.core.services.release_links import find_release, link_release
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    if not can(request, "release:tag", release.product):
+        return 403, {
+            "detail": "You do not have permission to link releases to this release",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    # An OIDC bot may link from the releases it may tag, the products holding its
+    # component. The linked product does not have to hold it: that is the point.
+    from sbomify.apps.oidc.permissions import is_authorised_for_product
+
+    if not is_authorised_for_product(request, release.product):
+        return 403, {
+            "detail": "This OIDC token cannot change releases of a product its component is not part of",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    linked = find_release(
+        release.product.team_id,
+        release_id=payload.release_id,
+        product_id=payload.product_id,
+        version=payload.version,
+    )
+    if linked is None:
+        return 404, {"detail": "Release to link not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    result = link_release(release, linked)
+    if not result.ok:
+        status = result.status_code or 400
+        return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
+
+    _broadcast_release_updated(release)
+    _broadcast_linked_releases_updated(linked)
+    return 201, _release_link_response(result.value)
+
+
+@router.delete(
+    "/releases/{release_id}/links/{linked_release_id}",
+    response={204: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,
+    tags=["Releases"],
+)
+@decorate_view(optional_token_auth)
+def unlink_release_from_release(request: HttpRequest, release_id: str, linked_release_id: str) -> Any:
+    """Remove a linked release."""
+    from sbomify.apps.core.services.release_links import unlink_release
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
+
+    if not can(request, "release:manage", release.product):
+        return 403, {
+            "detail": "You don't have permission to manage this release's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
+    result = unlink_release(release, linked_release_id)
+    if not result.ok:
+        status = result.status_code or 400
+        return status, {"detail": result.error, "error_code": _LINK_ERROR_CODES.get(status, ErrorCode.BAD_REQUEST)}
+
+    # The link's own delete tells the linked release and every release it kept monitored.
+    _broadcast_release_updated(release)
     return 204, None
 
 
@@ -4033,9 +4824,9 @@ def list_document_releases(
     page_size: int = Query(15),  # type: ignore[type-arg]
 ) -> Any:
     """List all releases that contain this document."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4095,9 +4886,9 @@ def list_document_releases(
 )
 def add_document_to_releases(request: HttpRequest, document_id: str, payload: DocumentReleaseTaggingSchema) -> Any:
     """Add a document to multiple releases."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4116,7 +4907,7 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 
     for release_id in payload.release_ids:
         try:
-            release = Release.objects.select_related("product").get(pk=release_id)
+            release = Release.objects.select_related("product__team").get(pk=release_id)
 
             # Verify release belongs to same team as the document's component
             if str(release.product.team_id) != str(document.component.team_id):
@@ -4131,8 +4922,10 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
             result = add_artifact_to_release(release, document=document, allow_replacement=True)
             if result["created"]:
                 created_artifacts.append(result["artifact"])
+                _broadcast_release_updated(release)
             elif result["replaced"]:
                 replaced_artifacts.append(result)
+                _broadcast_release_updated(release)
             else:
                 errors.append(f"Document already exists in release {release.name}")
 
@@ -4181,15 +4974,15 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
 )
 def remove_document_from_release(request: HttpRequest, document_id: str, release_id: str) -> Any:
     """Remove a document from a specific release."""
-    try:
-        from sbomify.apps.documents.models import Document
+    from sbomify.apps.documents.models import Document
 
+    try:
         document = Document.objects.select_related("component").get(pk=document_id)
     except Document.DoesNotExist:
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -4209,6 +5002,7 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
     try:
         artifact = ReleaseArtifact.objects.get(release=release, document=document)
         artifact.delete()
+        _broadcast_release_updated(release)
         return 204, None
     except ReleaseArtifact.DoesNotExist:
         return 404, {"detail": "Document not in this release"}
@@ -4223,9 +5017,9 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
 @decorate_view(optional_token_auth)
 def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
     """List all releases that contain this SBOM."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4286,9 +5080,9 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
 )
 def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleaseTaggingSchema) -> Any:
     """Add an SBOM to multiple releases."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
@@ -4307,7 +5101,7 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 
     for release_id in payload.release_ids:
         try:
-            release = Release.objects.select_related("product").get(pk=release_id)
+            release = Release.objects.select_related("product__team").get(pk=release_id)
 
             # Verify release belongs to same team as the SBOM's component
             if str(release.product.team_id) != str(sbom.component.team_id):
@@ -4322,8 +5116,10 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
             result = add_artifact_to_release(release, sbom=sbom, allow_replacement=True)
             if result["created"]:
                 created_artifacts.append(result["artifact"])
+                _broadcast_release_updated(release)
             elif result["replaced"]:
                 replaced_artifacts.append(result)
+                _broadcast_release_updated(release)
             else:
                 errors.append(f"SBOM already exists in release {release.name}")
 
@@ -4370,15 +5166,15 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
 )
 def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str) -> Any:
     """Remove an SBOM from a specific release."""
-    try:
-        from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM
 
+    try:
         sbom = SBOM.objects.select_related("component").get(pk=sbom_id)
     except SBOM.DoesNotExist:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -4402,6 +5198,7 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
     try:
         artifact = ReleaseArtifact.objects.get(release=release, sbom=sbom)
         artifact.delete()
+        _broadcast_release_updated(release)
         return 204, None
     except ReleaseArtifact.DoesNotExist:
         return 404, {"detail": "SBOM not in this release"}
@@ -4538,9 +5335,11 @@ def list_component_sboms(
 
         # Import assessment helpers
         from sbomify.apps.plugins.apis import _compute_status_summary, _is_run_failing, _is_run_skipped
+        from sbomify.apps.plugins.latest import latest_run_ids
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
+        from sbomify.apps.plugins.services.access import plugins_within_plan
         from sbomify.apps.vulnerability_scanning.utils import (
             reconstruct_result_summary,
         )
@@ -4553,13 +5352,17 @@ def list_component_sboms(
         sbom_ids = [str(s.id) for s in paginated_sboms]
 
         # 1. Team-level plugin enablement (already a single query)
+        # Only the plugins the plan includes count: an entry it excludes is kept across
+        # a downgrade so it resumes on upgrade, and nothing runs it meanwhile, so
+        # "no_plugins_enabled" is the honest default status for a workspace holding
+        # only those.
         team_has_enabled_plugins = False
         try:
             team = component.team
             if team:
                 plugin_settings = TeamPluginSettings.objects.filter(team=team).first()
                 if plugin_settings:
-                    team_has_enabled_plugins = bool(plugin_settings.enabled_plugins)
+                    team_has_enabled_plugins = bool(plugins_within_plan(team, plugin_settings.enabled_plugins or []))
         except Exception as e:
             team_id = getattr(component, "team_id", None) or "unknown"
             log.warning(f"Error checking plugin settings for team {team_id}: {e}")
@@ -4575,6 +5378,9 @@ def list_component_sboms(
                     status="completed",
                     created_at__gte=recent_threshold,
                 )
+                # Unsorted, or the default -created_at joins the DISTINCT and
+                # every scan of the last day comes back, not one row per SBOM.
+                .order_by()
                 .values_list("sbom_id", flat=True)
                 .distinct()
             )
@@ -4605,34 +5411,16 @@ def list_component_sboms(
             log.warning(f"Database error fetching release artifacts for component {component_id}: {db_err}")
 
         # 4. Latest AssessmentRun per (sbom_id, plugin_name) across ALL SBOMs.
-        # ``DISTINCT ON`` is Postgres-specific but the project standardises on
-        # Postgres 17 (see CLAUDE.md). The same index that backed the prior
-        # per-SBOM subquery — ``(sbom, plugin_name, -created_at)`` — covers
-        # this batched form too.
         runs_by_sbom: dict[str, list[AssessmentRun]] = defaultdict(list)
         plugin_names_seen: set[str] = set()
         try:
             # Two-phase on purpose: the summary annotations extract JSON keys
-            # from ``result``, and computing them on the DISTINCT ON input made
+            # from ``result``, and computing them across the run history made
             # Postgres de-TOAST every historical run's multi-MB blob only to
-            # discard the losers — >100s for a component with hundreds of SBOM
-            # versions. Phase 1 picks the winning run ids touching no JSON;
-            # phase 2 annotates just those winners.
-            #
-            # The ids are materialised deliberately: passed lazily to ``id__in``,
-            # Django strips the subquery's ORDER BY, and DISTINCT ON without its
-            # ORDER BY returns an arbitrary row per group instead of the latest.
-            # The list is bounded by (sboms x plugins), the same magnitude as the
-            # ``sbom_ids`` IN-list already used above.
-            winner_ids = list(
-                AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-                # -id breaks created_at ties deterministically (newest row wins),
-                # matching vulnerability_trends so both surfaces agree on which
-                # run is "latest" when two share a timestamp.
-                .order_by("sbom_id", "plugin_name", "-created_at", "-id")
-                .distinct("sbom_id", "plugin_name")
-                .values_list("id", flat=True)
-            )
+            # discard the losers, >100s for a component with hundreds of SBOM
+            # versions. Phase 1 picks the winning run ids, one probe per pair,
+            # touching no JSON; phase 2 annotates just those winners.
+            winner_ids = latest_run_ids(AssessmentRun.objects.all(), sbom_ids)
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")
@@ -4710,6 +5498,7 @@ def list_component_sboms(
                             "status": plugin_status,
                             "findings_count": findings_count,
                             "fail_count": (run.result or {}).get("summary", {}).get("fail_count", 0),
+                            "category": run.category,
                         }
                     )
 
@@ -4758,14 +5547,20 @@ def list_component_sboms(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component SBOMs: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing component SBOMs")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 @router.get(
     "/components/{component_id}/documents",
-    response={200: PaginatedDocumentsResponse, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: PaginatedDocumentsResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        500: ErrorResponse,
+    },
     auth=None,
     tags=["Components"],
 )
@@ -4844,6 +5639,12 @@ def list_component_documents(
                         "document_type": document.document_type,
                         "document_type_display": document.get_document_type_display(),
                         "compliance_subcategory": document.compliance_subcategory or "",
+                        # The documents table's edit form round-trips this field.
+                        # Without it the textarea bound to `undefined`, posted an
+                        # empty string, and every save silently cleared the
+                        # description — harmless only while the modal's HTMX form
+                        # was never wired at all.
+                        "description": document.description,
                         "content_type": document.content_type,
                         "file_size": document.file_size,
                         "version": document.version,
@@ -4855,9 +5656,9 @@ def list_component_documents(
 
         return 200, {"items": items, "pagination": pagination_meta}
 
-    except Exception as e:
-        log.error(f"Error listing component documents: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+    except Exception:
+        log.exception("Error listing component documents")
+        return 500, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
 
 
 class DeleteAccountRequest(BaseModel):
@@ -4896,7 +5697,7 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     - Personal access tokens revoked
     - Pending invitations removed
     - Workspaces where you are the sole member will be deleted
-    - Stripe subscriptions for deleted workspaces will be cancelled
+    - Stripe subscriptions for deleted workspaces will be canceled
 
     **After 14 days:**
     - Account permanently deleted
@@ -4963,12 +5764,12 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
 
 def _export_team(request: HttpRequest) -> tuple[Any, tuple[int, ErrorResponse] | None]:
     """The caller's workspace for an export, or an error pair."""
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     team_id = _get_user_team_id(request)
     if not team_id:
         return None, (403, ErrorResponse(detail="No workspace context"))
-    team = Team.objects.filter(id=team_id).first()
+    team = Workspace.objects.filter(id=team_id).first()
     if team is None:
         return None, (403, ErrorResponse(detail="No workspace context"))
     if not can(request, "workspace:read", team):
@@ -4988,7 +5789,9 @@ def _csv_response(csv_text: str, filename: str) -> HttpResponse:
 
 @router.get(
     "/exports/inventory.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the package inventory as CSV",
     tags=["Exports"],
 )
@@ -5017,7 +5820,9 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
 
 @router.get(
     "/exports/licenses.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export the license list as CSV",
     tags=["Exports"],
 )
@@ -5051,7 +5856,9 @@ def export_licenses(
 
 @router.get(
     "/exports/findings.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export assessment findings as CSV",
     tags=["Exports"],
 )
@@ -5076,7 +5883,9 @@ def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[
 
 @router.get(
     "/exports/vulnerabilities.csv",
-    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 is the CSV itself, an HttpResponse passed through unvalidated.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     summary="Export vulnerability findings as CSV",
     tags=["Exports"],
 )

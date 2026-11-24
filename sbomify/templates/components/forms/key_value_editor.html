@@ -1,0 +1,44 @@
+{% comment %}
+Rows of key and value text fields, with a remove button per row and an add
+button under them. Built for custom metadata on products and components:
+free-form string pairs a workspace defines for itself.
+
+model is an Alpine expression naming an array of { key, value } objects in the
+caller's scope; the rows bind to it, so the caller owns the data and decides
+how to save it. With name set, each row also posts as repeated name_key and
+name_value fields, so an HTMX form can submit it without any script.
+
+max caps the rows the add button will create, to match the server limit.
+label is the group's accessible name. Empty rows are allowed while editing;
+the server drops a row whose key and value are both blank.
+{% endcomment %}
+<c-vars model name label="Custom metadata" max="50" id class />
+<div role="group"
+     aria-label="{{ label }}"
+     class="flex flex-col gap-2{% if class %} {{ class }}{% endif %}"
+     {% if id %}id="{{ id }}"{% endif %}
+     {{ attrs }}>
+    <template x-if="{{ model }}.length > 0">
+        <div class="hidden sm:grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_2.25rem] gap-2 text-xs font-medium text-text-muted"
+             aria-hidden="true">
+            <span>Key</span>
+            <span>Value</span>
+            <span></span>
+        </div>
+    </template>
+    <template x-for="(row, index) in {{ model }}" :key="index">
+        <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)_2.25rem] gap-2 items-center"
+             data-key-value-row>
+            <c-forms.input size="sm" placeholder="Key" maxlength="128" x-model="row.key" ::aria-label="'Key ' + (index + 1)" ::name="'{{ name }}' ? '{{ name }}_key' : null" />
+            <c-forms.input size="sm" placeholder="Value" maxlength="1024" x-model="row.value" ::aria-label="'Value ' + (index + 1)" ::name="'{{ name }}' ? '{{ name }}_value' : null" />
+            <c-buttons.icon size="sm" variant="danger" label="Remove row" @click="{{ model }}.splice(index, 1)">
+            <i class="fas fa-times" aria-hidden="true"></i>
+            </c-buttons.icon>
+        </div>
+    </template>
+    <div>
+        <c-buttons.secondary size="sm" @click="{{ model }}.push({ key: '', value: '' })" ::disabled="{{ model }}.length >= {{ max }}">
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add field
+        </c-buttons.secondary>
+    </div>
+</div>

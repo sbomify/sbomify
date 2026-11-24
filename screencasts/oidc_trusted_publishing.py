@@ -154,7 +154,7 @@ def mock_sbom_s3(mocker) -> Any:
     """
     fake_s3 = mocker.MagicMock()
     fake_s3.upload_sbom.return_value = "screencast_oidc_demo_" + DEMO_REPOSITORY.replace("/", "_") + ".json"
-    return mocker.patch("sbomify.apps.sboms.apis.S3Client", return_value=fake_s3)
+    return mocker.patch("sbomify.apps.sboms.apis.StorageClient", return_value=fake_s3)
 
 
 # ---------------------------------------------------------------------------

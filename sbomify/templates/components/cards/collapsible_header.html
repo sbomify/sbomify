@@ -1,0 +1,5 @@
+{% comment %}Keep a collapsible trigger and its navigation action as siblings so links never nest inside a button. Actions wrap below the title on narrow cards.{% endcomment %}
+<div class="flex flex-wrap items-center gap-x-3 pr-6">
+    <div class="min-w-0 flex-1 basis-48">{{ slot }}</div>
+    {% if actions %}<div class="ml-auto py-3">{{ actions }}</div>{% endif %}
+</div>

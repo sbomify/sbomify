@@ -1,10 +1,10 @@
 <#import "template.ftl" as layout>
 <@layout.emailLayout>
-    <h1>Reset Your Password</h1>
-    <p>Dear ${user.firstName!user.username},</p>
+    <h1>Reset your password</h1>
+    <p>Hi ${user.firstName!user.username},</p>
     <p>We received a request to reset your password for your sbomify account. Click the button below to create a new password.</p>
     <p style="text-align: center;">
-        <a href="${link}" class="button">Reset Password</a>
+        <a href="${link}" class="button">Reset password</a>
     </p>
     <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
     <p class="text-secondary" style="word-break: break-all;">${link}</p>

@@ -23,7 +23,7 @@ from sbomify.apps.core.services.access_control import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 @pytest.fixture
@@ -36,8 +36,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -142,7 +141,7 @@ class TestCheckComponentAccess:
         request.user = sample_user
         # Mock is_authenticated property
         type(request.user).is_authenticated = PropertyMock(return_value=True)
-        request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
+        request.session = {"current_workspace": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
         result = check_component_access(request, private_component)
 
@@ -160,7 +159,7 @@ class TestCheckComponentAccess:
         request.user = guest_user
         # Mock is_authenticated property
         type(request.user).is_authenticated = PropertyMock(return_value=True)
-        request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
+        request.session = {"current_workspace": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
         result = check_component_access(request, private_component)
 
@@ -207,7 +206,7 @@ class TestCheckComponentAccess:
         Member.objects.get_or_create(
             user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
         )
-        other_team = Team.objects.create(name="Other WS", key="otherwsscopekey")
+        other_team = Workspace.objects.create(name="Other WS", key="otherwsscopekey")
 
         factory = RequestFactory()
         request = factory.get("/")
@@ -276,8 +275,7 @@ class TestCheckComponentAccess:
         old_nda = Document.objects.create(
             name="Old NDA",
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
             document_filename="nda_old.pdf",
             content_type="application/pdf",
             file_size=len(old_nda_content),
@@ -660,8 +658,7 @@ class TestUserHasSignedCurrentNDA:
         old_nda = Document.objects.create(
             name="Old NDA",
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
             document_filename="nda_old.pdf",
             content_type="application/pdf",
             file_size=len(old_nda_content),
@@ -697,8 +694,7 @@ class TestUserHasSignedCurrentNDA:
         old_nda = Document.objects.create(
             name="Old NDA",
             component=company_nda_document.component,
-            document_type=Document.DocumentType.COMPLIANCE,
-            compliance_subcategory=Document.ComplianceSubcategory.NDA,
+            document_type=Document.DocumentType.NDA,
             document_filename="nda_old.pdf",
             content_type="application/pdf",
             file_size=len(old_nda_content),

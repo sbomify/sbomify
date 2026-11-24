@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 from sbomify.apps.teams.services.security_txt import generate_security_txt
@@ -214,18 +214,40 @@ class TestGenerateSecurityTxtOptionalFields:
     def test_custom_expires_override(self, sample_team_with_owner_member) -> None:
         from datetime import timedelta
 
-        future_expires = (datetime.now(timezone.utc) + timedelta(days=180)).isoformat()
+        stored = datetime.now(timezone.utc) + timedelta(days=180)
         team = sample_team_with_owner_member.team
         team.security_txt_config = {
             "enabled": True,
-            "expires": future_expires,
+            "expires": stored.isoformat(),
         }
         team.save(update_fields=["security_txt_config"])
         _create_security_contact(team, "sec@example.com")
 
         result = generate_security_txt(team)
 
-        assert f"Expires: {future_expires}" in result
+        # Same instant, normalized to whole seconds in UTC (TR-03183-3 keeps
+        # the field auditor-friendly; microseconds leaked before).
+        assert f"Expires: {stored.strftime('%Y-%m-%dT%H:%M:%SZ')}" in result
+
+    def test_expires_beyond_a_year_is_clamped(self, sample_team_with_owner_member) -> None:
+        from datetime import timedelta
+
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {
+            "enabled": True,
+            "expires": (datetime.now(timezone.utc) + timedelta(days=900)).isoformat(),
+        }
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team, "sec@example.com")
+
+        result = generate_security_txt(team)
+
+        expires_line = next(line for line in result.splitlines() if line.startswith("Expires: "))
+        emitted = datetime.strptime(expires_line.removeprefix("Expires: "), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+        assert emitted <= datetime.now(timezone.utc) + timedelta(days=365, minutes=1)
+        assert emitted > datetime.now(timezone.utc)
 
 
 @pytest.mark.django_db
@@ -389,10 +411,10 @@ class TestSecurityTxtView:
 class TestSecurityTxtSettingsPost:
     """Tests for the _update_security_txt POST handler."""
 
-    def _post_settings(self, client, team_key: str, data: dict, follow: bool = False):
+    def _post_settings(self, client, workspace_key: str, data: dict, follow: bool = False):
         from django.urls import reverse
 
-        url = reverse("teams:team_settings", kwargs={"team_key": team_key})
+        url = reverse("workspaces:team_settings", kwargs={"workspace_key": workspace_key})
         post_data = {"security_txt_action": "update", "active_tab": "trust-center", "security_txt_enabled": "false"}
         post_data.update(data)
         return client.post(url, post_data, follow=follow)
@@ -495,10 +517,10 @@ class TestSecurityTxtSettingsPost:
 
     def test_rejects_contact_from_other_team(self, authenticated_web_client, sample_team_with_owner_member) -> None:
         """contact_id from another team should be rejected."""
-        from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Team
+        from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Workspace
 
         team = sample_team_with_owner_member.team
-        other_team = Team.objects.create(name="Other Team")
+        other_team = Workspace.objects.create(name="Other Team")
         profile = ContactProfile.objects.create(team=other_team, name="Other", is_default=True)
         entity = ContactEntity.objects.create(profile=profile, name="Other Entity", is_author=True)
         other_contact = ContactProfileContact.objects.create(entity=entity, name="Hacker", email="h@evil.com")
@@ -528,3 +550,128 @@ class TestSecurityTxtSettingsPost:
         msgs = list(response.context["messages"]) if hasattr(response, "context") and response.context else []
         if msgs:
             assert "settings saved" in str(msgs[0]).lower() or "enabled" not in str(msgs[0]).lower()
+
+
+@pytest.mark.django_db
+class TestBsiTr03183Layout:
+    """TR-03183-3 4.2: contact ordering, comment lines, CSAF pointer."""
+
+    def _team(self, sample_team_with_owner_member, **config):
+        team = sample_team_with_owner_member.team
+        team.security_txt_config = {"enabled": True, **config}
+        team.save(update_fields=["security_txt_config"])
+        _create_security_contact(team, "psirt@example.com")
+        return team
+
+    def test_contacts_emit_in_mandated_order(self, sample_team_with_owner_member) -> None:
+        team = self._team(
+            sample_team_with_owner_member,
+            csirt_email="csirt@example.com",
+            report_url="https://example.com/report",
+        )
+
+        lines = generate_security_txt(team).splitlines()
+
+        assert lines[0] == "# Our security addresses"
+        assert lines[1] == "Contact: mailto:psirt@example.com"
+        assert lines[2] == "Contact: mailto:csirt@example.com"
+        assert lines[3] == "Contact: https://example.com/report"
+
+    def test_each_block_carries_its_comment(self, sample_team_with_owner_member) -> None:
+        team = self._team(
+            sample_team_with_owner_member,
+            encryption_urls=["https://example.com/key.asc"],
+            policy_url="https://example.com/vdp",
+            acknowledgments_url="https://example.com/thanks",
+            csaf_url="https://example.com/.well-known/csaf/provider-metadata.json",
+        )
+
+        result = generate_security_txt(team)
+
+        for comment, field in (
+            ("# Our OpenPGP keys", "Encryption: https://example.com/key.asc"),
+            ("# Our security policy", "Policy: https://example.com/vdp"),
+            ("# Our acknowledgments page", "Acknowledgments: https://example.com/thanks"),
+            ("# Our CSAF provider metadata", "CSAF: https://example.com/.well-known/csaf/provider-metadata.json"),
+        ):
+            lines = result.splitlines()
+            assert field in lines
+            assert lines[lines.index(field) - 1] == comment
+
+    def test_comments_absent_for_empty_blocks(self, sample_team_with_owner_member) -> None:
+        team = self._team(sample_team_with_owner_member)
+
+        result = generate_security_txt(team)
+
+        assert "# Our OpenPGP keys" not in result
+        assert "# Our security policy" not in result
+        assert "# Our CSAF provider metadata" not in result
+
+    def test_invalid_csirt_email_is_dropped(self, sample_team_with_owner_member) -> None:
+        team = self._team(sample_team_with_owner_member, csirt_email="not-an-email")
+
+        result = generate_security_txt(team)
+
+        assert result.count("Contact:") == 1
+
+    def test_still_valid_with_single_contact(self, sample_team_with_owner_member) -> None:
+        """An existing single-contact config keeps producing a valid file."""
+        team = self._team(sample_team_with_owner_member)
+
+        result = generate_security_txt(team)
+
+        assert "Contact: mailto:psirt@example.com" in result
+        assert result.splitlines()[-1].startswith("Expires: ")
+
+
+@pytest.mark.django_db
+class TestCsafField:
+    """RFC 9116 CSAF field: derived from the workspace's own provider metadata."""
+
+    trust_center = override_settings(TRUST_CENTER_DOMAIN="trustcenters.test")
+
+    @pytest.fixture(autouse=True)
+    def _domain(self):
+        """A workspace only has a CSAF URL once it has a domain to serve it on."""
+        with self.trust_center:
+            yield
+
+    def _enabled(self, team, **config):
+        _create_security_contact(team)
+        team.security_txt_config = {"enabled": True, **config}
+        team.save(update_fields=["security_txt_config"])
+        return team
+
+    def test_points_at_the_workspaces_own_provider_metadata(self, sample_team_with_owner_member) -> None:
+        team = self._enabled(sample_team_with_owner_member.team)
+
+        content = generate_security_txt(team)
+
+        assert "CSAF: " in content
+        assert "/.well-known/csaf/provider-metadata.json" in content
+
+    def test_explicit_config_still_wins(self, sample_team_with_owner_member) -> None:
+        """A workspace whose CSAF lives elsewhere keeps pointing there."""
+        team = self._enabled(
+            sample_team_with_owner_member.team,
+            csaf_url="https://example.com/.well-known/csaf/provider-metadata.json",
+        )
+
+        assert "CSAF: https://example.com/.well-known/csaf/provider-metadata.json" in generate_security_txt(team)
+
+    def test_absent_for_a_private_workspace(self, sample_team_with_owner_member) -> None:
+        """The endpoint 404s for a private workspace, so the field must not promise it."""
+        team = self._enabled(sample_team_with_owner_member.team)
+        team.billing_plan = "business"
+        team.is_public = False
+        team.save(update_fields=["billing_plan", "is_public"])
+        assert team.is_public is False
+
+        assert "CSAF:" not in generate_security_txt(team)
+
+    def test_absent_without_a_public_domain(self, sample_team_with_owner_member) -> None:
+        """No trust center domain and no BYOD domain means no URL to promise."""
+        team = self._enabled(sample_team_with_owner_member.team)
+
+        with override_settings(TRUST_CENTER_DOMAIN=""):
+            assert "CSAF:" not in generate_security_txt(team)

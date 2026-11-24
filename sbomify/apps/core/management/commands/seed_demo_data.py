@@ -31,7 +31,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.utils import add_artifact_to_release
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
@@ -46,7 +46,7 @@ from sbomify.apps.security_advisories.models import (
     SecurityAdvisory,
 )
 from sbomify.apps.security_advisories.services.advisories import create_advisory, post_update, publish_advisory
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 # .../apps/core/management/commands/this.py -> .../apps/sboms/tests/test_data
 TEST_DATA = Path(__file__).resolve().parents[3] / "sboms" / "tests" / "test_data"
@@ -78,7 +78,7 @@ class ComponentSpec:
     gating: str = ""
     # How many SBOM versions to upload. Ignored for document components.
     sboms: int = 1
-    documents: tuple[tuple[str, str, str], ...] = ()  # (name, document_type, version)
+    documents: tuple[tuple[str, str, str, str | None], ...] = ()  # (name, document_type, version, subcategory)
 
 
 @dataclass(frozen=True)
@@ -117,8 +117,10 @@ class AdvisorySpec:
     references: tuple[str, ...] = ()
 
 
-def _doc(name: str, doc_type: str, version: str = "1.0") -> tuple[str, str, str]:
-    return (name, doc_type, version)
+def _doc(
+    name: str, doc_type: str, version: str = "1.0", subcategory: str | None = None
+) -> tuple[str, str, str, str | None]:
+    return (name, doc_type, version, subcategory)
 
 
 # Two catalogues so two workspaces do not look like copies of each other. A
@@ -209,7 +211,7 @@ SLICE_A: tuple[ProductSpec, ...] = (
     ),
     ProductSpec(
         "Beacon Telemetry Service",
-        "Ingest tier that accepts device telemetry and normalises it for analytics.",
+        "Ingest tier that accepts device telemetry and normalizes it for analytics.",
         False,
         (ComponentSpec("beacon-ingest-service", BOM, PRIVATE, sboms=1),),
     ),
@@ -357,7 +359,7 @@ GLOBAL_COMPONENTS: tuple[ComponentSpec, ...] = (
         "Company NDA",
         DOC,
         PRIVATE,
-        documents=(_doc("Mutual non-disclosure agreement", Document.DocumentType.COMPLIANCE, "2026.1"),),
+        documents=(_doc("Mutual non-disclosure agreement", Document.DocumentType.NDA, "2026.1"),),
     ),
     ComponentSpec(
         "Security policies",
@@ -372,7 +374,14 @@ GLOBAL_COMPONENTS: tuple[ComponentSpec, ...] = (
         "Certifications",
         DOC,
         PUBLIC,
-        documents=(_doc("ISO 27001 certificate", Document.DocumentType.COMPLIANCE, "2026"),),
+        documents=(
+            _doc(
+                "ISO 27001 certificate",
+                Document.DocumentType.COMPLIANCE,
+                "2026",
+                Document.ComplianceSubcategory.ISO27001,
+            ),
+        ),
     ),
 )
 
@@ -650,16 +659,16 @@ class Command(BaseCommand):
 
         self._report(totals)
 
-    def _non_test_workspaces(self) -> list[Team]:
+    def _non_test_workspaces(self) -> list[Workspace]:
         """Every real workspace, oldest first.
 
         The migration-created placeholder has no key, and a workspace named
         for testing is not somewhere to write demo data.
         """
-        teams = Team.objects.exclude(key__isnull=True).exclude(key="").order_by("pk")
+        teams = Workspace.objects.exclude(key__isnull=True).exclude(key="").order_by("pk")
         return [team for team in teams if not team.name.lower().startswith("test")]
 
-    def _owner(self, team: Team) -> Any:
+    def _owner(self, team: Workspace) -> Any:
         member = Member.objects.filter(team=team, role="owner").select_related("user").first()
         if member is None:
             member = Member.objects.filter(team=team).exclude(role="bot").select_related("user").first()
@@ -676,7 +685,7 @@ class Command(BaseCommand):
         request.session = {}  # type: ignore[assignment]
         return request
 
-    def _seed_workspace(self, team: Team, catalogue: tuple[ProductSpec, ...], totals: Counts) -> None:
+    def _seed_workspace(self, team: Workspace, catalogue: tuple[ProductSpec, ...], totals: Counts) -> None:
         owner = self._owner(team)
         if owner is None:
             self.stdout.write(self.style.WARNING("  No member to act as. Skipping."))
@@ -712,7 +721,7 @@ class Command(BaseCommand):
         self._seed_releases(products, components_by_product, totals)
         self._seed_advisories(team, owner, products, totals)
 
-    def _ensure_component(self, team: Team, spec: ComponentSpec, totals: Counts) -> Component:
+    def _ensure_component(self, team: Workspace, spec: ComponentSpec, totals: Counts) -> Component:
         component, created = Component.objects.get_or_create(
             team=team,
             name=spec.name,
@@ -742,7 +751,7 @@ class Command(BaseCommand):
             defaults={"team": product.team},
         )
 
-    def _seed_global_components(self, team: Team, totals: Counts) -> Document | None:
+    def _seed_global_components(self, team: Workspace, totals: Counts) -> Document | None:
         """Workspace-wide document components, including the NDA."""
         nda_document: Document | None = None
         for spec in GLOBAL_COMPONENTS:
@@ -757,13 +766,13 @@ class Command(BaseCommand):
             )
             if created:
                 totals.components += 1
-            for name, doc_type, version in spec.documents:
-                document = self._ensure_document(team, component, name, doc_type, version, totals)
+            for name, doc_type, version, subcategory in spec.documents:
+                document = self._ensure_document(team, component, name, doc_type, version, subcategory, totals)
                 if spec.name == "Company NDA":
                     nda_document = document
         return nda_document
 
-    def _wire_nda(self, team: Team, nda_document: Document) -> None:
+    def _wire_nda(self, team: Workspace, nda_document: Document) -> None:
         """Point the workspace and its NDA-gated components at the NDA."""
         branding = dict(team.branding_info or {})
         if branding.get("company_nda_document_id") != nda_document.id:
@@ -777,18 +786,28 @@ class Command(BaseCommand):
             component.save(update_fields=["nda_document"])
 
     def _ensure_document(
-        self, team: Team, component: Component, name: str, doc_type: str, version: str, totals: Counts
+        self,
+        team: Workspace,
+        component: Component,
+        name: str,
+        doc_type: str,
+        version: str,
+        subcategory: str | None,
+        totals: Counts,
     ) -> Document:
         existing = Document.objects.filter(component=component, name=name, version=version).first()
         if existing is not None:
+            # A workspace seeded before the subcategory existed still has the
+            # row, so re-seeding brings it up to the spec rather than leaving a
+            # certificate that cannot earn its badge.
+            if existing.compliance_subcategory != subcategory:
+                existing.compliance_subcategory = subcategory
+                existing.save(update_fields=["compliance_subcategory"])
             return existing
 
         body = _document_body(name, version, team.name)
-        subcategory = None
-        if doc_type == Document.DocumentType.COMPLIANCE and "non-disclosure" in name.lower():
-            subcategory = Document.ComplianceSubcategory.NDA
 
-        filename = S3Client("DOCUMENTS").upload_document(body)
+        filename = StorageClient("DOCUMENTS").upload_document(body)
         document = Document.objects.create(
             name=name,
             version=version,
@@ -805,11 +824,11 @@ class Command(BaseCommand):
         return document
 
     def _seed_component_artifacts(
-        self, request: HttpRequest, team: Team, component: Component, spec: ComponentSpec, totals: Counts
+        self, request: HttpRequest, team: Workspace, component: Component, spec: ComponentSpec, totals: Counts
     ) -> None:
         if spec.kind == DOC:
-            for name, doc_type, version in spec.documents:
-                self._ensure_document(team, component, name, doc_type, version, totals)
+            for name, doc_type, version, subcategory in spec.documents:
+                self._ensure_document(team, component, name, doc_type, version, subcategory, totals)
             return
 
         for index in range(min(spec.sboms, len(VERSION_LADDER))):
@@ -918,7 +937,7 @@ class Command(BaseCommand):
                 if result.get("created"):
                     totals.release_artifacts += 1
 
-    def _seed_advisories(self, team: Team, user: Any, products: list[Product], totals: Counts) -> None:
+    def _seed_advisories(self, team: Workspace, user: Any, products: list[Product], totals: Counts) -> None:
         for spec in ADVISORY_SPECS:
             if SecurityAdvisory.objects.filter(team=team, title=spec.title).exists():
                 continue
@@ -926,7 +945,7 @@ class Command(BaseCommand):
                 if self._build_advisory(team, user, spec, products):
                     totals.advisories += 1
 
-    def _build_advisory(self, team: Team, user: Any, spec: AdvisorySpec, products: list[Product]) -> bool:
+    def _build_advisory(self, team: Workspace, user: Any, spec: AdvisorySpec, products: list[Product]) -> bool:
         selected = [products[index] for index in spec.product_indexes if index < len(products)]
         if spec.notice:
             advisory = self._create_notice(team, user, spec)
@@ -974,7 +993,7 @@ class Command(BaseCommand):
             self._withdraw(advisory, user)
         return True
 
-    def _create_notice(self, team: Team, user: Any, spec: AdvisorySpec) -> SecurityAdvisory:
+    def _create_notice(self, team: Workspace, user: Any, spec: AdvisorySpec) -> SecurityAdvisory:
         """A workspace notice names no product, so it is built directly.
 
         ``create_advisory`` always writes a product advisory, and the model
@@ -1083,7 +1102,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.MIGRATE_HEADING("\nTotals in the database"))
         for label, count in (
-            ("workspaces", Team.objects.exclude(key__isnull=True).count()),
+            ("workspaces", Workspace.objects.exclude(key__isnull=True).count()),
             ("products", Product.objects.count()),
             ("components", Component.objects.count()),
             ("sboms", SBOM.objects.count()),

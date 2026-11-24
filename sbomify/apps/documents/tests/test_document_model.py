@@ -59,6 +59,7 @@ class TestDocumentModel:
 
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
+            (Document.DocumentType.NDA, "other"),
             (Document.DocumentType.COMPLIANCE, "certification-report"),
             (Document.DocumentType.EVIDENCE, "evidence"),
 
@@ -156,6 +157,7 @@ class TestDocumentModel:
 
             # Legal and Compliance
             (Document.DocumentType.LICENSE, "license"),
+            (Document.DocumentType.NDA, "nda"),
             (Document.DocumentType.COMPLIANCE, "compliance"),
             (Document.DocumentType.EVIDENCE, "evidence"),
 
@@ -234,3 +236,24 @@ class TestDocumentModel:
 
         # Test that it's stored correctly
         assert document.document_type == "security-advisory"
+
+@pytest.mark.django_db
+def test_an_nda_still_counts_as_legal_paperwork(sample_component):
+    """The admin dashboard's compliance metric must not lose NDAs.
+
+    It filtered on a literal ``["compliance", "evidence", "license"]``, so
+    moving NDAs out of ``COMPLIANCE`` into their own document type silently
+    dropped every one of them from the count. The grouping is a constant now,
+    and this is what notices if a legal type is added without joining it.
+    """
+    from sbomify.apps.documents.models import LEGAL_DOCUMENT_TYPES, Document
+
+    assert Document.DocumentType.NDA in LEGAL_DOCUMENT_TYPES
+
+    Document.objects.create(
+        name="Mutual non-disclosure agreement",
+        component=sample_component,
+        document_type=Document.DocumentType.NDA,
+    )
+
+    assert Document.objects.filter(document_type__in=LEGAL_DOCUMENT_TYPES).count() == 1

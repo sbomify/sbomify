@@ -1,0 +1,8 @@
+{% extends "core/auth_base.html.j2" %}
+{% block title %}Signed out · sbomify{% endblock %}
+{% block login_content %}
+    <c-layout.frame>
+    <c-layout.page_header title="You are signed out" subtitle="Sign in to access your account again." />
+    <c-buttons.primary href="{% url 'core:keycloak_login' %}">Sign in</c-buttons.primary>
+    </c-layout.frame>
+{% endblock %}

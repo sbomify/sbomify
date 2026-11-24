@@ -824,6 +824,8 @@ def test_add_sbom_to_release(
     data = response.json()
     assert data["artifact_type"] == "sbom"
     assert data["artifact_name"] == sample_sbom.name
+    assert data["replaced"] is False
+    assert data["replaced_artifact_name"] is None
 
     # Verify artifact was added to database
     assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom, document=None).exists()
@@ -1052,8 +1054,13 @@ def test_download_release_sbom_no_artifacts(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 500  # Error generating SBOM from empty release
-    assert "Error generating release SBOM" in response.json()["detail"]
+    # The docstring above always said 404; the assertion pinned a hand-rolled
+    # 500 built outside ninja's pipeline. An empty release is the caller's
+    # situation, not a server fault.
+    assert response.status_code == 404
+    body = response.json()
+    assert body["error_code"] == "NOT_FOUND"
+    assert "no SBOMs" in body["detail"]
 
 
 # =============================================================================
@@ -1187,6 +1194,91 @@ def test_add_duplicate_sbom_format_to_release(
     assert response.status_code == 400
     assert "already contains an SBOM of format" in response.json()["detail"]
 
+    # The earlier SBOM is still the one in the release.
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom1.id]
+
+
+@pytest.mark.django_db
+def test_add_sbom_with_replace_supersedes_same_format_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Only an explicit replace=True swaps in a new SBOM for a component already in the release."""
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    sbom1 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1", version="1.0.0"
+    )
+    sbom2 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2", version="2.0.0"
+    )
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps({"sbom_id": sbom2.id, "replace": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["artifact_name"] == "SBOM 2"
+    # The client is told what it superseded, so a matrix build overwriting itself is not silent.
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "SBOM 1"
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom2.id]
+
+
+@pytest.mark.django_db
+def test_add_document_with_replace_supersedes_same_type_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    doc1 = Document.objects.create(component=sample_component, name="Doc 1", version="1.0.0", document_type="other")
+    doc2 = Document.objects.create(component=sample_component, name="Doc 2", version="2.0.0", document_type="other")
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, document=doc1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    def add(document: Document, **extra: bool):
+        return client.post(
+            url,
+            json.dumps({"document_id": document.id, **extra}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+    assert add(doc2).status_code == 400
+    response = add(doc2, replace=True)
+    assert response.status_code == 201
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "Doc 1"
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("document_id", flat=True)) == [doc2.id]
+
 
 @pytest.mark.django_db
 def test_add_sbom_from_different_team_fails(
@@ -1196,12 +1288,12 @@ def test_add_sbom_from_different_team_fails(
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that adding SBOM from different team fails."""
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     client = Client()
 
     # Create a different team explicitly
-    different_team = Team.objects.create(name="different team")
+    different_team = Workspace.objects.create(name="different team")
 
     # Ensure SBOM belongs to component from different team
     sample_component.team = different_team
@@ -2009,3 +2101,172 @@ def test_download_filename_sanitizes_user_names():
     assert "\r" not in dirty and "\n" not in dirty and '"' not in dirty
     assert dirty.endswith(".cdx.json")
     assert _download_filename("", "", ".cdx.json") == "release.cdx.json"
+
+
+class TestReleaseDeleteKeepsLifecycleHistory:
+    """A release's CLE records are its published lifecycle trail.
+
+    Both foreign keys into Release cascade, so deleting a release used to take
+    that trail with it and say nothing. The refusal lives in the endpoint rather
+    than on the keys: PROTECT would block workspace deletion, which cascades
+    through product to release, and a nullable key would push a release-less
+    event into every reader.
+    """
+
+    @staticmethod
+    def _event(release, event_id=1):
+        from django.utils import timezone
+
+        from sbomify.apps.sboms.models import CLEEventType, ReleaseCLEEvent
+
+        return ReleaseCLEEvent.objects.create(
+            release=release,
+            event_id=event_id,
+            event_type=CLEEventType.RELEASED,
+            effective=timezone.now(),
+        )
+
+    @staticmethod
+    def _as_owner(client, product):
+        assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+        setup_test_session(client, product.team, product.team.members.first())
+
+    @pytest.mark.django_db
+    def test_a_release_carrying_lifecycle_records_is_not_deleted(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 400
+        assert "lifecycle record" in response.json()["detail"]
+        assert Release.objects.filter(id=release.id).exists()
+        assert ReleaseCLEEvent.objects.filter(release=release).count() == 1
+
+    @pytest.mark.django_db
+    def test_the_records_are_counted_under_the_product_lock(
+        self,
+        sample_product: Product,
+        sample_access_token: AccessToken,
+    ):
+        """A CLE event is written under that lock, so one written while the delete waited is seen."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        self._as_owner(client, sample_product)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = client.delete(
+                reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            )
+
+        assert response.status_code == 400
+        statements = [query["sql"] for query in queries.captured_queries]
+        product_table, event_table = Product._meta.db_table, ReleaseCLEEvent._meta.db_table
+        locks = [i for i, sql in enumerate(statements) if "FOR UPDATE" in sql and f'FROM "{product_table}"' in sql]
+        counts = [i for i, sql in enumerate(statements) if f'FROM "{event_table}"' in sql]
+        assert locks and counts and locks[0] < counts[0], statements
+
+    @pytest.mark.django_db
+    def test_a_release_without_them_still_deletes(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        """The guard must not become a blanket refusal."""
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 204
+        assert not Release.objects.filter(id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_deleting_the_product_still_removes_both(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """Deleting a product is a deliberate act about its whole history.
+
+        The cascade has to keep working, or the guard would strand products
+        that can never be removed.
+        """
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        # Its own product, so tearing it down does not fight the fixture's.
+        doomed = Product.objects.create(name="doomed-product", team=sample_product.team)
+        release = Release.objects.create(product=doomed, name="v1.0.0")
+        self._event(release)
+
+        doomed.delete()
+
+        assert not Release.objects.filter(id=release.id).exists()
+        assert not ReleaseCLEEvent.objects.filter(release_id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_deleting_the_workspace_still_works(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The ripple that rules out PROTECT.
+
+        Account deletion hard deletes an orphaned workspace, and that cascade
+        runs workspace to product to release to event. A protected key would
+        raise here and leave a user unable to delete their account.
+        """
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        team = sample_product.team
+
+        team.delete()
+
+        assert not Release.objects.filter(id=release.id).exists()
+        assert not ReleaseCLEEvent.objects.filter(release_id=release.id).exists()
+
+    @pytest.mark.django_db
+    def test_a_support_definition_alone_is_enough_to_refuse(
+        self,
+        sample_product: Product,  # noqa: F811
+        sample_access_token: AccessToken,  # noqa: F811
+    ):
+        """The other cascading key counts too, not just events."""
+        from sbomify.apps.sboms.models import ReleaseCLESupportDefinition
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        ReleaseCLESupportDefinition.objects.create(
+            release=release, support_id="std", description="Standard support window"
+        )
+        self._as_owner(client, sample_product)
+
+        response = client.delete(
+            reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+        assert response.status_code == 400
+        assert Release.objects.filter(id=release.id).exists()

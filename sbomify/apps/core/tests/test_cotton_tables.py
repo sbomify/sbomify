@@ -6,6 +6,9 @@ the Alpine state names the sortable header and the pager rely on, so a page can
 nest the set without ever writing a class itself.
 """
 
+import re
+from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -13,6 +16,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 
 TABLES_DIR = Path(settings.BASE_DIR) / "sbomify" / "templates" / "components" / "tables"
+APP_ROOT = Path(settings.BASE_DIR) / "sbomify"
 
 
 @pytest.fixture(scope="module")
@@ -37,7 +41,7 @@ def test_shell_frames_the_table(rendered: str) -> None:
 
 
 def test_nested_shell_drops_its_own_frame(rendered: str) -> None:
-    nested = _element_holding(rendered, "div", "bg-transparent")
+    nested = _element_holding(rendered, "div", 'data-probe="nested-shell"')
     assert "flex flex-col overflow-hidden" in nested
     assert "border-border" not in nested
     assert "rounded-xl" not in nested
@@ -55,19 +59,28 @@ def test_toolbar_recipe(rendered: str) -> None:
 
 def test_toolbar_renders_the_right_group_only_when_it_is_filled(rendered: str) -> None:
     filled, without_right = rendered.split("bg-transparent", 1)
-    assert filled.count('<div class="flex items-center gap-3">') == 2
-    assert without_right.count('<div class="flex items-center gap-3">') == 1
+    assert filled.count('<div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">') == 2
+    assert without_right.count('<div class="flex flex-wrap min-w-0 max-w-full items-center gap-3">') == 1
 
 
 def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
     field = _element_holding(rendered, "input", 'id="probe-search"')
-    for bit in ("py-2 pr-3 pl-9", "min-w-[240px]", "bg-surface", "rounded-[0.5rem]", "placeholder:text-text-muted"):
+    for bit in (
+        "py-2",
+        "pr-[0.75rem]",
+        "pl-9",
+        "min-w-0",
+        "bg-surface",
+        "rounded-[0.5rem]",
+        "placeholder:text-text-muted",
+    ):
         assert bit in field
     assert "focus:outline-none focus:border-primary" in field
     assert "focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]" in field
     assert 'placeholder="Search components"' in field
     assert '<label for="probe-search" class="sr-only">Search components</label>' in rendered
-    assert '<i class="fas fa-search absolute left-3 text-sm text-text-muted pointer-events-none"' in rendered
+    assert "fas fa-search absolute top-1/2 -translate-y-1/2" in rendered
+    assert "left-3 text-sm" in rendered
 
 
 def test_search_forwards_its_binding_to_the_input(rendered: str) -> None:
@@ -76,9 +89,9 @@ def test_search_forwards_its_binding_to_the_input(rendered: str) -> None:
 
 def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
     select = _element_holding(rendered, "select", 'id="probe-per-page"')
-    for bit in ("py-1.5 pr-8 pl-3", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
+    for bit in ("py-1.5 pr-8 pl-[0.75rem] max-sm:min-h-11", "appearance-none", "bg-[position:right_0.5rem_center]", "bg-[length:1.25rem]"):
         assert bit in select
-    assert "bg-[url(data:image/svg+xml," in select
+    assert "data:image/svg+xml," in select
     assert 'x-model.number="perPage"' in select
     assert '<option value="10">Ten</option>' in select
     assert '<label for="probe-per-page" class="sr-only">Entries per page</label>' in rendered
@@ -87,7 +100,8 @@ def test_page_size_select_recipe_and_options_slot(rendered: str) -> None:
 
 
 def test_table_scrolls_inside_its_own_box(rendered: str) -> None:
-    assert '<div class="overflow-x-auto">' in rendered
+    assert "data-table-viewport" in rendered
+    assert 'class="overflow-x-auto [overflow-anchor:none]"' in rendered
     assert "w-full border-separate border-spacing-0" in _element_holding(rendered, "table", 'data-probe="table"')
 
 
@@ -127,10 +141,13 @@ def test_header_cell_band_recipe(rendered: str) -> None:
         "text-text-muted bg-background",
         "border-b border-solid border-border",
         "sticky top-0 z-[1]",
-        "first:rounded-tl-lg last:rounded-tr-lg",
         "first:pl-4 last:pr-4 max-sm:px-2",
     ):
         assert bit in cell
+    # The surface it sits in owns the corners. A cell that rounds itself cuts a
+    # notch wherever the table is not at the top of its card, and a smaller
+    # curve than the card's where it is.
+    assert "rounded" not in cell
 
 
 def test_header_cell_alignment_segments_never_conflict(rendered: str) -> None:
@@ -159,8 +176,8 @@ def test_sortable_header_keeps_the_table_state_names(rendered: str) -> None:
     assert ":data-sort=\"sortColumn === 'name' ? sortDirection : 'none'\"" in sortable
     assert "@click=\"sort('name')\"" in sortable
     assert 'data-sort="none"' in sortable
-    assert "inline-flex items-center gap-2 uppercase cursor-pointer select-none hover:text-primary" in sortable
-    assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in sortable
+    assert "inline-flex max-w-full items-center gap-2 uppercase cursor-pointer select-none hover:text-text" in sortable
+    assert "focus-visible:ring-2 focus-visible:ring-primary/40" in sortable
 
 
 def test_sortable_header_label_is_uppercase_like_an_unsorted_one(rendered: str) -> None:
@@ -177,10 +194,10 @@ def test_sortable_header_label_is_uppercase_like_an_unsorted_one(rendered: str) 
 
 def test_sort_icon_states_are_mutually_exclusive(rendered: str) -> None:
     sortable = _element_holding(rendered, "th", "Name column")
-    assert "flex flex-col gap-px opacity-30" in sortable
+    assert "h-3.5 w-2 shrink-0 flex-col items-center justify-center gap-px opacity-30" in sortable
     assert "[[data-sort=none]:hover_&]:opacity-60" in sortable
-    assert "[[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-primary" in sortable
-    assert "[[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-primary" in sortable
+    assert "[[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-text" in sortable
+    assert "[[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-text" in sortable
     assert "fa-caret-up text-[0.5rem] leading-none [[data-sort=desc]_&]:opacity-25" in sortable
     assert "fa-caret-down text-[0.5rem] leading-none [[data-sort=asc]_&]:opacity-25" in sortable
 
@@ -239,8 +256,39 @@ def test_nowrap_cell_holds_the_name_on_one_line_and_caps_it(rendered: str) -> No
     ending in an ellipsis.
     """
     cell = _element_holding(rendered, "td", "Nowrap body cell")
-    assert '<div class="truncate max-w-[24rem]">Nowrap body cell</div>' in cell
+    assert '<div class="truncate max-w-[24rem] *:truncate">Nowrap body cell</div>' in cell
     assert "whitespace-nowrap" not in cell
+
+
+def test_nowrap_cell_ends_every_stacked_line_in_its_own_ellipsis(rendered: str) -> None:
+    """A description under the name is its own block, so it needs its own ellipsis.
+
+    text-overflow only marks text overflowing the box it is set on. With the
+    truncation on the wrapper alone, a long description inherited nowrap, ran
+    past its block and was clipped mid letter by the wrapper with no ellipsis.
+    """
+    cell = _element_holding(rendered, "td", 'data-probe="stacked-description"')
+    wrapper = cell.split('<div class="truncate max-w-[24rem] *:truncate">', 1)
+    assert len(wrapper) == 2, "the nowrap wrapper does not give its children an ellipsis"
+    assert 'data-probe="stacked-description"' in wrapper[1]
+
+
+def test_name_line_lets_the_name_give_way_and_keeps_the_trail_whole(rendered: str) -> None:
+    """The name ellipsises in its own box and the trail sits beside it, outside that box."""
+    line = _element_holding(rendered, "td", 'data-probe="name-with-trail"')
+    assert '<div class="flex items-center gap-2 min-w-0" data-probe="name-with-trail">' in line
+    name, trail = line.split('<div class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">')
+    assert '<div class="truncate min-w-0">' in name
+    assert "Named body cell" in name
+    assert "trail-badge" not in name
+    assert 'data-probe="trail-badge"' in trail
+
+
+def test_name_line_drops_an_empty_trail(rendered: str) -> None:
+    """A trail whose badges are all conditional leaves no gap when none apply."""
+    line = _element_holding(rendered, "td", 'data-probe="name-with-empty-trail"')
+    assert "Bare named cell" in line
+    assert "shrink-0" not in line
 
 
 def test_a_cell_without_nowrap_gets_no_wrapper(rendered: str) -> None:
@@ -282,6 +330,32 @@ def test_actions_cell_states_its_own_column_gutters(rendered: str) -> None:
     assert "max-sm:px-2" not in header
 
 
+def test_pinned_actions_column_holds_the_right_edge(rendered: str) -> None:
+    """The inventory table is wider than the content column on a 1440 or 1366
+    laptop, so the trailing actions column scrolled out of sight. It is the only
+    route to download, edit, delete and several other actions, and the only clue
+    it exists is a scrollbar under the last row."""
+    body = _element_holding(rendered, "td", "Pinned component actions")
+    assert "sticky right-0" in body
+    header = _element_holding(rendered, "th", "Pinned row actions")
+    assert "sticky right-0" in header
+
+
+def test_pinned_actions_cell_paints_its_own_background(rendered: str) -> None:
+    """A row's hover tint is transparent, so a pinned cell that did not paint
+    itself would show the scrolling cells sliding underneath it."""
+    body = _element_holding(rendered, "td", "Pinned component actions")
+    assert "bg-surface" in body
+    assert "group-hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,var(--color-surface))]" in body
+
+
+def test_an_unpinned_actions_cell_is_unchanged(rendered: str) -> None:
+    # The exact pinned recipe, not its parts: the icon button nested in this
+    # cell carries hover:bg-surface of its own.
+    body = _element_holding(rendered, "td", "Component actions")
+    assert "sticky right-0" not in body
+
+
 def test_actions_cell_forwards_attrs_and_nests_its_menu_button(rendered: str) -> None:
     body = _element_holding(rendered, "td", "Component actions")
     assert "@click.stop" in body
@@ -311,14 +385,310 @@ def test_pager_drives_the_current_page_state(rendered: str) -> None:
     assert 'aria-label="Next page"' in pager
     assert ':disabled="currentPage === totalPages"' in pager
     assert '@click="if (currentPage < totalPages) currentPage++"' in pager
-    assert '<span x-text="currentPage"></span> / <span x-text="totalPages"></span>' in pager
+    assert '<span x-text="$number(currentPage)"></span> / <span x-text="$number(totalPages)"></span>' in pager
 
 
-def test_pager_arrows_render_through_the_buttons_set(rendered: str) -> None:
+def test_pager_arrows_render_through_the_shared_page_control(rendered: str) -> None:
     pager = [part for part in rendered.split('<div class="flex items-center gap-2"') if "Previous page" in part][0]
-    assert "px-3.5 py-2 min-h-9 text-xs rounded-md" in pager
-    # Asserted as separate utilities, not one substring: secondary restates its
-    # resting colour on hover, which sits between them in the class list.
+    assert "min-w-8 h-8 max-sm:min-w-11 max-sm:min-h-11 px-2 rounded-md" in pager
+    # Arrows use the same neutral hover recipe as numbered pages.
     for utility in ("bg-surface", "text-text", "hover:text-text", "border-border"):
         assert utility in pager
     assert '<i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>' in pager
+
+
+@pytest.mark.parametrize(
+    "label,order,state",
+    [
+        ("Server ascending", "ascending", "asc"),
+        ("Server descending", "descending", "desc"),
+        ("Server unsorted", "none", "none"),
+    ],
+)
+def test_server_and_client_headers_share_the_sort_control(rendered: str, label: str, order: str, state: str) -> None:
+    server = _element_holding(rendered, "th", label)
+    client = _element_holding(rendered, "th", "Name column")
+    assert f'aria-sort="{order}"' in server
+    assert f'data-sort="{state}"' in server
+    assert 'hx-boost="true"' in server
+    assert "@click" not in server
+    assert "<a " in server
+    assert "<button " in client
+    # Link and button carry exactly the same recipe and permanently reserve
+    # the same pair of carets, including the unsorted server state.
+    server_control = server.split("<a ", 1)[1]
+    client_control = client.split("<button ", 1)[1]
+    assert (
+        server_control.split('class="', 1)[1].split('"', 1)[0] == client_control.split('class="', 1)[1].split('"', 1)[0]
+    )
+    assert server.split('<span class="inline-flex', 1)[1] == client.split('<span class="inline-flex', 1)[1].replace(
+        "</button>", "</a>"
+    )
+
+
+def test_screen_reader_table_hides_its_wrapper_not_the_table() -> None:
+    """overflow does not reliably clip a table box, so the hiding class has to
+    sit on a block around it; the caption and the slot's rows stay in the table."""
+    rendered = render_to_string("core/cotton_probes/screen_reader_table.html.j2")
+    wrapper = _element_holding(rendered, "div", 'data-probe="screen-reader-table"')
+    assert 'class="sr-only"' in wrapper
+    table_tag, table = wrapper.split("<table", 1)[1].split(">", 1)
+    assert "sr-only" not in table_tag
+    assert "<caption>Probe series</caption>" in table
+    assert '<th scope="row">Oct 7</th>' in table
+
+
+def test_select_all_reads_the_shell_selection(rendered: str) -> None:
+    head = _element_holding(rendered, "th", "data-row-select-all")
+    assert "data-cell-select" in head
+    assert 'aria-label="Select all components"' in head
+    assert ':checked="allSelected"' in head
+    assert 'x-effect="$el.indeterminate = someSelected"' in head
+    assert ':disabled="rows.length === 0"' in head
+    assert '@click.stop="toggleAll()"' in head
+    # The gutter is variant-prefixed like the default recipe it replaces, so the
+    # default never lands beside it.
+    assert "w-12 first:pl-4 first:pr-0 max-sm:px-2" in head
+    assert "last:pr-4" not in head
+
+
+def test_row_box_carries_its_id_and_name(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", 'value="cmp-1"')
+    assert "data-cell-select" in cell
+    assert 'aria-label="Select acme-gateway-core"' in cell
+    assert 'data-row-label="acme-gateway-core"' in cell
+    assert "data-row-select " in cell
+    # Clicks, not x-model, so a shift-click can select a run of rows.
+    assert "x-model" not in cell
+    assert "@click.stop=\"toggle('cmp\\u002D1', $event)\"" in cell
+
+
+def test_a_disabled_row_box_is_disabled_on_the_input(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", 'value="cmp-2"')
+    assert "\n       disabled\n" in cell
+
+
+def test_an_x_for_row_binds_its_id_name_and_lock(rendered: str) -> None:
+    cell = _element_holding(rendered, "td", ':value="item.id"')
+    assert ':disabled="item.locked"' in cell
+    assert "\n       disabled\n" not in cell
+    assert ":aria-label=\"'Select ' + (item.name)\"" in cell
+    assert ':data-row-label="item.name"' in cell
+    assert '@click.stop="toggle(String(item.id), $event)"' in cell
+
+
+def test_a_selected_row_is_tinted_from_its_checked_box(rendered: str) -> None:
+    row = _element_holding(rendered, "tr", 'value="cmp-1"')
+    assert "has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)]" in row
+
+
+def test_a_pinned_actions_cell_restates_the_selected_tint() -> None:
+    source = (TABLES_DIR / "actions_cell.html").read_text()
+    assert (
+        "group-has-[[data-row-select]:checked]:bg-[color-mix(in_oklab,var(--color-primary)_8%,var(--color-surface))]"
+        in source
+    )
+
+
+def test_bulk_bar_shows_only_with_a_selection_and_announces_the_count(rendered: str) -> None:
+    bar = _element_holding(rendered, "div", 'data-probe="bulk-bar"')
+    assert 'x-show="count > 0"' in bar
+    assert "x-cloak" in bar
+    assert "px-4 py-3" in bar
+    assert " p-" not in bar.split('class="', 1)[1].split('"', 1)[0]
+    # The band runs to the table; its own controls and the page's actions sit inside it.
+    band = rendered.split('data-probe="bulk-bar"', 1)[1].split("<table", 1)[0]
+    assert '@click="clear()"' in band
+    assert "Clear selection" in band
+    assert '@click="confirmDelete()"' in band
+    status = rendered.split('role="status"', 1)[1].split(">", 1)[0]
+    assert "countOf('component', 'components') + ' selected'" in status
+
+
+def _dialogs(rendered: str) -> list[str]:
+    """Each bulk delete dialog in the probe, in order: form post, htmx with a target, htmx toast-only."""
+    return rendered.split('role="alertdialog"')[1:]
+
+
+def test_bulk_delete_confirms_before_posting(rendered: str) -> None:
+    dialog = _dialogs(rendered)[0]
+    assert 'aria-label="Delete components"' in dialog
+    assert 'x-show="confirmingDelete"' in rendered.split('role="alertdialog"')[0][-400:]
+    assert "Delete components" in dialog
+    form = dialog.split("<form", 1)[1].split("</form>", 1)[0]
+    assert "data-bulk-delete-form" in form
+    assert 'method="post"' in form
+    assert 'action="/probe/bulk-delete"' in form
+    assert "hx-post" not in form
+    # The rows are read once more as the form posts, and an empty or stale selection does not post.
+    assert '@submit="if (!startDelete()) $event.preventDefault()"' in form
+    assert '@pageshow.window="pageRestored($event)"' in form
+    assert '<input type="hidden" name="ids" :value="rowId">' in form
+    assert "selectedLabels.slice(0, 5)" in form
+    # The button repeats the count, cannot be pressed twice, and finds its own
+    # dialog's form rather than a page-wide form id.
+    button = _element_holding(dialog, "button", "data-bulk-delete-confirm")
+    assert 'type="button"' in button
+    assert 'form="' not in button
+    assert "$el.closest('[role=alertdialog]').querySelector('form[data-bulk-delete-form]').requestSubmit()" in button
+    assert ':disabled="submitting"' in button
+    assert "'Delete ' + countOf('component', 'components')" in button
+    # Cancel only locks while an htmx request is in flight.
+    cancel = _element_holding(dialog, "button", ':disabled="inFlight"')
+    assert '@click="cancelDelete()"' in cancel
+    assert "Cancel" in cancel
+    # The form-post dialog teleports; the htmx ones cannot.
+    assert "<template x-teleport" in rendered.split('role="alertdialog"', 1)[0][-1200:]
+
+
+def test_bulk_delete_without_an_id_names_no_element(rendered: str) -> None:
+    """Two dialogs on one page must not share ids, so an unnamed one carries none."""
+    dialog_tag = rendered.split('data-probe="bulk-delete"', 1)[0].rsplit("<div", 1)[1]
+    assert " id=" not in dialog_tag
+    assert "aria-labelledby" not in dialog_tag
+
+
+def test_htmx_bulk_delete_posts_in_place_and_stays_wired(rendered: str) -> None:
+    before, after = rendered.split('id="probe-bulk-delete-htmx"', 1)
+    assert "<template x-teleport" not in before[-300:]
+    form = after.split("<form", 1)[1].split("</form>", 1)[0]
+    assert 'hx-post="/probe/bulk-delete"' in form
+    assert 'hx-target="#probe-target"' in form
+    # A target with no swap named replaces the target, so the deleted rows go.
+    assert 'hx-swap="outerHTML"' in form
+    assert '@htmx:before-request="if (!startDelete(true)) $event.preventDefault()"' in form
+    assert '@htmx:after-request="deleteFinished($event.detail.successful)"' in form
+    assert 'method="post"' not in form
+
+
+def test_htmx_bulk_delete_without_a_target_swaps_nothing(rendered: str) -> None:
+    form = _dialogs(rendered)[2].split("<form", 1)[1].split("</form>", 1)[0]
+    assert 'hx-swap="none"' in form
+    assert "hx-target" not in form
+
+
+def test_row_boxes_stop_the_click_at_the_box(rendered: str) -> None:
+    """A row that opens on click must not also open when its box is ticked."""
+    for marker in ('value="cmp-1"', ':value="item.id"'):
+        cell = _element_holding(rendered, "td", marker)
+        assert "@click.stop=" in cell
+        assert "@keydown.enter.stop" in cell
+    assert '@click.stop="toggleAll()"' in _element_holding(rendered, "th", "data-row-select-all")
+
+
+@dataclass
+class _Node:
+    tag: str
+    classes: list[str] = field(default_factory=list)
+    children: list["_Node"] = field(default_factory=list)
+    text: str = ""
+
+
+class _Tree(HTMLParser):
+    VOID = {"br", "hr", "img", "input", "meta", "link", "source", "wbr"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.root = _Node("root")
+        self.stack = [self.root]
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        node = _Node(tag, (dict(attrs).get("class") or "").split())
+        self.stack[-1].children.append(node)
+        # Alpine fills an x-text element in the browser: it shows text all the same.
+        if "x-text" in dict(attrs):
+            node.children.append(_Node("#text", text=dict(attrs)["x-text"] or ""))
+        if tag not in self.VOID:
+            self.stack.append(node)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.stack[-1].children.append(_Node(tag, (dict(attrs).get("class") or "").split()))
+
+    def handle_endtag(self, tag: str) -> None:
+        for depth in range(len(self.stack) - 1, 0, -1):
+            if self.stack[depth].tag == tag:
+                del self.stack[depth:]
+                return
+
+    def handle_data(self, data: str) -> None:
+        if data.strip():
+            self.stack[-1].children.append(_Node("#text", text=data.strip()))
+
+
+def _has_text(node: _Node) -> bool:
+    return node.tag == "#text" or any(_has_text(child) for child in node.children)
+
+
+def _is_adornment(node: _Node) -> bool:
+    """A badge, or a link or button that is only an icon."""
+    if node.tag.startswith("c-badges."):
+        return True
+    if node.tag == "span" and any(c == "rounded-full" or c.startswith("rounded-[var(--radius") for c in node.classes):
+        return True
+    return node.tag in {"a", "button"} and not _has_text(node) and any(c.tag == "i" for c in node.children)
+
+
+def _is_same_line_row(node: _Node) -> bool:
+    """A flex row that lays its children out on the name's line, rather than a line of its own below it."""
+    if node.tag != "div" or not {"flex", "inline-flex"} & set(node.classes):
+        return False
+    return not any(c in {"flex-wrap", "flex-col"} or re.match(r"(mt|pt)-", c) for c in node.classes)
+
+
+def _clipped_adornments(nodes: list[_Node]) -> bool:
+    inline: list[_Node] = []
+    for node in nodes:
+        if _is_same_line_row(node):
+            if _clipped_adornments(node.children):
+                return True
+        elif node.tag not in {"div", "details", "p", "form"}:
+            inline.append(node)
+    return any(map(_is_adornment, inline)) and not all(map(_is_adornment, inline))
+
+
+_NOWRAP_CELL = re.compile(r"<c-tables\.cell\b[^>]*\bnowrap\b[^>]*>(.*?)</c-tables\.cell>", re.S)
+_NAME_LINE = re.compile(r"<c-tables\.name\b.*?</c-tables\.name>", re.S)
+_TEMPLATE_NOISE = re.compile(r"{%\s*comment\s*%}.*?{%\s*endcomment\s*%}|{#.*?#}|{%.*?%}", re.S)
+
+
+def _templates_with_clipped_adornments() -> list[str]:
+    offenders = []
+    for path in sorted([*APP_ROOT.rglob("*.html"), *APP_ROOT.rglob("*.j2")]):
+        if "node_modules" in path.parts or "static" in path.parts:
+            continue
+        source = path.read_text()
+        for cell in _NOWRAP_CELL.finditer(source):
+            parser = _Tree()
+            parser.feed(_NAME_LINE.sub("", _TEMPLATE_NOISE.sub("", cell.group(1))))
+            if _clipped_adornments(parser.root.children):
+                offenders.append(f"{path.relative_to(APP_ROOT)}:{source.count(chr(10), 0, cell.start()) + 1}")
+    return offenders
+
+
+def test_no_nowrap_cell_puts_a_badge_after_the_name_on_its_line() -> None:
+    """A nowrap cell clips its content as one box, so a badge after a long name is cut off or hidden.
+
+    The badge, flag or icon link belongs in the trail slot of <c-tables.name>,
+    which lets the name ellipsise and keeps the trail whole. A cell holding only
+    badges, or badges on a line of their own below the name, is fine.
+    """
+    assert _templates_with_clipped_adornments() == []
+
+
+def test_the_nowrap_guard_catches_a_badge_after_the_name() -> None:
+    for body in (
+        '<div class="flex items-center gap-2"><a x-text="name"></a><span class="rounded-full">SBOM</span></div>',
+        "<span>{{ doc.name }}</span><c-badges.violet>unreadable</c-badges.violet>",
+        '<code>{{ repo }}</code><a href="#" title="Open"><i class="fas fa-link"></i></a>',
+    ):
+        parser = _Tree()
+        parser.feed(body)
+        assert _clipped_adornments(parser.root.children), body
+    for body in (
+        '<a x-text="name"></a><div class="hidden sm:block mt-1"><c-badges.warning>Doc</c-badges.warning></div>',
+        "<c-badges.primary>Product override</c-badges.primary>",
+        '<a :href="url"><span x-text="id"></span><i class="fas fa-external-link-alt"></i></a><span x-text="id"></span>',
+    ):
+        parser = _Tree()
+        parser.feed(body)
+        assert not _clipped_adornments(parser.root.children), body

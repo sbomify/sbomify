@@ -188,9 +188,9 @@ def test_untag_dry_run_writes_nothing(sample_component, mocker, enqueue):  # noq
 def test_team_id_restricts_candidates(sample_component, mocker, enqueue):  # noqa: F811
     """#1069: --team-id only re-tags SBOMs in that workspace."""
     from sbomify.apps.core.utils import number_to_random_token
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
-    other_team = Team.objects.create(name="Other")
+    other_team = Workspace.objects.create(name="Other")
     other_team.key = number_to_random_token(other_team.pk)
     other_team.save()
     other_component = Component.objects.create(

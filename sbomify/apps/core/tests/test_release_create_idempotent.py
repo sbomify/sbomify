@@ -79,6 +79,8 @@ def test_an_unrelated_integrity_error_is_not_rewritten(
 
     response = _create(client, sample_product)
 
-    # The generic handler reports it; it is not a 200 and not a duplicate 400.
-    assert response.status_code == 400
+    # The generic handler reports it as the server fault it is, not as a
+    # duplicate. A NOT NULL violation reaching the view is our bug, not the
+    # caller's, so it must not come back as a 4xx.
+    assert response.status_code == 500
     assert "already exists" not in response.json()["detail"]

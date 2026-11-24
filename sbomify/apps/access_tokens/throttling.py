@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from math import ceil
@@ -10,7 +11,24 @@ from django.conf import settings
 from django.core.cache import caches
 from django.core.cache.backends.base import BaseCache
 from django.http import HttpRequest, HttpResponse
+from django_redis.exceptions import ConnectionInterrupted
 from ninja.throttling import SimpleRateThrottle
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
+from sbomify.backend_outage import report_backend_outage
+
+#: What a throttle treats as "the backend is unreachable": django-redis wraps
+#: the redis error in ConnectionInterrupted, but IGNORE_EXCEPTIONS is off on
+#: the throttle alias so the raw errors can surface too.
+_THROTTLE_BACKEND_ERRORS = (ConnectionInterrupted, RedisConnectionError, RedisTimeoutError)
+
+#: The Retry-After a refused caller sees while Redis recovers. Short, because
+#: a blip usually is: the same figure the redis clients use as their retry
+#: backoff ceiling.
+_BACKEND_OUTAGE_RETRY_SECONDS = 5
+
+logger = logging.getLogger(__name__)
 
 
 class AccessTokenRateThrottle(SimpleRateThrottle):
@@ -24,6 +42,12 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
     # Distinguishes one throttle's sliding window from another's; subclasses override
     # it so they never share (and corrupt) the base throttle's counter.
     cache_key_prefix = "throttle_access_token"
+
+    # Until when a backend outage has already been logged. Class-level so it
+    # survives the per-request instances the MCP server builds; a subclass
+    # assigning it gets its own, which is what we want — two throttles failing
+    # for the same reason are still two things worth hearing about once each.
+    _backend_refusal_until: float = 0.0
 
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_RATE_LIMIT)
@@ -45,6 +69,14 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         """
         return caches["throttle"]
 
+    def wait(self) -> float | None:
+        # The flag is shared, so it is read best effort: a racing request at
+        # worst reports the outage Retry-After instead of its own window, and
+        # Retry-After is advisory.
+        if time.monotonic() < type(self)._backend_refusal_until:
+            return float(_BACKEND_OUTAGE_RETRY_SECONDS)
+        return super().wait()
+
     def get_cache_key(self, request: HttpRequest) -> str | None:
         record = getattr(request, "access_token_record", None)
         if record is None:
@@ -52,7 +84,54 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         return f"{self.cache_key_prefix}_{record.pk}"
 
     def allow_request(self, request: HttpRequest) -> bool:
-        allowed = super().allow_request(request)
+        try:
+            allowed = super().allow_request(request)
+            # Backend reachable again: from here on, any refusal is a genuine
+            # rate limit, so wait() must report the real window, not the
+            # outage hint left over from before recovery. Cleared on the class
+            # for the same reason it is set there — one recovered request means
+            # the backend is back for every instance, not just this one.
+            type(self)._backend_refusal_until = 0.0
+        except _THROTTLE_BACKEND_ERRORS as exc:
+            # The throttle alias raises on a Redis failure by design: a
+            # swallowed failure reads as an empty window and hands every
+            # caller a fresh budget exactly when Redis being unwell suggests
+            # someone is hammering it. But the refusal must be a refusal, not
+            # a traceback. Unwrapped, this surfaced as a 500 on every
+            # throttled endpoint for the length of a Redis blip, with the
+            # trust-center release download the loudest.
+            #
+            # Returning False is the only safe refusal: ninja runs throttles
+            # in _run_checks, OUTSIDE Operation.run's try, so anything raised
+            # here bypasses every exception handler and lands as a raw 500.
+            # ninja then calls wait() and routes a Throttled through the 429
+            # handler itself, Retry-After included. Fail closed, politely.
+            #
+            # The refusal must still be heard: the old 500 was the alert, so
+            # going quiet would hide the outage. One log per refusal window
+            # keeps the signal without a log storm.
+            #
+            # The window lives on the class, not the instance: ninja reuses one
+            # throttle per route, but the MCP server builds a fresh one per
+            # request (its instances are not thread-safe to share), and an
+            # instance attribute would start every one of those at zero and put
+            # the storm back.
+            #
+            # An unreachable Redis is reported through the shared outage line,
+            # like every other caller, so it reaches Sentry only if it lasts.
+            # Anything else django-redis wrapped (an OOM, a read-only replica)
+            # is a fault in its own right and keeps its own report.
+            cls = type(self)
+            if (
+                time.monotonic() >= cls._backend_refusal_until
+                and report_backend_outage(exc, "API rate limiter") is None
+            ):
+                logger.exception(
+                    "Throttle backend unreachable; refusing throttled requests with Retry-After %ss until it recovers",
+                    _BACKEND_OUTAGE_RETRY_SECONDS,
+                )
+            cls._backend_refusal_until = time.monotonic() + _BACKEND_OUTAGE_RETRY_SECONDS
+            return False
         # Ninja reuses one throttle instance across requests, so its per-request scratch
         # (self.key/history/now) is unsafe to read here. Compute the budget from local
         # state and this request's own token instead: get_cache_key() is a pure function
@@ -64,7 +143,14 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         now = time.time()
         duration = self.duration or 0
         limit = self.num_requests or 0
-        history = [ts for ts in self.cache.get(key, []) if ts > now - duration]
+        try:
+            window = self.cache.get(key, [])
+        except _THROTTLE_BACKEND_ERRORS:
+            # The decision above already succeeded; this read only feeds the
+            # X-RateLimit headers. Losing the headers for one response beats
+            # failing a request the throttle just allowed.
+            return allowed
+        history = [ts for ts in window if ts > now - duration]
         remaining = max(0, limit - len(history))
         # ceil so the reset is never reported earlier than a slot actually frees.
         reset = ceil((history[-1] if history else now) + duration)
@@ -106,6 +192,16 @@ class AnonymousIPRateThrottle(AccessTokenRateThrottle):
     single shared budget would be trivially exhausted. That helper only honours
     ``X-Real-IP`` from a trusted proxy, so the key cannot be spoofed to escape
     the limit either.
+
+    That makes this limit only as good as the value Caddy puts in ``X-Real-IP``,
+    which is a dependency worth naming because it has already failed once. The
+    Caddyfile sent ``header_up X-Real-IP {remote_host}`` — the *peer* address —
+    so behind Cloudflare every visitor on the internet arrived wearing one of a
+    handful of edge addresses and shared one budget: exactly the "trivially
+    exhausted" pool this docstring warns about. It now sends ``{client_ip}``,
+    which Caddy resolves from ``Cf-Connecting-Ip`` for trusted peers. If per-IP
+    limits ever look like they are firing on innocent traffic, check that
+    placeholder before tuning the rates.
 
     A request that already carries a token is left to the token throttle, so an
     authenticated integration is not charged twice for one call.

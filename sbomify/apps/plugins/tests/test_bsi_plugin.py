@@ -78,14 +78,14 @@ def create_base_spdx3_sbom() -> dict:
                 "spdxId": "SPDXRef-Creator",
                 "creationInfo": "_:creationInfo",
                 "name": "SBOM Creator Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "sbom@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "sbom@example.com"}],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Maintainer",
                 "creationInfo": "_:creationInfo",
                 "name": "Example Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "maintainer@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "maintainer@example.com"}],
             },
             {
                 "type": "software_Package",
@@ -94,8 +94,8 @@ def create_base_spdx3_sbom() -> dict:
                 "name": "example-package",
                 "software_packageVersion": "1.0.0",
                 "originatedBy": ["SPDXRef-Maintainer"],
-                "externalIdentifiers": [
-                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                "externalIdentifier": [
+                    {"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/example@1.0.0"}
                 ],
             },
             {
@@ -465,7 +465,20 @@ class TestComponentLevelValidation:
         assert finding.status == "pass"
 
     def test_component_creator_with_url_passes(self):
-        """Component creator with valid URL should pass."""
+        """Component creator with a valid URL array, as the schema types it, should pass."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["manufacturer"] = {
+            "name": "Example Corp",
+            "url": ["https://example.com"],
+        }
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:component-creator")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_component_creator_with_url_string_passes(self):
+        """A bare URL string is not schema-valid but is still accepted."""
         sbom = create_base_cyclonedx_sbom()
         sbom["components"][0]["manufacturer"] = {
             "name": "Example Corp",
@@ -476,6 +489,32 @@ class TestComponentLevelValidation:
         finding = get_finding(result, "bsi-tr03183:component-creator")
         assert finding is not None
         assert finding.status == "pass"
+
+    def test_component_creator_url_array_skips_invalid_entries(self):
+        """Invalid entries in the URL array are skipped, not fatal."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["manufacturer"] = {
+            "name": "Example Corp",
+            "url": [None, "not a url", "https://example.com"],
+        }
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:component-creator")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_component_creator_url_array_without_valid_entry_fails(self):
+        """A URL array with no valid entry and no email should fail."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["manufacturer"] = {
+            "name": "Example Corp",
+            "url": ["not a url"],
+        }
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:component-creator")
+        assert finding is not None
+        assert finding.status == "fail"
 
     def test_component_creator_missing_fails(self):
         """Component without creator contact should fail."""
@@ -900,7 +939,7 @@ class TestAdditionalDataFields:
         sbom = create_base_spdx3_sbom()
         for element in sbom["@graph"]:
             if element.get("type") == "software_Package":
-                element.setdefault("externalIdentifiers", []).append(
+                element.setdefault("externalIdentifier", []).append(
                     {
                         "externalIdentifierType": "vcs",
                         "identifier": "https://github.com/example/repo",

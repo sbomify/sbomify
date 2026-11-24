@@ -1,0 +1,31 @@
+<c-modal id="cra-start-assessment" show="startOpen" title="Start assessment" size="sm">
+{% if available_products %}
+    <form id="cra-product-picker"
+          class="flex flex-col gap-4"
+          @submit.prevent="if (selectedProduct) window.location.assign(selectedProduct)">
+        <c-forms.hint compact>Choose a product. Scope screening checks whether the CRA applies before you start its assessment.</c-forms.hint>
+        <c-forms.field label="Product" for="cra-product-choice" required>
+        <c-forms.select id="cra-product-choice" x-model="selectedProduct" required>
+        <option value="">Choose a product</option>
+        {% for product in available_products %}
+            <option value="{% url 'compliance:cra_scope_screening' product_id=product.id %}">{{ product.name }}</option>
+        {% endfor %}
+        </c-forms.select>
+        </c-forms.field>
+    </form>
+{% elif assessments %}
+    <c-feedback.empty-state compact icon="fas fa-shield-halved" title="All products have assessments" message="Continue an existing assessment from the list, or create another product.">
+    <c-buttons.secondary href="{% url 'core:product_new' %}">Create product</c-buttons.secondary>
+    </c-feedback.empty-state>
+{% else %}
+    <c-feedback.empty-state compact icon="fas fa-cube" title="Create a product first" message="CRA assessments belong to products. Create a product to get started.">
+    <c-buttons.primary href="{% url 'core:product_new' %}"><i class="fas fa-plus" aria-hidden="true"></i>Create product</c-buttons.primary>
+    </c-feedback.empty-state>
+{% endif %}
+<c-slot name="footer">
+<c-buttons.secondary @click="startOpen = false">Cancel</c-buttons.secondary>
+{% if available_products %}
+    <c-buttons.primary type="submit" form="cra-product-picker" ::disabled="!selectedProduct">Start scope screening</c-buttons.primary>
+{% endif %}
+</c-slot>
+</c-modal>

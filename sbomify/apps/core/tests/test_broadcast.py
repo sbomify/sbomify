@@ -151,6 +151,21 @@ class TestPushNotification:
             assert data["action_url"] == "/test/url/"
             assert "id" in data  # Should have generated ID
 
+    def test_push_notification_with_title_and_action_label(self):
+        """A caller can name the modal and its button instead of the defaults."""
+        with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
+            push_notification(
+                workspace_key="test-workspace",
+                message="Scan failed",
+                action_url="/test/url/",
+                title="Vulnerability scan failed",
+                action_label="View SBOM",
+            )
+
+            data = mock_broadcast.call_args.kwargs["data"]
+            assert data["title"] == "Vulnerability scan failed"
+            assert data["action_label"] == "View SBOM"
+
     def test_push_notification_without_optional_fields(self):
         """Test push_notification works without optional action_url."""
         with patch("sbomify.apps.core.utils.broadcast_to_workspace") as mock_broadcast:
@@ -169,6 +184,8 @@ class TestPushNotification:
             assert data["severity"] == "info"  # Default
             assert data["notification_type"] == "system"  # Default
             assert data.get("action_url") is None
+            assert "title" not in data
+            assert "action_label" not in data
 
     def test_push_notification_generates_unique_ids(self):
         """Test that push_notification generates unique IDs for each call."""

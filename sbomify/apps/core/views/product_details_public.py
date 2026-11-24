@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db.models import Count, Exists, OuterRef, Q
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
@@ -14,7 +14,9 @@ from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifa
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
+    custom_domain_redirect,
     get_back_url_from_referrer,
+    get_component_public_slug,
     get_public_path,
     get_workspace_public_url,
     resolve_product_identifier,
@@ -28,13 +30,15 @@ from sbomify.apps.plugins.public_assessment_utils import (
 from sbomify.apps.sboms.models import SBOM, ProductIdentifier, ProductLink
 from sbomify.apps.tea.mappers import build_product_tei_urn
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # GTIN types that support barcode rendering
 BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
 
 
-def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[Any]:
+def _prepare_public_components(
+    product_id: str, is_custom_domain: bool, request: HttpRequest | None = None
+) -> list[Any]:
     """Prepare component data for display on the public product page.
 
     Uses batch query for assessment status to avoid N+1 queries.
@@ -55,6 +59,7 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
         .distinct()
     )
 
+    request = request or HttpRequest()
     assessments_by_component = get_components_latest_sbom_assessments_batch(components)
 
     public_components = []
@@ -64,12 +69,15 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
             {
                 "id": component.id,
                 "name": component.name,
-                "slug": component.slug,
+                "slug": get_component_public_slug(component, request),
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
                 "passing_assessments": passing_assessments,
                 "public_url": get_public_path(
-                    "component", component.id, is_custom_domain=is_custom_domain, slug=component.slug
+                    "component",
+                    component.id,
+                    is_custom_domain=is_custom_domain,
+                    slug=get_component_public_slug(component, request),
                 ),
             }
         )
@@ -137,6 +145,7 @@ def _get_public_releases(
             "released_at": release.released_at,
             "artifacts_count": release.annotated_artifacts_count,
             "has_sboms": release.annotated_has_sboms,
+            "lifecycle_state": release.lifecycle_state,
         }
         if is_custom_domain:
             release_data["public_url"] = f"/product/{product_slug}/release/{release_data['slug'] or release.id}/"
@@ -198,13 +207,15 @@ class ProductDetailsPublicView(View):
         product_boms = SBOM.objects.filter(component__products__id=resolved_id)
         has_downloadable_content = product_boms.filter(bom_type=SBOM.BomType.SBOM).exists()
         has_cbom = product_boms.filter(bom_type=SBOM.BomType.CBOM).exists()
-        team = Team.objects.filter(pk=product.get("team_id")).first()
+        team = Workspace.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
         if team and (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
             path = get_public_path("product", resolved_id, is_custom_domain=True, slug=product_obj.slug)
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
+            redirect = custom_domain_redirect(team, path, request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
         is_custom_domain = getattr(request, "is_custom_domain", False)
@@ -218,7 +229,7 @@ class ProductDetailsPublicView(View):
         # Prepare server-side data for Django templates
         from sbomify.apps.core.authz import can
 
-        public_components = _prepare_public_components(resolved_id, is_custom_domain)
+        public_components = _prepare_public_components(resolved_id, is_custom_domain, request)
         public_releases = _get_public_releases(
             resolved_id,
             is_custom_domain,

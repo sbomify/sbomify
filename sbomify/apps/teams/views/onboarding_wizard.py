@@ -6,8 +6,6 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -18,12 +16,9 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
-    ContactEntity,
-    ContactProfile,
-    ContactProfileContact,
     Member,
-    Team,
-    format_workspace_name,
+    Workspace,
+    default_patch_sla_days,
 )
 from sbomify.apps.teams.utils import (
     refresh_current_team_session,
@@ -36,7 +31,6 @@ if typing.TYPE_CHECKING:
 
 log = getLogger(__name__)
 
-DEFAULT_SBOM_AUGMENTATION_URL = "https://sbomify.com/features/generate-collaborate-analyze/"
 VALID_PLANS = {"community", "business", "enterprise"}
 
 
@@ -82,35 +76,54 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
-    def _render_setup(self, request: HttpRequest) -> HttpResponse:
+    def _render_setup(self, request: HttpRequest, form: OnboardingCompanyForm | None = None) -> HttpResponse:
         user = cast(User, request.user)
         initial: dict[str, Any] = {"email": getattr(request.user, "email", "")}
         full_name = user.get_full_name()
         if full_name:
             initial["contact_name"] = full_name
 
-        form = OnboardingCompanyForm(initial=initial)
-        sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
-
+        if form is None:
+            team = self._get_current_team(request)
+            initial.update(default_patch_sla_days())
+            if team:
+                initial.update(team.patch_sla_days)
+                initial["mode"] = "recommended" if team.patch_sla_days == default_patch_sla_days() else "custom"
+                if team.default_support_period_years is not None:
+                    initial["default_support_period_years"] = team.default_support_period_years
+            form = OnboardingCompanyForm(initial=initial)
+        security_fields = {
+            "security_email",
+            "publish_security_txt",
+            "mode",
+            "critical",
+            "high",
+            "medium",
+            "low",
+            "default_support_period_years",
+        }
+        setup_step = "security" if form.errors and not (set(form.errors) - security_fields) else "organization"
         context = {
             "form": form,
+            "wizard_config": {"step": setup_step, "addressExpanded": bool(form["address"].value())},
             "current_step": "setup",
-            "sbom_augmentation_url": sbom_augmentation_url,
             "billing_enabled": is_billing_enabled(),
         }
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_complete(self, request: HttpRequest) -> HttpResponse:
+        from sbomify.apps.teams.services.contacts import get_security_contact
+
         # Keyed on the company name rather than a component id: the wizard no
         # longer creates a component, and gating on one meant this step could
         # only be reached by having an entity the user never asked for.
         company_name = request.session.get("wizard_company_name")
         if not company_name:
-            return redirect(reverse("teams:onboarding_wizard"))
+            return redirect(reverse("workspaces:onboarding_wizard"))
 
         billing_enabled = is_billing_enabled()
         if billing_enabled:
-            next_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+            next_url = f"{reverse('workspaces:onboarding_wizard')}?step=plan"
         else:
             # The dashboard, where the onboarding checklist asks for a product
             # and a component. Those steps used to be pre-ticked by the wizard
@@ -118,9 +131,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             # had done either.
             next_url = reverse("core:dashboard")
 
+        team = self._get_current_team(request)
         context = {
             "current_step": "complete",
             "company_name": company_name,
+            "setup_saved": True,
+            "security_contact_saved": bool(team and get_security_contact(team)),
+            "support_default_saved": bool(team and team.default_support_period_years),
             "next_url": next_url,
             "billing_enabled": billing_enabled,
         }
@@ -147,7 +164,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if plan_hint not in VALID_PLANS:
             plan_hint = ""
 
-        context = self._build_plan_context(plan_hint)
+        from sbomify.apps.teams.services.onboarding import build_onboarding_plan_context
+
+        context = build_onboarding_plan_context(request, team, plan_hint)
         context["current_step"] = "plan"
         context["billing_enabled"] = True
         return render(request, "core/components/onboarding_wizard.html.j2", context)
@@ -158,7 +177,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         if not is_billing_enabled():
             return redirect("core:dashboard")
 
-        plan_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
+        plan_url = f"{reverse('workspaces:onboarding_wizard')}?step=plan"
 
         if check_rate_limit(f"onboarding_plan:{request.user.pk}", limit=RATE_LIMIT, period=RATE_LIMIT_PERIOD):
             messages.error(request, "Too many requests. Please try again later.")
@@ -202,13 +221,13 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 messages.error(request, "Business plan not configured. Please contact support.")
                 return redirect(plan_url)
 
-            team_key: str | None = team.key
-            if not team_key:
+            workspace_key: str | None = team.key
+            if not workspace_key:
                 log.error("Team %s has no key set — cannot start billing checkout", getattr(team, "pk", "unknown"))
                 messages.error(request, "We couldn't start the checkout for your workspace. Please contact support.")
                 return redirect(plan_url)
 
-            if not acquire_checkout_lock(team_key):
+            if not acquire_checkout_lock(workspace_key):
                 messages.info(request, "A checkout is already in progress. Please wait.")
                 return redirect(plan_url)
 
@@ -236,15 +255,15 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                 self._pop_wizard_session(request)
                 return redirect(session.url)
             except StripeError:
-                release_checkout_lock(team_key)
-                log.exception("Stripe error creating checkout session for team %s", team_key)
+                release_checkout_lock(workspace_key)
+                log.exception("Stripe error creating checkout session for team %s", workspace_key)
                 messages.warning(
                     request,
                     "We couldn't start the checkout right now. You're on the Community plan — you can upgrade anytime.",
                 )
                 return redirect(plan_url)
             except Exception:
-                release_checkout_lock(team_key)
+                release_checkout_lock(workspace_key)
                 raise
 
         team.has_selected_billing_plan = True
@@ -253,10 +272,10 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return redirect("core:dashboard")
 
     @staticmethod
-    def _get_current_team(request: HttpRequest) -> Team | None:
-        team_key = request.session.get("current_team", {}).get("key")
-        if team_key:
-            team = Team.objects.filter(key=team_key).first()
+    def _get_current_team(request: HttpRequest) -> Workspace | None:
+        workspace_key = request.session.get("current_workspace", {}).get("key")
+        if workspace_key:
+            team = Workspace.objects.filter(key=workspace_key).first()
             if team:
                 return team
         user = cast(User, request.user)
@@ -264,7 +283,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _can_administer_team(user: Any, team: Team) -> bool:
+    def _can_administer_team(user: Any, team: Workspace) -> bool:
         """The wizard configures the workspace, so it's the ADMINISTER tier."""
         return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 
@@ -273,161 +292,27 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         request.session.pop("wizard_company_name", None)
         request.session.pop("onboarding_plan_hint", None)
 
-    @staticmethod
-    def _build_plan_context(plan_hint: str) -> dict[str, Any]:
-        from sbomify.apps.billing.models import BillingPlan
-        from sbomify.apps.billing.stripe_pricing_service import StripePricingService
-
-        plan_order = {"community": 0, "business": 1, "enterprise": 2}
-        plans = sorted(BillingPlan.objects.filter(key__in=VALID_PLANS), key=lambda p: plan_order.get(p.key or "", 99))
-        from sbomify.apps.billing.config import is_billing_enabled
-
-        stripe_pricing = {}
-        if is_billing_enabled():
-            pricing_service = StripePricingService()
-            try:
-                stripe_pricing = pricing_service.get_all_plans_pricing()
-            except Exception:
-                log.exception("Failed to fetch Stripe pricing for onboarding plan selection")
-
-        plan_data = []
-        for plan in plans:
-            pricing = stripe_pricing.get(plan.key or "", {})
-            plan_data.append(
-                {
-                    "key": plan.key,
-                    "name": plan.name,
-                    "description": plan.description or "",
-                    "max_products": plan.max_products,
-                    "max_components": plan.max_components,
-                    "monthly_price": float(pricing.get("monthly_price") or 0),
-                    "annual_price": float(pricing.get("annual_price") or 0),
-                    "monthly_price_discounted": float(pricing.get("monthly_price_discounted") or 0),
-                    "annual_price_discounted": float(pricing.get("annual_price_discounted") or 0),
-                    "discount_percent_monthly": pricing.get("discount_percent_monthly", 0),
-                    "discount_percent_annual": pricing.get("discount_percent_annual", 0),
-                    "annual_savings_percent": pricing.get("annual_savings_percent", 0),
-                }
-            )
-
-        return {
-            "plans": plan_data,
-            "plan_hint": plan_hint,
-            "trial_days": settings.TRIAL_PERIOD_DAYS,
-        }
-
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
+        from sbomify.apps.teams.services.onboarding import complete_workspace_setup
 
         team = self._get_current_team(request)
         if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
-
         if team.is_payment_restricted:
             messages.error(request, "Your account is suspended. Please update your payment method.")
-            return redirect("teams:onboarding_wizard")
-
-        sbom_augmentation_url = getattr(settings, "SBOM_AUGMENTATION_URL", DEFAULT_SBOM_AUGMENTATION_URL)
+            return redirect("workspaces:onboarding_wizard")
 
         form = OnboardingCompanyForm(request.POST)
         if form.is_valid():
-            company_name = form.cleaned_data["company_name"]
+            result = complete_workspace_setup(team, cast(User, request.user), form.cleaned_data)
+            if result.ok and result.value:
+                if result.value.warning:
+                    messages.warning(request, result.value.warning)
+                update_user_teams_session(request, cast(User, request.user))
+                refresh_current_team_session(request, result.value.workspace)
+                request.session["wizard_company_name"] = form.cleaned_data["company_name"]
+                messages.success(request, "Your workspace settings are saved.")
+                return redirect(f"{reverse('workspaces:onboarding_wizard')}?step=complete")
+            form.add_error(None, result.error or "Unable to complete setup. Please try again.")
 
-            # Skip billing limit checks during onboarding. The wizard creates at
-            # most one product/component pair via get_or_create and should never
-            # be blocked — otherwise teams with pre-existing assets at the limit
-            # get stuck in an infinite onboarding loop.
-
-            try:
-                with transaction.atomic():
-                    website_url = form.cleaned_data.get("website")
-                    contact_name = form.cleaned_data["contact_name"]
-                    contact_email = (form.cleaned_data.get("email") or "").strip() or getattr(request.user, "email", "")
-
-                    contact_profile, created = ContactProfile.objects.get_or_create(
-                        team=team, is_default=True, defaults={"name": "Default"}
-                    )
-
-                    # A profile can only have one manufacturer entity. If one
-                    # already exists (e.g. from a previous onboarding attempt
-                    # with a different company name), update it in place.
-                    entity = ContactEntity.objects.filter(profile=contact_profile, is_manufacturer=True).first()
-                    if entity:
-                        # Only rename if no other entity in this profile already has the target name,
-                        # to avoid violating the unique (profile, name) constraint.
-                        name_conflict = (
-                            ContactEntity.objects.filter(profile=contact_profile, name=company_name)
-                            .exclude(pk=entity.pk)
-                            .exists()
-                        )
-                        if not name_conflict:
-                            entity.name = company_name
-                        else:
-                            messages.warning(
-                                request,
-                                f'Another entity named "{company_name}" already exists — kept the previous name.',
-                            )
-                        entity.email = contact_email
-                        if website_url:
-                            entity.website_urls = [website_url]
-                        entity.is_supplier = True
-                        entity.save(update_fields=["name", "email", "website_urls", "is_supplier", "updated_at"])
-                    else:
-                        entity = ContactEntity.objects.create(
-                            profile=contact_profile,
-                            name=company_name,
-                            email=contact_email,
-                            website_urls=[website_url] if website_url else [],
-                            is_manufacturer=True,
-                            is_supplier=True,
-                        )
-
-                    contact, created = ContactProfileContact.objects.get_or_create(
-                        entity=entity,
-                        name=contact_name,
-                        email=contact_email,
-                        defaults={"is_author": True},
-                    )
-                    if not created and not contact.is_author:
-                        contact.is_author = True
-                        contact.save(update_fields=["is_author"])
-
-                    # The wizard used to create a product named after the company and a
-                    # component called "Main Component" here. It no longer does.
-                    #
-                    # Bootstrapping an account left two entities nobody asked for, which
-                    # had to be found and deleted before the account looked like the one
-                    # being set up. It also pre-ticked the dashboard's own "create your
-                    # first product" and "create your first component" steps, so the
-                    # checklist meant to guide someone through those was complete before
-                    # they had done either.
-                    #
-                    # What the wizard is for — the workspace name, the manufacturer and
-                    # contact identity above, the onboarding goal — is unchanged.
-                    team.name = format_workspace_name(company_name)
-                    team.has_completed_wizard = True
-                    team.onboarding_goal = form.cleaned_data.get("goal", "")
-                    team.save(update_fields=["name", "has_completed_wizard", "onboarding_goal"])
-
-                    update_user_teams_session(request, cast(User, request.user))
-                    refresh_current_team_session(request, team)
-
-                    request.session["wizard_company_name"] = company_name
-                    request.session.modified = True
-                    request.session.save()
-
-                messages.success(request, "Your SBOM identity has been set up!")
-                return redirect(f"{reverse('teams:onboarding_wizard')}?step=complete")
-            except (IntegrityError, ValidationError) as e:
-                log.warning("Conflict during onboarding for team %s, company_name='%s': %s", team.key, company_name, e)
-                messages.warning(
-                    request,
-                    "Setup could not be completed due to a conflict. Please try again or contact support.",
-                )
-
-        context = {
-            "form": form,
-            "current_step": "setup",
-            "sbom_augmentation_url": sbom_augmentation_url,
-            "billing_enabled": is_billing_enabled(),
-        }
-        return render(request, "core/components/onboarding_wizard.html.j2", context)
+        return self._render_setup(request, form=form)

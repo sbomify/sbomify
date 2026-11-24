@@ -58,7 +58,7 @@ def owner_client(sample_sbom, sample_user):  # noqa: F811
     client = Client()
     client.force_login(sample_user)
     session = client.session
-    session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+    session["current_workspace"] = {"id": team.id, "key": team.key, "role": "owner"}
     session.save()
     return client
 
@@ -82,6 +82,31 @@ class TestRerunSucceeds:
         kwargs = send.call_args.kwargs
         assert kwargs["run_reason"] == "manual"
         assert kwargs["triggered_by_user_id"] == sample_user.id
+
+    def test_the_run_carries_the_workspace_config_for_the_plugin(
+        self, owner_client, sample_sbom, enabled_plugin, mocker
+    ):
+        """The upload and the scheduled scans pass it, so a re-run scans with the same settings."""
+        TeamPluginSettings.objects.filter(team=sample_sbom.component.team).update(
+            plugin_configs={"osv": {"ecosystem": "PyPI"}, "dependency-track": {"dt_server_id": "pinned"}}
+        )
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        owner_client.post(_url(sample_sbom.id))
+
+        assert send.call_args.kwargs["config"] == {"ecosystem": "PyPI"}
+
+    def test_a_workspace_with_no_config_for_the_plugin_sends_none(
+        self, owner_client, sample_sbom, enabled_plugin, mocker
+    ):
+        TeamPluginSettings.objects.filter(team=sample_sbom.component.team).update(
+            plugin_configs={"dependency-track": {"dt_server_id": "pinned"}}
+        )
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        owner_client.post(_url(sample_sbom.id))
+
+        assert send.call_args.kwargs["config"] is None
 
 
 class TestRerunIsGated:

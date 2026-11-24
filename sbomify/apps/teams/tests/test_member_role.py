@@ -132,17 +132,19 @@ class TestMemberCannotOverstep:
         tabs = {tab.key for tab in visible_tabs("member", billing_enabled=True)}
         assert tabs == {"tokens", "account"}, tabs
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
+        response = client.get(reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}))
         assert response.status_code == 200
         body = response.content.decode()
-        assert "Trust Center" not in body
-        assert "Branding" not in body
+        assert 'data-settings-tab="tokens"' in body
+        assert 'data-settings-tab="account"' in body
+        assert 'data-settings-tab="trust-center"' not in body
+        assert 'data-settings-tab="branding"' not in body
 
     def test_member_cannot_change_workspace_settings(self, member_client):
         """Reaching the page is not the same as being able to act on it.
 
         Needs a paid plan and is_public=False to be a real test: the model default
-        is True, and Team.save() force-sets is_public back to True when the plan
+        is True, and Workspace.save() force-sets is_public back to True when the plan
         cannot be private — so on a community workspace this would assert on state
         the model controls rather than on the guard.
         """
@@ -154,7 +156,7 @@ class TestMemberCannotOverstep:
         assert team.is_public is False, "setup failed: workspace should start private"
 
         response = client.post(
-            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            reverse("workspaces:team_settings", kwargs={"workspace_key": team.key}),
             {"visibility_action": "update", "is_public": ["false", "true"]},
         )
         assert response.status_code in (302, 403)
@@ -164,7 +166,7 @@ class TestMemberCannotOverstep:
     def test_member_cannot_invite(self, member_client):
         client, team = member_client
         response = client.post(
-            reverse("teams:invite_user", kwargs={"team_key": team.key}),
+            reverse("workspaces:invite_user", kwargs={"workspace_key": team.key}),
             {"email": "someone@example.com", "role": "owner"},
         )
         assert response.status_code == 403

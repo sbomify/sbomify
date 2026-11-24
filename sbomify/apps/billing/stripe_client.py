@@ -18,6 +18,14 @@ from .utils import STRIPE_API_LIMIT
 
 logger = getLogger(__name__)
 
+# Statuses in which a workspace's stored subscription is still the one it pays
+# through. While it is, an event for a different subscription of the same
+# customer describes one the workspace has replaced.
+LIVE_SUBSCRIPTION_STATUSES = frozenset({"active", "trialing", "past_due", "incomplete"})
+
+# Statuses Stripe never moves a subscription out of.
+TERMINAL_SUBSCRIPTION_STATUSES = frozenset({"canceled", "incomplete_expired"})
+
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -59,6 +67,30 @@ class BillingRetryableError(StripeError):
     succeed on a later attempt: transient DB/Stripe outages, a checkout race
     where the team↔subscription mapping is not yet written, or a billing plan
     that is momentarily unresolvable.
+    """
+
+    pass
+
+
+class BillingEventTooEarlyError(BillingRetryableError):
+    """The event arrived before the one it depends on, so Stripe should redeliver it.
+
+    Retryable like its parent, but an expected ordering rather than a fault, so the
+    webhook view reports it as a warning without a traceback.
+    """
+
+    pass
+
+
+class WorkspaceGoneError(StripeError):
+    """The workspace this event belongs to no longer exists.
+
+    Terminal like its parent, and acknowledged the same way, but separated so
+    the webhook view can report it for what it is. Every lookup strategy missed,
+    which means no workspace holds the subscription, the customer, or the key the
+    customer's own metadata names. Deleting a workspace cancels its subscription,
+    and Stripe reports that cancellation back here after the row has gone, so an
+    event with nowhere to land is an expected end state rather than a fault.
     """
 
     pass
@@ -209,6 +241,13 @@ class StripeClient:
 
         if trial_days:
             subscription_data["trial_period_days"] = trial_days
+            # A trial started this way carries no card, so say what happens when
+            # it ends without one. Stripe otherwise raises an invoice nobody can
+            # pay, which reaches the customer as a failed-payment notice for a
+            # trial they simply let lapse, and leaves the workspace past_due.
+            # Cancelling ends it cleanly, on the path the deleted-subscription
+            # handler already downgrades from.
+            subscription_data["trial_settings"] = {"end_behavior": {"missing_payment_method": "cancel"}}
 
         subscription = stripe.Subscription.create(**subscription_data)
 

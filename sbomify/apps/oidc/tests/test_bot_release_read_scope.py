@@ -1,0 +1,278 @@
+"""An OIDC bot reads release contents only on products that hold its bound component.
+
+The bot keeps ``release:read`` because the publish workflow lists releases to see
+whether one already exists, and that grant covers the whole workspace. The
+endpoints that hand over what a release contains (the SBOM, VEX and CBOM
+downloads and the artifact listing) also confine the bot to the products its
+binding publishes to, the rule ``create_release`` already applies.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.test import Client
+
+from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact, ReleaseLink
+from sbomify.apps.oidc.models import OIDCBinding
+from sbomify.apps.oidc.services import provision_bot_user_for_binding
+from sbomify.apps.sboms.models import SBOM
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture
+def bound_component(team_with_business_plan) -> Component:
+    return Component.objects.create(name="Bound", team=team_with_business_plan)
+
+
+@pytest.fixture
+def bot_token(bound_component, sample_user, github_claims_factory, mock_github_jwks) -> str:
+    """A GitHub OIDC token exchanged against a binding on ``bound_component``."""
+    placeholder = get_user_model().objects.create_user(username="placeholder-read-scope", password="x")
+    binding = OIDCBinding.objects.create(
+        component=bound_component,
+        provider=OIDCBinding.PROVIDER_GITHUB,
+        repository="acme/widget",
+        repository_id=12345,
+        repository_owner_id=67890,
+        bot_user=placeholder,
+        created_by=sample_user,
+    )
+    binding.bot_user = provision_bot_user_for_binding(binding)
+    binding.save(update_fields=["bot_user"])
+
+    response = Client().post(
+        "/api/v1/auth/oidc/github/exchange",
+        data=json.dumps({"component_id": bound_component.id}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {github_claims_factory()}",
+    )
+    assert response.status_code == 200, response.content
+    return response.json()["access_token"]
+
+
+def _release(component: Component, *, is_public: bool) -> Release:
+    product = Product.objects.create(name=f"{component.name}-{is_public}", team=component.team, is_public=is_public)
+    product.components.add(component)
+    release = Release.objects.create(product=product, name="v1")
+    sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", format_version="1.6")
+    ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    return release
+
+
+@pytest.fixture
+def own_release(bound_component) -> Release:
+    return _release(bound_component, is_public=False)
+
+
+@pytest.fixture
+def other_component(team_with_business_plan) -> Component:
+    return Component.objects.create(name="Other", team=team_with_business_plan)
+
+
+@pytest.fixture
+def other_release(other_component) -> Release:
+    return _release(other_component, is_public=False)
+
+
+@pytest.fixture
+def public_other_release(other_component) -> Release:
+    return _release(other_component, is_public=True)
+
+
+@pytest.fixture
+def builders(mocker, tmp_path) -> dict:
+    """Stand-ins for the aggregate builders, which read artifacts from S3.
+
+    The tests only need to see whether a download is served, and for which audience it was built.
+    """
+    cache.clear()
+    package = tmp_path / "release.cdx.json"
+    package.write_text("{}")
+    return {
+        "sbom": mocker.patch("sbomify.apps.core.apis.get_release_sbom_package", return_value=package),
+        "vex": mocker.patch("sbomify.apps.vulnerability_scanning.vex.build_release_vex", return_value={"a": 1}),
+        "cbom": mocker.patch("sbomify.apps.core.apis._release_cbom_document", return_value={"a": 1}),
+    }
+
+
+def _get(url: str, token: str):
+    return Client().get(url, HTTP_AUTHORIZATION=f"Bearer {token}")
+
+
+# Every release endpoint that serves what the release contains, relative to /api/v1/releases/<id>/.
+CONTENT_PATHS = ("download", "vex/download", "cbom/download", "artifacts?mode=existing")
+
+
+@pytest.mark.parametrize("path", CONTENT_PATHS)
+def test_bot_cannot_read_a_private_product_it_does_not_publish_to(path, bot_token, other_release, builders):
+    assert _get(f"/api/v1/releases/{other_release.id}/{path}", bot_token).status_code == 403
+
+
+def test_bot_reads_release_detail_only_on_a_product_it_publishes_to(bot_token, own_release, other_release):
+    """The release detail lists what the release contains, so it follows the same rule."""
+    assert _get(f"/api/v1/releases/{own_release.id}", bot_token).status_code == 200
+    assert _get(f"/api/v1/releases/{other_release.id}", bot_token).status_code == 403
+
+
+def test_bot_gets_the_public_view_of_a_public_product_it_does_not_publish_to(bot_token, public_other_release, builders):
+    for path in CONTENT_PATHS:
+        assert _get(f"/api/v1/releases/{public_other_release.id}/{path}", bot_token).status_code == 200, path
+    assert builders["sbom"].call_args.kwargs["include_non_public"] is False
+    assert builders["vex"].call_args.kwargs["include_non_public"] is False
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is False
+
+
+def test_bot_reads_the_whole_release_of_a_product_holding_its_component(bot_token, own_release, builders):
+    for path in CONTENT_PATHS:
+        assert _get(f"/api/v1/releases/{own_release.id}/{path}", bot_token).status_code == 200, path
+    assert builders["sbom"].call_args.kwargs["include_non_public"] is True
+    assert builders["vex"].call_args.kwargs["include_non_public"] is True
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is True
+
+
+@pytest.mark.parametrize(("publishes_to_it", "fixture"), [(True, "bound_component"), (False, "other_component")])
+def test_bot_product_cbom_audience_follows_its_binding(publishes_to_it, fixture, bot_token, builders, request):
+    """The product CBOM serves the latest release's CBOM, so the release rule picks its audience too.
+
+    Public products only: the product downloads refuse the bot on a private product.
+    """
+    product = _release(request.getfixturevalue(fixture), is_public=True).product
+
+    assert _get(f"/api/v1/products/{product.id}/cbom/download", bot_token).status_code == 200
+    assert builders["cbom"].call_args.kwargs["include_non_public"] is publishes_to_it
+
+
+def test_bot_without_a_binding_is_denied_its_own_product(bot_token, own_release, builders, mocker):
+    """Fail closed, as ``create_release`` does.
+
+    Patched rather than deleting the binding: deleting it reaps the bot user, so the request would
+    fail at authentication and never reach the check under test.
+    """
+    mocker.patch("sbomify.apps.oidc.permissions.bound_component_id_for_request", return_value=None)
+
+    assert _get(f"/api/v1/releases/{own_release.id}/download", bot_token).status_code == 403
+
+
+def test_bot_still_lists_releases_to_check_one_exists(bot_token, own_release):
+    """The publish workflow's release-exists check, which the confinement must leave alone."""
+    response = _get(f"/api/v1/releases?product_id={own_release.product_id}", bot_token)
+
+    assert response.status_code == 200
+    assert str(own_release.id) in {item["id"] for item in response.json()["items"]}
+
+
+# ---------------------------------------------------------------------------
+# Linked releases. A publish workflow links its release to the toolchain it
+# ships with, a product its bound component is not part of. That must not widen
+# what the bot reads: through a link, a product it does not publish to reads as
+# the public sees it.
+# ---------------------------------------------------------------------------
+
+
+def _link(token: str, release: Release, target: Release):
+    return Client().post(
+        f"/api/v1/releases/{release.id}/links",
+        data=json.dumps({"release_id": target.id}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+
+
+def test_bot_links_its_release_to_a_product_it_does_not_publish_to(bot_token, own_release, other_release):
+    response = _link(bot_token, own_release, other_release)
+    assert response.status_code == 201, response.content
+    assert ReleaseLink.objects.filter(release=own_release, linked_release=other_release).exists()
+
+
+def test_bot_cannot_link_from_a_product_it_does_not_publish_to(bot_token, own_release, other_release):
+    assert _link(bot_token, other_release, own_release).status_code == 403
+
+
+def test_bot_download_reads_the_linked_product_as_the_public_does(bot_token, own_release, other_release, builders):
+    ReleaseLink.objects.create(release=own_release, linked_release=other_release)
+
+    response = Client().get(f"/api/v1/releases/{own_release.id}/download", HTTP_AUTHORIZATION=f"Bearer {bot_token}")
+
+    assert response.status_code == 200
+    kwargs = builders["sbom"].call_args.kwargs
+    assert kwargs["include_non_public"] is True
+    assert kwargs["readable_product_ids"] == set()
+
+
+def test_bot_download_reads_a_linked_product_it_publishes_to_in_full(
+    bot_token, own_release, other_release, bound_component, builders
+):
+    other_release.product.components.add(bound_component)
+    ReleaseLink.objects.create(release=own_release, linked_release=other_release)
+
+    Client().get(f"/api/v1/releases/{own_release.id}/download", HTTP_AUTHORIZATION=f"Bearer {bot_token}")
+
+    assert builders["sbom"].call_args.kwargs["readable_product_ids"] == {other_release.product_id}
+
+
+def test_a_member_download_is_not_confined(authenticated_api_client, team_with_business_plan, builders):
+    from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+    product = Product.objects.create(name="App", team=team_with_business_plan)
+    release = Release.objects.create(product=product, name="v1")
+    component = Component.objects.create(name="c", team=team_with_business_plan)
+    ReleaseArtifact.objects.create(
+        release=release, sbom=SBOM.objects.create(name="s", component=component, format="cyclonedx")
+    )
+    client, token = authenticated_api_client
+
+    client.get(f"/api/v1/releases/{release.id}/download", **get_api_headers(token))
+
+    assert builders["sbom"].call_args.kwargs["readable_product_ids"] is None
+
+
+# ---------------------------------------------------------------------------
+# Supersession. A drop-in edge stops sbomify monitoring the release it names,
+# so naming predecessors needs release:manage, which the bot does not hold.
+# ---------------------------------------------------------------------------
+
+
+def test_bot_creates_a_release_but_cannot_name_what_it_replaces(bot_token, own_release):
+    def create(**body):
+        return Client().post(
+            "/api/v1/releases",
+            data=json.dumps({"product_id": own_release.product_id, "name": "v2", "version": "v2", **body}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {bot_token}",
+        )
+
+    refused = create(supersedes=[{"release_id": own_release.id}])
+    assert refused.status_code == 403, refused.content
+    assert "manage releases" in refused.json()["detail"]
+    assert create().status_code == 201
+
+
+def test_bot_sees_why_a_release_was_withdrawn_only_on_a_product_it_publishes_to(
+    bot_token, bound_component, own_release, other_component, public_other_release
+):
+    """The bot lists every release in its workspace, but why one was withdrawn is internal."""
+    from sbomify.apps.core.services.release_lifecycle import set_release_state
+
+    for release in (own_release, public_other_release):
+        assert set_release_state(release, "withdraw", reason="compromised").ok
+    # The bot lists a component's releases only when the component is public.
+    Component.objects.filter(pk__in=[bound_component.pk, other_component.pk]).update(
+        visibility=Component.Visibility.PUBLIC
+    )
+
+    def listed(url: str) -> dict[str, str | None]:
+        response = _get(url, bot_token)
+        assert response.status_code == 200, response.content
+        return {item["id"]: item["withdrawn_reason"] for item in response.json()["items"]}
+
+    assert _get(f"/api/v1/releases/{own_release.id}", bot_token).json()["withdrawn_reason"] == "compromised"
+    assert _get(f"/api/v1/releases/{public_other_release.id}", bot_token).json()["withdrawn_reason"] is None
+    assert listed(f"/api/v1/releases?product_id={own_release.product_id}")[own_release.id] == "compromised"
+    assert listed(f"/api/v1/releases?product_id={public_other_release.product_id}")[public_other_release.id] is None
+    assert listed(f"/api/v1/components/{bound_component.id}/releases")[own_release.id] == "compromised"
+    assert listed(f"/api/v1/components/{other_component.id}/releases")[public_other_release.id] is None

@@ -4,6 +4,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
@@ -12,7 +13,7 @@ from django.test import Client, RequestFactory
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 from .fixtures import (  # noqa: F401
     business_plan,
@@ -39,18 +40,20 @@ def factory():
 
 
 @pytest.mark.django_db
-def test_select_plan_requires_login(client: Client, team_with_business_plan: Team):  # noqa: F811
+def test_select_plan_requires_login(client: Client, team_with_business_plan: Workspace):  # noqa: F811
     """Test that plan selection page requires authentication."""
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url.startswith(settings.LOGIN_URL)
 
 
 @pytest.mark.django_db
-def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBaseUser, team_with_business_plan: Team):  # noqa: F811
+def test_select_plan_requires_team_owner(
+    client: Client, guest_user: AbstractBaseUser, team_with_business_plan: Workspace
+):  # noqa: F811
     """Test that only team owners can access plan selection."""
     client.force_login(guest_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")
     messages = list(get_messages(response.wsgi_request))
@@ -61,32 +64,56 @@ def test_select_plan_requires_team_owner(client: Client, guest_user: AbstractBas
 def test_select_plan_page(
     client: Client,
     sample_user: AbstractBaseUser,  # noqa: F811
-    team_with_business_plan: Team,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
     community_plan: BillingPlan,  # noqa: F811
     business_plan: BillingPlan,  # noqa: F811
 ):
     """Test plan selection page display."""
     client.force_login(sample_user)
-    response = client.get(reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}))
+    response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}))
 
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_what_a_downgrade_costs_renders_as_the_alert_body(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Workspace,  # noqa: F811
+    community_plan: BillingPlan,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+):
+    """The alert's default slot is a paragraph, and a list inside a paragraph is
+    closed out of it by the parser, so the list lands outside the alert's text
+    column. The block content goes in the named body slot instead."""
+    client.force_login(sample_user)
+
+    html = client.get(
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    ).content.decode()
+
+    alert = html[html.index("Moving here costs you") :]
+    alert = alert[: alert.index("</ul>")]
+    assert "<ul" in alert
+    assert '<p class="text-sm leading-6 m-0">' not in alert
 
 
 @pytest.mark.django_db
 def test_select_community_plan_immediate(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """Test switching to community plan when no active subscription exists (immediate)."""
     # clear subscription id to simulate no active sub
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
     response = client.post(
-        reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": community_plan.key}
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
     )
 
     assert response.status_code == 302
@@ -101,10 +128,181 @@ def test_select_community_plan_immediate(
 
 
 @pytest.mark.django_db
+def test_a_downgrade_the_workspace_has_outgrown_is_refused(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+):
+    """The plan cards disable a move down to a plan the workspace is over the
+    limits of. The server refuses the same request, whatever was posted."""
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    for name in ("first", "second"):
+        Product.objects.create(team=team_with_business_plan, name=name)
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
+def test_selecting_community_is_refused_when_the_sync_with_stripe_fails(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A sync that fails must not leave the stale stored status to decide.
+
+    The workspace reads canceled and Stripe has the subscription active, but the
+    sync's read fails transiently. Carried on, the guard would skip the check on
+    the stored status and the canceled branch would move an over-limit workspace
+    to Community while Stripe keeps billing it.
+    """
+    from sbomify.apps.core.models import Product
+
+    modified: list[str] = []
+    calls: list[str] = []
+
+    def flaky_retrieve(subscription_id: str, **kwargs) -> stripe.Subscription:
+        calls.append(subscription_id)
+        if len(calls) == 1:
+            raise stripe.error.APIConnectionError("Network blip")
+        return stripe.Subscription.construct_from(
+            {"id": subscription_id, "status": "active", "cancel_at_period_end": False, "cancel_at": None}, "sk_test"
+        )
+
+    monkeypatch.setattr(stripe.Subscription, "retrieve", flaky_retrieve)
+    monkeypatch.setattr(
+        stripe.Subscription, "modify", lambda subscription_id, **kwargs: modified.append(subscription_id)
+    )
+    team_with_business_plan.billing_plan_limits = {
+        **team_with_business_plan.billing_plan_limits,
+        "subscription_status": "canceled",
+    }
+    team_with_business_plan.save()
+    for i in range(community_plan.max_products + 1):
+        Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
+    client.force_login(sample_user)
+
+    response = client.post(
+        reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+        {"plan": community_plan.key},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Could not read the subscription before changing the plan. Please try again."
+    ]
+    assert modified == []
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
+def test_usage_committed_after_the_first_check_still_blocks_the_downgrade(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+):
+    """The first check runs before the plan write's transaction. Product creation
+    takes the same workspace lock as that write, so the write checks again under
+    it, and usage that landed in between still counts."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            # Another request commits two products between this check and the write.
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with patch.object(plan_selection, "check_downgrade", side_effect=check_then_race):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "business"
+
+
+@pytest.mark.django_db
+def test_usage_committed_after_the_first_check_still_blocks_a_scheduled_downgrade(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+):
+    """A subscription already cancelling at period end records Community as its
+    scheduled plan under the workspace lock. That write checks again too."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits["cancel_at_period_end"] = True
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
 def test_select_community_plan_with_subscription_redirects_to_portal(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     community_plan: BillingPlan,
 ):
     """Test selecting community plan with active subscription redirects to Portal (cancel flow)."""
@@ -114,26 +312,31 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
     team_with_business_plan.save()
 
     client.force_login(sample_user)
-    
+
     # Mock create_billing_portal_session on the CLASS
-    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+    # The sync before the guard reads Stripe through its own client. Stubbed as a
+    # sync that found nothing to change; a failed sync is its own test above.
+    with (
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+    ):
         mock_session = MagicMock()
         mock_session.url = "https://billing.stripe.com/p/session/test_portal_123"
         mock_create_portal.return_value = mock_session
 
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), 
-            {"plan": community_plan.key}
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
         )
 
         assert response.status_code == 302
         # Verify redirect to create_portal_session
         assert "/billing/portal/" in response.url
         assert "subscription_cancel" in response.url
-        
+
         # Follow the redirect manually
         response = client.get(response.url)
-        
+
         assert response.status_code == 302
         assert response.url == "https://billing.stripe.com/p/session/test_portal_123"
 
@@ -145,10 +348,168 @@ def test_select_community_plan_with_subscription_redirects_to_portal(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("already_cancelling", [False, True])
+def test_the_portal_cancel_flow_refuses_a_workspace_over_community_limits(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+    already_cancelling: bool,
+):
+    """The plan page links an active subscription straight to the portal, so the
+    cancel flow asks the same downgrade check before it opens a session."""
+    from sbomify.apps.core.models import Product
+
+    limits = team_with_business_plan.billing_plan_limits
+    limits.update(
+        {"stripe_subscription_id": "sub_test_123", "subscription_status": "active"},
+        cancel_at_period_end=already_cancelling,
+    )
+    team_with_business_plan.save()
+    for name in ("first", "second"):
+        Product.objects.create(team=team_with_business_plan, name=name)
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as create_portal,
+    ):
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
+            + "?flow_type=subscription_cancel"
+        )
+
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    create_portal.assert_not_called()
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("cancel_at_period_end", [True, False], ids=["known-cancellation", "stripe-already-scheduled"])
+def test_usage_committed_after_the_portal_check_still_blocks_the_scheduled_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+    cancel_at_period_end: bool,
+):
+    """Both places the portal view records Community as the scheduled plan, the
+    known cancellation and Stripe's "already scheduled" answer, check again under
+    the workspace lock, so usage that landed after the first check still counts."""
+    from sbomify.apps.billing.services import plan_selection
+    from sbomify.apps.billing.stripe_client import StripeError
+    from sbomify.apps.core.models import Product
+
+    team_with_business_plan.billing_plan_limits.update(
+        {"stripe_subscription_id": "sub_test_123", "subscription_status": "active"},
+        cancel_at_period_end=cancel_at_period_end,
+    )
+    team_with_business_plan.save()
+    real_check = plan_selection.check_downgrade
+    outcomes: list[bool] = []
+
+    def check_then_race(workspace, plan):
+        result = real_check(workspace, plan)
+        if not outcomes:
+            for name in ("first", "second"):
+                Product.objects.create(team=team_with_business_plan, name=name)
+        outcomes.append(result.ok)
+        return result
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe"),
+        patch(
+            "sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session",
+            side_effect=StripeError("This subscription is already set to be canceled."),
+        ),
+        patch.object(plan_selection, "check_downgrade", side_effect=check_then_race),
+    ):
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
+            + "?flow_type=subscription_cancel"
+        )
+
+    assert outcomes == [True, False]
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Reduce usage to choose Community: 2 products (limit: 1)."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert "scheduled_downgrade_plan" not in team_with_business_plan.billing_plan_limits
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", ["portal-known-cancellation", "portal-stripe-already-scheduled", "plan-page"])
+def test_a_subscription_replaced_before_the_lock_does_not_receive_the_schedule(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+    path: str,
+):
+    """Each write of Community as the scheduled plan branched on a cancelling
+    subscription read before the workspace lock. A checkout that replaces it in
+    between leaves a live subscription on the row, which the schedule must not
+    reach: the locked row is compared with what the caller branched on."""
+    from types import SimpleNamespace
+
+    from django.db import transaction
+
+    from sbomify.apps.billing.stripe_client import StripeError
+
+    workspace_key = team_with_business_plan.key
+    team_with_business_plan.billing_plan_limits["cancel_at_period_end"] = path != "portal-stripe-already-scheduled"
+    team_with_business_plan.save()
+    replacement = {
+        **team_with_business_plan.billing_plan_limits,
+        "stripe_subscription_id": "sub_replacement",
+        "subscription_status": "active",
+        "cancel_at_period_end": False,
+    }
+    real_atomic = transaction.atomic
+
+    def replace_then_lock(*args, **kwargs):
+        # The checkout lands just before the view takes the workspace lock.
+        Workspace.objects.filter(pk=team_with_business_plan.pk).update(billing_plan_limits=replacement)
+        return real_atomic(*args, **kwargs)
+
+    client.force_login(sample_user)
+    with (
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+        patch(
+            "sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session",
+            side_effect=StripeError("This subscription is already set to be canceled."),
+        ),
+        patch("sbomify.apps.billing.views.transaction", SimpleNamespace(atomic=replace_then_lock)),
+    ):
+        if path == "plan-page":
+            response = client.post(
+                reverse("billing:select_plan", kwargs={"workspace_key": workspace_key}), {"plan": community_plan.key}
+            )
+        else:
+            response = client.get(
+                reverse("billing:create_portal_session", kwargs={"workspace_key": workspace_key})
+                + "?flow_type=subscription_cancel"
+            )
+
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": workspace_key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Your subscription changed while the downgrade was being scheduled. Please review it and try again."
+    ]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits == replacement
+
+
+@pytest.mark.django_db
 def test_select_business_plan_new_checkout(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     business_plan: BillingPlan,
 ):
     """Test initiating business plan subscription (new)."""
@@ -156,7 +517,7 @@ def test_select_business_plan_new_checkout(
     team_with_business_plan.billing_plan = "community"
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = None
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
 
     # Mock the checkout session creation
@@ -167,14 +528,14 @@ def test_select_business_plan_new_checkout(
 
         # Request to select_plan endpoint
         response = client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
             {"plan": business_plan.key, "billing_period": "monthly"},
         )
 
         # Should redirect directly to Stripe
         assert response.status_code == 302
         assert response.url == "https://checkout.stripe.com/test-session"
-        
+
         # Verify the service was called correctly
         mock_create_session.assert_called_once()
 
@@ -183,7 +544,7 @@ def test_select_business_plan_new_checkout(
 def test_switch_business_plan_with_subscription_redirects_to_portal(
     client: Client,
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
+    team_with_business_plan: Workspace,
     business_plan: BillingPlan,
 ):
     """Test switching business plan period with active subscription redirects to Portal (update flow)."""
@@ -191,36 +552,175 @@ def test_switch_business_plan_with_subscription_redirects_to_portal(
     team_with_business_plan.billing_plan_limits["stripe_subscription_id"] = "sub_test_456"
     team_with_business_plan.billing_plan_limits["subscription_status"] = "active"
     team_with_business_plan.save()
-    
+
     client.force_login(sample_user)
-    
+
     # Expect create_billing_portal_session to be called instead of checkout
-    with patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal:
+    # The sync before the guard reads Stripe through its own client. Stubbed as a
+    # sync that found nothing to change; a failed sync is its own test above.
+    with (
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+        patch("sbomify.apps.billing.views.sync_subscription_from_stripe", return_value=True),
+    ):
         mock_session = MagicMock()
         mock_session.url = "https://billing.stripe.com/p/session/test_portal_456"
         mock_create_portal.return_value = mock_session
-        
+
         # Switch to annual
         response = client.post(
-             reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}),
-             {"plan": business_plan.key, "billing_period": "annual"},
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": business_plan.key, "billing_period": "annual"},
         )
-        
+
         assert response.status_code == 302
         # Verify redirect to create_portal_session
         assert "/billing/portal/" in response.url
         assert "subscription_update" in response.url
-        
+
         # Follow manually
         response = client.get(response.url)
-        
+
         assert response.status_code == 302
         assert response.url == "https://billing.stripe.com/p/session/test_portal_456"
-        
+
         mock_create_portal.assert_called_once()
         args, kwargs = mock_create_portal.call_args
         assert kwargs["flow_data"]["type"] == "subscription_update"
         assert kwargs["flow_data"]["subscription_update"]["subscription"] == "sub_test_456"
+
+
+def _subscription_with_status(status: str) -> stripe.Subscription:
+    return stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "object": "subscription",
+            "customer": "cus_test123",
+            "status": status,
+            "cancel_at_period_end": False,
+            "cancel_at": None,
+            "items": {
+                "object": "list",
+                "data": [{"price": {"id": "price_test_business_monthly"}, "current_period_end": 1893456000}],
+            },
+        },
+        "sk_test_dummy",
+    )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ended_status", ["canceled", "incomplete_expired"])
+def test_portal_sends_an_ended_subscription_to_plan_selection(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    ended_status: str,
+):
+    """Stripe never reopens an ended subscription, one whose first invoice expired unpaid included."""
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "incomplete"
+    team_with_business_plan.save()
+    client.force_login(sample_user)
+
+    with (
+        patch(
+            "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+            return_value=_subscription_with_status(ended_status),
+        ),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+    ):
+        mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_ended"
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
+        )
+
+    assert response.status_code == 302
+    assert response.url == reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key})
+    assert [str(m) for m in get_messages(response.wsgi_request)] == [
+        "Your subscription has ended. Please select a new plan to continue."
+    ]
+    mock_create_portal.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("unpaid_status", ["past_due", "unpaid"])
+def test_portal_opens_for_a_subscription_with_an_unpaid_invoice(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    unpaid_status: str,
+):
+    """Stripe can still move these back to active, and the owner pays the invoice in the portal."""
+    client.force_login(sample_user)
+
+    with (
+        patch(
+            "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+            return_value=_subscription_with_status(unpaid_status),
+        ),
+        patch("sbomify.apps.billing.stripe_client.StripeClient.create_billing_portal_session") as mock_create_portal,
+    ):
+        mock_create_portal.return_value.url = "https://billing.stripe.com/p/session/test_portal_unpaid"
+        response = client.get(
+            reverse("billing:create_portal_session", kwargs={"workspace_key": team_with_business_plan.key})
+        )
+
+    assert response.status_code == 302
+    assert response.url == "https://billing.stripe.com/p/session/test_portal_unpaid"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("ended_status", ["canceled", "incomplete_expired"])
+def test_select_community_after_the_subscription_ended_switches_the_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+    ended_status: str,
+):
+    """With the subscription ended there is nothing to cancel at Stripe, so Community applies at once."""
+    team_with_business_plan.billing_plan_limits["subscription_status"] = "incomplete"
+    team_with_business_plan.save()
+    client.force_login(sample_user)
+
+    with patch(
+        "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+        return_value=_subscription_with_status(ended_status),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert response.status_code == 302
+    assert response.url == reverse("core:dashboard")
+    assert [str(m) for m in get_messages(response.wsgi_request)] == ["Successfully switched to Community plan"]
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan == "community"
+    assert team_with_business_plan.billing_plan_limits["max_products"] == community_plan.max_products
+
+
+@pytest.mark.django_db
+def test_select_community_with_a_past_due_invoice_keeps_the_plan(
+    client: Client,
+    sample_user: AbstractBaseUser,
+    team_with_business_plan: Workspace,
+    community_plan: BillingPlan,
+):
+    """Stripe still retries a past-due invoice, so the subscription has not ended."""
+    client.force_login(sample_user)
+
+    with patch(
+        "sbomify.apps.billing.stripe_sync.stripe_client.get_subscription",
+        return_value=_subscription_with_status("past_due"),
+    ):
+        response = client.post(
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}),
+            {"plan": community_plan.key},
+        )
+
+    assert response.status_code == 302
+    team_with_business_plan.refresh_from_db()
+    assert team_with_business_plan.billing_plan_limits["subscription_status"] == "past_due"
+    assert team_with_business_plan.billing_plan == "business"
 
 
 @pytest.mark.django_db
@@ -364,7 +864,9 @@ def test_stripe_webhook_error_handling(factory):
 
     with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
         mock_stripe_client.construct_webhook_event.return_value = mock_event
-        with patch("sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")):
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_checkout_completed", side_effect=Exception("Test error")
+        ):
             response = StripeWebhookView.as_view()(request)
             assert response.status_code == 500
 
@@ -485,4 +987,78 @@ def test_stripe_webhook_subscription_updated_real_handler(factory, team_with_bus
     assert team_with_business_plan.billing_plan == "business"
 
 
+@pytest.mark.django_db
+def test_stripe_webhook_for_a_deleted_workspace_is_acknowledged(factory):
+    """Stripe telling us a deleted workspace's subscription ended is not a fault.
 
+    Deleting a workspace cancels its subscription, so this event is the
+    expected consequence rather than a problem: the row is gone by the time it
+    arrives. Answering non-2xx would make Stripe redeliver an event that can
+    never be processed, and logging it as an error would page somebody for a
+    thing that worked.
+    """
+    from sbomify.apps.billing import views as billing_views
+    from sbomify.apps.billing.stripe_client import WorkspaceGoneError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.deleted"
+    mock_event.id = "evt_gone12345"
+    mock_event.data.object = {"id": "sub_gone123", "customer": "cus_gone123"}
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "customer.subscription.deleted"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_subscription_deleted",
+            side_effect=WorkspaceGoneError("No workspace found for webhook event"),
+        ):
+            # The view's logger does not propagate to root, so caplog sees
+            # nothing; observe the logger itself instead.
+            with patch.object(billing_views.logger, "warning") as warned:
+                with patch.object(billing_views.logger, "error") as errored:
+                    response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 200, "a redelivery could never succeed"
+    assert warned.call_count == 1
+    assert "Webhook for a workspace that no longer exists (acknowledged)" in warned.call_args.args[0]
+    assert errored.call_count == 0, "a deleted workspace is expected, so nothing here should page anyone"
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_that_arrives_too_early_is_retried_quietly(factory):
+    """A checkout's first invoice beating the checkout webhook is redelivered, and pages nobody."""
+    from sbomify.apps.billing import views as billing_views
+    from sbomify.apps.billing.stripe_client import BillingEventTooEarlyError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "invoice.payment_succeeded"
+    mock_event.id = "evt_early12345"
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "invoice.payment_succeeded"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_payment_succeeded",
+            side_effect=BillingEventTooEarlyError("Workspace abc has not stored the subscription for this invoice yet"),
+        ):
+            with patch.object(billing_views.logger, "warning") as warned:
+                with patch.object(billing_views.logger, "error") as errored:
+                    response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 503, "Stripe redelivers only a non-2xx answer"
+    assert warned.call_count == 1
+    assert errored.call_count == 0

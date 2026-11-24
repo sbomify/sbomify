@@ -7,22 +7,62 @@ import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
+from django.utils import timezone
 from freezegun import freeze_time
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Page, Playwright, expect, sync_playwright
 
+from sbomify.apps.core.tests.e2e.utils import (
+    BROWSER_HEIGHT,
+    BROWSER_WIDTH,
+    SNAPSHOT_DIFF_THRESHOLD,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    assert_screenshot as _assert_screenshot,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    get_or_create_baseline_screenshot as _get_or_create_baseline_screenshot,
+)
+from sbomify.apps.core.tests.e2e.utils import (
+    take_screenshot as _take_screenshot,
+)
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
-from sbomify.apps.core.tests.e2e.utils import (
-    assert_screenshot as _assert_screenshot,
-    get_or_create_baseline_screenshot as _get_or_create_baseline_screenshot,
-    take_screenshot as _take_screenshot,
-    BROWSER_WIDTH,
-    BROWSER_HEIGHT,
-    SNAPSHOT_DIFF_THRESHOLD,
-)
+from sbomify.apps.plugins.models import RegisteredPlugin
+
+# Playwright's default assertion timeout is 5 s, which is a developer-machine
+# number. Several of these tests change a filter and then assert on what the
+# round trip produces -- an HTMX fetch, an Alpine re-render, and for the
+# dashboard a Chart.js canvas torn down and rebuilt. On a loaded CI runner that
+# chain does not reliably finish inside 5 s, and the suite has been losing a
+# test or two a run to it: test_dashboard_view_switch_and_trend_filters,
+# test_inventory_navigation_and_filters and test_settings_controls_and_navigation
+# have all failed this way on master, each passing on the next run.
+#
+# This buys time, not slack. An assertion still has to come true, and a real
+# break still fails -- it just takes longer to say so. Anything genuinely
+# needing more than a moment is a UI performance bug and should be fixed there,
+# not waited out here.
+expect.set_options(timeout=15_000)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def warm_url_resolver() -> None:
+    """Build both API surfaces before any test freezes the clock.
+
+    Django imports ROOT_URLCONF lazily, and deriving the v2 schemas under
+    freezegun fails: it swaps datetime.datetime for FakeDatetime and pydantic
+    dispatches on type identity. Session-scoped, so it runs once, before the
+    function-scoped freeze below ever applies. Warming here rather than in
+    AppConfig.ready keeps the cost out of workers, management commands and
+    every other process that never serves a request (measured at about a
+    second and 60 MB per process when it lived there).
+    """
+    from django.urls import get_resolver
+
+    get_resolver().url_patterns  # noqa: B018
 
 
 @pytest.fixture(autouse=True)
@@ -70,11 +110,15 @@ def setup_browser_session(
         team_with_business_plan.has_selected_billing_plan = True
         team_with_business_plan.save(update_fields=["has_selected_billing_plan"])
 
+    # The registry is written in real time at database setup, years after the
+    # frozen clock, so every plugin would otherwise be marked new on the page.
+    RegisteredPlugin.objects.update(created_at=timezone.now())
+
     django_client = Client()
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
     session = django_client.session
-    session["current_team"]["has_completed_wizard"] = True
+    session["current_workspace"]["has_completed_wizard"] = True
     session.save()
 
     return {

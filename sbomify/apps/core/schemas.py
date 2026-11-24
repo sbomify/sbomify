@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from sbomify.apps.core.custom_metadata import CustomMetadata
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
 
@@ -15,6 +16,10 @@ class ErrorCode(str, Enum):
     # Authentication errors
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
+    # Frozen, code and prose alike. A v1 response is a contract down to its
+    # strings: a client may branch on this value or match on the ``detail``
+    # beside it, so both keep their team wording until a v2 serves the new
+    # names. Same for TEAM_NOT_FOUND and TEAM_MISMATCH.
     NO_CURRENT_TEAM = "NO_CURRENT_TEAM"
 
     # Validation errors
@@ -46,10 +51,29 @@ class ErrorCode(str, Enum):
     # Conflict errors
     CONFLICT = "CONFLICT"
 
+    # Rate limiting
+    TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
+
     # General errors
     INTERNAL_ERROR = "INTERNAL_ERROR"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
+
+
+# The code a client reads when a view returns an error without naming one.
+# Keyed on status because that is the one thing every error response carries,
+# and applied by ``UTCZRenderer`` so a view that names its own code still wins.
+DEFAULT_ERROR_CODE_BY_STATUS: dict[int, ErrorCode] = {
+    400: ErrorCode.BAD_REQUEST,
+    401: ErrorCode.UNAUTHORIZED,
+    403: ErrorCode.FORBIDDEN,
+    404: ErrorCode.NOT_FOUND,
+    409: ErrorCode.CONFLICT,
+    422: ErrorCode.VALIDATION_ERROR,
+    429: ErrorCode.TOO_MANY_REQUESTS,
+    500: ErrorCode.INTERNAL_ERROR,
+    503: ErrorCode.SERVICE_UNAVAILABLE,
+}
 
 
 class ErrorResponse(BaseModel):
@@ -220,6 +244,11 @@ class ProductUpdateSchema(BaseModel):
     end_of_support: date | None = None
     end_of_life: date | None = None
 
+    # Omitted means "leave as is", so clients predating the field keep their pairs.
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
+
 
 class ProductPatchSchema(BaseModel):
     """Schema for partially updating a Product using PATCH."""
@@ -233,6 +262,10 @@ class ProductPatchSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
+
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ProductResponseSchema(BaseModel):
@@ -253,6 +286,8 @@ class ProductResponseSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
+
+    custom_metadata: dict[str, str] = Field(default_factory=dict, description="String key/value pairs")
 
 
 class ComponentSummarySchema(BaseModel):
@@ -287,6 +322,10 @@ class ComponentUpdateSchema(BaseModel):
     # is_global defaults to None so existing clients that omit it do not overwrite scope
     is_global: bool
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Omitted means "leave as is", so clients predating the field keep their pairs.
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ComponentVisibility(str, Enum):
@@ -315,6 +354,9 @@ class ComponentPatchSchema(BaseModel):
     nda_document_id: str | None = None
     is_global: bool | None = None
     metadata: dict[str, Any] | None = None
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ComponentResponseSchema(BaseModel):
@@ -331,6 +373,7 @@ class ComponentResponseSchema(BaseModel):
     component_type: ComponentType
     component_type_display: str | None = None
     metadata: dict[str, Any]
+    custom_metadata: dict[str, str] = Field(default_factory=dict, description="String key/value pairs")
     sbom_count: int | None = None
     document_count: int | None = None
     # None when no freshness window is configured or the component has no SBOM.
@@ -606,6 +649,28 @@ class ReleaseArtifactDetailSchema(BaseModel):
     document: ArtifactDocumentSchema | None = None
 
 
+class SupersedesItem(BaseModel):
+    """A release of the same product that the new release supersedes, named by ID or by version."""
+
+    release_id: str | None = None
+    version: str | None = Field(
+        default=None, max_length=255, description="The superseded release's version, or its name if it has none"
+    )
+    drop_in: bool = Field(
+        default=True,
+        description=(
+            "The new release replaces this one, which stops being monitored. "
+            "False records an upgrade path to a new line and keeps this release monitored."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def names_one_release(self) -> SupersedesItem:
+        if bool(self.release_id) == bool(self.version):
+            raise ValueError("Name the superseded release by release_id or by version, not both")
+        return self
+
+
 class ReleaseCreateSchema(BaseModel):
     """Schema for creating a new Release via top-level API endpoint."""
 
@@ -616,6 +681,22 @@ class ReleaseCreateSchema(BaseModel):
     product_id: str = Field(..., description="ID of the product this release belongs to")
     created_at: datetime | None = None
     released_at: datetime | None = None
+    supersedes: list[SupersedesItem] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Releases of the same product this release supersedes. Recorded with the release, or not at all.",
+    )
+
+
+class ReleaseLifecycleSchema(BaseModel):
+    """Withdraw, archive or reactivate a release."""
+
+    action: Literal["withdraw", "archive", "reactivate"]
+    reason: str = Field(
+        default="",
+        max_length=30,
+        description="Why the release is withdrawn: defective, compromised or published_in_error. Withdraw only.",
+    )
 
 
 class ReleaseUpdateSchema(BaseModel):
@@ -638,6 +719,24 @@ class ReleasePatchSchema(BaseModel):
     is_prerelease: bool | None = None
     created_at: datetime | None = None
     released_at: datetime | None = None
+    supersedes: list[SupersedesItem] | None = Field(
+        default=None,
+        max_length=8,
+        description=(
+            "Every release of the same product this release supersedes. Links left out are removed, "
+            "so an empty list removes them all. Leave it out to keep them as they are."
+        ),
+    )
+
+
+class ReleaseEdgeSchema(BaseModel):
+    """One supersession edge, described by the release at its other end."""
+
+    release_id: str | None = Field(description="The other release, or null for a successor outside sbomify")
+    name: str
+    version: str | None = None
+    drop_in: bool = Field(description="True on the same line, where the later release replaces the earlier one")
+    effective: datetime
 
 
 class ReleaseResponseSchema(BaseModel):
@@ -656,6 +755,37 @@ class ReleaseResponseSchema(BaseModel):
     released_at: datetime | None = None
     artifacts_count: int | None = None
     artifacts: list[ReleaseArtifactDetailSchema] | None = None
+    lifecycle_state: str = Field(
+        description="active, superseded, end_of_support, end_of_life, withdrawn or archived. Only active is monitored."
+    )
+    is_tracked: bool = Field(
+        description=(
+            "Whether the release itself is still monitored: lifecycle_state is active. Its SBOMs can still be "
+            "scanned while a monitored release ships them too or links to it."
+        )
+    )
+    superseded_at: datetime | None = None
+    end_of_support: date | None = Field(default=None, description="The release's own end of support, if it has one")
+    end_of_life: date | None = Field(default=None, description="The release's own end of life, if it has one")
+    effective_end_of_support: date | None = Field(
+        default=None,
+        description="The end of support that applies: the release's own, else the product's for every version",
+    )
+    effective_end_of_life: date | None = Field(
+        default=None,
+        description="The end of life that applies: the release's own, else the product's for every version",
+    )
+    withdrawn_at: datetime | None = None
+    withdrawn_reason: str | None = Field(
+        default=None, description="Why the release was withdrawn. Null for readers outside the workspace."
+    )
+    archived_at: datetime | None = None
+    predecessors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release this one follows. On a single release only, not in lists."
+    )
+    successors: list[ReleaseEdgeSchema] | None = Field(
+        default=None, description="Every release that follows this one. On a single release only, not in lists."
+    )
 
 
 class ReleaseArtifactCreateSchema(BaseModel):
@@ -663,6 +793,14 @@ class ReleaseArtifactCreateSchema(BaseModel):
 
     sbom_id: str | None = None
     document_id: str | None = None
+    replace: bool = Field(
+        False,
+        description=(
+            "Explicitly replace an artifact of the same kind from the same component that is already "
+            "in the release. By default such an add is refused, so a release is never overwritten "
+            "unless the caller asks for it."
+        ),
+    )
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -671,6 +809,33 @@ class ReleaseArtifactCreateSchema(BaseModel):
             raise ValueError("Either sbom_id or document_id must be provided")
         if self.sbom_id and self.document_id:
             raise ValueError("Cannot provide both sbom_id and document_id")
+
+
+class ReleaseLinkCreateSchema(BaseModel):
+    """The release to link: by ``release_id``, or by ``product_id`` and ``version``."""
+
+    release_id: str | None = None
+    product_id: str | None = None
+    version: str | None = None
+
+    @model_validator(mode="after")
+    def one_way_to_name_it(self) -> ReleaseLinkCreateSchema:
+        by_pair = bool(self.product_id and self.version)
+        if bool(self.release_id) == by_pair:
+            raise ValueError("Provide either release_id, or product_id and version")
+        return self
+
+
+class ReleaseLinkSchema(BaseModel):
+    """A release linked from another release."""
+
+    id: str
+    name: str
+    version: str
+    product_id: str
+    product_name: str
+    is_prerelease: bool
+    linked_at: datetime
 
 
 class ReleaseArtifactsUpdateSchema(BaseModel):
@@ -745,3 +910,11 @@ class ReleaseArtifactAddResponseSchema(BaseModel):
     document_type: str | None = None
     document_version: str | None = None
     component_slug: str | None = None
+    replaced: bool = Field(
+        False,
+        description=(
+            "True when the add superseded an artifact of the same kind from the same component that "
+            "was already in the release (only possible with replace=True)."
+        ),
+    )
+    replaced_artifact_name: str | None = Field(None, description="Name of the artifact that was superseded.")

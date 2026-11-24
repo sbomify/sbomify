@@ -107,11 +107,21 @@ def component_license_factory():
 
 @pytest.fixture
 def document_factory():
-    def _create(component: Component, name: str = "test-document.pdf", version: str = "1.0.0") -> Document:
+    def _create(
+        component: Component,
+        name: str = "test-document.pdf",
+        version: str = "1.0.0",
+        document_type: str = Document.DocumentType.OTHER,
+        compliance_subcategory: str | None = None,
+        document_filename: str = "",
+    ) -> Document:
         return Document.objects.create(
             name=name,
             component=component,
             version=version,
+            document_type=document_type,
+            compliance_subcategory=compliance_subcategory,
+            document_filename=document_filename,
         )
 
     return _create
@@ -153,6 +163,14 @@ def vulnerability_scan_factory():
             run_reason="on_upload",
             status="completed",
             result={
+                # AssessmentResultSchema requires these four. Without them the
+                # blob fails validation and _run_to_schema degrades the run to
+                # result=None, so the card rendered an assessment that reported
+                # nothing rather than the scan this factory is describing.
+                "plugin_name": provider,
+                "plugin_version": "1.0.0",
+                "category": "security",
+                "assessed_at": "2020-01-01T00:00:00Z",
                 "summary": {
                     "total_findings": total,
                     "by_severity": {

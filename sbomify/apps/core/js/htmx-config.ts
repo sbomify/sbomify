@@ -1,6 +1,23 @@
+import type htmx from 'htmx.org';
 import { getCsrfToken } from './csrf';
+import { registerHistorySnapshotCleanup } from './htmx-history-snapshot';
+import { registerMorphPreserve } from './htmx-morph-preserve';
 
 export function registerHtmxConfig(): void {
+    // Every entry point that loads HTMX needs the same swap styles. Registering
+    // morph-preserve here rather than in one bundle is what keeps a page from
+    // naming an extension its own bundle never defined: htmx silently falls back
+    // to defaultSwapStyle, so `hx-swap="morph"` becomes an innerHTML swap.
+    registerMorphPreserve();
+    registerHistorySnapshotCleanup();
+
+    // Alpine owns inline visibility and positioning. HTMX's settle phase must
+    // not replace those live styles with the incoming HTML's resting state.
+    const engine = (window as Window & { htmx?: typeof htmx }).htmx;
+    if (engine) {
+        engine.config.attributesToSettle = engine.config.attributesToSettle.filter(attribute => attribute !== 'style');
+    }
+
     document.body.addEventListener('htmx:configRequest', (event: Event) => {
         const detail = (event as CustomEvent).detail;
         if (!detail?.headers) {

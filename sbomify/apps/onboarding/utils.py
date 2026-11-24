@@ -156,6 +156,10 @@ def get_email_context(user: Any, **additional_context: Any) -> dict[str, Any]:
         "base_url": base_url,
         "website_base_url": normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", "")),
         "onboarding_status": onboarding_status,
+        # Only the drip templates render this. Transactional mail (billing,
+        # access decisions, token expiry) must not offer to unsubscribe from
+        # something the recipient cannot opt out of.
+        "unsubscribe_url": get_unsubscribe_url(user.pk),
     }
 
     # Add trial info if available
@@ -178,3 +182,38 @@ def get_email_context(user: Any, **additional_context: Any) -> dict[str, Any]:
     context.update(additional_context)
 
     return context
+
+
+UNSUBSCRIBE_SALT = "onboarding.unsubscribe"
+
+
+def make_unsubscribe_token(user_id: int) -> str:
+    """Sign a user id into an unsubscribe token.
+
+    Deliberately not time-limited. An unsubscribe link has to keep working in a
+    mailbox indefinitely: someone digging out a six-month-old email to opt out
+    must not be told the link expired.
+    """
+    from django.core import signing
+
+    return signing.dumps(user_id, salt=UNSUBSCRIBE_SALT)
+
+
+def read_unsubscribe_token(token: str) -> int | None:
+    """Return the user id a token carries, or None if it is not ours."""
+    from django.core import signing
+
+    try:
+        return int(signing.loads(token, salt=UNSUBSCRIBE_SALT))
+    except (signing.BadSignature, ValueError, TypeError):
+        return None
+
+
+def get_unsubscribe_url(user_id: int) -> str:
+    """Absolute unsubscribe URL for a user, for email bodies and headers."""
+    from django.urls import reverse
+
+    from sbomify.apps.core.url_utils import get_base_url
+
+    path = reverse("onboarding:unsubscribe", kwargs={"token": make_unsubscribe_token(user_id)})
+    return f"{get_base_url()}{path}"

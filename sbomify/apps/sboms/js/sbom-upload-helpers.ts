@@ -2,7 +2,9 @@ export const MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
 export const ALLOWED_MIME_TYPES = ['application/json', 'text/xml', 'application/xml'];
 export const ALLOWED_EXTENSIONS = ['.json', '.spdx', '.cdx', '.xml'];
 
-export type UploadBomType = 'sbom' | 'vex' | 'cbom'
+import type { UploadBomType } from '../../core/js/components/upload-dialog'
+
+export type { UploadBomType }
 
 export function bomTypeLabel(bomType: UploadBomType): string {
     if (bomType === 'vex') return 'VEX'
@@ -10,11 +12,15 @@ export function bomTypeLabel(bomType: UploadBomType): string {
     return 'SBOM'
 }
 
-export function buildUploadEndpoint(componentId: string, bomType: UploadBomType): string {
+export function buildUploadEndpoint(componentId: string, bomType: UploadBomType, review: boolean = false): string {
     // The default SBOM case must omit bom_type: the server's CBOM
     // auto-detection only runs when the caller leaves it unset.
     const base = `/api/v1/sboms/upload-file/${componentId}`
-    return bomType === 'sbom' ? base : `${base}?bom_type=${encodeURIComponent(bomType)}`
+    if (bomType === 'sbom') return base
+    // Only a VEX can wait for approval: it is the one artifact that changes
+    // which findings everyone sees as open.
+    const query = `bom_type=${encodeURIComponent(bomType)}${bomType === 'vex' && review ? '&review=true' : ''}`
+    return `${base}?${query}`
 }
 
 export function validateUploadFile(file: File, bomType: UploadBomType): string | null {

@@ -7,6 +7,7 @@ from __future__ import annotations
 import collections.abc
 import ipaddress
 import logging
+import re
 import string
 import uuid
 from dataclasses import dataclass
@@ -73,6 +74,33 @@ def broadcast_to_workspace(workspace_key: str, message_type: str, data: dict[str
         return False
 
 
+def user_group_name(user_id: Any) -> str:
+    """The channel group a signed-in user's own socket joins, whatever workspace they are in."""
+    return f"user_{user_id}"
+
+
+def broadcast_to_user(user_id: Any, message_type: str, data: dict[str, Any] | None = None) -> bool:
+    """Send a message to one user's own sockets rather than to a workspace.
+
+    For news meant for a person who is not a member of the workspace it is
+    about, such as a trust-center visitor whose access request was decided.
+    The workspace feed would tell them everything else too, so they never get
+    it. Safe to call from synchronous code. Returns whether it was sent.
+    """
+    try:
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return False
+        async_to_sync(channel_layer.group_send)(
+            user_group_name(user_id),
+            {"type": "workspace_message", "data": {"type": message_type, **(data or {})}},
+        )
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to broadcast to user {user_id}: {e}")
+        return False
+
+
 def push_notification(
     workspace_key: str,
     message: str,
@@ -80,6 +108,8 @@ def push_notification(
     notification_type: str = "system",
     action_url: str | None = None,
     notification_id: str | None = None,
+    title: str | None = None,
+    action_label: str | None = None,
 ) -> bool:
     """
     Push a notification to all connected WebSocket clients in a workspace.
@@ -94,6 +124,8 @@ def push_notification(
         notification_type: The type of notification (e.g., "system", "billing"). Default: "system".
         action_url: Optional URL for an action button. If provided, displays a modal with action.
         notification_id: Optional unique ID for the notification. Auto-generated if not provided.
+        title: Optional heading for the modal. Defaults to the severity on the frontend.
+        action_label: Optional label for the action button. Defaults to "Take Action" on the frontend.
 
     Returns:
         bool: True if the notification was sent successfully, False otherwise.
@@ -118,6 +150,10 @@ def push_notification(
 
     if action_url:
         notification_data["action_url"] = action_url
+    if title:
+        notification_data["title"] = title
+    if action_label:
+        notification_data["action_label"] = action_label
 
     return broadcast_to_workspace(
         workspace_key=workspace_key,
@@ -167,6 +203,34 @@ def sanitize_email_for_cache_key(email: str | None, user_id: str | int | None = 
     return sanitized_email
 
 
+_TOKEN_WORD_SEPARATORS = re.compile(r"[_\-\s]+")
+
+
+def humanize_token(value: object, default: str = "") -> str:
+    """A machine code as display text: ``on_upload`` becomes "On Upload".
+
+    The last line of defence for a code that reaches a page without a label of
+    its own — an enum member nobody added to a map, a value a published spec
+    gained after we wrote the map, a string read straight out of a stored
+    document. Underscore and hyphen both separate words, because the codes we
+    render come from both conventions: our own enums spell ``on_upload``, the
+    document types aligned with SPDX and CycloneDX spell ``release-notes``.
+
+    An all-caps word is left alone, so ``nda-report`` keeps its acronym rather
+    than reading as "Nda Report".
+
+    Prefer a real label wherever one exists — ``get_FOO_display()``, or the
+    app's own label map. This only guarantees that no user ever reads a raw
+    code.
+    """
+    if not isinstance(value, str):
+        return default
+    words = [word for word in _TOKEN_WORD_SEPARATORS.split(value.strip()) if word]
+    if not words:
+        return default
+    return " ".join(word if word.isupper() else word[:1].upper() + word[1:] for word in words)
+
+
 def number_to_random_token(value: int) -> str:
     """
     Convert an integer to a random token.
@@ -207,11 +271,11 @@ def get_current_team_id(request: HttpRequest) -> int | None:
 
     If no current team is found in the request session, return None.
     """
-    team_key = request.session.get("current_team", {}).get("key")
-    if team_key is None:
+    workspace_key = request.session.get("current_workspace", {}).get("key")
+    if workspace_key is None:
         return None
 
-    return token_to_number(team_key)
+    return token_to_number(workspace_key)
 
 
 @lru_cache(maxsize=1)
@@ -250,6 +314,20 @@ def get_client_ip(request: HttpRequest) -> str | None:
     direct peer (REMOTE_ADDR) is a trusted proxy (settings.TRUSTED_PROXIES);
     otherwise a client reaching Django directly could spoof X-Real-IP and defeat
     per-IP rate limiting.
+
+    X-Real-IP is the ONLY header consulted here, and deliberately so. Caddy
+    resolves the origin address once, from its own ``client_ip_headers`` and
+    only for a peer in its ``trusted_proxies`` list, then writes the answer into
+    X-Real-IP with ``header_up`` — which replaces whatever the client sent. That
+    makes the value arriving here one Caddy vouches for.
+
+    Cf-Connecting-Ip in particular must NOT be read here, however tempting it is
+    as "the header Cloudflare sets". Caddy forwards the client's raw
+    Cf-Connecting-Ip upstream untouched, so anything that reaches the edge
+    directly, bypassing Cloudflare, can set it to any value it likes. Trusting
+    it here would hand every caller a rate-limit bucket and an audit-log entry
+    of their choosing. Add new sources to Caddy's ``client_ip_headers``, never
+    to this function.
     """
     remote_addr: str | None = request.META.get("REMOTE_ADDR")
     real_ip: str | None = request.META.get("HTTP_X_REAL_IP")
@@ -416,7 +494,7 @@ def get_team_id_from_session(request: Any) -> str | None:
         str | None: The team ID as string, or None if not found
     """
     session = request.session
-    current_team = session.get("current_team")
+    current_team = session.get("current_workspace")
 
     if not current_team:
         return None
@@ -439,7 +517,7 @@ def get_team_id_from_session(request: Any) -> str | None:
 
 def _extract_team_id(item: Any) -> int | None:
     """Extract the team_id from any model that has a team relationship."""
-    if hasattr(item, "_meta") and item._meta.label == "teams.Team":
+    if hasattr(item, "_meta") and item._meta.label == "teams.Workspace":
         return item.id  # type: ignore[no-any-return]
     if hasattr(item, "team_id"):
         return item.team_id  # type: ignore[no-any-return]
@@ -494,6 +572,36 @@ def verify_item_access(
     if allowed_roles is None:
         return True
     return member.role in allowed_roles
+
+
+def _swap_release_artifacts(release: Any, same: Any, **artifact: Any) -> Any:
+    """Replace the ``same`` rows with one new artifact, recorded as a single ARTIFACT_UPDATED.
+
+    Left to the signals, the delete and the create bump the collection REMOVED and then ADDED, or
+    only REMOVED when the swapped row was the release's one artifact. They are muted for the swap,
+    as in ``Release.add_artifact_to_latest_release``, so the VEX pin upkeep they would have done
+    runs here instead.
+    """
+    from sbomify.apps.core.models import Release, ReleaseArtifact, _suppress_collection_signals
+    from sbomify.apps.core.services.vex_pins import sync_vex_pins
+    from sbomify.apps.sboms.models import SBOM
+
+    sbom = artifact.get("sbom")
+    token = _suppress_collection_signals.set(True)
+    try:
+        same.delete()
+        new_artifact = ReleaseArtifact.objects.create(release=release, **artifact)
+        if sbom is not None and sbom.bom_type == SBOM.BomType.SBOM.value:
+            sync_vex_pins(release, sbom.component, bump=False)
+        elif sbom is not None and sbom.bom_type == SBOM.BomType.VEX.value:
+            # A hand-pinned VEX supersedes whatever sbomify auto-pinned for this component.
+            release.artifacts.filter(
+                sbom__component=sbom.component, sbom__bom_type=SBOM.BomType.VEX.value, auto_pinned=True
+            ).exclude(pk=new_artifact.pk).delete()
+    finally:
+        _suppress_collection_signals.reset(token)
+    release.bump_collection_version(Release.CollectionUpdateReason.ARTIFACT_UPDATED)
+    return new_artifact
 
 
 def add_artifact_to_release(
@@ -587,8 +695,7 @@ def add_artifact_to_release(
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
-                same.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+                new_artifact = _swap_release_artifacts(release, same, sbom=sbom)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
             new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
         else:
@@ -615,8 +722,7 @@ def add_artifact_to_release(
                     "new_document": document.name,
                     "component": document.component.name,
                 }
-                same.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+                new_artifact = _swap_release_artifacts(release, same, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
             new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
 

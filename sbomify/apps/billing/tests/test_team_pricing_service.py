@@ -68,6 +68,7 @@ class TestGetPlanLimits:
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
         icons = {item["label"]: item["icon"] for item in limits}
+        assert icons.get("Members") == "users"
         assert icons.get("Products") == "cube"
         assert icons.get("Components") == "puzzle-piece"
 
@@ -75,20 +76,21 @@ class TestGetPlanLimits:
         """Test passing BillingPlan object directly."""
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
-        assert len(limits) == 2
-        labels = [item["label"] for item in limits]
-        assert "Products" in labels
-        assert "Components" in labels
+        # Members is a real quota: max_users is enforced on invite, so the card
+        # that lists what the plan allows has to show it next to the other two.
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
+        assert {item["label"]: item["value"] for item in limits}["Members"] == "10"
 
     def test_fetches_billing_plan_if_not_provided(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test auto-fetch BillingPlan from DB when not provided."""
         limits = pricing_service.get_plan_limits(team_with_business_plan)
-        assert len(limits) == 2
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
 
     def test_unlimited_display(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
         """Test -1 or None shows 'Unlimited'."""
         team_with_business_plan.billing_plan = "enterprise"
         team_with_business_plan.billing_plan_limits = {
+            "max_users": -1,
             "max_products": -1,
             "max_components": -1,
         }
@@ -96,8 +98,34 @@ class TestGetPlanLimits:
 
         limits = pricing_service.get_plan_limits(team_with_business_plan, enterprise_plan)
 
+        # max_users is absent from billing_plan_limits and None on the plan, so
+        # this also covers the unlimited quota reading as a tile rather than
+        # vanishing from the card.
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
         for item in limits:
             assert item["value"] == "Unlimited"
+            assert item["unlimited"] is True
+
+    def test_an_unlimited_quota_keeps_its_tile(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
+        """A None limit on the model used to drop the tile, not read "Unlimited"."""
+        team_with_business_plan.billing_plan = "enterprise"
+        team_with_business_plan.billing_plan_limits = {}
+        team_with_business_plan.save()
+
+        limits = pricing_service.get_plan_limits(team_with_business_plan, enterprise_plan)
+
+        assert [item["label"] for item in limits] == ["Members", "Products", "Components"]
+        assert {item["value"] for item in limits} == {"Unlimited"}
+
+    def test_reports_usage_against_each_limit(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
+        """A limit on its own does not answer "how close am I?"."""
+        limits = {
+            item["label"]: item for item in pricing_service.get_plan_limits(team_with_business_plan, business_plan)
+        }
+
+        assert limits["Members"]["used"] == str(team_with_business_plan.members.count())
+        assert limits["Products"]["used"] == "0"
+        assert limits["Components"]["used"] == "0"
 
     def test_numeric_values(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test numeric limits are converted to strings."""
@@ -120,6 +148,26 @@ class TestGetPlanLimits:
         values = {item["label"]: item["value"] for item in limits}
         assert values.get("Products") == "50"
         assert values.get("Components") == "500"
+
+    def test_seats_come_from_the_plan_the_seat_check_enforces(
+        self,
+        pricing_service,
+        team_with_business_plan,
+        community_plan,  # noqa: F811
+    ):
+        """The seat check reads the plan model, and not every downgrade path
+        refreshes the cached seat limit, so a former Business workspace kept
+        "max_users": 10 in its cache after moving to Community."""
+        community_plan.max_users = 1
+        community_plan.save()
+        team_with_business_plan.billing_plan = "community"
+        team_with_business_plan.billing_plan_limits = {**team_with_business_plan.billing_plan_limits, "max_users": 10}
+        team_with_business_plan.save()
+
+        limits = pricing_service.get_plan_limits(team_with_business_plan, community_plan)
+
+        values = {item["label"].split(" and ")[0]: item["value"] for item in limits}
+        assert values["Members"] == "1"
 
     def test_fallback_when_no_billing_plan(self, pricing_service, team_with_business_plan):  # noqa: F811
         """Test fallback to billing_plan_limits when BillingPlan doesn't exist."""

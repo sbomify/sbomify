@@ -1,7 +1,10 @@
 """RFC 9116 security.txt generation service.
 
-Generates a security.txt file from a team's security contact and configuration.
-Spec: https://www.rfc-editor.org/rfc/rfc9116
+Generates a security.txt file from a team's security contact and configuration,
+laid out the way BSI TR-03183-3 section 4.2 expects it: the contact lines in
+the mandated order (PSIRT mailbox, CSIRT mailbox, report page), a comment line
+above each block, and an Expires no more than a year out.
+Specs: https://www.rfc-editor.org/rfc/rfc9116 and BSI TR-03183-3.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 # Max length for URL fields (RFC 9116 recommends fields < 2048 chars)
 MAX_FIELD_LENGTH = 2048
@@ -19,6 +22,9 @@ MAX_FIELD_LENGTH = 2048
 # Preferred-Languages constraints (RFC 5646 language tags)
 MAX_PREFERRED_LANGUAGES_LENGTH = 200
 PREFERRED_LANGUAGES_PATTERN = r"[a-zA-Z0-9, \-]+"
+
+# TR-03183-3 4.2.9: Expires must not be more than a year ahead.
+MAX_EXPIRES_AHEAD = timedelta(days=365)
 
 
 def validate_preferred_languages(value: str) -> str | None:
@@ -37,7 +43,25 @@ def _sanitize_value(value: str) -> str:
     return re.sub(r"[\r\n\x00]", "", value).strip()
 
 
-def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | None:
+def validate_security_email(value: str) -> str | None:
+    """Validate an email for a Contact: mailto line. Returns error message or None if valid."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    if not value:
+        return None
+    if len(value) > MAX_FIELD_LENGTH:
+        return f"Email exceeds maximum length of {MAX_FIELD_LENGTH} characters"
+    if re.search(r"[\x00-\x1f\x7f\s]", value):
+        return "Email contains invalid characters (whitespace or control characters)"
+    try:
+        validate_email(value)
+    except ValidationError:
+        return "Enter a valid email address"
+    return None
+
+
+def _get_security_contact_email(team: Workspace, config: dict[str, Any]) -> str | None:
     """Find the security contact email.
 
     If a specific contact_id is set in config, use that contact.
@@ -91,8 +115,55 @@ def validate_security_txt_url(url: str) -> str | None:
     return None
 
 
-def generate_security_txt(team: Team) -> str:
-    """Generate RFC 9116 security.txt content for a team.
+def clean_expires(raw: str) -> str:
+    """A valid Expires value: in the future, at most a year out, whole seconds.
+
+    Falls back to a year from now when the stored value is missing, past,
+    unparseable, or further out than TR-03183-3 4.2.9 allows.
+    """
+    now = datetime.now(timezone.utc)
+    cap = now + MAX_EXPIRES_AHEAD
+    try:
+        expires_dt = datetime.fromisoformat(raw) if raw else None
+        if expires_dt and expires_dt.tzinfo is None:
+            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        expires_dt = None
+    if not expires_dt or expires_dt <= now or expires_dt > cap:
+        expires_dt = cap
+    return expires_dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _valid_url(config: dict[str, Any], key: str) -> str:
+    raw = str(config.get(key, "")).strip()
+    if raw and validate_security_txt_url(raw) is None:
+        return _sanitize_value(raw)
+    return ""
+
+
+def _default_csaf_url(team: Workspace) -> str:
+    """The workspace's own CSAF provider metadata, when it serves any.
+
+    A workspace that publishes advisories already answers on
+    ``/.well-known/csaf/provider-metadata.json``, so the URL is derived rather
+    than configured: a hand-typed copy is one rename away from pointing at a
+    404, and a ``CSAF`` field nothing answers is worse than an absent one. An
+    explicit ``csaf_url`` still wins, for a workspace whose CSAF lives
+    somewhere else entirely.
+
+    Returns "" when the workspace has no public domain or is not public, which
+    are the same conditions under which the endpoint itself 404s.
+    """
+    from sbomify.apps.core.url_utils import build_custom_domain_url
+    from sbomify.apps.security_advisories.csaf_provider import PROVIDER_METADATA_PATH
+
+    if not getattr(team, "is_public", False):
+        return ""
+    return build_custom_domain_url(team, PROVIDER_METADATA_PATH) or ""
+
+
+def generate_security_txt(team: Workspace) -> str:
+    """Generate RFC 9116 / TR-03183-3 security.txt content for a team.
 
     Returns empty string if security.txt is disabled or no security contact
     is configured. All values are sanitized to prevent newline/field injection.
@@ -114,51 +185,58 @@ def generate_security_txt(team: Team) -> str:
 
     lines: list[str] = []
 
-    # Required: Contact (mailto URI) — sanitize email to prevent injection
+    # TR-03183-3 4.2.3 mandates the contact order: the PSIRT mailbox first,
+    # the CSIRT mailbox second, the report page URI third.
+    lines.append("# Our security addresses")
     lines.append(f"Contact: mailto:{_sanitize_value(email)}")
-
-    # Optional URL fields — validated first (reject invalid), then sanitized for output
-    url_fields = [
-        ("Policy", "policy_url"),
-        ("Acknowledgments", "acknowledgments_url"),
-        ("Canonical", "canonical_url"),
-        ("Hiring", "hiring_url"),
-    ]
-    for field_name, config_key in url_fields:
-        raw_value = str(config.get(config_key, "")).strip()
-        if raw_value and validate_security_txt_url(raw_value) is None:
-            value = _sanitize_value(raw_value)
-            if value:
-                lines.append(f"{field_name}: {value}")
+    csirt_email = str(config.get("csirt_email", "")).strip()
+    if csirt_email and validate_security_email(csirt_email) is None:
+        lines.append(f"Contact: mailto:{_sanitize_value(csirt_email)}")
+    if report_url := _valid_url(config, "report_url"):
+        lines.append(f"Contact: {report_url}")
 
     # Encryption: multiple URLs supported (RFC 9116 allows repeated Encryption fields)
+    encryption_lines: list[str] = []
     if "encryption_urls" in config and isinstance(config["encryption_urls"], list):
         for raw_url in config["encryption_urls"]:
             raw_url = str(raw_url).strip()
             if raw_url and validate_security_txt_url(raw_url) is None:
                 value = _sanitize_value(raw_url)
                 if value:
-                    lines.append(f"Encryption: {value}")
+                    encryption_lines.append(f"Encryption: {value}")
     # Backward compat: single encryption_url (legacy configs)
     elif encryption_url := str(config.get("encryption_url", "")).strip():
         if validate_security_txt_url(encryption_url) is None:
-            lines.append(f"Encryption: {_sanitize_value(encryption_url)}")
+            encryption_lines.append(f"Encryption: {_sanitize_value(encryption_url)}")
+    if encryption_lines:
+        lines.append("# Our OpenPGP keys")
+        lines.extend(encryption_lines)
+
+    if policy_url := _valid_url(config, "policy_url"):
+        lines.append("# Our security policy")
+        lines.append(f"Policy: {policy_url}")
+
+    if acknowledgments_url := _valid_url(config, "acknowledgments_url"):
+        lines.append("# Our acknowledgments page")
+        lines.append(f"Acknowledgments: {acknowledgments_url}")
+
+    # CSAF 2.0 section 7.1.8: points at the provider-metadata.json.
+    if csaf_url := _valid_url(config, "csaf_url") or _default_csaf_url(team):
+        lines.append("# Our CSAF provider metadata")
+        lines.append(f"CSAF: {csaf_url}")
+
+    if hiring_url := _valid_url(config, "hiring_url"):
+        lines.append(f"Hiring: {hiring_url}")
+
+    if canonical_url := _valid_url(config, "canonical_url"):
+        lines.append(f"Canonical: {canonical_url}")
 
     # Optional non-URL fields — reuse centralized validation
     if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
         if validate_preferred_languages(preferred_languages) is None:
             lines.append(f"Preferred-Languages: {preferred_languages}")
 
-    # Required: Expires — use stored value if valid and not past, else generate fresh
-    expires_str = str(config.get("expires", ""))
-    try:
-        expires_dt = datetime.fromisoformat(expires_str) if expires_str else None
-        if expires_dt and expires_dt.tzinfo is None:
-            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
-    except (ValueError, TypeError):
-        expires_dt = None
-    if not expires_dt or expires_dt <= datetime.now(timezone.utc):
-        expires_str = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
-    lines.append(f"Expires: {_sanitize_value(expires_str)}")
+    # Required: Expires — stored value if usable, clamped to a year out either way
+    lines.append(f"Expires: {clean_expires(str(config.get('expires', '')))}")
 
     return "\n".join(lines) + "\n"

@@ -19,7 +19,7 @@ from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     sample_user,
 )
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -33,6 +33,7 @@ class TestBillingReturnView:
         """Set up test environment."""
         self.client = Client()
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
     @patch("sbomify.apps.billing.views.stripe_client.get_customer")
@@ -41,8 +42,9 @@ class TestBillingReturnView:
         mock_get_customer,
         mock_get_subscription,
         mock_get_checkout_session,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test successful billing return from Stripe."""
@@ -99,7 +101,7 @@ class TestBillingReturnView:
     ):
         """Test billing return with non-paid payment status."""
         # Create team and make user an owner so ownership check passes
-        team = Team.objects.create(key="test_team", name="Test Team")
+        team = Workspace.objects.create(key="test_team", name="Test Team")
         Member.objects.create(team=team, user=sample_user, role="owner")
 
         mock_session = MagicMock()
@@ -115,6 +117,7 @@ class TestBillingReturnView:
         # Should redirect to select_plan when payment not paid
         assert "select-plan" in response.url
 
+    @patch("sbomify.apps.billing.views.stripe_client.cancel_subscription")
     @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     @patch("sbomify.apps.billing.views.stripe_client.get_checkout_session")
     @patch("sbomify.apps.billing.views.stripe_client.get_subscription")
@@ -125,8 +128,9 @@ class TestBillingReturnView:
         mock_get_subscription,
         mock_get_checkout_session,
         mock_sync,
+        mock_cancel_subscription,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         business_plan: BillingPlan,  # noqa: F811
     ):
         """Test billing return with trial payment_status 'no_payment_required' succeeds."""
@@ -282,14 +286,14 @@ class TestEnterpriseContactView:
     def test_select_enterprise_plan(
         self,
         sample_user: AbstractBaseUser,  # noqa: F811
-        team_with_business_plan: Team,  # noqa: F811
+        team_with_business_plan: Workspace,  # noqa: F811
         enterprise_plan: BillingPlan,  # noqa: F811
     ):
         """Test selecting enterprise plan shows contact page."""
         self.client.force_login(sample_user)
 
         response = self.client.post(
-            reverse("billing:select_plan", kwargs={"team_key": team_with_business_plan.key}), {"plan": "enterprise"}
+            reverse("billing:select_plan", kwargs={"workspace_key": team_with_business_plan.key}), {"plan": "enterprise"}
         )
 
         assert response.status_code == 302

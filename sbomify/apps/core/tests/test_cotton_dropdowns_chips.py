@@ -15,7 +15,7 @@ from django.template.loader import render_to_string
 PANEL = "min-w-48"
 ITEM = "group flex items-center gap-3"
 ICON_CHIP = "shrink-0 flex items-center justify-center"
-METRIC_CHIP = "inline-flex items-center gap-1.5"
+METRIC_CHIP = "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5"
 ASSESSMENT = "inline-flex items-center justify-center gap-1"
 
 
@@ -98,11 +98,12 @@ def test_menu_panel_carries_the_keyboard_handling(rendered: str) -> None:
 def test_menu_keys_reach_a_choice_row_as_well_as_a_command(rendered: str) -> None:
     """A row that is a setting, not a command, is still stepped through.
 
-    The keys match on the menuitem prefix, so menuitemradio and
-    menuitemcheckbox rows are walked with the rest rather than skipped.
+    The keys match whitespace-separated role tokens, so formatted radio and
+    checkbox roles are walked with the rest rather than skipped.
     """
     panel = _opening(rendered, PANEL, "Component actions")
-    assert "[role^=menuitem]" in panel
+    for role in ("menuitem", "menuitemradio", "menuitemcheckbox"):
+        assert f"[role~={role}]" in panel
     assert "[role=menuitem]" not in panel
 
 
@@ -133,9 +134,9 @@ def test_panel_width_comes_from_the_caller_class(rendered: str) -> None:
 def test_item_carries_the_shared_row(rendered: str) -> None:
     item = _classes(rendered, ITEM, "Edit")
     for bit in (
-        "flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold",
+        "flex items-center gap-3 w-full max-sm:min-h-11 px-2.5 py-2 rounded-lg text-sm font-semibold",
         "text-left no-underline cursor-pointer",
-        "transition-all duration-150",
+        "transition-colors duration-150",
         "focus-visible:outline-none",
     ):
         assert bit in item
@@ -276,7 +277,8 @@ def test_icon_chip_forwards_attrs_and_caller_class(rendered: str) -> None:
 def test_metric_chip_shares_the_pill_shell(rendered: str) -> None:
     chip = _classes(rendered, METRIC_CHIP, "Components")
     assert chip.startswith(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
+        "inline-flex flex-wrap items-center min-w-0 max-w-full gap-1.5 "
+        "px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
     )
 
 
@@ -294,15 +296,21 @@ def test_metric_chip_accent_segments_tint_fill_border_and_text(rendered: str, ac
     chip = _classes(rendered, METRIC_CHIP, marker)
     assert f"bg-[color-mix(in_oklab,var(--color-{accent})_10%,transparent)]" in chip
     assert f"border-[color-mix(in_oklab,var(--color-{accent})_30%,transparent)]" in chip
-    assert f"text-[color:color-mix(in_oklab,var(--color-{accent})_60%,var(--color-text))]" in chip
+    assert f"text-[color:var(--color-{accent})]" in chip
+    assert f"[--metric-ink:var(--color-{accent}-ink)]" in chip
+    assert "[--metric-label:var(--color-text)]" in chip
     assert "bg-surface" not in chip
 
 
-def test_metric_chip_parts_keep_the_label_muted_and_the_value_tabular(rendered: str) -> None:
-    assert _classes(rendered, "text-text-muted", "Components") == "text-text-muted"
-    assert _classes(rendered, "font-semibold tabular-nums", "12</span>") == "font-semibold tabular-nums"
-    # The label stays muted under an accent, so only the value takes the chip's colour.
-    assert _classes(rendered, "text-text-muted", "Critical") == "text-text-muted"
+def test_metric_chip_parts_read_the_chips_text_colours(rendered: str) -> None:
+    # Muted label and inherited value on a plain chip; on a tinted one the chip's
+    # segment sets both properties, so the same parts render the label as full
+    # text and the value in the accent's ink.
+    label = "text-[color:var(--metric-label,var(--color-text-muted))]"
+    value = "font-semibold tabular-nums text-[color:var(--metric-ink,currentColor)]"
+    assert _classes(rendered, label, "Components") == label
+    assert _classes(rendered, "font-semibold tabular-nums", "12</span>") == value
+    assert _classes(rendered, label, "Critical") == label
 
 
 def test_metric_chip_slot_keeps_the_callers_order(rendered: str) -> None:
@@ -331,7 +339,9 @@ def test_assessment_pill_without_a_status_is_the_quiet_tint(rendered: str) -> No
     pill = _opening(rendered, ASSESSMENT, "+2")
     assert 'data-status=""' in pill
     classes = _classes(rendered, ASSESSMENT, "+2")
-    assert "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+    assert (
+        "text-[color:var(--color-text-secondary)] bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+    )
     assert "border-[color-mix(in_oklab,var(--color-border)_40%,transparent)]" in classes
 
 
@@ -347,13 +357,13 @@ def test_assessment_pill_token_recipes_are_keyed_by_the_attribute(rendered: str,
     assert f"data-[status={status}]:hover:bg-[color-mix(in_oklab,var(--color-{token})_15%,transparent)]" in pill
 
 
-def test_assessment_pill_keeps_the_literal_ambers_and_reds(rendered: str) -> None:
-    """fail and summary-fail were raw values in the stylesheet, not the tokens."""
+def test_assessment_failures_use_the_warning_and_danger_tokens(rendered: str) -> None:
+    """Failure states share the palette with every other assessment surface."""
     pill = _classes(rendered, ASSESSMENT, "CRA")
-    assert "data-[status=fail]:text-[#b45309]" in pill
-    assert "data-[status=fail]:bg-[rgb(245_158_11/0.12)]" in pill
-    assert "data-[status=summary-fail]:text-[#dc2626]" in pill
-    assert "data-[status=summary-fail]:bg-[rgb(239_68_68/0.1)]" in pill
+    assert "data-[status=fail]:text-warning" in pill
+    assert "data-[status=fail]:bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)]" in pill
+    assert "data-[status=summary-fail]:text-danger" in pill
+    assert "data-[status=summary-fail]:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)]" in pill
 
 
 def test_assessment_pill_carries_every_recipe_whatever_the_status(rendered: str) -> None:

@@ -34,7 +34,7 @@ from sbomify.apps.compliance.models import (
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Product, User
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 _CATALOG_PATH = Path(__file__).resolve().parent.parent / "oscal_data" / "cra-annex-i-catalog.json"
 
@@ -142,7 +142,7 @@ def ensure_cra_catalog() -> OSCALCatalog:
 
 def create_assessment_result(
     catalog: OSCALCatalog,
-    team: Team,
+    team: Workspace,
     product: Product,
     user: User,
 ) -> OSCALAssessmentResult:
@@ -286,12 +286,10 @@ def get_annex_url(annex_reference: str) -> str:
     """
     if not annex_reference:
         return ""
-    for part, anchor in _CRA_ANNEX_ANCHORS.items():
-        if part in annex_reference:
-            url = f"{CRA_EURLEX_HTML}#{anchor}"
-            break
-    else:
-        url = f"{CRA_EURLEX_HTML}#anx_I"
+    # Exact match per comma-separated segment: "Part I" is a substring of "Part II".
+    segments = (segment.strip() for segment in annex_reference.split(","))
+    anchor = next((_CRA_ANNEX_ANCHORS[s] for s in segments if s in _CRA_ANNEX_ANCHORS), "anx_I")
+    url = f"{CRA_EURLEX_HTML}#{anchor}"
     return url if url.startswith("https://") else ""
 
 

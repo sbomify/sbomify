@@ -4,6 +4,7 @@ Dramatiq tasks for onboarding email processing.
 
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 import dramatiq
@@ -12,10 +13,41 @@ from django.contrib.auth import get_user_model
 from sbomify.logging import getLogger
 from sbomify.task_utils import record_task_breadcrumb
 
-from ..services import OnboardingEmailService
+from ..services import OnboardingEmailService, TransientEmailError, is_retryable_failure
 
 User = get_user_model()
 logger = getLogger(__name__)
+
+
+def _report_send_failure(log_prefix: str, task_name: str, user_id: int, exc: Exception) -> None:
+    """Record a failed send at the level its recoverability deserves.
+
+    Sentry's logging integration is wired with ``event_level=ERROR``, so a
+    transient failure logged at error here would raise an issue on every one
+    of the four attempts before the retry that fixes it. That covers more than
+    the classified sends: the eligibility check re-raises database errors and
+    the context build queries before anything is rendered, so a database that
+    goes away arrives here as itself rather than wrapped.
+
+    The log level is only half of it. These actors leave by ``raise``, because
+    that is how the Retries middleware is told to try again, and
+    ``DramatiqIntegration`` captures the exception every time an actor raises
+    -- so dropping to warning here removed the logging event and left a
+    dramatiq event per attempt. ``REPORT_ON_RETRY_EXHAUSTION_ONLY`` in
+    ``sbomify.sentry_config`` names these actors and drops the intermediate
+    attempts in ``before_send``, leaving the attempt that runs out of retries
+    as the one issue, which is the one worth reading.
+    """
+    if is_retryable_failure(exc):
+        # "Retryable", not "will retry": the attempt that exhausts the budget
+        # reaches this line too, and a log promising another try when there is
+        # none sends whoever reads it looking for a delivery that never comes.
+        reported = exc.__cause__ if isinstance(exc, TransientEmailError) and exc.__cause__ else exc
+        logger.warning("%s Retryable failure for user %s: %s", log_prefix, user_id, reported)
+        record_task_breadcrumb(task_name, "retryable_error", level="warning", data={"user_id": user_id})
+    else:
+        logger.error("%s Error for user %s: %s", log_prefix, user_id, exc)
+        record_task_breadcrumb(task_name, "error", level="error", data={"error": str(exc)})
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
@@ -45,8 +77,7 @@ def send_welcome_email_task(user_id: int) -> None:
         else:
             logger.warning("[TASK_send_welcome_email] Failed to send welcome email to user %s", user_id)
     except Exception as e:
-        logger.error("[TASK_send_welcome_email] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_welcome_email_task", "error", level="error", data={"error": str(e)})
+        _report_send_failure("[TASK_send_welcome_email]", "send_welcome_email_task", user_id, e)
         raise
 
 
@@ -69,8 +100,7 @@ def send_quick_start_email_task(user_id: int) -> None:
         else:
             logger.warning("[TASK_send_quick_start] Failed to send to user %s", user_id)
     except Exception as e:
-        logger.error("[TASK_send_quick_start] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_quick_start_email_task", "error", level="error", data={"error": str(e)})
+        _report_send_failure("[TASK_send_quick_start]", "send_quick_start_email_task", user_id, e)
         raise
 
 
@@ -93,8 +123,7 @@ def send_first_component_email_task(user_id: int) -> None:
         else:
             logger.warning("[TASK_send_first_component] Failed to send to user %s", user_id)
     except Exception as e:
-        logger.error("[TASK_send_first_component] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_first_component_email_task", "error", level="error", data={"error": str(e)})
+        _report_send_failure("[TASK_send_first_component]", "send_first_component_email_task", user_id, e)
         raise
 
 
@@ -117,8 +146,7 @@ def send_first_sbom_email_task(user_id: int) -> None:
         else:
             logger.warning("[TASK_send_first_sbom] Failed to send to user %s", user_id)
     except Exception as e:
-        logger.error("[TASK_send_first_sbom] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_first_sbom_email_task", "error", level="error", data={"error": str(e)})
+        _report_send_failure("[TASK_send_first_sbom]", "send_first_sbom_email_task", user_id, e)
         raise
 
 
@@ -141,8 +169,7 @@ def send_collaboration_email_task(user_id: int) -> None:
         else:
             logger.warning("[TASK_send_collaboration] Failed to send to user %s", user_id)
     except Exception as e:
-        logger.error("[TASK_send_collaboration] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_collaboration_email_task", "error", level="error", data={"error": str(e)})
+        _report_send_failure("[TASK_send_collaboration]", "send_collaboration_email_task", user_id, e)
         raise
 
 
@@ -200,18 +227,124 @@ def process_all_onboarding_reminders_task() -> None:
     Designed to be run on a schedule (e.g., daily via cron or periodic task).
     Fans out to ``process_onboarding_sequence_batch_task``, which queues
     quick-start / first-component / first-sbom / collaboration emails for
-    users at the right point in their drip clock. The welcome email is NOT
-    part of this fan-out — it is signal-driven via ``queue_welcome_email``
-    on user creation, not on a daily cron.
+    users at the right point in their drip clock, and to
+    ``requeue_missed_welcome_emails_task``, which is the welcome email's only
+    second chance: that one is signal-driven via ``queue_welcome_email`` on
+    user creation, so a send that failed has nothing else to pick it up.
     """
     try:
         logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
         process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
-        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
+        requeue_missed_welcome_emails_task.send_with_options(args=(), delay=0)
+        logger.info("[TASK_process_all_onboarding_reminders] Queued the sequence batch and the missed-welcome recovery")
 
     except Exception as e:
         logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)
         raise
+
+
+#: How far back the welcome sweep looks, measured from ``User.date_joined``.
+#: The welcome email is sent within seconds of signup, so anything that is
+#: going to fail has failed long before this. The bound is what keeps the sweep
+#: a recovery rather than a backfill: without it, its first run would mail every
+#: account that predates the onboarding sequence entirely.
+WELCOME_RECOVERY_WINDOW_DAYS = 7
+
+
+@dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
+def requeue_missed_welcome_emails_task() -> None:
+    """Re-queue welcome emails for recent signups that never got one.
+
+    Everything else in onboarding gets another pass from the daily batch, so a
+    broken template or an exhausted retry budget costs a delay rather than the
+    message. The welcome email had no such path: it is queued once, by a signal
+    on user creation, and a send that failed was simply gone.
+
+    ``welcome_email_sent`` is set only on a successful send, so it is the whole
+    of the eligibility test, along with its own absence: a user with no
+    ``OnboardingStatus`` row at all is the case where the welcome is most
+    certainly missing, because the signal that creates the row is the signal
+    that queues the email. The service owns the other gates: bot identities,
+    deactivated or soft-deleted accounts, an empty address and one already
+    refused. A send is decided there, at send time, because a task queued
+    before a deletion runs after it. The query repeats each of them only as a
+    pre-filter, so a daily run does not queue a task per account for the
+    service to throw away. Dropping one from the query costs wasted tasks;
+    dropping one from the service would mail someone it must not.
+
+    The drip opt-out is deliberately *not* one of them. It covers the scheduled
+    sequence; the welcome email confirms an account the user just created, so
+    it stays transactional and ``send_welcome_email`` does not check the flag.
+    Filtering on it here would suppress a welcome that failed before the opt-out
+    and could then never be sent, which is stricter than the send path itself.
+
+    The window is measured on the account, not on its status row. A status row
+    is created by ``get_or_create`` from the component and SBOM tracking paths
+    too, so a long-lived user can acquire one this week; keying the cutoff to
+    that would mail someone who signed up years ago. ``date_joined`` is the
+    signup, and the welcome email is sent seconds after it.
+
+    Not restricted to workspace owners either: the post-save signal queues a
+    welcome for every human user, so an owner-only sweep would leave a failed
+    send lost for exactly the accounts that are not primary owners.
+    """
+    from django.db.models import Q
+    from django.db.models.functions import Trim
+    from django.utils import timezone
+
+    from sbomify.apps.oidc.services import BOT_EMAIL_DOMAIN, BOT_USERNAME_PREFIX
+
+    from ..models import OnboardingEmail
+    from ..services import refused_at_current_address
+
+    cutoff = timezone.now() - datetime.timedelta(days=WELCOME_RECOVERY_WINDOW_DAYS)
+    # A refused welcome leaves welcome_email_sent false forever, so without
+    # this the sweep re-queues every permanently refused address daily for the
+    # length of the window. The service would refuse each one, but only after a
+    # task had been queued and its template rendered.
+    refused = OnboardingEmail.objects.filter(email_type=OnboardingEmail.EmailType.WELCOME).filter(
+        refused_at_current_address()
+    )
+    # A welcome handed to the mailer and never recorded, because the worker
+    # died or the outcome write failed, is settled by the next send attempt
+    # and the drip waits on its flag. Past the window nothing else would come
+    # back to it, so it is swept whatever the account's age.
+    unresolved = OnboardingEmail.objects.filter(
+        email_type=OnboardingEmail.EmailType.WELCOME,
+        status=OnboardingEmail.EmailStatus.PENDING,
+        handed_to_mailer_at__isnull=False,
+    )
+    # Driven from the user, not from OnboardingStatus. The post-save signal
+    # creates that row and queues the welcome, so a failure there leaves a user
+    # with neither — invisible to a query that starts at the status table, and
+    # the one case where the welcome is most certainly missing.
+    # ``send_welcome_email`` calls ``get_or_create`` on it, so the row appears
+    # when the send runs.
+    missed = (
+        # Trimmed, because _is_mailable strips before deciding: without this a
+        # whitespace-only address is queued every day for the service to refuse.
+        User.objects.filter(
+            Q(date_joined__gte=cutoff) | Q(id__in=unresolved.values("user_id")),
+            is_active=True,
+            deleted_at__isnull=True,
+        )
+        .annotate(_trimmed_email=Trim("email"))
+        .exclude(_trimmed_email="")
+        .exclude(email__isnull=True)
+        .filter(Q(onboarding_status__isnull=True) | Q(onboarding_status__welcome_email_sent=False))
+        .exclude(username__startswith=BOT_USERNAME_PREFIX)
+        .exclude(email__iendswith=f"@{BOT_EMAIL_DOMAIN}")
+        .exclude(id__in=refused.values("user_id"))
+        .values_list("id", flat=True)
+    )
+
+    queued = 0
+    for user_id in missed:
+        send_welcome_email_task.send_with_options(args=(user_id,), delay=0)
+        queued += 1
+
+    if queued:
+        logger.info("[TASK_requeue_missed_welcome] Re-queued %d welcome email(s)", queued)
 
 
 # Convenience functions for triggering tasks from signals or other parts of the application

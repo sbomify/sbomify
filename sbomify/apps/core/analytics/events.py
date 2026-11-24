@@ -50,12 +50,18 @@ depends on its scope:
   workspace (``user:account_deleted`` after the user has soft-deleted,
   ``billing:enterprise_contact_submitted`` from a visitor with no
   workspace). ``distinct_id`` is the user PK or session-derived.
-  Note: ``user:signed_up`` is intentionally ``"workspace"`` — by the
-  time the signal fires we already have the default workspace key
-  (the post_save handler creates one), and attributing the signup to
-  the workspace keeps the funnel consistent with the rest of Tier 2.
+  ``user:signed_up`` is ``"user"`` and is sent by the browser, not the
+  server (see ``posthog_service.queue_client_event``): it has to land on
+  the person ``posthog.identify`` merges the visitor's anonymous
+  history into, or no funnel can say which pages led to the signup.
 * ``"system"`` — for events fired from background context with no
   workspace (rare). ``distinct_id`` is the literal string ``"system"``.
+* ``"installation"`` — for events about the installation as a whole.
+  ``distinct_id`` is the installation id and
+  ``groups={"installation": installation_id}``.
+
+Every event also carries an ``installation_id`` property, which
+``posthog_service`` adds on its way out. It is not listed per event.
 """
 
 from __future__ import annotations
@@ -67,7 +73,7 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-DistinctIdKind = Literal["workspace", "user", "system"]
+DistinctIdKind = Literal["workspace", "user", "system", "installation"]
 
 
 @dataclass(frozen=True)
@@ -220,7 +226,7 @@ TEAM_ROLE_CHANGED = _register(
 TEAM_BRANDING_UPDATED = _register(
     EventSpec(
         name="team:branding_updated",
-        description="Workspace branding (colours, logo, icon) was updated.",
+        description="Workspace branding (colors, logo, icon) was updated.",
         distinct_id_kind="workspace",
     )
 )
@@ -590,6 +596,7 @@ SEARCH_PERFORMED = _register(
         properties={
             "query_length": "Character length of the query string.",
             "result_count": "Number of results returned (products + components).",
+            "destination_count": "Number of navigation destinations offered for the query.",
         },
         pii_notes=(
             "The raw query string is NEVER shipped — it can contain customer "
@@ -604,9 +611,9 @@ SEARCH_PERFORMED = _register(
 USER_SIGNED_UP = _register(
     EventSpec(
         name="user:signed_up",
-        description="A new user signed up.",
-        distinct_id_kind="workspace",
-        properties={"signup_method": "Auth provider used (e.g. 'keycloak')."},
+        description="A new user signed up. Sent from the browser after identify.",
+        distinct_id_kind="user",
+        properties={"signup_method": "Auth provider used (e.g. 'keycloak'), or 'email'."},
     )
 )
 
@@ -645,6 +652,11 @@ BILLING_SUBSCRIPTION_UPDATED = _register(
         name="billing:subscription_updated",
         description="A Stripe subscription update was processed.",
         distinct_id_kind="workspace",
+        properties={
+            "status": "Stripe subscription status after the update.",
+            "previous_status": "Subscription status before the update; empty when unknown.",
+            "plan": "Billing plan key of the workspace after the update.",
+        },
     )
 )
 
@@ -653,6 +665,9 @@ BILLING_SUBSCRIPTION_CANCELED = _register(
         name="billing:subscription_canceled",
         description="A Stripe subscription ended.",
         distinct_id_kind="workspace",
+        properties={
+            "plan": "Billing plan key of the workspace once the cancellation is applied.",
+        },
     )
 )
 
@@ -661,6 +676,10 @@ BILLING_PAYMENT_FAILED = _register(
         name="billing:payment_failed",
         description="A Stripe invoice payment failed.",
         distinct_id_kind="workspace",
+        properties={
+            "invoice_id": "Stripe invoice id.",
+            "plan": "Billing plan key of the workspace.",
+        },
     )
 )
 
@@ -669,6 +688,12 @@ BILLING_PAYMENT_SUCCEEDED = _register(
         name="billing:payment_succeeded",
         description="A Stripe invoice payment succeeded.",
         distinct_id_kind="workspace",
+        properties={
+            "amount": "Amount paid, in major currency units.",
+            "currency": "ISO 4217 currency code, lowercase as Stripe reports it.",
+            "invoice_id": "Stripe invoice id.",
+            "plan": "Billing plan key of the workspace.",
+        },
     )
 )
 
@@ -677,6 +702,12 @@ BILLING_CHECKOUT_COMPLETED = _register(
         name="billing:checkout_completed",
         description="A Stripe checkout session completed successfully.",
         distinct_id_kind="workspace",
+        properties={
+            "plan": "Key of the plan that was purchased.",
+            "amount": "Session total, in major currency units.",
+            "currency": "ISO 4217 currency code, lowercase as Stripe reports it.",
+            "subscription_status": "Stripe status of the subscription the checkout created.",
+        },
     )
 )
 
@@ -714,5 +745,23 @@ VULNERABILITY_SCAN_COMPLETED = _register(
             "plugin": "Plugin that ran the scan.",
             "status": "Final assessment status (completed / failed / etc.).",
         },
+    )
+)
+
+# --- Installation events -------------------------------------------------------
+
+INSTALLATION_USAGE_REPORTED = _register(
+    EventSpec(
+        name="installation:usage_reported",
+        description="How large this installation is. Sent when its size changes, and on deploy.",
+        distinct_id_kind="installation",
+        properties={
+            "user_count": "Number of user accounts.",
+            "workspace_count": "Number of workspaces.",
+            "product_count": "Number of products across all workspaces.",
+            "component_count": "Number of components across all workspaces.",
+            "sbomify_version": "Version of sbomify the installation runs.",
+        },
+        pii_notes="Counts only. No names, keys or anything identifying a workspace.",
     )
 )

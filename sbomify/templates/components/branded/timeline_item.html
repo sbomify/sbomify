@@ -1,0 +1,39 @@
+{% comment %}
+One event on a c-branded.timeline: a dot on the rail, the label and when it
+happened, and an optional note.
+
+The dot takes the event's status colour (success, info, warning, danger,
+violet) as --tone, the same platform ramp the app's own timeline uses, so a
+resolved advisory reads green here and there. It is never the brand: these
+colours mean something, and a workspace's accent does not.
+
+A timeline runs newest first, so where an item sits says what it is, and the
+item reads that from the list rather than from props. The first is ringed, so
+"where does this stand now" is answered before anything is read. The last has
+no rail below it, because a line leading nowhere reads as more history to come.
+Props for either would have to be written as whole tags in a loop, since cotton
+reads an attribute rendered empty as a boolean that is set.
+
+The note is the slot, set as prose. The page puts its own text in a <p> when
+the text carries line breaks worth keeping.
+{% endcomment %}
+<c-vars icon tone class />
+<li class="group/event relative flex gap-4{% if class %} {{ class }}{% endif %}"
+    style="--tone: {% if tone == 'success' %}var(--color-success){% elif tone == 'info' %}var(--color-info){% elif tone == 'warning' %}var(--color-warning){% elif tone == 'danger' %}var(--color-danger){% elif tone == 'violet' %}var(--color-accent){% else %}var(--color-text-muted){% endif %}"
+    {{ attrs }}>
+    <div class="relative flex flex-col items-center shrink-0">
+        <span class="relative z-[1] flex h-8 w-8 items-center justify-center rounded-full border border-solid border-[color-mix(in_oklab,var(--tone)_30%,transparent)] bg-[color-mix(in_oklab,var(--tone)_12%,var(--color-surface))] text-[var(--tone)] text-xs group-first/event:shadow-[0_0_0_4px_color-mix(in_oklab,var(--tone)_15%,transparent)]">
+            <i class="{{ icon|default:'fas fa-circle' }}" aria-hidden="true"></i>
+        </span>
+        <span class="w-px flex-1 bg-border group-last/event:hidden"
+              aria-hidden="true"></span>
+    </div>
+    <div class="min-w-0 flex-1 flex flex-col gap-1 pt-[0.25rem] pb-6 group-last/event:pb-0">
+        <div class="flex items-baseline justify-between gap-3 [flex-wrap:wrap]">
+            <p class="text-sm font-semibold text-text my-0">{{ heading }}</p>
+            {% if when %}<div class="text-xs text-text-muted tabular-nums">{{ when }}</div>{% endif %}
+        </div>
+        {% if meta %}<div class="flex items-center gap-3 [flex-wrap:wrap] text-xs text-text-muted">{{ meta }}</div>{% endif %}
+        {% if slot.strip %}<div class="text-sm text-text-secondary">{{ slot }}</div>{% endif %}
+    </div>
+</li>

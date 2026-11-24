@@ -8,15 +8,15 @@ import pytest
 from sbomify.apps.core.tests.fixtures import guest_user, sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
 
-from .models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from .models import ContactEntity, ContactProfile, ContactProfileContact, Member, Workspace
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import User
 
 
 @pytest.fixture
-def sample_team() -> Generator[Team, Any, None]:
-    team = Team(name="test team")
+def sample_team() -> Generator[Workspace, Any, None]:
+    team = Workspace(name="test team")
     team.save()
     team.key = number_to_random_token(team.pk)
     team.save()
@@ -29,7 +29,7 @@ def sample_team() -> Generator[Team, Any, None]:
 # rely on the same user account.
 @pytest.fixture
 def sample_team_with_owner_member(
-    sample_team: Team,
+    sample_team: Workspace,
     sample_user: User,  # noqa: F811
 ) -> Generator[Member, Any, None]:
     # First try to get existing membership
@@ -51,7 +51,7 @@ def sample_team_with_owner_member(
 
 @pytest.fixture
 def sample_team_with_admin_member(
-    sample_team: Team,
+    sample_team: Workspace,
     sample_user: User,  # noqa: F811
 ) -> Generator[Member, Any, None]:
     # First try to get existing membership
@@ -71,8 +71,29 @@ def sample_team_with_admin_member(
 
 
 @pytest.fixture
+def sample_team_with_operator_member(
+    sample_team: Workspace,
+    sample_user: User,  # noqa: F811
+) -> Generator[Member, Any, None]:
+    # First try to get existing membership
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "operator"
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="operator")
+        membership.save()
+    yield membership
+
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass
+
+
+@pytest.fixture
 def sample_team_with_guest_member(
-    sample_team: Team,
+    sample_team: Workspace,
     sample_user: User,  # noqa: F811
 ) -> Generator[Member, Any, None]:
     # First try to get existing membership
@@ -93,7 +114,7 @@ def sample_team_with_guest_member(
 
 @pytest.fixture
 def sample_contact_profile_with_contacts(
-    sample_team: Team,
+    sample_team: Workspace,
 ) -> Generator[ContactProfile, Any, None]:
     # Create profile (3-level hierarchy: Profile -> Entity -> Contact)
     # CycloneDX aligned: entities are manufacturer/supplier, authors are separate
@@ -129,7 +150,7 @@ def sample_contact_profile_with_contacts(
 
 @pytest.fixture
 def sample_team_with_member_role(
-    sample_team: Team,
+    sample_team: Workspace,
     sample_user: User,  # noqa: F811
 ) -> Generator[Member, Any, None]:
     """A day-to-day contributor. Mutually exclusive with the fixtures above.

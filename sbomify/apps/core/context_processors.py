@@ -2,14 +2,82 @@ from __future__ import annotations
 
 import asyncio
 import os
+from functools import wraps
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, Callable
+
+from django.http import HttpRequest
 
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
 
+def once_per_request(processor: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    """Run a context processor once per request rather than once per render.
+
+    Cotton builds a fresh ``RequestContext`` for every component it renders, and
+    binding one runs every processor in this module again. A page is hundreds of
+    components, so the counts here were being recomputed hundreds of times:
+    measured at 443 invitation lookups and 889 member lookups on one artifact
+    scan report, 3,116 queries for a single page.
+
+    Cache only within the same user and workspace scope. A session repair or
+    workspace switch must not reuse another workspace's capability flags.
+    """
+    name = processor.__name__
+
+    @wraps(processor)
+    def wrapper(request: Any) -> Any:
+        session = getattr(request, "session", {})
+        resolver_match = getattr(request, "resolver_match", None)
+        scope = (
+            getattr(getattr(request, "user", None), "pk", None),
+            (session.get("current_workspace") or {}).get("key"),
+            resolver_match.kwargs.get("workspace_key") if resolver_match else None,
+        )
+        cache = getattr(request, "_ctx_cache", None)
+        if not isinstance(cache, dict) or getattr(request, "_ctx_cache_scope", None) != scope:
+            # A plain attribute would be read straight off a Mock, which answers
+            # every getattr, and the processor would never run under test. A
+            # dict has to be one we put there.
+            cache = {}
+            try:
+                request._ctx_cache = cache
+                request._ctx_cache_scope = scope
+            except AttributeError:
+                # Not every object handed to a processor accepts attributes.
+                return processor(request)
+        if name not in cache:
+            cache[name] = processor(request)
+        return cache[name]
+
+    return wrapper
+
+
+def app_context(request: HttpRequest) -> dict[str, Any]:
+    """Build shared context once per request, including nested Cotton renders.
+
+    Isolated components create their own RequestContext. Repeating the app
+    processors there multiplies workspace queries by the number of components.
+    Keep the result on this request only, so each new request reads live roles.
+    A user or workspace switch within a request also gets a fresh context.
+    """
+    context: dict[str, Any] = {}
+    for processor in (
+        version_context,
+        pending_invitations_context,
+        pending_access_requests_context,
+        global_modals_context,
+        team_context,
+        sentry_context,
+        posthog_context,
+    ):
+        context.update(processor(request))
+    return context
+
+
+@once_per_request
 def version_context(request: Any) -> Any:
     """Add version and build information to template context.
 
@@ -43,6 +111,7 @@ def version_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def pending_invitations_context(request: Any) -> Any:
     """Add pending invitations count to template context."""
     if not request.user.is_authenticated:
@@ -54,8 +123,9 @@ def pending_invitations_context(request: Any) -> Any:
 
     from sbomify.apps.core.utils import sanitize_email_for_cache_key
     from sbomify.apps.teams.models import Invitation
+    from sbomify.apps.teams.queries import invitation_email
 
-    email = request.user.email or ""
+    email = invitation_email(request.user)
     sanitized_email = sanitize_email_for_cache_key(email, user_id=getattr(getattr(request, "user", None), "id", None))
     if not sanitized_email:
         return {
@@ -77,6 +147,7 @@ def pending_invitations_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def global_modals_context(request: Any) -> Any:
     """Add global modals forms to template context."""
     if not request.user.is_authenticated:
@@ -89,6 +160,7 @@ def global_modals_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def pending_access_requests_context(request: Any) -> Any:
     """Add pending access requests count to template context for owners/admins."""
     if not request.user.is_authenticated:
@@ -97,10 +169,10 @@ def pending_access_requests_context(request: Any) -> Any:
             "has_pending_access_requests": False,
         }
 
-    current_team_data = request.session.get("current_team", {})
-    team_key = current_team_data.get("key")
+    current_team_data = request.session.get("current_workspace", {})
+    workspace_key = current_team_data.get("key")
 
-    if not team_key:
+    if not workspace_key:
         return {
             "pending_access_requests_count": 0,
             "has_pending_access_requests": False,
@@ -112,10 +184,10 @@ def pending_access_requests_context(request: Any) -> Any:
 
         from sbomify.apps.core.authz import ADMINISTER
         from sbomify.apps.documents.access_models import AccessRequest
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
         # Only show count for owners/admins
-        team = Team.objects.get(key=team_key)
+        team = Workspace.objects.get(key=workspace_key)
         member = Member.objects.filter(team=team, user=request.user).first()
 
         if not member or member.role not in ADMINISTER:
@@ -125,7 +197,7 @@ def pending_access_requests_context(request: Any) -> Any:
             }
 
         # Cache the count to avoid querying on every page load
-        cache_key = f"pending_access_requests:{team_key}:{request.user.id}"
+        cache_key = f"pending_access_requests:{workspace_key}:{request.user.id}"
         cached = cache.get(cache_key)
         if cached is not None:
             count = cached
@@ -164,6 +236,7 @@ def pending_access_requests_context(request: Any) -> Any:
         }
 
 
+@once_per_request
 def team_context(request: Any) -> Any:
     """
     Add current team, user role, and derived capability flags to context.
@@ -184,7 +257,7 @@ def team_context(request: Any) -> Any:
     if not request.user.is_authenticated:
         return {}
 
-    current_team_data = request.session.get("current_team", {})
+    current_team_data = request.session.get("current_workspace", {})
     session_team_key = current_team_data.get("key")
 
     # The workspace this page is *about*, which is not always the one in the
@@ -195,25 +268,24 @@ def team_context(request: Any) -> Any:
     url_team_key = None
     resolver_match = getattr(request, "resolver_match", None)
     if resolver_match is not None:
-        url_team_key = resolver_match.kwargs.get("team_key")
+        url_team_key = resolver_match.kwargs.get("workspace_key")
 
-    team_key = url_team_key or session_team_key
-    if not team_key:
+    workspace_key = url_team_key or session_team_key
+    if not workspace_key:
         return {}
 
     try:
-        from sbomify.apps.teams.models import Member, Team
+        from sbomify.apps.teams.models import Member, Workspace
 
-        # We could use select_related hooks or simple caching here if performance is an issue
         try:
-            team = Team.objects.get(key=team_key)
-        except Team.DoesNotExist:
-            # A ``team_key`` kwarg that names no workspace isn't necessarily a
+            team = Workspace.objects.get(key=workspace_key)
+        except Workspace.DoesNotExist:
+            # A ``workspace_key`` kwarg that names no workspace isn't necessarily a
             # workspace key at all. Fall back rather than dropping the whole
             # context and stripping the chrome off the page.
             if not url_team_key or not session_team_key:
                 raise
-            team = Team.objects.get(key=session_team_key)
+            team = Workspace.objects.get(key=session_team_key)
 
         # Determine if owner. Billing status (banners/notifications) is read
         # straight from team.billing_plan_limits below; it is NOT synced from
@@ -228,7 +300,7 @@ def team_context(request: Any) -> Any:
         from django.conf import settings
 
         from sbomify.apps.billing.config import is_billing_enabled
-        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, ROLE_OWNER
+        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, READ_INTERNAL, ROLE_OWNER, TRIAGE
 
         return {
             "team": team,
@@ -239,6 +311,10 @@ def team_context(request: Any) -> Any:
             "can_administer": role in ADMINISTER,
             "can_manage": role in MANAGE,
             "can_delete": role in DELETE,
+            "can_read_internal": role in READ_INTERNAL,
+            # Not can_triage: views pass that name per component, and this one
+            # is the workspace role's, for surfaces such as the Overview.
+            "can_triage_vulnerabilities": role in TRIAGE,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }
@@ -251,6 +327,7 @@ def team_context(request: Any) -> Any:
         return {}
 
 
+@once_per_request
 def sentry_context(request: Any) -> Any:
     """Add Sentry configuration for frontend.
 
@@ -265,6 +342,7 @@ def sentry_context(request: Any) -> Any:
     }
 
 
+@once_per_request
 def posthog_context(request: Any) -> dict[str, Any]:
     """Add PostHog analytics configuration for frontend.
 
@@ -306,17 +384,25 @@ def posthog_context(request: Any) -> dict[str, Any]:
         from sbomify.apps.core.posthog_service import hash_email
 
         user = request.user
-        team_key = request.session.get("current_team", {}).get("key", "")
+        workspace_key = request.session.get("current_workspace", {}).get("key", "")
         identify = {
             "distinct_id": str(user.pk),
             "email_hash": hash_email(getattr(user, "email", "")),
-            "workspace_key": team_key,
+            "workspace_key": workspace_key,
         }
+
+    from functools import cache, partial
+
+    from sbomify.apps.core.posthog_service import get_installation_id, take_client_events
 
     return {
         "posthog_api_key": api_key,
+        "posthog_installation_id": get_installation_id(),
         "posthog_host": host,
         "posthog_dns_host": dns_host,
         "posthog_assets_host": assets_host,
         "posthog_identify": identify,
+        # Called only by the template that sends them, so an HTMX partial
+        # rendered in between cannot take the events off the session.
+        "posthog_client_events": cache(partial(take_client_events, request)),
     }

@@ -5,19 +5,19 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.utils import get_app_hostname, plan_has_custom_domain_access
 
 
-class TeamCustomDomainView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamCustomDomainView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing workspace custom domain settings."""
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 

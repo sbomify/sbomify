@@ -6,6 +6,8 @@ from typing import Any
 from django.http import HttpRequest
 
 from sbomify.apps.core.apis import get_component, list_component_documents
+from sbomify.apps.core.authz import can
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.documents.forms import DocumentDeleteForm, DocumentEditForm
 from sbomify.apps.documents.models import Document
@@ -52,6 +54,9 @@ def build_documents_table_context(
         "documents": document_items,
         "is_public_view": is_public_view,
         "has_crud_permissions": component.get("has_crud_permissions") if not is_public_view else False,
+        # Editing is the manage tier; deleting asks owner or admin, as the API does.
+        "can_delete_document": not is_public_view
+        and bool(can(request, "document:delete", Component.objects.select_related("team").get(pk=component_id))),
         "delete_form": DocumentDeleteForm(),
         "document_type_choices": Document.DocumentType.choices,
         "document_type_subcategories": document_type_subcategories,
@@ -82,22 +87,15 @@ def update_document_from_request(request: HttpRequest) -> ServiceResult[None]:
     document_id = form.cleaned_data["document_id"]
     document_type = form.cleaned_data.get("document_type")
 
-    # Dynamically extract subcategory based on document type
-    compliance_subcategory = None
-    if document_type == Document.DocumentType.COMPLIANCE:
-        # Get compliance_subcategory from form or POST data
-        compliance_subcategory = (
-            form.cleaned_data.get("compliance_subcategory") or request.POST.get("compliance_subcategory") or None
-        )
-    # Add more subcategory fields here as needed for other document types
-
     payload = DocumentUpdateRequest(
         name=form.cleaned_data.get("name"),
         version=form.cleaned_data.get("version"),
         document_type=document_type,
-        compliance_subcategory=compliance_subcategory,
         description=form.cleaned_data.get("description"),
     )
+
+    if "compliance_subcategory" in request.POST:
+        payload.compliance_subcategory = form.cleaned_data.get("compliance_subcategory") or None
 
     result = update_document_metadata(request, document_id, payload)
     if not result.ok:

@@ -11,7 +11,7 @@ import pytest
 from django.core.cache import cache
 
 from sbomify.apps.core.models import Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +31,7 @@ def clear_cache():
 @pytest.fixture
 def custom_domain_team(db):
     """Create a team with a validated custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Company",
         billing_plan="business",
         custom_domain="trust.example.com",
@@ -48,7 +48,7 @@ def custom_domain_team(db):
 @pytest.fixture
 def team_without_custom_domain(db):
     """Create a team without a custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Regular Company",
         billing_plan="community",
         is_public=True,
@@ -134,7 +134,7 @@ class TestPublicPagesOnMainDomain:
 
     def test_unvalidated_custom_domain_accessible(self, client, db):
         """Test that products work on main domain even with unvalidated custom domain."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Unvalidated Company",
             key="unval789",
             billing_plan="business",

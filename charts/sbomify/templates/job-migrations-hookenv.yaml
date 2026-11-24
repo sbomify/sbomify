@@ -1,0 +1,43 @@
+{{- if .Values.migrations.enabled }}
+{{/*
+Short-lived configuration for the pre-install/pre-upgrade migrations Job.
+
+Helm runs every pre-install hook before it creates any ordinary resource, so the
+Job cannot mount the release's own ConfigMap/Secret, which do not exist yet on a
+fresh install. Annotating those as hooks instead would work, but hook resources
+are not tracked in the release: `helm uninstall` would leave them behind, and
+the next `helm install` would then fail with "invalid ownership metadata".
+
+So the hook gets its own copies, at a lower weight, deleted as soon as it
+succeeds. On failure they survive, which is what you want for debugging.
+*/}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sbomify.fullname" . }}-migrations-config
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "migrations") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  {{- include "sbomify.configMapData" . | nindent 2 }}
+{{- if not .Values.secrets.existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "sbomify.fullname" . }}-migrations-secrets
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "migrations") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+type: Opaque
+stringData:
+  {{- include "sbomify.secretData" . | nindent 2 }}
+{{- end }}
+{{- end }}

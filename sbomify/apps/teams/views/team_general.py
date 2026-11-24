@@ -12,13 +12,20 @@ from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.forms import TeamGeneralSettingsForm
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.forms import AdvisoryIdForm, PatchSLAForm, SupportPeriodForm, TeamGeneralSettingsForm
+from sbomify.apps.teams.models import Member, Workspace, default_patch_sla_days
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.services.settings_page import (
+    general_context,
+    update_advisory_ids,
+    update_patch_sla,
+    update_support_period,
+)
 from sbomify.apps.teams.utils import (
+    delete_workspace_with_billing_cleanup,
     refresh_current_team_session,
     switch_active_workspace,
     update_user_teams_session,
@@ -27,7 +34,7 @@ from sbomify.apps.teams.utils import (
 logger = logging.getLogger(__name__)
 
 
-class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamGeneralView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing workspace general settings (name, default, deletion).
 
     Gated at the ``ADMINISTER`` tier (owners and admins). Workspace *deletion* is
@@ -37,9 +44,8 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        user = cast(User, request.user)
-        status_code, team = get_team(request, team_key)
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -47,32 +53,70 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             initial={"name": team.name, "sbom_freshness_days": team.sbom_freshness_days},
         )
 
-        membership = Member.objects.filter(user=user, team__key=team_key).first()
-        is_default_team = membership.is_default_team if membership else False
-
         return render(
             request,
             "teams/team_general.html.j2",
             {
                 "team": team,
                 "form": form,
-                "is_default_team": is_default_team,
+                **(general_context(request, workspace_key).value or {}),
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         action = request.POST.get("action", "update_name")
 
+        if action == "update_support_period":
+            support_form = SupportPeriodForm(request.POST)
+            if not support_form.is_valid():
+                return htmx_error_response(support_form.errors.as_text())
+            result = update_support_period(workspace_key, support_form.cleaned_data["default_support_period_years"])
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save support period")
+            # Re-render this form alone so it compares against what was saved.
+            # Without it Save and Discard stay live and Discard restores the
+            # pre-save value over the one the server already holds; refreshing
+            # the whole tab instead would drop an unsaved edit in the card above.
+            return htmx_success_response("Default support period updated", triggers={"refreshSupportPeriod": True})
+
+        if action == "update_advisory_ids":
+            advisory_form = AdvisoryIdForm(request.POST)
+            if not advisory_form.is_valid():
+                return htmx_error_response(
+                    " ".join(str(m) for messages in advisory_form.errors.values() for m in messages)
+                )
+            result = update_advisory_ids(
+                workspace_key,
+                advisory_form.cleaned_data["advisory_id_prefix"],
+                advisory_form.cleaned_data["advisory_id_start_at"],
+            )
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save advisory ids")
+            return htmx_success_response("Advisory ids updated", triggers={"refreshAdvisoryIds": True})
+
+        if action == "update_patch_sla":
+            form = PatchSLAForm(request.POST)
+            if not form.is_valid():
+                return htmx_error_response(form.errors.as_text())
+            targets = (
+                default_patch_sla_days()
+                if form.cleaned_data["mode"] == "recommended"
+                else {severity: form.cleaned_data[severity] for severity in default_patch_sla_days()}
+            )
+            result = update_patch_sla(workspace_key, targets)
+            if not result.ok:
+                return htmx_error_response(result.error or "Unable to save patch targets")
+            return htmx_success_response("Patch targets updated", triggers={"refreshPatchSLA": True})
         if action == "set_default":
-            return self._set_default(request, team_key)
+            return self._set_default(request, workspace_key)
         elif action == "delete_workspace" or action == "delete":
-            return self._delete_workspace(request, team_key)
+            return self._delete_workspace(request, workspace_key)
 
-        return self._update_general(request, team_key)
+        return self._update_general(request, workspace_key)
 
-    def _update_general(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _update_general(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Update the workspace name and freshness window."""
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
@@ -88,28 +132,37 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         try:
             with transaction.atomic():
-                team_obj = Team.objects.select_for_update().get(key=team_key)
+                team_obj = Workspace.objects.select_for_update().get(key=workspace_key)
                 team_obj.name = new_name
                 team_obj.sbom_freshness_days = freshness_days
                 team_obj.save(update_fields=["name", "sbom_freshness_days"])
 
             refresh_current_team_session(request, team_obj)
+            # The sidebar and header are cached fragments keyed on
+            # ``user_teams_version``, and only this call recomputes that
+            # checksum. Without it the switcher keeps showing the old name
+            # until the cache expires on its own.
+            update_user_teams_session(request, cast(User, request.user))
 
+            # The generated advisory prefix comes from the name, so its preview
+            # refreshes too. Only the preview: the numbering fields may hold
+            # unsaved edits.
             return htmx_success_response(
-                "Workspace settings updated successfully", triggers={"refreshTeamGeneral": True}
+                "Workspace settings updated",
+                triggers={"refreshWorkspaceCard": True, "refreshAdvisoryIdPreview": True},
             )
 
-        except Team.DoesNotExist:
+        except Workspace.DoesNotExist:
             return htmx_error_response("Workspace not found")
         except Exception:
-            logger.exception("Failed to update workspace name for team_key=%s", team_key)
+            logger.exception("Failed to update workspace name for team_key=%s", workspace_key)
             return htmx_error_response("Failed to update workspace. Please try again.")
 
-    def _set_default(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _set_default(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Set this workspace as the default."""
         user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=user, team__key=team_key)
+            membership = Member.objects.select_related("team").get(user=user, team__key=workspace_key)
 
             with transaction.atomic():
                 Member.objects.filter(user=user).update(is_default_team=False)
@@ -120,16 +173,16 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             return htmx_success_response(
                 f"{membership.team.name} is now your default workspace",
-                triggers={"refreshTeamGeneral": True},
+                triggers={"refreshWorkspaceCard": True},
             )
 
         except Member.DoesNotExist:
             return htmx_error_response("Membership not found")
         except Exception:
-            logger.exception("Failed to set default workspace for team_key=%s", team_key)
+            logger.exception("Failed to set default workspace for team_key=%s", workspace_key)
             return htmx_error_response("Failed to set default workspace. Please try again.")
 
-    def _delete_workspace(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def _delete_workspace(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Delete the workspace — owner only.
 
         The class gate admits admins; this is the ``OWNER_ONLY`` carve-out, so
@@ -137,7 +190,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         """
         user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=user, team__key=team_key)
+            membership = Member.objects.select_related("team").get(user=user, team__key=workspace_key)
             if membership.role not in OWNER_ONLY:
                 # A real 403, matching what TeamRoleRequiredMixin returns for the
                 # rest of the view — an authorization failure, not a form error.
@@ -153,8 +206,7 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team = membership.team
             team_name = team.name
 
-            with transaction.atomic():
-                team.delete()
+            delete_workspace_with_billing_cleanup(team)
 
             # Update user teams session after deletion
             user_teams = update_user_teams_session(request, user)
@@ -168,33 +220,33 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
                 try:
                     # Get the team object and switch to it using the proper function
-                    target_team = Team.objects.get(key=target_team_key)
+                    target_team = Workspace.objects.get(key=target_team_key)
                     switch_active_workspace(request, target_team)
 
                     logger.info(
                         "Switched to %s workspace %s after deleting %s",
                         "default" if default_team_key else "first available",
                         target_team_key,
-                        team_key,
+                        workspace_key,
                     )
-                except Team.DoesNotExist:
+                except Workspace.DoesNotExist:
                     logger.error("Target workspace %s not found after deletion", target_team_key)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
-                    request.session["current_team"] = {"key": target_team_key, **target_team_data}
+                    request.session["current_workspace"] = {"key": target_team_key, **target_team_data}
                     request.session.modified = True
                     request.session.save()
                 except Exception as e:
                     logger.error("Error switching workspace after deletion: %s", e, exc_info=True)
                     # Fallback: manually set session
                     target_team_data = user_teams[target_team_key]
-                    request.session["current_team"] = {"key": target_team_key, **target_team_data}
+                    request.session["current_workspace"] = {"key": target_team_key, **target_team_data}
                     request.session.modified = True
                     request.session.save()
             else:
                 # No workspaces left - this shouldn't happen if validation is correct
-                logger.warning("User %s has no workspaces after deleting %s", request.user.id, team_key)
-                request.session.pop("current_team", None)
+                logger.warning("User %s has no workspaces after deleting %s", request.user.id, workspace_key)
+                request.session.pop("current_workspace", None)
                 request.session.modified = True
                 request.session.save()
 
@@ -206,5 +258,5 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except Member.DoesNotExist:
             return htmx_error_response("You don't have permission to delete this workspace")
         except Exception:
-            logger.exception("Failed to delete workspace for team_key=%s", team_key)
+            logger.exception("Failed to delete workspace for team_key=%s", workspace_key)
             return htmx_error_response("Failed to delete workspace. Please try again.")

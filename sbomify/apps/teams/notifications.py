@@ -9,7 +9,7 @@ from django.http import HttpRequest
 from django.urls import reverse
 
 from sbomify.apps.notifications.schemas import NotificationSchema
-from sbomify.apps.teams.queries import get_pending_invitations_for_email
+from sbomify.apps.teams.queries import get_pending_invitations_for_email, invitation_email
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -20,20 +20,17 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     if not request.user.is_authenticated:
         return []
 
-    email = request.user.email
+    email = invitation_email(request.user)
     if not email:
         return []
 
     try:
         pending = get_pending_invitations_for_email(email)
 
-        # Build action URL pointing to the members tab where accept/reject UI lives
-        current_team = request.session.get("current_team", {})
-        team_key = current_team.get("key")
-        if team_key:
-            action_url = reverse("teams:team_settings", kwargs={"team_key": team_key}) + "#members"
-        else:
-            action_url = reverse("core:settings")
+        # Accepting happens on the user's own settings page. Pointing at the
+        # current workspace's members tab sent someone invited to workspace B
+        # to workspace A's member list, which holds no invitation of theirs.
+        action_url = reverse("core:settings")
 
         notifications: list[NotificationSchema] = []
         for inv in pending:

@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.test import RequestFactory
 
 from sbomify.apps.core.middleware import CustomDomainContextMiddleware
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def middleware():
 @pytest.fixture
 def custom_domain_team(db):
     """Create a team with a validated custom domain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Company",
         billing_plan="business",
         custom_domain="trust.example.com",
@@ -203,7 +203,7 @@ class TestCaching:
 
         # Delete the team
         team_id = team.id
-        Team.objects.filter(id=team_id).delete()
+        Workspace.objects.filter(id=team_id).delete()
 
         # Try to get team again - cache has old ID but team is gone
         team2 = middleware._get_team_for_domain("trust.example.com")
@@ -213,11 +213,11 @@ class TestCaching:
 
 @pytest.mark.django_db
 class TestAutoValidation:
-    """Test auto-validation of custom domains."""
+    """A request on a custom domain never validates it; only the probe does."""
 
-    def test_auto_validates_unvalidated_domain(self, request_factory, db):
-        """Test that middleware auto-validates an unvalidated custom domain."""
-        team = Team.objects.create(
+    def test_does_not_validate_unvalidated_domain(self, request_factory, db):
+        """The Host header is the client's choice, so it proves nothing."""
+        team = Workspace.objects.create(
             name="Unvalidated Co",
             billing_plan="business",
             custom_domain="unvalidated.example.com",
@@ -228,22 +228,18 @@ class TestAutoValidation:
         request.META["HTTP_HOST"] = "unvalidated.example.com"
 
         def get_response(req):
-            # By the time the response handler runs, the team should be validated
-            assert req.custom_domain_team.custom_domain_validated is True
+            assert req.custom_domain_team.custom_domain_validated is False
             return None
 
         mw = CustomDomainContextMiddleware(get_response)
         mw(request)
 
-        # Verify the DB was updated
         team.refresh_from_db()
-        assert team.custom_domain_validated is True
-        assert team.custom_domain_verification_failures == 0
+        assert team.custom_domain_validated is False
 
     def test_skips_already_validated_domain(self, request_factory, custom_domain_team):
         """Test that middleware does not write to DB for already-validated domains."""
-        # Fixture creates team with validated=True, last_checked_at=None
-        assert custom_domain_team.custom_domain_last_checked_at is None
+        Workspace.objects.filter(pk=custom_domain_team.pk).update(custom_domain_verification_failures=3)
 
         request = request_factory.get("/")
         request.META["HTTP_HOST"] = "trust.example.com"
@@ -254,11 +250,10 @@ class TestAutoValidation:
         mw = CustomDomainContextMiddleware(get_response)
         mw(request)
 
-        # If _auto_validate_domain had run, it would have set last_checked_at.
-        # Verify no DB write occurred by checking it remains None.
+        # _probe_soon would have cleared the failure count.
         custom_domain_team.refresh_from_db()
         assert custom_domain_team.custom_domain_validated is True
-        assert custom_domain_team.custom_domain_last_checked_at is None
+        assert custom_domain_team.custom_domain_verification_failures == 3
 
 
 @pytest.mark.django_db
@@ -283,7 +278,7 @@ class TestEdgeCases:
     def test_handles_uppercase_domain(self, middleware, db):
         """Test that middleware handles uppercase domains."""
         # Create team with lowercase domain
-        Team.objects.create(
+        Workspace.objects.create(
             name="Test",
             custom_domain="UPPER.EXAMPLE.COM".lower(),  # Stored lowercase
             custom_domain_validated=True,
@@ -303,12 +298,12 @@ class TestEdgeCases:
 
     def test_multiple_teams_different_domains(self, middleware, db):
         """Test that middleware distinguishes between different custom domains."""
-        team1 = Team.objects.create(
+        team1 = Workspace.objects.create(
             name="Team 1",
             custom_domain="team1.example.com",
             custom_domain_validated=True,
         )
-        team2 = Team.objects.create(
+        team2 = Workspace.objects.create(
             name="Team 2",
             custom_domain="team2.example.com",
             custom_domain_validated=True,

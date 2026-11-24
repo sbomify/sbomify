@@ -97,9 +97,11 @@
 {% endif %}
 {% if can_manage_identifiers %}
     {# Add Identifier Modal #}
-    <c-modal id="addIdentifierModal" show="showAddModal" title="Add Identifier">
+    <c-modal teleport="false" id="addIdentifierModal" show="showAddModal" title="Add Identifier">
     <form id="add-identifier-form"
-          @submit.prevent=" fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showAddModal = false; }); ">
+          hx-post="{% url 'core:product_identifiers' product.id %}"
+          hx-target="#product-identifiers-card"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="action" value="create">
         <div class="space-y-4">
@@ -127,9 +129,11 @@
     </c-slot>
     </c-modal>
     {# Edit Identifier Modal #}
-    <c-modal id="editIdentifierModal" show="showEditModal" title="Edit Identifier" icon="fas fa-edit">
+    <c-modal teleport="false" id="editIdentifierModal" show="showEditModal" title="Edit Identifier" icon="fas fa-edit">
     <form id="edit-identifier-form"
-          @submit.prevent=" const formData = new FormData($el); formData.set('identifier_id', editId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showEditModal = false; }); ">
+          hx-post="{% url 'core:product_identifiers' product.id %}"
+          hx-target="#product-identifiers-card"
+          hx-swap="outerHTML">
         {% csrf_token %}
         <input type="hidden" name="action" value="update">
         <input type="hidden" name="identifier_id" :value="editId">
@@ -158,7 +162,7 @@
     </c-slot>
     </c-modal>
     {# Delete Identifier Modal #}
-    <c-modal show="showDeleteModal" size="sm" role="alertdialog" aria-labelledby="deleteIdentifierModalLabel">
+    <c-modal teleport="false" show="showDeleteModal" size="sm" role="alertdialog" aria-labelledby="deleteIdentifierModalLabel">
     <div class="relative text-center">
         <c-buttons.icon label="Close" class="absolute -top-2 -right-2" @click="showDeleteModal = false">
         <i class="fas fa-times" aria-hidden="true"></i>
@@ -176,9 +180,16 @@
     </div>
     <c-slot name="footer">
     <c-buttons.ghost @click="showDeleteModal = false">Cancel</c-buttons.ghost>
-    <c-buttons.danger @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('identifier_id', deleteId); fetch('{% url 'core:product_identifiers' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-identifiers-card').outerHTML = html; showDeleteModal = false; }); ">
-    <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete
-    </c-buttons.danger>
+    <form hx-post="{% url 'core:product_identifiers' product.id %}"
+          hx-target="#product-identifiers-card"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="identifier_id" :value="deleteId">
+        <c-buttons.danger type="submit">
+        <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete
+        </c-buttons.danger>
+    </form>
     </c-slot>
     </c-modal>
 {% endif %}

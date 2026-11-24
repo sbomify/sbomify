@@ -1,8 +1,19 @@
 ---
+# Same reason as the base file: json-file keeps everything forever by default.
+# Services this overlay redefines inherit the base file's setting; the anchor is
+# repeated here because YAML anchors do not cross files, and it covers the
+# services that exist only in development.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: "${LOG_MAX_FILE:-3}"
+
 # Development-specific environment variable anchors
 x-keycloak-env: &keycloak-env
   KC_HOSTNAME_URL: ${KC_HOSTNAME_URL:-http://keycloak:8080/}
   KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080/}
+  KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-}
   KEYCLOAK_REALM: ${KEYCLOAK_REALM:-sbomify}
   KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-sbomify}
   KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-client-secret}
@@ -11,10 +22,17 @@ x-keycloak-admin-env: &keycloak-admin-env
   KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
   KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
 
+# Where the dev stack serves the app. The backend and the Keycloak bootstrap
+# must agree: the bootstrap writes it into the audience of MCP access tokens,
+# and /mcp accepts only a token whose audience is its own URL.
+x-app-env: &app-env
+  APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
+
 x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
   LOCAL_DEV: ${LOCAL_DEV:-True}
+  TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-False}
   EMAIL_HOST: ${EMAIL_HOST:-mailpit}
   EMAIL_PORT: ${EMAIL_PORT:-1025}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-True}
@@ -22,6 +40,7 @@ x-dev-env: &dev-env
 
 services:
   keycloak:
+    logging: *default-logging
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     restart: ${KEYCLOAK_RESTART_POLICY:-always}
     environment:
@@ -36,6 +55,7 @@ services:
     command: start-dev
 
   keycloak-bootstrap:
+    logging: *default-logging
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
     depends_on:
       - keycloak
@@ -43,15 +63,15 @@ services:
       - ./bin/keycloak-bootstrap.sh:/keycloak-bootstrap.sh
     entrypoint: /bin/sh /keycloak-bootstrap.sh
     environment:
-      <<: [*keycloak-env, *keycloak-admin-env]
+      <<: [*keycloak-env, *keycloak-admin-env, *app-env]
       KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
-      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
 
   # S3-compatible storage for local development. SeaweedFS `mini` runs the whole
   # stack in one process and creates the buckets from S3_BUCKET on boot, so no
   # bootstrap sidecar is needed. Credentials live in bin/seaweedfs-s3.json and
   # must match the AWS_*_ACCESS_KEY_ID / AWS_*_SECRET_ACCESS_KEY defaults.
   sbomify-s3:
+    logging: *default-logging
     image: ${S3_IMAGE:-chrislusf/seaweedfs:4.42}
     restart: always
     networks:
@@ -89,6 +109,7 @@ services:
       retries: 12
 
   sbomify-backend:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       # context is inherited from docker-compose.yml
@@ -101,7 +122,7 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
     depends_on:
       sbomify-db:
         condition: service_healthy
@@ -111,6 +132,7 @@ services:
         condition: service_started
 
   sbomify-migrations:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -119,9 +141,10 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   sbomify-worker:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -132,9 +155,10 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   sbomify-scheduler:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       target: ${BUILD_TARGET:-python-app-dev}
@@ -143,10 +167,11 @@ services:
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
     environment:
-      <<: *dev-env
+      <<: [*dev-env, *app-env]
 
   # sbomify-frontend is a new service specific to development
   sbomify-frontend:
+    logging: *default-logging
     pull_policy: never  # Never pull from registry in dev, use local builds
     build:
       context: . # Must be defined as it's a new service
@@ -169,6 +194,7 @@ services:
     restart: ${FRONTEND_RESTART_POLICY:-unless-stopped}
 
   mailpit:
+    logging: *default-logging
     image: axllent/mailpit:latest
     expose:
       - 1025
@@ -183,6 +209,7 @@ services:
 
   # Use Caddyfile.dev for development
   sbomify-caddy:
+    logging: *default-logging
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
 

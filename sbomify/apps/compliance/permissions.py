@@ -7,14 +7,13 @@ from typing import TYPE_CHECKING
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.authz import ADMINISTER
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
     from sbomify.apps.compliance.models import CRAAssessment
     from sbomify.apps.core.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
 
 @dataclass(frozen=True)
@@ -40,7 +39,7 @@ class AccessCheckFailure:
     error_code: str = "access_denied"
 
 
-def check_cra_access(team: Team | None = None, *, billing_plan_key: str | None = None) -> bool:
+def check_cra_access(team: Workspace | None = None, *, billing_plan_key: str | None = None) -> bool:
     """Returns True if team has Business+ plan (or billing disabled).
 
     Pure key check — no DB query. Can be called with either a Team object
@@ -70,7 +69,7 @@ def _is_team_member(request: HttpRequest, team_id: int) -> bool:
     # Session cache first (avoids the DB round-trip on the hot path).
     # The session's ``user_teams`` map is keyed by team key; fall back
     # to a DB check only if it isn't populated.
-    user_teams = request.session.get("user_teams") or {}
+    user_teams = request.session.get("user_workspaces") or {}
     for payload in user_teams.values():
         if payload.get("id") == team_id or payload.get("team_id") == team_id:
             return True
@@ -82,13 +81,20 @@ def require_assessment_access(
     request: HttpRequest,
     assessment_id: str,
     *,
-    allowed_roles: tuple[str, ...] = ADMINISTER,
+    action: str = "cra_assessment:read",
 ) -> CRAAssessment | AccessCheckFailure:
     """Centralised access check for all CRAAssessment-bound endpoints.
 
     Returns the assessment on success; ``AccessCheckFailure`` otherwise.
     Both the web view and the Ninja API call this so any change to the
     role list, billing gate, or lookup semantics lands in one place.
+
+    The role check routes through ``can()`` (not ``verify_item_access``
+    directly) so the API token action-scope gate runs: a read-only token
+    gets ``cra_assessment:read`` but not ``cra_assessment:manage``, so it
+    can view an assessment but cannot save steps, generate a document or
+    sign a Declaration of Conformity. Mutation endpoints pass
+    ``action="cra_assessment:manage"``.
 
     Access decisions:
       - Assessment missing OR user not a member of its team → 404
@@ -104,7 +110,7 @@ def require_assessment_access(
       - Team lacks the billing plan → 403.
     """
     from sbomify.apps.compliance.models import CRAAssessment
-    from sbomify.apps.core.utils import verify_item_access
+    from sbomify.apps.core.authz import can
 
     # Eager-load the hot-path joins that Step 3 context builders and
     # the Ninja API consumed via a wider ``select_related`` before this
@@ -122,7 +128,7 @@ def require_assessment_access(
     if not _is_team_member(request, assessment.team_id):
         return AccessCheckFailure(status_code=404, message="Not found", error_code="not_found")
 
-    if not verify_item_access(request, assessment, list(allowed_roles)):
+    if not can(request, action, assessment):
         return AccessCheckFailure(status_code=403, message="Forbidden", error_code="permission_denied")
 
     if not check_cra_access(assessment.team):
@@ -139,16 +145,19 @@ def require_product_cra_access(
     request: HttpRequest,
     product_id: str,
     *,
-    allowed_roles: tuple[str, ...] = ADMINISTER,
+    action: str = "cra_assessment:manage",
 ) -> Product | AccessCheckFailure:
     """Centralised access check for Product-bound CRA endpoints.
 
     Same shape and intent as ``require_assessment_access``, returning
     the product on success. 404 for unknown product or non-member user;
-    403 for insufficient role or missing billing plan.
+    403 for insufficient role or missing billing plan. Routes the role
+    check through ``can()`` so a scoped API token cannot exceed its scope
+    (these endpoints create and drive the assessment, so they default to
+    the ``cra_assessment:manage`` action).
     """
+    from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Product
-    from sbomify.apps.core.utils import verify_item_access
 
     try:
         product = Product.objects.select_related("team").get(pk=product_id)
@@ -158,7 +167,7 @@ def require_product_cra_access(
     if not _is_team_member(request, product.team_id):
         return AccessCheckFailure(status_code=404, message="Not found", error_code="not_found")
 
-    if not verify_item_access(request, product, list(allowed_roles)):
+    if not can(request, action, product):
         return AccessCheckFailure(status_code=403, message="Forbidden", error_code="permission_denied")
 
     if not check_cra_access(product.team):

@@ -1,0 +1,54 @@
+{{- $name := printf "%s-caddy" (include "sbomify.fullname" .) -}}
+---
+# The cluster's edge. This is what public DNS, including every workspace
+# custom domain, should point at.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+  {{- with .Values.caddy.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.caddy.service.type }}
+  {{- if has .Values.caddy.service.type (list "LoadBalancer" "NodePort") }}
+  # Decides whether the client IP survives, which is what Caddy's client_ip
+  # matchers (the internal-API guard) and the application's rate limiting key
+  # on. `Local` keeps the real caller; `Cluster` replaces it with a node
+  # address, at the cost of only reaching nodes that run a Caddy pod.
+  #
+  # Rendered for NodePort as well as LoadBalancer because Kubernetes honours
+  # the field for both. That is not a claim that NodePort preserves the source
+  # IP here: values-local.yaml deliberately chooses `Cluster`, because on kind
+  # `Local` would black-hole traffic to nodes without a Caddy pod.
+  externalTrafficPolicy: {{ .Values.caddy.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- if eq .Values.caddy.service.type "LoadBalancer" }}
+  {{- with .Values.caddy.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.caddy.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+      {{- if and (eq .Values.caddy.service.type "NodePort") .Values.caddy.service.nodePorts.http }}
+      nodePort: {{ .Values.caddy.service.nodePorts.http }}
+      {{- end }}
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+      {{- if and (eq .Values.caddy.service.type "NodePort") .Values.caddy.service.nodePorts.https }}
+      nodePort: {{ .Values.caddy.service.nodePorts.https }}
+      {{- end }}
+  selector:
+    {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}

@@ -42,6 +42,19 @@ pytest_plugins = [
 ]
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _load_urlconf():
+    """Import every view and API module before any test patches what they import.
+
+    The URLconf is otherwise loaded by a worker's first request. When that test
+    has patched a class such as ``object_store.StorageClient``, every module
+    that imports it by name keeps the mock for the rest of the worker's run.
+    """
+    from django.urls import get_resolver
+
+    get_resolver().url_patterns
+
+
 @pytest.fixture(autouse=True)
 def _clear_cache():
     """Clear the in-memory cache between every test.
@@ -52,6 +65,20 @@ def _clear_cache():
     from django.core.cache import cache
 
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _forget_installation_id():
+    """Drop the installation id ``posthog_service`` caches per process.
+
+    The row it was read from is rolled back with the test that created it, so
+    a cached id would follow later tests into their PostHog payloads.
+    """
+    from sbomify.apps.core import posthog_service
+
+    posthog_service._installation_id = ""
+    yield
+    posthog_service._installation_id = ""
 
 
 @pytest.fixture(scope="module")

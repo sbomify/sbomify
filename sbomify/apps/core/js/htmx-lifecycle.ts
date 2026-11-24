@@ -5,9 +5,17 @@
  * integration, focus management, and state preservation.
  */
 import Alpine from 'alpinejs';
+import { initTableSorting } from './components/table-sorting';
 
 // Track initialization state
 let isInitialized = false;
+
+interface PendingButton {
+    element: HTMLButtonElement;
+    disabled: boolean;
+}
+
+const pendingButtons = new WeakMap<XMLHttpRequest, PendingButton[]>();
 
 /**
  * Initialize all HTMX lifecycle event handlers
@@ -15,6 +23,7 @@ let isInitialized = false;
 export function initHtmxLifecycle(): void {
     if (isInitialized) return;
     isInitialized = true;
+    initTableSorting();
 
     // ============================================
     // HTMX REQUEST LIFECYCLE
@@ -30,11 +39,9 @@ export function initHtmxLifecycle(): void {
         target.classList.add('htmx-loading');
 
         // Disable submit buttons in the target
-        const submitButtons = target.querySelectorAll<HTMLButtonElement>('button[type="submit"]');
-        submitButtons.forEach(btn => {
-            btn.dataset.originalDisabled = btn.disabled.toString();
-            btn.disabled = true;
-        });
+        const buttons = Array.from(target.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
+        pendingButtons.set(event.detail.xhr, buttons.map(element => ({ element, disabled: element.disabled })));
+        buttons.forEach(button => { button.disabled = true; });
     }) as EventListener);
 
     /**
@@ -47,12 +54,12 @@ export function initHtmxLifecycle(): void {
         target.classList.remove('htmx-loading');
 
         // Restore button states
-        const submitButtons = target.querySelectorAll<HTMLButtonElement>('button[type="submit"]');
-        submitButtons.forEach(btn => {
-            const wasDisabled = btn.dataset.originalDisabled === 'true';
-            btn.disabled = wasDisabled;
-            delete btn.dataset.originalDisabled;
+        // Restore only the controls this request disabled. A swap may have
+        // replaced them with new controls whose state already belongs to Alpine.
+        pendingButtons.get(event.detail.xhr)?.forEach(({ element, disabled }) => {
+            if (element.isConnected) element.disabled = disabled;
         });
+        pendingButtons.delete(event.detail.xhr);
     }) as EventListener);
 
     // ============================================
@@ -64,7 +71,10 @@ export function initHtmxLifecycle(): void {
      * Uses Alpine.morph when available for state preservation
      */
     document.body.addEventListener('htmx:afterSwap', ((event: CustomEvent) => {
-        const target = event.detail.target as HTMLElement;
+        // History restoration emits these events on the restored element
+        // without the request-specific detail.target.
+        const target = event.detail.target ?? event.target;
+        if (!(target instanceof HTMLElement)) return;
 
         // Find elements with x-data that need initialization
         const alpineElements = target.querySelectorAll('[x-data]');
@@ -104,7 +114,8 @@ export function initHtmxLifecycle(): void {
      * After swap - restore focus to appropriate element
      */
     document.body.addEventListener('htmx:afterSettle', ((event: CustomEvent) => {
-        const target = event.detail.target as HTMLElement;
+        const target = event.detail.target ?? event.target;
+        if (!(target instanceof HTMLElement)) return;
 
         // Look for element with autofocus attribute
         const autofocusEl = target.querySelector<HTMLElement>('[autofocus]');
@@ -232,4 +243,3 @@ export function initHtmxLifecycle(): void {
 
 export { initHtmxLifecycle as registerHtmxLifecycle };
 export default initHtmxLifecycle;
-

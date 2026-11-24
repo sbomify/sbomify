@@ -7,7 +7,7 @@ from django.test import Client
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -36,7 +36,7 @@ def export_team(export_user, db):
             "max_users": 2,
         },
     )
-    team = Team.objects.create(name="Export Team", billing_plan="community")
+    team = Workspace.objects.create(name="Export Team", billing_plan="community")
     team.key = number_to_random_token(team.pk)
     team.save()
     Member.objects.create(team=team, user=export_user, role="owner", is_default_team=True)

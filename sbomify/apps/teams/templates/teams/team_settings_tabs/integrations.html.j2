@@ -1,0 +1,12 @@
+{% comment %}
+    A sync result names one connection, but the panel shows them all, so the
+    region keys on the message type. liveRegion holds the refresh while a
+    publish control has focus, and also matches resync.
+{% endcomment %}
+<div id="integrations-wrapper"
+     x-data="liveRegion({ refresh: ['integration_synced'], key: 'type', id: 'integration_synced' })"
+     hx-get="{% url 'integrations:panel' team.key %}"
+     hx-trigger="load, refreshIntegrations from:body, live-refresh"
+     hx-swap="innerHTML">
+    <c-feedback.loading-list message="Loading integrations..." rows="1" />
+</div>

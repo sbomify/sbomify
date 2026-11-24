@@ -56,6 +56,7 @@ mock.module('alpinejs', () => ({
 
 interface WsStore {
     connect: (workspaceKey: string) => void
+    connectUser: () => void
     disconnect: () => void
     connected: boolean
     reconnectAttempts: number
@@ -116,15 +117,22 @@ function runPendingTimer(): number {
     return timer.delay
 }
 
+/** Event types the store dispatched on window, in order. */
+const dispatched: string[] = []
+
 describe('WebSocket store reconnection', () => {
     beforeEach(() => {
         sockets.length = 0
+        dispatched.length = 0
         pending.length = 0
 
         ;(globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeWebSocket
         ;(globalThis as unknown as { window: unknown }).window = {
             location: { protocol: 'https:', host: 'app.sbomify.com' },
-            dispatchEvent: () => true
+            dispatchEvent: (event: { type: string }) => {
+                dispatched.push(event.type)
+                return true
+            }
         }
         ;(globalThis as unknown as { CustomEvent: unknown }).CustomEvent = class {
             constructor(
@@ -309,5 +317,58 @@ describe('WebSocket store reconnection', () => {
         getStore().connect('workspace-key')
 
         expect(sockets[0].url).toBe('wss://app.sbomify.com/ws/workspace/workspace-key/')
+    })
+
+    test('the first open does not ask listeners to resync', () => {
+        getStore().connect('workspace-key')
+        sockets[0].open()
+
+        expect(dispatched).toEqual(['ws:connected'])
+    })
+
+    test('a reopen after a drop asks every listener to resync', () => {
+        // Whatever was broadcast while the socket was down never arrived.
+        getStore().connect('workspace-key')
+        sockets[0].open()
+        sockets[0].drop()
+        runPendingTimer()
+        dispatched.length = 0
+
+        sockets[1].open()
+
+        expect(dispatched).toEqual(['ws:connected', 'ws:message', 'ws:resync'])
+    })
+
+    test('a deliberate connect starts over, with nothing to catch up on', () => {
+        const store = getStore()
+        store.connect('workspace-a')
+        sockets[0].open()
+        store.connect('workspace-b')
+        dispatched.length = 0
+
+        sockets[1].open()
+
+        expect(dispatched).toEqual(['ws:connected'])
+    })
+
+    test('a user channel connects to the user URL and retries like any other', () => {
+        getStore().connectUser()
+        expect(sockets[0].url).toBe('wss://app.sbomify.com/ws/user/')
+
+        sockets[0].drop()
+        runPendingTimer()
+
+        expect(sockets[1].url).toBe('wss://app.sbomify.com/ws/user/')
+    })
+
+    test('switching from the user channel to a workspace opens the workspace socket', () => {
+        const store = getStore()
+        store.connectUser()
+        sockets[0].open()
+
+        store.connect('workspace-key')
+
+        expect(sockets[0].closed).not.toBeNull()
+        expect(sockets[1].url).toBe('wss://app.sbomify.com/ws/workspace/workspace-key/')
     })
 })

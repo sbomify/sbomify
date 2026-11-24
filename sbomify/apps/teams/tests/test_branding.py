@@ -1,7 +1,9 @@
 """Security and edge case tests for branding functionality."""
 
 import pytest
+from django.urls import reverse
 
+from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.branding import (
     DEFAULT_ACCENT_COLOR,
     DEFAULT_BRAND_COLOR,
@@ -14,7 +16,7 @@ from sbomify.apps.teams.branding import (
     resolve_brand_color,
     sanitize_hex_color,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class TestSanitizeHexColor:
@@ -91,7 +93,7 @@ class TestBuildBrandingContext:
 
     def test_sanitizes_malicious_brand_color(self):
         """Malicious brand color should be sanitized."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Evil Corp",
             branding_info={
                 "brand_color": "#000; } </style><script>alert('xss')</script><style>",
@@ -108,7 +110,7 @@ class TestBuildBrandingContext:
 
     def test_sanitizes_malicious_accent_color(self):
         """Malicious accent color should be sanitized."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Evil Corp",
             branding_info={
                 "accent_color": "'; DROP TABLE teams; --",
@@ -133,7 +135,7 @@ class TestBuildBrandingContext:
 
     def test_branding_disabled_returns_defaults(self):
         """Team with branding disabled should return defaults."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="No Branding Team",
             branding_info={
                 "branding_enabled": False,
@@ -148,7 +150,7 @@ class TestBuildBrandingContext:
 
     def test_valid_colors_pass_through(self):
         """Valid colors should pass through and RGB should be computed."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Valid Colors Team",
             branding_info={
                 "brand_color": "#123456",
@@ -167,7 +169,7 @@ class TestBuildBrandingContext:
 
     def test_empty_colors_use_defaults(self):
         """Empty color strings should use defaults."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Empty Colors Team",
             branding_info={
                 "brand_color": "",
@@ -183,7 +185,7 @@ class TestBuildBrandingContext:
 
     def test_rgb_values_precomputed(self):
         """RGB values should be pre-computed as strings."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="RGB Test Team",
             branding_info={
                 "brand_color": "#ff0000",
@@ -201,7 +203,7 @@ class TestBuildBrandingContext:
 
     def test_accent_color_dark_computed(self):
         """Darkened accent color should be computed."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Dark Color Team",
             branding_info={
                 "accent_color": "#6366f1",
@@ -283,3 +285,60 @@ class TestResolveBrandColor:
             fill = resolve_brand_color(brand)
             assert ink_on_color(fill) == ink_on_color(resolve_brand_color(brand))
             assert is_dark_color(fill) is (ink_on_color(fill) == "#ffffff")
+
+
+@pytest.mark.django_db
+class TestBrandingOffNotice:
+    """The notice that says saved colours are not reaching public pages.
+
+    It was bound with x-show to ``branding_info``, which is Django context and
+    never reaches the Alpine scope, so the page threw
+    "branding_info is not defined" and the notice never rendered. Nothing
+    caught it because nothing rendered the template.
+    """
+
+    NOTICE = "customers still see the default sbomify look"
+
+    def _render(self, client, team):
+        return client.get(reverse("workspaces:team_branding", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
+
+    def test_the_notice_renders_when_branding_is_off(self, client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": False}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = self._render(client, team)
+
+        assert response.status_code == 200
+        assert self.NOTICE in response.content.decode()
+
+    def test_the_notice_tracks_the_switch_rather_than_the_saved_value(self, client, sample_team_with_owner_member):
+        """Alpine can only reveal markup the server rendered.
+
+        Gating this on the saved value meant turning branding off showed no
+        warning until a save and a reload, which matters now the switch is the
+        first control on the form. It ships either way, bound to the checkbox,
+        with x-cloak keeping it down until Alpine can answer.
+        """
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": True}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        html = self._render(client, team).content.decode()
+
+        assert self.NOTICE in html
+        assert 'x-show="!localBrandingInfo.branding_enabled"' in html
+        assert "x-cloak" in html
+
+    def test_the_page_names_no_alpine_variable_it_does_not_define(self, client, sample_team_with_owner_member):
+        """x-show on a server-only name is invisible until a browser runs it."""
+        team = sample_team_with_owner_member.team
+        team.branding_info = {"branding_enabled": False}
+        team.save(update_fields=["branding_info"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        html = self._render(client, team).content.decode()
+
+        assert "branding_info." not in html, "branding_info is Django context, not Alpine state"

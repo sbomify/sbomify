@@ -86,3 +86,32 @@ def add_utm(url: Any, campaign: Any = "trust_center") -> Any:
     except Exception:
         # If anything goes wrong, return the original URL
         return url
+
+
+@register.filter
+def humanize_token(value: Any) -> str:
+    """A machine code as display text: ``dependency-track`` becomes "Dependency Track".
+
+    The template-side door onto ``core.utils.humanize_token``, for the last
+    branch of a badge or a label where no real display name is to hand. Reach
+    for a stored label first — a plugin's ``display_name``, a model's
+    ``get_FOO_display()`` — and for this only when there is none.
+    """
+    from sbomify.apps.core.utils import humanize_token as _humanize_token
+
+    return _humanize_token(value)
+
+
+@register.filter
+def repeat(count: Any) -> range:
+    """``count`` as something to loop over, for a node drawn once per row.
+
+    Skeletons size themselves from a real count, so slicing a literal string
+    silently caps them at however long that string happened to be. Anything
+    that will not read as a whole number draws nothing, which is the same
+    answer a zero gives.
+    """
+    try:
+        return range(max(0, int(count)))
+    except (TypeError, ValueError):
+        return range(0)

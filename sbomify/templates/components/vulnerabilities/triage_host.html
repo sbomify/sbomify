@@ -1,0 +1,11 @@
+{% comment %}
+Where a vulnerabilities list loads its triage dialog. A row's Triage dispatches
+open-vulnerability-triage with the dialog URL (core:component_triage_modal for
+that occurrence and SBOM); this fetches it into itself, and the response opens
+itself with the occurrence's purl and current decision. It lives outside any
+region HTMX replaces, so paging the table keeps an open dialog.
+{% endcomment %}
+<div id="vulnerability-triage-host"
+     class="contents"
+     x-data
+     @open-vulnerability-triage.window="htmx.ajax('GET', $event.detail.url, { target: $el, swap: 'innerHTML' })"></div>

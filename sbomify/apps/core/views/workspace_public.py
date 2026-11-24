@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
+from django.db.models import Count, Exists, OuterRef, Q
+from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.views import View
 
@@ -11,19 +11,23 @@ from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.url_utils import (
-    build_custom_domain_url,
+    custom_domain_redirect,
+    get_component_public_slug,
     should_redirect_to_clean_url,
     should_redirect_to_custom_domain,
 )
 from sbomify.apps.core.utils import token_to_number
+from sbomify.apps.documents.models import Document
+from sbomify.apps.documents.services.trust_center_badges import public_certification_badges
 from sbomify.apps.plugins.models import TeamPluginSettings
+from sbomify.apps.plugins.services.access import plugins_within_plan
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.security_advisories.services.trust_center import public_advisory_summary
 from sbomify.apps.teams.branding import build_branding_context
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
-def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
+def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Workspace | dict[str, Any]]:
     """
     Resolve a public workspace by explicit key, custom domain, or session fallback.
 
@@ -52,8 +56,8 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
             return 404, {"detail": "Workspace not found"}
 
         try:
-            team = Team.objects.get(pk=team_id)
-        except Team.DoesNotExist:
+            team = Workspace.objects.get(pk=team_id)
+        except Workspace.DoesNotExist:
             return 404, {"detail": "Workspace not found"}
 
         if team.key != workspace_key or not team.is_public:
@@ -61,7 +65,7 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
 
         return 200, team
 
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     team_id = current_team.get("id") or current_team.get("team_id")  # type: ignore[assignment]
     if not team_id and current_team.get("key"):
         try:
@@ -73,8 +77,8 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not team.is_public:
@@ -83,7 +87,7 @@ def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[
     return 200, team
 
 
-def _list_public_products(team: Team) -> list[dict[str, Any]]:
+def _list_public_products(team: Workspace) -> list[dict[str, Any]]:
     """List public products that have at least one publicly-visible component.
 
     Includes passing assessments based on the latest SBOM of each component.
@@ -130,16 +134,29 @@ def _list_public_products(team: Team) -> list[dict[str, Any]]:
     return result
 
 
-def _list_public_global_components(team: Team) -> list[dict[str, Any]]:
+def _list_public_global_components(team: Workspace, request: HttpRequest) -> list[dict[str, Any]]:
     # Include both public and gated components (visible to public)
-    components = Component.objects.filter(
-        team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
-    ).order_by("name")
+    #
+    # A component holding nothing but NDAs is where the access request flow
+    # keeps the workspace NDA (see ``get_or_create_company_wide_component``).
+    # Readers are shown the NDA when they request access; listed here it would
+    # read as a compliance artifact the workspace publishes.
+    workspace_documents = Document.objects.filter(component=OuterRef("pk"))
+    nda_only = Exists(workspace_documents.filter(document_type=Document.DocumentType.NDA)) & ~Exists(
+        workspace_documents.exclude(document_type=Document.DocumentType.NDA)
+    )
+    components = (
+        Component.objects.filter(
+            team=team, visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED), is_global=True
+        )
+        .exclude(nda_only)
+        .order_by("name")
+    )
     return [
         {
             "id": component.id,
             "name": component.name,
-            "slug": component.slug,
+            "slug": get_component_public_slug(component, request),
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
             "visibility": component.visibility,
@@ -153,7 +170,7 @@ class WorkspacePublicView(View):
 
     def get(self, request: HttpRequest, workspace_key: str | None = None) -> HttpResponse:
         status_code, team_or_error = fetch_public_team(request, workspace_key)
-        if status_code != 200 or not isinstance(team_or_error, Team):
+        if status_code != 200 or not isinstance(team_or_error, Workspace):
             return error_response(request, HttpResponseNotFound(team_or_error.get("detail", "Workspace not found")))  # type: ignore[union-attr]
 
         team = team_or_error
@@ -161,12 +178,14 @@ class WorkspacePublicView(View):
         # Redirect to custom domain if team has a verified one and we're not already on it
         # OR redirect from /public/ URL to clean URL on custom domain
         if should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request):
-            return HttpResponseRedirect(build_custom_domain_url(team, "/", request.is_secure()))
+            redirect = custom_domain_redirect(team, "/", request.is_secure())
+            if redirect is not None:
+                return redirect
 
         brand = build_branding_context(team)
 
         products_data = _list_public_products(team)
-        global_artifacts_data = _list_public_global_components(team)
+        global_artifacts_data = _list_public_global_components(team, request)
 
         # Add custom domain context for URL generation in templates
         is_custom_domain = getattr(request, "is_custom_domain", False)
@@ -182,7 +201,10 @@ class WorkspacePublicView(View):
         if is_workspace_admin:
             try:
                 plugin_settings = TeamPluginSettings.objects.get(team=team)
-                has_vulnerability_plugin = bool(set(plugin_settings.enabled_plugins) & {"osv", "dependency-track"})
+                # What the plan actually runs, not what the workspace has on file: a
+                # plugin it no longer includes stays stored so it resumes on upgrade.
+                running = set(plugins_within_plan(team, plugin_settings.enabled_plugins or []))
+                has_vulnerability_plugin = bool(running & {"osv", "dependency-track"})
             except TeamPluginSettings.DoesNotExist:
                 pass
 
@@ -205,6 +227,11 @@ class WorkspacePublicView(View):
         # are, so the landing page and /advisories/ cannot disagree about it.
         advisories = public_advisory_summary(request, team)
 
+        # Certifications, earned from published company-wide compliance
+        # documents. Same for every visitor: a badge says the workspace holds
+        # the certification, and the artifact behind it keeps its own gate.
+        certifications = public_certification_badges(team, request)
+
         return render(
             request,
             "core/workspace_public.html.j2",
@@ -217,6 +244,7 @@ class WorkspacePublicView(View):
                 "products": products_data,
                 "global_components": global_artifacts_data,
                 "advisories": advisories,
+                "certifications": certifications,
                 "is_custom_domain": is_custom_domain,
                 "custom_domain": team.custom_domain if is_custom_domain else None,
                 "is_workspace_admin": is_workspace_admin,

@@ -22,9 +22,9 @@ def s3(mocker):
         store[name] = content
         return name
 
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_sbom", side_effect=upload)
-    mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data", side_effect=lambda name: store.get(name))
-    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object", return_value=None)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", side_effect=upload)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", side_effect=lambda name: store.get(name))
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object", return_value=None)
     return store
 
 
@@ -77,7 +77,7 @@ class TestVexDocuments:
         # The in-app triage overlay must not appear in the uploaded-documents list.
         _store_vex(component, s3, TRIAGE_SOURCE, "CVE-TRIAGE", name="t.json")
 
-        response = _client(sample_user, team).get(f"/component/{component.id}/vex/")
+        response = _client(sample_user, team).get(f"/component/{component.id}/vex/", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         body = response.content.decode()
         assert "VEX Documents" in body
@@ -96,15 +96,15 @@ class TestVexDocuments:
         _store_vex(component, s3, "manual_upload", "CVE-2021-45046", name="g.json")
 
         # Anonymous: reaches the public-listing gate but not component downloads.
-        response = Client().get(f"/component/{component.id}/vex/")
+        response = Client().get(f"/component/{component.id}/vex/", HTTP_HX_REQUEST="true")
         assert "CVE-2021-45046" not in response.content.decode()
 
     def test_empty_state(self, sample_user, sample_team_with_owner_member, s3) -> None:
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="vex-empty", team=team, component_type="bom")
-        response = _client(sample_user, team).get(f"/component/{component.id}/vex/")
+        response = _client(sample_user, team).get(f"/component/{component.id}/vex/", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
-        assert "No VEX documents uploaded yet" in response.content.decode()
+        assert "No VEX documents yet" in response.content.decode()
 
     def test_delete_removes_vex(self, sample_user, sample_team_with_owner_member, s3, reapply_stub) -> None:
         team = sample_team_with_owner_member.team
@@ -133,6 +133,6 @@ class TestVexDocuments:
             sbom_filename="gone.json",
             bom_type=SBOM.BomType.VEX.value,
         )
-        response = _client(sample_user, team).get(f"/component/{component.id}/vex/")
+        response = _client(sample_user, team).get(f"/component/{component.id}/vex/", HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert "unreadable" in response.content.decode()

@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.test import RequestFactory, override_settings
 
 from sbomify.apps.core.middleware import CustomDomainContextMiddleware
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 TRUST_CENTER_DOMAIN = "trustcenters.test"
 
@@ -29,7 +29,7 @@ def middleware():
 @pytest.fixture
 def trust_center_team(db):
     """Create a public team with a slug for trust center subdomain."""
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Acme Corp",
         billing_plan="community",
         is_public=True,
@@ -183,7 +183,7 @@ class TestTrustCenterSlugValidation:
 
     def test_rejects_private_team_slug(self, middleware, db):
         """Private teams are not resolved via trust center subdomain."""
-        team = Team.objects.create(
+        team = Workspace.objects.create(
             name="Private Corp",
             billing_plan="business",
         )

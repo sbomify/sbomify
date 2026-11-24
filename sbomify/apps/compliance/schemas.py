@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from ninja import Schema
+from pydantic import AwareDatetime, Field
 
 
 class CRAAssessmentSchema(Schema):
@@ -79,6 +80,23 @@ class ExportPackageSchema(Schema):
     content_hash: str
     manifest: dict[str, Any]
     created_at: datetime
+    signed: bool = False
+    signed_by: str = ""
+    signed_by_issuer: str = ""
+    signed_at: datetime | None = None
+
+
+class ExportSignatureUploadSchema(Schema):
+    """Who the bundle says signed. The bundle itself arrives as a file part beside these fields."""
+
+    identity: str = Field(min_length=1, max_length=512)
+    issuer: str = Field(min_length=1, max_length=255)
+
+
+class ExportSignatureSchema(Schema):
+    signed_by: str
+    issuer: str
+    signed_at: datetime
 
 
 class SBOMStatusSchema(Schema):
@@ -136,3 +154,88 @@ class SignatureResponseSchema(Schema):
     image: str
     signed_at: str | None = None
     is_signed: bool
+
+
+# The deadlines are counted from these times, so one without a zone is refused
+# rather than guessed: it cannot be compared with the deadlines at all.
+class CRAReportCreateSchema(Schema):
+    kind: str
+    product_id: str
+    aware_at: AwareDatetime
+    advisory_id: str | None = None
+    occurred_at: AwareDatetime | None = None
+    measure_available_at: AwareDatetime | None = None
+
+
+class CRAReportUpdateSchema(Schema):
+    """Only what is sent changes. A value sent empty is cleared."""
+
+    values: dict[str, Any] | None = None
+    aware_at: AwareDatetime | None = None
+    occurred_at: AwareDatetime | None = None
+    measure_available_at: AwareDatetime | None = None
+    # The report's ``revision`` from the read this edit is based on. If the
+    # report changed since, the edit is refused with 409 instead of undoing it.
+    revision: str = Field(min_length=1, max_length=64)
+
+
+class CRAFilingCreateSchema(Schema):
+    stage: str
+    srp_reference: str = Field("", max_length=100)
+    filed_at: AwareDatetime | None = None
+    # The report's ``revision`` when its values were copied into the portal.
+    revision: str = Field(min_length=1, max_length=64)
+
+
+class CRAFilingSchema(Schema):
+    id: str
+    stage: str
+    srp_reference: str
+    filed_at: datetime
+    filed_by: str
+
+
+class CRAFilingDetailSchema(CRAFilingSchema):
+    """A filing with the report as it stood when the filing was recorded."""
+
+    snapshot: dict[str, Any]
+
+
+class CRANextDueSchema(Schema):
+    stage: str
+    label: str
+    due: datetime | None
+    overdue: bool
+
+
+class CRAReportSchema(Schema):
+    id: str
+    kind: str
+    product_id: str
+    product_name: str
+    advisory_id: str | None
+    aware_at: datetime
+    occurred_at: datetime | None
+    measure_available_at: datetime | None
+    values: dict[str, Any]
+    filings: list[CRAFilingSchema]
+    next_due: CRANextDueSchema | None
+    # Opaque: send it back unchanged when recording a filing.
+    revision: str
+
+
+class SRPFieldSchema(Schema):
+    id: str
+    label: str
+    value: str
+    max_length: int | None
+    required: bool
+    missing: bool
+
+
+class SRPLayoutSchema(Schema):
+    stage: str
+    fields: list[SRPFieldSchema]
+    # The report's ``revision`` these fields come from: send it when recording
+    # the filing, so a draft edited after copying is not recorded as filed.
+    revision: str

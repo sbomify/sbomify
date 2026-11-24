@@ -34,8 +34,7 @@ def company_nda_document(team_with_business_plan):
     document = Document.objects.create(
         name="Company NDA",
         component=component,
-        document_type=Document.DocumentType.COMPLIANCE,
-        compliance_subcategory=Document.ComplianceSubcategory.NDA,
+        document_type=Document.DocumentType.NDA,
         document_filename="nda.pdf",
         content_type="application/pdf",
         file_size=len(content),
@@ -110,7 +109,7 @@ class TestGuestMemberGatedAccess:
         from unittest.mock import PropertyMock
 
         type(request.user).is_authenticated = PropertyMock(return_value=True)
-        request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
+        request.session = {"current_workspace": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
         result = check_component_access(request, private_component)
 
@@ -385,7 +384,7 @@ class TestGuestCannotLeakAcrossWorkspaces:
     @pytest.fixture
     def guest_of_vendor(self, team_with_business_plan, guest_user, company_nda_document):
         """A user who owns their own workspace and is an approved guest of another."""
-        from sbomify.apps.teams.models import Team
+        from sbomify.apps.teams.models import Workspace
 
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         access_request = AccessRequest.objects.create(
@@ -399,7 +398,7 @@ class TestGuestCannotLeakAcrossWorkspaces:
             nda_content_hash=company_nda_document.content_hash,
             signed_name="Test User",
         )
-        own = Team.objects.create(name="Guest's Own Workspace")
+        own = Workspace.objects.create(name="Guest's Own Workspace")
         Member.objects.create(team=own, user=guest_user, role="owner", is_default_team=True)
         return guest_user, own
 

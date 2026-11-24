@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import contextvars
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import F, QuerySet
+from django.db.models import F, Q, QuerySet
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -57,6 +59,28 @@ class User(AbstractUser):
             models.Index(fields=["email_verified"]),
             models.Index(fields=["deleted_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(Lower("email"), condition=~Q(email=""), name="core_users_email_ci_unique"),
+        ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # One account per address, compared without case. allauth lowercases
+        # the address it looks up and then matches the stored value exactly.
+        # Only when the address is written, so the instance never differs from its row.
+        update_fields = kwargs.get("update_fields")
+        if self.email and (update_fields is None or "email" in update_fields):
+            self.email = self.email.lower()
+        # email_verified is about the stored address. Whatever replaces it, the
+        # Keycloak event poller or allauth's email pages, starts unconfirmed
+        # until the next sign-in reads it from the identity provider again.
+        # A full save of an unconfirmed flag writes False whatever the stored address was.
+        if self.pk and (self.email_verified if update_fields is None else "email" in update_fields):
+            stored = type(self).objects.filter(pk=self.pk).values_list("email", flat=True).first()
+            if stored is not None and stored.lower() != (self.email or "").lower():
+                self.email_verified = False
+                if update_fields is not None:
+                    kwargs["update_fields"] = {*update_fields, "email_verified"}
+        super().save(*args, **kwargs)
 
 
 # Proxy models for sbom entities - provides clean core app interface
@@ -272,8 +296,75 @@ class Release(models.Model):
         default=CollectionUpdateReason.INITIAL_RELEASE,
     )
 
+    class WithdrawnReason(models.TextChoices):
+        DEFECTIVE = "defective", "Defective"
+        COMPROMISED = "compromised", "Compromised"
+        PUBLISHED_IN_ERROR = "published_in_error", "Published in error"
+
+    class LifecycleState(models.TextChoices):
+        ACTIVE = "active", "Active"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+        END_OF_LIFE = "end_of_life", "End of life"
+        END_OF_SUPPORT = "end_of_support", "End of support"
+        SUPERSEDED = "superseded", "Superseded"
+        ARCHIVED = "archived", "Archived"
+
+    # Derived from the release's CLE events by recompute_release_lifecycle; never written directly.
+    superseded_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the earliest drop-in successor took over, derived from CLE events"
+    )
+    end_of_support = models.DateField(
+        null=True, blank=True, help_text="Final end of support across support policies, derived from CLE events"
+    )
+    end_of_life = models.DateField(null=True, blank=True, help_text="End of life, derived from CLE events")
+    # What monitoring reads: the release's own date, else the product's when that
+    # date covers every version. Derived by recompute_release_lifecycle.
+    effective_end_of_support = models.DateField(
+        null=True, blank=True, help_text="End of support that applies: the release's own, else the product's"
+    )
+    effective_end_of_life = models.DateField(
+        null=True, blank=True, help_text="End of life that applies: the release's own, else the product's"
+    )
+    # Set by a person. CLE has no event for a yanked or archived release.
+    withdrawn_at = models.DateTimeField(null=True, blank=True, help_text="When the release was withdrawn")
+    withdrawn_reason = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        choices=WithdrawnReason.choices,
+        help_text="Why the release was withdrawn",
+    )
+    archived_at = models.DateTimeField(null=True, blank=True, help_text="When the release was archived")
+
     def __str__(self) -> str:
         return f"{self.product.name} - {self.name}"
+
+    @property
+    def lifecycle_state(self) -> str:
+        """Where the release stands, by the rules of ``release_lifecycle.tracked_releases()``.
+
+        First match wins: withdrawn, end of life, end of support, superseded,
+        archived, active. ``latest`` is always active.
+        """
+        if self.is_latest:
+            return self.LifecycleState.ACTIVE
+        now = timezone.now()
+        today = now.date()
+        if self.withdrawn_at is not None:
+            return self.LifecycleState.WITHDRAWN
+        if self.effective_end_of_life is not None and self.effective_end_of_life < today:
+            return self.LifecycleState.END_OF_LIFE
+        if self.effective_end_of_support is not None and self.effective_end_of_support < today:
+            return self.LifecycleState.END_OF_SUPPORT
+        if self.superseded_at is not None and self.superseded_at <= now:
+            return self.LifecycleState.SUPERSEDED
+        if self.archived_at is not None:
+            return self.LifecycleState.ARCHIVED
+        return self.LifecycleState.ACTIVE
+
+    @property
+    def is_tracked(self) -> bool:
+        return self.lifecycle_state == self.LifecycleState.ACTIVE
 
     @property
     def slug(self) -> str:
@@ -286,6 +377,26 @@ class Release(models.Model):
         """
         return slugify(self.name, allow_unicode=True)
 
+    @staticmethod
+    def _as_aware(value: Any) -> Any:
+        """Attach the current timezone to a naive datetime.
+
+        ``created_at`` is always aware (it comes from ``timezone.now()``), but
+        ``released_at`` arrives from callers: the API accepts an ISO-8601
+        string, and one without an offset parses to a naive datetime. Comparing
+        the two then raised ``can't compare offset-naive and offset-aware
+        datetimes``, which the release endpoints reported to the caller as
+        "Internal server error". Reading a bare timestamp as local time is what
+        the rest of Django does with one, so it is read that way here.
+
+        Anything that is not a datetime is handed back untouched. A date field
+        also accepts a string or an ``F()`` expression, and neither is this
+        function's business — the ORM resolves those on the way to the column.
+        """
+        if isinstance(value, datetime) and timezone.is_naive(value):
+            return timezone.make_aware(value)
+        return value
+
     def clean(self) -> None:
         """Ensure only one latest release per product and valid release dates."""
         if self.is_latest:
@@ -295,7 +406,11 @@ class Release(models.Model):
             if existing_latest.exists():
                 raise ValidationError("A product can only have one latest release.")
 
-        if self.created_at and self.released_at and self.released_at < self.created_at:
+        # Normalized for the comparison rather than assigned, so ``full_clean()``
+        # on its own stays free of side effects; ``save()`` does the writing.
+        created_at = self._as_aware(self.created_at)
+        released_at = self._as_aware(self.released_at)
+        if isinstance(created_at, datetime) and isinstance(released_at, datetime) and released_at < created_at:
             raise ValidationError("Release date cannot be earlier than creation date.")
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -306,8 +421,28 @@ class Release(models.Model):
             # Default release date to creation time for new records only
             self.released_at = self.created_at
 
+        self.created_at = self._as_aware(self.created_at)
+        self.released_at = self._as_aware(self.released_at)
+
         self.clean()
         super().save(*args, **kwargs)
+
+    def component_releases(self) -> "models.QuerySet[ComponentRelease]":
+        """The component versions this release ships.
+
+        Derived, not stored. The relationship already exists through the SBOM:
+        a ReleaseArtifact names an SBOM, and ComponentReleaseArtifact.sbom is
+        unique, so each SBOM belongs to exactly one ComponentRelease and the
+        join is single-valued. It resolves in one query.
+
+        A stored edge would have to be maintained on every pin and unpin, and
+        would go stale the moment one was missed, in exchange for a join the
+        database already does. The method exists so callers stop rewriting it,
+        not because the edge was missing.
+        """
+        return ComponentRelease.objects.filter(
+            artifacts__sbom__in=ReleaseArtifact.objects.filter(release=self, sbom__isnull=False).values("sbom_id")
+        ).distinct()
 
     def bump_collection_version(self, reason: "Release.CollectionUpdateReason") -> None:
         """Increment the collection version when artifacts change.
@@ -362,20 +497,23 @@ class Release(models.Model):
         if not self.is_latest:
             raise ValueError("refresh_latest_artifacts() can only be called on latest releases")
 
+        from sbomify.apps.core.signals import releases_told_together
+
         token = _suppress_collection_signals.set(True)
         try:
-            # Clear existing artifacts
-            self.artifacts.all().delete()
+            with releases_told_together():
+                # Clear existing artifacts
+                self.artifacts.all().delete()
 
-            # Get all components that belong to this product. Query via the
-            # core.Component proxy (rather than self.product.components, which
-            # returns sboms.Component) so methods like
-            # get_latest_sboms_by_format remain accessible.
-            components = Component.objects.filter(products=self.product).order_by("id").distinct()
+                # Get all components that belong to this product. Query via the
+                # core.Component proxy (rather than self.product.components, which
+                # returns sboms.Component) so methods like
+                # get_latest_sboms_by_format remain accessible.
+                components = Component.objects.filter(products=self.product).order_by("id").distinct()
 
-            for component in components:
-                # Add latest artifacts from each component
-                self._add_latest_artifacts_from_component(component)
+                for component in components:
+                    # Add latest artifacts from each component
+                    self._add_latest_artifacts_from_component(component)
         finally:
             _suppress_collection_signals.reset(token)
 
@@ -388,10 +526,18 @@ class Release(models.Model):
         Args:
             component: The component to add artifacts from
         """
-        # Add latest SBOMs by format
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
+        # Add latest SBOMs by format. VEX is not taken by recency: the newest VEX
+        # may be for another version than the newest SBOM, so it is pinned below
+        # only when written for a version this release ships.
         latest_sboms = component.get_latest_sboms_by_format()
         for format_name, sbom in latest_sboms.items():
+            if sbom.bom_type == SBOM.BomType.VEX.value:
+                continue
             ReleaseArtifact.objects.create(release=self, sbom=sbom, auto_pinned=True)
+        sync_vex_pins(self, component, bump=False)
 
         # Add latest Documents by type
         latest_documents = component.get_latest_documents_by_type()
@@ -410,13 +556,20 @@ class Release(models.Model):
         if not self.is_latest:
             raise ValueError("add_artifact_to_latest_release() can only be called on latest releases")
 
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+        from sbomify.apps.sboms.models import SBOM
+
         # Suppress collection signals during delete+create to avoid a double bump
         # (ARTIFACT_REMOVED + ARTIFACT_ADDED). Bump once at the end if an artifact was replaced.
         token = _suppress_collection_signals.set(True)
         replaced = False
         try:
             # Determine if this is an SBOM or Document
-            if hasattr(artifact, "format"):  # SBOM
+            if hasattr(artifact, "format") and artifact.bom_type == SBOM.BomType.VEX.value:
+                # A VEX lands here only when written for a version this release
+                # ships; otherwise it would speak for a build it never saw.
+                replaced = sync_vex_pins(self, artifact.component, bump=False)
+            elif hasattr(artifact, "format"):  # SBOM
                 # Remove any existing artifact of the same format AND bom_type from the same
                 # component. Keying on bom_type keeps a CBOM/VEX (same cyclonedx format) from
                 # evicting the component's real SBOM: each bom_type replaces only its own slot.
@@ -432,6 +585,8 @@ class Release(models.Model):
                 # refresh_vex_pins free to re-point it (there are no true
                 # manual pins on latest releases; the API rejects them).
                 ReleaseArtifact.objects.create(release=self, sbom=artifact, auto_pinned=True)
+                # A new version of the component's SBOM changes which VEX applies.
+                replaced = sync_vex_pins(self, artifact.component, bump=False) or replaced
 
             elif hasattr(artifact, "document_type"):  # Document
                 # Remove any existing Document of the same type from the same component
@@ -580,6 +735,16 @@ class ComponentRelease(models.Model):
             label += f" ({self.qualifiers})"
         return label
 
+    def product_releases(self) -> "models.QuerySet[Release]":
+        """The product releases shipping this component version.
+
+        The mirror of :meth:`Release.component_releases`, derived the same way
+        and for the same reason.
+        """
+        return Release.objects.filter(
+            artifacts__sbom__in=ComponentReleaseArtifact.objects.filter(component_release=self).values("sbom_id")
+        ).distinct()
+
     def bump_collection_version(self, reason: "ComponentRelease.CollectionUpdateReason") -> None:
         """Increment the collection version when artifacts change.
 
@@ -666,10 +831,10 @@ class ReleaseArtifact(models.Model):
     auto_pinned = models.BooleanField(
         default=False,
         help_text=(
-            "Pinned automatically by sbomify (latest-release maintenance, or "
-            "newest-VEX tracking on other releases). Only auto-pinned VEX pins "
-            "are ever re-pointed when a newer VEX appears; a manually pinned "
-            "artifact is never replaced automatically."
+            "Pinned automatically by sbomify (latest-release maintenance, or the "
+            "VEX written for the version a release ships). Only auto-pinned VEX "
+            "pins are ever re-pointed when a newer VEX for that version appears; "
+            "a manually pinned artifact is never replaced automatically."
         ),
     )
 
@@ -720,3 +885,136 @@ class ReleaseArtifact(models.Model):
         elif self.document:
             return self.document.component
         return None
+
+
+class ReleaseLink(models.Model):
+    """A release that includes another product's release.
+
+    A product built on another product, such as an application and the toolchain
+    it downloads at run time, cannot list that product's components as its own:
+    a release only holds artifacts. A link records the dependency at the release
+    level instead, so the release shows what it ships with and its aggregate SBOM
+    carries the linked release's SBOMs.
+    """
+
+    class Meta:
+        db_table = "core_release_links"
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["release", "linked_release"], name="unique_release_link"),
+            models.CheckConstraint(
+                condition=~models.Q(release=models.F("linked_release")),
+                name="release_link_not_self",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="links")
+    linked_release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="linked_from")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.release_id} -> {self.linked_release_id}"
+
+
+class ReleaseSupersessionQuerySet(models.QuerySet["ReleaseSupersession"]):
+    def live(self) -> ReleaseSupersessionQuerySet:
+        return self.filter(withdrawn_at__isnull=True)
+
+
+class ReleaseSupersession(models.Model):
+    """One edge of a product's supersession graph: ``from_release`` is superseded by ``to_release``.
+
+    A release can have many successors and many predecessors. 1.2.1 can be
+    replaced by 1.2.2 on its own line while 2.0 starts a new one, and two
+    releases can be replaced by one. Each successor is its own row, and
+    ``drop_in`` says whether it replaces the release (which then retires) or
+    starts a new line (both stay monitored).
+
+    sbomify never infers an edge: a person or an API caller asserts each one.
+    ``successor_label`` is what they named, so a successor outside sbomify, or
+    one deleted later, stays readable. Each edge is published as the
+    predecessor's ``supersededBy`` CLE event; withdrawing that event withdraws
+    the edge. Rows are never deleted while their predecessor exists.
+    """
+
+    class Meta:
+        db_table = "core_release_supersessions"
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(from_release=models.F("to_release")),
+                name="release_supersession_not_self",
+            ),
+            models.UniqueConstraint(
+                fields=["from_release", "successor_label"],
+                condition=models.Q(withdrawn_at__isnull=True),
+                name="unique_live_release_supersession",
+            ),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id, editable=False)
+    from_release = models.ForeignKey(Release, on_delete=models.CASCADE, related_name="successor_edges")
+    to_release = models.ForeignKey(
+        Release,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="predecessor_edges",
+        help_text="The successor in the same product, if sbomify has it",
+    )
+    successor_label = models.CharField(max_length=255, help_text="The successor's version as asserted")
+    drop_in = models.BooleanField(
+        default=False,
+        help_text="Whether the successor replaces this release, so this release stops being monitored",
+    )
+    reason = models.TextField(blank=True, default="")
+    effective = models.DateTimeField(help_text="When the successor takes over")
+    actor = models.ForeignKey("core.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cle_event = models.OneToOneField(
+        "sboms.ReleaseCLEEvent",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supersession",
+        help_text="The supersededBy CLE event this edge is published as",
+    )
+    withdrawn_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the edge was withdrawn; empty while live"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = ReleaseSupersessionQuerySet.as_manager()
+
+    def __str__(self) -> str:
+        return f"{self.from_release_id} -> {self.to_release_id or self.successor_label}"
+
+
+class Installation(models.Model):
+    """The one row identifying this sbomify installation.
+
+    Generated by migration so every deployment carries its own id from the
+    start. Support asks for it, and every PostHog event carries it so events
+    from one self-hosted instance can be told apart from another's.
+    """
+
+    SINGLETON_ID = 1
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_ID, editable=False)
+    installation_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "core_installation"
+        constraints = [
+            models.CheckConstraint(condition=Q(id=1), name="core_installation_singleton"),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.installation_id)
+
+    @classmethod
+    def get(cls) -> Installation:
+        """Return the installation row, creating it if the migration's row is gone."""
+        installation, _ = cls.objects.get_or_create(id=cls.SINGLETON_ID)
+        return installation

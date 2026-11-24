@@ -6,9 +6,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
 
+from defusedxml.ElementTree import DefusedXMLParser, ParseError
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.uploadedfile import UploadedFile as DjangoUploadedFile
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import File, Router
@@ -18,14 +20,21 @@ from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.access_tokens.throttling import OnDemandTLSRateThrottle
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import ROLE_OWNER, can
 from sbomify.apps.core.models import User
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
+from sbomify.apps.teams.models import (
+    ContactEntity,
+    ContactProfile,
+    ContactProfileContact,
+    Invitation,
+    Member,
+    Workspace,
+)
 from sbomify.apps.teams.schemas import (
     AuthorContactSchema,
     BrandingInfo,
@@ -37,8 +46,12 @@ from sbomify.apps.teams.schemas import (
     ContactProfileCreateSchema,
     ContactProfileSchema,
     ContactProfileUpdateSchema,
+    InvitationCreateSchema,
     InvitationSchema,
+    MemberRoleSchema,
+    MemberRoleUpdateSchema,
     MemberSchema,
+    PendingInvitationSchema,
     SupplierCreateSchema,
     SupplierSchema,
     SupplierUpdateSchema,
@@ -49,13 +62,19 @@ from sbomify.apps.teams.schemas import (
     UpdateTeamBrandingSchema,
     UserSchema,
 )
+from sbomify.apps.teams.services.invitations import invite_member, list_invitations, revoke_invitation
+from sbomify.apps.teams.services.members import change_member_role
 from sbomify.apps.teams.services.suppliers import (
     create_supplier,
     delete_supplier,
     list_suppliers,
     update_supplier,
 )
-from sbomify.apps.teams.utils import on_demand_tls_cache_key
+from sbomify.apps.teams.utils import (
+    on_demand_tls_cache_key,
+    refresh_current_team_session,
+    update_user_teams_session,
+)
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -69,20 +88,31 @@ class FieldValue(BaseModel):
     value: str | bool | None
 
 
-def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
+def _build_team_response(request: HttpRequest, team: Workspace) -> TeamSchema:
     current_user_id = getattr(getattr(request, "user", None), "id", None)
+    # The settings pages show members and billing to admins and owners only, so
+    # the API does too. Everyone keeps their own row and both counts, which the
+    # workspaces page reads.
+    sees_members = bool(can(request, "member:manage", team))
+    sees_billing = bool(can(request, "billing:manage", team))
 
     members_data = [
         MemberSchema(
             id=member.id,
-            user=UserSchema(
-                id=member.user.id,
-                first_name=member.user.first_name,
-                last_name=member.user.last_name,
-                email=member.user.email,
+            user=(
+                UserSchema(
+                    id=member.user.id,
+                    first_name=member.user.first_name,
+                    last_name=member.user.last_name,
+                    email=member.user.email,
+                )
+                if sees_members or member.user.id == current_user_id
+                else UserSchema(id=member.user.id, first_name="", last_name="", email="")
             ),
             role=member.role,
+            # One value, two names, while clients migrate off the old one.
             is_default_team=member.is_default_team,
+            is_default_workspace=member.is_default_team,
             is_me=(current_user_id == member.user.id),
         )
         # Bots are excluded alongside guests: a role="bot" membership is the
@@ -100,13 +130,13 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     invitations_data = [
         InvitationSchema(
             id=invitation.id,
-            token=str(invitation.token),
-            email=invitation.email,
-            role=invitation.role,
+            token=str(invitation.token) if sees_members else "",
+            email=invitation.email if sees_members else "",
+            role=invitation.granted_role,
             created_at=invitation.created_at,
             expires_at=invitation.expires_at,
         )
-        for invitation in team.invitation_set.all()
+        for invitation in team.invitation_set.select_related("invited_by").all()
     ]
 
     return TeamSchema(
@@ -116,7 +146,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
         is_public=team.is_public,
         created_at=team.created_at,
         billing_plan=team.billing_plan,
-        billing_plan_limits=team.billing_plan_limits,
+        billing_plan_limits=team.billing_plan_limits if sees_billing else None,
         has_completed_wizard=team.has_completed_wizard,
         custom_domain=team.custom_domain,
         custom_domain_validated=team.custom_domain_validated,
@@ -129,7 +159,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
     )
 
 
-def _private_workspace_allowed(team: Team) -> bool:
+def _private_workspace_allowed(team: Workspace) -> bool:
     return team.can_be_private()
 
 
@@ -164,8 +194,8 @@ def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     user = cast(User, request.user)
@@ -207,8 +237,8 @@ def update_team_branding_field(
         return 400, {"detail": f"Invalid field. Must be one of: {', '.join(valid_fields)}"}
 
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
@@ -219,15 +249,15 @@ def update_team_branding_field(
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
 
-    s3_client = S3Client("MEDIA")
-
-    # Handle file deletions
-    if field in ["icon", "logo"] and data.value is None and update_data.get(field):
-        old_filename = update_data[field]
-        try:
-            s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+    if field in ["icon", "logo"]:
+        # A file key only ever comes from an upload; this endpoint can only clear it.
+        if data.value is not None:
+            return 400, {"detail": f"Upload a file to set the {field}. Send null to clear it."}
+        if old_filename := update_data.get(field):
+            try:
+                delete_from_s3(team, field, old_filename)
+            except Exception as e:
+                logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
         update_data[field] = ""
     else:
         update_data[field] = data.value
@@ -246,26 +276,184 @@ def update_team_branding_field(
     return 200, BrandingInfoWithUrls(**response_data)
 
 
-def generate_branding_filename(team: Team, field: str, file: Any) -> str:
-    file_ext = Path(file.name or "").suffix
+# Branding files are served straight from the public media bucket, so whether
+# one is stored, and its extension and ContentType, follow from its bytes and
+# never from the filename or type the client sent.
+_INVALID_BRANDING_IMAGE = "Upload a PNG, JPEG or WebP image, or a plain SVG under 1 MB."
+# Checking an SVG runs Python for every element and attribute, so SVGs get a size cap of their own.
+_MAX_SVG_BYTES = 1024 * 1024
+
+_SVG_ROOT = "{http://www.w3.org/2000/svg}svg"
+# Elements a browser runs as HTML or MathML even inside an SVG document.
+_LIVE_NAMESPACES = ("{http://www.w3.org/1999/xhtml}", "{http://www.w3.org/1998/Math/MathML}")
+# An in-document reference or an embedded PNG, JPEG or WebP image, in an href or a CSS url().
+# Anything else loads or runs something the check never saw.
+_INERT_HREF = re.compile(r"#|data:image/(png|jpe?g|webp)[;,]")
+# CSS that fetches from a plain string, or the start of a url() whose target _INERT_HREF checks.
+_CSS_FETCH = re.compile(r"@import|image-set\(|url\(\s*['\"]?\s*")
+_CSS_ESCAPE = re.compile(r"\\(?:([0-9a-f]{1,6})[ \t\n]?|(.))", re.IGNORECASE | re.DOTALL)
+
+
+def _css_fetches(css: str) -> bool:
+    """Whether ``css`` fetches anything but an in-document reference or an embedded raster image."""
+    if "\\" in css:
+        # Decode escapes as a browser does, where CRLF, CR and form feed each read as one line break.
+        css = _CSS_ESCAPE.sub(
+            lambda escape: chr(min(int(escape[1], 16), 0x10FFFF)) if escape[1] else escape[2],
+            re.sub(r"\r\n?|\f", "\n", css),
+        )
+    css = css.lower()
+    return any(
+        not fetch[0].startswith("url(") or not _INERT_HREF.match(css, fetch.end()) for fetch in _CSS_FETCH.finditer(css)
+    )
+
+
+class _InertSvgTarget:
+    """Parser target that raises at the first thing a browser could run or fetch.
+
+    It keeps no element, so no tree builds up, only the text of a style sheet it is inside.
+    """
+
+    root_seen = False
+    style_sheet: list[str] | None = None
+
+    def start(self, tag: str, attrib: dict[str, str]) -> None:
+        if not self.root_seen and tag != _SVG_ROOT:
+            raise ValueError("not an SVG")
+        self.root_seen = True
+        # A browser drops an element inside a style sheet and joins the text on either side of it.
+        if self.style_sheet is not None:
+            raise ValueError("element inside a style sheet")
+        element = tag.rpartition("}")[2]
+        if element == "script" or tag.startswith(_LIVE_NAMESPACES):
+            raise ValueError("script, HTML or MathML element")
+        if element == "style":
+            self.style_sheet = []
+        for attribute, value in attrib.items():
+            name = attribute.rpartition("}")[2].lower()
+            animated = value.strip().rpartition(":")[2].lower() if name == "attributename" else ""
+            if (
+                name.startswith("on")
+                or name in ("base", "ping")
+                or animated in ("href", "base", "ping")
+                or animated.startswith("on")
+            ):
+                raise ValueError("event handler, xml:base, ping or animated href")
+            if name == "href" and not _INERT_HREF.match(value.strip().lower()):
+                raise ValueError("href that leaves the document")
+            # Presentation attributes, style and animation values are CSS, and none of them has a namespace.
+            if "}" not in attribute and _css_fetches(value):
+                raise ValueError("CSS that fetches")
+
+    def data(self, text: str) -> None:
+        if self.style_sheet is not None:
+            self.style_sheet.append(text)
+
+    def end(self, tag: str) -> None:
+        if self.style_sheet is not None:
+            if _css_fetches("".join(self.style_sheet)):
+                raise ValueError("CSS that fetches")
+            self.style_sheet = None
+
+    def pi(self, target: str, data: str) -> None:
+        raise ValueError("processing instruction")
+
+
+def _is_inert_svg(data: bytes) -> bool:
+    """Whether ``data`` is an SVG that runs nothing and fetches nothing when opened on its own.
+
+    Checked, never cleaned: a file is stored exactly as uploaded or not at all.
+    A DTD is refused because its entities and attribute defaults add content the
+    markup does not show, xml:base because it re-points every in-document href,
+    ping because following a link sends a request to it, and an animation of an
+    href, an event handler, xml:base or ping because it swaps the checked value
+    for another once the image loads. CSS gets the href rule:
+    a url() stays in the document or holds a raster image, and @import and
+    image-set(), which fetch from a plain string, are refused.
+    """
+    parser = DefusedXMLParser(target=_InertSvgTarget(), forbid_dtd=True)
+    try:
+        parser.feed(data)
+        parser.close()
+    except (ParseError, ValueError, LookupError):
+        return False
+    return True
+
+
+def _branding_image_type(data: bytes) -> tuple[str, str] | None:
+    """The extension and ContentType to store a branding image under, or None to reject it."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png", "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg", "image/jpeg"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp", "image/webp"
+    if len(data) <= _MAX_SVG_BYTES and _is_inert_svg(data):
+        return ".svg", "image/svg+xml"
+    return None
+
+
+def generate_branding_filename(team: Workspace, field: str, extension: str) -> str:
     unique_id = str(uuid.uuid4())
-    return f"team_{team.key}_{field}_{unique_id}{file_ext}"
+    return f"team_{team.key}_{field}_{unique_id}{extension}"
 
 
 def upload_to_s3(
     filename: str,
-    file: Any,
+    data: bytes,
+    content_type: str,
 ) -> None:
-    s3_client = S3Client("MEDIA")
-    file.seek(0)
-    s3_client.upload_media(filename, file.read())
+    s3_client = StorageClient("MEDIA")
+    s3_client.upload_media(filename, data, content_type)
 
 
-def delete_from_s3(
-    filename: str,
-) -> None:
-    s3_client = S3Client("MEDIA")
+def _is_own_branding_key(team: Workspace, field: str, filename: str) -> bool:
+    """True when the key is one this workspace's uploads generate, current or legacy."""
+    if "/" in filename:
+        return False
+    if filename.startswith(f"team_{team.key}_{field}_"):
+        return True
+    suffix = Path(filename).suffix
+    return bool(suffix) and filename == f"{team.key}_{field}{suffix}"
+
+
+def delete_from_s3(team: Workspace, field: str, filename: str) -> None:
+    """Delete a replaced or cleared branding file, only if this workspace uploaded it."""
+    if not _is_own_branding_key(team, field, filename):
+        logger.warning(f"Not deleting {field} key {filename!r}: not an upload of workspace {team.key}")
+        return
+    s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
+
+
+def _delete_branding_files(team: Workspace, files: Sequence[tuple[str, str]]) -> None:
+    for field, filename in files:
+        try:
+            delete_from_s3(team, field, filename)
+        except Exception as e:
+            logger.warning(f"Failed to delete branding file {filename}: {e}")
+
+
+def _refresh_workspace_list_session(request: HttpRequest) -> None:
+    """Recompute the cached workspace list after a rename.
+
+    Only for callers that already carry one. SessionMiddleware hands every
+    request a lazy SessionStore, so writing to it unconditionally would mint a
+    session row and a Set-Cookie for token clients that never asked for one.
+    """
+    session = getattr(request, "session", None)
+    user = getattr(request, "user", None)
+    if session is None or user is None or not user.is_authenticated:
+        return
+
+    # Refresh a workspace list only where one already exists. session_key alone
+    # is the unloaded cookie value, so a token client sending a stale sessionid
+    # would pass that check and then get a fresh session minted on write. Reading
+    # a key loads the store, and a dead key loads as empty.
+    if "user_workspaces" not in session:
+        return
+
+    update_user_teams_session(request, user)
 
 
 @router.put(
@@ -279,39 +467,54 @@ def update_team_branding(
 ) -> tuple[int, Any]:
     # TODO: has to be in middleware or decorator or anything else
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         logger.warning(f"Workspace not found: {team_key}")
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    # Check every new file before storing any, so a rejected logo cannot leave a new icon half-applied.
+    # Each file is read again for its upload, so only one sits in memory at a time.
+    images: dict[str, tuple[DjangoUploadedFile, str, str]] = {}
+    for field in ["icon", "logo"]:
+        if (file := request.FILES.get(field)) and not getattr(payload, f"{field}_pending_deletion", False):
+            file.seek(0)
+            # A raster is typed by its signature and a longer SVG fails the cap, so one byte past it is enough.
+            if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
+                return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+            images[field] = (file, *image_type)
+
     # TODO: has to be a separate model
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
 
+    # Old files go only once the new keys are committed. A failed upload or save removes this request's uploads.
+    uploaded: list[tuple[str, str]] = []
+    replaced: list[tuple[str, str]] = []
     for field in ["icon", "logo"]:
         old_filename = branding_info.get(field)
 
         if getattr(payload, f"{field}_pending_deletion", False):
             branding_info[field] = ""
-        elif file := request.FILES.get(field):
-            branding_info[field] = generate_branding_filename(team, field, file)
+        elif field in images:
+            file, extension, content_type = images[field]
+            branding_info[field] = generate_branding_filename(team, field, extension)
+            file.seek(0)
 
             try:
-                upload_to_s3(branding_info[field], file)
-            except Exception as e:
-                logger.error(f"Failed to upload {field} file {file.name}: {e}")
-                raise e
+                upload_to_s3(branding_info[field], file.read(), content_type)
+            except Exception:
+                logger.exception(f"Failed to upload {field} file {branding_info[field]}")
+                _delete_branding_files(team, [*uploaded, (field, branding_info[field])])
+                raise
+            uploaded.append((field, branding_info[field]))
         else:
             continue
 
-        try:
-            if old_filename:
-                delete_from_s3(old_filename)
-        except Exception as e:
-            logger.warning(f"Failed to delete old {field} file {old_filename}: {e}")
+        if old_filename:
+            replaced.append((field, old_filename))
 
     branding_info["brand_color"] = payload.brand_color or branding_info.get("brand_color")
     branding_info["accent_color"] = payload.accent_color or branding_info.get("accent_color")
@@ -321,7 +524,12 @@ def update_team_branding(
         branding_info["branding_enabled"] = payload.branding_enabled
 
     team.branding_info = branding_info
-    team.save(update_fields=["branding_info"])
+    try:
+        team.save(update_fields=["branding_info"])
+    except Exception:
+        _delete_branding_files(team, uploaded)
+        raise
+    transaction.on_commit(lambda: _delete_branding_files(team, replaced))
 
     updated_branding_data = _normalize_branding_payload(team.branding_info)
     updated_branding = BrandingInfo(**updated_branding_data)
@@ -351,28 +559,31 @@ def upload_branding_file(
         return 400, {"detail": "Invalid file type. Must be 'icon' or 'logo'"}
 
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Workspace.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
+    file.seek(0)
+    # As in update_team_branding, one byte past the SVG cap is enough to type the file.
+    if not (image_type := _branding_image_type(file.read(_MAX_SVG_BYTES + 1))):
+        return 400, {"detail": _INVALID_BRANDING_IMAGE, "error_code": ErrorCode.VALIDATION_ERROR}
+
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
-    s3_client = S3Client("MEDIA")
+    s3_client = StorageClient("MEDIA")
 
     # Generate new filename first
-    uploaded = request.FILES["file"]
-    file_ext = Path(getattr(uploaded, "name", "") or "").suffix
-    unique_id = str(uuid.uuid4())
-    new_filename = f"team_{team.key}_{file_type}_{unique_id}{file_ext}"
+    extension, content_type = image_type
+    new_filename = generate_branding_filename(team, file_type, extension)
     old_filename = update_data.get(file_type)
 
     # Upload new file first
-    file_obj = getattr(uploaded, "file", uploaded)
-    s3_client.upload_media(new_filename, file_obj.read())  # type: ignore[union-attr]
+    file.seek(0)
+    s3_client.upload_media(new_filename, file.read(), content_type)
 
     try:
         # Update database atomically
@@ -384,17 +595,17 @@ def upload_branding_file(
         # Only delete old file after successful database commit
         if old_filename:
             try:
-                s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, old_filename)
+                delete_from_s3(team, file_type, old_filename)
             except Exception as e:
                 logger.warning(f"Failed to delete old {file_type} file {old_filename}: {e}")
 
-    except Exception as e:
+    except Exception:
         # Database save failed, clean up the new file we just uploaded
         try:
             s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, new_filename)
         except Exception as cleanup_error:
             logger.error(f"Failed to cleanup uploaded file {new_filename} after database error: {cleanup_error}")
-        raise e
+        raise
 
     # Create a new BrandingInfo object with the updated data to get correct URLs
     updated_branding_data = _normalize_branding_payload(team.branding_info)
@@ -408,18 +619,18 @@ def upload_branding_file(
 
 
 def _get_team_and_membership_role(
-    request: HttpRequest, team_key: str
-) -> tuple[Team | None, str | None, tuple[int, dict[str, str]] | None]:
+    request: HttpRequest, workspace_key: str
+) -> tuple[Workspace | None, str | None, tuple[int, dict[str, str]] | None]:
     user = cast(User, request.user)
 
     try:
-        team_id = token_to_number(team_key)
+        team_id = token_to_number(workspace_key)
     except ValueError:
         return None, None, (404, {"detail": "Workspace not found"})
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return None, None, (404, {"detail": "Workspace not found"})
 
     membership = Member.objects.filter(user=user, team=team).first()
@@ -443,7 +654,7 @@ def _clean_url_list(urls: list[str]) -> list[str]:
     return unique
 
 
-def _get_team_owner_email(team: Team) -> str:
+def _get_team_owner_email(team: Workspace) -> str:
     """Get the team owner's email for fallback purposes."""
     owner = Member.objects.filter(team=team, role="owner").select_related("user").first()
     return owner.user.email if owner and owner.user and owner.user.email else "no-reply@sbomify.com"
@@ -513,6 +724,16 @@ def _upsert_entities(
     existing_ids = [getattr(e, "id") for e in valid_entities if getattr(e, "id", None)]
 
     if is_update:
+        # Reject IDs that are not part of this profile *before* deleting anything:
+        # the delete below removes every entity not named in ``existing_ids``, so a
+        # foreign or stale ID would wipe the profile and then be skipped by the
+        # update loop, committing an empty profile.
+        if existing_ids:
+            known_ids = set(profile.entities.filter(id__in=existing_ids).values_list("id", flat=True))
+            unknown_ids = [entity_id for entity_id in existing_ids if entity_id not in known_ids]
+            if unknown_ids:
+                raise ValueError(f"Entity '{unknown_ids[0]}' does not belong to this contact profile.")
+
         profile.entities.exclude(id__in=existing_ids).delete()
 
     for entity_data in valid_entities:
@@ -533,12 +754,15 @@ def _upsert_entities(
                 # Model's save() calls full_clean() automatically
                 entity.save()
             except ContactEntity.DoesNotExist:
+                # IDs are validated above, so this is only reachable if a concurrent
+                # write removed the row mid-transaction. Fail the update so it rolls
+                # back instead of silently committing a profile with fewer entities.
                 logger.warning(
-                    "Entity %s not found in profile %s during update - skipping",
+                    "Entity %s vanished from profile %s during update",
                     entity_id,
                     profile.id,
                 )
-                continue
+                raise ValueError(f"Entity '{entity_id}' does not belong to this contact profile.") from None
         else:
             # Check if this is an author-only entity
             is_author_only = (
@@ -843,6 +1067,9 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
             if payload.authors:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before creating a contact profile.")
+
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 201, serialize_contact_profile(profile)
@@ -960,6 +1187,11 @@ def update_contact_profile(
             if payload.authors is not None:
                 _upsert_authors(profile, payload.authors, fallback_email)
 
+            # Same postcondition as creation, enforced inside the transaction so an
+            # update that would empty the profile rolls back entirely.
+            if not profile.entities.exists():
+                raise ValueError("Add at least one entity before saving a contact profile.")
+
         # Re-fetch with prefetch_related for efficient serialization
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(pk=profile.pk)
         return 200, serialize_contact_profile(profile)
@@ -1025,8 +1257,8 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1040,6 +1272,14 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
                     return 403, {"detail": "Disabling the Trust Center is available on Business or Enterprise plans."}
                 team.is_public = payload.is_public
             team.save()
+
+        # The navbar reads the session's current_team; without this the old
+        # name survives every reload until the session cache expires. The
+        # sidebar and header are also cached fragments keyed on
+        # ``user_teams_version``, so the workspace list has to be recomputed
+        # too or the switcher keeps the old name regardless.
+        refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
@@ -1068,8 +1308,8 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1085,6 +1325,9 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()
+
+        refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
@@ -1110,9 +1353,13 @@ class TeamDomainResponseSchema(BaseModel):
 @router.patch(
     "/{team_key}/domain",
     response={200: TeamDomainResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # Both methods share the view, and Ninja names an operation after its view, so
+    # without this the PATCH duplicates the PUT's operationId in the schema.
+    operation_id="sbomify_apps_teams_apis_patch_team_domain",
 )
 def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainSchema) -> tuple[int, Any]:
     """Set or update workspace custom domain."""
+    from sbomify.apps.teams.tasks import check_custom_domain
     from sbomify.apps.teams.utils import invalidate_custom_domain_cache
     from sbomify.apps.teams.validators import validate_custom_domain
 
@@ -1122,8 +1369,8 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1156,12 +1403,23 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # write, so two concurrent first-time saves can't both observe an
         # empty value and both treat themselves as the "first" domain set.
         with transaction.atomic():
-            locked_team = Team.objects.select_for_update().get(pk=team.pk)
+            locked_team = Workspace.objects.select_for_update().get(pk=team.pk)
             old_domain = locked_team.custom_domain
             locked_team.custom_domain = normalized_domain
             locked_team.custom_domain_validated = False  # Reset validation on change
-            locked_team.save(update_fields=["custom_domain", "custom_domain_validated"])
+            # Start the backoff over: the check queued below claims the domain by this empty last check time.
+            locked_team.custom_domain_verification_failures = 0
+            locked_team.custom_domain_last_checked_at = None
+            locked_team.save(
+                update_fields=[
+                    "custom_domain",
+                    "custom_domain_validated",
+                    "custom_domain_verification_failures",
+                    "custom_domain_last_checked_at",
+                ]
+            )
             is_first_time_set = not old_domain
+            transaction.on_commit(lambda: check_custom_domain.send(team.pk, normalized_domain))
 
         # Invalidate cache for both old and new domains
         invalidate_custom_domain_cache(old_domain)
@@ -1172,7 +1430,9 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # ``on_commit`` so a rollback in the surrounding flow doesn't
         # ship a ghost event for a domain that wasn't actually persisted.
         if is_first_time_set:
-            transaction.on_commit(lambda: capture_for_request(request, "team:custom_domain_added", team_key=team_key))
+            transaction.on_commit(
+                lambda: capture_for_request(request, "team:custom_domain_added", workspace_key=team_key)
+            )
 
         return 200, {"domain": normalized_domain, "validated": False}
 
@@ -1197,8 +1457,8 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     if not can(request, "workspace:administer", team):
@@ -1272,8 +1532,8 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 404, {"detail": "Workspace not found"}
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
 
     # Check if user is a member of this team
@@ -1419,14 +1679,14 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
         slug = domain_normalized[: -(len(trust_center_domain) + 1)]
         # Validate slug format before DB query to reject random probing cheaply
         if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
-            if Team.objects.filter(slug=slug, is_public=True).exists():
+            if Workspace.objects.filter(slug=slug, is_public=True).exists():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
                 return 200
         logger.warning(f"On-demand TLS denied: {domain_normalized} (unknown trust center slug)")
         return 404
 
     # Check if domain exists and belongs to Business/Enterprise team
-    is_allowed = Team.objects.filter(
+    is_allowed = Workspace.objects.filter(
         custom_domain=domain_normalized, billing_plan__in=["business", "enterprise"]
     ).exists()
 
@@ -1438,16 +1698,16 @@ def _resolve_on_demand_tls(domain_normalized: str) -> int:
         return 404
 
 
-def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
-    """Resolve the workspace for a supplier call, or the error to return.
+def _supplier_team(request: HttpRequest, workspace_key: str, action: str) -> tuple[int, Any]:
+    """Resolve the workspace for a supplier or invitation call, or the error to return.
 
-    Every supplier endpoint needs the same three answers — does the workspace
+    Every such endpoint needs the same three answers — does the workspace
     exist, is the caller a non-guest member, does the action clear ``can()`` —
     and getting one of them wrong on one endpoint is how a scoping hole opens.
     """
     try:
-        team = Team.objects.get(pk=token_to_number(team_key))
-    except (ValueError, Team.DoesNotExist):
+        team = Workspace.objects.get(pk=token_to_number(workspace_key))
+    except (ValueError, Workspace.DoesNotExist):
         return 404, {"detail": "Workspace not found"}
 
     user = cast(User, request.user)
@@ -1535,6 +1795,98 @@ def delete_workspace_supplier(request: HttpRequest, team_key: str, supplier_id: 
         return status_code, team
 
     result = delete_supplier(team, supplier_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error}
+    return 204, None
+
+
+@router.patch(
+    "/{team_key}/members/{member_id}",
+    response={200: MemberRoleSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def update_workspace_member_role(
+    request: HttpRequest, team_key: str, member_id: int, payload: MemberRoleUpdateSchema
+) -> tuple[int, Any]:
+    """Change a member's role. Guests and trusted-publisher bots are not changed here."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+    if payload.role == ROLE_OWNER and not can(request, "member:grant_owner", team):
+        return 403, {"detail": "Only workspace owners can make someone an owner.", "error_code": ErrorCode.FORBIDDEN}
+
+    result = change_member_role(request.user, team, member_id, payload.role)
+    if not result.ok or result.value is None:
+        error: dict[str, Any] = {"detail": result.error}
+        if result.status_code == 403:
+            error["error_code"] = ErrorCode.FORBIDDEN
+        return result.status_code or 400, error
+    return 200, {"id": result.value.id, "user_id": result.value.user_id, "role": result.value.role}
+
+
+def _invitation_payload(invitation: Invitation) -> dict[str, Any]:
+    return {
+        "id": invitation.id,
+        "email": invitation.email,
+        "role": invitation.granted_role,
+        "created_at": invitation.created_at,
+        "expires_at": invitation.expires_at,
+    }
+
+
+@router.get(
+    "/{team_key}/invitations",
+    response={200: list[PendingInvitationSchema], 403: ErrorResponse, 404: ErrorResponse},
+)
+def list_workspace_invitations(request: HttpRequest, team_key: str) -> tuple[int, Any]:
+    """List the invitations to this workspace that nobody has accepted yet."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+
+    return 200, [_invitation_payload(invitation) for invitation in list_invitations(team).value or []]
+
+
+@router.post(
+    "/{team_key}/invitations",
+    response={
+        201: PendingInvitationSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+)
+def create_workspace_invitation(
+    request: HttpRequest, team_key: str, payload: InvitationCreateSchema
+) -> tuple[int, Any]:
+    """Invite someone to this workspace by email. They join when they accept the invitation."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+    if payload.role == ROLE_OWNER and not can(request, "member:grant_owner", team):
+        return 403, {"detail": "Only an owner can invite someone as owner", "error_code": ErrorCode.FORBIDDEN}
+
+    result = invite_member(request, team, payload.email, payload.role)
+    if not result.ok or result.value is None:
+        error: dict[str, Any] = {"detail": result.error}
+        # The service refuses with 403 only when the plan has no seat left.
+        if result.status_code == 403:
+            error["error_code"] = ErrorCode.BILLING_LIMIT_EXCEEDED
+        return result.status_code or 400, error
+    return 201, _invitation_payload(result.value)
+
+
+@router.delete(
+    "/{team_key}/invitations/{invitation_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_workspace_invitation(request: HttpRequest, team_key: str, invitation_id: int) -> tuple[int, Any]:
+    """Withdraw an invitation, so its link stops working."""
+    status_code, team = _supplier_team(request, team_key, "member:manage")
+    if status_code != 200:
+        return status_code, team
+
+    result = revoke_invitation(team, invitation_id)
     if not result.ok:
         return result.status_code or 400, {"detail": result.error}
     return 204, None

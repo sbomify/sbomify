@@ -8,11 +8,26 @@ from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
+from .views.component_vulnerabilities import ComponentTriageModalView
+from .views.repository_setup import RepositorySetupInstructionsView, RepositorySetupTokenView
+from .views.trust_center_access import TrustCenterAccessView
+from .views.trust_center_session import TrustCenterSessionView, TrustCenterSignInView
 
 app_name = "core"
 urlpatterns = [
+    path(
+        "component/<str:component_id>/triage/modal/", ComponentTriageModalView.as_view(), name="component_triage_modal"
+    ),
     path("", views.home, name="home"),
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    path("dashboard/trends/", views.DashboardView.as_view(show_trends=True), name="dashboard_trends"),
+    path("getting-started/", views.DashboardView.as_view(show_setup=True), name="repository_setup"),
+    path("setup.md", RepositorySetupInstructionsView.as_view(), name="repository_setup_instructions"),
+    path(
+        "workspaces/<str:workspace_key>/setup-token/",
+        RepositorySetupTokenView.as_view(),
+        name="repository_setup_token",
+    ),
     path("settings", views.user_settings, name="settings"),
     path(
         "settings/invitations/<int:invitation_id>/accept/",
@@ -24,12 +39,20 @@ urlpatterns = [
         views.reject_user_invitation,
         name="reject_user_invitation",
     ),
+    path("settings/trust-centers/", TrustCenterAccessView.as_view(), name="trust_center_access"),
     path("access_tokens/<token_id>/delete", views.delete_access_token, name="delete_access_token"),
     path("logout", views.logout, name="logout"),
+    path("signed-out/", views.SignedOutView.as_view(), name="signed_out"),
     path("login_error", views.login_error, name="login_error"),
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
     path("login/", views.keycloak_login, name="keycloak_login"),
+    path(
+        "trust-center/<str:workspace_key>/sign-in/",
+        TrustCenterSignInView.as_view(),
+        name="trust_center_sign_in",
+    ),
+    path("trust-center/session/", TrustCenterSessionView.as_view(), name="trust_center_session"),
     # Product/Component URLs - moved from sboms app
     # Backward compatibility redirects for URLs that now have trailing slashes
     path("products", RedirectView.as_view(pattern_name="core:products_dashboard", permanent=True)),
@@ -47,7 +70,6 @@ urlpatterns = [
     # Main URLs
     path("products/", views.ProductsDashboardView.as_view(), name="products_dashboard"),
     path("products/new/", views.ProductCreateView.as_view(), name="product_new"),
-    path("products/table/", views.ProductsTableView.as_view(), name="products_table"),
     path(
         "product/<str:product_id>/",
         views.ProductDetailsPrivateView.as_view(),
@@ -74,13 +96,18 @@ urlpatterns = [
         name="product_lifecycle",
     ),
     path(
+        "product/<str:product_id>/custom-metadata/",
+        views.ProductCustomMetadataView.as_view(),
+        name="product_custom_metadata",
+    ),
+    path(
         "public/link/<str:link_id>/",
         views.ProductLinkRedirectView.as_view(),
         name="product_link_redirect",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path("components/new/", views.ComponentCreateView.as_view(), name="component_new"),
-    path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
+    path("upload/", views.ArtifactUploadView.as_view(), name="artifact_upload"),
     path(
         "component/<str:component_id>/",
         views.ComponentDetailsPrivateView.as_view(),
@@ -91,8 +118,13 @@ urlpatterns = [
         views.ComponentScopeView.as_view(),
         name="component_scope",
     ),
+    path(
+        "component/<str:component_id>/vulnerabilities/panel/",
+        views.ComponentVulnerabilitiesPanelView.as_view(),
+        name="component_vulnerabilities_panel",
+    ),
+    path("releases/new/", views.ReleaseCreateView.as_view(), name="release_new"),
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
-    path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
         "security-advisories/",
         views.SecurityAdvisoriesDashboardView.as_view(),
@@ -103,7 +135,12 @@ urlpatterns = [
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
     ),
-    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    # Before the <advisory_id> pattern, which would otherwise swallow "new" and "delete".
+    path(
+        "security-advisories/delete/",
+        views.SecurityAdvisoriesBulkDeleteView.as_view(),
+        name="security_advisories_bulk_delete",
+    ),
     path(
         "security-advisories/new/",
         views.SecurityAdvisoryCreateView.as_view(),
@@ -113,6 +150,11 @@ urlpatterns = [
         "security-advisories/<str:advisory_id>/",
         views.SecurityAdvisoryDetailView.as_view(),
         name="security_advisory_detail",
+    ),
+    path(
+        "security-advisories/<str:advisory_id>/product-releases/",
+        views.SecurityAdvisoryProductReleasesView.as_view(),
+        name="security_advisory_product_releases",
     ),
     path(
         "public/component/<str:component_id>/",
@@ -182,6 +224,16 @@ urlpatterns = [
         "product/<str:product_id>/release/<str:release_id>/diff/<str:other_release_id>/",
         views.ReleaseDiffView.as_view(),
         name="release_diff",
+    ),
+    path(
+        "product/<str:product_id>/release/<str:release_id>/lifecycle/",
+        views.ReleaseLifecycleView.as_view(),
+        name="release_lifecycle",
+    ),
+    path(
+        "product/<str:product_id>/release/<str:release_id>/links/",
+        views.ReleaseLinksView.as_view(),
+        name="release_links",
     ),
     path(
         "public/product/<str:product_id>/release/<str:release_id>/",

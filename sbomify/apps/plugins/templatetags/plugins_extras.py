@@ -7,6 +7,8 @@ from typing import Any
 from django import template
 from django.utils.html import conditional_escape, format_html, format_html_join
 
+from sbomify.apps.core.utils import humanize_token
+
 logger = logging.getLogger(__name__)
 
 register = template.Library()
@@ -14,137 +16,74 @@ register = template.Library()
 # Number of packages to show before collapsing with "Show all" toggle
 VISIBLE_PACKAGE_COUNT = 5
 
+# The CommonMark an advisory body arrives in. OSV serves GHSA's `details`
+# verbatim, so "### Impact", backticked package names and reference links all
+# reach us as markup. Images come before links, because an image is a link with
+# a bang in front of it. Code spans are not here at all: they are lifted out
+# before any of this runs and put back afterwards, so nothing below can read
+# their contents as markup.
+_MARKDOWN_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^\s*(?:```|~~~).*$", re.MULTILINE), ""),  # code fences
+    (re.compile(r"^\s{0,3}#{1,6}\s+", re.MULTILINE), ""),  # ATX headings
+    (re.compile(r"^\s{0,3}>\s?", re.MULTILINE), ""),  # block quotes
+    # GitHub's alert syntax, which rides inside a block quote and so is left
+    # behind once the quote marker goes. GHSA advisories open with it.
+    (re.compile(r"\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*", re.IGNORECASE), ""),
+    (re.compile(r"^\s{0,3}(?:[-*_]\s*){3,}$", re.MULTILINE), ""),  # thematic breaks
+    (re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s+", re.MULTILINE), ""),  # list markers
+    (re.compile(r"!\[([^\]]*)\]\([^)]*\)"), r"\1"),  # images, kept as their alt text
+    (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),  # links, kept as their text
+    (re.compile(r"\*\*(.+?)\*\*", re.DOTALL), r"\1"),  # bold
+    # Underscore bold is guarded where asterisk bold is not: __init__ and
+    # __reduce__ are the shape of a dunder, and an advisory about pickle or
+    # prototype pollution is full of them. CommonMark would read those as
+    # emphasis; a reader would not, and the identifier is what they came for.
+    (re.compile(r"(?<![\w_])__(?!\s)(?![a-z]+__(?![\w_]))(.+?)(?<!\s)__(?![\w_])", re.DOTALL), r"\1"),
+    # Italic, guarded against a doubled marker on either side so __proto__ does
+    # not come out as _proto_ once the bold rule above has declined it.
+    (re.compile(r"(?<![\w*_])(\*|_)(?![\s*_])(.+?)(?<![\s*_])\1(?![\w*_])", re.DOTALL), r"\2"),
+)
+
+#: Lifted out before the patterns above run, and restored after.
+#: One line only, so a fenced block stays the fence pattern's business.
+_CODE_SPAN_RE = re.compile(r"`+([^`\n]+)`+")
+
+# Same ceiling as format_finding_description: a pathological advisory body must
+# not be handed to a dozen regexes.
+MAX_DESCRIPTION_CHARS = 100_000
+
+
+# Every RunReason the SDK defines, plus the two legacy codes still sitting in
+# stored rows ("scheduled" predates SCHEDULED_REFRESH, "migration" was written
+# by the 0004 backfill). A reason is shown as a plain trigger word, so the
+# wording drops the "on_" and "_refresh" the enum carries for its own sake.
+RUN_REASONS = {
+    "on_upload": "Upload",
+    "manual": "Manual",
+    "scheduled": "Scheduled",
+    "scheduled_refresh": "Scheduled",
+    "config_change": "Config Change",
+    "plugin_update": "Plugin Update",
+    "on_release_association": "Release",
+    "dependency_changed": "Dependency Change",
+    "migration": "Migration",
+}
+
 
 @register.filter
 def format_run_reason(reason: str) -> str:
-    """Format assessment run reason for display.
+    """Format an assessment run reason for display.
 
     Args:
-        reason: The run reason code. Expected values:
-            - "on_upload": Triggered by SBOM upload
-            - "manual": Manually triggered by user
-            - "scheduled": Triggered by scheduled job
-            - "config_change": Triggered by configuration change
-            - "migration": Triggered during data migration
+        reason: The run reason code, e.g. ``"on_upload"``.
 
     Returns:
-        Human-readable display string for the reason.
+        Human-readable display string for the reason. A code with no wording of
+        its own — a reason added to the SDK after this map, or a value from a
+        stored row older than the enum — is humanized rather than printed raw,
+        so "on_upload" can never reach a reader as written.
     """
-    reasons = {
-        "on_upload": "Upload",
-        "manual": "Manual",
-        "scheduled": "Scheduled",
-        "config_change": "Config Change",
-        "migration": "Migration",
-    }
-    return reasons.get(reason, reason)
-
-
-@register.filter
-def status_border_class(status: str) -> str:
-    """Map finding status to Bootstrap border CSS class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Bootstrap border class (e.g., "border-success", "border-warning").
-    """
-    classes = {  # nosec B105
-        "pass": "border-success",
-        "fail": "border-warning",
-        "error": "border-danger",
-        "warning": "border-info",
-        "info": "border-secondary",
-    }
-    return classes.get(status, "border-secondary")
-
-
-@register.filter
-def status_text_class(status: str) -> str:
-    """Map finding status to Bootstrap text color CSS class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Bootstrap text color class (e.g., "text-success", "text-warning").
-    """
-    classes = {  # nosec B105
-        "pass": "text-success",
-        "fail": "text-warning",
-        "error": "text-danger",
-        "warning": "text-info",
-        "info": "text-secondary",
-    }
-    return classes.get(status, "text-secondary")
-
-
-@register.filter
-def severity_border_class(severity: str) -> str:
-    """Map vulnerability severity to border CSS class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        CSS border class string.
-    """
-    classes = {
-        "critical": "border-danger",
-        "high": "border-warning",
-        "medium": "border-info",
-        "low": "border-success",
-    }
-    return classes.get(severity, "border-secondary")
-
-
-@register.filter
-def severity_text_class(severity: str) -> str:
-    """Map vulnerability severity to text color CSS class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        CSS text color class string.
-    """
-    classes = {
-        "critical": "text-danger",
-        "high": "text-warning",
-        "medium": "text-info",
-        "low": "text-success",
-    }
-    return classes.get(severity, "text-secondary")
-
-
-@register.filter
-def severity_icon(severity: str) -> str:
-    """Map vulnerability severity to Font Awesome icon class.
-
-    Args:
-        severity: The severity level (critical, high, medium, low).
-
-    Returns:
-        Font Awesome icon class string.
-    """
-    icons = {
-        "critical": "fas fa-shield-alt",
-        "high": "fas fa-shield-alt",
-        "medium": "fas fa-exclamation-circle",
-        "low": "fas fa-info-circle",
-    }
-    return icons.get(severity, "fas fa-info-circle")
+    return RUN_REASONS.get(reason) or humanize_token(reason)
 
 
 @register.filter
@@ -158,31 +97,6 @@ def is_security_category(category: str) -> bool:
         True if the category is "security".
     """
     return category == "security"
-
-
-@register.filter
-def status_icon(status: str) -> str:
-    """Map finding status to Font Awesome icon class.
-
-    Args:
-        status: The finding status. Expected values:
-            - "pass": Finding passed validation
-            - "fail": Finding failed validation
-            - "error": Error occurred during validation
-            - "warning": Warning condition detected
-            - "info": Informational finding
-
-    Returns:
-        Font Awesome icon class (e.g., "fas fa-check-circle").
-    """
-    icons = {  # nosec B105
-        "pass": "fas fa-check-circle",
-        "fail": "fas fa-times-circle",
-        "warning": "fas fa-exclamation-circle",
-        "error": "fas fa-exclamation-triangle",
-        "info": "fas fa-info-circle",
-    }
-    return icons.get(status, "fas fa-info-circle")
 
 
 def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
@@ -199,6 +113,42 @@ def _build_package_span_args(packages: list[str]) -> list[tuple[str, str, str]]:
         hidden_class = " pkg-hidden" if i >= VISIBLE_PACKAGE_COUNT else ""
         args.append((hidden_class, pkg, pkg))
     return args
+
+
+@register.filter
+def advisory_prose(text: object) -> str:
+    """An advisory body as one line of plain prose.
+
+    The pages that show a description show the opening words of it, so the
+    markup is removed rather than rendered: a heading is not structure inside a
+    twenty-word summary, and flattening first means the truncation that follows
+    can only ever cut prose, never leave a code span or a link half-open.
+
+    Whitespace collapses too. The source is written as paragraphs and lists,
+    and every newline in it would otherwise arrive as a space in a sentence
+    that reads as though a word is missing.
+    """
+    if not isinstance(text, str) or not text:
+        return ""
+    if len(text) > MAX_DESCRIPTION_CHARS:
+        logger.debug("Skipping markdown flattening: length %d exceeds limit", len(text))
+        return text
+
+    # A code span is literal by definition, so its contents are set aside while
+    # the rest runs. Everything an advisory puts in backticks is the thing a
+    # reader is looking for: a package called *star, a header field with a #
+    # in it, a path with an underscore.
+    spans: list[str] = []
+
+    def _stash(match: re.Match[str]) -> str:
+        spans.append(match.group(1))
+        return f"\x00{len(spans) - 1}\x00"
+
+    text = _CODE_SPAN_RE.sub(_stash, text)
+    for pattern, replacement in _MARKDOWN_PATTERNS:
+        text = pattern.sub(replacement, text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], text)
+    return " ".join(text.split())
 
 
 @register.filter
@@ -321,3 +271,116 @@ def vulnerability_findings(findings: Any) -> list[Any]:
     if not isinstance(findings, (list, tuple)):
         return []
     return [f for f in findings if isinstance(f, dict) and is_vulnerability(f)]
+
+
+@register.filter
+def vulnerability_table_rows(findings: Any, triage: Any = None) -> list[dict[str, Any]]:
+    """A page of stored findings as c-vulnerabilities.table rows.
+
+    The shape the component and report pages render, so a scan opened on the
+    artifact page reads the same. The shared row builder takes a whole result
+    and re-sorts it; a run's page is already filtered, ordered and sliced, so
+    each finding goes through on its own. What the builder leaves out and this
+    panel always showed rides along: the read-time exploited and malicious
+    marks, and the advisory's own text and links.
+
+    ``triage`` carries the component's in-app rulings (``statements``), which
+    the component page reads too, and the recorded decisions (``decisions``)
+    the triage dialog reopens in their own scope. A result stored before a
+    ruling's scope was recorded on it has only these to say whether the ruling
+    covers the whole component.
+    """
+    from sbomify.apps.vulnerability_scanning.utils import _scoped_by_advisory, extract_finding_rows
+    from sbomify.apps.vulnerability_scanning.vex import statement_index
+
+    triage = triage if isinstance(triage, dict) else {}
+    # Indexed and grouped once for the page; each row would otherwise redo both.
+    index = statement_index(triage["statements"]) if triage.get("statements") else None
+    decisions = triage.get("decisions") or None
+    scoped = _scoped_by_advisory(decisions) if decisions else None
+    rows = []
+    for finding in vulnerability_findings(findings):
+        extracted = extract_finding_rows(
+            {"findings": [finding]},
+            triage_decisions=decisions,
+            vex_index=index,
+            scoped_index=scoped,
+        )
+        if not extracted:
+            continue
+        references = finding.get("references") or []
+        rows.append(
+            {
+                **extracted[0],
+                "kev": bool(finding.get("kev")),
+                "euvd": bool(finding.get("euvd")),
+                "malicious": bool(finding.get("malicious")) or extracted[0]["malicious"],
+                "details": finding.get("description") or "",
+                "references": [ref for ref in references if isinstance(ref, str) and ref],
+            }
+        )
+    return rows
+
+
+@register.filter
+def vex_justification_label(value: object) -> str:
+    """Human wording for a stored finding's raw VEX justification enum."""
+    from sbomify.apps.vulnerability_scanning.utils import justification_label
+
+    return justification_label(value)
+
+
+@register.filter
+def vulnerability_total(summary: object) -> int:
+    """How many vulnerabilities a security run actually reported.
+
+    Not ``total_findings``. That counts every row a plugin emitted, and a
+    security plugin emits rows that are not vulnerabilities: a scanner that
+    stood down records its own notice as one info finding, which is why the
+    card had to special-case skipped runs to stop claiming a vulnerability
+    nobody reported.
+
+    Summing ``by_severity`` is what the public badge already does
+    (``public_assessment_utils._is_passing``), so this brings the private card
+    onto the same count rather than inventing a second one.
+    """
+    if not isinstance(summary, dict):
+        return 0
+    by_severity = summary.get("by_severity") or {}
+    if not isinstance(by_severity, dict):
+        return 0
+    # bool subclasses int, and a stray True must not count as one vulnerability.
+    return sum(value for value in by_severity.values() if isinstance(value, int) and not isinstance(value, bool))
+
+
+#: Verdicts of a completed scan that produced nothing to list. A skipped scan's
+#: caption is the reason, which waiting will not fix.
+NO_SCAN_RESULT = ("Could not scan", "No result", "Skipped")
+
+
+@register.filter
+def unfinished_scans(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Vulnerability scans with no results to read: queued, running, failed, errored or skipped.
+
+    Scans with results are read on the Vulnerabilities list, so the assessments
+    card leaves them out. One without has nothing there, and this card is the
+    only place its state, and an error, shows. A scanner error is stored as a
+    completed run whose summary counts errors, so its verdict is what tells it apart.
+    """
+    from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
+
+    return [
+        tile
+        for tile in build_scorecards(assessment_runs)
+        if tile["run"]
+        and tile["run"].get("category") == "security"
+        and (tile["run"].get("status") in ("pending", "running", "failed") or tile["label"] in NO_SCAN_RESULT)
+    ]
+
+
+@register.filter
+def assessment_scorecards(assessment_runs: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """One row per assessment, most urgent first. See services/assessment_scorecard.py."""
+    from sbomify.apps.plugins.services.assessment_scorecard import build_scorecards
+
+    return build_scorecards(assessment_runs)

@@ -1,6 +1,8 @@
+import type { AlpineComponent } from 'alpinejs'
 import Alpine from '../../core/js/alpine-init'
 import { showSuccess, showError } from '../../core/js/alerts'
 import { getCsrfToken } from '../../core/js/csrf'
+import { resolveRequestedBomType, type UploadRequest } from '../../core/js/components/upload-dialog'
 import { bomTypeLabel, buildPreviewEndpoint, buildUploadEndpoint, validateUploadFile, type UploadBomType } from './sbom-upload-helpers'
 
 interface VexPreview {
@@ -10,7 +12,8 @@ interface VexPreview {
     would_suppress: number
     already_suppressed: number
     unmatched_statements: number
-    matched: Array<{ id: string; package: string | null; version: string | null; state: string }>
+    // state is the document's own VEX code; state_label is the wording to show.
+    matched: Array<{ id: string; package: string | null; version: string | null; state: string; state_label: string }>
 }
 
 interface SbomUploadState {
@@ -20,10 +23,17 @@ interface SbomUploadState {
     isPreviewing: boolean
     componentId: string
     bomType: UploadBomType
+    initialBomType: UploadBomType
+    // Owned by the enclosing uploadDialog scope; a fresh object per open.
+    uploadRequest?: UploadRequest | null
     preview: VexPreview | null
     pendingFile: File | null
+    // Hold a VEX for someone to approve instead of applying it now.
+    sendForReview: boolean
     abortController: AbortController | null
     readonly bomTypeLabel: string
+    init: () => void
+    applyUploadRequest: (request: UploadRequest | null | undefined) => void
     handleDrop: (event: DragEvent) => void
     handleFileSelect: (event: Event) => void
     handleFile: (file: File) => void
@@ -36,16 +46,29 @@ interface SbomUploadState {
 }
 
 export function registerSbomUpload(): void {
-    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false): SbomUploadState => ({
+    Alpine.data('sbomUpload', (componentId: string, hasSboms: boolean = false, initialBomType: UploadBomType = 'sbom'): AlpineComponent<SbomUploadState> => ({
         expanded: !hasSboms,
         isDragOver: false,
         isUploading: false,
         isPreviewing: false,
         componentId: componentId,
-        bomType: 'sbom' as UploadBomType,
+        bomType: initialBomType,
+        initialBomType,
         preview: null,
         pendingFile: null,
+        sendForReview: false,
         abortController: null,
+
+        init(): void {
+            // The dialog may have opened from a deep link before this body
+            // initialised, so apply the current request as well as later ones.
+            this.applyUploadRequest(this.uploadRequest)
+            this.$watch('uploadRequest', (request: UploadRequest | null | undefined) => this.applyUploadRequest(request))
+        },
+
+        applyUploadRequest(request: UploadRequest | null | undefined): void {
+            this.bomType = resolveRequestedBomType(this, request, this.initialBomType)
+        },
 
         get bomTypeLabel(): string {
             return bomTypeLabel(this.bomType)
@@ -77,7 +100,7 @@ export function registerSbomUpload(): void {
 
                 const csrfToken = getCsrfToken()
 
-                const response = await fetch(buildUploadEndpoint(this.componentId, this.bomType), {
+                const response = await fetch(buildUploadEndpoint(this.componentId, this.bomType, this.sendForReview), {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -97,7 +120,13 @@ export function registerSbomUpload(): void {
                     }
                 }
 
-                if (response.ok) {
+                if (response.status === 202) {
+                    // Held for approval: nothing was stored, so there is no
+                    // page to reload, only a queue to point at.
+                    showSuccess('VEX sent for review. It takes effect once someone approves it.')
+                    this.sendForReview = false
+                    window.dispatchEvent(new CustomEvent('close-upload'))
+                } else if (response.ok) {
                     showSuccess(`${this.bomTypeLabel} uploaded successfully! Reloading page...`)
                     // The upload is done; the modal has nothing left to say.
                     window.dispatchEvent(new CustomEvent('close-upload'))
@@ -109,7 +138,7 @@ export function registerSbomUpload(): void {
             } catch (error) {
                 if (error instanceof Error) {
                     if (error.name === 'AbortError') {
-                        showError('Upload was cancelled.')
+                        showError('Upload was canceled.')
                     } else {
                         showError(`Network error: ${error.message}`)
                     }

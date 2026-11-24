@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 
 from sbomify.apps.billing import email_notifications
 from sbomify.apps.core.utils import number_to_random_token
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def team(db):
     """Create a test team with a member."""
-    team = Team.objects.create(name="Test Team")
+    team = Workspace.objects.create(name="Test Team")
     team.key = number_to_random_token(team.pk)
     team.save()
     user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass123")
@@ -95,7 +95,7 @@ def test_notify_subscription_cancelled(team):
         mock_send.assert_called_once_with(
             team,
             member,
-            "Your sbomify subscription has been cancelled",
+            "Your sbomify subscription has been canceled",
             "subscription_cancelled",
             {},
         )
@@ -132,7 +132,7 @@ def test_send_billing_email(team):
                 with patch("sbomify.apps.billing.email_notifications.EmailMultiAlternatives") as mock_email_cls:
                     mock_email = MagicMock()
                     mock_email_cls.return_value = mock_email
-                    email_notifications.send_billing_email(team, member, subject, template, extra_context)
+                    email_notifications.render_and_send_billing_email(team, member, subject, template, extra_context)
                     mock_email_cls.assert_called_once_with(
                         subject=subject,
                         body="text_content",
@@ -159,7 +159,7 @@ def test_send_billing_email_template_error(team):
 
     with patch("sbomify.apps.billing.email_notifications.render_to_string", side_effect=Exception("Template error")):
         with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
-            email_notifications.send_billing_email(team, member, subject, template, context)
+            email_notifications.render_and_send_billing_email(team, member, subject, template, context)
             mock_logger.error.assert_called_once()
 
 
@@ -177,7 +177,7 @@ def test_send_billing_email_send_error(team):
             mock_email.send.side_effect = Exception("Send error")
             mock_email_cls.return_value = mock_email
             with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
-                email_notifications.send_billing_email(team, member, subject, template, context)
+                email_notifications.render_and_send_billing_email(team, member, subject, template, context)
                 mock_logger.error.assert_called_once()
 
 
@@ -192,7 +192,7 @@ def test_send_billing_email_invalid_team(team):
     team = None
 
     with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
-        email_notifications.send_billing_email(team, member, subject, template, context)
+        email_notifications.render_and_send_billing_email(team, member, subject, template, context)
         mock_logger.error.assert_called_once()
 
 
@@ -207,5 +207,5 @@ def test_send_billing_email_invalid_member(team):
     member = None
 
     with patch("sbomify.apps.billing.email_notifications.logger") as mock_logger:
-        email_notifications.send_billing_email(team, member, subject, template, context)
+        email_notifications.render_and_send_billing_email(team, member, subject, template, context)
         mock_logger.error.assert_called_once()

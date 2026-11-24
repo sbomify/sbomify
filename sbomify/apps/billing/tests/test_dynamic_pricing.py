@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeError
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 User = get_user_model()
 
@@ -266,15 +266,15 @@ class TestBillingPlanValidation(TestCase):
             monthly_price=Decimal("100.00"),
             annual_price=Decimal("1000.00"),
         )
-        
+
         # Clear stripe IDs to test that clean() skips validation
         plan.stripe_price_monthly_id = ""
         plan.stripe_price_annual_id = ""
-        
+
         # Should not raise validation errors when clean() is called
         # (validation is skipped when stripe IDs are empty)
         plan.clean()  # Should not raise ValidationError from price validation
-        
+
         # Note: save() may still raise ValidationError for blank fields,
         # but clean() itself should not raise for price validation when IDs are empty
 
@@ -375,9 +375,9 @@ class TestTeamSettingsBillingPeriod(TestCase):
     def setUp(self):
         """Set up test data."""
         from sbomify.apps.core.utils import number_to_random_token
-        
+
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         # Ensure team has a valid key
         if not self.team.key or len(self.team.key) < 9:
             self.team.key = number_to_random_token(self.team.id)
@@ -411,7 +411,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("workspaces:team_settings_tab", kwargs={"workspace_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is in context
@@ -438,7 +442,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("workspaces:team_settings_tab", kwargs={"workspace_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is in context
@@ -460,7 +468,11 @@ class TestTeamSettingsBillingPeriod(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("workspaces:team_settings_tab", kwargs={"workspace_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
 
         # Check that billing period is None for community
@@ -474,7 +486,7 @@ class TestSelectPlanTemplate(TestCase):
     def setUp(self):
         """Set up test data."""
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team", key="test-team")
+        self.team = Workspace.objects.create(name="Test Team", key="test-team")
         Member.objects.create(team=self.team, user=self.user, role="owner")
 
         self.business_plan = create_test_plan(
@@ -494,7 +506,7 @@ class TestSelectPlanTemplate(TestCase):
         client = Client()
         client.force_login(self.user)
 
-        response = client.get(reverse("billing:select_plan", kwargs={"team_key": self.team.key}))
+        response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": self.team.key}))
         assert response.status_code == 200
 
         # Check that prices are in the rendered HTML
@@ -514,7 +526,7 @@ class TestSelectPlanTemplate(TestCase):
         client = Client()
         client.force_login(self.user)
 
-        response = client.get(reverse("billing:select_plan", kwargs={"team_key": self.team.key}))
+        response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": self.team.key}))
         assert response.status_code == 200
 
         # Check that discount percentage is calculated and shown
@@ -534,7 +546,7 @@ class TestSelectPlanTemplate(TestCase):
         client = Client()
         client.force_login(self.user)
 
-        response = client.get(reverse("billing:select_plan", kwargs={"team_key": self.team.key}))
+        response = client.get(reverse("billing:select_plan", kwargs={"workspace_key": self.team.key}))
         assert response.status_code == 200
 
         content = response.content.decode()
@@ -681,9 +693,9 @@ class TestIntegrationScenarios(TestCase):
     def setUp(self):
         """Set up test data."""
         from sbomify.apps.core.utils import number_to_random_token
-        
+
         self.user = User.objects.create_user(username="testuser", email="test@example.com", password="testpass")
-        self.team = Team.objects.create(name="Test Team")
+        self.team = Workspace.objects.create(name="Test Team")
         # Ensure team has a valid key
         if not self.team.key or len(self.team.key) < 9:
             self.team.key = number_to_random_token(self.team.id)
@@ -729,7 +741,11 @@ class TestIntegrationScenarios(TestCase):
         client.force_login(self.user)
         setup_test_session(client, self.team, self.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": self.team.key}))
+        response = client.get(
+            # The billing tab, not the settings index: the index resolves to
+            # General, which renders no billing and so builds none.
+            reverse("workspaces:team_settings_tab", kwargs={"workspace_key": self.team.key, "tab": "billing"})
+        )
         assert response.status_code == 200
         assert response.context["plan_pricing"]["billing_period"] == "annual"
 

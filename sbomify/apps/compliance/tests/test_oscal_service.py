@@ -16,6 +16,7 @@ from sbomify.apps.compliance.services.oscal_service import (
     build_trestle_assessment_results,
     create_assessment_result,
     ensure_cra_catalog,
+    get_annex_url,
     import_catalog_to_db,
     load_cra_catalog,
     serialize_assessment_results,
@@ -696,3 +697,17 @@ class TestSerializeAssessmentResults:
 
         not_sat = by_target[findings[1].control.control_id]
         assert not_sat["target"]["status"]["state"] == "not-satisfied"
+
+
+@pytest.mark.parametrize(
+    ("reference", "anchor"),
+    [
+        ("Annex I, Part I, §1", "#d1e47-68-1"),
+        ("Annex I, Part I, §13", "#d1e47-68-1"),
+        ("Annex I, Part II, §1", "#d1e143-68-1"),
+        ("Annex I, Part II, §8", "#d1e143-68-1"),
+        ("Annex I", "#anx_I"),
+    ],
+)
+def test_annex_url_links_to_the_referenced_part(reference, anchor):
+    assert get_annex_url(reference).endswith(anchor)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 import requests
 from django import forms
@@ -95,6 +95,7 @@ class CreateAccessTokenForm(forms.Form):
     SCOPE_CHOICES = [
         ("full", "Full access"),
         ("publish", "Publish only (CI/CD upload)"),
+        ("agent", "AI agent"),
         ("read_only", "Read-only"),
     ]
     scope = forms.ChoiceField(
@@ -140,6 +141,59 @@ class CreateAccessTokenForm(forms.Form):
 
 class TogglePublicStatusForm(forms.Form):
     is_public = forms.BooleanField(required=False)
+
+
+class ProductCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    description = forms.CharField(max_length=1000, required=False)
+
+
+class ComponentCreateForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    component_type = forms.ChoiceField(
+        choices=[("bom", "BOM"), ("document", "Document")], initial="bom", required=False
+    )
+    is_global = forms.BooleanField(required=False)
+
+    def clean_component_type(self) -> str:
+        return self.cleaned_data["component_type"] or "bom"
+
+
+class ReleaseCreateForm(forms.Form):
+    product_id = forms.ChoiceField(label="Product")
+    name = forms.CharField(max_length=255, label="Release name")
+    version = forms.CharField(max_length=255, required=False)
+    description = forms.CharField(max_length=1000, required=False)
+    is_prerelease = forms.BooleanField(required=False)
+    created_at = forms.DateTimeField(required=False)
+    released_at = forms.DateTimeField(required=False)
+    replaces = forms.ChoiceField(required=False)
+    replaces_line = forms.ChoiceField(choices=[("same", "Same line"), ("new", "New line")], required=False)
+    dropped_replaces = False
+
+    def __init__(
+        self,
+        *args: Any,
+        products: list[tuple[str, str]],
+        candidates: list[tuple[str, str]] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        cast(forms.ChoiceField, self.fields["product_id"]).choices = [("", "Choose a product"), *products]
+        cast(forms.ChoiceField, self.fields["replaces"]).choices = [("", "None"), *(candidates or [])]
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        # The prerelease box clears Replaces in the browser; a submit that beats the page script keeps the
+        # server's preselection, which never has a line. A line means the user chose the predecessor.
+        if cleaned.get("is_prerelease") and not cleaned.get("replaces_line"):
+            # The view says so: someone who did pick it would otherwise take the link as made.
+            self.dropped_replaces = bool(cleaned.get("replaces"))
+            cleaned["replaces"] = ""
+        # Same line retires the release it replaces, so the form never guesses which one is meant.
+        if cleaned.get("replaces") and not cleaned.get("replaces_line"):
+            self.add_error("replaces_line", "Choose Same line or New line, or set Release it replaces to None.")
+        return cleaned
 
 
 class SupportContactForm(forms.Form):

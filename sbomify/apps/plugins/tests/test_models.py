@@ -15,11 +15,11 @@ from sbomify.apps.plugins.models import (
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
-def test_team(db) -> Team:
+def test_team(db) -> Workspace:
     """Create a test team for model tests."""
     # Ensure billing plan exists
     BillingPlan.objects.get_or_create(
@@ -31,7 +31,7 @@ def test_team(db) -> Team:
             "max_users": 2,
         },
     )
-    team = Team.objects.create(
+    team = Workspace.objects.create(
         name="Test Team",
         billing_plan="community",
     )
@@ -40,7 +40,7 @@ def test_team(db) -> Team:
 
 
 @pytest.fixture
-def sample_component(test_team: Team) -> Component:
+def sample_component(test_team: Workspace) -> Component:
     """Create a sample component for testing."""
     component = Component.objects.create(
         team=test_team,
@@ -51,7 +51,7 @@ def sample_component(test_team: Team) -> Component:
 
 
 @pytest.fixture
-def sample_component_bom(test_team: Team) -> Component:
+def sample_component_bom(test_team: Workspace) -> Component:
     """Create a sample component with component_type='bom' for testing."""
     component = Component.objects.create(
         team=test_team,
@@ -163,7 +163,7 @@ class TestRegisteredPlugin:
 class TestTeamPluginSettings:
     """Tests for TeamPluginSettings model."""
 
-    def test_create_settings(self, test_team: Team) -> None:
+    def test_create_settings(self, test_team: Workspace) -> None:
         """Test creating team plugin settings."""
         settings = TeamPluginSettings.objects.create(
             team=test_team,
@@ -177,7 +177,7 @@ class TestTeamPluginSettings:
         assert "checksum" in settings.enabled_plugins
         assert "ntia" in settings.enabled_plugins
 
-    def test_settings_string_representation(self, test_team: Team) -> None:
+    def test_settings_string_representation(self, test_team: Workspace) -> None:
         """Test settings string representation."""
         settings = TeamPluginSettings.objects.create(
             team=test_team,
@@ -186,7 +186,7 @@ class TestTeamPluginSettings:
 
         assert str(settings) == "Test Team - 3 plugins enabled"
 
-    def test_is_plugin_enabled(self, test_team: Team) -> None:
+    def test_is_plugin_enabled(self, test_team: Workspace) -> None:
         """Test checking if a plugin is enabled."""
         settings = TeamPluginSettings.objects.create(
             team=test_team,
@@ -197,7 +197,7 @@ class TestTeamPluginSettings:
         assert settings.is_plugin_enabled("ntia") is True
         assert settings.is_plugin_enabled("osv") is False
 
-    def test_get_plugin_config(self, test_team: Team) -> None:
+    def test_get_plugin_config(self, test_team: Workspace) -> None:
         """Test getting plugin-specific configuration."""
         settings = TeamPluginSettings.objects.create(
             team=test_team,
@@ -215,7 +215,7 @@ class TestTeamPluginSettings:
         assert config["allowed"] == ["MIT", "Apache-2.0"]
         assert config["denied"] == ["GPL-3.0"]
 
-    def test_get_plugin_config_not_configured(self, test_team: Team) -> None:
+    def test_get_plugin_config_not_configured(self, test_team: Workspace) -> None:
         """Test getting config for unconfigured plugin returns empty dict."""
         settings = TeamPluginSettings.objects.create(
             team=test_team,
@@ -226,7 +226,7 @@ class TestTeamPluginSettings:
 
         assert config == {}
 
-    def test_plugins_disabled_by_default(self, test_team: Team) -> None:
+    def test_plugins_disabled_by_default(self, test_team: Workspace) -> None:
         """Test that all plugins are disabled by default when TeamPluginSettings is created.
 
         This ensures teams must explicitly opt-in to enable plugins.
@@ -342,7 +342,7 @@ class TestTeamPluginSettingsSignal:
         yield plugin
         plugin.delete()
 
-    def test_signal_dispatches_background_task_when_plugins_enabled(self, test_team: Team, registered_plugin) -> None:
+    def test_signal_dispatches_background_task_when_plugins_enabled(self, test_team: Workspace, registered_plugin) -> None:
         """Test that signal dispatches background task when plugins are enabled."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
@@ -356,7 +356,7 @@ class TestTeamPluginSettingsSignal:
             assert call_kwargs["team_id"] == str(test_team.id)
             assert call_kwargs["enabled_plugins"] == ["checksum"]
 
-    def test_signal_does_not_dispatch_when_no_plugins_enabled(self, test_team: Team) -> None:
+    def test_signal_does_not_dispatch_when_no_plugins_enabled(self, test_team: Workspace) -> None:
         """Test that signal doesn't dispatch task when no plugins are enabled."""
         with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
@@ -367,7 +367,7 @@ class TestTeamPluginSettingsSignal:
             # Verify that the background task was NOT dispatched
             assert not mock_task.send.called
 
-    def test_signal_uses_run_on_commit(self, test_team: Team, registered_plugin) -> None:
+    def test_signal_uses_run_on_commit(self, test_team: Workspace, registered_plugin) -> None:
         """Test that the signal correctly uses run_on_commit to defer task dispatch."""
         with patch("sbomify.apps.plugins.signals.run_on_commit") as mock_run_on_commit:
             TeamPluginSettings.objects.create(
@@ -378,7 +378,7 @@ class TestTeamPluginSettingsSignal:
             # Verify that run_on_commit was called
             assert mock_run_on_commit.called
 
-    def test_signal_handles_errors_gracefully(self, test_team: Team) -> None:
+    def test_signal_handles_errors_gracefully(self, test_team: Workspace) -> None:
         """Test that the signal handles errors gracefully."""
         with patch("sbomify.apps.plugins.signals.logger") as mock_logger:
             # Simulate an error by making the task dispatch fail
@@ -392,7 +392,7 @@ class TestTeamPluginSettingsSignal:
             # Verify that an error was logged
             assert mock_logger.error.called
 
-    def test_signal_passes_plugin_configs_to_task(self, test_team: Team, registered_plugin) -> None:
+    def test_signal_passes_plugin_configs_to_task(self, test_team: Workspace, registered_plugin) -> None:
         """Test that signal passes plugin configs to the background task."""
         plugin_configs = {"checksum": {"option": "value"}}
         with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
@@ -426,7 +426,7 @@ class TestBulkEnqueueTask:
         plugin.delete()
 
     def test_task_only_processes_recent_sboms(
-        self, test_team: Team, sample_component_bom: Component, registered_plugin
+        self, test_team: Workspace, sample_component_bom: Component, registered_plugin
     ) -> None:
         """Test that the task only processes SBOMs within the cutoff period."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -475,7 +475,7 @@ class TestBulkEnqueueTask:
         old_sbom.delete()
 
     def test_task_skips_sboms_with_existing_runs(
-        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
+        self, test_team: Workspace, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task skips SBOMs that already have assessment runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -518,7 +518,7 @@ class TestBulkEnqueueTask:
         assert result["sboms_found"] == 0
         assert result["assessments_enqueued"] == 0
 
-    def test_task_handles_no_sboms_gracefully(self, test_team: Team, registered_plugin) -> None:
+    def test_task_handles_no_sboms_gracefully(self, test_team: Workspace, registered_plugin) -> None:
         """Test that task handles teams with no recent SBOMs gracefully."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
@@ -533,7 +533,7 @@ class TestBulkEnqueueTask:
             assert not mock_enqueue.called
 
     def test_task_enqueues_for_multiple_plugins(
-        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
+        self, test_team: Workspace, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task enqueues assessments for multiple enabled plugins."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -563,7 +563,7 @@ class TestBulkEnqueueTask:
         ntia_plugin.delete()
 
     def test_task_only_enqueues_for_plugins_without_existing_runs(
-        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
+        self, test_team: Workspace, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task only enqueues for plugins that don't have existing runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task

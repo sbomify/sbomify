@@ -12,7 +12,7 @@ from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_5 as cdx15
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.sboms.utils import ProductSBOMBuilder
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from .fixtures import (
     sample_access_token,  # noqa: F401
@@ -40,7 +40,7 @@ def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: 
         sample_team.save()
 
     # Set up session data
-    mock_request.session["user_teams"] = {
+    mock_request.session["user_workspaces"] = {
         sample_team.key: {"role": member.role, "name": sample_team.name, "is_default_team": member.is_default_team}
     }
     return mock_request
@@ -49,7 +49,7 @@ def mock_request_with_teams(mock_request, sample_team) -> HttpRequest:  # noqa: 
 def test_verify_item_access_unauthenticated(mock_request):
     """Test access verification for unauthenticated user"""
     mock_request.user = type("AnonymousUser", (), {"is_authenticated": False})()
-    team = Team(name="test")
+    team = Workspace(name="test")
 
     result = verify_item_access(mock_request, team, ["owner"])
 
@@ -103,8 +103,8 @@ def mock_s3_client(mocker):
         }
     ).encode()
 
-    # Mock the S3Client class to return our mock instance
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    # Mock the StorageClient class to return our mock instance
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     return mock_client
 
 
@@ -293,10 +293,10 @@ def test_product_sbom_file_generation(tmp_path):
     # Import necessary models
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create a team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create a PUBLIC product with PUBLIC components attached directly
     product = Product.objects.create(name="test-product", team=team, is_public=True)
@@ -329,7 +329,7 @@ def test_product_sbom_file_generation(tmp_path):
     product.components.add(component1, component2)
 
     # Mock S3 client
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
 
         def mock_get_sbom_data(filename):
@@ -383,10 +383,10 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
 
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test entities
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
     product = Product.objects.create(name="test-product", team=team, is_public=True)
 
     # Create component
@@ -406,7 +406,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     product.components.add(component)
 
     # Mock S3 client
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -461,10 +461,10 @@ def test_private_product_sbom_generation(tmp_path):
 
     from sbomify.apps.sboms.models import Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create a team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create a PRIVATE product
     private_product = Product.objects.create(name="private-product", team=team, is_public=False)
@@ -527,10 +527,10 @@ def test_product_external_references_schema_compatibility():
     """Test that product external references use correct schema format."""
     from sbomify.apps.sboms.models import Product, ProductLink
     from sbomify.apps.sboms.utils import create_product_external_references
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test data
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
     product = Product.objects.create(name="test-product", team=team)
 
     # Create a product link that would trigger the schema error
@@ -573,10 +573,10 @@ def test_product_sbom_includes_documents_full_integration():
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.models import Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create team
-    team = Team.objects.create(name="test-team", key="test-team")
+    team = Workspace.objects.create(name="test-team", key="test-team")
 
     # Create product
     product = Product.objects.create(name="test-product", team=team, is_public=True)
@@ -655,10 +655,10 @@ def test_product_sbom_documents_relationship_debug():
     from sbomify.apps.core.models import Component
     from sbomify.apps.documents.models import Document
     from sbomify.apps.sboms.models import Product
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create team
-    team = Team.objects.create(name="debug-team", key="debug-team")
+    team = Workspace.objects.create(name="debug-team", key="debug-team")
 
     # Create product
     product = Product.objects.create(name="debug-product", team=team, is_public=True)
@@ -712,10 +712,10 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     """
     from sbomify.apps.sboms.models import SBOM, Component, Product
     from sbomify.apps.sboms.utils import get_product_sbom_package
-    from sbomify.apps.teams.models import Team
+    from sbomify.apps.teams.models import Workspace
 
     # Create test entities
-    team = Team.objects.create(name="schema-test-team", key="schema-test-team")
+    team = Workspace.objects.create(name="schema-test-team", key="schema-test-team")
     product = Product.objects.create(name="schema-test-product", team=team, is_public=True)
 
     component = Component.objects.create(
@@ -730,7 +730,7 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     )
     product.components.add(component)
 
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -987,10 +987,10 @@ def clear_sbomify_action_cache():
 
 def _mock_sbom_content(mocker, content: dict) -> None:
     """Stand in for an S3 fetch: returns ``content`` JSON-encoded for the
-    one call site that matters (``S3Client(...).get_sbom_data``)."""
+    one call site that matters (``StorageClient(...).get_sbom_data``)."""
     mock_client = mocker.MagicMock()
     mock_client.get_sbom_data.return_value = json.dumps(content).encode()
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
 
 @pytest.mark.django_db
@@ -1139,7 +1139,7 @@ class TestSbomWasGeneratedBySbomifyAction:
 
         mock_client = mocker.MagicMock()
         mock_client.get_sbom_data.side_effect = RuntimeError("S3 boom")
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 
@@ -1154,7 +1154,7 @@ class TestSbomWasGeneratedBySbomifyAction:
         mock_client.get_sbom_data.return_value = json.dumps(
             {"specVersion": "1.6", "metadata": {"tools": {"components": [{"name": "sbomify-action"}]}}}
         ).encode()
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
@@ -1176,7 +1176,7 @@ class TestSbomWasGeneratedBySbomifyAction:
         mocker.patch("django.core.cache.cache.get", return_value=None)
         mock_client = mocker.MagicMock()
         mock_client.get_sbom_data.side_effect = RuntimeError("S3 down")
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 
@@ -1207,6 +1207,29 @@ class TestSbomWasGeneratedBySbomifyAction:
         assert cache_set.called
         ttl_used = cache_set.call_args.args[2]
         assert ttl_used == _SBOMIFY_ACTION_CHECK_CACHE_TTL
+
+    def test_non_object_json_is_a_durable_clean_negative(
+        self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache
+    ):  # noqa: F811
+        """A top-level JSON array decodes fine but is no SBOM; that is a fact
+        about the document, so it caches at the long TTL instead of retrying
+        on every page load through the transient path."""
+        from sbomify.apps.sboms.utils import (
+            _SBOMIFY_ACTION_CHECK_CACHE_TTL,
+            sbom_was_generated_by_sbomify_action,
+        )
+
+        sample_sbom.format = "spdx"
+        sample_sbom.save(update_fields=["format"])
+        cache_set = mocker.patch("django.core.cache.cache.set")
+        mocker.patch("django.core.cache.cache.get", return_value=None)
+        mock_client = mocker.MagicMock()
+        mock_client.get_sbom_data.return_value = b"[1, 2, 3]"
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
+
+        assert cache_set.call_args.args[2] == _SBOMIFY_ACTION_CHECK_CACHE_TTL
 
     def test_cache_get_failure_treated_as_miss(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
         """django-redis without IGNORE_EXCEPTIONS raises on Redis outage.

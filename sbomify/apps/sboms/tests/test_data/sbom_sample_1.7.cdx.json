@@ -1,0 +1,76 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-09-01T00:00:00Z",
+    "distributionConstraints": {
+      "tlp": "GREEN"
+    },
+    "component": {
+      "type": "application",
+      "bom-ref": "app",
+      "name": "example-app",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/requests@2.31.0",
+      "name": "requests",
+      "version": "2.31.0",
+      "purl": "pkg:pypi/requests@2.31.0",
+      "isExternal": false,
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "942c5a758f98d790eaed1a29cb6eefc7ffb0d1cf7af05c3d2791656dbd6ad1e1"
+        },
+        {
+          "alg": "Streebog-256",
+          "content": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/psf/requests"
+        },
+        {
+          "type": "patent-assertion",
+          "url": "https://example.com/patent-assertion"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:npm/lodash",
+      "name": "lodash",
+      "purl": "pkg:npm/lodash",
+      "isExternal": true,
+      "versionRange": "vers:npm/>=4.0.0|<4.17.21"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "app",
+      "dependsOn": [
+        "pkg:pypi/requests@2.31.0",
+        "pkg:npm/lodash"
+      ]
+    }
+  ],
+  "citations": [
+    {
+      "bom-ref": "citation-1",
+      "pointers": [
+        "/components/0"
+      ],
+      "timestamp": "2026-09-01T00:00:00Z",
+      "attributedTo": "app"
+    }
+  ]
+}

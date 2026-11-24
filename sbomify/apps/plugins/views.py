@@ -3,33 +3,36 @@
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import ADMINISTER
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import get_team
-from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
+from sbomify.apps.teams.permissions import GuestAccessBlockedMixin, TeamRoleRequiredMixin
 from sbomify.logging import getLogger
 
 from .apis import UpdateTeamPluginSettingsRequest, get_team_plugin_settings, update_team_plugin_settings
+from .services.catalogue import CATEGORY_ORDER, get_catalogue_shape
+from .services.new_plugins import plugins_added_since_last_save
 
 logger = getLogger(__name__)
 
 
-class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class TeamPluginSettingsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing team plugin settings."""
 
     allowed_roles = list(ADMINISTER)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Render the plugin settings page."""
-        status_code, team = get_team(request, team_key)
+        status_code, team = get_team(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+        status_code, plugin_settings = get_team_plugin_settings(request, workspace_key)
         if status_code != 200:
             return htmx_error_response(plugin_settings.get("detail", "Failed to load settings"))
 
@@ -37,8 +40,17 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         enabled_plugins = plugin_settings.get("enabled_plugins", [])
         plugin_configs = plugin_settings.get("plugin_configs", {})
         plugins = plugin_settings.get("available_plugins", [])
+        new_plugins = plugins_added_since_last_save(workspace_key).value or set()
         for plugin in plugins:
             plugin["is_enabled"] = plugin["name"] in enabled_plugins and plugin.get("has_access", False)
+            # Enabled while the plan still included it, and kept across the downgrade.
+            # Its checkbox is disabled and unchecked, so without saying so the row reads
+            # as "off" when the stored setting is really "on, not running" — and the row
+            # would look unchanged by an upgrade that in fact restarts the plugin.
+            plugin["is_paused_by_plan"] = plugin["name"] in enabled_plugins and not plugin.get("has_access", False)
+            plugin["is_new"] = (
+                plugin["name"] in new_plugins and plugin.get("has_access", False) and not plugin["is_enabled"]
+            )
             schema = plugin.get("config_schema") or []
             for field in schema:
                 field["current_value"] = plugin_configs.get(plugin["name"], {}).get(field.get("key", ""), "")
@@ -53,16 +65,17 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # badge conveys plan gating, so the previous global "Requires Plan Upgrade"
         # divider is dropped. Sort so regroup produces contiguous category blocks in
         # a stable, sensible order.
-        # Every AssessmentCategory (sdk.enums) is listed so none falls into the unknown
-        # bucket; anything unlisted still degrades gracefully via the category tiebreaker.
-        category_order = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
+        # CATEGORY_ORDER lists every AssessmentCategory (sdk.enums) so none falls into
+        # the unknown bucket; anything unlisted still degrades gracefully via the
+        # category tiebreaker. The catalogue skeleton sorts by the same constant, so
+        # its placeholder cards line up with the sections that replace them.
         # Group by category for {% regroup %} (which only groups adjacent rows, so the
         # category string keeps same-category plugins contiguous even when two unknown
         # categories both fall back to 99). Within a category, preserve the API's ordering:
         # accessible plugins before upgrade-gated ones, then by display name.
         plugins.sort(
             key=lambda p: (
-                category_order.get(p.get("category", ""), 99),
+                CATEGORY_ORDER.get(p.get("category", ""), 99),
                 p.get("category", ""),
                 p.get("requires_upgrade", False),
                 p.get("display_name", ""),
@@ -78,7 +91,7 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             },
         )
 
-    def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def post(self, request: HttpRequest, workspace_key: str) -> HttpResponse:
         """Update plugin settings."""
         # Get enabled plugins from form data (checkboxes)
         enabled_plugins = request.POST.getlist("enabled_plugins")
@@ -101,7 +114,7 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             plugin_configs=plugin_configs if plugin_configs else None,
         )
 
-        status_code, result = update_team_plugin_settings(request, team_key, payload)
+        status_code, result = update_team_plugin_settings(request, workspace_key, payload)
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update settings"))
 
@@ -111,13 +124,13 @@ class TeamPluginSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         )
 
 
-def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] | None:
+def _build_plugin_stats(request: HttpRequest, workspace_key: str) -> dict[str, Any] | None:
     """Build plugin summary stats from the API."""
-    status_code, plugin_settings = get_team_plugin_settings(request, team_key)
+    status_code, plugin_settings = get_team_plugin_settings(request, workspace_key)
     if status_code != 200:
-        # Intentionally do NOT include team_key in the log message: CodeQL
+        # Intentionally do NOT include workspace_key in the log message: CodeQL
         # flags it as "clear-text logging of sensitive information" because
-        # team_key is a URL path parameter (user-controlled input). Structured
+        # workspace_key is a URL path parameter (user-controlled input). Structured
         # log correlation for this warning is available via the request's
         # standard Django request-id middleware, which already scopes every
         # log entry to the team implicitly through the URL.
@@ -153,23 +166,108 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the standalone plugins page."""
-        return render(request, "plugins/plugins_page.html.j2")
+        shape = get_catalogue_shape()
+        return render(request, "plugins/plugins_page.html.j2", {"catalogue_shape": shape.value})
 
 
-class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
+class PluginsSummaryView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
     allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
-        team_data = request.session.get("current_team", {})
-        team_key = team_data.get("key", "")
+        team_data = request.session.get("current_workspace", {})
+        workspace_key = team_data.get("key", "")
 
         context: dict[str, Any] = {}
-        if team_key:
-            stats = _build_plugin_stats(request, team_key)
+        if workspace_key:
+            stats = _build_plugin_stats(request, workspace_key)
             if stats:
                 context["plugin_stats"] = stats
 
         return render(request, "plugins/plugins_summary.html.j2", context)
+
+
+class AssessmentRunFindingsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """One page of a single assessment run's findings.
+
+    The run card on the artifact page renders its header from ``result.summary``
+    and fetches this when a reader opens it, so a scan with thousands of
+    findings costs the page nothing until someone looks.
+
+    Authorized by the same ``component:access`` check the assessments API runs,
+    so this adds no reachable data beyond what that endpoint already answers.
+    Guests are blocked on top of that, the way the page this belongs to is.
+    ``component:access`` is the attribute path a guest legitimately reaches
+    gated trust-center content through, so without the mixin a guest redirected
+    off the artifact page could still pull its fragments by URL.
+
+    One URL, two audiences. An HTMX request gets the region; a plain one, a
+    pasted link or a pager link followed with hx-boost not running, lands on the
+    artifact page at that plugin's card instead of a bare fragment.
+    """
+
+    def get(self, request: HttpRequest, run_id: str) -> HttpResponse:
+        from sbomify.apps.core.authz import can
+        from sbomify.apps.vulnerability_scanning.services.finding_browse import query_string
+        from sbomify.apps.vulnerability_scanning.triage import triage_decisions
+        from sbomify.apps.vulnerability_scanning.vex import triage_statements
+
+        from .services.run_findings import PAGE_SIZE, PARAM_PREFIX, build_run_findings_page
+
+        result = build_run_findings_page(request, run_id, request.GET)
+        if not result.ok or result.value is None:
+            return HttpResponse(result.error or "Assessment run not found", status=result.status_code or 404)
+        found = result.value
+
+        # The header rather than django-htmx's request.htmx, the same reading the
+        # vulnerabilities panel does: the middleware that sets that attribute is
+        # not in the test settings.
+        if not request.headers.get("HX-Request"):
+            page_url = reverse(
+                "core:component_item",
+                kwargs={
+                    "component_id": found.sbom.component_id,
+                    "item_type": "sboms",
+                    "item_id": str(found.sbom.id),
+                },
+            )
+            return HttpResponseRedirect(f"{page_url}#plugin-{found.run.plugin_name}")
+
+        base_url = reverse("plugins:assessment_run_findings", args=[str(found.run.id)])
+        can_triage = can(request, "artifact:publish_vex", found.sbom.component)
+        query = found.panel["query"]
+        # The pager sits outside the filter form, so its links carry the active
+        # filters themselves; following one must not silently clear the search.
+        return render(
+            request,
+            "plugins/components/_assessment_run_findings.html.j2",
+            {
+                "run": found.run,
+                "is_security": found.is_security,
+                "findings": found.findings,
+                # The in-app rulings, the overlay every release shares, read once from
+                # the cache the component page uses. Imported VEX is the run's own
+                # annotation, made in its release context. The recorded decisions
+                # reopen each ruling in its own scope, and only the dialog needs them.
+                "triage": {
+                    "statements": triage_statements(found.sbom.component_id),
+                    "decisions": triage_decisions(found.sbom.component_id) if can_triage else {},
+                }
+                if found.is_security
+                else {},
+                "can_triage": can_triage,
+                "findings_url": base_url,
+                "findings_query": query_string(query, page=1, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
+                # The pager's links reset to page 1; a refresh must not. This
+                # keeps the page the reader is on as well as the filters, so
+                # re-rendering the panel after a triage lands them back where
+                # they were.
+                "findings_refresh_query": query_string(query, prefix=PARAM_PREFIX, default_per_page=PAGE_SIZE),
+                "panel": found.panel,
+                # A short check list reads whole; search and paging only earn
+                # their place once it runs past one page.
+                "show_toolbar": found.is_security or found.panel["unfiltered_total"] > PAGE_SIZE,
+            },
+        )

@@ -12,7 +12,7 @@ from django.dispatch import receiver
 
 from sbomify.apps.core.models import Component, User
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 from .models import OnboardingStatus
@@ -165,8 +165,8 @@ def track_first_bom_artifact_upload(sender: type[Any], instance: SBOM, created: 
             logger.error("Failed to track BOM artifact upload: %s", e, exc_info=True)
 
 
-@receiver(post_save, sender=Team)
-def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **kwargs: Any) -> None:
+@receiver(post_save, sender=Workspace)
+def track_wizard_completion(sender: type[Any], instance: Workspace, created: bool, **kwargs: Any) -> None:
     """
     Track when a user completes the onboarding wizard (team setup).
 

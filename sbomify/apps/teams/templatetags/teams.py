@@ -52,16 +52,14 @@ def _strip_workspace_suffix(name: str) -> str:
 
 @register.filter
 def workspace_display(name: str | None) -> str:
-    """Display workspace names with a single `'s Workspace` suffix."""
-    if not name:
-        return "Workspace"
+    """A workspace's name as the user set it, with a fallback for an unnamed one.
 
-    trimmed = str(name).strip()
-    normalized = trimmed.casefold()
-    if any(normalized.endswith(suffix) for suffix in LEGACY_SUFFIXES):
-        return trimmed
-
-    return f"{trimmed}{WORKSPACE_SUFFIX}"
+    It used to append `'s Workspace`, which left every workspace carrying two
+    names at once: the switcher and the settings field showed what the user
+    typed, and page headers showed that plus a suffix. The name is the name.
+    """
+    trimmed = str(name).strip() if name else ""
+    return trimmed or "Workspace"
 
 
 @register.filter
@@ -197,7 +195,7 @@ def user_workspaces(context: dict[str, Any]) -> Any:
     if not request or not hasattr(request, "user") or not request.user.is_authenticated:
         return {}
 
-    user_teams = request.session.get("user_teams")
+    user_teams = request.session.get("user_workspaces")
     last_checked_raw = request.session.get("user_teams_checked_at")
     last_checked = None
     if last_checked_raw:
@@ -231,7 +229,7 @@ def user_workspaces(context: dict[str, Any]) -> Any:
 
     # If invalidated, clear session data to force refresh
     if was_invalidated:
-        request.session.pop("user_teams", None)
+        request.session.pop("user_workspaces", None)
         request.session.pop("user_teams_version", None)
         request.session.pop("user_teams_checked_at", None)
         user_teams = None
@@ -264,7 +262,7 @@ def user_workspaces(context: dict[str, Any]) -> Any:
 
     user_teams = validated_teams
 
-    current_team = request.session.get("current_team") or {}
+    current_team = request.session.get("current_workspace") or {}
     current_key = current_team.get("key")
 
     # Validate current key
@@ -276,7 +274,7 @@ def user_workspaces(context: dict[str, Any]) -> Any:
         valid_keys = (k for k in user_teams.keys() if _validate_workspace_key(k))
         current_key = next(valid_keys, None)
         if current_key:
-            request.session["current_team"] = {
+            request.session["current_workspace"] = {
                 "key": current_key,
                 **user_teams[current_key],
             }

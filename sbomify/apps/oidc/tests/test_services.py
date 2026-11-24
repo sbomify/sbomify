@@ -14,7 +14,7 @@ from sbomify.apps.oidc.services import (
     provision_bot_user_for_binding,
 )
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 
 def _make_binding(component: Component, *, repo: str = "acme/widget", repo_id: int = 12345, owner_id: int = 67890):
@@ -34,7 +34,7 @@ def _make_binding(component: Component, *, repo: str = "acme/widget", repo_id: i
 
 
 @pytest.fixture
-def component(db, team_with_business_plan: Team) -> Component:
+def component(db, team_with_business_plan: Workspace) -> Component:
     return Component.objects.create(name="OIDC Test", team=team_with_business_plan)
 
 
@@ -44,7 +44,7 @@ class TestProvision:
         binding, _ = _make_binding(component)
         bot = provision_bot_user_for_binding(binding)
         assert bot.username == f"oidc-bot-{binding.id}"
-        assert bot.email == f"oidc-bot-{binding.id}@sbomify.local"
+        assert bot.email == f"oidc-bot-{binding.id.lower()}@sbomify.local"
         assert bot.is_active is True
         # Unusable password — no human can log in as this account
         assert not bot.has_usable_password()

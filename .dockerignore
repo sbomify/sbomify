@@ -15,3 +15,18 @@ screencasts/
 .ruff_cache/
 .pytest_cache/
 **/__pycache__/
+
+# The Dockerfile does `COPY . .`, so anything not listed here ends up inside
+# the runtime image.
+#
+# Deployment artifacts: consumed by Helm/kubectl, never by the application.
+# Shipping them bloats the image and puts deployment topology in every pulled
+# container.
+charts/
+deploy/
+
+# CI configuration and documentation: not read at runtime. Workflow files in
+# particular describe build and release automation, which has no business
+# inside a published application image.
+.github/
+docs/

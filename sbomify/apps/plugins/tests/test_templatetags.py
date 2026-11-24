@@ -1,12 +1,12 @@
 """Tests for plugins template tags and filters."""
 
+from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.plugins.templatetags.plugins_extras import (
+    RUN_REASONS,
+    advisory_prose,
     format_finding_description,
     format_run_reason,
     has_compliance_failures,
-    status_border_class,
-    status_icon,
-    status_text_class,
 )
 
 
@@ -28,74 +28,22 @@ class TestFormatRunReason:
     def test_migration(self) -> None:
         assert format_run_reason("migration") == "Migration"
 
-    def test_unknown_returns_original(self) -> None:
-        assert format_run_reason("unknown_reason") == "unknown_reason"
+    def test_every_sdk_reason_has_an_explicit_label(self) -> None:
+        """A RunReason the SDK defines must be worded here, not left to the fallback.
 
+        Asserted against the map rather than against the rendered string:
+        humanize_token would de-underscore an unmapped reason too, so a
+        rendering check alone would pass for a reason nobody wrote wording
+        for, and "On Release Association" is not what that trigger is called.
+        """
+        missing = [reason.value for reason in RunReason if reason.value not in RUN_REASONS]
+        assert not missing, f"RunReason values with no label: {missing}"
 
-class TestStatusBorderClass:
-    """Tests for status_border_class filter."""
+    def test_unknown_is_humanized_not_printed_raw(self) -> None:
+        assert format_run_reason("unknown_reason") == "Unknown Reason"
 
-    def test_pass(self) -> None:
-        assert status_border_class("pass") == "border-success"
-
-    def test_fail(self) -> None:
-        assert status_border_class("fail") == "border-warning"
-
-    def test_error(self) -> None:
-        assert status_border_class("error") == "border-danger"
-
-    def test_warning(self) -> None:
-        assert status_border_class("warning") == "border-info"
-
-    def test_info(self) -> None:
-        assert status_border_class("info") == "border-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_border_class("unknown") == "border-secondary"
-
-
-class TestStatusTextClass:
-    """Tests for status_text_class filter."""
-
-    def test_pass(self) -> None:
-        assert status_text_class("pass") == "text-success"
-
-    def test_fail(self) -> None:
-        assert status_text_class("fail") == "text-warning"
-
-    def test_error(self) -> None:
-        assert status_text_class("error") == "text-danger"
-
-    def test_warning(self) -> None:
-        assert status_text_class("warning") == "text-info"
-
-    def test_info(self) -> None:
-        assert status_text_class("info") == "text-secondary"
-
-    def test_unknown_returns_secondary(self) -> None:
-        assert status_text_class("unknown") == "text-secondary"
-
-
-class TestStatusIcon:
-    """Tests for status_icon filter."""
-
-    def test_pass(self) -> None:
-        assert status_icon("pass") == "fas fa-check-circle"
-
-    def test_fail(self) -> None:
-        assert status_icon("fail") == "fas fa-times-circle"
-
-    def test_warning(self) -> None:
-        assert status_icon("warning") == "fas fa-exclamation-circle"
-
-    def test_error(self) -> None:
-        assert status_icon("error") == "fas fa-exclamation-triangle"
-
-    def test_info(self) -> None:
-        assert status_icon("info") == "fas fa-info-circle"
-
-    def test_unknown_returns_info(self) -> None:
-        assert status_icon("unknown") == "fas fa-info-circle"
+    def test_empty_stays_empty(self) -> None:
+        assert format_run_reason("") == ""
 
 
 class TestFormatFindingDescription:
@@ -359,3 +307,156 @@ class TestHasComplianceFailures:
             ]
         }
         assert has_compliance_failures(data) is False
+
+
+class TestVulnerabilityTotal:
+    """The count the card shows is the by_severity sum and nothing else."""
+
+    def test_sums_the_severity_map(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": 2, "high": 1, "low": 0}}) == 3
+
+    def test_non_dict_shapes_count_zero(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total(None) == 0
+        assert vulnerability_total("summary") == 0
+        assert vulnerability_total({"by_severity": "high"}) == 0
+        assert vulnerability_total({"by_severity": None}) == 0
+
+    def test_non_integer_values_do_not_count(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": "2", "high": 1.5, "low": None}}) == 0
+
+    def test_a_stray_boolean_is_not_a_vulnerability(self):
+        from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_total
+
+        assert vulnerability_total({"by_severity": {"critical": True, "high": 2}}) == 2
+
+
+class TestAdvisoryProse:
+    """OSV serves GHSA's CommonMark verbatim, and the cards show the opening
+    words of it, so the markup has to come off before the text is cut."""
+
+    def test_the_advisory_that_was_rendering_its_own_markup(self) -> None:
+        """The fast-uri body, as it reached the page on production."""
+        body = (
+            "### Impact\n"
+            "`fast-uri` decodes percent-encoded characters in the scheme component "
+            "with the legacy global `unescape()` and serializes the result back.\n"
+        )
+
+        assert advisory_prose(body) == (
+            "Impact fast-uri decodes percent-encoded characters in the scheme component "
+            "with the legacy global unescape() and serializes the result back."
+        )
+
+    def test_headings_of_every_depth_lose_their_markers(self) -> None:
+        assert advisory_prose("# One\n## Two\n###### Six") == "One Two Six"
+
+    def test_a_hash_that_is_not_a_heading_is_left_alone(self) -> None:
+        """C# is a language and #1 is an issue number; neither opens a heading."""
+        assert advisory_prose("Affects C# and issue #1") == "Affects C# and issue #1"
+
+    def test_links_keep_their_text_and_lose_their_target(self) -> None:
+        assert advisory_prose("See [the advisory](https://example.test/a) for more") == ("See the advisory for more")
+
+    def test_an_image_keeps_its_alt_text(self) -> None:
+        assert advisory_prose("![a diagram](https://example.test/d.png) shows it") == "a diagram shows it"
+
+    def test_emphasis_markers_come_off(self) -> None:
+        assert advisory_prose("**Critical** and _urgent_ and *both*") == "Critical and urgent and both"
+
+    def test_a_dunder_survives_being_bold_shaped(self) -> None:
+        """__init__ and __reduce__ are the shape of underscore bold. An advisory
+        about pickle or prototype pollution is written almost entirely in them,
+        and the identifier is the thing the reader came for."""
+        assert advisory_prose("calls `__init__` then `__reduce__`") == "calls __init__ then __reduce__"
+        assert advisory_prose("pollutes __proto__ on every merge") == "pollutes __proto__ on every merge"
+        assert advisory_prose("the __init__ method") == "the __init__ method"
+
+    def test_underscore_bold_around_words_still_comes_off(self) -> None:
+        assert advisory_prose("__Impact__ is high") == "Impact is high"
+
+    def test_a_code_span_keeps_whatever_it_holds(self) -> None:
+        """Backticks mean literal, so nothing inside one is read as markup."""
+        assert advisory_prose("the `*` wildcard") == "the * wildcard"
+        assert advisory_prose("send `#include <x>` first") == "send #include <x> first"
+        assert advisory_prose("read `a_b_c` from disk") == "read a_b_c from disk"
+
+    def test_a_bare_underscore_inside_a_name_survives(self) -> None:
+        """Package and symbol names carry underscores, and they are not emphasis."""
+        assert advisory_prose("calls parse_uri_string on every request") == "calls parse_uri_string on every request"
+
+    def test_lists_quotes_and_fences_flatten_to_a_sentence(self) -> None:
+        body = "> Note\n\n- first\n- second\n\n1. one\n\n```py\ncode()\n```"
+
+        assert advisory_prose(body) == "Note first second one code()"
+
+    def test_a_github_alert_marker_comes_off_with_its_quote(self) -> None:
+        """GHSA advisories open with one, and it rides inside a block quote, so
+        removing the quote marker alone left the marker sitting in the prose."""
+        body = "> [!NOTE]\n> Scored assuming a deployment where policy is a boundary."
+
+        assert advisory_prose(body) == "Scored assuming a deployment where policy is a boundary."
+
+    def test_a_thematic_break_leaves_nothing_behind(self) -> None:
+        assert advisory_prose("Before\n\n---\n\nAfter") == "Before After"
+
+    def test_empty_and_non_string_input(self) -> None:
+        assert advisory_prose("") == ""
+        assert advisory_prose(None) == ""
+        assert advisory_prose(3) == ""
+
+    def test_an_oversized_body_is_returned_rather_than_scanned(self) -> None:
+        body = "#" * 200_001
+
+        assert advisory_prose(body) == body
+
+    def test_plain_prose_is_unchanged(self) -> None:
+        assert advisory_prose("A plain sentence about a package.") == "A plain sentence about a package."
+
+
+def test_the_scan_panel_indexes_the_rulings_once_for_every_row(mocker) -> None:
+    """The panel built each row on its own, so the component's statements were indexed
+    again for every finding on the page: a full page against a large VEX visited the
+    same statements once per row on every refresh.
+    """
+    from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_table_rows
+    from sbomify.apps.vulnerability_scanning import vex
+
+    indexed = mocker.patch.object(vex, "statement_index", wraps=vex.statement_index)
+    findings = [
+        {"id": f"CVE-2026-{n}", "severity": severity, "component": {"name": "lodash", "version": "4.17.15"}}
+        for n, severity in ((1, "low"), (2, "critical"), (3, "medium"))
+    ]
+    statements = [{"ids": ["cve-2026-2"], "packages": set(), "state": "not_affected", "product_scoped": True}]
+
+    rows = vulnerability_table_rows(findings, {"statements": statements})
+
+    assert indexed.call_count == 1
+    assert [row["id"] for row in rows] == ["CVE-2026-1", "CVE-2026-2", "CVE-2026-3"]
+    assert [row["vex_state"] for row in rows] == ["", "not_affected", ""]
+
+
+def test_the_scan_panel_groups_the_recorded_rulings_once_for_every_row(mocker) -> None:
+    """The panel built each row on its own, so the recorded rulings were grouped by advisory
+    again for every finding: a full page walked every ruling once per row on each refresh.
+    """
+    from sbomify.apps.plugins.templatetags.plugins_extras import vulnerability_table_rows
+    from sbomify.apps.vulnerability_scanning import utils
+
+    grouped = mocker.patch.object(utils, "_scoped_by_advisory", wraps=utils._scoped_by_advisory)
+    findings = [
+        {"id": f"CVE-2026-{n}", "severity": "medium", "component": {"name": f"pkg-{n}", "version": "1.0.0"}}
+        for n in range(25)
+    ]
+    unrelated = {"ref": "pkg:npm/other@1.0.0", "component_wide": False}
+    decisions = {(f"cve-2026-{9000 + n}", f"pkg:npm/other-{n}@1.0.0"): unrelated for n in range(100)}
+
+    rows = vulnerability_table_rows(findings, {"decisions": decisions})
+
+    assert len(rows) == 25
+    assert grouped.call_count == 1

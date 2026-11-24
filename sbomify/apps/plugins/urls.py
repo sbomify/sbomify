@@ -2,7 +2,7 @@
 
 from django.urls import path
 
-from .views import PluginsPageView, PluginsSummaryView, TeamPluginSettingsView
+from .views import AssessmentRunFindingsView, PluginsPageView, PluginsSummaryView, TeamPluginSettingsView
 
 app_name = "plugins"
 
@@ -19,9 +19,14 @@ urlpatterns = [
         name="plugins_summary",
     ),
     path(
-        "settings/<team_key>",
+        "settings/<workspace_key>",
         TeamPluginSettingsView.as_view(),
         name="team_plugin_settings",
+    ),
+    path(
+        "assessments/runs/<str:run_id>/findings/",
+        AssessmentRunFindingsView.as_view(),
+        name="assessment_run_findings",
     ),
 ]
 

@@ -1,7 +1,7 @@
 {% comment %}
-The muted half of a metric chip. Muted under every accent, so it never carries
-the chip's colour.
+The quiet half of a metric chip. Muted on a plain chip; full text on a tinted
+one, where muted grey falls below 4.5:1. It never carries the chip's colour.
 {% endcomment %}
 <c-vars class />
-<span class="text-text-muted{% if class %} {{ class }}{% endif %}"
+<span class="text-[color:var(--metric-label,var(--color-text-muted))]{% if class %} {{ class }}{% endif %}"
       {{ attrs }}>{{ slot }}</span>

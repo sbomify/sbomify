@@ -6,7 +6,7 @@ import stripe
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.sboms.models import Component, Product, ProductComponent
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 @pytest.fixture
@@ -207,7 +207,7 @@ def mock_stripe(monkeypatch):
 
 
 @pytest.fixture
-def test_product(team_with_business_plan: Team) -> Product:
+def test_product(team_with_business_plan: Workspace) -> Product:
     """Create a test product and clean it up after the test."""
     product = Product.objects.create(name="Test Product", team=team_with_business_plan)
     yield product
@@ -215,7 +215,7 @@ def test_product(team_with_business_plan: Team) -> Product:
 
 
 @pytest.fixture
-def multiple_products(team_with_business_plan: Team, community_plan: BillingPlan) -> list[Product]:
+def multiple_products(team_with_business_plan: Workspace, community_plan: BillingPlan) -> list[Product]:
     """Create multiple products exceeding community plan limits and clean up after test."""
     products = []
     for i in range(community_plan.max_products + 1):
@@ -227,7 +227,7 @@ def multiple_products(team_with_business_plan: Team, community_plan: BillingPlan
 
 @pytest.fixture
 def multiple_components(
-    team_with_business_plan: Team, test_product: Product, community_plan: BillingPlan
+    team_with_business_plan: Workspace, test_product: Product, community_plan: BillingPlan
 ) -> list[Component]:
     """Create multiple components exceeding community plan limits and clean up after test."""
     components = []

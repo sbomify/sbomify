@@ -93,6 +93,8 @@ def validate_expression(expr: str) -> dict[str, Any]:
         return {"status": 400, "error": "Processing error"}
     except Exception:
         return {"status": 400, "error": "Invalid expression"}
+    if tree is None:
+        return {"status": 400, "error": "Empty expression"}
 
     # Get tokens from the parsed tree - these are the individual license
     # identifiers

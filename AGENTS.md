@@ -33,10 +33,10 @@ Always run tests in Docker:
 # Start test services
 docker compose -f docker-compose.tests.yml up -d
 
-# All tests (parallel — requires pytest-xdist installed in container)
+# All backend tests (parallel). If Docker runs out of memory, use -n 4 instead.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest -n auto --ignore=sbomify/apps/core/tests/e2e
 
-# All tests (sequential)
+# All tests (sequential). For --pdb, which xdist cannot support.
 docker compose -f docker-compose.tests.yml exec tests uv run pytest --ignore=sbomify/apps/core/tests/e2e
 
 # Specific file or directory
@@ -48,6 +48,27 @@ docker compose -f docker-compose.tests.yml exec tests uv run pytest --pdb -x -s 
 # Coverage report (must be >= 80%)
 docker compose -f docker-compose.tests.yml exec tests uv run coverage run -m pytest
 docker compose -f docker-compose.tests.yml exec tests uv run coverage report
+```
+
+Notes on the test environment:
+
+- **Frontend assets are optional.** Template-rendering tests resolve Vite assets through `sbomify/static/dist/manifest.json`, a gitignored `bun run build` artifact. `sbomify/test_settings.py` falls back to Vite dev mode when it is absent, so the suite is green straight from a clone. Run `bun run build` first if you want tests to exercise the built-asset path production actually serves (CI does).
+- **Never run two pytest sessions against the same test database.** They share `test_sbomify_test` and will corrupt each other's schema mid-run, producing failures that look like real regressions. Give the second run its own database with `-e TEST_DATABASE_NAME=<other>`.
+- **Two checkouts can run tests concurrently** by giving each stack its own network and compose project — Docker refuses to create two networks on the same subnet:
+
+```bash
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree up -d
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree \
+  exec -e TEST_DATABASE_NAME=sbomify_myworktree tests uv run pytest
+```
+
+Making the subnet configurable narrowed it from `/16` to `/24`, and Docker will not re-address a
+network that already exists. A checkout that ran tests before this change fails its next `up` with a
+network config mismatch. Remove the old network once; the next `up` rebuilds it:
+
+```bash
+docker compose -f docker-compose.tests.yml down
+docker network rm sbomify_testnet
 ```
 
 If tests fail with `database "test_sbomify_test" already exists` or `is being accessed by other users` (stale DB from killed parallel runs), clean up:
@@ -70,8 +91,31 @@ docker compose -f docker-compose.tests.yml exec db psql -U sbomify_test -d postg
 
 E2E tests use Playwright via Chrome DevTools Protocol in Docker with visual regression (baseline screenshots in `__snapshots__/`, diffs in `__diffs__/`):
 
+Run browser tests sequentially. Workers share one CDP browser, so parallel runs
+can interfere with focus and overwrite emulated motion preferences.
+
 ```bash
 docker compose -f docker-compose.tests.yml exec tests uv run pytest sbomify/apps/core/tests/e2e/
+```
+
+CI splits this suite across six matrix groups with pytest-split, weighted by
+`.github/e2e-test-durations.json`, because serially it is the pipeline's critical
+path. To reproduce one CI group locally, pass the same flags:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  --splits 6 --group 3 --durations-path .github/e2e-test-durations.json \
+  sbomify/apps/core/tests/e2e/
+```
+
+A test with no entry in that file is scheduled at the average, so adding one
+never drops it from a group, it only skews the balance. Refresh the weights when
+the suite's shape changes materially:
+
+```bash
+docker compose -f docker-compose.tests.yml exec tests uv run pytest \
+  sbomify/apps/core/tests/e2e/ --store-durations \
+  --durations-path .github/e2e-test-durations.json
 ```
 
 Frontend tests:
@@ -81,6 +125,10 @@ bun test
 bun test path/to/file.spec.ts
 ```
 
+For UI work, read [UI change considerations and CI](docs/ui-change-considerations.md)
+before choosing tests. A page can render components owned by several apps;
+testing only the app containing the edited template can miss a failing consumer.
+
 ### Key Test Fixtures
 
 Global fixtures (no import needed — registered in root `conftest.py`):
@@ -89,10 +137,10 @@ Global fixtures (no import needed — registered in root `conftest.py`):
 | ------------------------------- | --------------------------------------------------------------------------- |
 | `sample_user`                   | Test user from `DJANGO_TEST_USER` env                                       |
 | `guest_user`                    | Second standalone user (no team role assigned)                              |
-| `sample_team`                   | Bare Team with no members                                                   |
+| `sample_team`                   | Bare workspace with no members                                              |
 | `sample_team_with_owner_member` | Owner `Member` for `sample_user` in `sample_team` (access team via `.team`) |
-| `team_with_community_plan`      | Team + community billing plan                                               |
-| `team_with_business_plan`       | Team + active business subscription                                         |
+| `team_with_community_plan`      | Workspace + community billing plan                                          |
+| `team_with_business_plan`       | Workspace + active business subscription                                    |
 | `authenticated_api_client`      | `(Client, AccessToken)` tuple — use `get_api_headers(token)` for auth       |
 | `authenticated_web_client`      | Django Client with full session for web tests                               |
 | `ensure_billing_plans`          | Creates billing plan objects (use explicitly)                               |
@@ -100,6 +148,12 @@ Global fixtures (no import needed — registered in root `conftest.py`):
 Session setup helper: `setup_authenticated_client_session(client, team, user)` from `sbomify.apps.core.tests.shared_fixtures`.
 
 Test settings: `sbomify.test_settings`. Tests run with `--nomigrations` (bare schema). Deselect slow tests: `-m "not slow"`.
+
+`test_settings` pins `PASSWORD_HASHERS` to MD5. That is not a shortcut to tidy
+away: PBKDF2 at Django's default work factor costs 0.13 s per hash, the fixtures
+set a password on nearly every user they build, and restoring the real hasher
+puts roughly fifteen minutes back into a full run. Nothing outside
+`test_settings` may pin a hasher, and no test should assert on one.
 
 ### Linting and Formatting
 
@@ -147,7 +201,7 @@ Django with Django Ninja for APIs. The frontend is server-driven — data comes 
 ### Domain Model Hierarchy
 
 ```text
-Workspace (Team) → Product → Component → SBOM / Document
+Workspace → Product → Component → SBOM / Document
 ```
 
 Components are the core unit — each can contain SBOMs and/or documents. Components attach directly to Products via a `ProductComponent` M2M. Releases are tagged collections of component artifacts under a Product. The `core` app has **proxy models** for entities whose tables live in `sboms`:
@@ -156,7 +210,7 @@ Components are the core unit — each can contain SBOMs and/or documents. Compon
 from sbomify.apps.core.models import Product, Component  # use these in new code
 ```
 
-Most entity PKs (Product, Component, SBOM, Document, Release) are 12-character alphanumeric tokens generated by `generate_id()` from `sbomify.apps.core.utils`. Team uses an auto-incrementing integer PK with a separate `key` field derived via `number_to_random_token(pk)`.
+Most entity PKs (Product, Component, SBOM, Document, Release) are 12-character alphanumeric tokens generated by `generate_id()` from `sbomify.apps.core.utils`. Workspace uses an auto-incrementing integer PK with a separate `key` field derived via `number_to_random_token(pk)`.
 
 ### Service Layer Pattern
 
@@ -221,11 +275,17 @@ utilities (grid, flex, spacing) and nothing else. The moment you write a
 styled control, a repeated visual pattern, or anything wanting its own class,
 it belongs in `sbomify/templates/components/`.
 
+The app canvas is a `<c-layout.frame>` with a default vertical gap. Use the same
+frame for an HTMX replacement root or a page group that needs its own width.
+Parents own spacing between components through flex/grid gaps; components do
+not supply external margins or switches to remove them. Nested groups can use
+a smaller gap for their internal layout.
+
 ```html
 {# No load tag needed: <c-dir.name> works in any template #}
 <c-tables.shell>
   <c-tables.toolbar>
-    <c-tables.search id="things-search" label="Search things" x-model="search" />
+    <c-forms.search-input size="sm" id="things-search" label="Search things" x-model="search" />
   </c-tables.toolbar>
   <c-tables.table fixed>…</c-tables.table>
 </c-tables.shell>
@@ -244,12 +304,31 @@ Adding to the library: a variant is a new file nesting the base and passing
 `variant_class`; a modifier (size, state, density) is a prop. Ship it with a
 gallery demo in `core/design_system.html.j2` in the same change.
 
+**Loading convention**: content uses `<c-feedback.loading>` (card body), or its
+`loading-table`, `loading-list`, `loading-chart`, `loading-stats` and `loading-page`
+variants. Choose the shape of the content being loaded; keep the page header
+visible. Each supplies an accessible status and decorative, motion-aware
+skeletons. Do not build page-specific loaders or cover already loaded content
+with a navigation overlay. `<c-feedback.spinner>` and button `loading` are for
+small actions such as saving and uploading. Skeleton primitives have no external
+margins; their parent owns gaps, just like loaded components.
+
 Colour, radius, shadow and type come from the tokens in
 `sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`
 overrides). Use token utilities (`bg-surface`, `text-text-muted`,
 `border-border`) or arbitrary values referencing tokens
 (`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
 in a diff is a review blocker.
+
+**That file is the only place a token may be declared.** The public pages load
+`static/css/tokens.css` and six other legacy sheets, all unlayered, and Tailwind
+publishes its theme inside `@layer theme`. An unlayered declaration beats a
+layered one whatever the source order, so a `--radius-*` or `--shadow-*`
+restated in any of those sheets does not shade a token, it forks the scale every
+utility reading it computes from, on the public side only and with no class name
+to grep for. `rounded-xl` shipped at 16px there against 12px in the app this
+way. `test_only_the_tailwind_entrypoint_declares_the_radius_scale` holds the
+radius line.
 
 #### The things that actually break
 
@@ -275,6 +354,34 @@ in a diff is a review blocker.
 - **Referencing a class that does not exist fails silently.** Grep before shipping.
 - **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
   review blocker, same as a raw hex.
+
+#### UI change considerations and CI
+
+`CLAUDE.md` links to this file. Keep one set of agent rules here. The
+[UI change considerations](docs/ui-change-considerations.md) record failures
+from the UI migration and link to the tests that protect each affected behavior.
+Read them when changing shared components, page structure or interaction flows.
+
+- **Small visual changes can affect many test suites.** Search component callers,
+  template includes, labels, selectors and old assertions across `sbomify/apps/`.
+  [CI](.github/workflows/ci-cd.yml) runs every app's tests in one job, so a change
+  to a shared component is checked against every consumer at once, including the
+  backend tests that render HTML. The design-system gallery and a browser
+  screenshot are only part of validation.
+- **Keep behavior and accessibility intact.** Preserve routes, permissions, IDs,
+  HTMX targets, Alpine state and filter parameters. When presentation intentionally
+  changes, update tests to verify the user-visible result and interaction. Do not
+  remove accessibility attributes or restore duplicate UI to satisfy old markup
+  assertions. Exact style assertions still belong in component contract tests.
+- **Inspect visual failures before accepting them.** Shared table wrapping once
+  crushed short labels; that needed a component fix. Intended header, card, modal
+  and spacing changes need reviewed baselines at every affected viewport. Never
+  widen screenshot tolerances or skip tests to hide a difference.
+- **Validate the production path and all affected consumers before committing.**
+  Build assets before browser tests, check Docker source copies when adding app
+  assets, and use the guide's validation scope. Shared component changes require
+  broader checks than a few selected tests on the page being edited. Report local
+  results and GitHub status separately; an unfinished or crashed run is not a pass.
 
 #### Other
 
@@ -323,10 +430,43 @@ scope, a widget, an email preview or one card on a page the root does not brand.
 
 Class names need more care here than in the main library: these render on public
 pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
-`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
-`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`shadow-sm`, `w-50` and `text-muted` all lose there. Stay on `px-*`, `py-*`,
+`gap-*`, `rounded-xl`, arbitrary values and the token utilities.
 `test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
 needs `data-button` or the legacy sheet repaints it.
+
+**The same care applies to any component a public page renders**, which is most
+of the main library: a trust centre is built out of `c-tables.*`, `c-forms.*`,
+`c-buttons.*` and `c-feedback.*`, and those lose the same way. The branded set
+must name none of the 154, because it exists for those pages; outside it the
+guard forbids only the names that genuinely compute differently, and a
+variant-prefixed utility such as `first:pl-4` is safe because the class name
+keeps its prefix and the legacy bare selector cannot match it. A spacing step
+that cannot diverge today (`mt-1`, `p-2`) is forgiven by arithmetic the guard
+re-derives from `tokens.css`, not by an allowlist, so retuning that scale turns
+the guard red rather than silently invalidating it. The replacement for a
+divergent name is an arbitrary value carrying Tailwind's own measurement:
+`mb-[1rem]` for `mb-4`, `pt-[1.25rem]` for `pt-5`,
+`rounded-[var(--radius-sm)]` for `rounded`. `tables/cell.html` is the worked
+example.
+
+Two things that forgiveness does not extend to:
+
+- **A shorthand is only harmless alone.** `.m-0` is `margin: 0 !important`, so
+  on `class="m-0 mt-0.5"` it zeroes the top margin the longhand asked for, even
+  though `m-0` and Tailwind's `m-0` agree. Write the sides you mean
+  (`mb-0 mt-0.5`), not the shorthand plus an exception.
+- **`!important` was doing two jobs.** Dropping a legacy class also drops its
+  win over the *other* unlayered rules on the page. `static/css/base.css` styles
+  `h1..h6` and the inline block in `public_base.htmx.j2` styles every bare
+  anchor, both unlayered, so a plain utility on those elements loses to them
+  too. Where that happens, the
+  replacement takes Tailwind's own important modifier: `mb-[0.75rem]!`.
+
+**Scope follows `hx-get`, not just `include`.** Half a public page arrives over
+HTMX, naming a URL rather than a template, so the guard walks the resolver to
+the view and takes the templates its module renders. A partial is on a public
+page the moment a public page fetches it.
 
 **Which library a trust-centre control belongs to.** Not everything on a branded
 page is branded. The brand goes on what the page *is*, not on the machinery for
@@ -355,9 +495,7 @@ the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
 so a filled library button there is white text over whatever colour the
 workspace picked, with no ink measurement: fine on navy, unreadable on pale
 amber. No token can fix it, because the ink is not a token. **So do not put a
-filled main-library button on a public page.** There are 8 today across 5 pages
-this branch has not touched; each needs a neutral button or an ink measured from
-`ink_on_color`.
+filled main-library button on a public page.**
 
 ### API Layer
 
@@ -392,9 +530,43 @@ Plugins analyze SBOMs without modifying them:
 
 `PluginOrchestrator` (`sbomify/apps/plugins/orchestrator.py`) manages execution, dependency checking, config hashing, and retry logic (`RetryLaterError`).
 
+### MCP Server (ADR-009)
+
+`sbomify/apps/mcp/` serves a Model Context Protocol endpoint at `/mcp`, dispatched from `sbomify/asgi.py`. Curated task-oriented tools, not a generated wrapper over the REST API.
+
+Rules when touching it:
+
+- **Every tool must be `async`.** In mcp 1.28 a sync tool function runs directly on the event loop, where Django ORM access raises `SynchronousOnlyOperation`. Wrap DB work in `run_db()` (`tools/_base.py`).
+- **Register tools via `mcp_tool(mcp, name, action, writes=...)`.** It supplies authentication, the token-scope gate, the audit event, and the response-size cap. The `action` must be a member of `authz.ALL_ACTIONS`.
+- **Destructive and administrative actions cannot be exposed.** `registry.register` rejects any `*:delete` or `*:administer` action, plus a named set of the outward-facing ones authz carves up to ADMINISTER: setting product or component visibility, managing publishers or members, billing, and publishing an advisory. Deletion is not an agent-reachable operation.
+- **Treat artifact content as untrusted.** Anything read out of an uploaded SBOM or document is attacker-influenced; pass free text through `limits.untrusted()` and never widen a tool's authority based on it.
+- **Reuse existing REST view functions for writes.** Ninja's decorators return the undecorated function, so `apis.sbom_upload_cyclonedx(request, component_id)` is a plain call — do not reimplement upload validation.
+- Session state is impossible: production runs four worker processes with no affinity, so the server is `stateless_http=True`.
+
+Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a tool is added.
+
+`docs/mcp.md` covers both connecting a client and running the endpoint. A change to the tool surface needs a change there.
+
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
+
+- **Every change something on screen shows is broadcast**, after commit
+  (`transaction.on_commit`, or `schedule_broadcast` in `core/apis.py`), from
+  every path that makes it: the API endpoint and the HTMX view are two paths.
+  Payloads carry ids, names and statuses only, since every member receives them.
+- **Every list or count that shows it listens.** A listener that never hears
+  its message is the same bug as a message nobody listens for, so add both
+  sides in one change and grep the other side's spelling.
+- **Every listener also matches `resync`.** The store sends it when the socket
+  reopens, because whatever was broadcast while it was down never arrived.
+- **A region with inline edits uses `liveRegion`**
+  (`core/js/components/live-region.ts`): it refreshes only its own element,
+  waits while a field inside has focus, and leaves the page when its subject is
+  deleted.
+- **News for someone outside the workspace goes to `broadcast_to_user()`.** The
+  workspace socket only admits `workspace:read`; public pages connect to the
+  user channel (`ws/user/`) with `$store.ws.connectUser()`.
 
 ### Background Tasks
 
@@ -404,24 +576,30 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 - **Database**: PostgreSQL 17
 - **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
-- **Caching/Broker**: Redis 8
+- **Caching/Broker**: Valkey 9 (anything speaking the Redis protocol works, Redis 8 included)
 
 ### Authentication
 
 Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requires `127.0.0.1 keycloak` in `/etc/hosts` for dev. Dev test users: `jdoe/foobar123` and `ssmith/foobar123`. Tests use Django's `force_login`, not Keycloak.
 
-### Team Roles and Permissions
+### Workspace Roles and Permissions
 
-Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
+Supported roles (defined in `WORKSPACE_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"operator"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
 
 **`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
 
-1. **The ladder stays linear** — `guest ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+1. **The ladder stays linear** — `guest ⊂ operator ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
 2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
 
-Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
+Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` (+ member). On the read/triage side: `READ_INTERNAL` (owner + admin + member + operator).
 
-`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+`PUBLISH` (`MANAGE` + bot), `READ_INTERNAL_OR_BOT` (`READ_INTERNAL` + bot) and `TRIAGE` (`READ_INTERNAL` + bot) each add the synthetic `bot` to one of those. They are **not** further rungs on the ladder: `bot` is an orthogonal CI identity, not a more-privileged role, so reading these as a linear chain says a bot outranks an owner. `READ_INTERNAL_OR_BOT` and `TRIAGE` are the **same tuple** today — they are named separately because they answer different questions (may this identity read internal state, may it record a triage decision), and a future change to one should not silently move the other. `test_role_ladder_is_upward_closed` is what enforces the ladder; nothing enforces a relationship between these three, because there is none to enforce.
+
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities.
+
+`operator` is the read-mostly security role: it reads everything internal (`READ_INTERNAL`) and holds exactly one write, `artifact:publish_vex`, which is the `TRIAGE` tier. That lets it record triage decisions in the app and through the triage API, and nothing else — no products, no components, no releases, no uploads, no settings. The VEX **file upload** endpoints pair `artifact:publish_vex` with `artifact:publish`, which operators do not have, so uploading an artifact stays with members, admins and CI bots. The split mirrors Dependency-Track's `VULNERABILITY_ANALYSIS` vs `BOM_UPLOAD`.
+
+Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rules — *an admin may not remove an owner, and may not change the role of, or remove, an owner or another admin* — are relational rather than tiers, so they live in `check_member_removal` and `check_role_change` (`teams/permissions.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
@@ -434,14 +612,133 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 **`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
 
-**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
+**Templates must not branch on `request.session.current_workspace.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `can_read_internal`, `can_triage_vulnerabilities`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
+
+## This repository is public
+
+Commit messages, branch names, pull request titles and bodies are all
+world-readable the moment you push. **An edit does not take it back.** GitHub
+keeps the previous revision in its edit history, where anyone with read access
+can open it, and every watcher was emailed the original when it landed.
+
+The mistake worth naming is not leaking a credential. It is quoting a figure
+out of the issue you are working from, because the issue and the pull request
+felt like one conversation. They are two audiences, and moving text between
+them is a decision rather than a formatting step.
+
+**Never put in a commit message, branch name, PR title or PR body:**
+
+- Customer or workspace counts, revenue, MRR, ARR, churn, conversion or signup
+  figures, and any sentence that characterises them. "The real number is much
+  lower" gives away as much as the number.
+- Internal tracker ids, branch names included. They link a public change to a
+  private thread. Reference issues in this repo by number instead.
+- Real names, email addresses, or anything identifying a customer or a
+  workspace. Fixtures use `example.com`.
+- Screenshots or logs taken against real data. Seed what you need.
+
+**Write instead** what the code does, why it is wrong today, and how you know
+the change is right. That is the whole audience for a PR description. If a
+figure genuinely has to be public, get a human to say so before it goes out.
+
+## Audit your own diff before you commit
+
+Read every hunk of `git --no-pager diff` and `git --no-pager diff --staged`
+before committing. A hunk that does not serve the change you were asked to
+make is noise, and noise is expensive: it buries the real change in review,
+churns `git blame`, and turns a three-line fix into a two-hundred-line pull
+request nobody can check.
+
+**Revert any hunk whose only effect is one of these:**
+
+- Rewrapping prose, comments or docstrings to a different width, joining lines
+  onto one line, or splitting one line across several.
+- Blank lines, trailing whitespace or a trailing newline added or removed in
+  code you did not otherwise change.
+- Reordering imports, dict keys, template attributes or CSS classes with no
+  functional reason.
+- Swapping quote style, `.format()` for an f-string, or `List[str]` for
+  `list[str]` on lines the task did not touch. Modern syntax is the rule for
+  code you write, not a licence to sweep the file.
+- Renaming a local, reordering parameters or restyling a conditional because
+  you prefer it the other way.
+- Re-serialising a JSON, YAML or lock file with different indentation or key
+  order. Lockfiles are regenerated with `uv` or `bun`, never hand-edited.
+
+**The formatters own the shape of a file, you do not.** `ruff format`,
+`eslint --fix`, `djlint` and the pre-commit hooks are the only things allowed
+to reformat, and what they change belongs in the diff. If one of them rewrites
+a file far past your edit, that file was unformatted before you arrived: put
+the reformat in its own commit and say so in the message. The same goes for a
+cleanup that is genuinely worth doing. A rename, a reorder, a dead-code
+removal — each is its own commit, never folded into the change under review.
+
+Two commands catch most of it. `git --no-pager diff --stat`: if the line count
+is much larger than the change you would describe in one sentence, there is
+reformatting in there. `git --no-pager diff -w`: if that is much smaller than
+the plain diff, the gap is whitespace churn to revert.
 
 ## Key Conventions
 
 ### Naming
 
 - "sbomify" is always lowercase
-- "Workspace" in UI maps to "Team" in models (legacy naming)
+
+### Glossary: one name per concept
+
+Where a concept has two names, this table says which one to reach for. It is
+the target, not a description of the tree: `team` still names the foreign key
+fields and the `teams` app label, and the v1 API keeps it byte for byte. What
+the table does settle is which word new code and new copy use.
+
+| Concept | Use | Notes |
+| --- | --- | --- |
+| Tenant | workspace | the model is `Workspace`; `team` survives in foreign key field names, the `teams` app label and v1, not in new code |
+| Tenant key, the external identifier | `workspace_key` | not the PK; the workspace's PK is an integer, `key` is derived from it |
+| Person in a workspace | member | |
+| Roles | owner, admin, member, operator, guest, bot | see the authz section |
+| Mixed BOM or document unit | **artifact** in UI; in code an SBOM row (typed by `bom_type`) or a Document row | the `/api/v1/sboms` prefix is frozen |
+| One specific BOM kind | SBOM, CBOM, HBOM, AI BOM, VEX | only when the type is the point |
+| The advisory itself, and security counts | **vulnerability** | the user-facing word |
+| One plugin-run result row | **finding** | the SDK and storage word, not user copy |
+| A compliance check that did not pass | **issue** | |
+| Any plugin run | **assessment** | the umbrella, per ADR-003 |
+| A security assessment, as a verb | **scan** | "scanned 5 minutes ago" |
+| The public branded surface | Trust Center in UI, public workspace in code | a deliberate pair |
+| A release's artifact set at a version | collection version | the sanctioned TEA term inside core |
+| Party roles on a component | supplier, manufacturer | distinct CycloneDX roles, never merged |
+| Auth verbs | Sign in, Sign out | sentence case, including the Keycloak theme |
+
+Three of these are worth saying twice, because they collide on single screens
+today: an assessment accordion renders "70 Vulnerabilities 70 findings", and a
+compliance run renders "4 Issues 7 findings". **vulnerability** is what a user
+reads, **finding** is what the SDK stores, and **issue** is a check that failed.
+
+### TEA vocabulary is the spec's, not ours
+
+The `tea` app implements the CycloneDX Transparency Exchange API, so its nouns
+are fixed by the spec. They translate at the mapper and must not spread into
+core or into UI copy.
+
+| TEA noun | sbomify |
+| --- | --- |
+| product | `Product` |
+| component | `Component` |
+| productRelease | `core.Release`, which belongs to a Product |
+| componentRelease | `core.ComponentRelease`, unique on component + version + qualifiers |
+| collection | the artifact set at a version, served for both release kinds |
+| artifact | one SBOM-table row, or a Document |
+| TEI | a URN, resolved by `tea_tei_mapper` |
+
+One sanctioned exception: `collection_version`, `collection_updated_at`,
+`CollectionUpdateReason` and `bump_collection_version` live on both
+`core.Release` and `core.ComponentRelease`. Consumers read that number, so
+renaming it internally would only re-introduce a translation.
+
+`Release` and `ComponentRelease` are two different models, not one mapped two
+ways. There is no stored edge between them: the join runs through the SBOM
+both sides attach, `ReleaseArtifact.sbom` on one and
+`ComponentReleaseArtifact.sbom` on the other.
 
 ### Copy (anything a user reads)
 
@@ -514,7 +811,11 @@ words people actually type in `keywords` — including the ones the UI does not 
 - **ADR-003**: Plugin-based assessment system for SBOM analysis
 - **ADR-004**: Immutable artifacts — sbomify never modifies uploaded SBOMs/documents
 - **ADR-005**: Tailwind CSS + Alpine.js + HTMX frontend architecture (replacing Bootstrap)
+- **ADR-006**: Generalized BOM model
+- **ADR-007**: GCS support and cloud workload identity, and (a second 0007) removal of the Project layer
+- **ADR-008**: Workspace roles as a linear capability ladder
+- **ADR-009**: MCP server mounted in the Django app, authorized by scoped access tokens
 
 ## API Documentation
 
-Available at `http://localhost:8000/api/v1/docs` when running locally.
+Available at `http://localhost:8000/api/v2/docs` when running locally. v1, frozen byte for byte, is still at `/api/v1/docs`.

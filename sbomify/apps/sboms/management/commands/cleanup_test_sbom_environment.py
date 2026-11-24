@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from sbomify.apps.sboms.models import Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 
 class Command(BaseCommand):
@@ -28,16 +28,16 @@ class Command(BaseCommand):
         team_id = options.get("team_id")
         dry_run = options.get("dry_run")
 
-        teams: list[Team]
+        teams: list[Workspace]
         if team_id:
-            teams = [Team.objects.get(id=team_id)]
+            teams = [Workspace.objects.get(id=team_id)]
         else:
-            teams = list(Team.objects.all())
+            teams = list(Workspace.objects.all())
 
         for team in teams:
             self.cleanup_team_data(team, dry_run)
 
-    def cleanup_team_data(self, team: Team, dry_run: bool | None) -> None:
+    def cleanup_team_data(self, team: Workspace, dry_run: bool | None) -> None:
         """Clean up test data for a specific workspace"""
         self.stdout.write(f"\nCleaning up test data for workspace: {team.name}")
 

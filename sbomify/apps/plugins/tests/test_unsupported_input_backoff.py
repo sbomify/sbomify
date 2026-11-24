@@ -167,7 +167,7 @@ class TestTheMarkerTheBackoffReads:
 
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
-        result = DependencyTrackPlugin()._create_skipped_result(
+        result = DependencyTrackPlugin().create_skipped_result(
             finding_id="dependency-track:unsupported-spec-version",
             title="Spec Version Not Supported",
             description="x",
@@ -183,7 +183,7 @@ class TestTheMarkerTheBackoffReads:
 
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
-        result = DependencyTrackPlugin()._create_skipped_result(
+        result = DependencyTrackPlugin().create_skipped_result(
             finding_id="dependency-track:no-release",
             title="No Release",
             description="x",

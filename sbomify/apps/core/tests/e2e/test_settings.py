@@ -4,20 +4,24 @@ from urllib.parse import urlparse
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
-from playwright.sync_api import BrowserContext, Page
+from django.urls import reverse
+from playwright.sync_api import BrowserContext, Page, expect
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.models import Invitation, Team
+from sbomify.apps.teams.models import Invitation, Workspace
 
 
 @pytest.fixture
 def invitation(sample_user) -> Generator[Invitation, None, None]:  # noqa: F811
     """An invitation waiting for the signed-in user, which is the only thing
     that keeps /settings on the settings page: with a workspace selected the
-    view redirects into the workspace's own settings."""
-    team = Team.objects.create(name="Contoso Industries")
+    view redirects into the workspace's own settings. Only a confirmed address
+    sees its invitations."""
+    sample_user.email_verified = True
+    sample_user.save(update_fields=["email_verified"])
+    team = Workspace.objects.create(name="Contoso Industries")
     yield Invitation.objects.create(team=team, email=sample_user.email, role="admin")
 
 
@@ -48,7 +52,7 @@ def no_workspace_page(
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
     session = django_client.session
-    del session["current_team"]
+    del session["current_workspace"]
     session.save()
 
     browser_context.add_cookies(
@@ -83,6 +87,11 @@ class TestSettingsSnapshot:
     ) -> None:
         no_workspace_page.goto("/settings")
         no_workspace_page.wait_for_load_state("networkidle")
+
+        expect(no_workspace_page.get_by_role("button", name="Generate token", exact=False)).to_have_count(0)
+        expect(no_workspace_page.get_by_role("link", name="Select workspace", exact=True)).to_have_attribute(
+            "href", reverse("workspaces:teams_dashboard")
+        )
 
         baseline = snapshot.get_or_create_baseline_screenshot(no_workspace_page, width=width)
         current = snapshot.take_screenshot(no_workspace_page, width=width)

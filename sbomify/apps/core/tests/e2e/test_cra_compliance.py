@@ -7,13 +7,11 @@ components and a live assessment.
 """
 
 import hashlib
+import re
 from typing import Generator
 
 import pytest
-from playwright.sync_api import Page
-
-from sbomify.apps.core.models import Component
-from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
+from playwright.sync_api import Page, expect
 
 # Imported at module scope on purpose. The compliance services pull in
 # trestle, whose pydantic-v1 layer subclasses ``datetime.date`` at import
@@ -22,6 +20,8 @@ from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 # Collection happens before any clock is frozen, so importing here is safe.
 from sbomify.apps.compliance.models import CRAScopeScreening  # noqa: E402
 from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment  # noqa: E402
+from sbomify.apps.core.models import Component
+from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
 
 @pytest.fixture
@@ -37,9 +37,9 @@ def cra_billing_session(browser_context) -> None:
 
     for row in Session.objects.all():
         store = SessionStore(session_key=row.session_key)
-        current_team = store.get("current_team") or {}
+        current_team = store.get("current_workspace") or {}
         current_team["billing_plan"] = "business"
-        store["current_team"] = current_team
+        store["current_workspace"] = current_team
         store.save()
 
 
@@ -122,6 +122,36 @@ class TestCRAScopeScreeningSnapshot:
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("width", [320, 390])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_mobile_cra_actions_and_tabs(authenticated_page: Page, cra_assessment, width: int, theme: str) -> None:
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.set_viewport_size({"width": width, "height": 740})
+    page.goto(f"/compliance/cra/scope/{cra_assessment.product_id}/")
+    save = page.get_by_role("button", name="Save & Continue to Wizard")
+    expect(save).to_be_visible()
+    assert save.evaluate("el => el.getBoundingClientRect().right <= document.documentElement.clientWidth")
+    assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/3/")
+    tabs = page.get_by_role("tablist", name="Security assessment sections")
+    expect(tabs.get_by_role("tab", name="Security checklist")).to_have_attribute("aria-selected", "true")
+    # An oversized tab keeps the start of its label visible on narrow screens.
+    assert tabs.evaluate(
+        "el => el.querySelector('[aria-selected=true]').getBoundingClientRect().left "
+        ">= el.parentElement.getBoundingClientRect().left - 1"
+    )
+    tabs.get_by_role("tab", name="Incident reporting").click()
+    expect(page.get_by_role("tabpanel", name="Incident reporting")).to_be_visible()
+    assert page.locator("html").evaluate("el => el.scrollWidth <= el.clientWidth")
+    page.keyboard.press("Home")
+    expect(tabs.get_by_role("tab", name="Security checklist")).to_have_attribute("aria-selected", "true")
+    page.keyboard.press("ArrowRight")
+    expect(page.get_by_role("tabpanel", name="Vulnerability handling")).to_be_visible()
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestCRAProductListSnapshot:
     """The CRA list with a row in it: status badge, progress and the CTA."""
@@ -141,3 +171,147 @@ class TestCRAProductListSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [375, 1920])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_start_assessment_from_empty_list(
+    authenticated_page: Page, cra_billing_session, product_factory, width: int, theme: str, snapshot
+) -> None:
+    product = product_factory(name="Product to assess")
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}')")
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).last.click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    expect(dialog).to_be_visible()
+    action = dialog.get_by_role("button", name="Start scope screening")
+    expect(action).to_be_disabled()
+    dialog.get_by_label("Product", exact=False).select_option(label=product.name)
+    expect(action).to_be_enabled()
+    baseline = snapshot.get_or_create_baseline_screenshot(page, width=width)
+    current = snapshot.take_screenshot(page, width=width)
+    snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+    action.click()
+    expect(page).to_have_url(re.compile(f"/compliance/cra/scope/{product.id}/$"))
+    expect(page.get_by_role("heading", name="CRA scope screening", exact=True)).to_be_visible()
+
+
+@pytest.mark.django_db
+def test_cra_picker_keeps_existing_assessments_accessible(
+    authenticated_page: Page, cra_billing_session, cra_assessment, product_factory
+) -> None:
+    available = product_factory(name="Another product")
+    page = authenticated_page
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    choices = dialog.get_by_label("Product", exact=False).locator("option")
+    expect(choices).to_have_text(["Choose a product", available.name])
+    page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+    page.get_by_role("link", name="Continue", exact=True).click()
+    expect(page).to_have_url(re.compile(f"/compliance/cra/{cra_assessment.id}/step/1/$"))
+
+
+@pytest.mark.django_db
+def test_cra_empty_workspace_can_create_product(authenticated_page: Page, cra_billing_session) -> None:
+    page = authenticated_page
+    page.goto("/compliance/cra/")
+    page.get_by_role("button", name="Start assessment", exact=True).first.click()
+    dialog = page.get_by_role("dialog", name="Start assessment", exact=True)
+    expect(dialog.get_by_role("heading", name="Create a product first")).to_be_visible()
+    dialog.get_by_role("link", name="Create product", exact=True).click()
+    expect(page).to_have_url(re.compile("/products/new/$"))
+
+
+@pytest.mark.django_db
+def test_the_dependent_scope_rows_grey_with_their_own_control(authenticated_page: Page, cra_assessment) -> None:
+    """The EN 18031-2/-3 rows follow ``::disabled``, with no second source of truth.
+
+    They are inert until radio equipment is ticked, and they used to say so with a
+    hand-rolled ``opacity-50`` that faded the "Triggers EN 18031-*" sentence
+    explaining each one. ``c-layout.select-row`` now derives the greying from the
+    control through ``has-[input:disabled]``, so these rows carry no state class at
+    all. That only holds if ``:has()`` tracks Alpine's binding live, which is what
+    this walks: greyed and never faded while blocked, fully coloured once enabled.
+    """
+    page = authenticated_page
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/1/")
+
+    def scope_row(label: str):
+        """These controls carry no label element, so reach them through the row text."""
+        return page.get_by_text(label, exact=True).locator("..").locator("..")
+
+    radio = scope_row("Radio equipment under the RED").locator("input")
+    row = scope_row("Processes personal data")
+    dependent = row.locator("input")
+
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"
+    assert row.evaluate("el => getComputedStyle(el).opacity") == "1"
+    explanation = row.get_by_text("Triggers EN 18031-2", exact=False)
+    expect(explanation).to_be_visible()
+    assert explanation.evaluate("el => getComputedStyle(el).opacity") == "1"
+
+    radio.check()
+    expect(dependent).to_be_enabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "none"
+
+    radio.uncheck()
+    expect(dependent).to_be_disabled()
+    assert row.evaluate("el => getComputedStyle(el).filter") == "grayscale(1)"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_step_five_offers_keyless_signing_then_names_the_signer(
+    authenticated_page: Page, cra_assessment, theme: str
+) -> None:
+    """An unsigned export shows the cosign command for its own file and the
+    upload form; once signed, the page names the signer and how to verify."""
+    from datetime import UTC, datetime
+
+    from sbomify.apps.compliance.models import CRAExportPackage
+
+    digest = "ab" * 32
+    file_name = f"cra-package-cra-test-product-{digest[:12]}.zip"
+    package = CRAExportPackage.objects.create(
+        assessment=cra_assessment,
+        storage_key=f"compliance/exports/{cra_assessment.id}/{digest}.zip",
+        content_hash=digest,
+        manifest={"format_version": "1.2"},
+    )
+    page = authenticated_page
+    page.add_init_script(f"localStorage.setItem('sbomify-theme', '{theme}');")
+    page.goto(f"/compliance/cra/{cra_assessment.id}/step/5/")
+
+    form = page.get_by_test_id("signature-upload-form")
+    expect(form).to_be_visible()
+    expect(form.locator("pre code")).to_have_text(f"cosign sign-blob {file_name} --bundle {file_name}.sigstore.json")
+    expect(form.get_by_role("button", name="Copy code")).to_be_visible()
+    expect(page.locator("#signature-issuer")).to_have_value("https://github.com/login/oauth")
+    upload = page.get_by_test_id("upload-signature-btn")
+    expect(upload).to_be_disabled()
+    page.locator("#signature-identity").fill("security@acme.test")
+    page.locator("#signature-file").set_input_files(
+        files=[{"name": f"{file_name}.sigstore.json", "mimeType": "application/json", "buffer": b"{}"}]
+    )
+    expect(upload).to_be_enabled()
+    expect(form).to_contain_text(f"{file_name}.sigstore.json")
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+
+    package.signed_by = "security@acme.test"
+    package.signed_by_issuer = "https://accounts.google.com"
+    package.signed_at = datetime(2026, 8, 6, 1, 3, 1, tzinfo=UTC)
+    package.save(update_fields=["signed_by", "signed_by_issuer", "signed_at"])
+    page.reload()
+
+    expect(page.get_by_test_id("bundle-signed-by")).to_contain_text("security@acme.test through Google on Aug 6, 2026")
+    expect(page.get_by_test_id("bundle-signature").locator("pre code")).to_contain_text(
+        "--certificate-identity 'security@acme.test' --certificate-oidc-issuer 'https://accounts.google.com'"
+    )
+    expect(page.get_by_test_id("download-signature-btn")).to_be_visible()
+    expect(form).to_have_count(0)

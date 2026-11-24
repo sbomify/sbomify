@@ -11,6 +11,18 @@ from sbomify.apps.controls.services.status_service import upsert_status
 from sbomify.apps.core.models import Product
 
 
+@pytest.fixture
+def published_catalog(sample_catalog):
+    """A catalogue the workspace has put on its trust center.
+
+    Activating a catalogue and publishing it are two decisions now, so a
+    public-surface test has to make the second one explicitly.
+    """
+    sample_catalog.is_published = True
+    sample_catalog.save(update_fields=["is_published"])
+    return sample_catalog
+
+
 @pytest.mark.django_db
 class TestGetPublicControls:
     def test_returns_failure_when_no_active_catalog(self, sample_team_with_owner_member) -> None:
@@ -19,8 +31,8 @@ class TestGetPublicControls:
         assert not result.ok
         assert "No active catalog" in result.error
 
-    def test_returns_summary_with_categories(self, sample_catalog, sample_controls, sample_user) -> None:
-        team = sample_catalog.team
+    def test_returns_summary_with_categories(self, published_catalog, sample_controls, sample_user) -> None:
+        team = published_catalog.team
         upsert_status(sample_controls[0], None, ControlStatus.Status.COMPLIANT, sample_user)
 
         result = get_public_controls(team)
@@ -42,9 +54,9 @@ class TestGetPublicProductControls:
         assert not result.ok
         assert "No active catalog" in result.error
 
-    def test_product_fallback_to_global(self, sample_catalog, sample_controls, sample_user) -> None:
+    def test_product_fallback_to_global(self, published_catalog, sample_controls, sample_user) -> None:
         """Product controls should fall back to global when no product-specific status exists."""
-        team = sample_catalog.team
+        team = published_catalog.team
         product = Product.objects.create(team=team, name="Test Product")
 
         # Set global statuses
@@ -59,9 +71,9 @@ class TestGetPublicProductControls:
         assert data["addressed"] == 1.5
         assert data["total"] == 3
 
-    def test_product_overrides_global(self, sample_catalog, sample_controls, sample_user) -> None:
+    def test_product_overrides_global(self, published_catalog, sample_controls, sample_user) -> None:
         """Product-specific status should take precedence over global."""
-        team = sample_catalog.team
+        team = published_catalog.team
         product = Product.objects.create(team=team, name="Test Product")
 
         # Set global status: CC6.1 = compliant
@@ -74,3 +86,29 @@ class TestGetPublicProductControls:
         data = result.value
         # Product override means CC6.1 is not_implemented, so addressed = 0
         assert data["addressed"] == 0.0
+
+
+@pytest.mark.django_db
+class TestPublishingIsSeparateFromActivating:
+    """The public surface reads is_published, never is_active.
+
+    Tracking a framework internally is not consent to publish a compliance
+    score to your customers, and the two used to be the same flag.
+    """
+
+    def test_an_active_but_unpublished_catalogue_is_not_public(self, sample_catalog, sample_controls) -> None:
+        assert sample_catalog.is_active is True
+        assert sample_catalog.is_published is False
+
+        result = get_public_controls(sample_catalog.team)
+
+        assert not result.ok
+
+    def test_a_published_catalogue_is_public(self, published_catalog, sample_controls) -> None:
+        assert get_public_controls(published_catalog.team).ok
+
+    def test_unpublishing_takes_it_off_again(self, published_catalog, sample_controls) -> None:
+        published_catalog.is_published = False
+        published_catalog.save(update_fields=["is_published"])
+
+        assert not get_public_controls(published_catalog.team).ok

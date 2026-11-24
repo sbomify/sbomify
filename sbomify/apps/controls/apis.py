@@ -56,11 +56,12 @@ from sbomify.apps.controls.services.status_service import (
     get_controls_detail,
     upsert_status,
 )
-from sbomify.apps.core.authz import ADMINISTER, can
+from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -73,7 +74,7 @@ router = Router(tags=["Controls"])
 # ---------------------------------------------------------------------------
 
 
-def _get_user_team(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorResponse] | None]:
+def _get_user_team(request: HttpRequest) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
     """Resolve team from session or token, return (team, error_tuple)."""
     from sbomify.apps.core.apis import _get_user_team_id
 
@@ -82,18 +83,22 @@ def _get_user_team(request: HttpRequest) -> tuple[Team | None, tuple[int, ErrorR
         return None, (403, ErrorResponse(detail="No current workspace"))
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return None, (404, ErrorResponse(detail="Workspace not found"))
 
     return team, None
 
 
-def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorResponse] | None:
-    """Return an error tuple if the user is not owner or admin."""
-    user = cast(User, request.user)
-    member = Member.objects.filter(user=user, team=team).only("role").first()
-    if not member or member.role not in ADMINISTER:
+def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, ErrorResponse] | None:
+    """Return an error tuple if the caller may not manage this workspace's controls.
+
+    Routes through ``can()`` rather than reading the ``Member`` role directly, so
+    the token action-scope gate runs: a scoped API token (read-only, publish,
+    agent) is denied even when its holder is an owner/admin. A bare role check
+    skips that gate, which let a read-only token perform catalog writes.
+    """
+    if not can(request, "controls:manage", team):
         return 403, ErrorResponse(detail="Only workspace owners and admins can perform this action")
     return None
 
@@ -105,7 +110,7 @@ def _check_admin_role(request: HttpRequest, team: Team) -> tuple[int, ErrorRespo
 
 @router.get(
     "/catalogs/",
-    response={200: list[CatalogSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[CatalogSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="List catalogs for the current workspace",
 )
@@ -327,6 +332,11 @@ def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int,
 
 @router.get(
     "/catalogs/{catalog_id}/export/csv",
+    # 200 is the CSV itself, an HttpResponse ninja passes through unvalidated.
+    # Without the declaration, the error tuples below raised ConfigError and
+    # every failure became a raw 500.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls as CSV",
 )
@@ -359,11 +369,19 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
     filename = f"{safe_name}-controls.csv"
     response = HttpResponse(result.value, content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Workspace-scoped, so it must not sit in a shared cache; see the note on
+    # core.apis._csv_response.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
 @router.get(
     "/catalogs/{catalog_id}/export/summary-csv",
+    # 200 is the CSV itself, an HttpResponse ninja passes through unvalidated.
+    # Without the declaration, the error tuples below raised ConfigError and
+    # every failure became a raw 500.
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    openapi_extra=CSV_RESPONSE_DOCS,
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Export controls summary as CSV",
 )
@@ -387,6 +405,8 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
 
     response = HttpResponse(result.value, content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="controls-summary.csv"'
+    # Workspace-scoped; see the note on core.apis._csv_response.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
@@ -397,7 +417,7 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
 
 @router.get(
     "/catalogs/{catalog_id}/controls/",
-    response={200: list[ControlWithStatusSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[ControlWithStatusSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="List controls with statuses for a catalog",
 )
@@ -524,7 +544,7 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
 
 @router.get(
     "/controls/{control_id}/mappings/",
-    response={200: list[ControlMappingSchema], 403: ErrorResponse, 404: ErrorResponse},
+    response={200: list[ControlMappingSchema], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     auth=(PersonalAccessTokenAuth(), django_auth),
     summary="Get all mappings for a control (both directions)",
 )
@@ -649,7 +669,7 @@ _VALID_EVIDENCE_TYPES = {choice[0] for choice in ControlEvidence.EvidenceType.ch
 
 
 def _resolve_control_status(
-    control_id: str, team: Team
+    control_id: str, team: Workspace
 ) -> tuple[ControlStatus | None, tuple[int, ErrorResponse] | None]:
     """Find the ControlStatus for a control scoped to a team.
 
@@ -851,8 +871,8 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
         return 404, ErrorResponse(detail="Workspace not found")
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, ErrorResponse(detail="Workspace not found")
 
     if not team.is_public:
@@ -880,7 +900,11 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
         content_type="application/json",
         status=200,
     )
-    response["Cache-Control"] = "public, max-age=3600"
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
     return response
 
 
@@ -899,8 +923,8 @@ def public_product_controls_summary(
         return 404, ErrorResponse(detail="Workspace not found")
 
     try:
-        team = Team.objects.get(pk=team_id)
-    except Team.DoesNotExist:
+        team = Workspace.objects.get(pk=team_id)
+    except Workspace.DoesNotExist:
         return 404, ErrorResponse(detail="Workspace not found")
 
     if not team.is_public:
@@ -936,5 +960,9 @@ def public_product_controls_summary(
         content_type="application/json",
         status=200,
     )
-    response["Cache-Control"] = "public, max-age=3600"
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
     return response

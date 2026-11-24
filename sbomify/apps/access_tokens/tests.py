@@ -13,7 +13,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token, verify_item_access
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 from .auth import PersonalAccessTokenAuth, optional_token_auth
 from .models import AccessToken
@@ -285,7 +285,7 @@ def test_auth_returns_none_without_db_record(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_scoped_token_same_team_access(sample_user):  # noqa: F811
     """Token scoped to team A, access team A resource -> allowed."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -294,7 +294,7 @@ def test_scoped_token_same_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }
@@ -306,10 +306,10 @@ def test_scoped_token_same_team_access(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
     """Token scoped to team A, access team B resource -> denied."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
-    team_b = Team.objects.create(name="Team B")
+    team_b = Workspace.objects.create(name="Team B")
     team_b.key = number_to_random_token(team_b.pk)
     team_b.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -319,7 +319,7 @@ def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_b.key: {"role": "owner", "name": team_b.name, "is_default_team": False, "team_id": team_b.id}
         }
     }
@@ -333,7 +333,7 @@ def test_scoped_token_wrong_team_access(sample_user):  # noqa: F811
 @pytest.mark.django_db
 def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     """Token with team=None, access any team user belongs to -> allowed."""
-    team_a = Team.objects.create(name="Team A")
+    team_a = Workspace.objects.create(name="Team A")
     team_a.key = number_to_random_token(team_a.pk)
     team_a.save()
     Member.objects.create(user=sample_user, team=team_a, role="owner", is_default_team=True)
@@ -342,7 +342,7 @@ def test_unscoped_legacy_token_access(sample_user):  # noqa: F811
     request = factory.get("/")
     request.user = sample_user
     request.session = {
-        "user_teams": {
+        "user_workspaces": {
             team_a.key: {"role": "owner", "name": team_a.name, "is_default_team": True, "team_id": team_a.id}
         }
     }
@@ -445,10 +445,10 @@ def test_token_scoped_to_one_workspace_blocks_other_workspaces(
     from sbomify.apps.sboms.models import Component
 
     # Two distinct workspaces — same user is owner of both.
-    workspace_a = Team.objects.create(name="Workspace A")
+    workspace_a = Workspace.objects.create(name="Workspace A")
     workspace_a.key = number_to_random_token(workspace_a.pk)
     workspace_a.save()
-    workspace_b = Team.objects.create(name="Workspace B")
+    workspace_b = Workspace.objects.create(name="Workspace B")
     workspace_b.key = number_to_random_token(workspace_b.pk)
     workspace_b.save()
     Member.objects.create(user=sample_user, team=workspace_a, role="owner", is_default_team=True)
@@ -509,10 +509,10 @@ def test_token_scoped_to_workspace_a_cannot_create_in_workspace_b(
     coerced into operating on the user's default workspace if it's
     scoped elsewhere.
     """
-    workspace_a = Team.objects.create(name="Workspace A (scoped target)")
+    workspace_a = Workspace.objects.create(name="Workspace A (scoped target)")
     workspace_a.key = number_to_random_token(workspace_a.pk)
     workspace_a.save()
-    workspace_b = Team.objects.create(name="Workspace B (default)")
+    workspace_b = Workspace.objects.create(name="Workspace B (default)")
     workspace_b.key = number_to_random_token(workspace_b.pk)
     workspace_b.save()
     # B is the DEFAULT — a buggy ``_get_user_team_id`` that forgot
@@ -602,7 +602,9 @@ def test_optional_token_auth_invalid_bearer_returns_401():
 
     assert isinstance(response, JsonResponse)
     assert response.status_code == 401
-    assert json.loads(response.content) == {"detail": "Unauthorized"}
+    # error_code included: this JsonResponse never passes through the ninja
+    # renderer that fills codes in, so it has to carry its own.
+    assert json.loads(response.content) == {"detail": "Unauthorized", "error_code": "UNAUTHORIZED"}
     assert calls == []  # handler must not run
 
 
@@ -1012,7 +1014,9 @@ def test_last_used_at_stamped_for_oidc_token(sample_user):  # noqa: F811
     from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 
     token_str = create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
-    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="oidc")
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, token_type=TOKEN_TYPE_OIDC, description="oidc"
+    )
 
     get_user_and_token_record(token_str)
 
@@ -1121,20 +1125,25 @@ def test_throttled_handler_sets_retry_after():
     """#1060: the 429 response carries Retry-After from the Throttled wait, and omits it when None."""
     from ninja.errors import Throttled
 
-    from sbomify.apis import _on_throttled
+    from sbomify.apis import api, api_v2
 
     req = RequestFactory().get("/api/v1/x")
-    resp = _on_throttled(req, Throttled(wait=42))
-    assert resp.status_code == 429
-    assert resp["Retry-After"] == "42"
+    # The handler is registered per API object now (v2 needed its own; an
+    # exception handler belongs to the instance it is registered on), so it is
+    # reached through the registration rather than a module-level name.
+    for api_object in (api, api_v2):
+        handler = api_object._exception_handlers[Throttled]
+        resp = handler(req, Throttled(wait=42))
+        assert resp.status_code == 429
+        assert resp["Retry-After"] == "42"
 
-    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
-    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
-    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
+        # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
+        assert handler(req, Throttled(wait=0.4))["Retry-After"] == "1"
+        assert handler(req, Throttled(wait=5.1))["Retry-After"] == "6"
 
-    resp_no_wait = _on_throttled(req, Throttled(wait=None))
-    assert resp_no_wait.status_code == 429
-    assert "Retry-After" not in resp_no_wait
+        resp_no_wait = handler(req, Throttled(wait=None))
+        assert resp_no_wait.status_code == 429
+        assert "Retry-After" not in resp_no_wait
 
 
 def test_heavy_throttle_independent_budget_and_distinct_key():
@@ -1258,3 +1267,162 @@ def test_api_response_carries_ratelimit_headers(sample_product, sample_access_to
     assert int(resp["X-RateLimit-Limit"]) > 0
     assert int(resp["X-RateLimit-Remaining"]) >= 0
     assert int(resp["X-RateLimit-Reset"]) > 0
+
+
+@pytest.mark.django_db
+class TestThrottleRefusesCleanlyWhenRedisIsDown:
+    """Fail closed, but with a 429 rather than a traceback.
+
+    The throttle alias raises on a Redis failure by design, so a swallowed
+    failure cannot hand out fresh budgets during an outage. ninja runs
+    throttles outside Operation.run's try, so anything RAISED in
+    allow_request bypasses every handler and lands as a raw 500, which is
+    what production did on every throttled endpoint for the length of a
+    blip; Sentry's loudest transaction was the trust-center release
+    download. Returning False routes the refusal through ninja's own
+    Throttled path and the 429 handler.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _clear_refusal_window(self):
+        """The refusal window lives on the class, so a test must start from zero.
+
+        It has to: the MCP server builds a throttle per request, and per-instance
+        state would restart the window on every one of them.
+        """
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+        AccessTokenRateThrottle._backend_refusal_until = 0.0
+        yield
+        AccessTokenRateThrottle._backend_refusal_until = 0.0
+
+    def _broken_cache(self):
+        from unittest.mock import MagicMock
+
+        from django_redis.exceptions import ConnectionInterrupted
+
+        cache = MagicMock()
+        cache.get.side_effect = ConnectionInterrupted(connection=None)
+        cache.set.side_effect = ConnectionInterrupted(connection=None)
+        return cache
+
+    def test_allow_request_refuses_instead_of_raising(self, sample_user):  # noqa: F811
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            assert throttle.allow_request(request) is False
+        assert throttle.wait() == 5.0
+
+    def test_the_api_answers_429_with_retry_after_not_500(self, sample_user):  # noqa: F811
+        from unittest.mock import patch
+
+        from django.test import Client
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        token_str = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            response = Client().get("/api/v1/products", **get_api_headers(record))
+
+        assert response.status_code == 429, response.content
+        assert response["Retry-After"] == "5"
+        assert response.json() == {"detail": "Too many requests.", "error_code": "TOO_MANY_REQUESTS"}
+
+    def test_recovery_clears_the_outage_hint(self, sample_user):  # noqa: F811
+        """After Redis comes back, wait() reports the real window again.
+
+        The outage flag survives on the shared instance, so without the
+        clear a genuine rate-limit inside the 5s window would borrow the
+        outage Retry-After instead of its own.
+        """
+        from unittest.mock import patch
+
+        from django.core.cache.backends.locmem import LocMemCache
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}):
+            assert throttle.allow_request(request) is False
+        assert throttle.wait() == 5.0
+
+        working = LocMemCache("recovered", {"TIMEOUT": 300})
+        with patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": working}):
+            assert throttle.allow_request(request) is True
+        assert throttle._backend_refusal_until == 0.0
+        assert throttle.wait() != 5.0 or throttle.wait() is None
+
+    def test_the_outage_logs_once_per_refusal_window(self, sample_user):  # noqa: F811
+        """The old 500 was the alert; the refusal keeps the signal without the storm."""
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        throttle = AccessTokenRateThrottle()
+        with (
+            patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}),
+            patch("sbomify.apps.access_tokens.throttling.logger") as mock_logger,
+        ):
+            assert throttle.allow_request(request) is False
+            assert throttle.allow_request(request) is False
+
+        # Second refusal lands inside the first refusal window, so it must not
+        # log again: one alert per window, not one per rejected request.
+        assert mock_logger.exception.call_count == 1
+
+    def test_the_outage_logs_once_across_fresh_instances(self, sample_user):  # noqa: F811
+        """The MCP server builds a throttle per request; that must not restart the window."""
+        from unittest.mock import patch
+
+        from django.test import RequestFactory
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        token = create_personal_access_token(sample_user)
+        record = AccessToken.objects.create(user=sample_user, encoded_token=token, description="t")
+        request = RequestFactory().get("/")
+        request.access_token_record = record
+
+        with (
+            patch("sbomify.apps.access_tokens.throttling.caches", {"throttle": self._broken_cache()}),
+            patch("sbomify.apps.access_tokens.throttling.logger") as mock_logger,
+        ):
+            for _ in range(3):
+                assert AccessTokenRateThrottle().allow_request(request) is False
+
+        assert mock_logger.exception.call_count == 1

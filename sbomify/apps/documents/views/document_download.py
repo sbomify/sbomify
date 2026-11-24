@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpRe
 from django.views import View
 
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.access_control import check_component_access
 from sbomify.apps.documents.content_safety import apply_safe_download_headers
 from sbomify.apps.documents.models import Document
@@ -25,7 +25,7 @@ class DocumentDownloadView(View):
 
         if access_result.has_access:
             try:
-                s3 = S3Client("DOCUMENTS")
+                s3 = StorageClient("DOCUMENTS")
                 document_data = s3.get_document_data(document.document_filename)
 
                 if document_data:
@@ -85,7 +85,7 @@ class DocumentDownloadView(View):
                         else "Your access request is pending approval or has been rejected."
                     )
                     request_access_url = (
-                        reverse("documents:request_access", kwargs={"team_key": team.key}) if team else None
+                        reverse("documents:request_access", kwargs={"workspace_key": team.key}) if team else None
                     )
 
                     # Get component detail page URL instead of referrer to avoid loops

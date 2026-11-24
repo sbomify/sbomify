@@ -27,7 +27,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.oidc.forms import OIDCBindingForm
@@ -78,7 +78,7 @@ class _TrustedPublishersBase(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return component
 
 
-class TrustedPublishersView(_TrustedPublishersBase):
+class TrustedPublishersView(HtmxFragmentMixin, _TrustedPublishersBase):
     """GET: render the section partial. POST: create a binding."""
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:

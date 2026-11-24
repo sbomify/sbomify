@@ -13,7 +13,7 @@ from django.http import HttpRequest
 from sbomify.apps.core.authz import Decision
 from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 User = get_user_model()
 
@@ -46,7 +46,7 @@ class Command(BaseCommand):
             return
 
         # Get the user's team
-        team = Team.objects.filter(member__user=user).first()
+        team = Workspace.objects.filter(member__user=user).first()
         if not team:
             self.stdout.write(self.style.ERROR(f"User '{username}' is not a member of any team"))
             return
