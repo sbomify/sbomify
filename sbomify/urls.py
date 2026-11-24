@@ -34,7 +34,7 @@ from sbomify.apps.security_advisories.wellknown import (
     WhiteDocumentView,
     WhiteFeedView,
 )
-from sbomify.apps.tea.mappers import TEA_API_VERSION, TEA_V1_VERSION
+from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.wellknown import TEAWellKnownView
 from sbomify.apps.teams.urls import domain_check
 from sbomify.apps.teams.views.security_txt import SecurityTxtView
@@ -76,7 +76,6 @@ urlpatterns = [
     path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),
     # TEA API endpoints - for custom domains
     path(f"tea/v{TEA_API_VERSION}/", include("sbomify.apps.tea.urls")),
-    path(f"tea/v{TEA_V1_VERSION}/", include("sbomify.apps.tea.urls_v1")),
     # Standard URLs (includes /public/* patterns and private pages)
     path("", include("sbomify.apps.core.urls")),
     # Keep the legacy prefix but avoid clashing namespaces with the primary workspaces URLs

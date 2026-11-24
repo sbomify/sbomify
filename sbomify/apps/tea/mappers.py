@@ -7,12 +7,12 @@ This module provides helper functions for:
 - Building TEA server URLs for workspaces
 
 Key exports:
-- TEA_API_VERSION, TEA_V1_VERSION: the two TEA versions served, 0.4.0 and 1.0.0
-- build_product_tei_urn: Builds a TEI URN for a product given a Team instance
-- get_product_tei_urn: Service function that builds a TEI URN given a team ID
+- TEA_API_VERSION: The TEA version served
+- build_product_tei: Builds a TEI for a product given a Team instance
+- get_product_tei: Service function that builds a TEI given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
 - tea_identifier_mapper: Converts sbomify ProductIdentifier to TEA format
-- tea_tei_mapper: Resolves TEI URNs to sbomify entities
+- tea_tei_mapper: Resolves TEIs to sbomify entities
 """
 
 from __future__ import annotations
@@ -42,13 +42,8 @@ if TYPE_CHECKING:
 
 log = getLogger(__name__)
 
-# TEA API versions. Both are served, each under /tea/v<version>/.
-TEA_API_VERSION = "0.4.0"
-TEA_V1_VERSION = "1.0.0"
-TEA_SPEC_VERSIONS = (TEA_V1_VERSION, TEA_API_VERSION)
-
-# Identifier types TEA 1.0.0 defines. sbomify's GTIN and ASIN identifiers have no 1.0.0 type.
-TEA_V1_IDENTIFIER_TYPES = frozenset({"CPE", "PURL", "TEI"})
+# TEA API version
+TEA_API_VERSION = "1.0.0"
 
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
@@ -81,12 +76,7 @@ TEI_TYPE_TO_IDENTIFIER_TYPE = {
 IDENTIFIER_TYPE_TO_TEA = {
     ProductIdentifier.IdentifierType.PURL: "PURL",
     ProductIdentifier.IdentifierType.CPE: "CPE",
-    ProductIdentifier.IdentifierType.GTIN_8: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_12: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_13: "GTIN",
-    ProductIdentifier.IdentifierType.GTIN_14: "GTIN",
-    ProductIdentifier.IdentifierType.ASIN: "ASIN",
-    # Note: SKU, MPN, GS1_GPC_BRICK don't have TEA equivalents
+    # TEA 1.0.0 has no identifier type for GTIN, ASIN, SKU, MPN or GS1_GPC_BRICK
 }
 
 # Mapping from TEA identifier type strings to sbomify ProductIdentifier types
@@ -95,8 +85,6 @@ TEA_IDENTIFIER_TYPE_MAPPING = {
     "PURL": [ProductIdentifier.IdentifierType.PURL],
     "CPE": [ProductIdentifier.IdentifierType.CPE],
     "TEI": None,  # Special case: resolved via tea_tei_mapper, not stored as ProductIdentifier
-    "GTIN": _GTIN_TYPES,
-    "ASIN": [ProductIdentifier.IdentifierType.ASIN],
 }
 
 
@@ -263,7 +251,7 @@ def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
 
     Args:
         team: The workspace/team to search within
-        tei: The TEI URN string
+        tei: The TEI string
 
     Returns:
         List of matching Release objects. Returns all releases for the product
@@ -367,15 +355,15 @@ def tea_identifier_mapper(product: Product) -> list[TEAIdentifier]:
     return _build_identifier_list(product.identifiers.all())
 
 
-def build_product_tei_urn(product_uuid: uuid.UUID, team: Workspace, *, is_public: bool) -> str | None:
+def build_product_tei(product_uuid: uuid.UUID, team: Workspace, *, is_public: bool) -> str | None:
     """
-    Build a TEI URN for a product.
+    Build a TEI for a product.
 
-    Returns the TEI URN in the format ``urn:tei:uuid:<domain>:<product_uuid>``
+    Returns the TEA 1.0.0 TEI ``tei://<domain>/uuid/<product_uuid>``
     when the product is public, TEA is enabled, and a validated custom domain
     is configured.  Returns ``None`` otherwise.
 
-    TEI URNs are only meaningful for public products because the TEA discovery
+    TEIs are only meaningful for public products because the TEA discovery
     endpoint (``tea_tei_mapper``) filters on ``is_public=True``.
     """
     if not is_public:
@@ -384,15 +372,15 @@ def build_product_tei_urn(product_uuid: uuid.UUID, team: Workspace, *, is_public
         return None
     if not team.custom_domain or not team.custom_domain_validated:
         return None
-    return f"urn:tei:uuid:{team.custom_domain}:{product_uuid}"
+    return f"tei://{team.custom_domain}/uuid/{product_uuid}"
 
 
-def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | None:
+def get_product_tei(product_id: str, team_id: int | str | None) -> str | None:
     """
-    Service function that builds a TEI URN for a product given a team ID.
+    Service function that builds a TEI for a product given a team ID.
 
     Looks up the Team by ID and the product's UUID and visibility, then
-    delegates to :func:`build_product_tei_urn`.  Returns ``None`` if the
+    delegates to :func:`build_product_tei`.  Returns ``None`` if the
     team or product is not found, or TEI conditions are not met.
     """
     from sbomify.apps.teams.models import Workspace as TeamModel
@@ -412,7 +400,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
     if not team:
         return None
 
-    # Short-circuit: skip product query when team can never produce a TEI URN
+    # Short-circuit: skip product query when team can never produce a TEI
     if not team.tea_enabled or not team.is_public or not team.custom_domain or not team.custom_domain_validated:
         return None
 
@@ -421,7 +409,7 @@ def get_product_tei_urn(product_id: str, team_id: int | str | None) -> str | Non
         return None
 
     product_uuid, is_public = row
-    return build_product_tei_urn(product_uuid, team, is_public=is_public)
+    return build_product_tei(product_uuid, team, is_public=is_public)
 
 
 def build_tea_server_url(

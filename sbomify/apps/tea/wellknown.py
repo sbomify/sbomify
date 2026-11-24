@@ -11,7 +11,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views import View
 
 from sbomify.apps.tea.cache import cache_origin, get_tea_cache, set_tea_cache, tea_cache_key
-from sbomify.apps.tea.mappers import TEA_SPEC_VERSIONS, build_tea_server_url
+from sbomify.apps.tea.mappers import TEA_API_VERSION, build_tea_server_url
 from sbomify.apps.tea.schemas import TEAWellKnownEndpoint, TEAWellKnownResponse
 from sbomify.logging import getLogger
 
@@ -65,7 +65,7 @@ class TEAWellKnownView(View):
             endpoints=(
                 TEAWellKnownEndpoint(
                     url=base_url,
-                    versions=TEA_SPEC_VERSIONS,
+                    versions=(TEA_API_VERSION,),
                     priority=1.0,
                 ),
             ),

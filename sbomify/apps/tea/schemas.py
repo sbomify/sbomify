@@ -1,7 +1,5 @@
 """TEA schemas — re-exported from libtea with server-side aliases."""
 
-from datetime import datetime
-
 from libtea.models import (
     CLE as TEACLE,
 )
@@ -15,13 +13,7 @@ from libtea.models import (
     Checksum as TEAChecksum,
 )
 from libtea.models import (
-    Collection,
-    ComponentReleaseWithCollection,
-    PaginatedCollectionResponse,
-    PaginatedComponentReleaseResponse,
-    PaginatedComponentResponse,
-    ProductReleaseWithCollection,
-    Release,
+    Collection as TEACollection,
 )
 from libtea.models import (
     CollectionUpdateReason as TEACollectionUpdateReason,
@@ -42,6 +34,15 @@ from libtea.models import (
     Identifier as TEAIdentifier,
 )
 from libtea.models import (
+    PaginatedCollectionResponse as TEAPaginatedCollectionResponse,
+)
+from libtea.models import (
+    PaginatedComponentReleaseResponse as TEAPaginatedComponentReleaseResponse,
+)
+from libtea.models import (
+    PaginatedComponentResponse as TEAPaginatedComponentResponse,
+)
+from libtea.models import (
     PaginatedProductReleaseResponse as TEAPaginatedProductReleaseResponse,
 )
 from libtea.models import (
@@ -52,6 +53,12 @@ from libtea.models import (
 )
 from libtea.models import (
     ProductRelease as TEAProductRelease,
+)
+from libtea.models import (
+    ProductReleaseWithCollection as TEAProductReleaseWithCollection,
+)
+from libtea.models import (
+    Release as TEARelease,
 )
 from libtea.models import (
     ReleaseDistribution as TEAReleaseDistribution,
@@ -90,53 +97,21 @@ __all__ = [
     "TEAServerInfo",
     "TEAWellKnownEndpoint",
     "TEAWellKnownResponse",
-    "TEA_LEGACY_CONTEXT",
-    "TEACollectionV1",
-    "TEAComponentReleaseWithCollectionV1",
     "TEAPaginatedCollectionResponse",
     "TEAPaginatedComponentReleaseResponse",
     "TEAPaginatedComponentResponse",
     "TEAProductReleaseWithCollection",
 ]
 
-TEARelease = Release
 
-# TEA 1.0.0 shapes, served at /tea/v1.0.0/. libtea models 1.0.0 natively.
-TEACollectionV1 = Collection
-TEAPaginatedCollectionResponse = PaginatedCollectionResponse
-TEAPaginatedComponentReleaseResponse = PaginatedComponentReleaseResponse
-TEAPaginatedComponentResponse = PaginatedComponentResponse
-TEAProductReleaseWithCollection = ProductReleaseWithCollection
-
-# sbomify serves TEA 0.4.0. libtea checks a model it builds against the 1.0.0 rules
-# (an artifact needs a version, a format with a url needs a checksum) unless the
-# model is validated in this context.
-TEA_LEGACY_CONTEXT = {"tea_legacy": True}
-
-
-class TEACollection(Collection):
-    """A collection whose creation timestamp keeps its TEA 0.4.0 name, ``date``.
-
-    libtea names the field ``createdDate``, as TEA 1.0.0 does.
-    """
-
-    created_date: datetime | None = Field(default=None, alias="date")
-
-
-class TEAComponentReleaseWithCollection(ComponentReleaseWithCollection):
-    """Nests :class:`TEACollection`, so the latest collection serializes ``date`` as well."""
-
-    latest_collection: TEACollection
-
-
-class TEAComponentReleaseWithCollectionV1(Release):
+class TEAComponentReleaseWithCollection(TEARelease):
     """A component release with its latest collection, flat as TEA 1.0.0 defines it.
 
     libtea's ComponentReleaseWithCollection nests the release under ``release``, the
     0.4.0 shape, and flattens it only in ``libtea.server.to_wire``.
     """
 
-    latest_collection: Collection
+    latest_collection: TEACollection
 
 
 class TEABadRequestResponse(BaseModel):

@@ -54,7 +54,7 @@ For more information, see [sbomify.com](https://sbomify.com).
 
 ### Transparency Exchange API (TEA)
 
-- Implements the [Transparency Exchange API](https://github.com/CycloneDX/transparency-exchange-api/) 1.0.0 at `/tea/v1.0.0/`, and still serves 0.4.0 at `/tea/v0.4.0/`
+- Implements the [Transparency Exchange API](https://github.com/CycloneDX/transparency-exchange-api/) 1.0.0 at `/tea/v1.0.0/`
 - Standardized SBOM discovery via `.well-known/tea` endpoints
 - Enables automated discovery and retrieval of SBOMs across the supply chain
 

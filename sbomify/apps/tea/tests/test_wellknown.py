@@ -7,7 +7,7 @@ import json
 import pytest
 from django.test import Client, RequestFactory
 
-from sbomify.apps.tea.mappers import TEA_API_VERSION, TEA_V1_VERSION
+from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.wellknown import TEAWellKnownView
 
 
@@ -44,7 +44,7 @@ class TestTEAWellKnownEndpoint:
 
         endpoint = data["endpoints"][0]
         assert endpoint["url"] == "https://trust.example.com/tea"
-        assert endpoint["versions"] == [TEA_V1_VERSION, TEA_API_VERSION]
+        assert TEA_API_VERSION in endpoint["versions"]
         assert endpoint["priority"] == 1
 
     def test_wellknown_not_on_custom_domain(self, sample_team):

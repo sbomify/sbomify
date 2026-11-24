@@ -595,7 +595,7 @@ class TestProductTeiUrnRendering:
         )
 
         assert response.status_code == 200
-        expected_urn = f"urn:tei:uuid:trust.example.com:{public_product.uuid}"
+        expected_urn = f"tei://trust.example.com/uuid/{public_product.uuid}"
         assert response.context["product_tei"] == expected_urn
 
     def test_tei_urn_hidden_when_tea_disabled(self, public_team, public_product):
@@ -612,7 +612,7 @@ class TestProductTeiUrnRendering:
         )
 
         assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
+        assert "tei://" not in response.content.decode()
 
     def test_tei_urn_hidden_when_domain_not_validated(self, public_team, public_product):
         """TEI URN should not be rendered when custom domain is not validated."""
@@ -626,7 +626,7 @@ class TestProductTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
+        assert "tei://" not in response.content.decode()
 
     def test_tei_urn_hidden_when_no_custom_domain(self, public_team, public_product):
         """TEI URN should not be rendered when no custom domain is set."""
@@ -638,4 +638,4 @@ class TestProductTeiUrnRendering:
         response = client.get(url)
 
         assert response.status_code == 200
-        assert "urn:tei:uuid:" not in response.content.decode()
+        assert "tei://" not in response.content.decode()

@@ -26,7 +26,7 @@ from sbomify.apps.core.services.cle import (
     create_release_cle_event,
 )
 from sbomify.apps.sboms.models import ProductIdentifier
-from sbomify.apps.tea.mappers import TEA_API_VERSION, TEA_SPEC_VERSIONS
+from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 
 def _give_every_check_something_to_read(team, product, release, component, component_release):
@@ -58,8 +58,7 @@ def format_failures(failures):
 
 @pytest.mark.django_db(transaction=True)
 class TestTEAConformance:
-    @pytest.mark.parametrize("spec_version", TEA_SPEC_VERSIONS)
-    def test_conformance_suite(self, live_server, tea_conformance_data, spec_version):
+    def test_conformance_suite(self, live_server, tea_conformance_data):
         team, product, release, component, sbom = tea_conformance_data
 
         # live_server binds to 0.0.0.0 but middleware only allows named hosts.
@@ -67,20 +66,14 @@ class TestTEAConformance:
         host = os.environ.get("TEA_CONFORMANCE_HOST", "localhost")
         port = live_server.url.rsplit(":", 1)[-1]
         # libtea reads the spec version to test from the /v<version> suffix.
-        base_url = f"http://{host}:{port}/public/{team.key}/tea/v{spec_version}"
+        base_url = f"http://{host}:{port}/public/{team.key}/tea/v{TEA_API_VERSION}"
         # Uploading the SBOM created this release; its UUID is not the SBOM's.
         component_release = ComponentRelease.objects.get(component=component, version=sbom.version)
         _give_every_check_something_to_read(team, product, release, component, component_release)
-        # Each version's own TEI form: 0.4.0 has only the URN.
-        tei = (
-            f"urn:tei:uuid:example.com:{product.uuid}"
-            if spec_version == TEA_API_VERSION
-            else f"tei://example.com/uuid/{product.uuid}"
-        )
 
         result = run_conformance(
             base_url=base_url,
-            tei=tei,
+            tei=f"tei://example.com/uuid/{product.uuid}",
             product_uuid=str(product.uuid),
             product_release_uuid=str(release.uuid),
             component_uuid=str(component.uuid),
@@ -92,8 +85,7 @@ class TestTEAConformance:
         failures = [c for c in result.checks if c.status == CheckStatus.FAIL]
         assert not failures, format_failures(failures)
         skipped = {c.name for c in result.checks if c.status == CheckStatus.SKIP}
-        # 0.4.0 pages by offset, so the page token check does not apply to it.
-        assert skipped == ({"pagination_token"} if spec_version == TEA_API_VERSION else set()), sorted(skipped)
+        assert not skipped, sorted(skipped)
 
         # Sanity: ensure checks actually ran
         assert len(result.checks) > 0, "No conformance checks were executed"

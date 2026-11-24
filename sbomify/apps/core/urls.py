@@ -4,7 +4,7 @@ from django.conf import settings
 from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
-from sbomify.apps.tea.mappers import TEA_API_VERSION, TEA_V1_VERSION
+from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
@@ -198,10 +198,6 @@ urlpatterns = [
     path(
         f"public/<str:workspace_key>/tea/v{TEA_API_VERSION}/",
         include("sbomify.apps.tea.urls"),
-    ),
-    path(
-        f"public/<str:workspace_key>/tea/v{TEA_V1_VERSION}/",
-        include("sbomify.apps.tea.urls_v1"),
     ),
     path(
         "component/<str:component_id>/transfer",
