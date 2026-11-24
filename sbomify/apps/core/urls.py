@@ -5,7 +5,7 @@ from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 from sbomify.apps.tea.mappers import TEA_API_VERSION
-from sbomify.apps.tea.views import TeaSubscribeView, TeaSubscriptionCheckView
+from sbomify.apps.tea.views import TeaReleasePinsView, TeaSubscribeView, TeaSubscriptionCheckView
 
 from . import views
 from .views.component_metadata import ComponentMetadataFormView
@@ -114,6 +114,7 @@ urlpatterns = [
         TeaSubscriptionCheckView.as_view(),
         name="tea_subscription_check",
     ),
+    path("release/<str:release_id>/remote-pins/", TeaReleasePinsView.as_view(), name="tea_release_pins"),
     path("upload/", views.ArtifactUploadView.as_view(), name="artifact_upload"),
     path(
         "component/<str:component_id>/",

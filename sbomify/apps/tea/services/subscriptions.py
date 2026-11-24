@@ -16,7 +16,7 @@ from sbomify.apps.core.domain.exceptions import (
 )
 from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.tea import pins, sync
-from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease, TeaSubscription
+from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease, TeaSubscription, TeaSubscriptionEvent
 from sbomify.apps.tea.services.remote import RemoteServer, read
 from sbomify.apps.teams.broadcasts import broadcast_on_commit
 from sbomify.apps.teams.models import Workspace
@@ -121,6 +121,58 @@ def _starting_artifacts(subscription: TeaSubscription, release_uuids: list[str])
     return list(start.artifacts.filter(state=TeaRemoteArtifact.State.CURRENT).order_by("uuid", "version"))
 
 
+# The badge each state wears, for c-badges.dynamic. Anything unlisted is neutral.
+STATUS_TONES: dict[str, str] = {
+    TeaSubscription.Status.OK: "success",
+    TeaSubscription.Status.NOT_FOUND: "warning",
+    TeaSubscription.Status.UNREACHABLE: "danger",
+    TeaSubscription.Status.ERROR: "danger",
+}
+STATE_TONES: dict[str, str] = {
+    TeaRemoteArtifact.State.CURRENT: "success",
+    TeaRemoteArtifact.State.REPLACED: "info",
+    TeaRemoteArtifact.State.CHANGED: "warning",
+    TeaRemoteArtifact.State.GONE: "danger",
+}
+LIFECYCLE_TONES: dict[str, str] = {
+    TeaRemoteRelease.Lifecycle.END_OF_SUPPORT: "warning",
+    TeaRemoteRelease.Lifecycle.END_OF_LIFE: "danger",
+    TeaRemoteRelease.Lifecycle.NO_LONGER_DISTRIBUTED: "danger",
+}
+
+
+def page_context(component_id: str) -> dict[str, Any]:
+    """What the component page shows for a subscription: its state and the latest events."""
+    subscription = TeaSubscription.objects.select_related("component", "latest_release").get(component_id=component_id)
+    events = subscription.events.select_related("release")[:50]
+    return {
+        "subscription": describe(subscription),
+        "subscription_events": [
+            {"title": event.get_kind_display(), "summary": event_summary(event), "created_at": event.created_at}
+            for event in events
+        ],
+    }
+
+
+def event_summary(event: TeaSubscriptionEvent) -> str:
+    """One line on what an event names, in the words a user reads."""
+    detail = event.detail
+    kind = TeaSubscriptionEvent.Kind
+    if event.kind in (kind.RELEASE_ADDED, kind.RELEASE_REMOVED):
+        return f"Release {detail.get('version', '')}"
+    if event.kind == kind.COLLECTION_UPDATED:
+        return f"Collection version {detail.get('old')} to {detail.get('new')}"
+    if event.kind == kind.LIFECYCLE_CHANGED:
+        labels = dict(TeaRemoteRelease.Lifecycle.choices)
+        old, new = labels.get(detail.get("old", ""), ""), labels.get(detail.get("new", ""), "")
+        return f"Release {detail.get('version', '')}: {old} to {new}"
+    if event.kind == kind.CHECK_FAILED:
+        return str(detail.get("error", ""))
+    if "name" in detail:
+        return f"{detail['name']} version {detail.get('version', '')}"
+    return ""
+
+
 def describe(subscription: TeaSubscription) -> dict[str, Any]:
     """A subscription's state, releases and artifacts, newest release first, for the API and the component page."""
     releases = subscription.releases.prefetch_related("artifacts").order_by("-release_date", "-created_date")
@@ -136,6 +188,7 @@ def describe(subscription: TeaSubscription) -> dict[str, Any]:
         "remote_identifiers": subscription.remote_identifiers,
         "status": subscription.status,
         "status_display": subscription.get_status_display(),
+        "status_tone": STATUS_TONES.get(subscription.status, ""),
         "last_error": subscription.last_error,
         "last_checked_at": subscription.last_checked_at,
         "last_success_at": subscription.last_success_at,
@@ -150,6 +203,7 @@ def describe(subscription: TeaSubscription) -> dict[str, Any]:
                 "tracked": release.tracked,
                 "lifecycle": release.lifecycle,
                 "lifecycle_display": release.get_lifecycle_display(),
+                "lifecycle_tone": LIFECYCLE_TONES.get(release.lifecycle, ""),
                 "gone": release.gone_at is not None,
                 "artifacts": [
                     _artifact(a) for a in sorted(release.artifacts.all(), key=lambda a: (a.name, -a.version))
@@ -171,5 +225,6 @@ def _artifact(artifact: TeaRemoteArtifact) -> dict[str, Any]:
         "type": artifact.artifact_type,
         "state": artifact.state,
         "state_display": artifact.get_state_display(),
+        "state_tone": STATE_TONES.get(artifact.state, ""),
         "formats": [{"media_type": f.get("mediaType") or "", "url": f.get("url") or ""} for f in formats],
     }

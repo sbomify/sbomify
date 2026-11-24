@@ -18,6 +18,7 @@ from sbomify.apps.core.schemas import ReleaseLifecycleSchema
 from sbomify.apps.core.services.release_lifecycle import remove_supersession, supersession_links
 from sbomify.apps.core.services.release_links_card import build_release_links_context
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
+from sbomify.apps.tea.pins import release_card
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -100,6 +101,7 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "vulnerabilities": vulnerabilities.value if vulnerabilities.ok else None,
                 "lifecycle": lifecycle,
                 **(release_links.value if release_links.ok and release_links.value else {}),
+                **release_card(request, Release.objects.select_related("product").get(pk=release["id"])),
             },
         )
 

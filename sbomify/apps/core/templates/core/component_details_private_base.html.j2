@@ -68,11 +68,13 @@
     {# Stats Badges #}
     <div class="flex flex-wrap gap-2">
         <c-chips.metric-chip>
-        <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"
+        <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% elif component.component_type == 'tea_subscription' %}satellite-dish{% else %}file-alt{% endif %} text-primary text-xs"
            aria-hidden="true"></i>
         <c-chips.metric.value>
         {% if component.component_type == 'bom' %}
             {{ component.sbom_count|default:0|intcomma }}
+        {% elif component.component_type == 'tea_subscription' %}
+            {{ subscription.releases|length|intcomma }}
         {% else %}
             {{ component.document_count|default:0|intcomma }}
         {% endif %}
@@ -80,6 +82,8 @@
         <c-chips.metric.label>
         {% if component.component_type == 'bom' %}
             BOMs
+        {% elif component.component_type == 'tea_subscription' %}
+            Upstream releases
         {% else %}
             Documents
         {% endif %}

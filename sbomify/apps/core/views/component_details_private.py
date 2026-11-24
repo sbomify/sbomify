@@ -160,6 +160,11 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             template_name = "core/component_details_private_sbom.html.j2"
         elif component_type == "document":
             template_name = "core/component_details_private_document.html.j2"
+        elif component_type == "tea_subscription":
+            from sbomify.apps.tea.services.subscriptions import page_context
+
+            context.update(page_context(component_id))
+            template_name = "core/component_details_private_tea_subscription.html.j2"
         else:
             return error_response(request, HttpResponse(status=400, content="Invalid component type"))
 

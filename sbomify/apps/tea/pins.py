@@ -164,3 +164,68 @@ def upstream_changed() -> Exists:
         | ~Q(remote_artifact__release__lifecycle=TeaRemoteRelease.Lifecycle.ACTIVE)
     )
     return Exists(ReleaseArtifact.objects.filter(unsettled, release=OuterRef("pk"), remote_artifact__isnull=False))
+
+
+FINDING_TONES = {
+    GONE_UPSTREAM[0]: "danger",
+    RELEASE_REMOVED[0]: "danger",
+    NO_LONGER_DISTRIBUTED[0]: "danger",
+    END_OF_LIFE[0]: "danger",
+    CHANGED[0]: "warning",
+    OUT_OF_SUPPORT[0]: "warning",
+    NEWER_REVISION[0]: "info",
+    NEWER_RELEASE[0]: "info",
+}
+
+
+def release_card(actor: object, release: Release) -> dict[str, object]:
+    """The release page's remote artifacts card: each pin with its findings, and what may be pinned next."""
+    from sbomify.apps.core.authz import can
+
+    rows = []
+    pinned_ids = set()
+    for pin_row in pins_of(release):
+        artifact = pin_row.remote_artifact
+        if artifact is None:
+            continue
+        pinned_ids.add(artifact.pk)
+        rows.append(
+            {
+                "id": pin_row.pk,
+                "name": artifact.name or artifact.uuid,
+                "version": artifact.version,
+                "component_name": artifact.release.subscription.component.name,
+                "component_id": artifact.release.subscription.component_id,
+                "remote_release": artifact.release.version,
+                "auto_pinned": pin_row.auto_pinned,
+                "findings": [{"label": label, "tone": FINDING_TONES[key]} for key, label in findings(artifact)],
+            }
+        )
+    editable = not release.is_latest
+    may_pin = editable and bool(can(actor, "release:tag", release.product))
+    choices = []
+    if may_pin:
+        candidates = (
+            TeaRemoteArtifact.objects.filter(
+                release__subscription__component__products=release.product,
+                release__gone_at__isnull=True,
+                state=TeaRemoteArtifact.State.CURRENT,
+            )
+            .exclude(pk__in=pinned_ids)
+            .select_related("release__subscription__component")
+            .order_by("release__subscription__component__name", "-release__release_date", "name")
+        )
+        choices = [
+            {
+                "value": candidate.pk,
+                "label": f"{candidate.release.subscription.component.name} {candidate.release.version}: "
+                f"{candidate.name or candidate.uuid} version {candidate.version}",
+            }
+            for candidate in candidates[:200]
+        ]
+    return {
+        "remote_pins": rows,
+        "remote_pin_choices": choices,
+        "can_pin_remote": may_pin,
+        "can_unpin_remote": editable and bool(can(actor, "release:manage", release.product)),
+    }
