@@ -37,12 +37,25 @@ never sees the Secret.
 {{- fail "sbomify: redis.host is required. This chart does not run Redis for you: point it at a managed instance or one provisioned separately. See charts/sbomify/README.md." }}
 {{- end }}
 
-{{- if not .Values.objectStorage.endpointUrl }}
-{{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate" }}
+{{- $backend := include "sbomify.storageBackend" . }}
+{{- if not (has $backend (list "s3" "gcs")) }}
+{{- fail (printf "sbomify: objectStorage.backend must be \"s3\" or \"gcs\", got %q" .Values.objectStorage.backend) }}
+{{- end }}
+{{- if and (eq $backend "s3") (not .Values.objectStorage.endpointUrl) }}
+{{- fail "sbomify: objectStorage.endpointUrl is required: S3, R2, Tigris, or a MinIO you operate. On Google Cloud set objectStorage.backend=gcs instead." }}
+{{- end }}
+{{/*
+Keyless S3 means an AWS role (IRSA, EKS Pod Identity), and boto3 exchanges it
+for credentials at STS in AWS_REGION. "auto" is Cloudflare R2's region, which
+only ever works with static keys, so with workload identity it fails at the
+first upload rather than at install time.
+*/}}
+{{- if and (eq $backend "s3") .Values.objectStorage.useWorkloadIdentity (has (.Values.objectStorage.region | default "" | lower) (list "" "auto")) }}
+{{- fail "sbomify: objectStorage.useWorkloadIdentity needs a real AWS region in objectStorage.region (for example eu-west-1), not \"auto\". The role is exchanged for credentials at STS in that region." }}
 {{- end }}
 
-{{- if not .Values.auth.keycloak.serverUrl }}
-{{- fail "sbomify: auth.keycloak.serverUrl is required. This chart does not run Keycloak for you: deploy it with the Keycloak Operator (the project's official Kubernetes path) and point this at it. See charts/sbomify/README.md." }}
+{{- if and (not .Values.auth.keycloak.serverUrl) (not .Values.auth.oidc.discoveryUrl) }}
+{{- fail "sbomify: auth.keycloak.serverUrl or auth.oidc.discoveryUrl is required. This chart does not run an identity provider for you: deploy Keycloak with the Keycloak Operator (the project's official Kubernetes path), or point auth.oidc.discoveryUrl at another OIDC provider. See charts/sbomify/README.md." }}
 {{- end }}
 
 {{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.secretKey) }}
@@ -63,7 +76,7 @@ AWS_* variables, which fails at runtime in a way that points nowhere near the
 configuration. Either supply keys, or say you are using the workload's own
 identity.
 */}}
-{{- if and (not .Values.secrets.existingSecret) (not .Values.objectStorage.useWorkloadIdentity) }}
+{{- if and (not .Values.secrets.existingSecret) (not (include "sbomify.storageKeyless" .)) }}
 {{- if or (not .Values.objectStorage.sboms.accessKeyId) (not .Values.objectStorage.sboms.secretAccessKey) }}
 {{- fail "sbomify: objectStorage.sboms.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. Set objectStorage.useWorkloadIdentity=true to skip them and use the workload's own cloud identity instead." }}
 {{- end }}
@@ -82,8 +95,8 @@ It stays a value because three templates need it, not because it is tunable.
 {{- fail "sbomify: caddy.healthPath must stay /UuPha8mu/. The application hardcodes that path in urls.py and SECURE_REDIRECT_EXEMPT, so changing it here only breaks the probes and the edge health route." }}
 {{- end }}
 
-{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}
-{{- fail "sbomify: set auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
+{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) (not .Values.auth.oidc.clientSecret) }}
+{{- fail "sbomify: set auth.oidc.clientSecret or auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
 {{- end }}
 
 {{- if and .Values.app.billing (not .Values.app.extraEnvFrom) (not .Values.app.extraEnv) }}
@@ -98,8 +111,21 @@ It stays a value because three templates need it, not because it is tunable.
 {{- fail "sbomify: caddy.onDemandTLS.enabled requires caddy.onDemandTLS.ask. Without the ask endpoint Caddy will attempt issuance for ANY hostname pointed at it, which is an open door to ACME rate-limit exhaustion." }}
 {{- end }}
 
-{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.localCerts) (or (not .Values.caddy.acme.email) (eq .Values.caddy.acme.email "admin@example.com")) }}
-{{- fail "sbomify: set caddy.acme.email to a real address: Let's Encrypt sends expiry and revocation notices there. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
+{{/*
+Let's Encrypt refuses to register an account whose contact is on a reserved
+domain (HTTP 400 invalidContact): the example.com/.net/.org placeholders and the
+special-use TLDs. Caddy only finds out at the first TLS handshake, so the chart
+renders, every pod goes Ready, and the edge then serves no certificate at all.
+ACME is in play whenever certificates are not local: for on-demand TLS, and for
+any extraRoutes host served over https.
+*/}}
+{{- $acmeHosts := .Values.caddy.onDemandTLS.enabled }}
+{{- range .Values.caddy.extraRoutes }}
+{{- if eq (.scheme | default "https") "https" }}{{- $acmeHosts = true }}{{- end }}
+{{- end }}
+{{- $email := .Values.caddy.acme.email | default "" }}
+{{- if and $acmeHosts (not .Values.caddy.localCerts) (or (not $email) (regexMatch "(?i)@(([a-z0-9-]+\\.)*example\\.(com|net|org)|([a-z0-9-]+\\.)*[a-z0-9-]+\\.(test|invalid|localhost|example|local|internal))$" $email)) }}
+{{- fail "sbomify: set caddy.acme.email to a real address. Let's Encrypt rejects example.com/.net/.org and reserved-TLD (.test, .invalid, .local...) contacts, so no certificate would ever be issued. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
 {{- end }}
 
 {{- end -}}

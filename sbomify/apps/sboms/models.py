@@ -77,6 +77,11 @@ class Product(models.Model):
     )
     end_of_life = models.DateField(blank=True, null=True, help_text="Date when all support ends")
 
+    # Workspace-defined string key/value pairs (see core/custom_metadata.py)
+    custom_metadata = models.JSONField(
+        default=dict, blank=True, help_text="Free-form string key/value pairs defined by the workspace"
+    )
+
     def __str__(self) -> str:
         return f"{self.name}(Team ID: {self.team_id})"
 
@@ -615,6 +620,10 @@ class Component(models.Model):
 
     # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict, blank=True)
+    # Workspace-defined string key/value pairs (see core/custom_metadata.py)
+    custom_metadata = models.JSONField(
+        default=dict, blank=True, help_text="Free-form string key/value pairs defined by the workspace"
+    )
     products = models.ManyToManyField(Product, through="sboms.ProductComponent", related_name="components")
 
     def __str__(self) -> str:

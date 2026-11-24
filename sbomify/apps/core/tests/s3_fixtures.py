@@ -115,6 +115,13 @@ class MockStorageClient:
             raise Exception(self.error_message)
         self.uploaded_files.pop(object_name, None)
 
+    def delete_objects(self, bucket_name: str, object_names: list[str]) -> None:
+        """Mock delete_objects method."""
+        if self.should_raise_error:
+            raise Exception(self.error_message)
+        for object_name in object_names:
+            self.uploaded_files.pop(object_name, None)
+
     def object_exists(self, bucket_name: str, object_name: str) -> bool:
         """Mock object_exists method."""
         if self.should_raise_error:

@@ -4,7 +4,22 @@ Date: 2026-03-29
 
 ## Status
 
-Proposed
+Accepted. Phases 1 and 2 are implemented: credentials are optional on the S3
+backend, and `STORAGE_BACKEND=gcs` selects a native Google Cloud Storage backend
+that authenticates through Application Default Credentials and signs download
+URLs through IAM signBlob. Both were verified end to end on GKE with Workload
+Identity, through the Helm chart (`objectStorage.backend: gcs`).
+
+Where the implementation differs from the plan below:
+
+- Bucket names still come from the `AWS_*_STORAGE_BUCKET_NAME` settings; the
+  generic `STORAGE_*` names were not added.
+- `google-cloud-storage` is a regular dependency rather than an optional one,
+  so the one published image serves both backends.
+- The GCS backend raises the same `botocore` `ClientError` codes
+  (`NoSuchKey`, `NoSuchBucket`, `AccessDenied`) the S3 backend does, so callers
+  stay backend-agnostic. Its tests mock the client; `fake-gcs-server` was not
+  added to the test compose file.
 
 ## Context
 

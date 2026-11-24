@@ -6,6 +6,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from sbomify.apps.core.custom_metadata import CustomMetadata
 from sbomify.apps.teams.schemas import ContactProfileSchema
 
 
@@ -243,6 +244,11 @@ class ProductUpdateSchema(BaseModel):
     end_of_support: date | None = None
     end_of_life: date | None = None
 
+    # Omitted means "leave as is", so clients predating the field keep their pairs.
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
+
 
 class ProductPatchSchema(BaseModel):
     """Schema for partially updating a Product using PATCH."""
@@ -256,6 +262,10 @@ class ProductPatchSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
+
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ProductResponseSchema(BaseModel):
@@ -276,6 +286,8 @@ class ProductResponseSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
+
+    custom_metadata: dict[str, str] = Field(default_factory=dict, description="String key/value pairs")
 
 
 class ComponentSummarySchema(BaseModel):
@@ -310,6 +322,10 @@ class ComponentUpdateSchema(BaseModel):
     # is_global defaults to None so existing clients that omit it do not overwrite scope
     is_global: bool
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Omitted means "leave as is", so clients predating the field keep their pairs.
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ComponentVisibility(str, Enum):
@@ -338,6 +354,9 @@ class ComponentPatchSchema(BaseModel):
     nda_document_id: str | None = None
     is_global: bool | None = None
     metadata: dict[str, Any] | None = None
+    custom_metadata: CustomMetadata | None = Field(
+        default=None, description="String key/value pairs. Replaces the whole set when sent."
+    )
 
 
 class ComponentResponseSchema(BaseModel):
@@ -354,6 +373,7 @@ class ComponentResponseSchema(BaseModel):
     component_type: ComponentType
     component_type_display: str | None = None
     metadata: dict[str, Any]
+    custom_metadata: dict[str, str] = Field(default_factory=dict, description="String key/value pairs")
     sbom_count: int | None = None
     document_count: int | None = None
     # None when no freshness window is configured or the component has no SBOM.
@@ -773,6 +793,14 @@ class ReleaseArtifactCreateSchema(BaseModel):
 
     sbom_id: str | None = None
     document_id: str | None = None
+    replace: bool = Field(
+        False,
+        description=(
+            "Explicitly replace an artifact of the same kind from the same component that is already "
+            "in the release. By default such an add is refused, so a release is never overwritten "
+            "unless the caller asks for it."
+        ),
+    )
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -882,3 +910,11 @@ class ReleaseArtifactAddResponseSchema(BaseModel):
     document_type: str | None = None
     document_version: str | None = None
     component_slug: str | None = None
+    replaced: bool = Field(
+        False,
+        description=(
+            "True when the add superseded an artifact of the same kind from the same component that "
+            "was already in the release (only possible with replace=True)."
+        ),
+    )
+    replaced_artifact_name: str | None = Field(None, description="Name of the artifact that was superseded.")

@@ -16,6 +16,11 @@ interface LifecyclePhase {
     label: string;
 }
 
+interface KeyValueRow {
+    key: string;
+    value: string;
+}
+
 interface ComponentMetaInfoEditorProps {
     componentId: string;
     teamKey: string;
@@ -57,16 +62,21 @@ export function registerComponentMetaInfoEditor() {
             release_date: null,
             end_of_support: null,
             end_of_life: null,
-            vcs_url: null
+            vcs_url: null,
+            custom_metadata: {}
         } as ComponentMetaInfo,
         contactProfiles: props.contactProfiles || [],
+        // Edited as rows so a key can be renamed or left blank mid-edit;
+        // folded back into metadata.custom_metadata on every change.
+        customMetadataRows: [] as KeyValueRow[],
         selectedProfileId: props.metadata?.contact_profile_id || '',
         validationErrors: {
             supplier: {} as Record<string, string>,
             authors: {} as Record<string, string>,
             licenses: {} as Record<string, string>,
             lifecycle_phase: null as string | null,
-            vcs_url: null as string | null
+            vcs_url: null as string | null,
+            custom_metadata: null as string | null
         },
         isSaving: false,
         hasUnsavedChanges: false,
@@ -115,7 +125,8 @@ export function registerComponentMetaInfoEditor() {
             const hasLicenseErrors = Object.keys(this.validationErrors.licenses).length > 0;
             const hasLifecycleErrors = this.validationErrors.lifecycle_phase !== null;
             const hasVcsErrors = this.validationErrors.vcs_url !== null;
-            return !hasSupplierErrors && !hasAuthorErrors && !hasLicenseErrors && !hasLifecycleErrors && !hasVcsErrors;
+            const hasCustomErrors = this.validationErrors.custom_metadata !== null;
+            return !hasSupplierErrors && !hasAuthorErrors && !hasLicenseErrors && !hasLifecycleErrors && !hasVcsErrors && !hasCustomErrors;
         },
 
         init() {
@@ -147,8 +158,11 @@ export function registerComponentMetaInfoEditor() {
                         ...data,
                         supplier: data.supplier || { name: null, url: [], address: null, contacts: [] },
                         authors: data.authors || [],
-                        licenses: data.licenses || []
+                        licenses: data.licenses || [],
+                        custom_metadata: data.custom_metadata || {}
                     };
+                    this.customMetadataRows = Object.entries(this.metadata.custom_metadata)
+                        .map(([key, value]) => ({ key, value: value as string }));
                     this.selectedProfileId = this.metadata.contact_profile_id || '';
                     this.originalMetadata = JSON.stringify(this.metadata);
 
@@ -323,6 +337,34 @@ export function registerComponentMetaInfoEditor() {
                 : null;
         },
 
+        /**
+         * Fold the editor rows into metadata.custom_metadata. Fully blank rows are
+         * dropped; a value with no key or a repeated key is an error the save
+         * button waits on, matching the server's rules.
+         */
+        syncCustomMetadata() {
+            const result: Record<string, string> = Object.create(null);
+            let error: string | null = null;
+            for (const row of this.customMetadataRows) {
+                const key = row.key.trim();
+                const value = row.value.trim();
+                if (!key && !value) continue;
+                if (!key) {
+                    error = 'Every value needs a key';
+                    break;
+                }
+                if (key in result) {
+                    error = `Duplicate key '${key}'`;
+                    break;
+                }
+                result[key] = value;
+            }
+            this.validationErrors.custom_metadata = error;
+            if (!error) {
+                this.metadata.custom_metadata = result;
+            }
+        },
+
         isValidEmail(email: string): boolean {
             if (!email) return true;
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -371,7 +413,8 @@ export function registerComponentMetaInfoEditor() {
                     release_date: this.metadata.release_date,
                     end_of_support: this.metadata.end_of_support,
                     end_of_life: this.metadata.end_of_life,
-                    vcs_url: (this.metadata.vcs_url || '').trim() || null
+                    vcs_url: (this.metadata.vcs_url || '').trim() || null,
+                    custom_metadata: this.metadata.custom_metadata
                 };
 
                 const response = await fetch(`/api/v1/components/${this.componentId}/metadata`, {

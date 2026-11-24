@@ -219,6 +219,20 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # CRA Article 14 reports go to ENISA and the national CSIRTs, so recording
     # one is the same outward act as publishing an advisory.
     "cra_report:manage": ADMINISTER,
+    # The CRA Declaration-of-Conformity assessment wizard. Reading and editing an
+    # assessment are both owner/admin today (the wizard is governance, not
+    # day-to-day contribution), so both sit at ADMINISTER. Split read from manage
+    # so a read-only token reads the assessment but cannot save steps, generate a
+    # document, or sign a DoC — the scope gate in can() enforces that split, which
+    # a bare role check (verify_item_access) cannot.
+    "cra_assessment:read": ADMINISTER,
+    "cra_assessment:manage": ADMINISTER,
+    # Compliance control catalogs are workspace-level framework configuration:
+    # activating, importing, editing status/mappings/evidence and running
+    # automation sync. Owner/admin, like the rest of workspace governance, and a
+    # named action so a scoped token (read-only / publish / agent) cannot write
+    # them just because its holder happens to be an admin.
+    "controls:manage": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -400,13 +414,17 @@ def credential_channel(request: Any) -> str:
     return "api"
 
 
-def _scope_permits(scopes: list[str] | None, action: str) -> bool:
+def scope_permits(scopes: list[str] | None, action: str) -> bool:
     """Does a token's ``scopes`` grant ``action``?
 
     ``None`` means an unscoped (legacy / full-capability) token — it permits
     everything, matching the ``expires_at IS NULL = never expires`` precedent.
     An empty list permits nothing. Scope can only *narrow* access; the role and
     resource-attribute checks still run afterwards.
+
+    Public because the MCP server (``sbomify.apps.mcp.registry``) reuses it to
+    filter its advertised tool list to what the caller's token could actually
+    invoke. That is presentation only — enforcement remains ``can()`` below.
     """
     if scopes is None or SCOPE_WILDCARD in scopes:
         return True
@@ -462,7 +480,7 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
     # the user's role would allow it. Non-token actors (sessions, delegated
     # user-stub checks) carry no access_token_record, so this is a no-op for them.
     token = getattr(request, "access_token_record", None)
-    if token is not None and not _scope_permits(token.scopes, action):
+    if token is not None and not scope_permits(token.scopes, action):
         return Decision(False, f"token scope does not grant {action!r}")
 
     if action in _ABAC_ACTIONS:

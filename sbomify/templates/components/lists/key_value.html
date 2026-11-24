@@ -1,0 +1,33 @@
+{% comment %}
+A read-only list of key and value pairs, as a description list: the custom
+metadata a workspace sets on a product or component.
+
+Pass items, a dict rendered on the server, or model, an Alpine expression
+naming an object in the caller's scope for a panel that loads its data in the
+browser. One of the two; the markup is the same so both read alike.
+
+Keys are muted and values carry the weight, the way the other detail panels
+read. Long values wrap anywhere so a URL or a hash cannot overflow the card.
+{% endcomment %}
+<c-vars items model label="Custom metadata" class />
+<dl aria-label="{{ label }}"
+    class="m-0 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-6 gap-y-2 text-sm{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>
+    {% if model %}
+        <template x-for="[key, value] in Object.entries({{ model }} || {})" :key="key">
+            <div class="contents">
+                <dt class="text-text-muted [overflow-wrap:anywhere]" x-text="key"></dt>
+                <dd class="m-0 font-medium text-text [overflow-wrap:anywhere]"
+                    x-text="value || '—'">
+                </dd>
+            </div>
+        </template>
+    {% else %}
+        {% for key, value in items.items %}
+            <dt class="text-text-muted [overflow-wrap:anywhere]">{{ key }}</dt>
+            <dd class="m-0 font-medium text-text [overflow-wrap:anywhere]">
+                {{ value|default:"—" }}
+            </dd>
+        {% endfor %}
+    {% endif %}
+</dl>
