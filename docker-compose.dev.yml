@@ -35,7 +35,7 @@ x-dev-env: &dev-env
 services:
   keycloak:
     logging: *default-logging
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.2}
     restart: ${KEYCLOAK_RESTART_POLICY:-always}
     environment:
       <<: [*keycloak-env, *keycloak-admin-env]
@@ -50,7 +50,7 @@ services:
 
   keycloak-bootstrap:
     logging: *default-logging
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.4.7}
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.2}
     depends_on:
       - keycloak
     volumes:
