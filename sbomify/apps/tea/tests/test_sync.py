@@ -7,113 +7,22 @@ the schedule, and the pins of the product releases.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
-from typing import Any
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
-from libtea.exceptions import TeaConnectionError, TeaNotFoundError
-from libtea.models import CLE, Artifact, Collection, Component, Release
+from libtea.exceptions import TeaConnectionError
 
 from sbomify.apps.core.models import Product, ReleaseArtifact
 from sbomify.apps.core.models import Release as ProductRelease
 from sbomify.apps.tea import pins, sync
 from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease, TeaSubscription, TeaSubscriptionEvent
+from sbomify.apps.tea.tests.fakes import FakeServer, artifact
 
 pytestmark = pytest.mark.django_db
 
 Event = TeaSubscriptionEvent.Kind
 State = TeaRemoteArtifact.State
-
-
-def _artifact(uuid: str, version: int = 1, sha: str = "a") -> dict[str, Any]:
-    return {
-        "uuid": uuid,
-        "name": f"{uuid}.cdx.json",
-        "type": "BOM",
-        "version": version,
-        "createdDate": "2025-01-01T00:00:00Z",
-        "formats": [
-            {
-                "mediaType": "application/vnd.cyclonedx+json",
-                "url": f"https://cdn.example.com/{uuid}/{version}",
-                "checksums": [{"algType": "SHA-256", "algValue": sha * 64}],
-            }
-        ],
-    }
-
-
-class FakeServer:
-    """What one remote TEA server publishes for one component, mutable between checks."""
-
-    def __init__(self, component_uuid: str) -> None:
-        self.component_uuid = component_uuid
-        self.releases: dict[str, dict[str, Any]] = {}
-        self.collections: dict[str, list[dict[str, Any]]] = {}
-        self.collection_versions: dict[str, int] = {}
-        self.cles: dict[str, list[dict[str, Any]]] = {}
-        self.gone: set[tuple[str, int]] = set()
-        self.failure: Exception | None = None
-
-    def publish(self, release_uuid: str, version: str, days_ago: int, artifacts: list[dict[str, Any]]) -> None:
-        when = (datetime(2026, 1, 1, tzinfo=UTC) - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
-        self.releases[release_uuid] = {
-            "uuid": release_uuid,
-            "component": self.component_uuid,
-            "version": version,
-            "createdDate": when,
-            "releaseDate": when,
-        }
-        self.collections[release_uuid] = artifacts
-        self.collection_versions[release_uuid] = self.collection_versions.get(release_uuid, 0) + 1
-
-    # The TeaClient calls a check makes.
-    def __enter__(self) -> FakeServer:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        return None
-
-    def _maybe_fail(self) -> None:
-        if self.failure is not None:
-            raise self.failure
-
-    def get_component(self, uuid: str) -> Component:
-        self._maybe_fail()
-        if uuid != self.component_uuid:
-            raise TeaNotFoundError("no such component")
-        return Component.model_validate({"uuid": uuid, "name": "remote lib", "identifiers": []})
-
-    def get_component_releases(self, uuid: str) -> list[Release]:
-        return [Release.model_validate(r) for r in self.releases.values()]
-
-    def get_component_release_collection_latest(self, uuid: str) -> Collection:
-        if uuid not in self.collections:
-            raise TeaNotFoundError("no collection")
-        return Collection.model_validate(
-            {
-                "uuid": uuid,
-                "version": self.collection_versions[uuid],
-                "createdDate": "2025-01-01T00:00:00Z",
-                "belongsTo": "COMPONENT_RELEASE",
-                "updateReason": {"type": "ARTIFACT_UPDATED"},
-                "artifacts": self.collections[uuid],
-            }
-        )
-
-    def get_component_release_cle(self, uuid: str) -> CLE:
-        if uuid not in self.cles:
-            raise TeaNotFoundError("no lifecycle")
-        return CLE.model_validate({"events": self.cles[uuid]})
-
-    def get_artifact_version(self, uuid: str, version: int) -> Artifact:
-        if (uuid, version) in self.gone:
-            raise TeaNotFoundError("gone")
-        for artifacts in self.collections.values():
-            for artifact in artifacts:
-                if artifact["uuid"] == uuid and artifact["version"] == version:
-                    return Artifact.model_validate(artifact)
-        return Artifact.model_validate(_artifact(uuid, version))
 
 
 @pytest.fixture
@@ -124,7 +33,7 @@ def subscription(sample_team, make_subscription) -> TeaSubscription:
 @pytest.fixture
 def server(subscription) -> FakeServer:
     server = FakeServer(subscription.remote_component_uuid)
-    server.publish("r1", "1.0", days_ago=30, artifacts=[_artifact("a")])
+    server.publish("r1", "1.0", days_ago=30, artifacts=[artifact("a")])
     return server
 
 
@@ -197,7 +106,7 @@ class TestChanges:
         old = TeaRemoteArtifact.objects.get(uuid="a")
         cut = ProductRelease.objects.create(product=product, name="1.0")
         ReleaseArtifact.objects.create(release=cut, remote_artifact=old)
-        server.publish("r2", "2.0", days_ago=1, artifacts=[_artifact("b")])
+        server.publish("r2", "2.0", days_ago=1, artifacts=[artifact("b")])
 
         checked = run(subscription, server)
 
@@ -209,7 +118,7 @@ class TestChanges:
         assert pins.findings(pin.remote_artifact) == [pins.NEWER_RELEASE]
 
     def test_a_removed_release_is_marked_gone(self, subscription, server, product):
-        server.publish("r2", "2.0", days_ago=1, artifacts=[_artifact("b")])
+        server.publish("r2", "2.0", days_ago=1, artifacts=[artifact("b")])
         run(subscription, server)
         del server.releases["r1"]
 
@@ -222,7 +131,7 @@ class TestChanges:
         pinned = TeaRemoteArtifact.objects.get(uuid="a")
         cut = ProductRelease.objects.create(product=product, name="1.0")
         ReleaseArtifact.objects.create(release=cut, remote_artifact=pinned)
-        server.publish("r1", "1.0", days_ago=30, artifacts=[_artifact("a", sha="b")])
+        server.publish("r1", "1.0", days_ago=30, artifacts=[artifact("a", sha="b")])
 
         run(subscription, server)
 
@@ -236,7 +145,7 @@ class TestChanges:
         assert ProductRelease.objects.filter(pk=cut.pk).annotate(marked=pins.upstream_changed()).get().marked
 
     def test_a_newer_revision_replaces_the_old_one(self, subscription, server, product):
-        server.publish("r1", "1.0", days_ago=30, artifacts=[_artifact("a", version=2)])
+        server.publish("r1", "1.0", days_ago=30, artifacts=[artifact("a", version=2)])
 
         run(subscription, server)
 
