@@ -59,6 +59,19 @@ def test_the_first_check_records_everything_and_logs_nothing(subscription, serve
     assert timedelta(minutes=45) < checked.next_check_at - timezone.now() <= timedelta(minutes=50)
 
 
+def test_a_snapshot_reads_back_as_the_server_sent_it(subscription, server):
+    from libtea.models import Artifact
+
+    bare = {**artifact("n"), "formats": [{"mediaType": "application/spdx+json", "description": "SPDX SBOM"}]}
+    server.publish("r1", "1.0", days_ago=30, artifacts=[bare])
+
+    run(subscription, server)
+
+    snapshot = TeaRemoteArtifact.objects.get(uuid="n").snapshot
+    assert snapshot["formats"] == bare["formats"]
+    Artifact.model_validate(snapshot)
+
+
 def test_a_check_that_is_not_due_does_nothing(subscription, server):
     run(subscription, server)
 

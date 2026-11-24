@@ -341,7 +341,8 @@ def _apply_releases(
 
 
 def _snapshot(artifact: Artifact) -> dict[str, Any]:
-    return artifact.model_dump(mode="json", by_alias=True, exclude_none=True)
+    """The artifact as the server sent it. Defaults it left out stay out: an empty checksum list is not TEA 1.0."""
+    return artifact.model_dump(mode="json", by_alias=True, exclude_none=True, exclude_unset=True)
 
 
 def _apply_collection(
