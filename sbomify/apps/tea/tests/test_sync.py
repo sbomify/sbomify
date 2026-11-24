@@ -278,3 +278,66 @@ class TestScheduling:
         tasks.check_tea_subscription.fn(subscription.pk)
 
         later.assert_not_called()
+
+
+WHEN = {"effective": "2025-01-01T00:00:00Z", "published": "2025-01-01T00:00:00Z"}
+
+
+def _changed(server):
+    server.publish("r1", "1.0", days_ago=30, artifacts=[artifact("a", sha="b")])
+
+
+def _replaced(server):
+    server.publish("r1", "1.0", days_ago=30, artifacts=[artifact("a", version=2)])
+
+
+def _removed(server):
+    server.gone.add(("a", 1))
+    server.publish("r1", "1.0", days_ago=30, artifacts=[])
+
+
+def _release_removed(server):
+    del server.releases["r1"]
+
+
+def _lifecycle(event):
+    def apply(server):
+        server.cles["r1"] = [{"id": 1, **WHEN, **event}]
+
+    return apply
+
+
+def _newer_release(server):
+    server.publish("r2", "2.0", days_ago=1, artifacts=[artifact("b")])
+
+
+@pytest.mark.parametrize(
+    "upstream,finding",
+    [
+        (_changed, pins.CHANGED),
+        (_replaced, pins.NEWER_REVISION),
+        (_removed, pins.GONE_UPSTREAM),
+        (_release_removed, pins.RELEASE_REMOVED),
+        (_lifecycle({"type": "endOfSupport", "supportId": "std"}), pins.OUT_OF_SUPPORT),
+        (_lifecycle({"type": "endOfLife"}), pins.END_OF_LIFE),
+        (_lifecycle({"type": "endOfDistribution"}), pins.NO_LONGER_DISTRIBUTED),
+        (_newer_release, pins.NEWER_RELEASE),
+    ],
+    ids=["changed", "replaced", "removed", "release-removed", "eos", "eol", "eod", "newer-release"],
+)
+def test_each_upstream_change_shows_on_the_pin_and_leaves_it_as_pinned(subscription, server, upstream, finding):
+    run(subscription, server)
+    product = Product.objects.create(team=subscription.component.team, name="product")
+    cut = ProductRelease.objects.create(product=product, name="1.0")
+    pinned = TeaRemoteArtifact.objects.get(uuid="a", version=1)
+    pins.pin(cut, pinned)
+    snapshot = dict(pinned.snapshot)
+
+    upstream(server)
+    run(subscription, server)
+
+    pin = cut.artifacts.get()
+    assert pin.remote_artifact_id == pinned.pk
+    pin.remote_artifact.refresh_from_db()
+    assert pin.remote_artifact.snapshot == snapshot
+    assert pins.findings(pin.remote_artifact)[0] == finding
