@@ -2,7 +2,9 @@
 Integrations, in the settings-tab style every other tab uses: a level-2
 section header, then one card per provider, with the column gap owning the
 space between them. Each card is a section header (chip, name, tagline,
-status badge, actions) over a section body indented to the title.
+status badge, actions) over a section body indented to the title. wrap
+drops the actions under the tagline on a phone, where they would otherwise
+squeeze it into a narrow column.
 
 Every control posts back to this same URL and swaps the whole panel, so the
 connected state, the last sync line and the framework list can never disagree
@@ -13,7 +15,7 @@ with each other after an action.
     {% for card in cards %}
         <c-cards.card>
         <div class="flex flex-col gap-4">
-            <c-layout.section-header icon="{{ card.provider.icon }}" title="{{ card.provider.name }}" subtitle="{{ card.provider.tagline }}">
+            <c-layout.section-header wrap icon="{{ card.provider.icon }}" title="{{ card.provider.name }}" subtitle="{{ card.provider.tagline }}">
             {% if card.needs_reconnect %}
                 <div class="mt-2">
                     <c-badges.warning size="sm">Needs reconnecting</c-badges.warning>
