@@ -25,7 +25,7 @@ from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.tea import pins
 from sbomify.apps.tea.models import TeaRemoteArtifact, TeaSubscription
 from sbomify.apps.tea.services import remote
-from sbomify.apps.tea.services.subscriptions import Subscribe, describe, subscribe
+from sbomify.apps.tea.services.subscriptions import Subscribe, authorize_targets, describe, subscribe
 from sbomify.apps.tea.tasks import check_tea_subscription
 from sbomify.apps.teams.models import Workspace
 
@@ -243,10 +243,8 @@ def create_subscription(request: HttpRequest, payload: SubscribeIn) -> Any:
     team = _workspace(request)
     if isinstance(team, tuple):
         return team
-    for release in Release.objects.filter(pk__in=payload.pin_release_ids).select_related("product"):
-        if not can(request, "release:tag", release.product):
-            return 403, {"detail": f"You can't pin into release {release.name}", "error_code": ErrorCode.FORBIDDEN}
     try:
+        authorize_targets(request, team, payload.product_ids, payload.pin_release_ids)
         server = remote.connect(payload.server)
         subscription = subscribe(
             team,

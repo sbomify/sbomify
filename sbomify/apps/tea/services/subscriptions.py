@@ -7,7 +7,13 @@ from typing import Any
 
 from django.db import IntegrityError, transaction
 
-from sbomify.apps.core.domain.exceptions import ConflictError, ExternalServiceError, ValidationError
+from sbomify.apps.core.authz import can
+from sbomify.apps.core.domain.exceptions import (
+    ConflictError,
+    ExternalServiceError,
+    PermissionDeniedError,
+    ValidationError,
+)
 from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.tea import pins, sync
 from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease, TeaSubscription
@@ -27,6 +33,20 @@ class Subscribe:
     name: str = ""
     product_ids: list[str] = field(default_factory=list)
     pin_release_ids: list[str] = field(default_factory=list)
+
+
+def authorize_targets(actor: Any, team: Workspace, product_ids: list[str], release_ids: list[str]) -> None:
+    """Refuse products or releases the caller may not change. Ids from another workspace read as unknown."""
+    products = list(Product.objects.filter(team=team, pk__in=product_ids))
+    releases = list(
+        Release.objects.filter(product__team=team, pk__in=release_ids, is_latest=False).select_related("product")
+    )
+    if len(products) != len(set(product_ids)) or len(releases) != len(set(release_ids)):
+        raise ValidationError("Pick products and releases from this workspace.")
+    if not all(can(actor, "product:manage", product) for product in products):
+        raise PermissionDeniedError("You can't add components to one of those products.")
+    if not all(can(actor, "release:tag", release.product) for release in releases):
+        raise PermissionDeniedError("You can't pin into one of those releases.")
 
 
 def subscribe(team: Workspace, request: Subscribe) -> TeaSubscription:

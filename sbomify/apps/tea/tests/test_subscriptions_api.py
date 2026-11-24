@@ -93,6 +93,21 @@ class TestSubscribing:
         assert response.json()["detail"].startswith("The server did not answer.")
         assert not Component.objects.filter(team=team).exists()
 
+    def test_products_and_releases_from_another_workspace_are_refused_by_name(self, owner, server):
+        from sbomify.apps.teams.models import Workspace
+
+        client, team = owner
+        elsewhere = Workspace.objects.create(name="elsewhere")
+        their_product = Product.objects.create(team=elsewhere, name="their product")
+        their_release = Release.objects.create(product=their_product, name="their secret release")
+
+        for payload in ({"product_ids": [their_product.id]}, {"pin_release_ids": [their_release.id]}):
+            response = subscribe(client, **payload)
+
+            assert response.status_code == 400
+            assert "their" not in response.json()["detail"]
+        assert not Component.objects.filter(team=team).exists()
+
     def test_a_0_4_0_server_is_refused(self, owner, mocker):
         client, _ = owner
         mocker.patch.object(remote, "check_address")
