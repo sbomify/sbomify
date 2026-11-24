@@ -1,7 +1,7 @@
 """
 TEA conformance tests using libtea's conformance suite.
 
-Runs the full 26-check conformance suite against sbomify's TEA endpoints
+Runs libtea's full conformance suite against sbomify's TEA endpoints
 via live_server, validating spec compliance end-to-end.
 
 Skipped by default. Run explicitly with:
@@ -17,6 +17,7 @@ if os.environ.get("RUN_TEA_CONFORMANCE") != "1":
 
 from libtea.conformance import CheckStatus, run_conformance
 
+from sbomify.apps.core.models import ComponentRelease
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 
 
@@ -40,13 +41,15 @@ class TestTEAConformance:
         host = os.environ.get("TEA_CONFORMANCE_HOST", "localhost")
         port = live_server.url.rsplit(":", 1)[-1]
         base_url = f"http://{host}:{port}/public/{team.key}/tea/v{TEA_API_VERSION}"
+        # Uploading the SBOM created this release; its UUID is not the SBOM's.
+        component_release = ComponentRelease.objects.get(component=component, version=sbom.version)
 
         result = run_conformance(
             base_url=base_url,
             product_uuid=str(product.uuid),
             product_release_uuid=str(release.uuid),
             component_uuid=str(component.uuid),
-            component_release_uuid=str(sbom.uuid),
+            component_release_uuid=str(component_release.uuid),
             artifact_uuid=str(sbom.uuid),
             allow_private_ips=True,
         )
