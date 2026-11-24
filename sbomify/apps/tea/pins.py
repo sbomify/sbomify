@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from django.db import transaction
 from django.db.models import Exists, OuterRef, Q, QuerySet
 
+from sbomify.apps.core.domain.exceptions import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from sbomify.apps.core.models import Product, Release, ReleaseArtifact, _suppress_collection_signals
 from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease, TeaSubscription
 
@@ -72,6 +74,43 @@ def repoint_latest_pins(subscription: TeaSubscription) -> None:
             _suppress_collection_signals.reset(token)
         latest.bump_collection_version(Release.CollectionUpdateReason.ARTIFACT_UPDATED)
         _schedule_latest_release_updated(latest, product)
+
+
+def pin(release: Release, remote_artifact: TeaRemoteArtifact, *, allow_replacement: bool = False) -> ReleaseArtifact:
+    """Pin a remote artifact revision into a release, as it is now. It is never re-pointed afterwards.
+
+    A release holds one revision of each remote artifact: pinning another one
+    replaces it when ``allow_replacement``, and is refused otherwise. Pinning the
+    same revision again changes nothing.
+    """
+    subscription = remote_artifact.release.subscription
+    if subscription.component.team_id != release.product.team_id:
+        raise PermissionDeniedError("That artifact belongs to another workspace.")
+    if release.is_latest:
+        raise ValidationError("The latest release follows upstream by itself.")
+    with transaction.atomic():
+        Release.objects.select_for_update().get(pk=release.pk)
+        existing = ReleaseArtifact.objects.filter(release=release, remote_artifact=remote_artifact).first()
+        if existing is not None:
+            return existing
+        slot = ReleaseArtifact.objects.filter(
+            release=release,
+            remote_artifact__release__subscription=subscription,
+            remote_artifact__uuid=remote_artifact.uuid,
+        )
+        if slot.exists():
+            if not allow_replacement:
+                raise ConflictError("This release already pins another revision of that artifact.")
+            slot.delete()
+        return ReleaseArtifact.objects.create(release=release, remote_artifact=remote_artifact)
+
+
+def unpin(release: Release, pin_id: str) -> None:
+    if release.is_latest:
+        raise ValidationError("The latest release follows upstream by itself.")
+    deleted, _ = ReleaseArtifact.objects.filter(pk=pin_id, release=release, remote_artifact__isnull=False).delete()
+    if not deleted:
+        raise NotFoundError("That release does not pin this artifact.")
 
 
 def pins_of(release: Release) -> QuerySet[ReleaseArtifact]:

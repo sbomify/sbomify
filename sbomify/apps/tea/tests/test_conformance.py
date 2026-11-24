@@ -18,7 +18,7 @@ if os.environ.get("RUN_TEA_CONFORMANCE") != "1":
 
 from libtea.conformance import CheckStatus, run_conformance
 
-from sbomify.apps.core.models import ComponentRelease, Product
+from sbomify.apps.core.models import ComponentRelease, Product, Release
 from sbomify.apps.core.services.cle import (
     create_cle_event,
     create_component_cle_event,
@@ -27,6 +27,8 @@ from sbomify.apps.core.services.cle import (
 )
 from sbomify.apps.sboms.models import ProductIdentifier
 from sbomify.apps.tea.mappers import TEA_API_VERSION
+from sbomify.apps.tea.models import TeaRemoteArtifact, TeaRemoteRelease
+from sbomify.apps.tea.pins import pin
 
 
 def _give_every_check_something_to_read(team, product, release, component, component_release):
@@ -46,6 +48,40 @@ def _give_every_check_something_to_read(team, product, release, component, compo
             assert create(subject, "released", datetime(2025, month, 1, tzinfo=UTC), version=version).ok
 
 
+def _pin_a_remote_artifact(team, product, make_subscription):
+    """A release whose collection carries an artifact published on another TEA server, as a subscription pins it.
+
+    Its own release, so the collection stays at version 1: sbomify keeps only a collection's latest version.
+    """
+    release = Release.objects.create(product=product, name="v2.0.0-remote")
+    subscription = make_subscription(team)
+    product.components.add(subscription.component)
+    remote_release = TeaRemoteRelease.objects.create(subscription=subscription, uuid="remote-release", version="1.0")
+    remote = TeaRemoteArtifact.objects.create(
+        release=remote_release,
+        uuid="6f1c6a7e-4c1b-4bd0-9a43-3b1f3c1c2a10",
+        version=2,
+        name="remote.cdx.json",
+        snapshot={
+            "uuid": "6f1c6a7e-4c1b-4bd0-9a43-3b1f3c1c2a10",
+            "name": "remote.cdx.json",
+            "type": "BOM",
+            "version": 2,
+            "createdDate": "2025-01-01T00:00:00Z",
+            "formats": [
+                {
+                    "mediaType": "application/vnd.cyclonedx+json",
+                    "url": "https://cdn.example.com/remote.cdx.json",
+                    "checksums": [{"algType": "SHA-256", "algValue": "a" * 64}],
+                }
+            ],
+        },
+        snapshot_fingerprint="fp",
+    )
+    pin(release, remote)
+    return release
+
+
 def format_failures(failures):
     """Format failed checks into a readable assertion message."""
     lines = [f"{len(failures)} conformance check(s) failed:"]
@@ -58,8 +94,9 @@ def format_failures(failures):
 
 @pytest.mark.django_db(transaction=True)
 class TestTEAConformance:
-    def test_conformance_suite(self, live_server, tea_conformance_data):
-        team, product, release, component, sbom = tea_conformance_data
+    def test_conformance_suite(self, live_server, tea_conformance_data, make_subscription):
+        team, product, _, component, sbom = tea_conformance_data
+        release = _pin_a_remote_artifact(team, product, make_subscription)
 
         # live_server binds to 0.0.0.0 but middleware only allows named hosts.
         # Use TEA_CONFORMANCE_HOST (default: localhost) for the Host header.

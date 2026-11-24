@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from datetime import datetime
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core import signing
@@ -21,6 +22,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from libtea.models import ArtifactType as TEAArtifactType
 from libtea.models import ChecksumAlgorithm, CollectionBelongsTo, CollectionUpdateReasonType, ErrorType
 from ninja import Query, Router
+from pydantic import ValidationError as PydanticValidationError
 
 from sbomify.apps.core.models import (
     Component,
@@ -50,6 +52,7 @@ from sbomify.apps.tea.mappers import (
     tea_purl_mapper,
     tea_tei_mapper,
 )
+from sbomify.apps.tea.models import TeaRemoteArtifact
 from sbomify.apps.tea.schemas import (
     TEACLE,
     TEAArtifact,
@@ -313,11 +316,11 @@ def _build_product_release_response(
                 if component_id not in cr_uuid_by_component:
                     cr_uuid_by_component[component_id] = str(cra.component_release.uuid)
 
-        product_components = Component.objects.filter(
-            products=release.product,
-            team_id=release.product.team_id,
-            visibility=Component.Visibility.PUBLIC,
-        ).distinct()
+        product_components = (
+            _published_components()
+            .filter(products=release.product, team_id=release.product.team_id, visibility=Component.Visibility.PUBLIC)
+            .distinct()
+        )
 
         for component in product_components:
             component_ref = TEAComponentRef(
@@ -378,15 +381,14 @@ def _build_collection_response(
 ) -> TEACollection:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
-    for artifact in release.artifacts.select_related("sbom__component", "document__component").all():
+    pins = release.artifacts.select_related(
+        "sbom__component", "document__component", "remote_artifact__release__subscription__component"
+    )
+    for artifact in pins:
         # Note: Only PUBLIC components are included in TEA responses (not GATED).
         # GATED components require user authentication/approval and are inappropriate
         # for unauthenticated TEA transparency endpoints.
-        component = None
-        if artifact.sbom:
-            component = artifact.sbom.component
-        elif artifact.document:
-            component = artifact.document.component
+        component = artifact.component
         if component and component.visibility != Component.Visibility.PUBLIC:
             continue
 
@@ -409,12 +411,32 @@ def _build_collection_response(
 
 
 def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TEAArtifact | None:
-    """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
+    """Build TEA Artifact from a ReleaseArtifact (SBOM, Document or pinned remote artifact)."""
     if artifact.sbom:
         return _build_sbom_artifact(artifact.sbom, base_url=base_url)
     elif artifact.document:
         return _build_document_artifact(artifact.document, base_url=base_url)
+    elif artifact.remote_artifact:
+        return _build_remote_artifact(artifact.remote_artifact)
     return None
+
+
+def _build_remote_artifact(remote_artifact: TeaRemoteArtifact) -> TEAArtifact | None:
+    """A pinned remote artifact as its server published it when pinned: its uuid, version and URLs.
+
+    Distribution ids name the remote server's distributions, not ours, so they are left out.
+    """
+    snapshot = {key: value for key, value in remote_artifact.snapshot.items() if key != "distributionIds"}
+    try:
+        return TEAArtifact.model_validate(snapshot)
+    except PydanticValidationError:
+        log.warning("Pinned remote artifact %s no longer reads as TEA 1.0; leaving it out", remote_artifact.pk)
+        return None
+
+
+def _published_components() -> QuerySet[Component]:
+    """Components this server publishes. A subscription's component is published by the server it follows."""
+    return Component.objects.exclude(component_type=Component.ComponentType.TEA_SUBSCRIPTION)
 
 
 def _build_component_release_collection_response(
@@ -931,7 +953,7 @@ def query_components(
     sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
     team = getattr(request, TEA_TEAM_ATTR)
-    components = Component.objects.filter(team=team, visibility=Component.Visibility.PUBLIC)
+    components = _published_components().filter(team=team, visibility=Component.Visibility.PUBLIC)
     if idType and idValue:
         components = components.none()
     return _page(
@@ -957,7 +979,9 @@ def get_component(
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
     team = getattr(request, TEA_TEAM_ATTR)
-    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    component = _queryset_get_or_404(
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
+    )
     if isinstance(component, tuple):
         return component
     return 200, _build_component_response(component)
@@ -981,7 +1005,9 @@ def list_component_releases(
     sortOrder: SortOrder = Query("asc", description="The direction of the sort"),  # type: ignore[type-arg]
 ) -> Any:
     team = getattr(request, TEA_TEAM_ATTR)
-    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    component = _queryset_get_or_404(
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
+    )
     if isinstance(component, tuple):
         return component
     releases = ComponentRelease.objects.filter(component=component).select_related("component")
@@ -1188,7 +1214,9 @@ def get_component_cle(
     workspace_key: str | None = Query(None, max_length=255, description="Workspace key"),  # type: ignore[type-arg]
 ) -> Any:
     team = getattr(request, TEA_TEAM_ATTR)
-    component = _get_or_404(Component, uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC)
+    component = _queryset_get_or_404(
+        _published_components(), uuid=uuid, team=team, visibility=Component.Visibility.PUBLIC
+    )
     if isinstance(component, tuple):
         return component
     return _cle(get_component_cle_document(component), uuid)
@@ -1220,10 +1248,29 @@ def get_component_release_cle(
 
 
 def _artifact_revision(request: HttpRequest, uuid: str, version: int | None) -> TEAArtifact | tuple[int, Any]:
-    found = _find_artifact(getattr(request, TEA_TEAM_ATTR), uuid)
-    if found is None or version not in (None, 1):
-        return NOT_FOUND
-    return _build_artifact(found, _get_base_url(request))
+    team = getattr(request, TEA_TEAM_ATTR)
+    found = _find_artifact(team, uuid)
+    if found is not None:
+        return _build_artifact(found, _get_base_url(request)) if version in (None, 1) else NOT_FOUND
+    remote = _find_remote(team, uuid, version)
+    built = _build_remote_artifact(remote) if remote is not None else None
+    return built if built is not None else NOT_FOUND
+
+
+def _find_remote(team: Workspace, uuid: str, version: int | None) -> TeaRemoteArtifact | None:
+    """A remote artifact revision this workspace publishes by pinning it into a public product's release.
+
+    Without a version, the highest pinned one, as "latest" means here.
+    """
+    pinned = TeaRemoteArtifact.objects.filter(
+        uuid=uuid,
+        release__subscription__component__team=team,
+        release__subscription__component__visibility=Component.Visibility.PUBLIC,
+        pins__release__product__is_public=True,
+    ).select_related("release__subscription")
+    if version is not None:
+        pinned = pinned.filter(version=version)
+    return pinned.order_by("-version", "-first_seen_at").first()
 
 
 @router.get(
@@ -1271,8 +1318,12 @@ def _download(
     The format's url is not published when it has no checksum, so this endpoint is
     where a TEA 1.0.0 client finds that content.
     """
-    found = _find_artifact(getattr(request, TEA_TEAM_ATTR), uuid)
-    if found is None or version not in (None, 1):
+    team = getattr(request, TEA_TEAM_ATTR)
+    found = _find_artifact(team, uuid)
+    if found is None:
+        remote = _find_remote(team, uuid, version)
+        return NOT_FOUND if remote is None else _remote_download(remote, media_type, signature=signature)
+    if version not in (None, 1):
         return NOT_FOUND
     base_url = _get_base_url(request)
     fmt = _sbom_format(found, base_url) if isinstance(found, SBOM) else _document_format(found, base_url)
@@ -1281,6 +1332,30 @@ def _download(
     location = fmt["signature_url"] if signature else fmt["url"]
     if not location:
         return 404, TEAErrorResponse(error=ErrorType.SIGNATURE_NOT_FOUND)
+    return HttpResponseRedirect(location)
+
+
+def _remote_download(
+    remote: TeaRemoteArtifact, media_type: str | None, *, signature: bool
+) -> HttpResponse | tuple[int, Any]:
+    """Redirect to a pinned remote artifact's content on the server that publishes it.
+
+    A format the snapshot names without a URL is fetched through that server's own download route.
+    """
+    formats = remote.snapshot.get("formats") or []
+    if media_type is not None:
+        formats = [f for f in formats if _media_type(f.get("mediaType") or "") == _media_type(media_type)]
+        if not formats:
+            return 406, TEAErrorResponse(error=ErrorType.NO_ACCEPTABLE_FORMAT)
+    fmt = formats[0] if formats else {}
+    location = fmt.get("signatureUrl" if signature else "url")
+    if not location:
+        route = f"{remote.release.subscription.api_base_url}/artifact/{remote.uuid}/{remote.version}"
+        location = f"{route}/signature/download" if signature else f"{route}/download"
+        if fmt.get("mediaType"):
+            location = f"{location}?{urlencode({'mediaType': fmt['mediaType']})}"
+    if not location.startswith(("https://", "http://")):
+        return NOT_FOUND
     return HttpResponseRedirect(location)
 
 
