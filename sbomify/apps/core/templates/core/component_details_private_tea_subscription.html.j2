@@ -52,7 +52,7 @@
             </dl>
         </div>
         </c-cards.card>
-        <c-cards.card title="Watched releases" subtitle="The newest release, the one picked when subscribing, and any pinned into a product release." flush>
+        <c-cards.card title="Upstream releases" subtitle="Every release the server lists. sbomify reads the newest one, the one picked when subscribing, and any pinned into a product release." flush>
         {% if subscription.releases %}
             <c-tables.table>
             <c-tables.head>
@@ -69,7 +69,11 @@
                     {% if release.gone %}<c-badges.danger size="sm">Removed upstream</c-badges.danger>{% endif %}
                     </c-tables.cell>
                     <c-tables.cell>
-                    <c-badges.dynamic data-variant="{{ release.lifecycle_tone }}">{{ release.lifecycle_display }}</c-badges.dynamic>
+                    {% if release.read %}
+                        <c-badges.dynamic data-variant="{{ release.lifecycle_tone }}">{{ release.lifecycle_display }}</c-badges.dynamic>
+                    {% else %}
+                        <span class="text-text-muted">Not read</span>
+                    {% endif %}
                     </c-tables.cell>
                     <c-tables.cell>
                     <div class="flex flex-col gap-1">

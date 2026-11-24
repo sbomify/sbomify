@@ -34,6 +34,7 @@ def setup(sample_team_with_owner_member, ensure_billing_plans, make_subscription
 def test_the_component_page_shows_upstream_releases_and_history(setup):
     client, subscription, server, _ = setup
     server.publish("r2", "2.0", days_ago=1, artifacts=[artifact("b")])
+    server.publish("r0", "0.9", days_ago=100, artifacts=[artifact("z")])
     sync.check(subscription.pk, force=True, client_for=lambda _: server)
 
     body = client.get(reverse("core:component_details", args=[subscription.component_id])).content.decode()
@@ -43,6 +44,7 @@ def test_the_component_page_shows_upstream_releases_and_history(setup):
     assert "New upstream release" in body and "Release 2.0" in body
     assert "Upload document" not in body
     assert "Upstream releases" in body
+    assert "0.9" in body and "Not read" in body and "z.cdx.json" not in body
 
 
 def test_check_now_queues_a_forced_check(setup, mocker):

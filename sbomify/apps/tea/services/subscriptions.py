@@ -205,6 +205,8 @@ def describe(subscription: TeaSubscription) -> dict[str, Any]:
                 "lifecycle_display": release.get_lifecycle_display(),
                 "lifecycle_tone": LIFECYCLE_TONES.get(release.lifecycle, ""),
                 "gone": release.gone_at is not None,
+                # Only a watched release's lifecycle and artifacts are read.
+                "read": release.checked_at is not None,
                 "artifacts": [
                     _artifact(a) for a in sorted(release.artifacts.all(), key=lambda a: (a.name, -a.version))
                 ],
