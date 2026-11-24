@@ -1,43 +1,34 @@
 {% comment %}
-Integrations, in the settings-tab style the branding tab set: no card chrome,
-an h2 and one explainer line up top, then one plain section per provider
-separated by hairlines.
+Integrations, in the settings-tab style every other tab uses: a level-2
+section header, then one card per provider, with the column gap owning the
+space between them. Each card is a section header (chip, name, tagline,
+status badge, actions) over a section body indented to the title. wrap
+drops the actions under the tagline on a phone, where they would otherwise
+squeeze it into a narrow column.
 
 Every control posts back to this same URL and swaps the whole panel, so the
 connected state, the last sync line and the framework list can never disagree
 with each other after an action.
 {% endcomment %}
-<div>
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-            <h2 class="text-lg font-semibold text-text m-0">Integrations</h2>
-            <p class="text-sm text-text-muted mt-1 m-0">
-                Connect the tools your team already uses. Show your compliance on your Trust Center, and send vulnerability news to Slack.
-            </p>
-        </div>
-    </div>
+<div class="flex flex-col gap-5">
+    <c-layout.section-header level="2" title="Integrations" subtitle="Connect the tools your team already uses. Show your compliance on your Trust Center, and send vulnerability news to Slack." />
     {% for card in cards %}
-        <section class="mt-8 {% if not forloop.first %}pt-8 border-t border-border{% endif %}">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="flex items-start gap-3">
-                    <c-chips.icon-chip>
-                    <i class="{{ card.provider.icon }}" aria-hidden="true"></i>
-                    </c-chips.icon-chip>
-                    <div>
-                        <h3 class="text-sm font-semibold text-text m-0 flex items-center gap-2">
-                            {{ card.provider.name }}
-                            {% if card.needs_reconnect %}
-                                <c-badges.warning size="sm">Needs reconnecting</c-badges.warning>
-                            {% elif card.is_connected %}
-                                <c-badges.success size="sm">Connected</c-badges.success>
-                            {% endif %}
-                        </h3>
-                        <p class="text-sm text-text-muted mt-1 m-0">{{ card.provider.tagline }}</p>
-                    </div>
+        <c-cards.card>
+        <div class="flex flex-col gap-4">
+            <c-layout.section-header wrap icon="{{ card.provider.icon }}" title="{{ card.provider.name }}" subtitle="{{ card.provider.tagline }}">
+            {% if card.needs_reconnect %}
+                <div class="mt-2">
+                    <c-badges.warning size="sm">Needs reconnecting</c-badges.warning>
                 </div>
-                <div class="flex items-center gap-2">
-                    {% if card.is_connected %}
-                        {% comment %}
+            {% elif card.is_connected %}
+                <div class="mt-2">
+                    <c-badges.success size="sm">Connected</c-badges.success>
+                </div>
+            {% endif %}
+            <c-slot name="actions">
+            <div class="flex items-center gap-2">
+                {% if card.is_connected %}
+                    {% comment %}
                         Reconnecting is the same consent flow as connecting, and
                         it lands on the same row: a workspace has one connection
                         per provider, so there is nothing to tear down first.
@@ -46,58 +37,59 @@ with each other after an action.
                         warning above already says syncing has stopped, and the
                         worker claims no connection that cannot be refreshed, so
                         a Sync now here would report a run that does nothing.
-                        {% endcomment %}
-                        {% if card.needs_reconnect and card.provider.asks_for_credentials %}
-                            {% comment %}Reconnecting is the credentials form under the warning.{% endcomment %}
-                        {% elif card.needs_reconnect and card.provider.is_configured %}
-                            <form method="post"
-                                  action="{% url 'integrations:connect' team.key card.provider.key %}">
-                                {% csrf_token %}
-                                <c-buttons.primary size="sm" type="submit">Reconnect</c-buttons.primary>
-                            </form>
-                        {% elif card.provider.is_configured and card.provider.syncs %}
-                            <form method="post"
-                                  hx-post="{% url 'integrations:panel' team.key %}"
-                                  hx-target="#integrations-wrapper"
-                                  hx-disabled-elt="find button[type='submit']"
-                                  hx-swap="innerHTML">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="sync">
-                                <input type="hidden" name="provider" value="{{ card.provider.key }}">
-                                <c-buttons.secondary size="sm" type="submit">
-                                <i class="fas fa-arrows-rotate mr-2" aria-hidden="true"></i>Sync now
-                                </c-buttons.secondary>
-                            </form>
-                        {% endif %}
-                        <form method="post"
-                              hx-post="{% url 'integrations:panel' team.key %}"
-                              hx-target="#integrations-wrapper"
-                              hx-confirm="{% if card.provider.kind == 'notifications' %}Disconnect {{ card.provider.name }}? sbomify stops posting to every channel.{% else %}Disconnect {{ card.provider.name }}? Its frameworks come off your Trust Center straight away.{% endif %}"
-                              hx-swap="innerHTML">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="disconnect">
-                            <input type="hidden" name="provider" value="{{ card.provider.key }}">
-                            <c-buttons.outline-danger size="sm" type="submit">Disconnect</c-buttons.outline-danger>
-                        </form>
-                    {% elif card.provider.is_configured and card.provider.asks_for_credentials %}
-                        {% comment %}The credentials form below is the connect button.{% endcomment %}
-                    {% elif card.provider.is_configured %}
-                        {% comment %}
-                        A plain form post, not HTMX: this response is a redirect
-                        off site to the provider's consent screen, which HTMX
-                        would try to swap into the page.
-                        {% endcomment %}
+                    {% endcomment %}
+                    {% if card.needs_reconnect and card.provider.asks_for_credentials %}
+                        {% comment %}Reconnecting is the credentials form under the warning.{% endcomment %}
+                    {% elif card.needs_reconnect and card.provider.is_configured %}
                         <form method="post"
                               action="{% url 'integrations:connect' team.key card.provider.key %}">
                             {% csrf_token %}
-                            <c-buttons.primary size="sm" type="submit">Connect {{ card.provider.name }}</c-buttons.primary>
+                            <c-buttons.primary size="sm" type="submit">Reconnect</c-buttons.primary>
                         </form>
-                    {% else %}
-                        <c-badges.secondary size="sm">Not available here</c-badges.secondary>
+                    {% elif card.provider.is_configured and card.provider.syncs %}
+                        <form method="post"
+                              hx-post="{% url 'integrations:panel' team.key %}"
+                              hx-target="#integrations-wrapper"
+                              hx-disabled-elt="find button[type='submit']"
+                              hx-swap="innerHTML">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="sync">
+                            <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                            <c-buttons.secondary size="sm" type="submit">
+                            <i class="fas fa-arrows-rotate mr-2" aria-hidden="true"></i>Sync now
+                            </c-buttons.secondary>
+                        </form>
                     {% endif %}
-                </div>
+                    <form method="post"
+                          hx-post="{% url 'integrations:panel' team.key %}"
+                          hx-target="#integrations-wrapper"
+                          hx-confirm="{% if card.provider.kind == 'notifications' %}Disconnect {{ card.provider.name }}? sbomify stops posting to every channel.{% else %}Disconnect {{ card.provider.name }}? Its frameworks come off your Trust Center straight away.{% endif %}"
+                          hx-swap="innerHTML">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="disconnect">
+                        <input type="hidden" name="provider" value="{{ card.provider.key }}">
+                        <c-buttons.outline-danger size="sm" type="submit">Disconnect</c-buttons.outline-danger>
+                    </form>
+                {% elif card.provider.is_configured and card.provider.asks_for_credentials %}
+                    {% comment %}The credentials form below is the connect button.{% endcomment %}
+                {% elif card.provider.is_configured %}
+                    {% comment %}
+                        A plain form post, not HTMX: this response is a redirect
+                        off site to the provider's consent screen, which HTMX
+                        would try to swap into the page.
+                    {% endcomment %}
+                    <form method="post"
+                          action="{% url 'integrations:connect' team.key card.provider.key %}">
+                        {% csrf_token %}
+                        <c-buttons.primary size="sm" type="submit">Connect {{ card.provider.name }}</c-buttons.primary>
+                    </form>
+                {% else %}
+                    <c-badges.secondary size="sm">Not available here</c-badges.secondary>
+                {% endif %}
             </div>
-            <c-layout.section-body class="mt-4">
+            </c-slot>
+            </c-layout.section-header>
+            <c-layout.section-body>
             {% comment %}
             Connected is checked first, deliberately. A deployment can lose its
             credentials after a workspace has already connected, and that
@@ -209,6 +201,7 @@ with each other after an action.
                 {% endif %}
             {% endif %}
             </c-layout.section-body>
-        </section>
+        </div>
+        </c-cards.card>
     {% endfor %}
 </div>
