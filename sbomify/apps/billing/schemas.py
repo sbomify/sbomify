@@ -7,7 +7,7 @@ from pydantic import Field
 
 
 class BillingLimitsData(TypedDict, total=False):
-    """Type definition for Team.billing_plan_limits JSON field."""
+    """Type definition for Workspace.billing_plan_limits JSON field."""
 
     max_products: int | None
     max_components: int | None

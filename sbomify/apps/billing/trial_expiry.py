@@ -19,7 +19,7 @@ from django.conf import settings
 class TrialExpiryEmissionGuard:
     """Two-marker state machine for exactly-once trial-expired side effects.
 
-    Markers are stored in ``Team.billing_plan_limits``:
+    Markers are stored in ``Workspace.billing_plan_limits``:
 
     * ``trial_expired_claimed_at`` — reserved under a row lock by the
       caller that wins the race. Acts as the gate: concurrent webhooks
@@ -38,7 +38,7 @@ class TrialExpiryEmissionGuard:
 
         guard = TrialExpiryEmissionGuard()
         with transaction.atomic():
-            team = Team.objects.select_for_update().get(pk=team.pk)
+            team = Workspace.objects.select_for_update().get(pk=team.pk)
             billing_limits = (team.billing_plan_limits or {}).copy()
             now = timezone.now()
             should_run = guard.should_claim(billing_limits, now)
@@ -51,7 +51,7 @@ class TrialExpiryEmissionGuard:
         if should_run:
             # ... run side effects ...
             with transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
+                team = Workspace.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
                 guard.stamp_emitted(billing_limits, timezone.now())
                 team.billing_plan_limits = billing_limits

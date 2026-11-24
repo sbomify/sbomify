@@ -48,7 +48,7 @@ from sbomify.apps.core.models import Release, ReleaseArtifact
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component, Product
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 COMPONENT_NAME = "Compression Core Library"
 PRODUCT_NAME = "Pied Piper Compression Engine"
@@ -134,7 +134,7 @@ def _vex_bytes(document: dict) -> bytes:
 
 
 @pytest.fixture
-def vex_release(deletable_team: Team) -> dict:
+def vex_release(deletable_team: Workspace) -> dict:
     """Seed a public release whose scanned SBOM has an unmitigated critical."""
     component = Component.objects.create(team=deletable_team, name=COMPONENT_NAME)
 

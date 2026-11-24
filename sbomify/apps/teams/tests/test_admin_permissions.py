@@ -86,7 +86,7 @@ def test_settings_for_a_workspace_you_do_not_belong_to_is_refused(client, owner,
     re-resolves the role against B and refuses — this pins that, and that the
     refusal says the right thing rather than blaming the user's role.
     """
-    # No explicit key: Team.save() derives a real token from the pk, and the
+    # No explicit key: Workspace.save() derives a real token from the pk, and the
     # settings path decodes it. A hand-written key decodes to nothing and 404s
     # before any of the logic under test runs.
     other = Workspace.objects.create(name="Someone Else's Workspace")
