@@ -64,7 +64,7 @@
             <tbody>
                 {% for release in subscription.releases %}
                     <c-tables.row>
-                    <c-tables.cell nowrap class="font-medium">
+                    <c-tables.cell class="font-medium">
                     {{ release.version }}
                     {% if release.gone %}<c-badges.danger size="sm">Removed upstream</c-badges.danger>{% endif %}
                     </c-tables.cell>

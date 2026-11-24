@@ -304,7 +304,10 @@ def list_pins(request: HttpRequest, release_id: str) -> Any:
     return 200, [_pin_out(pin) for pin in pins.pins_of(release)]
 
 
-@router.post("/releases/{release_id}/pins", response={201: PinOut, **ERRORS})
+@router.post(
+    "/releases/{release_id}/pins",
+    response={201: PinOut, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
 def add_pin(request: HttpRequest, release_id: str, payload: PinIn) -> Any:
     """Pin a remote artifact revision into a release, as it is now."""
     release = _release(request, release_id, "release:tag")

@@ -13,7 +13,7 @@
     <tbody>
         {% for release in page.items %}
             <c-tables.row>
-            <c-tables.cell nowrap class="font-medium">
+            <c-tables.cell class="font-medium">
             {{ release.version }}
             {% if release.pre_release %}<c-badges.warning size="sm">Pre-release</c-badges.warning>{% endif %}
             </c-tables.cell>
