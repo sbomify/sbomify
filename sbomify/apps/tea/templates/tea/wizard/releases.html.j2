@@ -1,0 +1,57 @@
+{% url 'core:tea_subscription_new' as wizard_url %}
+{% include "tea/wizard/_stepper.html.j2" %}
+<c-layout.form-section step="3" title="Select" description="Pick a product release. Its components come next.">
+{% if page.items %}
+    <c-cards.card flush>
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell nowrap>Version</c-tables.header-cell>
+    <c-tables.header-cell>Product</c-tables.header-cell>
+    <c-tables.header-cell date>Released</c-tables.header-cell>
+    <c-tables.actions-cell as="th" label="Actions" />
+    </c-tables.head>
+    <tbody>
+        {% for release in page.items %}
+            <c-tables.row>
+            <c-tables.cell nowrap class="font-medium">
+            {{ release.version }}
+            {% if release.pre_release %}<c-badges.warning size="sm">Pre-release</c-badges.warning>{% endif %}
+            </c-tables.cell>
+            <c-tables.cell muted>{{ release.product_name }}</c-tables.cell>
+            <c-tables.cell date>{{ release.release_date|date:"j M Y" }}</c-tables.cell>
+            <c-tables.cell end>
+            <form hx-post="{{ wizard_url }}"
+                  hx-target="#tea-wizard"
+                  hx-disabled-elt="find button">
+                {% csrf_token %}
+                <input type="hidden" name="step" value="components">
+                <input type="hidden" name="server" value="{{ server.base_url }}">
+                <input type="hidden" name="tei" value="{{ tei }}">
+                <input type="hidden" name="product_release_uuid" value="{{ release.uuid }}">
+                <c-buttons.ghost type="submit" size="sm"><span>Pick</span><i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.ghost>
+            </form>
+            </c-tables.cell>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+    </c-cards.card>
+{% else %}
+    <c-cards.card flush>
+    <c-feedback.empty-state icon="fas fa-tag" title="No releases published" message="This product has no releases on the server yet." />
+    </c-cards.card>
+{% endif %}
+{% if page.next_page_token %}
+    <form class="flex justify-end"
+          hx-post="{{ wizard_url }}"
+          hx-target="#tea-wizard"
+          hx-disabled-elt="find button">
+        {% csrf_token %}
+        <input type="hidden" name="step" value="releases">
+        <input type="hidden" name="server" value="{{ server.base_url }}">
+        <input type="hidden" name="product_uuid" value="{{ product_uuid }}">
+        <input type="hidden" name="page_token" value="{{ page.next_page_token }}">
+        <c-buttons.secondary type="submit"><span>Next page</span></c-buttons.secondary>
+    </form>
+{% endif %}
+</c-layout.form-section>

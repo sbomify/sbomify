@@ -1,0 +1,24 @@
+{% include "tea/wizard/_stepper.html.j2" %}
+<form class="flex flex-col gap-6"
+      hx-post="{% url 'core:tea_subscription_new' %}"
+      hx-target="#tea-wizard"
+      hx-disabled-elt="find button"
+      x-data="{ source: '{{ sources.0.value|escapejs }}' }">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="find">
+    <c-layout.form-section step="1" title="Source" description="The TEA server that publishes the component.">
+    <div class="flex flex-col gap-5">
+        <c-layout.choice-group name="source" label="Server" :options="sources" selected="{{ sources.0.value }}" required hint="Another server can be a domain that publishes .well-known/tea, or an API base ending in its version." @change="source = $event.target.value" />
+        <div x-show="source === 'custom'" x-cloak>
+            <c-forms.field label="Server address" for="custom_server">
+            <c-forms.input id="custom_server" name="custom_server" maxlength="500" placeholder="tea.example.com or https://tea.example.com/tea/v1.0.0" ::disabled="source !== 'custom'" />
+            </c-forms.field>
+        </div>
+    </div>
+    </c-layout.form-section>
+    <div class="flex flex-wrap items-center justify-end gap-2">
+        <c-buttons.primary type="submit">
+        <span>Connect</span><i class="fas fa-arrow-right" aria-hidden="true"></i>
+        </c-buttons.primary>
+    </div>
+</form>

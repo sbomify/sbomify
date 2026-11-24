@@ -170,6 +170,14 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "Subscribe to a TEA component",
+      "url_name": "core:tea_subscription_new",
+      "section": "create",
+      "icon": "fa-satellite-dish",
+      "keywords": ["tea subscription", "subscribe", "remote component", "transparency exchange", "import component", "follow component", "upstream sbom"],
+      "roles": ["owner", "admin", "member"]
+    },
+    {
       "title": "New advisory",
       "url_name": "core:security_advisory_new",
       "section": "create",

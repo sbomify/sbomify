@@ -14,6 +14,7 @@
     <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to components</span>
     </c-buttons.ghost>
     </c-layout.page-header>
+    <c-layout.action-tile href="{% url 'core:tea_subscription_new' %}" icon="fas fa-satellite-dish" title="Subscribe to a TEA component" description="Follow a component another TEA 1.0 server publishes, instead of uploading your own." />
     {% if form.non_field_errors %}
         <c-feedback.alert variant="danger" title="Component could not be created">{{ form.non_field_errors|join:' ' }}</c-feedback.alert>
     {% endif %}

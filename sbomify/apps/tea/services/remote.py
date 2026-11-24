@@ -240,6 +240,22 @@ def product_release_components(server: RemoteServer, product_release_uuid: str) 
     }
 
 
+def describe_product_releases(server: RemoteServer, uuids: list[str]) -> list[dict[str, Any]]:
+    """Product releases by uuid, as a TEI resolves to them, with what a person picks one by."""
+    with server.client() as client:
+        releases = [read(partial(client.get_product_release, uuid)) for uuid in uuids[:PREVIEW_LIMIT]]
+    return [
+        {
+            "uuid": r.uuid,
+            "version": r.version,
+            "product_name": r.product_name or "",
+            "release_date": r.release_date or r.created_date,
+            "pre_release": bool(r.pre_release),
+        }
+        for r in releases
+    ]
+
+
 def component_releases(server: RemoteServer, component_uuid: str) -> list[dict[str, Any]]:
     with server.client() as client:
         releases = read(lambda: client.get_component_releases(component_uuid))

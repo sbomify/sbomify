@@ -1,0 +1,23 @@
+{# Progress rail for the TEA import wizard. Expects: steps (dict), step (int). #}
+<nav aria-label="Subscription progress">
+    <c-navigation.stepper>
+    {% for number, label in steps.items %}
+        {% if number < step %}
+            <c-navigation.stepper-step state="completed" label="{{ label }}" label_class="sr-only sm:not-sr-only">
+            <i class="fas fa-check text-xs" aria-hidden="true"></i>
+            </c-navigation.stepper-step>
+        {% elif number == step %}
+            <c-navigation.stepper-step state="active" label="{{ label }}" label_class="sr-only sm:not-sr-only" aria-current="step">{{ number }}</c-navigation.stepper-step>
+        {% else %}
+            <c-navigation.stepper-step label="{{ label }}" label_class="sr-only sm:not-sr-only">{{ number }}</c-navigation.stepper-step>
+        {% endif %}
+        {% if not forloop.last %}
+            {% if number < step %}
+                <c-navigation.stepper-connector completed />
+            {% else %}
+                <c-navigation.stepper-connector />
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    </c-navigation.stepper>
+</nav>
