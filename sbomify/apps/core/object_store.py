@@ -502,11 +502,34 @@ class GCSObjectStoreClient(ObjectStoreClient):
         )
         return result
 
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of the object, or ``None`` if it is not there."""
+        from google.api_core import exceptions as gexc
+
+        blob = self._blob(bucket_name, key)
+
+        def _ranged() -> bytes:
+            try:
+                data: bytes = blob.download_as_bytes(start=0, end=length - 1, timeout=self._timeout, retry=self._retry)
+            except gexc.RequestRangeNotSatisfiable:
+                # A range starting at 0 is unsatisfiable only for an empty object.
+                return b""
+            return data
+
+        result: bytes | None = self._call("GetObject", _ranged, missing_object=None)
+        return result
+
     def delete_object(self, bucket_name: str, key: str) -> None:
         # S3 DeleteObject succeeds on an absent key; match that so a retried
         # cleanup does not fail on the second pass.
         blob = self._blob(bucket_name, key)
         self._call("DeleteObject", lambda: blob.delete(timeout=self._timeout, retry=self._retry), missing_object=None)
+
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None:
+        # One request per key through delete_object, so a key that is already
+        # gone is not an error, as with S3.
+        for key in keys:
+            self.delete_object(bucket_name, key)
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return list(self.iter_objects(bucket_name, prefix))
@@ -538,6 +561,17 @@ class GCSObjectStoreClient(ObjectStoreClient):
 
         exists: bool = self._call("HeadObject", _head, missing_object=False)
         return exists
+
+    def object_size(self, bucket_name: str, key: str) -> int | None:
+        """The stored object's size in bytes, or ``None`` if it is not there."""
+        blob = self._blob(bucket_name, key)
+
+        def _head() -> int:
+            blob.reload(timeout=self._timeout, retry=self._retry)
+            return int(blob.size)
+
+        size: int | None = self._call("HeadObject", _head, missing_object=None)
+        return size
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
         blob = self._blob(bucket_name, key)

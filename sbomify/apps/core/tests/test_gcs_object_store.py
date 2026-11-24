@@ -151,6 +151,33 @@ class TestDataOperations:
         _blob(client).reload.side_effect = gexc.NotFound("No such object: bucket/key")
         assert store.object_exists("bucket", "key") is False
 
+    def test_get_object_prefix_is_a_ranged_read(self, gcs):
+        store, client, _ = gcs
+        _blob(client).download_as_bytes.return_value = b"hel"
+        assert store.get_object_prefix("bucket", "key", 3) == b"hel"
+        kwargs = _blob(client).download_as_bytes.call_args.kwargs
+        assert (kwargs["start"], kwargs["end"]) == (0, 2)
+
+    def test_get_object_prefix_of_missing_or_empty_object(self, gcs):
+        store, client, _ = gcs
+        _blob(client).download_as_bytes.side_effect = gexc.NotFound("No such object: bucket/key")
+        assert store.get_object_prefix("bucket", "key", 3) is None
+        _blob(client).download_as_bytes.side_effect = gexc.RequestRangeNotSatisfiable("empty")
+        assert store.get_object_prefix("bucket", "key", 3) == b""
+
+    def test_object_size(self, gcs):
+        store, client, _ = gcs
+        _blob(client).size = 42
+        assert store.object_size("bucket", "key") == 42
+        _blob(client).reload.side_effect = gexc.NotFound("No such object: bucket/key")
+        assert store.object_size("bucket", "key") is None
+
+    def test_delete_objects_skips_missing_keys(self, gcs):
+        store, client, _ = gcs
+        _blob(client).delete.side_effect = [None, gexc.NotFound("No such object: bucket/b"), None]
+        store.delete_objects("bucket", ["a", "b", "c"])
+        assert [c.args for c in client.bucket.return_value.blob.call_args_list] == [("a",), ("b",), ("c",)]
+
     def test_iter_and_list_objects(self, gcs):
         store, client, _ = gcs
         blobs = [MagicMock(), MagicMock()]
@@ -339,7 +366,17 @@ class TestKeylessSigningAgainstTheRealSDK:
 
 @pytest.mark.parametrize(
     "operation",
-    ["get_object", "put_object", "object_exists", "delete_object", "list_objects", "upload_file", "download_file"],
+    [
+        "get_object",
+        "get_object_prefix",
+        "put_object",
+        "object_exists",
+        "object_size",
+        "delete_object",
+        "list_objects",
+        "upload_file",
+        "download_file",
+    ],
 )
 def test_transfers_bound_sdk_retries(operation: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Repeated read timeouts must leave room inside the VEX actor's 120-second limit."""
@@ -371,6 +408,8 @@ def test_transfers_bound_sdk_retries(operation: str, monkeypatch: pytest.MonkeyP
         "get_object": ("bucket", "key"),
         "put_object": ("bucket", "key", b"{}"),
         "object_exists": ("bucket", "key"),
+        "object_size": ("bucket", "key"),
+        "get_object_prefix": ("bucket", "key", 3),
         "delete_object": ("bucket", "key"),
         "list_objects": ("bucket", "prefix/"),
         "upload_file": ("bucket", str(file_path), "key"),
