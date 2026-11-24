@@ -9,6 +9,10 @@ updates:
       github-actions:
         patterns:
           - "*"
+    ignore:
+      # The v2.6.0 image on ghcr.io references a manifest that is gone, so it cannot be pulled.
+      - dependency-name: "ossf/scorecard-action"
+        versions: ["2.6.0"]
   - package-ecosystem: "bun"
     directory: "/"
     schedule:
