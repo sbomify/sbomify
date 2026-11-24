@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django.test import Client
+from django.core.cache import cache
+from django.test import Client, override_settings
 from django.urls import reverse
 
 from sbomify.apps.core.domain.exceptions import ValidationError
@@ -132,3 +133,25 @@ def test_confirm_needs_a_pick(owner, fake):
     response = step(client, "confirm", server=SERVER.base_url)
 
     assert "Pick at least one component" in response["HX-Trigger"]
+
+
+def test_oversized_fields_and_too_many_picks_are_refused(owner, fake):
+    client, _ = owner
+
+    long_server = step(client, "find", source="custom", custom_server="x" * 501)
+    many_picks = step(client, "confirm", server=SERVER.base_url, pick=[f"c{n}|r|n" for n in range(26)])
+
+    assert long_server.status_code == 400
+    assert many_picks.status_code == 400
+
+
+@override_settings(CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}})
+def test_the_wizard_is_rate_limited(owner, fake):
+    client, _ = owner
+    cache.clear()
+
+    answers = [step(client, "find", source="library.sbomify.com") for _ in range(31)]
+
+    assert "Connected to" in answers[29].content.decode()
+    assert "Too many requests" in answers[30]["HX-Trigger"]
+    cache.clear()

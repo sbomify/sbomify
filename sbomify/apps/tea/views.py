@@ -18,6 +18,7 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.billing.billing_helpers import check_rate_limit
 from sbomify.apps.core.authz import MANAGE, can
 from sbomify.apps.core.domain.exceptions import DomainError
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
@@ -31,6 +32,11 @@ from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
 
 STEPS = {1: "Source", 2: "Find", 3: "Select", 4: "Confirm"}
+# Each step reads a remote server on the user's behalf, so the wizard is rate limited like the API.
+STEP_LIMIT, STEP_PERIOD = 30, 60
+# The longest value each field takes, as the API allows. A name_<n> field takes 255.
+FIELD_LIMITS = (("server", 500), ("custom_server", 500), ("tei", 2048), ("id_value", 2048), ("page_token", 2048))
+MAX_PICKS = remote.PREVIEW_LIMIT
 CUSTOM_SOURCE = "custom"
 ID_TYPES = [{"value": "PURL", "label": "PURL"}, {"value": "CPE", "label": "CPE"}, {"value": "TEI", "label": "TEI"}]
 
@@ -57,6 +63,13 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         team = self._team(request)
+        if check_rate_limit(f"tea_wizard:{request.user.pk}", limit=STEP_LIMIT, period=STEP_PERIOD):
+            return htmx_error_response("Too many requests. Wait a minute and try again.")
+        too_long = any(len(request.POST.get(name, "")) > limit for name, limit in FIELD_LIMITS) or any(
+            len(value) > 255 for name, value in request.POST.items() if name.startswith("name_")
+        )
+        if too_long or len(request.POST.getlist("pick")) > MAX_PICKS:
+            return HttpResponseBadRequest("Request too large")
         handlers: dict[str, Callable[[HttpRequest, Workspace], HttpResponse]] = {
             "find": self._find,
             "tei": self._tei,
