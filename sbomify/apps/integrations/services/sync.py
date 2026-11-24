@@ -53,15 +53,15 @@ def run_sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
             # that keeps one live token per application (Vanta) refuses it
             # the moment anything else mints another from the same app, so
             # this is a token that was replaced, not credentials that died.
-            # Dropping it makes the next run mint a fresh one; if the app
-            # really is gone, that mint is refused and revokes the row.
+            # Forgetting its expiry makes it stale, so the next run mints a
+            # fresh one; if the app really is gone, that mint is refused and
+            # revokes the row.
             message = (
                 f"{provider.name} stopped accepting sbomify's token partway through. Something else may be "
                 f"using the same {provider.name} application. The next sync tries again with a new token."
             )
             _record(
                 integration,
-                access_token="",
                 token_expires_at=None,
                 last_sync_status=Integration.SyncStatus.FAILED,
                 last_sync_error=message,
