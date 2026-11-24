@@ -46,11 +46,6 @@ InternalDocumentKind = Literal[
     "final_report",
 ]
 
-# The wizard is owner and admin work, so its writes declare an admin-tier scope:
-# a token scoped for day-to-day product work does not answer a conformity
-# assessment.
-_ASSESSOR = ("workspace:manage",)
-
 # Steps a person saves in sbomify. Step 3 writes into the public security.txt,
 # step 5 publishes the Declaration of Conformity.
 _PERSON_STEPS = {
@@ -107,7 +102,20 @@ def _lookup_report(principal: Principal, report_id: str) -> None:
 
 
 def register_tools(mcp: FastMCP) -> None:
-    @mcp_tool(mcp, "start_cra_assessment", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
+    # The assessment tools declare the action their view checks: cra_assessment:read
+    # to read, cra_assessment:manage to change. Both are owner and admin tier, so a
+    # token scoped for day-to-day product work cannot answer a conformity assessment.
+    #
+    # also_requires product:manage: create_or_get_assessment, the REST view this
+    # delegates to, checks it on top of require_product_cra_access's check.
+    @mcp_tool(
+        mcp,
+        "start_cra_assessment",
+        "cra_assessment:manage",
+        also_requires=("product:manage",),
+        writes=True,
+        idempotent=True,
+    )
     async def start_cra_assessment(principal: Principal, product_id: str) -> dict[str, Any]:
         """Start the CRA conformity assessment for a product, or return the one it already has.
 
@@ -133,7 +141,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "get_cra_assessment", "product:read")
+    @mcp_tool(mcp, "get_cra_assessment", "cra_assessment:read")
     async def get_cra_assessment(
         principal: Principal, assessment_id: str | None = None, product_id: str | None = None
     ) -> dict[str, Any]:
@@ -170,7 +178,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "get_cra_step", "product:read")
+    @mcp_tool(mcp, "get_cra_step", "cra_assessment:read")
     async def get_cra_step(principal: Principal, assessment_id: str, step: int) -> dict[str, Any]:
         """Read one step of a CRA assessment with the data it holds.
 
@@ -195,7 +203,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "save_cra_step", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
+    @mcp_tool(mcp, "save_cra_step", "cra_assessment:manage", writes=True, idempotent=True)
     async def save_cra_step(
         principal: Principal, assessment_id: str, step: int, data: dict[str, Any]
     ) -> dict[str, Any]:
@@ -246,7 +254,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "update_cra_finding", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=True)
+    @mcp_tool(mcp, "update_cra_finding", "cra_assessment:manage", writes=True, idempotent=True)
     async def update_cra_finding(
         principal: Principal,
         assessment_id: str,
@@ -287,7 +295,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "add_cra_observation", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=False)
+    @mcp_tool(mcp, "add_cra_observation", "cra_assessment:manage", writes=True, idempotent=False)
     async def add_cra_observation(
         principal: Principal,
         assessment_id: str,
@@ -319,7 +327,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "generate_cra_document", "product:manage", also_requires=_ASSESSOR, writes=True, idempotent=False)
+    @mcp_tool(mcp, "generate_cra_document", "cra_assessment:manage", writes=True, idempotent=False)
     async def generate_cra_document(
         principal: Principal, assessment_id: str, kind: InternalDocumentKind
     ) -> dict[str, Any]:
@@ -341,7 +349,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "get_cra_export", "product:read")
+    @mcp_tool(mcp, "get_cra_export", "cra_assessment:read")
     async def get_cra_export(principal: Principal, assessment_id: str, package_id: str) -> dict[str, Any]:
         """One export package of a CRA assessment: its files, integrity hash and signature.
 

@@ -68,7 +68,7 @@ async def _run(token, tool, arguments):
 async def test_start_cra_assessment_creates_once(make_token, product_in_bound_workspace):
     from sbomify.apps.compliance.models import CRAAssessment
 
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:manage", "product:manage"])
     first = structured(await _run(token, "start_cra_assessment", {"product_id": product_in_bound_workspace.id}))
     again = structured(await _run(token, "start_cra_assessment", {"product_id": product_in_bound_workspace.id}))
 
@@ -96,7 +96,7 @@ async def test_a_member_cannot_start_a_cra_assessment(mcp_owner, make_token, pro
 
 @pytest.mark.asyncio
 async def test_get_cra_assessment_by_product_folds_in_staleness_and_sbom_status(make_token, assessment):
-    token = await sync_to_async(make_token)(["product:read"])
+    token = await sync_to_async(make_token)(["cra_assessment:read"])
 
     result = structured(await _run(token, "get_cra_assessment", {"product_id": assessment.product_id}))
 
@@ -107,7 +107,7 @@ async def test_get_cra_assessment_by_product_folds_in_staleness_and_sbom_status(
 
 @pytest.mark.asyncio
 async def test_get_cra_step_three_names_each_controls_finding(make_token, assessment):
-    token = await sync_to_async(make_token)(["product:read"])
+    token = await sync_to_async(make_token)(["cra_assessment:read"])
 
     result = structured(await _run(token, "get_cra_step", {"assessment_id": assessment.id, "step": 3}))
 
@@ -121,7 +121,7 @@ async def test_save_cra_step_saves_step_four_and_leaves_the_public_steps_to_a_pe
     from sbomify.apps.compliance.models import CRAAssessment
     from sbomify.apps.teams.models import Workspace
 
-    token = await sync_to_async(make_token)(["product:read", "product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:read", "cra_assessment:manage"])
     saved = structured(
         await _run(
             token,
@@ -175,7 +175,7 @@ async def test_saving_step_one_keeps_a_third_party_procedure(make_token, assessm
         conformity_assessment_procedure=CRAAssessment.ConformityProcedure.MODULE_H,
         harmonised_standard_applied=True,
     )
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:manage"])
 
     structured(
         await _run(
@@ -196,7 +196,7 @@ async def test_update_cra_finding_keeps_the_notes_it_was_not_sent(make_token, as
 
     finding = await sync_to_async(_first_finding)(assessment)
     await sync_to_async(OSCALFinding.objects.filter(pk=finding.pk).update)(notes="Reviewed in the design doc")
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:manage"])
 
     result = structured(
         await _run(
@@ -216,7 +216,7 @@ async def test_add_cra_observation_records_evidence(make_token, assessment):
     from sbomify.apps.compliance.models import OSCALObservation
 
     finding = await sync_to_async(_first_finding)(assessment)
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:manage"])
 
     result = structured(
         await _run(
@@ -239,7 +239,7 @@ async def test_add_cra_observation_records_evidence(make_token, assessment):
 async def test_generate_cra_document_writes_internal_kinds_only(make_token, assessment):
     from sbomify.apps.compliance.models import CRAGeneratedDocument
 
-    token = await sync_to_async(make_token)(["product:manage", "workspace:manage"])
+    token = await sync_to_async(make_token)(["cra_assessment:manage"])
     with patch("sbomify.apps.core.object_store.StorageClient"):
         made = structured(
             await _run(token, "generate_cra_document", {"assessment_id": assessment.id, "kind": "risk_assessment"})
@@ -264,7 +264,7 @@ async def test_get_cra_export_reads_a_package(make_token, assessment):
         content_hash="0" * 64,
         manifest={"format_version": "1.0"},
     )
-    token = await sync_to_async(make_token)(["product:read"])
+    token = await sync_to_async(make_token)(["cra_assessment:read"])
 
     result = structured(await _run(token, "get_cra_export", {"assessment_id": assessment.id, "package_id": package.id}))
 
@@ -350,6 +350,27 @@ async def test_read_only_token_sees_no_cra_write(make_token):
     }
 
 
+@pytest.mark.asyncio
+async def test_a_token_without_the_cra_assessment_scopes_is_refused_at_the_door(make_token, assessment):
+    """The views check cra_assessment:*, so product and workspace scopes must not let a call reach them."""
+    finding = await sync_to_async(_first_finding)(assessment)
+    token = await sync_to_async(make_token)(["product:read", "product:manage", "workspace:manage"])
+    on_finding = {"assessment_id": assessment.id, "finding_id": finding.id}
+    calls = [
+        ("start_cra_assessment", {"product_id": assessment.product_id}, "cra_assessment:manage"),
+        ("save_cra_step", {"assessment_id": assessment.id, "step": 4, "data": {}}, "cra_assessment:manage"),
+        ("update_cra_finding", {**on_finding, "status": "satisfied"}, "cra_assessment:manage"),
+        ("add_cra_observation", {**on_finding, "description": "x", "method": "TEST"}, "cra_assessment:manage"),
+        ("generate_cra_document", {"assessment_id": assessment.id, "kind": "risk_assessment"}, "cra_assessment:manage"),
+        ("get_cra_assessment", {"assessment_id": assessment.id}, "cra_assessment:read"),
+        ("get_cra_step", {"assessment_id": assessment.id, "step": 1}, "cra_assessment:read"),
+        ("get_cra_export", {"assessment_id": assessment.id, "package_id": "none"}, "cra_assessment:read"),
+    ]
+
+    for tool, arguments, action in calls:
+        assert f"Not permitted ({action})" in _refusal(await _run(token, tool, arguments)), tool
+
+
 def test_answering_the_assessment_needs_an_admin_tier_scope():
     """The wizard is owner and admin work, so a token needs an admin-tier scope to change an assessment."""
     from sbomify.apps.mcp import registry
@@ -361,5 +382,5 @@ def test_answering_the_assessment_needs_an_admin_tier_scope():
         "add_cra_observation",
         "generate_cra_document",
     }
-    assert writes & registry.permitted_by(["product:manage"]) == set()
-    assert writes <= registry.permitted_by(["product:manage", "workspace:manage"])
+    assert writes & registry.permitted_by(["product:manage", "workspace:manage"]) == set()
+    assert writes <= registry.permitted_by(["cra_assessment:manage", "product:manage"])

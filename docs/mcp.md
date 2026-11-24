@@ -53,9 +53,10 @@ Some writes stay with a person in sbomify, because they publish, attest or admin
 - approving VEX submissions, advisory changes and access requests;
 - workspace administration: control statuses and evidence, catalog changes and plugin settings.
 
-Some tools that are offered still need an admin-tier scope (`workspace:manage`) and an owner or admin
-role: supplier writes, creating or editing a contact profile, and the CRA wizard writes, starting an
-assessment included.
+Some tools that are offered still need an admin-tier scope and an owner or admin role. Supplier writes
+and creating or editing a contact profile need `workspace:manage`. Reading a CRA assessment needs
+`cra_assessment:read`, and the CRA wizard writes need `cra_assessment:manage`. Starting an assessment
+also needs `product:manage`.
 
 ### Signing in instead of using a token
 
