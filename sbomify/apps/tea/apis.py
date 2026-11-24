@@ -7,6 +7,7 @@ All endpoints are public and workspace-scoped.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from django.conf import settings
@@ -32,8 +33,9 @@ from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import get_download_url_for_document, get_download_url_for_sbom
 from sbomify.apps.tea.cache import TEA_TEAM_ATTR, hash_key_part, tea_cached
 from sbomify.apps.tea.mappers import (
-    TEA_API_VERSION,
     TEA_IDENTIFIER_TYPE_MAPPING,
+    TEA_SPEC_VERSIONS,
+    TEA_V1_IDENTIFIER_TYPES,
     TEIParseError,
     build_tea_server_url,
     tea_identifier_mapper,
@@ -46,12 +48,13 @@ from sbomify.apps.tea.schemas import (
     TEABadRequestResponse,
     TEAChecksum,
     TEACollection,
-    TEACollectionUpdateReason,
+    TEACollectionV1,
     TEAComponent,
     TEAComponentRef,
     TEAComponentReleaseWithCollection,
     TEADiscoveryInfo,
     TEAErrorResponse,
+    TEAIdentifier,
     TEAPaginatedProductReleaseResponse,
     TEAPaginatedProductResponse,
     TEAProduct,
@@ -147,7 +150,21 @@ def _get_base_url(request: HttpRequest) -> str:
     return settings.APP_BASE_URL.rstrip("/")
 
 
-def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
+def _artifact(fields: dict[str, Any], fmt: dict[str, Any], created_at: datetime, *, v1: bool) -> TEAArtifact:
+    """Build an artifact with its one format, shaped for TEA 0.4.0 or, with ``v1``, 1.0.0."""
+    if not v1:
+        return TEAArtifact.model_validate(
+            {**fields, "distribution_ids": None, "formats": (fmt,)}, context=TEA_LEGACY_CONTEXT
+        )
+    # sbomify never changes an uploaded artifact, so each one has a single revision.
+    # TEA 1.0.0 publishes a url only with a checksum; without one, a client fetches
+    # the format from the download endpoint, which redirects to the url.
+    if not fmt["checksums"]:
+        fmt = {key: value for key, value in fmt.items() if key not in ("url", "checksums")}
+    return TEAArtifact.model_validate({**fields, "version": 1, "created_date": created_at, "formats": (fmt,)})
+
+
+def _build_sbom_artifact(sbom: SBOM, base_url: str = "", *, v1: bool = False) -> TEAArtifact:
     """Build TEA Artifact from an SBOM-model artifact of any bom_type.
 
     TEA's artifact-type vocabulary has no dedicated CBOM entry, so a CBOM (or
@@ -156,45 +173,33 @@ def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
     """
     artifact_type = TEAArtifactType.VULNERABILITIES if sbom.bom_type == SBOM.BomType.VEX else TEAArtifactType.BOM
     kind = SBOM.BomType(sbom.bom_type).label if sbom.bom_type in SBOM.BomType.values else "SBOM"
-    return TEAArtifact.model_validate(
+    return _artifact(
+        {"uuid": str(sbom.uuid), "name": sbom.name, "type": artifact_type},
         {
-            "uuid": str(sbom.uuid),
-            "name": sbom.name,
-            "type": artifact_type,
-            "distribution_ids": None,
-            "formats": (
-                {
-                    "media_type": get_artifact_mime_type(sbom.format),
-                    "description": f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
-                    "url": get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
-                    "signature_url": sbom.signature_url,
-                    "checksums": tuple(_build_checksums(sbom.sha256_hash)),
-                },
-            ),
+            "media_type": get_artifact_mime_type(sbom.format),
+            "description": f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
+            "url": get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
+            "signature_url": sbom.signature_url,
+            "checksums": tuple(_build_checksums(sbom.sha256_hash)),
         },
-        context=TEA_LEGACY_CONTEXT,
+        sbom.created_at,
+        v1=v1,
     )
 
 
-def _build_document_artifact(doc: Document, base_url: str = "") -> TEAArtifact:
+def _build_document_artifact(doc: Document, base_url: str = "", *, v1: bool = False) -> TEAArtifact:
     """Build TEA Artifact from a Document."""
-    return TEAArtifact.model_validate(
+    return _artifact(
+        {"uuid": str(doc.uuid), "name": doc.name, "type": get_tea_artifact_type(doc.document_type)},
         {
-            "uuid": str(doc.uuid),
-            "name": doc.name,
-            "type": get_tea_artifact_type(doc.document_type),
-            "distribution_ids": None,
-            "formats": (
-                {
-                    "media_type": doc.content_type or "application/octet-stream",
-                    "description": f"Document: {doc.document_type or 'unknown'}",
-                    "url": get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
-                    "signature_url": doc.signature_url,
-                    "checksums": tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
-                },
-            ),
+            "media_type": doc.content_type or "application/octet-stream",
+            "description": f"Document: {doc.document_type or 'unknown'}",
+            "url": get_download_url_for_document(doc, base_url=base_url or settings.APP_BASE_URL),
+            "signature_url": doc.signature_url,
+            "checksums": tuple(_build_checksums(doc.sha256_hash or doc.content_hash)),
         },
-        context=TEA_LEGACY_CONTEXT,
+        doc.created_at,
+        v1=v1,
     )
 
 
@@ -266,18 +271,25 @@ def _apply_identifier_filter(
 # =============================================================================
 
 
-def _build_product_response(product: Product) -> TEAProduct:
+def _identifiers(product: Product, *, v1: bool) -> tuple[TEAIdentifier, ...]:
+    """A product's TEA identifiers, keeping only the types TEA 1.0.0 defines when ``v1``."""
+    return tuple(i for i in tea_identifier_mapper(product) if not v1 or i.id_type in TEA_V1_IDENTIFIER_TYPES)
+
+
+def _build_product_response(product: Product, *, v1: bool = False) -> TEAProduct:
     """Build TEA Product response from sbomify Product."""
     return TEAProduct(
         uuid=str(product.uuid),
         name=product.name,
-        identifiers=tuple(tea_identifier_mapper(product)),
+        identifiers=_identifiers(product, v1=v1),
     )
 
 
 def _build_product_release_response(
     release: Release,
     include_components: bool = True,
+    *,
+    v1: bool = False,
 ) -> TEAProductRelease:
     """Build TEA Product Release response from sbomify Release."""
     components = []
@@ -327,7 +339,7 @@ def _build_product_release_response(
         created_date=release.created_at,
         release_date=release.released_at,
         pre_release=release.is_prerelease,
-        identifiers=tuple(tea_identifier_mapper(release.product)),
+        identifiers=_identifiers(release.product, v1=v1),
         components=tuple(components),
     )
 
@@ -364,11 +376,18 @@ def _build_component_release_response(component_release: ComponentRelease) -> TE
     )
 
 
+def _collection(fields: dict[str, Any], *, v1: bool) -> TEACollectionV1:
+    """Build a collection. TEA 0.4.0 names its timestamp ``date``, 1.0.0 ``createdDate``."""
+    return (TEACollectionV1 if v1 else TEACollection).model_validate(fields)
+
+
 def _build_collection_response(
     release: Release,
     belongs_to: CollectionBelongsTo,
     base_url: str = "",
-) -> TEACollection:
+    *,
+    v1: bool = False,
+) -> TEACollectionV1:
     """Build TEA Collection response from sbomify Release artifacts."""
     artifacts = []
     for artifact in release.artifacts.select_related("sbom__component", "document__component").all():
@@ -383,31 +402,31 @@ def _build_collection_response(
         if component and component.visibility != Component.Visibility.PUBLIC:
             continue
 
-        tea_artifact = _build_release_artifact(artifact, base_url=base_url)
+        tea_artifact = _build_release_artifact(artifact, base_url=base_url, v1=v1)
         if tea_artifact:
             artifacts.append(tea_artifact)
         else:
             log.info("Skipping unresolvable artifact %s in collection for release %s", artifact.id, release.uuid)
 
-    return TEACollection(
-        uuid=str(release.uuid),
-        version=release.collection_version,
-        date=release.collection_updated_at or release.created_at,
-        belongs_to=belongs_to,
-        update_reason=TEACollectionUpdateReason(
-            type=CollectionUpdateReasonType(release.collection_update_reason),
-            comment=None,
-        ),
-        artifacts=tuple(artifacts),
+    return _collection(
+        {
+            "uuid": str(release.uuid),
+            "version": release.collection_version,
+            "created_date": release.collection_updated_at or release.created_at,
+            "belongs_to": belongs_to,
+            "update_reason": {"type": CollectionUpdateReasonType(release.collection_update_reason), "comment": None},
+            "artifacts": tuple(artifacts),
+        },
+        v1=v1,
     )
 
 
-def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "") -> TEAArtifact | None:
+def _build_release_artifact(artifact: ReleaseArtifact, base_url: str = "", *, v1: bool = False) -> TEAArtifact | None:
     """Build TEA Artifact from a ReleaseArtifact (SBOM or Document)."""
     if artifact.sbom:
-        return _build_sbom_artifact(artifact.sbom, base_url=base_url)
+        return _build_sbom_artifact(artifact.sbom, base_url=base_url, v1=v1)
     elif artifact.document:
-        return _build_document_artifact(artifact.document, base_url=base_url)
+        return _build_document_artifact(artifact.document, base_url=base_url, v1=v1)
     return None
 
 
@@ -415,7 +434,9 @@ def _build_component_release_collection_response(
     component_release: ComponentRelease,
     belongs_to: CollectionBelongsTo,
     base_url: str = "",
-) -> TEACollection:
+    *,
+    v1: bool = False,
+) -> TEACollectionV1:
     """Build TEA Collection response from a ComponentRelease and its artifacts.
 
     SBOMs come from the ComponentReleaseArtifact junction table.
@@ -437,7 +458,7 @@ def _build_component_release_collection_response(
         sbom = cra.sbom
         if sbom.component.visibility != Component.Visibility.PUBLIC:
             continue
-        artifacts.append(_build_sbom_artifact(sbom, base_url=base_url))
+        artifacts.append(_build_sbom_artifact(sbom, base_url=base_url, v1=v1))
         if cra.created_at and cra.created_at > latest_date:
             latest_date = cra.created_at
 
@@ -459,20 +480,23 @@ def _build_component_release_collection_response(
     )
 
     for doc in sibling_docs:
-        artifacts.append(_build_document_artifact(doc, base_url=base_url))
+        artifacts.append(_build_document_artifact(doc, base_url=base_url, v1=v1))
         if doc.created_at and doc.created_at > latest_date:
             latest_date = doc.created_at
 
-    return TEACollection(
-        uuid=str(component_release.uuid),
-        version=component_release.collection_version,
-        date=latest_date,
-        belongs_to=belongs_to,
-        update_reason=TEACollectionUpdateReason(
-            type=CollectionUpdateReasonType(component_release.collection_update_reason),
-            comment=None,
-        ),
-        artifacts=tuple(artifacts),
+    return _collection(
+        {
+            "uuid": str(component_release.uuid),
+            "version": component_release.collection_version,
+            "created_date": latest_date,
+            "belongs_to": belongs_to,
+            "update_reason": {
+                "type": CollectionUpdateReasonType(component_release.collection_update_reason),
+                "comment": None,
+            },
+            "artifacts": tuple(artifacts),
+        },
+        v1=v1,
     )
 
 
@@ -505,24 +529,19 @@ def discovery(
     if not releases:
         return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
-    # Build discovery response for each release
-    server_url = build_tea_server_url(team, workspace_key, request=request)
+    return 200, _discovery_results(request, team, workspace_key, releases)
 
-    results = [
-        TEADiscoveryInfo(
-            product_release_uuid=str(release.uuid),
-            servers=(
-                TEAServerInfo(
-                    root_url=server_url,
-                    versions=(TEA_API_VERSION,),
-                    priority=1.0,
-                ),
-            ),
-        )
-        for release in releases
-    ]
 
-    return 200, results
+def _discovery_results(
+    request: HttpRequest, team: Workspace, workspace_key: str | None, releases: list[Release]
+) -> list[TEADiscoveryInfo]:
+    """One discovery entry per release, each naming this server and the TEA versions it serves."""
+    server = TEAServerInfo(
+        root_url=build_tea_server_url(team, workspace_key, request=request),
+        versions=TEA_SPEC_VERSIONS,
+        priority=1.0,
+    )
+    return [TEADiscoveryInfo(product_release_uuid=str(release.uuid), servers=(server,)) for release in releases]
 
 
 # =============================================================================
@@ -991,7 +1010,7 @@ def get_component_release(
     collection = _build_component_release_collection_response(
         component_release, BELONGS_TO_COMPONENT_RELEASE, base_url=base_url
     )
-    return 200, TEAComponentReleaseWithCollection(release=release, latest_collection=collection)
+    return 200, TEAComponentReleaseWithCollection.model_validate({"release": release, "latest_collection": collection})
 
 
 @router.get(
@@ -1141,17 +1160,24 @@ def get_artifact(
     """Get artifact metadata by UUID."""
     team = getattr(request, TEA_TEAM_ATTR)
 
-    base_url = _get_base_url(request)
-    artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
+    found = _find_artifact(team, uuid)
+    if found is None:
+        return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
 
-    # Try to find as SBOM first
+    return 200, _build_artifact(found, base_url=_get_base_url(request))
+
+
+def _find_artifact(team: Workspace, uuid: str) -> SBOM | Document | None:
+    """Find a public SBOM, or failing that a public document, by its UUID."""
+    artifact_filters = dict(uuid=uuid, component__team=team, component__visibility=Component.Visibility.PUBLIC)
     sbom = _queryset_get_or_404(SBOM.objects.select_related("component"), **artifact_filters)
     if not isinstance(sbom, tuple):
-        return 200, _build_sbom_artifact(sbom, base_url=base_url)
-
-    # Fall back to Document
+        return sbom
     document = _queryset_get_or_404(Document.objects.select_related("component"), **artifact_filters)
-    if not isinstance(document, tuple):
-        return 200, _build_document_artifact(document, base_url=base_url)
+    return None if isinstance(document, tuple) else document
 
-    return 404, TEAErrorResponse(error=ErrorType.OBJECT_UNKNOWN)
+
+def _build_artifact(found: SBOM | Document, base_url: str, *, v1: bool = False) -> TEAArtifact:
+    if isinstance(found, SBOM):
+        return _build_sbom_artifact(found, base_url=base_url, v1=v1)
+    return _build_document_artifact(found, base_url=base_url, v1=v1)

@@ -7,7 +7,7 @@ This module provides helper functions for:
 - Building TEA server URLs for workspaces
 
 Key exports:
-- TEA_API_VERSION: Current TEA API version string (e.g., "0.4.0")
+- TEA_API_VERSION, TEA_V1_VERSION: the two TEA versions served, 0.4.0 and 1.0.0
 - build_product_tei_urn: Builds a TEI URN for a product given a Team instance
 - get_product_tei_urn: Service function that builds a TEI URN given a team ID
 - build_tea_server_url: Constructs the TEA server root URL for a workspace
@@ -25,6 +25,9 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, QuerySet
+from libtea.discovery import parse_tei as parse_tei_uri
+from libtea.discovery import purl_from_tei
+from libtea.exceptions import TeaDiscoveryError
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.purl import PURLParseError, parse_purl, strip_purl_version
@@ -39,8 +42,13 @@ if TYPE_CHECKING:
 
 log = getLogger(__name__)
 
-# TEA API version
+# TEA API versions. Both are served, each under /tea/v<version>/.
 TEA_API_VERSION = "0.4.0"
+TEA_V1_VERSION = "1.0.0"
+TEA_SPEC_VERSIONS = (TEA_V1_VERSION, TEA_API_VERSION)
+
+# Identifier types TEA 1.0.0 defines. sbomify's GTIN and ASIN identifiers have no 1.0.0 type.
+TEA_V1_IDENTIFIER_TYPES = frozenset({"CPE", "PURL", "TEI"})
 
 # TEI URN pattern: urn:tei:<type>:<domain-name>:<unique-identifier>
 TEI_PATTERN = re.compile(r"^urn:tei:(\w+):([^:]+):(\S+)$")
@@ -98,12 +106,14 @@ class TEIParseError(ValueError):
 
 def parse_tei(tei: str) -> tuple[str, str, str]:
     """
-    Parse a TEI (Transparency Exchange Identifier) URN.
+    Parse a TEI (Transparency Exchange Identifier).
 
-    TEI format: urn:tei:<type>:<domain-name>:<unique-identifier>
+    Accepts the TEA 0.4.0 URN, ``urn:tei:<type>:<domain-name>:<unique-identifier>``,
+    and the TEA 1.0.0 URI, ``tei://<domain-name>/<type>/<unique-identifier>``. A 1.0.0
+    ``purl`` TEI carries its PURL as Base64URL; the PURL comes back decoded.
 
     Args:
-        tei: The TEI URN string (URL-decoded)
+        tei: The TEI string (URL-decoded)
 
     Returns:
         Tuple of (tei_type, domain_name, unique_identifier)
@@ -113,6 +123,14 @@ def parse_tei(tei: str) -> tuple[str, str, str]:
     """
     if len(tei) < 10:
         raise TEIParseError("Invalid TEI format")
+
+    if tei.startswith("tei://"):
+        try:
+            tei_type, domain, identifier = parse_tei_uri(tei)
+            identifier = purl_from_tei(tei) if tei_type == "purl" else urllib.parse.unquote(identifier)
+        except TeaDiscoveryError as exc:
+            raise TEIParseError("Invalid TEI format") from exc
+        return tei_type, domain, identifier
 
     # URL decode if needed
     decoded_tei = urllib.parse.unquote(tei)
@@ -229,9 +247,10 @@ def _exclude_latest_duplicates(qs: QuerySet[Release]) -> list[Release]:
 
 def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
     """
-    Parse TEI URN and return matching product releases.
+    Parse a TEI and return matching product releases.
 
-    TEI format: urn:tei:<type>:<domain-name>:<unique-identifier>
+    TEI formats: urn:tei:<type>:<domain-name>:<unique-identifier> (TEA 0.4.0)
+    and tei://<domain-name>/<type>/<unique-identifier> (TEA 1.0.0)
 
     Supported types:
     - purl: Direct PURL mapping (extract version from PURL if present)
@@ -254,7 +273,20 @@ def tea_tei_mapper(team: Workspace, tei: str) -> list[Release]:
         TEIParseError: If the TEI is invalid
     """
     tei_type, _domain_name, unique_identifier = parse_tei(tei)
+    return _resolve_tei(team, tei_type, unique_identifier)
 
+
+def tea_purl_mapper(team: Workspace, purl: str) -> list[Release]:
+    """Resolve a PURL to product releases, as TEA 1.0.0 discovery by PURL does.
+
+    Raises:
+        TEIParseError: If the PURL is invalid
+    """
+    return _resolve_tei(team, "purl", purl)
+
+
+def _resolve_tei(team: Workspace, tei_type: str, unique_identifier: str) -> list[Release]:
+    """Return the product releases a parsed TEI names."""
     # Handle UUID type specially - direct product lookup
     if tei_type == "uuid":
         try:
