@@ -34,6 +34,7 @@ from libtea import TeaClient
 from libtea.exceptions import TeaConnectionError, TeaError, TeaNotFoundError, TeaServerError
 from libtea.models import CLE, Artifact, Collection, Component, Release
 
+from sbomify.apps.core.domain.exceptions import DomainError, ExternalServiceError
 from sbomify.apps.core.models import ReleaseArtifact
 from sbomify.apps.core.services.release_lifecycle import _surviving, fold_dates
 from sbomify.apps.sboms.models import CLEEventType
@@ -152,9 +153,9 @@ def check(
             fetched = fetch(subscription, client, now)
     except CheckFailed as failed:
         _record_failure(subscription_id, lease, failed.status, str(failed), now)
-    except Exception as exc:
+    except Exception:
         log.exception("TEA subscription %s check failed unexpectedly", subscription_id)
-        _record_failure(subscription_id, lease, TeaSubscription.Status.ERROR, f"Unexpected error: {exc}", now)
+        _record_failure(subscription_id, lease, TeaSubscription.Status.ERROR, "The check failed unexpectedly.", now)
     else:
         apply(subscription_id, lease, fetched, now)
     return TeaSubscription.objects.select_related("latest_release").filter(pk=subscription_id).first()
@@ -164,7 +165,12 @@ def _client(subscription: TeaSubscription) -> TeaClient:
     try:
         return RemoteServer(subscription.api_base_url, subscription.spec_version).client()
     except Exception as exc:
-        raise CheckFailed(TeaSubscription.Status.ERROR, str(exc)) from exc
+        # A refused address is our own message; a name that no longer resolves is an unreachable server.
+        status = TeaSubscription.Status.ERROR
+        if isinstance(exc, ExternalServiceError):
+            status = TeaSubscription.Status.UNREACHABLE
+        message = str(exc) if isinstance(exc, DomainError) else "The server address can't be used."
+        raise CheckFailed(status, message) from exc
 
 
 def _optional(call: Callable[[], _T]) -> _T | None:
@@ -208,10 +214,14 @@ def fetch(subscription: TeaSubscription, client: TeaClient, now: datetime) -> Fe
             )
     except TeaNotFoundError as exc:
         raise CheckFailed(TeaSubscription.Status.NOT_FOUND, "The server no longer lists this component.") from exc
+    # What a server answered stays in the logs. Shown to users, it could carry another host's
+    # response back out of sbomify's network if a name resolves somewhere else at connect time.
     except (TeaConnectionError, TeaServerError) as exc:
-        raise CheckFailed(TeaSubscription.Status.UNREACHABLE, f"The server did not answer: {exc}") from exc
+        log.info("TEA subscription %s: server unreachable: %s", subscription.pk, exc)
+        raise CheckFailed(TeaSubscription.Status.UNREACHABLE, "The server did not answer.") from exc
     except TeaError as exc:
-        raise CheckFailed(TeaSubscription.Status.ERROR, f"The server's answer is not valid TEA 1.0: {exc}") from exc
+        log.info("TEA subscription %s: answer refused: %s", subscription.pk, exc)
+        raise CheckFailed(TeaSubscription.Status.ERROR, "The server's answer is not valid TEA 1.0.") from exc
     return fetched
 
 
