@@ -57,7 +57,7 @@ app:
 #
 # When `existingSecret` is set, that Secret must supply these keys:
 #   SECRET_KEY, SIGNED_URL_SALT, DATABASE_URL, REDIS_URL, KEYCLOAK_CLIENT_SECRET
-# plus, unless objectStorage.useWorkloadIdentity is true:
+# plus, unless objectStorage.useWorkloadIdentity is true or backend is gcs:
 #   AWS_MEDIA_ACCESS_KEY_ID, AWS_MEDIA_SECRET_ACCESS_KEY,
 #   AWS_SBOMS_ACCESS_KEY_ID, AWS_SBOMS_SECRET_ACCESS_KEY
 # and may supply GITHUB_API_TOKEN (optional).
@@ -102,8 +102,8 @@ secrets:
 # -- OIDC / Keycloak client configuration (the app is the OIDC *client*).
 auth:
   keycloak:
-    # REQUIRED. Keycloak base URL the app talks to, with a trailing slash,
-    # e.g. https://sso.example.com/
+    # REQUIRED unless auth.oidc.discoveryUrl is set. Keycloak base URL the app
+    # talks to, with a trailing slash, e.g. https://sso.example.com/
     #
     # Usually the PUBLIC url rather than an in-cluster Service name: OIDC
     # discovery hands the *browser* whatever endpoints it finds here, so the
@@ -115,26 +115,67 @@ auth:
     # serverUrl is an address the browser cannot reach. Defaults to serverUrl.
     publicUrl: ""
     realm: "sbomify"
+    # The OIDC client's ID and secret. auth.oidc.clientId and
+    # auth.oidc.clientSecret take precedence when set.
     clientId: "sbomify"
     clientSecret: ""
+  # Optional. Sign in through an OIDC provider other than Keycloak (Okta,
+  # Auth0, Entra ID, Authentik, Zitadel, ...). See docs/deployment.md.
+  oidc:
+    # The provider's discovery document, e.g.
+    # https://login.microsoftonline.com/<tenant-id>/v2.0/.well-known/openid-configuration
+    # When set, auth.keycloak.serverUrl is not needed.
+    discoveryUrl: ""
+    # The browser-facing logout endpoint. Only needed when the discovery
+    # document has no end_session_endpoint (Auth0 with RP-Initiated Logout
+    # off): https://<tenant>.auth0.com/oidc/logout
+    logoutUrl: ""
+    # The client's ID and secret at the provider. Provider-neutral names for
+    # auth.keycloak.clientId and auth.keycloak.clientSecret, which they
+    # override when set. The secret is stored under the same Secret key,
+    # KEYCLOAK_CLIENT_SECRET, so secrets.existingSecret is unchanged.
+    clientId: ""
+    clientSecret: ""
+    # Treat the provider's email addresses as confirmed without an
+    # email_verified claim (Entra ID sends none), like Keycloak's "Trust Email".
+    # "true", or a comma-separated list of domains such as "example.com".
+    # Only for a provider that controls the addresses it issues.
+    trustEmail: ""
 
-# -- REQUIRED. Object storage, S3 compatible: AWS S3, Cloudflare R2, Tigris,
-# or a MinIO you operate.
+# -- REQUIRED. Object storage: anything S3 compatible (AWS S3, Cloudflare R2,
+# Tigris, a MinIO you operate) or Google Cloud Storage natively.
 objectStorage:
+  # "s3" or "gcs".
+  #
+  # gcs talks to Google Cloud Storage through Application Default Credentials,
+  # so on GKE it runs on Workload Identity with no keys at all: annotate the
+  # ServiceAccount with iam.gke.io/gcp-service-account and grant that Google
+  # service account roles/storage.objectUser on both buckets, plus
+  # roles/iam.serviceAccountTokenCreator on itself so it can sign download
+  # URLs. endpointUrl, region and the access keys are ignored, and media and
+  # sboms bucket URLs default to https://storage.googleapis.com/<bucket>.
+  backend: "s3"
+  gcs:
+    # Project for the client. Empty takes it from the credentials.
+    projectId: ""
+    # Service account that signs download URLs through IAM signBlob. Empty
+    # signs as the workload's own Google service account, which is right for
+    # Workload Identity.
+    signingServiceAccount: ""
+
+  # S3 only.
   endpointUrl: ""
   region: "auto"
 
-  # Authenticate with the workload's own cloud identity instead of static keys.
+  # S3 only: authenticate with the workload's own cloud identity instead of
+  # static keys (EKS IRSA or Pod Identity). Needs a real AWS region in `region`
+  # above; "auto" is refused. (backend=gcs never takes keys, so it needs no
+  # switch.)
   #
   # When true the chart omits every AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY
   # variable, which is what lets boto3 reach its default credential chain.
   # Omitting them is the point: setting them to empty strings would leave boto3
   # holding blank credentials rather than looking for an identity.
-  #
-  # Requires an image containing ADR-0007 phase 1 (in this branch), where
-  # object_store.py resolves the credentials as `getattr(...) or None`. Before
-  # that change the application passed "" to boto3 explicitly and boto3 read the
-  # empty string as a credential, so the chain was never reached.
   #
   # Annotate the ServiceAccount with the cloud role (EKS IRSA or Pod Identity)
   # and set serviceAccount.create=false if your platform manages it. See
@@ -396,7 +437,7 @@ service:
 # ---------------------------------------------------------------------------
 # Caddy is the cluster edge, not an Ingress. That is a deliberate choice, for a
 # reason specific to this application: a workspace can bring its own domain
-# (Team.custom_domain), so the set of TLS hostnames is unbounded and changes at
+# (Workspace.custom_domain), so the set of TLS hostnames is unbounded and changes at
 # runtime. Ingress and Gateway API both require hostnames to be declared ahead
 # of time, so neither can serve them. Caddy's on-demand TLS asks the
 # application whether a domain is known and issues on the fly.
@@ -558,6 +599,12 @@ caddy:
   #   - host: sso.example.com
   #     upstream: keycloak.identity.svc.cluster.local:8080
   #     scheme: https   # https (default) or http
+  #
+  # `scheme` is how the PUBLIC side is served, not how Caddy talks to the
+  # upstream: https gets a certificate for `host` and redirects plain HTTP to
+  # it, http serves it unencrypted (local clusters only). Caddy always reaches
+  # the upstream over plain HTTP, so an in-cluster Keycloak listening on 8080
+  # (KC_HTTP_ENABLED, KC_PROXY_HEADERS=xforwarded) wants the default here.
   extraRoutes: []
 
   # Appended verbatim to the end of the Caddyfile.

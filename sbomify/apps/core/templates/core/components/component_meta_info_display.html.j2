@@ -234,6 +234,17 @@
                     </a>
                 </template>
             </div>
+            <div class="mt-6">
+                <div class="text-sm font-bold text-text-muted uppercase tracking-wider pb-2 mb-3 border-b border-border">
+                    Custom Metadata
+                </div>
+                <template x-if="Object.keys(metadata.custom_metadata || {}).length === 0">
+                    <span class="text-text-muted italic">Not set yet</span>
+                </template>
+                <template x-if="Object.keys(metadata.custom_metadata || {}).length > 0">
+                    <c-lists.key-value model="metadata.custom_metadata" label="Component custom metadata" />
+                </template>
+            </div>
             <template x-if="showEditButton">
                 <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-border">
                     <c-buttons.secondary size="sm" @click="$dispatch('edit-metadata')">

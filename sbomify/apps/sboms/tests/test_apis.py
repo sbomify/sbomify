@@ -1689,7 +1689,8 @@ def test_get_and_set_component_metadata(sample_component: Component, sample_acce
     assert response_json["contact_profile"] is None
     assert response_json["uses_custom_contact"] is True
     # 10 base fields + 3 lifecycle event fields + vcs_url = 14
-    assert len(response_json.keys()) == 14
+    assert response_json["custom_metadata"] == {}
+    assert len(response_json.keys()) == 15
     assert response_json["vcs_url"] is None
 
     # Set component metadata

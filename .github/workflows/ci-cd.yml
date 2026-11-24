@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.15"
 
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -317,6 +317,55 @@ jobs:
             sbomify/apps/core/tests/test_redis_protocol_compat.py \
             sbomify/apps/core/tests/test_dramatiq_broker.py | tee test_results.txt
           ! grep -q SKIPPED test_results.txt
+
+  # The suite runs with --nomigrations and makemigrations --check only compares
+  # models to files, so nothing else ever applies the migrations. An ordering
+  # bug between two apps' migrations (#2021) only shows up here, the way a
+  # fresh install meets it.
+  migrations:
+    name: Migrate an empty database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sbomify_test
+          POSTGRES_PASSWORD: sbomify_test
+          POSTGRES_DB: sbomify_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sbomify_test"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 15
+    env:
+      DJANGO_SETTINGS_MODULE: sbomify.test_settings
+      DJANGO_TEST: 'true'
+      TEST_DATABASE_HOST: localhost
+      TEST_DATABASE_PORT: 5432
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Apply every migration
+        run: |
+          uv run python manage.py migrate --no-input
+          uv run python manage.py migrate --check --no-input
 
   frontend-tests:
     name: Frontend Tests

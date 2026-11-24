@@ -574,6 +574,36 @@ def verify_item_access(
     return member.role in allowed_roles
 
 
+def _swap_release_artifacts(release: Any, same: Any, **artifact: Any) -> Any:
+    """Replace the ``same`` rows with one new artifact, recorded as a single ARTIFACT_UPDATED.
+
+    Left to the signals, the delete and the create bump the collection REMOVED and then ADDED, or
+    only REMOVED when the swapped row was the release's one artifact. They are muted for the swap,
+    as in ``Release.add_artifact_to_latest_release``, so the VEX pin upkeep they would have done
+    runs here instead.
+    """
+    from sbomify.apps.core.models import Release, ReleaseArtifact, _suppress_collection_signals
+    from sbomify.apps.core.services.vex_pins import sync_vex_pins
+    from sbomify.apps.sboms.models import SBOM
+
+    sbom = artifact.get("sbom")
+    token = _suppress_collection_signals.set(True)
+    try:
+        same.delete()
+        new_artifact = ReleaseArtifact.objects.create(release=release, **artifact)
+        if sbom is not None and sbom.bom_type == SBOM.BomType.SBOM.value:
+            sync_vex_pins(release, sbom.component, bump=False)
+        elif sbom is not None and sbom.bom_type == SBOM.BomType.VEX.value:
+            # A hand-pinned VEX supersedes whatever sbomify auto-pinned for this component.
+            release.artifacts.filter(
+                sbom__component=sbom.component, sbom__bom_type=SBOM.BomType.VEX.value, auto_pinned=True
+            ).exclude(pk=new_artifact.pk).delete()
+    finally:
+        _suppress_collection_signals.reset(token)
+    release.bump_collection_version(Release.CollectionUpdateReason.ARTIFACT_UPDATED)
+    return new_artifact
+
+
 def add_artifact_to_release(
     release: Any, sbom: Any = None, document: Any = None, allow_replacement: Any = False
 ) -> Any:
@@ -665,8 +695,7 @@ def add_artifact_to_release(
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
-                same.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+                new_artifact = _swap_release_artifacts(release, same, sbom=sbom)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
             new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
         else:
@@ -693,8 +722,7 @@ def add_artifact_to_release(
                     "new_document": document.name,
                     "component": document.component.name,
                 }
-                same.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+                new_artifact = _swap_release_artifacts(release, same, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
             new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
 

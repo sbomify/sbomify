@@ -193,8 +193,43 @@ def cached_openid_config(adapter: Any) -> dict[str, Any]:
     return config
 
 
+OIDC_ID_TOKEN_SESSION_KEY = "oidc_id_token"  # nosec B105 - a session key name, not a secret
+
+
+def keep_id_token(complete_login: Any) -> Any:
+    """Wrap allauth's ``complete_login`` to keep the raw ID token in the session.
+
+    Logout sends it back as ``id_token_hint``. Okta refuses an RP-initiated
+    logout without one, and Keycloak skips its "Do you want to log out?"
+    confirmation when it has one. allauth keeps only the decoded claims, so
+    this is the one place the raw token is still in hand, and it is stored only
+    once allauth has validated it.
+
+    It goes to two places. The session carries it when login finishes in a
+    later request, such as after allauth's signup form. The request carries
+    it past ``login()``, which flushes the session when someone signs in again
+    over an existing one; ``CustomAccountAdapter.login`` puts it back.
+    """
+
+    def wrapper(self: Any, request: HttpRequest, app: Any, token: Any, **kwargs: Any) -> Any:
+        login = complete_login(self, request, app, token, **kwargs)
+        if id_token := (kwargs.get("response") or {}).get("id_token"):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
+            setattr(request, "_oidc_id_token", id_token)
+        return login
+
+    return wrapper
+
+
 class CustomAccountAdapter(DefaultAccountAdapter):  # type: ignore[misc]
     """Custom account adapter for username/password authentication."""
+
+    def login(self, request: HttpRequest, user: Any) -> None:
+        """Keep the logout hint after allauth replaces an existing session."""
+        super().login(request, user)
+        if id_token := getattr(request, "_oidc_id_token", None):
+            request.session[OIDC_ID_TOKEN_SESSION_KEY] = id_token
+            delattr(request, "_oidc_id_token")
 
     def save_user(self, request: HttpRequest, user: Any, form: Any, commit: Any = True) -> Any:
         """
@@ -376,8 +411,8 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):  # type: ignore[m
             user.email_verified = _provider_confirmed_email(sociallogin)
 
             # Map Keycloak name fields directly to Django fields (try both possible keys)
-            user.first_name = data.get("given_name") or data.get("first_name", "")
-            user.last_name = data.get("family_name") or data.get("last_name", "")
+            user.first_name = data.get("given_name") or data.get("first_name") or ""
+            user.last_name = data.get("family_name") or data.get("last_name") or ""
 
             # Use preferred_username if available
             if "preferred_username" in data:

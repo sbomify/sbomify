@@ -96,11 +96,11 @@ def _broadcast_access_request_updated(team: Workspace, request_id: str, user_id:
     """Tell the workspace's open pages an access request changed, once it is committed."""
     if not team.key:
         return
-    team_key = team.key
+    workspace_key = team.key
     data = {"access_request_id": request_id, "user_id": user_id, "status": status, "action": status}
 
     def _send() -> None:
-        broadcast_to_workspace(workspace_key=team_key, message_type="access_request_updated", data=data)
+        broadcast_to_workspace(workspace_key=workspace_key, message_type="access_request_updated", data=data)
         # The requester is not a member, so the workspace feed never reaches
         # them; their own channel is how their open page learns the verdict.
         if status != "pending":

@@ -298,8 +298,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
         if default_team_id:
             return str(default_team_id)
 
-        # If no default workspace is set, fall back to first workspace
-        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        # If no default workspace is set, fall back to first workspace.
+        # Ordered so the fallback is deterministic: an unordered .first() could
+        # hand two requests from the same user different workspaces (and let
+        # REST and MCP resolve the same legacy token to different workspaces).
+        first_membership = Member.objects.filter(user=request.user).select_related("team").order_by("pk").first()
         if first_membership:
             return str(first_membership.team.id)
 
@@ -375,6 +378,20 @@ def _build_item_base(
     }
 
 
+def _visible_custom_metadata(request: HttpRequest, item: Any) -> dict[str, str]:
+    """Custom metadata is for signed-in readers only.
+
+    The endpoints serving a public product or component answer anonymous
+    callers too; those get an empty object. Any authenticated caller who can
+    read the item, by session or by a valid access token, gets the pairs.
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return {}
+    # jsonb hands keys back in its own storage order; sort for a stable response.
+    return dict(sorted((item.custom_metadata or {}).items()))
+
+
 def _build_product_response(
     request: HttpRequest,
     product: Any,
@@ -392,9 +409,24 @@ def _build_product_response(
     response = _build_item_base(request, product, has_crud_permissions)
     response["is_public"] = product.is_public
     response["description"] = product.description
-    response["component_count"] = (
-        product.component_count if hasattr(product, "component_count") else product.components.count()
-    )
+
+    # A public product is readable by anyone, but its private components are not:
+    # to a caller who cannot read the workspace's internal inventory, a private
+    # component does not exist. Mirror the Trust Center component panel and
+    # _build_release_response — public and gated are listable, private is not —
+    # so an anonymous GET of a public product no longer enumerates the names and
+    # ids of the private components attached to it. ``components`` is prefetched
+    # by optimize_product_queryset(), so filtering in Python adds no query, and
+    # ``component_count`` is derived from the same list so the two never disagree.
+    components = list(product.components.all())
+    if not can(request, "component:read_internal", product):
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        components = [component for component in components if component.visibility in listable]
+        response["component_count"] = len(components)
+    else:
+        response["component_count"] = (
+            product.component_count if hasattr(product, "component_count") else len(components)
+        )
     response["components"] = [
         {
             "id": component.id,
@@ -405,7 +437,7 @@ def _build_product_response(
             "component_type": component.component_type,
             "component_type_display": component.get_component_type_display(),
         }
-        for component in product.components.all()
+        for component in components
     ]
     response["identifiers"] = [
         {
@@ -431,6 +463,7 @@ def _build_product_response(
     response["release_date"] = product.release_date.isoformat() if product.release_date else None
     response["end_of_support"] = product.end_of_support.isoformat() if product.end_of_support else None
     response["end_of_life"] = product.end_of_life.isoformat() if product.end_of_life else None
+    response["custom_metadata"] = _visible_custom_metadata(request, product)
     return response
 
 
@@ -455,6 +488,7 @@ def _build_component_response(
         component.document_count if hasattr(component, "document_count") else component.document_set.count()
     )
     response["metadata"] = component.metadata
+    response["custom_metadata"] = _visible_custom_metadata(request, component)
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
@@ -967,6 +1001,8 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
             product.name = payload.name
             product.description = payload.description
             product.is_public = payload.is_public
+            if "custom_metadata" in payload.model_fields_set:
+                product.custom_metadata = payload.custom_metadata or {}
 
             product.save()
             # Lifecycle dates are CLE events, the one place they are stored. Only the
@@ -1076,6 +1112,9 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 for field in ("release_date", "end_of_support", "end_of_life")
                 if field in update_data
             }
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
             for field, value in update_data.items():
                 setattr(product, field, value)
             product.save()
@@ -2042,6 +2081,8 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             component.gating_mode = payload.gating_mode
             component.is_global = payload.is_global
             component.metadata = payload.metadata
+            if "custom_metadata" in payload.model_fields_set:
+                component.custom_metadata = payload.custom_metadata or {}
 
             # Enforce scope exclusivity: a workspace-scoped (global) component
             # must not be attached to any product.
@@ -2186,6 +2227,10 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                 if new_visibility != Component.Visibility.GATED:
                     component.gating_mode = None
                     component.nda_document = None
+
+            if "custom_metadata" in update_data:
+                # An explicit null clears the set; the column itself is never NULL.
+                update_data["custom_metadata"] = update_data["custom_metadata"] or {}
 
             # Only update fields that were provided (exclude already-handled fields)
             for field, value in update_data.items():
@@ -2393,6 +2438,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
         "vcs_url": component.vcs_url or None,
+        "custom_metadata": _visible_custom_metadata(request, component),
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)
@@ -2417,7 +2463,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
     if _is_guest_member(request):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    log.debug("Incoming metadata payload for component %s: %s", component_id, request.body)
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -2508,6 +2554,10 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
 
         if "vcs_url" in meta_dict:
             component.vcs_url = meta_dict["vcs_url"] or ""
+
+        if "custom_metadata" in meta_dict:
+            # Replaces the whole set; an explicit null clears it.
+            component.custom_metadata = meta_dict["custom_metadata"] or {}
 
         # Handle licenses using native fields
         if "licenses" in meta_dict:
@@ -4486,7 +4536,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, sbom.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4509,6 +4559,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": None,
                 "document_version": None,
                 "component_slug": get_component_public_slug(artifact.sbom.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
         except Exception:
             log.exception("Error processing SBOM")
@@ -4534,7 +4586,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            result = add_artifact_to_release(release, document=document, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4556,6 +4608,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
                 "component_slug": get_component_public_slug(artifact.document.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
         except Exception:
             log.exception("Error processing document")

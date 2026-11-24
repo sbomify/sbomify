@@ -57,11 +57,11 @@ from sbomify.apps.controls.services.status_service import (
     upsert_status,
 )
 from sbomify.apps.core.api.errors import CSV_RESPONSE_DOCS
-from sbomify.apps.core.authz import ADMINISTER, can
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.models import Member, Workspace
+from sbomify.apps.teams.models import Workspace
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -91,10 +91,14 @@ def _get_user_team(request: HttpRequest) -> tuple[Workspace | None, tuple[int, E
 
 
 def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, ErrorResponse] | None:
-    """Return an error tuple if the user is not owner or admin."""
-    user = cast(User, request.user)
-    member = Member.objects.filter(user=user, team=team).only("role").first()
-    if not member or member.role not in ADMINISTER:
+    """Return an error tuple if the caller may not manage this workspace's controls.
+
+    Routes through ``can()`` rather than reading the ``Member`` role directly, so
+    the token action-scope gate runs: a scoped API token (read-only, publish,
+    agent) is denied even when its holder is an owner/admin. A bare role check
+    skips that gate, which let a read-only token perform catalog writes.
+    """
+    if not can(request, "controls:manage", team):
         return 403, ErrorResponse(detail="Only workspace owners and admins can perform this action")
     return None
 

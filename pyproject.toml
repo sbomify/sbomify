@@ -21,6 +21,10 @@ dependencies = [
     "django-ninja>=1.4.3,<2",
     "ruid>=0.1.2,<0.2",
     "boto3>=1.40.36,<2",
+    # Native Google Cloud Storage backend (STORAGE_BACKEND=gcs, ADR-0007).
+    # Reads Application Default Credentials, so GKE Workload Identity needs
+    # no static keys.
+    "google-cloud-storage>=3.0.0,<4",
     "dj-database-url>=3.0.1,<4",
     "django-vite>=3.1.0,<4",
     "django-health-check>=3.20.0,<5",
@@ -68,6 +72,11 @@ dependencies = [
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
     "jsonschema>=4.26,<5",
+    # Model Context Protocol server SDK, mounted as a streamable-HTTP ASGI app
+    # at /mcp (see sbomify/apps/mcp/ and docs/ADR/0009-mcp-server.md).
+    # Pinned below 2.0: the v2 line renames the server class (FastMCP ->
+    # MCPServer) and is still a release candidate as of 2026-07.
+    "mcp>=1.28.1,<2",
     "django-cotton>=2.7.2",
     "fastjsonschema>=2.22.2",
     "univers>=32.0.1,<33",
@@ -280,6 +289,7 @@ follow_untyped_imports = true
 [[tool.mypy.overrides]]
 module = [
     "allauth.*",
+    "google.cloud.*",
     "anymail.*",
     "whitenoise.*",
     "health_check.*",
