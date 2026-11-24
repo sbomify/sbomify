@@ -23,6 +23,25 @@ interface DocumentData {
     component?: { id: string; name: string };
 }
 
+/** What has happened upstream to a pinned remote artifact, worst first, as the TEA subscriptions API reports it. */
+interface RemoteFinding {
+    key: string;
+    label: string;
+    tone: string;
+}
+
+/** A remote artifact a release pins, from the TEA subscriptions API. */
+interface RemotePin {
+    id: string;
+    name: string;
+    component_id: string;
+    component_name: string;
+    remote_release: string;
+    media_types: string[];
+    created_at: string;
+    finding_details: RemoteFinding[];
+}
+
 interface Artifact {
     id: string;
     name?: string;
@@ -44,11 +63,14 @@ interface Artifact {
     download_url?: string;
     sbom?: SBOMData | null;
     document?: DocumentData | null;
+    remote_findings?: RemoteFinding[];
+    remote_release?: string;
+    media_types?: string[];
 }
 
 interface AvailableArtifact {
     id: string;
-    artifact_type: 'sbom' | 'document';
+    artifact_type: 'sbom' | 'document' | 'remote';
     name: string;
     version?: string;
     format?: string;
@@ -84,6 +106,9 @@ interface ReleaseArtifactsParams {
     isLatest?: boolean;
     vulnerabilitiesScriptId?: string;
 }
+
+// Remote pins have their own routes, so the release artifact API keeps its shapes.
+const REMOTE_PINS = '/api/v1/tea-subscriptions/releases';
 
 function formatSbomDisplay(format?: string, version?: string): string {
     const normalizedFormat = format || 'unknown';
@@ -164,7 +189,7 @@ export function registerReleaseArtifacts() {
                         `/api/v1/releases/${this.releaseId}/artifacts?mode=existing&page_size=-1`
                     );
                     const artifactsData = Array.isArray(response.data) ? response.data : response.data.items || [];
-                    this.artifacts = artifactsData;
+                    this.artifacts = [...artifactsData, ...(await this.loadRemotePins())];
                 } catch (error) {
                     console.error('Failed to load artifacts:', error);
                     showError('Failed to load artifacts');
@@ -173,12 +198,42 @@ export function registerReleaseArtifacts() {
                 }
             },
 
+            /**
+             * Remote artifacts the release pins from TEA subscriptions. They live on their own
+             * routes so the release artifact API keeps its shapes; a workspace without
+             * subscriptions simply has none.
+             */
+            async loadRemotePins(): Promise<Artifact[]> {
+                try {
+                    const response = await $axios.get(`${REMOTE_PINS}/${this.releaseId}/pins`);
+                    return (response.data as RemotePin[]).map((pin) => ({
+                        id: pin.id,
+                        artifact_type: 'remote',
+                        artifact_name: pin.name,
+                        component_id: pin.component_id,
+                        component_name: pin.component_name,
+                        created_at: pin.created_at,
+                        remote_release: pin.remote_release,
+                        media_types: pin.media_types,
+                        remote_findings: pin.finding_details,
+                    }));
+                } catch {
+                    return [];
+                }
+            },
+
             async loadAvailableArtifacts() {
                 this.isLoadingAvailable = true;
                 try {
                     const response = await $axios.get(`/api/v1/releases/${this.releaseId}/artifacts?mode=available&page_size=-1`);
                     const data = Array.isArray(response.data) ? response.data : response.data.items || [];
-                    this.availableArtifacts = data;
+                    let remote: AvailableArtifact[] = [];
+                    try {
+                        remote = (await $axios.get(`${REMOTE_PINS}/${this.releaseId}/pinnable`)).data;
+                    } catch {
+                        remote = [];
+                    }
+                    this.availableArtifacts = [...data, ...remote];
                 } catch (error) {
                     console.error('Failed to load available artifacts:', error);
                     showError('Failed to load available artifacts');
@@ -389,7 +444,16 @@ export function registerReleaseArtifacts() {
             },
 
             // Artifact data extraction methods
+            isRemote(artifact: Artifact): boolean {
+                return artifact.artifact_type === 'remote';
+            },
+
+            remoteFindings(artifact: Artifact): RemoteFinding[] {
+                return artifact.remote_findings || [];
+            },
+
             getArtifactType(artifact: Artifact): string {
+                if (artifact.artifact_type === 'remote') return 'remote';
                 if (artifact.sbom || artifact.artifact_type === 'sbom') {
                     // VEX, CBOM and HBOM are stored as SBOM rows with a bom_type;
                     // badge them as themselves so they don't read as duplicate
@@ -443,6 +507,9 @@ export function registerReleaseArtifacts() {
                 if (artifact.artifact_type === 'document' && artifact.document_type) {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);
                 }
+                if (artifact.artifact_type === 'remote') {
+                    return (artifact.media_types || []).filter(Boolean).join(', ') || 'Unknown';
+                }
                 return 'Unknown';
             },
 
@@ -463,10 +530,12 @@ export function registerReleaseArtifacts() {
             getArtifactVersion(artifact: Artifact): string | null {
                 if (artifact.sbom) return artifact.sbom.version || null;
                 if (artifact.document) return artifact.document.version || null;
-                return artifact.sbom_version || artifact.document_version || null;
+                return artifact.sbom_version || artifact.document_version || artifact.remote_release || null;
             },
 
             getArtifactUrl(artifact: Artifact): string {
+                // A remote artifact lives on another server; its subscription's page links there.
+                if (artifact.artifact_type === 'remote') return this.getComponentUrl(artifact);
                 if (artifact.document) {
                     return artifactLink(routes, 'document', artifact.document.component?.id, artifact.document.id);
                 }
@@ -500,6 +569,8 @@ export function registerReleaseArtifacts() {
                         return 'fas fa-microchip';
                     case 'document':
                         return 'fas fa-file-alt';
+                    case 'remote':
+                        return 'fas fa-satellite-dish';
                     default:
                         return 'fas fa-file';
                 }
@@ -556,6 +627,7 @@ export function registerReleaseArtifacts() {
                 if (artifact.artifact_type === 'document' && artifact.document_type) {
                     return artifact.document_type.charAt(0).toUpperCase() + artifact.document_type.slice(1);
                 }
+                if (artifact.artifact_type === 'remote') return artifact.format || 'Unknown';
                 return 'Unknown';
             },
 
@@ -572,6 +644,9 @@ export function registerReleaseArtifacts() {
             },
 
             getAvailableArtifactUrl(artifact: AvailableArtifact): string {
+                if (artifact.artifact_type === 'remote') {
+                    return routes.component.replace('__COMPONENT__', encodeURIComponent(artifact.component?.id || ''));
+                }
                 return artifactLink(routes, artifact.artifact_type === 'document' ? 'document' : artifact.bom_type || 'sbom',
                     artifact.component?.id, artifact.id);
             },
@@ -696,6 +771,11 @@ export function registerReleaseArtifacts() {
                         if (!artifact) continue;
 
                         try {
+                            if (artifact.artifact_type === 'remote') {
+                                await $axios.post(`${REMOTE_PINS}/${this.releaseId}/pins`, { remote_artifact_id: artifactId });
+                                addedCount++;
+                                continue;
+                            }
                             let payload: { sbom_id: string } | { document_id: string };
                             if (artifact.artifact_type === 'sbom') {
                                 payload = { sbom_id: artifactId };
@@ -744,7 +824,10 @@ export function registerReleaseArtifacts() {
                 if (!this.deleteTarget) return;
 
                 try {
-                    await $axios.delete(`/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`);
+                    const route = this.isRemote(this.deleteTarget)
+                        ? `${REMOTE_PINS}/${this.releaseId}/pins/${this.deleteTarget.id}`
+                        : `/api/v1/releases/${this.releaseId}/artifacts/${this.deleteTarget.id}`;
+                    await $axios.delete(route);
                     showSuccess('Artifact removed from release');
                     this.closeDeleteModal();
                     await this.loadArtifacts();

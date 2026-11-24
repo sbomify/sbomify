@@ -59,6 +59,7 @@
         <option value="cbom">CBOMs Only</option>
         <option value="vex">VEX Only</option>
         <option value="document">Documents Only</option>
+        <option value="remote">Remote Only</option>
         </c-forms.select>
         <c-forms.select size="md" id="artifact-component-filter" label="Filter by component" x-model="componentFilter" @change="handleComponentFilter()">
         <option value="">All Components</option>
@@ -137,8 +138,22 @@
                     report. Nothing scanned is not nothing found, as on the
                     component's artifact table.
                 {% endcomment %}
-                <template x-if="getArtifactVulnerabilities(artifact) === undefined">
+                <template x-if="getArtifactVulnerabilities(artifact) === undefined && !isRemote(artifact)">
                     <span class="text-text-muted">—</span>
+                </template>
+                {% comment %}
+                    A remote artifact pinned from a TEA subscription is not scanned
+                    here; its row says what has happened to it upstream, worst first.
+                {% endcomment %}
+                <template x-if="isRemote(artifact)">
+                    <span class="inline-flex items-center gap-1.5 flex-wrap">
+                        <template x-for="finding in remoteFindings(artifact)" :key="finding.key">
+                            <c-badges.dynamic ::data-variant="finding.tone" x-text="finding.label" />
+                        </template>
+                        <template x-if="remoteFindings(artifact).length === 0">
+                            <c-badges.success>Current upstream</c-badges.success>
+                        </template>
+                    </span>
                 </template>
                 <template x-if="getArtifactVulnerabilities(artifact) === null">
                     <span class="text-text-muted text-sm">Not scanned</span>
@@ -217,6 +232,7 @@
                     <option value="cbom">CBOMs Only</option>
                     <option value="vex">VEX Only</option>
                     <option value="document">Documents Only</option>
+                    <option value="remote">Remote Only</option>
                     </c-forms.select>
                 </div>
                 <div class="md:col-span-3">

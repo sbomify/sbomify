@@ -186,8 +186,26 @@ class TestPins:
 
         assert added.status_code == 201
         assert [(p["uuid"], p["findings"]) for p in listed] == [("a", ["newer_release"])]
+        (pin,) = listed
+        assert pin["finding_details"] == [
+            {"key": "newer_release", "label": "Newer upstream release exists", "tone": "info"}
+        ]
+        assert (pin["component_name"], pin["remote_release"]) == ("remote lib", "1.0")
         assert removed.status_code == 204
         assert not cut.artifacts.exists()
+
+    def test_pinnable_lists_what_the_product_may_pin_and_not_what_is_pinned(self, release):
+        client, cut = release
+        subscription = TeaSubscription.objects.get()
+        cut.product.components.add(subscription.component)
+
+        before = client.get(f"{BASE}/releases/{cut.id}/pinnable").json()
+        post(client, f"{BASE}/releases/{cut.id}/pins", {"remote_artifact_id": before[0]["id"]})
+        after = client.get(f"{BASE}/releases/{cut.id}/pinnable").json()
+
+        assert sorted(a["name"] for a in before) == ["a.cdx.json", "b.cdx.json"]
+        assert all(a["artifact_type"] == "remote" for a in before)
+        assert len(after) == len(before) - 1
 
     def test_the_latest_release_refuses_manual_pins(self, release):
         client, cut = release

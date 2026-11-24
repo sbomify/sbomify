@@ -23,12 +23,10 @@ from sbomify.apps.core.authz import MANAGE, can
 from sbomify.apps.core.domain.exceptions import DomainError
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.tea import pins
-from sbomify.apps.tea.models import TeaRemoteArtifact, TeaSubscription
+from sbomify.apps.tea.models import TeaSubscription
 from sbomify.apps.tea.services import remote
 from sbomify.apps.tea.services.subscriptions import Subscribe, authorize_targets, subscribe
 from sbomify.apps.tea.tasks import check_tea_subscription
-from sbomify.apps.teams.broadcasts import broadcast_on_commit
 from sbomify.apps.teams.models import Workspace
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 from sbomify.apps.teams.queries import get_member_role_by_key
@@ -195,44 +193,6 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         response = HttpResponse(status=204)
         response["HX-Redirect"] = target
         return response
-
-
-class TeaReleasePinsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
-    """Pin a remote artifact into a release, or unpin one, from the release page."""
-
-    def post(self, request: HttpRequest, release_id: str) -> HttpResponse:
-        release = Release.objects.select_related("product__team").filter(pk=release_id).first()
-        if release is None or not can(request, "release:read", release.product):
-            raise Http404("Release not found")
-        try:
-            if request.POST.get("action") == "unpin":
-                if not can(request, "release:manage", release.product):
-                    return htmx_error_response("You can't change this release.")
-                pins.unpin(release, request.POST.get("pin_id", ""))
-                message = "Unpinned."
-            else:
-                if not can(request, "release:tag", release.product):
-                    return htmx_error_response("You can't pin into this release.")
-                artifact = (
-                    TeaRemoteArtifact.objects.select_related("release__subscription__component")
-                    .filter(
-                        pk=request.POST.get("remote_artifact_id", ""),
-                        release__subscription__component__team=release.product.team,
-                    )
-                    .first()
-                )
-                if artifact is None:
-                    return htmx_error_response("Pick a remote artifact.")
-                pins.pin(release, artifact, allow_replacement=True)
-                message = "Pinned as it is now."
-        except DomainError as error:
-            return htmx_error_response(error.detail)
-        broadcast_on_commit(
-            release.product.team.key,
-            "release_updated",
-            {"release_id": str(release.id), "product_id": str(release.product_id), "name": release.name},
-        )
-        return htmx_success_response(message, triggers={"refresh-remote-pins": True})
 
 
 class TeaSubscriptionCheckView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

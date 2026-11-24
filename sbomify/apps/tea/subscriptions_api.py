@@ -83,6 +83,12 @@ class PinIn(BaseModel):
     allow_replacement: bool = False
 
 
+class FindingOut(BaseModel):
+    key: str
+    label: str
+    tone: str
+
+
 class PinOut(BaseModel):
     id: str
     release_id: str
@@ -93,6 +99,24 @@ class PinOut(BaseModel):
     state: str
     auto_pinned: bool
     findings: list[str]
+    finding_details: list[FindingOut]
+    component_id: str
+    component_name: str
+    remote_release: str
+    media_types: list[str]
+    created_at: datetime
+
+
+class PinnableOut(BaseModel):
+    """A remote artifact a release may pin, shaped like the release page's other available artifacts."""
+
+    id: str
+    artifact_type: str = "remote"
+    name: str
+    version: str
+    format: str
+    created_at: datetime
+    component: dict[str, str]
 
 
 def _fail(error: DomainError) -> tuple[int, dict[str, Any]]:
@@ -131,18 +155,30 @@ def _release(request: HttpRequest, release_id: str, action: str) -> Release | tu
     return release
 
 
+def _media_types(artifact: TeaRemoteArtifact) -> list[str]:
+    return [fmt.get("mediaType") or "" for fmt in artifact.snapshot.get("formats") or []]
+
+
 def _pin_out(pin: Any) -> PinOut:
     artifact = pin.remote_artifact
+    details = pins.finding_details(artifact)
+    component = artifact.release.subscription.component
     return PinOut(
         id=pin.id,
         release_id=pin.release_id,
         remote_artifact_id=artifact.id,
         uuid=artifact.uuid,
         version=artifact.version,
-        name=artifact.name,
+        name=artifact.name or artifact.uuid,
         state=artifact.state,
         auto_pinned=pin.auto_pinned,
-        findings=[key for key, _ in pins.findings(artifact)],
+        findings=[finding["key"] for finding in details],
+        finding_details=[FindingOut(**finding) for finding in details],
+        component_id=component.id,
+        component_name=component.name,
+        remote_release=artifact.release.version,
+        media_types=_media_types(artifact),
+        created_at=pin.created_at,
     )
 
 
@@ -302,6 +338,29 @@ def list_pins(request: HttpRequest, release_id: str) -> Any:
     if isinstance(release, tuple):
         return release
     return 200, [_pin_out(pin) for pin in pins.pins_of(release)]
+
+
+@router.get("/releases/{release_id}/pinnable", response={200: list[PinnableOut], **ERRORS})
+def list_pinnable(request: HttpRequest, release_id: str) -> Any:
+    """Remote artifacts this release may pin: the current ones of subscriptions on its product."""
+    release = _release(request, release_id, "release:tag")
+    if isinstance(release, tuple):
+        return release
+    return 200, [
+        PinnableOut(
+            id=artifact.id,
+            name=artifact.name or artifact.uuid,
+            version=artifact.release.version,
+            format=", ".join(filter(None, _media_types(artifact))),
+            created_at=artifact.first_seen_at,
+            component={
+                "id": artifact.release.subscription.component_id,
+                "name": artifact.release.subscription.component.name,
+                "component_type": "tea_subscription",
+            },
+        )
+        for artifact in pins.pinnable(release)[:500]
+    ]
 
 
 @router.post(

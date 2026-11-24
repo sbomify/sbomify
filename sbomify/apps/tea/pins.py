@@ -178,62 +178,20 @@ FINDING_TONES = {
 }
 
 
-def release_card(actor: object, release: Release) -> dict[str, object]:
-    """The release page's remote artifacts card: each pin with its findings, and what may be pinned next."""
-    from sbomify.apps.core.authz import can
+def finding_details(artifact: TeaRemoteArtifact) -> list[dict[str, str]]:
+    """A pin's findings with what a user reads and the badge each wears, worst first."""
+    return [{"key": key, "label": label, "tone": FINDING_TONES[key]} for key, label in findings(artifact)]
 
-    empty: dict[str, object] = {
-        "remote_pins": [],
-        "remote_pin_choices": [],
-        "can_pin_remote": False,
-        "can_unpin_remote": False,
-    }
-    if not can(actor, "release:read", release.product):
-        return empty
-    rows = []
-    pinned_ids = set()
-    for pin_row in pins_of(release):
-        artifact = pin_row.remote_artifact
-        if artifact is None:
-            continue
-        pinned_ids.add(artifact.pk)
-        rows.append(
-            {
-                "id": pin_row.pk,
-                "name": artifact.name or artifact.uuid,
-                "version": artifact.version,
-                "component_name": artifact.release.subscription.component.name,
-                "component_id": artifact.release.subscription.component_id,
-                "remote_release": artifact.release.version,
-                "auto_pinned": pin_row.auto_pinned,
-                "findings": [{"label": label, "tone": FINDING_TONES[key]} for key, label in findings(artifact)],
-            }
+
+def pinnable(release: Release) -> QuerySet[TeaRemoteArtifact]:
+    """Remote artifacts a release may pin: the current ones of subscriptions on its product, not pinned yet."""
+    return (
+        TeaRemoteArtifact.objects.filter(
+            release__subscription__component__products=release.product,
+            release__gone_at__isnull=True,
+            state=TeaRemoteArtifact.State.CURRENT,
         )
-    editable = not release.is_latest
-    may_pin = editable and bool(can(actor, "release:tag", release.product))
-    choices = []
-    if may_pin:
-        candidates = (
-            TeaRemoteArtifact.objects.filter(
-                release__subscription__component__products=release.product,
-                release__gone_at__isnull=True,
-                state=TeaRemoteArtifact.State.CURRENT,
-            )
-            .exclude(pk__in=pinned_ids)
-            .select_related("release__subscription__component")
-            .order_by("release__subscription__component__name", "-release__release_date", "name")
-        )
-        choices = [
-            {
-                "value": candidate.pk,
-                "label": f"{candidate.release.subscription.component.name} {candidate.release.version}: "
-                f"{candidate.name or candidate.uuid} version {candidate.version}",
-            }
-            for candidate in candidates[:200]
-        ]
-    return {
-        "remote_pins": rows,
-        "remote_pin_choices": choices,
-        "can_pin_remote": may_pin,
-        "can_unpin_remote": editable and bool(can(actor, "release:manage", release.product)),
-    }
+        .exclude(pins__release=release)
+        .select_related("release__subscription__component")
+        .order_by("release__subscription__component__name", "-release__release_date", "name")
+    )
