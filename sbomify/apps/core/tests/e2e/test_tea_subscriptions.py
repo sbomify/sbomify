@@ -47,5 +47,6 @@ def test_the_release_artifacts_list_pins_a_remote_artifact_and_shows_what_change
     dialog = page.get_by_role("dialog")
     dialog.locator("tr", has_text="other.cdx.json").click(position={"x": 8, "y": 8})
     dialog.get_by_role("button", name="Add to Release").click()
+    expect(dialog).to_be_hidden()
     expect(page.get_by_role("link", name="other.cdx.json", exact=True)).to_be_visible()
     assert release.artifacts.filter(remote_artifact__uuid="other").exists()
