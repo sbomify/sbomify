@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("access_tokens", "0001_initial"),
         ("teams", "0030_team_tea_enabled"),
@@ -26,14 +25,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="accesstoken",
-            index=models.Index(
-                fields=["team", "user"], name="access_toke_team_id_56c481_idx"
-            ),
+            index=models.Index(fields=["team", "user"], name="access_toke_team_id_56c481_idx"),
         ),
         migrations.AddIndex(
             model_name="accesstoken",
-            index=models.Index(
-                fields=["encoded_token"], name="access_toke_encoded_af10d4_idx"
-            ),
+            index=models.Index(fields=["encoded_token"], name="access_toke_encoded_af10d4_idx"),
         ),
     ]

@@ -13,7 +13,6 @@ def update_team_keys(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0013_alter_team_key"),
     ]

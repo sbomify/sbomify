@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0006_set_unique_team_keys"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

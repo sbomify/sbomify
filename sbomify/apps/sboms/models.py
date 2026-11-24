@@ -499,10 +499,13 @@ class Component(models.Model):
         BOM: Components containing BOM artifacts (SBOMs, VEX, CBOM, etc.).
              The bom_type field on the SBOM model distinguishes artifact types.
         DOCUMENT: Components containing document artifacts (NDAs, policies, etc.).
+        TEA_SUBSCRIPTION: A component published on another TEA server. It holds no
+             artifacts of its own; sbomify keeps that server's metadata and checks it.
         """
 
         BOM = "bom", "BOM"
         DOCUMENT = "document", "Document"
+        TEA_SUBSCRIPTION = "tea_subscription", "TEA subscription"
 
     class Visibility(models.TextChoices):
         """Component visibility levels."""
@@ -544,7 +547,7 @@ class Component(models.Model):
         max_length=20,
         choices=ComponentType.choices,
         default=ComponentType.BOM,
-        help_text="Type of component (BOM, Document)",
+        help_text="Type of component (BOM, Document, TEA subscription)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     visibility = models.CharField(

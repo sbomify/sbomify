@@ -7,7 +7,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0030_team_tea_enabled"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

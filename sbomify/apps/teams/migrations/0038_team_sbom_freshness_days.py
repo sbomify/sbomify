@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0037_invitation_invitation_role_not_bot"),
     ]

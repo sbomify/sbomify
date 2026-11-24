@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from sbomify.apps.core.models import Component, Release, ReleaseArtifact
@@ -8,6 +10,7 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
     sample_product,
     sample_sbom,
 )
+from sbomify.apps.tea.models import TeaSubscription
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
 
 
@@ -60,3 +63,26 @@ def tea_conformance_data(sample_sbom):
     ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
 
     return team, product, release, component, sample_sbom
+
+
+@pytest.fixture
+def make_subscription():
+    """Build a TEA subscription component in a workspace, as the import wizard leaves it."""
+
+    def make(team, name="remote library", **fields):
+        component = Component.objects.create(
+            team=team,
+            name=name,
+            component_type=Component.ComponentType.TEA_SUBSCRIPTION,
+            visibility=Component.Visibility.PUBLIC,
+        )
+        return TeaSubscription.objects.create(
+            component=component,
+            api_base_url="https://tea.example.com/tea/v1.0.0",
+            spec_version="1.0.0",
+            remote_component_uuid=str(uuid.uuid4()),
+            remote_name=name,
+            **fields,
+        )
+
+    return make

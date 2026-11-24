@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("teams", "0039_merge_0038_supplier_0038_team_sbom_freshness_days"),
     ]

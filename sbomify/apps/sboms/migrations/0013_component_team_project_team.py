@@ -11,7 +11,6 @@ def add_dummy_team(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("sboms", "0012_remove_sbom_is_public_component_is_public_and_more"),
         ("teams", "0003_invitation_expires_at"),
@@ -22,17 +21,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="component",
             name="team",
-            field=models.ForeignKey(
-                default=-1, on_delete=django.db.models.deletion.CASCADE, to="teams.team"
-            ),
+            field=models.ForeignKey(default=-1, on_delete=django.db.models.deletion.CASCADE, to="teams.team"),
             preserve_default=False,
         ),
         migrations.AddField(
             model_name="project",
             name="team",
-            field=models.ForeignKey(
-                default=-1, on_delete=django.db.models.deletion.CASCADE, to="teams.team"
-            ),
+            field=models.ForeignKey(default=-1, on_delete=django.db.models.deletion.CASCADE, to="teams.team"),
             preserve_default=False,
         ),
     ]

@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("security_advisories", "0004_advisorycomponent_and_more"),
         (
