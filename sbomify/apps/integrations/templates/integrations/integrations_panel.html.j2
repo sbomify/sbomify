@@ -47,7 +47,9 @@ with each other after an action.
                         worker claims no connection that cannot be refreshed, so
                         a Sync now here would report a run that does nothing.
                         {% endcomment %}
-                        {% if card.needs_reconnect and card.provider.is_configured %}
+                        {% if card.needs_reconnect and card.provider.asks_for_credentials %}
+                            {% comment %}Reconnecting is the credentials form under the warning.{% endcomment %}
+                        {% elif card.needs_reconnect and card.provider.is_configured %}
                             <form method="post"
                                   action="{% url 'integrations:connect' team.key card.provider.key %}">
                                 {% csrf_token %}
@@ -77,6 +79,8 @@ with each other after an action.
                             <input type="hidden" name="provider" value="{{ card.provider.key }}">
                             <c-buttons.outline-danger size="sm" type="submit">Disconnect</c-buttons.outline-danger>
                         </form>
+                    {% elif card.provider.is_configured and card.provider.asks_for_credentials %}
+                        {% comment %}The credentials form below is the connect button.{% endcomment %}
                     {% elif card.provider.is_configured %}
                         {% comment %}
                         A plain form post, not HTMX: this response is a redirect
@@ -119,6 +123,9 @@ with each other after an action.
                         </li>
                     {% endfor %}
                 </ul>
+                {% if card.provider.asks_for_credentials %}
+                    {% include "integrations/credentials_form.html.j2" %}
+                {% endif %}
             {% elif card.provider.kind == 'notifications' %}
                 {% include "integrations/notification_routes.html.j2" %}
             {% else %}
@@ -131,6 +138,9 @@ with each other after an action.
                     <c-feedback.alert variant="warning" title="Reconnect {{ card.provider.name }}">
                     {{ card.integration.last_sync_error|default:"The connection was refused." }} Reconnect to start syncing again.
                     </c-feedback.alert>
+                    {% if card.provider.asks_for_credentials and card.provider.is_configured %}
+                        {% include "integrations/credentials_form.html.j2" %}
+                    {% endif %}
                 {% elif card.integration.last_sync_status == 'failed' %}
                     <c-feedback.alert variant="warning" title="Last sync failed">
                     {{ card.integration.last_sync_error|default:"Something went wrong. The next scheduled sync tries again." }}
