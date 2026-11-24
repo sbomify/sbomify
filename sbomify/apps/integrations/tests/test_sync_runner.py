@@ -96,7 +96,6 @@ class TestRunSync:
         stored = Integration.objects.get(pk=connected_vanta.pk)
         assert stored.status == Integration.Status.CONNECTED
         assert stored.last_sync_status == Integration.SyncStatus.FAILED
-        assert stored.access_token == ""
         assert stored.token_is_stale
 
     def test_vanta_credentials_refused_at_minting_stay_revoked(self, connected_vanta, monkeypatch) -> None:

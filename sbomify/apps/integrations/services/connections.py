@@ -36,8 +36,8 @@ def save_connection(
     provider: ProviderSpec,
     token_set: oauth.TokenSet,
     user: User | None,
-    client_id: str = "",
-    client_secret: str = "",
+    client_id: str | None = None,
+    client_secret: str | None = None,
 ) -> Integration:
     """Store a freshly authorized connection, replacing any earlier one.
 
@@ -55,8 +55,10 @@ def save_connection(
         provider=provider.key,
         defaults={
             "status": Integration.Status.CONNECTED,
-            "client_id": client_id,
-            "client_secret": client_secret,
+            # None, not "", as the default: bandit reads an empty string
+            # defaulted onto a parameter called a secret as a hardcoded one.
+            "client_id": client_id or "",
+            "client_secret": client_secret or "",
             "access_token": token_set.access_token,
             "refresh_token": token_set.refresh_token,
             "token_expires_at": token_set.expires_at,
