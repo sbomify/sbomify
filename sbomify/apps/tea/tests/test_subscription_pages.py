@@ -84,3 +84,20 @@ def test_the_release_list_marks_a_release_whose_upstream_changed(setup):
 
     assert TeaSubscription.objects.get(pk=subscription.pk).status == TeaSubscription.Status.OK
     assert "Upstream changed" in body
+
+
+def test_the_remote_pins_card_is_empty_for_someone_who_cannot_read_the_release(setup, guest_user):
+    from django.contrib.auth.models import AnonymousUser
+    from django.test import RequestFactory
+
+    _, subscription, _, product = setup
+    cut = Release.objects.create(product=product, name="1.0")
+    pins.pin(cut, TeaRemoteArtifact.objects.get(uuid="a"))
+    request = RequestFactory().get("/")
+    request.user = guest_user
+
+    card = pins.release_card(request, cut)
+    request.user = AnonymousUser()
+
+    assert card["remote_pins"] == [] and card["remote_pin_choices"] == []
+    assert pins.release_card(request, cut)["remote_pins"] == []

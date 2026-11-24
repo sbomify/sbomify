@@ -182,6 +182,14 @@ def release_card(actor: object, release: Release) -> dict[str, object]:
     """The release page's remote artifacts card: each pin with its findings, and what may be pinned next."""
     from sbomify.apps.core.authz import can
 
+    empty: dict[str, object] = {
+        "remote_pins": [],
+        "remote_pin_choices": [],
+        "can_pin_remote": False,
+        "can_unpin_remote": False,
+    }
+    if not can(actor, "release:read", release.product):
+        return empty
     rows = []
     pinned_ids = set()
     for pin_row in pins_of(release):
