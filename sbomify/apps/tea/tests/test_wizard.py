@@ -155,3 +155,18 @@ def test_the_wizard_is_rate_limited(owner, fake):
     assert "Connected to" in answers[29].content.decode()
     assert "Too many requests" in answers[30]["HX-Trigger"]
     cache.clear()
+
+
+def test_confirm_offers_the_component_releases_to_start_from(owner, fake):
+    from sbomify.apps.tea.models import TeaRemoteRelease
+
+    client, team = owner
+    fake.publish("r2", "2.0", days_ago=0, artifacts=[artifact("b")])
+    pick = "remote-component|r2|acme-core"
+
+    confirm = step(client, "confirm", server=SERVER.base_url, pick=pick).content.decode()
+    step(client, "subscribe", server=SERVER.base_url, pick=pick, name_0="acme core", release_0="r1")
+
+    assert "Start from" in confirm and ">1.0<" in confirm and ">2.0<" in confirm
+    subscription = TeaSubscription.objects.get(component__team=team)
+    assert list(TeaRemoteRelease.objects.filter(subscription=subscription, tracked=True).values_list("uuid", flat=True)) == ["r1"]

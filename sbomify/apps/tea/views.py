@@ -65,8 +65,10 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         team = self._team(request)
         if check_rate_limit(f"tea_wizard:{request.user.pk}", limit=STEP_LIMIT, period=STEP_PERIOD):
             return htmx_error_response("Too many requests. Wait a minute and try again.")
-        too_long = any(len(request.POST.get(name, "")) > limit for name, limit in FIELD_LIMITS) or any(
-            len(value) > 255 for name, value in request.POST.items() if name.startswith("name_")
+        too_long = (
+            any(len(request.POST.get(name, "")) > limit for name, limit in FIELD_LIMITS)
+            or any(len(value) > 255 for name, value in request.POST.items() if name.startswith("name_"))
+            or any(len(value) > 64 for name, value in request.POST.items() if name.startswith("release_"))
         )
         if too_long or len(request.POST.getlist("pick")) > MAX_PICKS:
             return HttpResponseBadRequest("Request too large")
@@ -136,7 +138,7 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         product_release = remote.product_release_components(server, uuid)
         return self._step(request, "components", 3, server=server, product_release=product_release, tei=tei)
 
-    def _picked(self, request: HttpRequest) -> list[dict[str, str]]:
+    def _picked(self, request: HttpRequest) -> list[dict[str, Any]]:
         """The components picked on the select step, each as uuid, release uuid and remote name."""
         picked = []
         for value in request.POST.getlist("pick"):
@@ -151,6 +153,12 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         picked = self._picked(request)
         if not picked:
             return htmx_error_response("Pick at least one component.")
+        for pick in picked:
+            # The release to start from: the one the product release ships, or another the component published.
+            pick["releases"] = [
+                {"value": r["uuid"], "label": f"{r['version']} (pre-release)" if r["pre_release"] else r["version"]}
+                for r in remote.component_releases(server, pick["uuid"])
+            ]
         return self._step(
             request,
             "confirm",
@@ -171,13 +179,14 @@ class TeaSubscribeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         authorize_targets(request, team, product_ids, pin_release_ids)
         created: list[TeaSubscription] = []
         for index, pick in enumerate(picked):
+            start = request.POST.get(f"release_{index}") or pick["release_uuid"]
             created.append(
                 subscribe(
                     team,
                     Subscribe(
                         server=server,
                         component_uuid=pick["uuid"],
-                        release_uuids=[pick["release_uuid"]] if pick["release_uuid"] else [],
+                        release_uuids=[start] if start else [],
                         tei=request.POST.get("tei", ""),
                         name=request.POST.get(f"name_{index}", ""),
                         product_ids=product_ids,

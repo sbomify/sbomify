@@ -12,12 +12,19 @@
                name="pick"
                value="{{ pick.uuid }}|{{ pick.release_uuid }}|{{ pick.name }}">
     {% endfor %}
-    <c-layout.form-section step="4" title="Confirm" description="Name each subscription. sbomify checks it as soon as you subscribe.">
+    <c-layout.form-section step="4" title="Confirm" description="Name each subscription and pick the release it starts from. sbomify checks it as soon as you subscribe.">
     <div class="flex flex-col gap-5">
         {% for pick in picked %}
-            <c-forms.field label="Name for {{ pick.name }}" for="name_{{ forloop.counter0 }}" required>
-            <c-forms.input id="name_{{ forloop.counter0 }}" name="name_{{ forloop.counter0 }}" required maxlength="255" value="{{ pick.name }}" />
-            </c-forms.field>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <c-forms.field label="Name for {{ pick.name }}" for="name_{{ forloop.counter0 }}" required>
+                <c-forms.input id="name_{{ forloop.counter0 }}" name="name_{{ forloop.counter0 }}" required maxlength="255" value="{{ pick.name }}" />
+                </c-forms.field>
+                {% if pick.releases %}
+                    <c-forms.field label="Start from" for="release_{{ forloop.counter0 }}" hint="Always watched, whatever release is newest.">
+                    <c-forms.select id="release_{{ forloop.counter0 }}" name="release_{{ forloop.counter0 }}" :options="pick.releases" selected="{{ pick.release_uuid }}" />
+                    </c-forms.field>
+                {% endif %}
+            </div>
         {% endfor %}
     </div>
     </c-layout.form-section>
