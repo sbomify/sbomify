@@ -75,7 +75,11 @@ def _get_assessment_or_error(
     """
     from sbomify.apps.compliance.permissions import AccessCheckFailure, require_assessment_access
 
-    result = require_assessment_access(request, assessment_id)
+    # Mutation endpoints demand the write action so a read-only (or publish /
+    # agent) scoped token is rejected by the scope gate in can(); read endpoints
+    # ask only for read.
+    action = "cra_assessment:manage" if require_mutable else "cra_assessment:read"
+    result = require_assessment_access(request, assessment_id, action=action)
     if isinstance(result, AccessCheckFailure):
         # Route by ``error_code``, not ``status_code``: two distinct
         # 403 cases live behind the same status (role denial vs billing

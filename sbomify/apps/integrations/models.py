@@ -40,6 +40,7 @@ class Integration(models.Model):
 
     class Provider(models.TextChoices):
         VANTA = "vanta", "Vanta"
+        SLACK = "slack", "Slack"
 
     class Status(models.TextChoices):
         CONNECTED = "connected", "Connected"
@@ -72,6 +73,10 @@ class Integration(models.Model):
     refresh_token = models.TextField(blank=True, default="")
     token_expires_at = models.DateTimeField(null=True, blank=True)
     scopes = models.JSONField(default=list, blank=True)
+    # Who the credential belongs to, as the provider names it (a Slack
+    # workspace's id and name). Shown on the tile, so an admin with more than
+    # one account at the provider can tell which one is connected.
+    account = models.JSONField(default=dict, blank=True)
 
     connected_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     connected_at = models.DateTimeField(default=timezone.now)
@@ -100,3 +105,54 @@ class Integration(models.Model):
         if self.token_expires_at is None:
             return True
         return timezone.now() >= self.token_expires_at - TOKEN_REFRESH_LEEWAY
+
+
+class NotificationRoute(models.Model):
+    """One kind of news a workspace sends to one channel of a connection.
+
+    A row per event rather than a channel with a set of events: what an admin
+    chooses is "where does the VEX queue go", and a unique event per connection
+    makes that one answer instead of a set of channels to reconcile.
+
+    The channel name is kept beside its id because the provider only knows a
+    channel by id, and listing them all again to label one row on the settings
+    page is a request per page load. A rename in the provider shows up the next
+    time somebody picks the channel.
+    """
+
+    class Event(models.TextChoices):
+        VEX_SUBMISSIONS = "vex_submissions", "VEX approval queue"
+        DAILY_DIGEST = "daily_digest", "Daily vulnerability digest"
+        NEW_VULNERABILITIES = "new_vulnerabilities", "New vulnerabilities"
+
+    class Severity(models.TextChoices):
+        CRITICAL = "critical", "Critical only"
+        HIGH = "high", "High and above"
+        MEDIUM = "medium", "Medium and above"
+        LOW = "low", "All severities"
+
+    class Meta:
+        db_table = "integrations_notification_route"
+        constraints = [
+            models.UniqueConstraint(fields=["integration", "event"], name="unique_integration_event"),
+        ]
+        ordering = ["event"]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    integration = models.ForeignKey(Integration, on_delete=models.CASCADE, related_name="routes")
+    event = models.CharField(max_length=32, choices=Event.choices)
+    channel_id = models.CharField(max_length=64)
+    channel_name = models.CharField(max_length=255, blank=True, default="")
+    # The least severe vulnerability worth a message. Only new vulnerabilities
+    # read it: a first scan of a large SBOM opens hundreds at once, and a
+    # channel that hears about every low is a channel nobody reads.
+    min_severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.HIGH)
+
+    last_delivered_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"{self.get_event_display()} to {self.channel_name or self.channel_id}"

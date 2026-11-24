@@ -3425,6 +3425,45 @@ def test_list_products_enforces_token_read_scope(sample_team_with_owner_member: 
 
 
 @pytest.mark.django_db
+def test_public_product_hides_private_components_from_outsiders(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """A public product's response must not enumerate its private components.
+
+    An anonymous caller can read a public product, but a private component
+    attached to it does not exist to them: its name, id and visibility must not
+    appear, and component_count must not count it. The owner still sees both.
+    """
+    from sbomify.apps.sboms.models import ProductComponent
+
+    team = sample_team_with_owner_member.team
+    user = sample_team_with_owner_member.user
+    product = Product.objects.create(name="public-prod", team=team, is_public=True)
+    public_c = Component.objects.create(name="public-comp", team=team, visibility="public")
+    private_c = Component.objects.create(name="secret-comp", team=team, visibility="private")
+    ProductComponent.objects.create(product=product, component=public_c)
+    ProductComponent.objects.create(product=product, component=private_c)
+
+    url = reverse("api-1:get_product", kwargs={"product_id": product.id})
+
+    # Anonymous: only the public component is visible.
+    anon = Client().get(url)
+    assert anon.status_code == 200
+    body = anon.json()
+    names = {c["name"] for c in body["components"]}
+    assert names == {"public-comp"}
+    assert body["component_count"] == 1
+    assert private_c.id not in {c["id"] for c in body["components"]}
+
+    # Owner: sees every component and the full count.
+    owner_client = Client()
+    owner_client.force_login(user)
+    owner_body = owner_client.get(url).json()
+    assert {c["name"] for c in owner_body["components"]} == {"public-comp", "secret-comp"}
+    assert owner_body["component_count"] == 2
+
+
+@pytest.mark.django_db
 def test_dashboard_summary_scoped_token_sees_only_its_workspace(
     sample_team_with_owner_member: Member,  # noqa: F811
 ):
