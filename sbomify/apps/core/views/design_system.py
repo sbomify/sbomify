@@ -643,6 +643,7 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "2b4ac46",
             ],
             "demo_folding_items_short": ["1.2.0", "From 1.3.0, fixed in 1.4.2"],
+            "demo_key_values": {"owner": "platform-team", "cost-centre": "CC-1042", "tier": "critical"},
             # The version check: one product with a span and a pin, one with
             # pinned commits that fold, and one that is not affected at all.
             "demo_version_checks": {

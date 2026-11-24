@@ -24,7 +24,15 @@ TRIGGER_TO_REASON = {
 
 def migrate_osv_results(apps, schema_editor):
     """Convert VulnerabilityScanResult (provider=osv) to AssessmentRun records."""
-    VulnerabilityScanResult = apps.get_model("vulnerability_scanning", "VulnerabilityScanResult")
+    # Nothing orders this against vulnerability_scanning 0004, which deletes
+    # the model. On a fresh database the planner may run that deletion first,
+    # and then there is no table and so nothing to convert. Declaring the order
+    # now would raise InconsistentMigrationHistory on databases that already
+    # applied them the other way round, so tolerate the absence instead.
+    try:
+        VulnerabilityScanResult = apps.get_model("vulnerability_scanning", "VulnerabilityScanResult")
+    except LookupError:
+        return
     AssessmentRun = apps.get_model("plugins", "AssessmentRun")
 
     osv_results = VulnerabilityScanResult.objects.filter(provider="osv").select_related("sbom")

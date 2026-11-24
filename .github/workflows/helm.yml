@@ -57,7 +57,44 @@ jobs:
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
-            --set caddy.acme.email=ops@example.com
+            --set caddy.acme.email=ops@sbomify.com
+
+      - name: helm lint (S3 with EKS IRSA)
+        run: |
+          # Keyless S3: no access keys, a real region, a role on the ServiceAccount.
+          helm lint "$CHART" \
+            --set app.baseUrl=https://sbom.example.com \
+            --set database.host=10.0.0.3 \
+            --set database.password=hunter2 \
+            --set redis.host=10.0.0.4 \
+            --set objectStorage.endpointUrl=https://s3.eu-west-1.amazonaws.com \
+            --set objectStorage.region=eu-west-1 \
+            --set objectStorage.useWorkloadIdentity=true \
+            --set-string 'serviceAccount.annotations.eks\.amazonaws\.com/role-arn=arn:aws:iam::123456789012:role/sbomify' \
+            --set auth.keycloak.serverUrl=https://sso.example.com/ \
+            --set auth.keycloak.clientSecret=secret \
+            --set secrets.secretKey=lint-only-not-a-real-key \
+            --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
+            --set caddy.acme.email=ops@sbomify.com
+
+      - name: helm lint (GCS with Workload Identity)
+        run: |
+          # No endpoint and no keys: the gcs backend reads Application Default
+          # Credentials, so the chart must render without either.
+          helm lint "$CHART" \
+            --set app.baseUrl=https://sbom.example.com \
+            --set database.host=10.0.0.3 \
+            --set database.password=hunter2 \
+            --set redis.host=10.0.0.4 \
+            --set objectStorage.backend=gcs \
+            --set objectStorage.media.bucket=acme-sbomify-media \
+            --set objectStorage.sboms.bucket=acme-sbomify-sboms \
+            --set-string 'serviceAccount.annotations.iam\.gke\.io/gcp-service-account=sbomify@acme.iam.gserviceaccount.com' \
+            --set auth.keycloak.serverUrl=https://sso.example.com/ \
+            --set auth.keycloak.clientSecret=secret \
+            --set secrets.secretKey=lint-only-not-a-real-key \
+            --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
+            --set caddy.acme.email=ops@sbomify.com
 
       - name: Rendered manifests are valid Kubernetes objects
         run: |

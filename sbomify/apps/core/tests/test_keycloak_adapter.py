@@ -129,6 +129,19 @@ class TestCustomSocialAccountAdapter:
         # Verify username is generated from email
         assert user.username == "test.example.com"
 
+    def test_populate_user_without_name_claims(self, adapter, mock_request, mock_sociallogin):
+        """A provider that sends no given_name/family_name (Entra ID by default) still signs in.
+
+        allauth hands over its common fields with first_name/last_name present
+        but None, and the columns are NOT NULL.
+        """
+        data = {"email": "bob@example.com", "name": "Bob Example", "first_name": None, "last_name": None}
+
+        user = adapter.populate_user(mock_request, mock_sociallogin, data)
+
+        assert user.first_name == ""
+        assert user.last_name == ""
+
     def test_populate_user_with_duplicate_username(self, adapter, mock_request, mock_sociallogin):
         """Test username generation handles duplicates."""
         # Create existing user with the username that would be generated
