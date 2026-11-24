@@ -278,7 +278,8 @@ def build_inventory_snapshot(
         )
         counts = _counts(picture["counts"].get(component.id))
         assessed = component.id not in picture["unassessed"]
-        is_document = component.component_type == Component.ComponentType.DOCUMENT
+        # Documents and TEA subscriptions hold no SBOMs here, so scans and freshness do not apply.
+        is_document = component.component_type != Component.ComponentType.BOM
         stale = bool(freshness and freshness["is_stale"])
         freshness_label = (
             "Not applicable"
@@ -326,7 +327,7 @@ def build_inventory_snapshot(
     else:
         for product in products:
             assigned = [component_rows[c.id] for c in product.components.all()]
-            security_rows = [row for row in assigned if row["component_type"] != Component.ComponentType.DOCUMENT]
+            security_rows = [row for row in assigned if row["component_type"] == Component.ComponentType.BOM]
             counts = _counts(
                 {key: sum(row["counts"][key] for row in security_rows) for key in (*SEVERITIES, "suppressed")}
             )

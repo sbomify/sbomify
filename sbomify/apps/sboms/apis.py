@@ -207,6 +207,9 @@ def _cleanup_orphaned_s3_object(filename: str) -> None:
     log_orphaned_object(filename)
 
 
+# A TEA subscription references artifacts on another server; uploads go there.
+TEA_SUBSCRIPTION_HOLDS_NO_UPLOADS = "A TEA subscription holds no uploads. Upload to the server it follows."
+
 router = Router(tags=["Artifacts"], auth=(PersonalAccessTokenAuth(), django_auth))
 
 
@@ -578,6 +581,8 @@ def sbom_upload_cyclonedx(
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            return 400, {"detail": TEA_SUBSCRIPTION_HOLDS_NO_UPLOADS}
 
         # Allow OIDC bot tokens for trusted-publishing uploads. The second
         # check enforces that the bot can only push to ITS bound component,
@@ -790,6 +795,8 @@ def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, d
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            return 400, {"detail": TEA_SUBSCRIPTION_HOLDS_NO_UPLOADS}
         if not can(request, "artifact:publish", component):
             return 403, {"detail": "Forbidden"}
         # publish_vex is the looser tier and does not imply upload: the
@@ -845,6 +852,8 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            return 400, {"detail": TEA_SUBSCRIPTION_HOLDS_NO_UPLOADS}
 
         # Allow OIDC bot tokens for trusted-publishing uploads; restrict
         # them to the bound component (see CycloneDX upload above for
@@ -1383,6 +1392,8 @@ def sbom_upload_file(
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            return 400, {"detail": TEA_SUBSCRIPTION_HOLDS_NO_UPLOADS}
 
         if not can(request, "component:manage", component):
             return 403, {"detail": "Forbidden"}

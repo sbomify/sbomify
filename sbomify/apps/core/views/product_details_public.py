@@ -55,6 +55,8 @@ def _prepare_public_components(
             products__id=product_id,
             visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED),
         )
+        # A TEA subscription is published by the server it follows, not re-published on the Trust Center.
+        .exclude(component_type=Component.ComponentType.TEA_SUBSCRIPTION)
         .order_by("name")
         .distinct()
     )
