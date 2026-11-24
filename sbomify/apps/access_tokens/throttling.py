@@ -16,6 +16,8 @@ from ninja.throttling import SimpleRateThrottle
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from sbomify.backend_outage import report_backend_outage
+
 #: What a throttle treats as "the backend is unreachable": django-redis wraps
 #: the redis error in ConnectionInterrupted, but IGNORE_EXCEPTIONS is off on
 #: the throttle alias so the raw errors can surface too.
@@ -41,6 +43,12 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
     # it so they never share (and corrupt) the base throttle's counter.
     cache_key_prefix = "throttle_access_token"
 
+    # Until when a backend outage has already been logged. Class-level so it
+    # survives the per-request instances the MCP server builds; a subclass
+    # assigning it gets its own, which is what we want — two throttles failing
+    # for the same reason are still two things worth hearing about once each.
+    _backend_refusal_until: float = 0.0
+
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_RATE_LIMIT)
 
@@ -62,10 +70,10 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         return caches["throttle"]
 
     def wait(self) -> float | None:
-        # One shared instance serves every request, so this flag is read best
-        # effort: a racing request at worst reports the outage Retry-After
-        # instead of its own window, and Retry-After is advisory.
-        if time.monotonic() < getattr(self, "_backend_refusal_until", 0.0):
+        # The flag is shared, so it is read best effort: a racing request at
+        # worst reports the outage Retry-After instead of its own window, and
+        # Retry-After is advisory.
+        if time.monotonic() < type(self)._backend_refusal_until:
             return float(_BACKEND_OUTAGE_RETRY_SECONDS)
         return super().wait()
 
@@ -80,9 +88,11 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
             allowed = super().allow_request(request)
             # Backend reachable again: from here on, any refusal is a genuine
             # rate limit, so wait() must report the real window, not the
-            # outage hint left over from before recovery.
-            self._backend_refusal_until = 0.0
-        except _THROTTLE_BACKEND_ERRORS:
+            # outage hint left over from before recovery. Cleared on the class
+            # for the same reason it is set there — one recovered request means
+            # the backend is back for every instance, not just this one.
+            type(self)._backend_refusal_until = 0.0
+        except _THROTTLE_BACKEND_ERRORS as exc:
             # The throttle alias raises on a Redis failure by design: a
             # swallowed failure reads as an empty window and hands every
             # caller a fresh budget exactly when Redis being unwell suggests
@@ -100,12 +110,27 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
             # The refusal must still be heard: the old 500 was the alert, so
             # going quiet would hide the outage. One log per refusal window
             # keeps the signal without a log storm.
-            if time.monotonic() >= getattr(self, "_backend_refusal_until", 0.0):
+            #
+            # The window lives on the class, not the instance: ninja reuses one
+            # throttle per route, but the MCP server builds a fresh one per
+            # request (its instances are not thread-safe to share), and an
+            # instance attribute would start every one of those at zero and put
+            # the storm back.
+            #
+            # An unreachable Redis is reported through the shared outage line,
+            # like every other caller, so it reaches Sentry only if it lasts.
+            # Anything else django-redis wrapped (an OOM, a read-only replica)
+            # is a fault in its own right and keeps its own report.
+            cls = type(self)
+            if (
+                time.monotonic() >= cls._backend_refusal_until
+                and report_backend_outage(exc, "API rate limiter") is None
+            ):
                 logger.exception(
                     "Throttle backend unreachable; refusing throttled requests with Retry-After %ss until it recovers",
                     _BACKEND_OUTAGE_RETRY_SECONDS,
                 )
-            self._backend_refusal_until = time.monotonic() + _BACKEND_OUTAGE_RETRY_SECONDS
+            cls._backend_refusal_until = time.monotonic() + _BACKEND_OUTAGE_RETRY_SECONDS
             return False
         # Ninja reuses one throttle instance across requests, so its per-request scratch
         # (self.key/history/now) is unsafe to read here. Compute the budget from local

@@ -476,3 +476,201 @@ class TestAddArtifactsToReleaseAPI:
 
         # Verify artifact still exists
         assert ReleaseArtifact.objects.filter(id=artifact.id).exists()
+
+
+@pytest.mark.django_db
+class TestReplaceArtifactInRelease:
+    """``replace: true`` on the add-artifact endpoint, through v1 and v2."""
+
+    @pytest.fixture(autouse=True)
+    def setup_test_data(self, team_with_business_plan: Workspace, sample_user: User) -> None:
+        self.team = team_with_business_plan
+        self.product = Product.objects.create(name="Replace Product", team=self.team)
+        self.release = Release.objects.create(name="v1.0.0", product=self.product)
+        self.component = Component.objects.create(name="Replace Component", team=self.team)
+        self.old = SBOM.objects.create(name="old", component=self.component, format="cyclonedx", version="1.0.0")
+        self.new = SBOM.objects.create(name="new", component=self.component, format="cyclonedx", version="2.0.0")
+        ReleaseArtifact.objects.create(release=self.release, sbom=self.old)
+        self.member = Member.objects.get(team=self.team, user=sample_user)
+
+    def _add(self, client: Client, token: Any, payload: dict[str, Any], version: str = "v1") -> Any:
+        return client.post(
+            f"/api/{version}/releases/{self.release.id}/artifacts",
+            data=json.dumps(payload),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+    @pytest.mark.parametrize("version", ["v1", "v2"])
+    @pytest.mark.parametrize("with_other_artifact", [False, True])
+    def test_replace_is_one_collection_update(
+        self, authenticated_api_client: tuple[Client, Any], version: str, with_other_artifact: bool
+    ) -> None:
+        """A swap is one ARTIFACT_UPDATED, not a removal followed by an add."""
+        client, token = authenticated_api_client
+        if with_other_artifact:
+            other = Component.objects.create(name="Other Component", team=self.team)
+            ReleaseArtifact.objects.create(
+                release=self.release,
+                sbom=SBOM.objects.create(name="other", component=other, format="cyclonedx", version="1.0.0"),
+            )
+        before = Release.objects.get(pk=self.release.pk).collection_version
+
+        response = self._add(client, token, {"sbom_id": self.new.id, "replace": True}, version)
+
+        assert response.status_code == 201, response.content
+        assert response.json()["replaced"] is True
+        release = Release.objects.get(pk=self.release.pk)
+        assert release.collection_version == before + 1
+        assert release.collection_update_reason == Release.CollectionUpdateReason.ARTIFACT_UPDATED
+
+    def test_replace_broadcasts_after_commit(
+        self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
+    ) -> None:
+        client, token = authenticated_api_client
+
+        with patch("sbomify.apps.core.apis.broadcast_to_workspace") as mock_broadcast:
+            with django_capture_on_commit_callbacks(execute=False) as callbacks:
+                response = self._add(client, token, {"sbom_id": self.new.id, "replace": True})
+            assert response.status_code == 201
+            mock_broadcast.assert_not_called()
+            for callback in callbacks:
+                callback()
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.kwargs["message_type"] == "release_updated"
+        assert mock_broadcast.call_args.kwargs["data"]["release_id"] == str(self.release.id)
+
+    def test_replace_with_nothing_to_replace_is_a_plain_add(self, authenticated_api_client: tuple[Client, Any]) -> None:
+        client, token = authenticated_api_client
+        ReleaseArtifact.objects.filter(release=self.release).delete()
+
+        response = self._add(client, token, {"sbom_id": self.new.id, "replace": True})
+
+        assert response.status_code == 201
+        assert response.json()["replaced"] is False
+        assert response.json()["replaced_artifact_name"] is None
+        assert list(ReleaseArtifact.objects.filter(release=self.release).values_list("sbom_id", flat=True)) == [
+            self.new.id
+        ]
+
+    def test_replace_never_evicts_another_bom_type(self, authenticated_api_client: tuple[Client, Any]) -> None:
+        """A CBOM in the same format sits beside the component's SBOM, it does not take its slot."""
+        client, token = authenticated_api_client
+        cbom = SBOM.objects.create(
+            name="cbom", component=self.component, format="cyclonedx", version="1.0.0", bom_type=SBOM.BomType.CBOM
+        )
+
+        response = self._add(client, token, {"sbom_id": cbom.id, "replace": True})
+
+        assert response.status_code == 201
+        assert response.json()["replaced"] is False
+        assert set(ReleaseArtifact.objects.filter(release=self.release).values_list("sbom_id", flat=True)) == {
+            self.old.id,
+            cbom.id,
+        }
+
+    def test_replace_same_artifact_is_still_a_conflict(self, authenticated_api_client: tuple[Client, Any]) -> None:
+        client, token = authenticated_api_client
+
+        response = self._add(client, token, {"sbom_id": self.old.id, "replace": True})
+
+        assert response.status_code == 409
+
+    @pytest.mark.parametrize("role,status", [("member", 201), ("operator", 403), ("guest", 403)])
+    def test_replace_needs_the_publish_tier(
+        self, authenticated_api_client: tuple[Client, Any], role: str, status: int
+    ) -> None:
+        client, token = authenticated_api_client
+        self.member.role = role
+        self.member.save(update_fields=["role"])
+
+        response = self._add(client, token, {"sbom_id": self.new.id, "replace": True})
+
+        assert response.status_code == status
+        expected = self.new.id if status == 201 else self.old.id
+        assert list(ReleaseArtifact.objects.filter(release=self.release).values_list("sbom_id", flat=True)) == [
+            expected
+        ]
+
+    def test_replace_moves_the_vex_pin_to_the_new_version(self, authenticated_api_client: tuple[Client, Any]) -> None:
+        """The swap re-points the auto VEX pin at the version the release now ships, in the same one bump."""
+        from sbomify.apps.core.services.vex_pins import sync_vex_pins
+
+        client, token = authenticated_api_client
+        vex_for = {
+            version: SBOM.objects.create(
+                name=f"vex-{version}",
+                component=self.component,
+                format="cyclonedx",
+                version=version,
+                bom_type=SBOM.BomType.VEX,
+                source="manual_upload",
+            )
+            for version in ("1.0.0", "2.0.0")
+        }
+        sync_vex_pins(self.release, self.component)
+        assert set(self.release.artifacts.filter(auto_pinned=True).values_list("sbom_id", flat=True)) == {
+            vex_for["1.0.0"].id
+        }
+        before = Release.objects.get(pk=self.release.pk).collection_version
+
+        response = self._add(client, token, {"sbom_id": self.new.id, "replace": True})
+
+        assert response.status_code == 201
+        assert set(self.release.artifacts.values_list("sbom_id", flat=True)) == {self.new.id, vex_for["2.0.0"].id}
+        release = Release.objects.get(pk=self.release.pk)
+        assert release.collection_version == before + 1
+        assert release.collection_update_reason == Release.CollectionUpdateReason.ARTIFACT_UPDATED
+
+    def test_tagging_an_sbom_into_a_release_replaces_as_one_update(
+        self, authenticated_api_client: tuple[Client, Any]
+    ) -> None:
+        """POST /sboms/{id}/releases always replaces; it records the swap the same way."""
+        client, token = authenticated_api_client
+        before = Release.objects.get(pk=self.release.pk).collection_version
+
+        response = client.post(
+            f"/api/v1/sboms/{self.new.id}/releases",
+            data=json.dumps({"release_ids": [self.release.id]}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 201, response.content
+        release = Release.objects.get(pk=self.release.pk)
+        assert release.collection_version == before + 1
+        assert release.collection_update_reason == Release.CollectionUpdateReason.ARTIFACT_UPDATED
+
+    def test_replacing_a_hand_pinned_vex_drops_the_auto_pins(
+        self, authenticated_api_client: tuple[Client, Any]
+    ) -> None:
+        """A hand pin outranks sbomify's auto pins for the component, through a swap as through an add."""
+        from sbomify.apps.core.models import _suppress_collection_signals
+
+        client, token = authenticated_api_client
+
+        def vex(name: str, artifact_format: str) -> SBOM:
+            return SBOM.objects.create(
+                name=name,
+                component=self.component,
+                format=artifact_format,
+                version="1.0.0",
+                bom_type=SBOM.BomType.VEX,
+                source="manual_upload",
+            )
+
+        auto = vex("auto", "cyclonedx")
+        hand = vex("hand", "openvex")
+        signals_muted = _suppress_collection_signals.set(True)
+        try:
+            ReleaseArtifact.objects.create(release=self.release, sbom=auto, auto_pinned=True)
+            ReleaseArtifact.objects.create(release=self.release, sbom=hand)
+        finally:
+            _suppress_collection_signals.reset(signals_muted)
+        newer = vex("newer", "openvex")
+
+        response = self._add(client, token, {"sbom_id": newer.id, "replace": True})
+
+        assert response.status_code == 201
+        assert response.json()["replaced_artifact_name"] == "hand"
+        assert set(self.release.artifacts.values_list("sbom_id", flat=True)) == {self.old.id, newer.id}

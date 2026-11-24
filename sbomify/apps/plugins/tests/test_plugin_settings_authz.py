@@ -13,7 +13,7 @@ from sbomify.apps.teams.models import Workspace
 def test_plugin_settings_write_denies_cross_workspace(sample_team_with_owner_member):
     """A user who owns their own workspace must not update another workspace's plugin settings."""
     attacker = sample_team_with_owner_member.user  # owner of their own workspace only
-    victim = Workspace.objects.create(name="Victim WS")  # Team.save() populates .key
+    victim = Workspace.objects.create(name="Victim WS")  # Workspace.save() populates .key
 
     req = RequestFactory().post("/")
     req.user = attacker

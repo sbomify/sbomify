@@ -1664,6 +1664,30 @@ first-of-type rule that drops the leading hairline reads the section's position
         run to dozens, such as the versions an advisory affects, where a comma-joined line would overflow.
     </p>
     </c-cards.card>
+    <h2 id="key-value-list" class="text-xl font-semibold text-text">Key/value list</h2>
+    <c-cards.card>
+    <div class="grid gap-6 md:grid-cols-2">
+        <c-lists.key-value :items="demo_key_values" label="Custom metadata, rendered on the server" />
+        <div x-data="{ meta: { owner: 'platform-team', region: 'eu-west-1' } }">
+            <c-lists.key-value model="meta" label="Custom metadata, rendered by Alpine" />
+        </div>
+    </div>
+    <p class="text-sm text-text-muted mt-2 mb-0">
+        Custom metadata on a product or component. Takes a dict from the view, or an Alpine expression for a panel
+        that loads its data in the browser.
+    </p>
+    </c-cards.card>
+    <h2 id="key-value-editor" class="text-xl font-semibold text-text">Key/value editor</h2>
+    <c-cards.card>
+    <div x-data="{ rows: [{ key: 'owner', value: 'platform-team' }, { key: 'tier', value: 'critical' }] }"
+         class="max-w-2xl">
+        <c-forms.key-value-editor model="rows" label="Custom metadata" />
+    </div>
+    <p class="text-sm text-text-muted mt-2 mb-0">
+        Rows bind to an Alpine array of key and value objects. With name set, the rows also post as repeated
+        fields, so an HTMX form saves them without script.
+    </p>
+    </c-cards.card>
     <h2 id="tags" class="text-xl font-semibold text-text">Tags</h2>
     <c-cards.card>
     {% comment %}

@@ -232,3 +232,34 @@ class TestAMalformedDocumentIsNotRemembered:
 
 def test_the_provider_uses_the_cached_property() -> None:
     assert OpenIDConnectOAuth2Adapter.openid_config.fget is cached_openid_config
+
+
+def test_complete_login_keeps_raw_id_token_for_logout(rf):
+    """A validated token is kept in the session and on the request for login() to restore."""
+    from django.contrib.sessions.backends.db import SessionStore
+
+    from sbomify.apps.core.adapters import OIDC_ID_TOKEN_SESSION_KEY, keep_id_token
+
+    request = rf.get("/")
+    request.session = SessionStore()
+    wrapped = keep_id_token(lambda self, request, app, token, **kwargs: "login")
+
+    assert wrapped(None, request, None, None, response={"id_token": "h.p.s"}) == "login"
+    assert request._oidc_id_token == "h.p.s"
+    assert request.session[OIDC_ID_TOKEN_SESSION_KEY] == "h.p.s"
+
+
+def test_failed_login_keeps_no_id_token(rf):
+    from django.contrib.sessions.backends.db import SessionStore
+
+    from sbomify.apps.core.adapters import OIDC_ID_TOKEN_SESSION_KEY, keep_id_token
+
+    def refuse(self, request, app, token, **kwargs):
+        raise ValueError("invalid id_token")
+
+    request = rf.get("/")
+    request.session = SessionStore()
+    with pytest.raises(ValueError):
+        keep_id_token(refuse)(None, request, None, None, response={"id_token": "h.p.s"})
+    assert OIDC_ID_TOKEN_SESSION_KEY not in request.session
+    assert not hasattr(request, "_oidc_id_token")
