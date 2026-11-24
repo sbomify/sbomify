@@ -18,6 +18,7 @@ def set_component_team(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("sboms", "0013_component_team_project_team"),
     ]

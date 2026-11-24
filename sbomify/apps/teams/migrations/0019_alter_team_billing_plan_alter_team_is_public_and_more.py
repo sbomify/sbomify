@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("teams", "0018_invitation_token"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -38,18 +39,26 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="invitation",
-            index=models.Index(fields=["expires_at"], name="teams_invit_expires_5e3602_idx"),
+            index=models.Index(
+                fields=["expires_at"], name="teams_invit_expires_5e3602_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="team",
-            index=models.Index(fields=["created_at"], name="teams_teams_created_6eb5e5_idx"),
+            index=models.Index(
+                fields=["created_at"], name="teams_teams_created_6eb5e5_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="team",
-            index=models.Index(fields=["billing_plan"], name="teams_teams_billing_974e45_idx"),
+            index=models.Index(
+                fields=["billing_plan"], name="teams_teams_billing_974e45_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="team",
-            index=models.Index(fields=["is_public"], name="teams_teams_is_publ_ce6c3d_idx"),
+            index=models.Index(
+                fields=["is_public"], name="teams_teams_is_publ_ce6c3d_idx"
+            ),
         ),
     ]

@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("teams", "0011_team_billing_plan_team_billing_plan_limits"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("documents", "0013_ndasignature_one_live_signature_per_request_document"),
         (

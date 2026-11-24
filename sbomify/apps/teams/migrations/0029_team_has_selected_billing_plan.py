@@ -8,6 +8,7 @@ def set_existing_teams_plan_selected(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("teams", "0028_team_onboarding_goal"),
     ]

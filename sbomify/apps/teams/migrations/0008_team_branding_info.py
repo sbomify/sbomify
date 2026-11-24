@@ -4,14 +4,15 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
-        ("teams", "0007_team_teams_teams_key_87f11a_idx"),
+        ('teams', '0007_team_teams_teams_key_87f11a_idx'),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="team",
-            name="branding_info",
+            model_name='team',
+            name='branding_info',
             field=models.JSONField(default=dict),
         ),
     ]

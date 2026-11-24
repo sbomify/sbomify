@@ -5,6 +5,7 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("compliance", "0017_alter_craassessment_authorized_rep_mandate_reference"),
         (

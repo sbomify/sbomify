@@ -16,6 +16,7 @@ def set_team_keys(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("teams", "0005_team_key"),
     ]

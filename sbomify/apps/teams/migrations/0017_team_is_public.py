@@ -14,6 +14,7 @@ def set_initial_visibility(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("teams", "0016_team_custom_domain_and_more"),
     ]

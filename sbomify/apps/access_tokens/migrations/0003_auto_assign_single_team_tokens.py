@@ -28,7 +28,9 @@ def auto_assign_single_team_tokens(apps, schema_editor):
 
     # Build user_id -> team_id mapping
     single_team_user_ids = [m["user_id"] for m in single_team_members]
-    user_team_map = dict(Member.objects.filter(user_id__in=single_team_user_ids).values_list("user_id", "team_id"))
+    user_team_map = dict(
+        Member.objects.filter(user_id__in=single_team_user_ids).values_list("user_id", "team_id")
+    )
 
     # Bulk update tokens per user
     for user_id, team_id in user_team_map.items():
@@ -41,6 +43,7 @@ def reverse_auto_assign(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("access_tokens", "0002_accesstoken_team_and_more"),
         ("teams", "0001_initial"),

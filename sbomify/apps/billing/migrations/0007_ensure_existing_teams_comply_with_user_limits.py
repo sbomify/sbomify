@@ -64,6 +64,7 @@ def reverse_teams_user_limits_compliance(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+
     dependencies = [
         ("billing", "0006_populate_plan_user_limits"),
         ("teams", "0001_initial"),  # Ensure teams app is migrated
