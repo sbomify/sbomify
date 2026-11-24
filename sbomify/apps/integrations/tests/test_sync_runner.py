@@ -48,6 +48,8 @@ class TestRunSync:
 
     def test_a_dead_credential_is_recorded_rather_than_raised(self, connected_vanta, monkeypatch) -> None:
         def refuse(integration):
+            # What ``connections.access_token`` does with a refused credential.
+            integration.status = Integration.Status.REVOKED
             raise ProviderAuthError("Vanta needs reconnecting.", service="vanta")
 
         _install(monkeypatch, refuse)
@@ -60,14 +62,50 @@ class TestRunSync:
         assert "reconnecting" in connected_vanta.last_sync_error
 
     def test_a_refusal_from_the_api_asks_for_a_reconnect(self, connected_vanta, monkeypatch) -> None:
-        """``VantaClient`` raises on a 401 or 403 mid-sync, outside the token refresh
-        that marks a refused credential. Left connected, the scheduler would retry a
-        dead credential every six hours and the tab would offer no reconnect."""
+        """A 401 or 403 mid-sync, outside the token refresh that marks a refused
+        credential. On a consent-screen connection, left connected, the scheduler
+        would retry a dead credential every six hours and the tab would offer no
+        reconnect."""
+        from sbomify.apps.integrations.tests._providers import ROTATING
+
+        monkeypatch.setattr(sync_module, "get_provider", lambda key: ROTATING)
 
         def refuse(integration):
             raise ProviderAuthError("Vanta rejected the connection. Reconnect the workspace.", service="vanta")
 
         _install(monkeypatch, refuse)
+
+        run_sync(connected_vanta)
+
+        assert Integration.objects.get(pk=connected_vanta.pk).status == Integration.Status.REVOKED
+
+    def test_a_replaced_vanta_token_is_dropped_rather_than_revoked(self, connected_vanta, monkeypatch) -> None:
+        """Vanta keeps one live token per application and refuses the old one
+        the moment anything else mints a new one. The workspace's client ID and
+        secret still work, so asking a human to paste them again would be wrong:
+        the next run mints a fresh token instead."""
+
+        def refuse(integration):
+            raise ProviderAuthError("Vanta rejected the connection. Reconnect the workspace.", service="vanta")
+
+        _install(monkeypatch, refuse)
+
+        result = run_sync(connected_vanta)
+
+        assert not result.ok
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.status == Integration.Status.CONNECTED
+        assert stored.last_sync_status == Integration.SyncStatus.FAILED
+        assert stored.access_token == ""
+        assert stored.token_is_stale
+
+    def test_vanta_credentials_refused_at_minting_stay_revoked(self, connected_vanta, monkeypatch) -> None:
+        def mint_refused(integration):
+            Integration.objects.filter(pk=integration.pk).update(status=Integration.Status.REVOKED)
+            integration.status = Integration.Status.REVOKED
+            raise ProviderAuthError("Vanta needs a client ID and secret.", service="vanta")
+
+        _install(monkeypatch, mint_refused)
 
         run_sync(connected_vanta)
 

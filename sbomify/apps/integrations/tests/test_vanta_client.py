@@ -160,3 +160,43 @@ class TestFailures:
 
         with pytest.raises(VantaUnavailable):
             list(client.frameworks())
+
+
+class TestRateLimit:
+    """Vanta allows 50 requests a minute, and a sync is one request per control."""
+
+    def test_requests_are_spaced_under_the_limit(self, client, monkeypatch, vanta_sleeps) -> None:
+        now = [100.0]
+        monkeypatch.setattr(vanta_module, "_monotonic", lambda: now[0])
+        monkeypatch.setattr(vanta_module, "request_with_retry", lambda *a, **k: _Response(200, {"id": "c1"}))
+
+        client.control("c1")
+        now[0] += 0.3
+        client.control("c2")
+
+        # The first call waits for nothing; the second waits out the rest of
+        # its slot. 60 / 50 is 1.2 s, so 1.3 s apart stays under the limit.
+        assert vanta_sleeps == [pytest.approx(vanta_module.MIN_REQUEST_INTERVAL - 0.3)]
+        assert 60 / vanta_module.MIN_REQUEST_INTERVAL < 50
+
+    def test_a_429_is_waited_out_and_retried(self, client, monkeypatch, vanta_sleeps) -> None:
+        responses = [_Response(429, {}), _Response(200, {"id": "c1", "status": "COMPLETED"})]
+        monkeypatch.setattr(vanta_module, "request_with_retry", lambda *a, **k: responses.pop(0))
+
+        assert client.control("c1")["status"] == "COMPLETED"
+        assert vanta_module.RATE_LIMIT_WAIT in vanta_sleeps
+
+    def test_a_429_that_does_not_clear_fails_the_run_without_revoking(self, client, monkeypatch) -> None:
+        calls: list[str] = []
+
+        def always_limited(method, url, **kwargs):
+            calls.append(url)
+            return _Response(429, {})
+
+        monkeypatch.setattr(vanta_module, "request_with_retry", always_limited)
+
+        # Unavailable, not an auth error: the connection is fine, the next
+        # scheduled sync tries again.
+        with pytest.raises(VantaUnavailable):
+            client.control("c1")
+        assert len(calls) == vanta_module.RATE_LIMIT_ATTEMPTS

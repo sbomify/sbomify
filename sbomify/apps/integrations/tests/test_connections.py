@@ -13,9 +13,22 @@ from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnav
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers.vanta import VANTA
 from sbomify.apps.integrations.services import connections
+from sbomify.apps.integrations.tests._providers import ROTATING
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
 pytestmark = pytest.mark.django_db
+
+@pytest.fixture(autouse=True)
+def _rotating(rotating_credentials):
+    return rotating_credentials
+
+
+@pytest.fixture
+def connected_vanta(connected_vanta) -> Integration:
+    """A connection that also holds a refresh token, for the refresh path."""
+    connected_vanta.refresh_token = "vrt_live"
+    connected_vanta.save()
+    return connected_vanta
 
 
 def _token_set(access: str = "vat_new", refresh: str = "vrt_new", *, expires_in: int = 3600) -> oauth.TokenSet:
@@ -54,7 +67,7 @@ class TestAccessToken:
 
         monkeypatch.setattr(oauth, "refresh", fail)
 
-        assert connections.access_token(connected_vanta, VANTA) == "vat_live"
+        assert connections.access_token(connected_vanta, ROTATING) == "vat_live"
 
     @pytest.mark.parametrize(
         "expires_at",
@@ -66,7 +79,7 @@ class TestAccessToken:
         connected_vanta.save()
         monkeypatch.setattr(oauth, "refresh", lambda provider, token: _token_set("vat_rotated", "vrt_rotated"))
 
-        assert connections.access_token(connected_vanta, VANTA) == "vat_rotated"
+        assert connections.access_token(connected_vanta, ROTATING) == "vat_rotated"
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.access_token == "vat_rotated"
@@ -79,7 +92,7 @@ class TestAccessToken:
         connected_vanta.save()
         monkeypatch.setattr(oauth, "refresh", lambda provider, token: _token_set("vat_rotated", ""))
 
-        connections.access_token(connected_vanta, VANTA)
+        connections.access_token(connected_vanta, ROTATING)
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.refresh_token == "vrt_live"
@@ -94,7 +107,7 @@ class TestAccessToken:
         monkeypatch.setattr(oauth, "refresh", refuse)
 
         with pytest.raises(ProviderAuthError):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.status == Integration.Status.REVOKED
@@ -115,14 +128,14 @@ class TestAccessToken:
         monkeypatch.setattr(oauth, "refresh", unavailable)
 
         with pytest.raises(ProviderUnavailable):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.status == Integration.Status.CONNECTED
         assert connected_vanta.refresh_token == "vrt_live"
 
     def test_a_deployment_missing_its_client_secret_keeps_the_connection(
-        self, connected_vanta, vanta_credentials, monkeypatch
+        self, connected_vanta, rotating_credentials, monkeypatch
     ) -> None:
         """Our own missing setting is not the provider refusing the workspace.
 
@@ -130,7 +143,7 @@ class TestAccessToken:
         connection for good: restoring the setting would leave every workspace
         to reconnect by hand.
         """
-        vanta_credentials.VANTA_CLIENT_SECRET = ""
+        rotating_credentials.ROTATING_CLIENT_SECRET = ""
         connected_vanta.token_expires_at = None
         connected_vanta.save()
 
@@ -140,7 +153,7 @@ class TestAccessToken:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *args, **kwargs: Refused())
 
         with pytest.raises(ProviderUnavailable):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.status == Integration.Status.CONNECTED
@@ -151,7 +164,7 @@ class TestAccessToken:
         connected_vanta.save()
 
         with pytest.raises(ProviderAuthError):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         connected_vanta.refresh_from_db()
         assert connected_vanta.status == Integration.Status.REVOKED
@@ -177,11 +190,11 @@ class TestConcurrentRefresh:
 
         monkeypatch.setattr(oauth, "refresh", refresh_once)
 
-        first = connections.access_token(connected_vanta, VANTA)
+        first = connections.access_token(connected_vanta, ROTATING)
         # A second caller holding its own copy of the row, as a separate
         # process would.
         second_view = Integration.objects.get(pk=connected_vanta.pk)
-        second = connections.access_token(second_view, VANTA)
+        second = connections.access_token(second_view, ROTATING)
 
         assert first == second == "vat_rotated"
         assert calls == ["vrt_live"]
@@ -192,7 +205,7 @@ class TestConcurrentRefresh:
         connected_vanta.save()
         monkeypatch.setattr(oauth, "refresh", lambda provider, token: _token_set("vat_rotated", "vrt_rotated"))
 
-        connections.access_token(connected_vanta, VANTA)
+        connections.access_token(connected_vanta, ROTATING)
 
         assert connected_vanta.access_token == "vat_rotated"
         assert connected_vanta.refresh_token == "vrt_rotated"
@@ -411,7 +424,7 @@ class TestARefusalDoesNotOutliveTheCredentialItRefused:
         monkeypatch.setattr(oauth, "refresh", refuse_then_reconnect)
 
         with pytest.raises(ProviderAuthError):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         stored = Integration.objects.get(pk=connected_vanta.pk)
         assert stored.status == Integration.Status.CONNECTED
@@ -428,7 +441,7 @@ class TestARefusalDoesNotOutliveTheCredentialItRefused:
         )
 
         with pytest.raises(ProviderAuthError):
-            connections.access_token(connected_vanta, VANTA)
+            connections.access_token(connected_vanta, ROTATING)
 
         assert Integration.objects.get(pk=connected_vanta.pk).status == Integration.Status.REVOKED
 
@@ -569,9 +582,11 @@ class TestNoProviderCredentialReachesATemplate:
             "reads_intro",
             "reads",
             "is_configured",
+            "asks_for_credentials",
+            "setup_steps",
         }
-        assert "vcs_test" not in str(card)
-        assert "vci_test" not in str(card)
+        assert "vcs_workspace" not in str(card)
+        assert "vci_workspace" not in str(card)
 
     def test_the_tile_still_knows_whether_it_can_connect(self, vanta_credentials, sample_team_with_owner_member) -> None:  # noqa: F811
         """is_configured is derived from the credentials, so it has to survive."""
@@ -580,9 +595,165 @@ class TestNoProviderCredentialReachesATemplate:
         assert card["provider"]["is_configured"] is True
 
     def test_a_deployment_without_credentials_says_so(self, settings, sample_team_with_owner_member) -> None:  # noqa: F811
-        settings.VANTA_CLIENT_ID = ""
-        settings.VANTA_CLIENT_SECRET = ""
+        settings.VANTA_OAUTH_TOKEN_URL = ""
 
         card = connections.provider_cards(sample_team_with_owner_member.team)[0]
 
         assert card["provider"]["is_configured"] is False
+
+
+class TestClientCredentials:
+    """Vanta connects with an application the workspace created in Vanta."""
+
+    @pytest.fixture
+    def minted(self, monkeypatch) -> list[tuple[str, str]]:
+        calls: list[tuple[str, str]] = []
+
+        def mint(provider, client_id, client_secret):
+            calls.append((client_id, client_secret))
+            return oauth.TokenSet(
+                access_token=f"vat_minted_{len(calls)}",
+                refresh_token="",
+                expires_at=timezone.now() + timedelta(hours=1),
+                scopes=("vanta-api.all:read",),
+            )
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", mint)
+        return calls
+
+    def test_connecting_stores_the_application_and_its_first_token(
+        self,
+        sample_team_with_owner_member,  # noqa: F811
+        minted,
+    ) -> None:
+        result = connections.connect_with_client_credentials(
+            sample_team_with_owner_member.team,
+            VANTA,
+            "  vci_mine ",
+            "vcs_mine\n",
+            sample_team_with_owner_member.user,
+        )
+
+        assert result.ok
+        integration = Integration.objects.get(team=sample_team_with_owner_member.team, provider="vanta")
+        assert (integration.client_id, integration.client_secret) == ("vci_mine", "vcs_mine")
+        # Kept rather than minted again for the first sync: Vanta allows one
+        # live token per application, so a second mint would only waste this.
+        assert integration.access_token == "vat_minted_1"
+        assert integration.refresh_token == ""
+        assert minted == [("vci_mine", "vcs_mine")]
+
+    @pytest.mark.parametrize(("client_id", "client_secret"), [("", "vcs"), ("vci", " "), ("x" * 256, "vcs")])
+    def test_a_missing_or_absurd_credential_is_turned_away_unsent(
+        self,
+        sample_team_with_owner_member,  # noqa: F811
+        minted,
+        client_id,
+        client_secret,
+    ) -> None:
+        result = connections.connect_with_client_credentials(
+            sample_team_with_owner_member.team, VANTA, client_id, client_secret, None
+        )
+
+        assert not result.ok
+        assert minted == []
+        assert not Integration.objects.filter(team=sample_team_with_owner_member.team).exists()
+
+    def test_credentials_vanta_refuses_are_not_stored(self, sample_team_with_owner_member, monkeypatch) -> None:  # noqa: F811
+        def refuse(provider, client_id, client_secret):
+            raise ProviderAuthError("Vanta refused the connection.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse)
+
+        result = connections.connect_with_client_credentials(
+            sample_team_with_owner_member.team, VANTA, "vci_wrong", "vcs_wrong", None
+        )
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "vcs_wrong" not in (result.error or "")
+        assert not Integration.objects.filter(team=sample_team_with_owner_member.team).exists()
+
+    def test_an_unreachable_vanta_stores_nothing(self, sample_team_with_owner_member, monkeypatch) -> None:  # noqa: F811
+        def unavailable(provider, client_id, client_secret):
+            raise ProviderUnavailable("Vanta is not answering.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", unavailable)
+
+        result = connections.connect_with_client_credentials(
+            sample_team_with_owner_member.team, VANTA, "vci", "vcs", None
+        )
+
+        assert not result.ok
+        assert result.status_code == 502
+
+    def test_a_fresh_token_is_reused(self, connected_vanta, minted) -> None:
+        assert connections.access_token(connected_vanta, VANTA) == "vat_live"
+        assert minted == []
+
+    def test_an_expired_token_is_replaced_from_the_stored_application(self, connected_vanta, minted) -> None:
+        connected_vanta.token_expires_at = timezone.now() - timedelta(minutes=1)
+        connected_vanta.save()
+
+        assert connections.access_token(connected_vanta, VANTA) == "vat_minted_1"
+
+        assert minted == [("vci_workspace", "vcs_workspace")]
+        connected_vanta.refresh_from_db()
+        assert connected_vanta.access_token == "vat_minted_1"
+        assert connected_vanta.status == Integration.Status.CONNECTED
+
+    def test_a_second_caller_does_not_mint_over_the_first(self, connected_vanta, minted) -> None:
+        """Minting revokes Vanta's previous token, so two mints would break a running sync."""
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        first = connections.access_token(connected_vanta, VANTA)
+        second = connections.access_token(Integration.objects.get(pk=connected_vanta.pk), VANTA)
+
+        assert first == second == "vat_minted_1"
+        assert len(minted) == 1
+
+    def test_a_deleted_application_asks_for_new_credentials(self, connected_vanta, monkeypatch) -> None:
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        def refuse(provider, client_id, client_secret):
+            raise ProviderAuthError("Vanta refused the connection.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse)
+
+        with pytest.raises(ProviderAuthError):
+            connections.access_token(connected_vanta, VANTA)
+
+        connected_vanta.refresh_from_db()
+        assert connected_vanta.status == Integration.Status.REVOKED
+        assert "client ID and secret" in connected_vanta.last_sync_error
+
+    def test_new_credentials_entered_during_a_refusal_are_not_revoked(self, connected_vanta, monkeypatch) -> None:
+        connected_vanta.token_expires_at = None
+        connected_vanta.save()
+
+        def refuse_then_reconnect(provider, client_id, client_secret):
+            connections.save_connection(
+                connected_vanta.team,
+                VANTA,
+                _token_set("vat_new", ""),
+                None,
+                client_id="vci_new",
+                client_secret="vcs_new",
+            )
+            raise ProviderAuthError("refused", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse_then_reconnect)
+
+        with pytest.raises(ProviderAuthError):
+            connections.access_token(connected_vanta, VANTA)
+
+        stored = Integration.objects.get(pk=connected_vanta.pk)
+        assert stored.status == Integration.Status.CONNECTED
+        assert stored.client_secret == "vcs_new"
+
+    def test_the_secret_never_reaches_the_card(self, connected_vanta) -> None:
+        card = connections.provider_cards(connected_vanta.team)[0]
+
+        assert "vcs_workspace" not in str(card)
