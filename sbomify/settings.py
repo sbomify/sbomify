@@ -124,6 +124,15 @@ def _env_positive_float(value: str | None, default: float) -> float:
 # Request timing logging is disabled by default to avoid performance impact
 # Enable explicitly when needed for profiling (e.g., REQUEST_TIMING_LOGGING_ENABLED=true)
 REQUEST_TIMING_LOGGING_ENABLED = _env_bool(os.environ.get("REQUEST_TIMING_LOGGING_ENABLED"), default=False)
+
+# TEA subscriptions read servers a user names. Plain http and private or loopback
+# addresses are refused unless this is on, which is for local development only.
+# Link-local addresses, where cloud metadata services live, stay refused either way.
+TEA_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS = _env_bool(
+    os.environ.get("TEA_SUBSCRIPTION_ALLOW_PRIVATE_HOSTS"), default=LOCAL_DEV
+)
+# The TEA servers the import wizard offers by name, as (domain, label).
+TEA_SUBSCRIPTION_SOURCES = (("library.sbomify.com", "sbomify library"), ("pypi.sbomify.com", "PyPI by sbomify"))
 PENDING_INVITATIONS_CACHE_TTL = int(os.environ.get("PENDING_INVITATIONS_CACHE_TTL", "60"))
 
 # ALLOWED_HOSTS set to wildcard - actual host validation done in middleware

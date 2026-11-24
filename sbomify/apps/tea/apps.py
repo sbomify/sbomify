@@ -10,3 +10,4 @@ class TeaConfig(AppConfig):
 
     def ready(self) -> None:
         import sbomify.apps.tea.signals  # noqa: F401
+        import sbomify.apps.tea.tasks  # noqa: F401

@@ -529,6 +529,15 @@ class Release(models.Model):
         from sbomify.apps.core.services.vex_pins import sync_vex_pins
         from sbomify.apps.sboms.models import SBOM
 
+        if component.component_type == Component.ComponentType.TEA_SUBSCRIPTION:
+            from sbomify.apps.tea.pins import head_artifacts, subscription_of
+
+            subscription = subscription_of(component)
+            if subscription is not None:
+                for remote_artifact in head_artifacts(subscription):
+                    ReleaseArtifact.objects.create(release=self, remote_artifact=remote_artifact, auto_pinned=True)
+            return
+
         # Add latest SBOMs by format. VEX is not taken by recency: the newest VEX
         # may be for another version than the newest SBOM, so it is pinned below
         # only when written for a version this release ships.
