@@ -86,3 +86,13 @@ def make_subscription():
         )
 
     return make
+
+
+def pytest_collection_modifyitems(config, items):
+    """``live_tea`` tests read the sbomify servers over the internet, so they run only when ``-m live_tea`` asks."""
+    if "live_tea" in (config.getoption("markexpr") or ""):
+        return
+    skip = pytest.mark.skip(reason="Reads the sbomify TEA servers; run with -m live_tea")
+    for item in items:
+        if "live_tea" in item.keywords:
+            item.add_marker(skip)

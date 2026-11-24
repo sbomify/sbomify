@@ -164,6 +164,7 @@ filterwarnings = [
 
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "live_tea: reads the sbomify TEA servers over the internet; skipped unless selected with '-m live_tea'",
 ]
 
 [tool.coverage.run]

@@ -4,9 +4,10 @@ One workspace serves TEA 1.0 from a live server; a second subscribes to its
 component, pins it into a release, and serves the pin from its own TEA API.
 A second test reads the sbomify servers themselves, once they serve TEA 1.0.
 
-Skipped by default, like the conformance suite. Run explicitly with:
+Skipped by default. Run the first, like the conformance suite, with:
     RUN_TEA_CONFORMANCE=1 uv run pytest sbomify/apps/tea/tests/test_live_subscription.py -v
-    RUN_LIVE_TEA=1 uv run pytest sbomify/apps/tea/tests/test_live_subscription.py -v
+and the second, which needs the internet, with:
+    uv run pytest -m live_tea sbomify/apps/tea/tests/test_live_subscription.py -v
 """
 
 import os
@@ -64,7 +65,7 @@ def test_a_workspace_subscribes_to_another_over_tea(live_server, tea_conformance
     assert served["version"] == remote_artifact.version
 
 
-@pytest.mark.skipif(os.environ.get("RUN_LIVE_TEA") != "1", reason="Set RUN_LIVE_TEA=1 to read the sbomify servers")
+@pytest.mark.live_tea
 @pytest.mark.parametrize("domain", ["library.sbomify.com", "pypi.sbomify.com"])
 def test_the_sbomify_servers_speak_tea_1(domain):
     server = remote.connect(domain)
