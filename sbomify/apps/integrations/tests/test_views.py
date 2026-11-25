@@ -592,3 +592,48 @@ class TestConnectInPlace:
 
         assert response["HX-Reswap"] == "none"
         assert not Integration.objects.filter(team=team).exists()
+
+
+@pytest.mark.usefixtures("vanta_credentials")
+class TestVantaSetupGuide:
+    """The guide an admin follows to create the application in Vanta."""
+
+    def test_links_the_developer_console_for_every_region(
+        self, admin_client_for_team, sample_team_with_owner_member  # noqa: F811
+    ) -> None:
+        body = admin_client_for_team.get(
+            _panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true"
+        ).content.decode()
+
+        for host in ("app.vanta.com", "app.eu.vanta.com", "app.aus.vanta.com"):
+            assert f"https://{host}/settings/developer-console" in body
+
+    def test_warns_against_the_application_type_that_looks_right(
+        self, admin_client_for_team, sample_team_with_owner_member  # noqa: F811
+    ) -> None:
+        body = admin_client_for_team.get(
+            _panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true"
+        ).content.decode()
+
+        assert "Choose Manage Vanta, not Build Integrations" in body
+        assert "Starts with vci_" in body
+        assert "Starts with vcs_" in body
+
+    def test_the_guide_comes_back_with_a_refusal(
+        self, admin_client_for_team, sample_team_with_owner_member, monkeypatch  # noqa: F811
+    ) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderAuthError
+
+        def refuse(provider, client_id, client_secret):
+            raise ProviderAuthError("Vanta refused the connection.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse)
+
+        body = admin_client_for_team.post(
+            _panel_url(sample_team_with_owner_member.team),
+            {"action": "connect", "provider": "vanta", "client_id": "vci_x", "client_secret": "vcs_x"},
+            HTTP_HX_REQUEST="true",
+        ).content.decode()
+
+        assert "Could not connect Vanta" in body
+        assert "app.vanta.com/settings/developer-console" in body

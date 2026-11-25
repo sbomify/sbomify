@@ -55,9 +55,14 @@ class ProviderSpec:
     authorize_url_setting: str = ""
     client_id_setting: str = ""
     client_credential_setting: str = ""
-    # What the customer does in the provider before pasting credentials, one
-    # step per line. Copy. Only shown for a ``client_credentials`` provider.
-    setup_steps: tuple[str, ...] = ()
+    # The guide to creating the application in the provider, shown above the
+    # credentials form. A template rather than a list of strings, because the
+    # guide needs links into the provider and a warning about the one mistake
+    # people actually make. Only used by a ``client_credentials`` provider.
+    setup_template: str = ""
+    # What each pasted value looks like, under its field. Copy.
+    client_id_hint: str = ""
+    client_secret_hint: str = ""
     # What to tell someone whose pasted application is real but may not have
     # the scopes sbomify asks for, which is almost always an application of
     # the wrong type. Copy.

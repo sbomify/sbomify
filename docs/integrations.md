@@ -57,14 +57,19 @@ way Vanta grants read access to frameworks and controls:
   Vanta and cannot read a control, so there is no "Connect with Vanta" button
   that would work here.
 
-What a workspace admin does:
+What a workspace admin does. The Integrations tab walks through the same steps,
+with links to the Developer Console for each region:
 
 1. In Vanta, open Settings, then Developer Console. This needs the Vanta Admin
-   role.
-2. Create an application of type **Manage Vanta** and generate a client
-   secret.
-3. In sbomify, open Settings, then Integrations, and paste the client ID and
-   secret into the Vanta section.
+   role. The console is on the account's regional app host:
+   `app.vanta.com`, `app.eu.vanta.com` or `app.aus.vanta.com`, each at
+   `/settings/developer-console`.
+2. Click **Create** and choose **Manage Vanta** as the application type. Not
+   **Build Integrations**: see below.
+3. Name it something recognisable, such as "sbomify Trust Center".
+4. Click **Generate client secret**. Vanta shows the secret once.
+5. In sbomify, open Settings, then Integrations, and paste the client ID
+   (`vci_...`) and secret (`vcs_...`) into the Vanta section.
 
 sbomify mints a token straight away, so a mistyped secret or an application of
 the wrong type is turned away on the form instead of failing the first sync.
@@ -75,6 +80,18 @@ beside the form, and asks for a Manage Vanta application instead.
 The client ID and secret are stored on the connection, never rendered back,
 and used to mint a new token whenever the last one runs out (Vanta tokens last
 an hour, and there is no refresh token in this grant).
+
+### When connecting fails
+
+| What the form says | What happened | Fix |
+| --- | --- | --- |
+| "...the application cannot read controls. It is probably a Build Integrations application." | The application is the wrong type. Vanta accepts its credentials but refuses `vanta-api.all:read` with `invalid_scope`. | Create a new application of type Manage Vanta. The type cannot be changed afterwards. |
+| "Vanta did not accept that client ID and secret." | A typo, a secret that was rotated, or an application that was deleted. | Copy both values again, or generate a new secret. |
+| "Vanta is not answering." | Vanta's token endpoint is down or rate limiting. | Try again in a minute. Nothing was saved. |
+
+A connection that worked and later shows **Needs reconnecting** has had its
+application deleted or its secret rotated in Vanta. Paste new credentials into
+the same form; the synced frameworks are kept.
 
 Vanta keeps **one active token per application**. Minting a new one revokes
 the previous one, so the application should be used for sbomify only: a

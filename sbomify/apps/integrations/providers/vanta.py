@@ -66,7 +66,7 @@ VANTA = ProviderSpec(
     name="Vanta",
     tagline="Publish the frameworks and controls you already track in Vanta.",
     icon="fas fa-shield-halved",
-    docs_url="https://developer.vanta.com/docs/api-access-setup",
+    docs_url="https://developer.vanta.com/docs/quickstart/manage-vanta",
     reads=(
         "The frameworks your Vanta account tracks",
         "The controls in each framework, and how far each one has got",
@@ -74,12 +74,9 @@ VANTA = ProviderSpec(
     scopes=("vanta-api.all:read",),
     exchange_url_setting="VANTA_OAUTH_TOKEN_URL",
     grant="client_credentials",
-    setup_steps=(
-        "In Vanta, open Settings, then Developer Console. You need to be a Vanta admin.",
-        "Create an application and choose Manage Vanta as its type.",
-        "Generate a client secret, then copy the client ID and the secret here.",
-        "Use this application only for sbomify. Vanta keeps one active token per application.",
-    ),
+    setup_template="integrations/setup/vanta.html.j2",
+    client_id_hint="Starts with vci_",
+    client_secret_hint="Starts with vcs_. Vanta shows it once, when you generate it.",
     scope_refused_hint=(
         "Vanta accepted that client ID and secret, but the application cannot read controls. It is probably a "
         "Build Integrations application. Create a new application, choose Manage Vanta as its type, and paste "

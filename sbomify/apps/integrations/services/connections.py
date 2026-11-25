@@ -114,8 +114,8 @@ def connect_with_client_credentials(
         )
     except ProviderAuthError:
         return ServiceResult.failure(
-            f"{provider.name} did not accept that client ID and secret. Check they belong to the "
-            "right kind of application.",
+            f"{provider.name} did not accept that client ID and secret. Copy both again, and check the "
+            "secret has not been rotated or the application deleted.",
             status_code=400,
         )
     except ProviderUnavailable as exc:
@@ -393,7 +393,9 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "reads": provider.reads,
         "is_configured": provider.is_configured,
         "asks_for_credentials": provider.asks_for_credentials,
-        "setup_steps": provider.setup_steps,
+        "setup_template": provider.setup_template,
+        "client_id_hint": provider.client_id_hint,
+        "client_secret_hint": provider.client_secret_hint,
     }
 
 

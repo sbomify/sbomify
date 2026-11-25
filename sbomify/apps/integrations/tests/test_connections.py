@@ -583,7 +583,9 @@ class TestNoProviderCredentialReachesATemplate:
             "reads",
             "is_configured",
             "asks_for_credentials",
-            "setup_steps",
+            "setup_template",
+            "client_id_hint",
+            "client_secret_hint",
         }
         assert "vcs_workspace" not in str(card)
         assert "vci_workspace" not in str(card)
