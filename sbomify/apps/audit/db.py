@@ -150,15 +150,15 @@ CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON {TABLE}
   FOR EACH STATEMENT EXECUTE FUNCTION audit_events_refuse();
 """
 
-UNINSTALL_SQL = f"""
-DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_guard_delete ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_no_update ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_seal ON {TABLE};
+UNINSTALL_SQL = """
+DROP TRIGGER IF EXISTS audit_events_no_truncate ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_guard_delete ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_no_update ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_seal ON audit_events;
 DROP FUNCTION IF EXISTS audit_events_guard_delete();
 DROP FUNCTION IF EXISTS audit_events_refuse();
 DROP FUNCTION IF EXISTS audit_events_seal();
-DROP FUNCTION IF EXISTS audit_events_canonical({TABLE});
+DROP FUNCTION IF EXISTS audit_events_canonical(audit_events);
 """
 
 
