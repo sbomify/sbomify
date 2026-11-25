@@ -21,6 +21,8 @@ from conftest import (
     narrate,
     navigate_to_components,
     pace,
+    settle,
+    smooth_scroll,
     start_on_dashboard,
     type_text,
 )
@@ -135,3 +137,8 @@ def document_upload(recording_page: Page, pied_piper_with_sboms: dict, s3_short_
     table.locator("tbody tr").first.hover()
 
     narrate(page, "show_trust_center")
+    # Point at the control the line names, then let the line finish on it.
+    visibility = page.get_by_role("button", name="Component visibility")
+    smooth_scroll(page, visibility, 300)
+    visibility.hover()
+    settle(page)
