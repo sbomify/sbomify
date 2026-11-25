@@ -808,7 +808,9 @@ def chapter_vulnerabilities(page: Page) -> None:
     settle(page)
 
     narrate(page, "vulnerabilities_person_approves")
-    pace(page, 1200)
+    # Rest on Approve while "a person reads it", then click on "approves".
+    approve.hover()
+    pace(page, 1600)
     with page.expect_response(lambda r: "/review/decide/" in r.url, timeout=20_000):
         hover_and_click(page, approve)
     review.get_by_text("Nothing waiting").wait_for(state="visible", timeout=15_000)
