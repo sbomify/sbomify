@@ -10,6 +10,8 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
+    agent_console,
+    close_agent_console,
     hover_and_click,
     mock_vuln_trends,
     narrate,
@@ -102,7 +104,8 @@ def api_tokens(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     narrate(page, "give_short_life")
     hover_and_click(page, expiry)
     expiry.select_option(label="30 days")
-    pace(page, 1200)
+    # Generate only once the line about the expiry has landed.
+    settle(page)
 
     hover_and_click(page, modal.locator("#generate-token-button"))
 
@@ -116,6 +119,28 @@ def api_tokens(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.get_by_role("button", name="Copied").wait_for(state="visible", timeout=5_000)
     pace(page, 1500)
     hover_and_click(page, page.get_by_role("button", name="Hide token"))
+
+    # ── Hand it to the agent ─────────────────────────────────────────────
+    # The MCP endpoint has no page of its own: an agent is pointed at it with
+    # this token. Show the client configuration it takes (docs/mcp.md).
+    narrate(page, "connect_over_mcp")
+    agent_console(
+        page,
+        "Claude Code · .mcp.json",
+        [
+            "{",
+            '  "mcpServers": {',
+            '    "sbomify": {',
+            '      "url": "https://app.sbomify.com/mcp",',
+            '      "headers": { "Authorization": "Bearer $SBOMIFY_TOKEN" }',
+            "    }",
+            "  }",
+            "}",
+        ],
+    )
+    narrate(page, "tools_follow_scope")
+    settle(page)
+    close_agent_console(page)
 
     # ── Revoke ───────────────────────────────────────────────────────────
     row = page.locator("tr", has_text=TOKEN_NAME)

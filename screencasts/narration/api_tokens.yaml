@@ -48,6 +48,16 @@ beats:
       sbomify shows the token only once. Copy it, and hand it to your agent as a
       secret, never in your code.
 
+  connect_over_mcp:
+    text: >-
+      Agents like Claude Code connect to sbomify's MCP server with it. Add the
+      server to the agent's settings, with the token as its key.
+
+  tools_follow_scope:
+    text: >-
+      The agent only sees the tools its token allows, so an AI agent token never
+      gets one that publishes or deletes.
+
   shows_when_token:
     text: >-
       The token is listed with when it was last used, and when it expires.
