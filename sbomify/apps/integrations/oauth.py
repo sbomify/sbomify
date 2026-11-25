@@ -34,7 +34,7 @@ from django.utils import timezone
 from django.utils.module_loading import import_string
 
 from sbomify.apps.core.integrations.http import request_with_retry
-from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderScopeRefused, ProviderUnavailable
 from sbomify.apps.integrations.providers.base import ProviderSpec
 from sbomify.logging import getLogger
 
@@ -228,6 +228,10 @@ def _token_request(
         # Every other 4xx is the provider answering, and for a grant that means
         # the grant itself was refused (``invalid_grant`` and friends are all
         # 400).
+        if _oauth_error_code(response) == "invalid_scope":
+            raise ProviderScopeRefused(
+                f"{provider.name} refused the permissions sbomify asks for.", service=provider.key
+            )
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     try:
@@ -247,6 +251,21 @@ def _token_request(
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     return _token_set(provider, data)
+
+
+def _oauth_error_code(response: requests.Response) -> str:
+    """The OAuth ``error`` code of a refusal, and nothing else from its body.
+
+    The code is one of a short list the OAuth spec defines, so it is safe to
+    branch on. The rest of the body (``error_description`` and anything a
+    provider adds) is free text that can echo the request, so it is never read.
+    """
+    try:
+        data = response.json()
+    except ValueError:
+        return ""
+    error = data.get("error") if isinstance(data, dict) else None
+    return error if isinstance(error, str) else ""
 
 
 def _token_set(provider: ProviderSpec, data: Any) -> TokenSet:

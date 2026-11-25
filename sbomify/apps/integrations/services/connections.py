@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderScopeRefused, ProviderUnavailable
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec
 from sbomify.apps.integrations.services import notifications
@@ -106,10 +106,16 @@ def connect_with_client_credentials(
 
     try:
         token_set = oauth.client_credentials_grant(provider, client_id, client_secret)
+    except ProviderScopeRefused:
+        return ServiceResult.failure(
+            provider.scope_refused_hint
+            or f"{provider.name} accepted that client ID and secret, but not the permissions sbomify needs.",
+            status_code=400,
+        )
     except ProviderAuthError:
         return ServiceResult.failure(
-            f"{provider.name} did not accept that client ID and secret. Check they belong to the "
-            "right kind of application.",
+            f"{provider.name} did not accept that client ID and secret. Copy both again, and check the "
+            "secret has not been rotated or the application deleted.",
             status_code=400,
         )
     except ProviderUnavailable as exc:
@@ -387,7 +393,9 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "reads": provider.reads,
         "is_configured": provider.is_configured,
         "asks_for_credentials": provider.asks_for_credentials,
-        "setup_steps": provider.setup_steps,
+        "setup_template": provider.setup_template,
+        "client_id_hint": provider.client_id_hint,
+        "client_credential_hint": provider.client_credential_hint,
     }
 
 
