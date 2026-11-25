@@ -59,13 +59,17 @@ google-chrome --headless=new --no-sandbox --disable-dev-shm-usage \
     --remote-debugging-port=9222 --user-data-dir=/tmp/cdp-profile
 ```
 
-Here, tunnel to it and record. The tunnel listens on every interface so the
-tests container can reach it, and the GPU host has to reach this machine on
-port 8099, where the live server is published:
+Here, point the recording at it and record. Connect over the plain network,
+not an SSH tunnel: the screencast streams every frame back over the DevTools
+connection, and through a tunnel it stalled for seconds at a time, so a dialog
+filmed as a loading skeleton while the page had long since rendered it. New
+headless Chrome binds DevTools to loopback whatever `--remote-debugging-address`
+says, so expose the port with a plain TCP relay on the GPU host (`socat
+TCP-LISTEN:9225,fork,reuseaddr TCP:127.0.0.1:9222`, or any equivalent). The GPU
+host has to reach this machine on port 8099, where the live server is published:
 
 ```bash
-ssh -N -L 0.0.0.0:9223:127.0.0.1:9222 <user>@<gpu-host> &
-export SCREENCAST_REMOTE_CDP=http://<this-host-ip>:9223
+export SCREENCAST_REMOTE_CDP=http://<gpu-host-ip>:9225
 export SCREENCAST_SERVER_HOST=<this-host-ip>
 ./bin/record_screencasts.sh all
 ```

@@ -239,7 +239,7 @@ three-sentence opener made 12% of it silence and dragged it to 103 wpm.
 ## Smoothness: record where there is a GPU
 
 **Preferred: keep the server here and borrow only the browser.** Start Chrome
-with DevTools on the GPU host, tunnel to it, and set `SCREENCAST_REMOTE_CDP`
+with DevTools on the GPU host, expose it on the LAN with a plain TCP relay (not an SSH tunnel, which stalls the screencast), and set `SCREENCAST_REMOTE_CDP`
 and `SCREENCAST_SERVER_HOST` for `record_screencasts.sh`; see "Record with a
 GPU browser" in `screencasts/README.md`. The rest of this section covers
 running the whole test process on the GPU host instead.
