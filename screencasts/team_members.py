@@ -106,6 +106,21 @@ def team_members(recording_page: Page, workspace_with_members: Workspace, pied_p
     page.get_by_text("No pending invitations").wait_for(state="visible", timeout=10_000)
     pace(page, 800)
 
+    # ── Change a role ────────────────────────────────────────────────────
+    admin_row = page.locator("tr", has_text="Bertram Gilfoyle")
+    smooth_scroll(page, admin_row, 500)
+    narrate(page, "change_role")
+    hover_and_click(page, admin_row.get_by_role("button", name="Member actions"))
+    make_member = page.get_by_role("menuitem", name="Make member")
+    make_member.wait_for(state="visible", timeout=5_000)
+    settle(page)
+    narrate(page, "role_changes_now")
+    with page.expect_navigation():
+        hover_and_click(page, make_member)
+    page.wait_for_load_state("networkidle")
+    smooth_scroll(page, page.locator("tr", has_text="Bertram Gilfoyle"), 400)
+    settle(page)
+
     # ── Remove a member ──────────────────────────────────────────────────
     member_row = page.locator("tr", has_text="Dinesh Chugtai")
     smooth_scroll(page, member_row, 500)
@@ -121,4 +136,4 @@ def team_members(recording_page: Page, workspace_with_members: Workspace, pied_p
     page.wait_for_load_state("networkidle")
     page.locator("tr", has_text="Dinesh Chugtai").wait_for(state="detached", timeout=10_000)
     pace(page, 800)
-    narrate(page, "there_no_role")
+    narrate(page, "admins_owners_decide")

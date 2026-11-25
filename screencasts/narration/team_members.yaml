@@ -43,6 +43,15 @@ beats:
     text: >-
       Changed your mind? Revoke the invitation, and the link stops working.
 
+  change_role:
+    text: >-
+      Roles change from the same row. Gilfoyle no longer needs to run the
+      workspace, so open his menu.
+
+  role_changes_now:
+    text: >-
+      Make him a member. The new role applies right away.
+
   take_someone_s:
     text: >-
       To take someone's access away, open the menu on their row and remove them.
@@ -51,7 +60,7 @@ beats:
     text: >-
       Their access ends immediately.
 
-  there_no_role:
+  admins_owners_decide:
     text: >-
-      There is no role switch on this tab. To give someone a different role,
-      remove them and invite them again.
+      Owners and admins manage members. An admin cannot change or remove an owner,
+      or another admin.
