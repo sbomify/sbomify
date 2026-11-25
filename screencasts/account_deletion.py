@@ -85,7 +85,8 @@ def account_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     hover_and_click(page, confirm_input)
     pace(page, 300)
     type_text(confirm_input, "delete", delay=120)
-    pace(page, 500)
+    # The click signs you out; let the line finish naming the button first.
+    settle(page)
 
     confirm_btn = modal.get_by_role("button", name="Delete my account")
     hover_and_click(page, confirm_btn)
