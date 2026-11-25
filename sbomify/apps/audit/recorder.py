@@ -120,6 +120,15 @@ def _actor(ctx: AuditContext | None, override: Any) -> dict[str, Any]:
     }
 
 
+def snapshot_actor_role(workspace_id: int) -> None:
+    """Remember the actor's role before membership changes or cascades."""
+    ctx = current()
+    if ctx is not None:
+        user = _actor(ctx, None)["user"]
+        if user is not None:
+            _role(user.pk, workspace_id, ctx)
+
+
 def record(
     action: str,
     *,

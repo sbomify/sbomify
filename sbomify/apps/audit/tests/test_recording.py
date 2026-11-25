@@ -181,3 +181,78 @@ def test_a_request_with_no_workspace_in_its_url_is_not_filed_under_the_session(
     with django_capture_on_commit_callbacks(execute=True):
         owner_client.patch("/api/v1/components/doesnotexist", "{}", content_type="application/json")
     assert not events(enterprise, action="request.patch")
+
+
+def test_partial_save_records_only_persisted_values(enterprise, sample_user, django_capture_on_commit_callbacks):
+    product = Product.objects.create(team=enterprise, name="Persisted")
+    with audit_context(AuditContext(user=sample_user)), django_capture_on_commit_callbacks(execute=True):
+        product.name = "Unsaved name"
+        product.description = "Unsaved description"
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+
+    product.refresh_from_db()
+    assert product.name == "Persisted"
+    [event] = events(enterprise, action="product.updated")
+    assert event.target_label == "Persisted"
+    assert event.metadata == {"changes": {"is_public": {"from": False, "to": True}}}
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_many_to_many_link_additions_are_recorded(
+    enterprise, sample_user, django_capture_on_commit_callbacks, reverse
+):
+    product = Product.objects.create(team=enterprise, name="Product")
+    component = Component.objects.create(team=enterprise, name="Component")
+    with audit_context(AuditContext(user=sample_user)), django_capture_on_commit_callbacks(execute=True):
+        if reverse:
+            product.components.add(component)
+            product.components.add(component)
+        else:
+            component.products.add(product)
+            component.products.add(product)
+
+    [event] = events(enterprise, action="product_component.created")
+    assert event.target_id == str(ProductComponent.objects.get(product=product, component=component).pk)
+    assert event.metadata["fields"] == {"product_id": product.pk, "component_id": component.pk}
+
+
+@pytest.mark.parametrize("delete", [False, True])
+def test_own_membership_change_keeps_the_actors_original_role(
+    enterprise, sample_user, django_capture_on_commit_callbacks, delete
+):
+    membership = Member.objects.get(team=enterprise, user=sample_user)
+    assert membership.role == "owner"
+    with audit_context(AuditContext(user=sample_user)), django_capture_on_commit_callbacks(execute=True):
+        if delete:
+            membership.delete()
+        else:
+            membership.role = "admin"
+            membership.save(update_fields=["role"])
+
+    [event] = events(enterprise, action="member.deleted" if delete else "member.updated")
+    assert event.actor_role == "owner"
+
+
+@pytest.mark.parametrize("field", ["user", "user_id"])
+def test_partial_foreign_key_save_is_recorded(
+    enterprise, sample_user, member_user, guest_user, django_capture_on_commit_callbacks, field
+):
+    membership = Member.objects.get(team=enterprise, user=member_user)
+    with audit_context(AuditContext(user=sample_user)), django_capture_on_commit_callbacks(execute=True):
+        membership.user = guest_user
+        membership.save(update_fields=[field])
+
+    [event] = events(enterprise, action="member.updated")
+    assert event.metadata["changes"] == {"user_id": {"from": member_user.pk, "to": guest_user.pk}}
+
+
+def test_expression_update_records_its_result(enterprise, sample_user, django_capture_on_commit_callbacks):
+    from django.db.models import F
+
+    with audit_context(AuditContext(user=sample_user)), django_capture_on_commit_callbacks(execute=True):
+        enterprise.audit_log_retention_days = F("audit_log_retention_days") + 30
+        enterprise.save(update_fields=["audit_log_retention_days"])
+
+    [event] = events(enterprise, action="workspace.updated")
+    assert event.metadata["changes"] == {"audit_log_retention_days": {"from": 365, "to": 395}}

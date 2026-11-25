@@ -23,10 +23,10 @@ from typing import Any
 from django.apps import apps
 from django.contrib.auth.signals import user_logged_in, user_logged_out
 from django.db.models import QuerySet
-from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
 
 from .context import current
-from .recorder import Target, record, workspace_has_audit_log
+from .recorder import Target, record, snapshot_actor_role, workspace_has_audit_log
 
 
 @dataclass(frozen=True)
@@ -265,6 +265,7 @@ def _active(instance: Any) -> tuple[Tracked, int] | None:
     workspace_id = _workspace_of(instance, tracked)
     if workspace_id is None or not workspace_has_audit_log(workspace_id, ctx):
         return None
+    snapshot_actor_role(workspace_id)
     return tracked, workspace_id
 
 
@@ -274,21 +275,20 @@ def on_pre_save(sender: Any, instance: Any, raw: bool = False, update_fields: An
     tracked = tracked_for(instance)
     if tracked is None or not tracked.watched:
         return
-    if update_fields is not None and not set(update_fields) & {
-        *tracked.watched,
-        *(_attname(instance, f) for f in tracked.watched),
-    }:
-        return
-    if _active(instance) is None:
+    saved_fields = None if update_fields is None else {_attname(instance, name) for name in update_fields}
+    watched = tuple(
+        name for name in tracked.watched if saved_fields is None or _attname(instance, name) in saved_fields
+    )
+    if not watched or _active(instance) is None:
         return
     before = (
         type(instance)
         ._base_manager.filter(pk=instance.pk)
-        .values(*(_attname(instance, name) for name in tracked.watched))
+        .values(*(_attname(instance, name) for name in watched))
         .first()
     )
     if before is not None:
-        instance._audit_before = {name: before[_attname(instance, name)] for name in tracked.watched}
+        instance._audit_before = {name: before[_attname(instance, name)] for name in watched}
 
 
 def on_post_save(sender: Any, instance: Any, created: bool = False, raw: bool = False, **kwargs: Any) -> None:
@@ -311,19 +311,40 @@ def on_post_save(sender: Any, instance: Any, created: bool = False, raw: bool = 
     before = instance.__dict__.pop("_audit_before", None)
     if before is None:
         return
-    after = _values(instance, tracked)
+    # Unsaved attributes and F() expressions on the in-memory instance are
+    # not the stored values. Labels must describe the persisted row too.
+    persisted = type(instance)._base_manager.get(pk=instance.pk)
+    after = _values(persisted, tracked)
+    target = Target(tracked.name, str(instance.pk), _label_of(persisted, tracked))
     changes = {
         name: {"from": _json_safe(before[name]), "to": _json_safe(after[name])}
         for name in tracked.fields
-        if before[name] != after[name]
+        if name in before and before[name] != after[name]
     }
-    changed_redacted = [name for name in tracked.redacted if before[name] != after[name]]
+    changed_redacted = [name for name in tracked.redacted if name in before and before[name] != after[name]]
     if not changes and not changed_redacted:
         return
     metadata: dict[str, Any] = {"changes": changes}
     if changed_redacted:
         metadata["changed"] = changed_redacted
     record(f"{tracked.name}.updated", workspace=workspace_id, target=target, metadata=metadata)
+
+
+def on_links_added(sender: Any, instance: Any, action: str, pk_set: Any, reverse: bool, **kwargs: Any) -> None:
+    """M2M additions bulk-insert through rows, bypassing post_save.
+
+    Removals already emit the through model's delete signals. post_add's
+    pk_set contains only new links, so repeated add() calls are not events.
+    """
+    if action != "post_add" or not pk_set or current() is None:
+        return
+    filters = (
+        {"product_id": instance.pk, "component_id__in": pk_set}
+        if reverse
+        else {"component_id": instance.pk, "product_id__in": pk_set}
+    )
+    for link in sender._base_manager.filter(**filters).select_related("product", "component"):
+        on_post_save(sender, link, created=True)
 
 
 def _cascaded(instance: Any, origin: Any) -> bool:
@@ -391,6 +412,9 @@ def on_user_logged_out(sender: Any, request: Any, user: Any, **kwargs: Any) -> N
 
 def connect() -> None:
     _resolve_registry()
+    m2m_changed.connect(
+        on_links_added, sender=apps.get_model("sboms", "ProductComponent"), dispatch_uid="audit_links_added"
+    )
     pre_save.connect(on_pre_save, dispatch_uid="audit_pre_save")
     post_save.connect(on_post_save, dispatch_uid="audit_post_save")
     pre_delete.connect(on_pre_delete, dispatch_uid="audit_pre_delete")
