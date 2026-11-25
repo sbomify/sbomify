@@ -27,6 +27,7 @@ from conftest import (
     start_on_dashboard,
     type_text,
 )
+from sbomify.apps.plugins.models import TeamPluginSettings
 
 COMPONENT_NAME = "Compression Core Library"
 WELCOME = "Security and compliance documents for the Pied Piper compression platform."
@@ -37,6 +38,9 @@ def public_product(pied_piper_with_sboms: dict) -> dict:
     product = pied_piper_with_sboms["product"]
     product.is_public = True
     product.save(update_fields=["is_public"])
+    # Scanning on, so the public page does not open with the admin-only
+    # prompt to enable it.
+    TeamPluginSettings.objects.update_or_create(team=product.team, defaults={"enabled_plugins": ["osv"]})
     return pied_piper_with_sboms
 
 
