@@ -68,6 +68,7 @@ from conftest import (
     start_on_dashboard,
     type_text,
 )
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 
@@ -169,6 +170,9 @@ def scanned_workspace(
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
     install_dict_backed_s3(monkeypatch)
+    # The fix prompt peeks at the stored SBOM for a repository hint; there is
+    # no SBOM bucket here, and the miss cost seconds of retries on camera.
+    monkeypatch.setattr(StorageClient, "get_sbom_data_prefix", lambda self, name, limit: None)
     product = pied_piper_with_sboms["product"]
     team = product.team
     team.name = WORKSPACE_NAME
@@ -287,7 +291,7 @@ def ai_agents(scanned_workspace: dict, recording_page: Page) -> None:
             ("text", f"triage_prompt: {first_line[:150]}"),
         ],
     )
-    pace(page, 2500)
+    settle(page)
 
     triage_path = f"/api/v2/vulnerability-scanning/components/{core.id}/triage"
     submitted = agent.post(
@@ -319,7 +323,8 @@ def ai_agents(scanned_workspace: dict, recording_page: Page) -> None:
             ("text", f'status: "{submission["status"]}"'),
         ],
     )
-    pace(page, 1500)
+    # Keep the accepted ruling on screen until the line about it has landed.
+    settle(page)
 
     hover_and_click(page, sidebar_link(page, "Vulnerabilities"))
     page.wait_for_load_state("networkidle")
