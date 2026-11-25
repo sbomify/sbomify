@@ -23,7 +23,7 @@ from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_
 from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.models import Integration
-from sbomify.apps.integrations.providers import get_provider
+from sbomify.apps.integrations.providers import ProviderSpec, get_provider
 from sbomify.apps.integrations.services import connections, notifications
 from sbomify.apps.integrations.tasks import sync_integration
 from sbomify.apps.teams.models import Member, Workspace
@@ -157,7 +157,12 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
 
 
 class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """Start the OAuth flow for one provider."""
+    """Connect one provider.
+
+    For most providers that means starting the OAuth flow. A provider that
+    asks for the workspace's own client id and secret is connected right here,
+    from the form, with no trip to the provider.
+    """
 
     allowed_roles = list(ADMINISTER)
 
@@ -171,7 +176,35 @@ class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, f"{spec.name} is not available on this deployment.")
             return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
+        if spec.asks_for_credentials:
+            return self._connect_with_credentials(request, workspace_key, spec)
+
         return HttpResponseRedirect(oauth.start_authorization(request, spec, workspace_key))
+
+    def _connect_with_credentials(self, request: HttpRequest, workspace_key: str, spec: ProviderSpec) -> HttpResponse:
+        team = _team_or_none(workspace_key)
+        if team is None:
+            messages.error(request, "Workspace not found")
+            return redirect("core:dashboard")
+
+        result = connections.connect_with_client_credentials(
+            team,
+            spec,
+            request.POST.get("client_id", ""),
+            request.POST.get("client_secret", ""),
+            cast(User, request.user),
+        )
+        if not result.ok or result.value is None:
+            messages.error(request, result.error or f"Could not connect {spec.name}.")
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
+
+        if spec.syncs:
+            sync_integration.send(result.value.id)
+        messages.success(
+            request,
+            f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
+        )
+        return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
 
 class IntegrationCallbackView(LoginRequiredMixin, View):
