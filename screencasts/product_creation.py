@@ -169,13 +169,17 @@ def product_creation(recording_page: Page) -> None:
     # ── 5. Links ──────────────────────────────────────────────────────────
     narrate(page, "links_point_people")
     _open_detail_tab(page, "Links", "product-links-card")
-    _add_link(page, *LINKS[0])
+    settle(page)
     narrate(page, "each_link_has")
+    _add_link(page, *LINKS[0])
+    narrate(page, "add_as_many")
     _add_link(page, *LINKS[1])
 
     # ── 6. Identifiers ────────────────────────────────────────────────────
     narrate(page, "identifiers_such_cpe")
     _open_detail_tab(page, "Identifiers", "product-identifiers-card")
+    settle(page)
+    narrate(page, "cpe_first")
     _add_identifier(page, *IDENTIFIERS[0])
     narrate(page, "purl_names_package")
     _add_identifier(page, *IDENTIFIERS[1])
