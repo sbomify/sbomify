@@ -80,6 +80,11 @@ VANTA = ProviderSpec(
         "Generate a client secret, then copy the client ID and the secret here.",
         "Use this application only for sbomify. Vanta keeps one active token per application.",
     ),
+    scope_refused_hint=(
+        "Vanta accepted that client ID and secret, but the application cannot read controls. It is probably a "
+        "Build Integrations application. Create a new application, choose Manage Vanta as its type, and paste "
+        "its client ID and secret instead."
+    ),
     sync_path="sbomify.apps.integrations.services.vanta_sync.sync",
 )
 

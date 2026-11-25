@@ -511,3 +511,84 @@ class TestConnectWithCredentials:
 
         assert mint == []
         assert not Integration.objects.filter(team=team).exists()
+
+
+@pytest.mark.usefixtures("vanta_credentials")
+class TestConnectInPlace:
+    """The credentials form posts to the panel, so a refusal stays on the form."""
+
+    @staticmethod
+    def _post(client, team, **data):
+        return client.post(
+            _panel_url(team),
+            {"action": "connect", "provider": "vanta", **data},
+            HTTP_HX_REQUEST="true",
+        )
+
+    def test_the_form_posts_to_the_panel(self, admin_client_for_team, sample_team_with_owner_member) -> None:  # noqa: F811
+        response = admin_client_for_team.get(_panel_url(sample_team_with_owner_member.team), HTTP_HX_REQUEST="true")
+
+        assert b'name="action" value="connect"' in response.content
+
+    def test_connecting_queues_the_first_sync(
+        self, admin_client_for_team, sample_team_with_owner_member, monkeypatch, no_queue  # noqa: F811
+    ) -> None:
+        monkeypatch.setattr(oauth, "client_credentials_grant", lambda provider, cid, cs: _token_set())
+        team = sample_team_with_owner_member.team
+
+        response = self._post(admin_client_for_team, team, client_id="vci_mine", client_secret="vcs_mine")
+
+        assert response.status_code == 200
+        assert "refreshIntegrations" in response["HX-Trigger"]
+        integration = Integration.objects.get(team=team, provider="vanta")
+        assert no_queue == [integration.id]
+
+    def test_a_wrong_kind_of_application_is_explained_beside_the_form(
+        self, admin_client_for_team, sample_team_with_owner_member, monkeypatch, no_queue  # noqa: F811
+    ) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+
+        def refuse(provider, client_id, client_secret):
+            raise ProviderScopeRefused("Vanta refused the permissions sbomify asks for.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse)
+        team = sample_team_with_owner_member.team
+
+        response = self._post(admin_client_for_team, team, client_id="vci_mine", client_secret="vcs_mine")
+
+        body = response.content.decode()
+        # Swapped into the panel, not suppressed like an error toast.
+        assert "HX-Reswap" not in response
+        assert "Build Integrations" in body
+        assert "Manage Vanta" in body
+        assert 'value="vci_mine"' in body
+        assert "vcs_mine" not in body
+        assert not Integration.objects.filter(team=team).exists()
+        assert no_queue == []
+
+    def test_a_member_may_not_connect(self, sample_team_with_owner_member, guest_user, monkeypatch) -> None:  # noqa: F811
+        calls: list[str] = []
+        monkeypatch.setattr(oauth, "client_credentials_grant", lambda *a: calls.append("minted") or _token_set())
+        team = sample_team_with_owner_member.team
+        Member.objects.create(user=guest_user, team=team, role="member")
+        client = Client()
+        setup_authenticated_client_session(client, team, guest_user)
+
+        self._post(client, team, client_id="vci_x", client_secret="vcs_x")
+
+        assert calls == []
+        assert not Integration.objects.filter(team=team).exists()
+
+    def test_a_consent_screen_provider_cannot_be_connected_this_way(
+        self, admin_client_for_team, sample_team_with_owner_member  # noqa: F811
+    ) -> None:
+        team = sample_team_with_owner_member.team
+
+        response = admin_client_for_team.post(
+            _panel_url(team),
+            {"action": "connect", "provider": "slack", "client_id": "x", "client_secret": "y"},
+            HTTP_HX_REQUEST="true",
+        )
+
+        assert response["HX-Reswap"] == "none"
+        assert not Integration.objects.filter(team=team).exists()

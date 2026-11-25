@@ -68,6 +68,10 @@ What a workspace admin does:
 
 sbomify mints a token straight away, so a mistyped secret or an application of
 the wrong type is turned away on the form instead of failing the first sync.
+The wrong type is the usual mistake: a **Build Integrations** application has a
+client ID and secret of the same shape, and Vanta accepts them, but refuses
+`vanta-api.all:read` with `invalid_scope`. sbomify reports that one separately,
+beside the form, and asks for a Manage Vanta application instead.
 The client ID and secret are stored on the connection, never rendered back,
 and used to mint a new token whenever the last one runs out (Vanta tokens last
 an hour, and there is no refresh token in this grant).

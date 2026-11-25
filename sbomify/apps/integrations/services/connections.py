@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderScopeRefused, ProviderUnavailable
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec
 from sbomify.apps.integrations.services import notifications
@@ -106,6 +106,12 @@ def connect_with_client_credentials(
 
     try:
         token_set = oauth.client_credentials_grant(provider, client_id, client_secret)
+    except ProviderScopeRefused:
+        return ServiceResult.failure(
+            provider.scope_refused_hint
+            or f"{provider.name} accepted that client ID and secret, but not the permissions sbomify needs.",
+            status_code=400,
+        )
     except ProviderAuthError:
         return ServiceResult.failure(
             f"{provider.name} did not accept that client ID and secret. Check they belong to the "

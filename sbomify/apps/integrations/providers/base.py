@@ -58,6 +58,10 @@ class ProviderSpec:
     # What the customer does in the provider before pasting credentials, one
     # step per line. Copy. Only shown for a ``client_credentials`` provider.
     setup_steps: tuple[str, ...] = ()
+    # What to tell someone whose pasted application is real but may not have
+    # the scopes sbomify asks for, which is almost always an application of
+    # the wrong type. Copy.
+    scope_refused_hint: str = ""
     # Dotted path to ``sync(integration) -> ServiceResult[SyncSummary]``.
     # A path rather than the function, so a provider module is free to import
     # this one. Empty for a provider sbomify only writes to, which has nothing
