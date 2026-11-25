@@ -195,7 +195,7 @@ AGENT_ADVISORY_DESCRIPTION = (
     "zipOpenNewFileInZip4_64 overflows on a long file name. Archive export is "
     "affected. Upgrading to zlib 1.3 is in progress."
 )
-AGENT_TOKEN_DESCRIPTION = "Claude Code agent"
+AGENT_TOKEN_DESCRIPTION = "Claude Code agent"  # nosec B105 - the token's label, not a secret
 
 
 def _security_result(component_name: str, scanned_at: datetime, finding_count: int | None = None) -> dict[str, Any]:
