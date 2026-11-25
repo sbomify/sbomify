@@ -112,6 +112,14 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
     # shows the summary bar as well as the same settings partial this tab
     # embedded. Two entry points to one screen is a choice the reader has to make
     # for no reason.
+    # Owners and admins only, like every governance tab. The plan gate is the
+    # panel's own: a workspace without the audit log is shown what it would get.
+    SettingsTab(
+        key="audit-log",
+        label="Audit log",
+        icon="fa-clipboard-list",
+        template="audit_log",
+    ),
     SettingsTab(
         key="billing",
         label="Billing",

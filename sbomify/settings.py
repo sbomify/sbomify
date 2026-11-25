@@ -281,6 +281,7 @@ INSTALLED_APPS = [
     "sbomify.apps.ops",
     "sbomify.apps.integrations",
     "sbomify.apps.mcp",
+    "sbomify.apps.audit",
 ]
 
 
@@ -338,6 +339,8 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Inside authentication, so the audit context can name who is acting.
+    "sbomify.apps.audit.middleware.AuditMiddleware",
     "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
