@@ -12,8 +12,10 @@ SQL, a Django shell, ``psql``. Python code cannot opt out of it.
   the trigger lets it, and nothing else can delete anything.
 * ``INSERT`` is sealed: the trigger stamps ``occurred_at`` with the database
   clock and links the row into its workspace's SHA-256 hash chain
-  (``chain_seq``, ``prev_hash``, ``entry_hash``). A row changed or removed by
-  someone able to disable the triggers (the table owner, a superuser) no longer
+  (``chain_seq``, ``prev_hash``, ``entry_hash``). The chain's head is kept in
+  ``audit_chain_heads``, which only moves forward and cannot be deleted. A row
+  changed or removed by someone able to disable the triggers (the table owner,
+  a superuser), including the newest rows or the whole chain, no longer
   verifies, and ``verify_chain`` says where.
 
 The table owner can still ``ALTER TABLE ... DISABLE TRIGGER``; PostgreSQL gives
@@ -36,14 +38,21 @@ from django.db import connection
 from .models import RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS
 
 TABLE = "audit_events"
+HEADS_TABLE = "audit_chain_heads"
 WORKSPACE_TABLE = "workspaces_workspaces"
+
+# The hash format every new row is sealed with. A row records the version it
+# was sealed under, so changing what the hash covers means adding a v2 function
+# beside this one, never editing v1: an edit would silently re-define the hash
+# of every row already written. ``test_canonical_v1_is_frozen`` holds that line.
+HASH_VERSION = 1
 
 # The fields an entry's hash covers, in order. Everything except the hash
 # itself. ``occurred_at`` is rendered in UTC with a fixed format and ``metadata``
 # as jsonb text, so the digest does not depend on the session's TimeZone or on
 # key order.
-CANONICAL_SQL = f"""
-CREATE OR REPLACE FUNCTION audit_events_canonical(e {TABLE}) RETURNS text
+CANONICAL_SQL = """
+CREATE OR REPLACE FUNCTION audit_events_canonical_v1(e audit_events) RETURNS text
 LANGUAGE sql STABLE AS $$
   SELECT json_build_array(
     e.event_id::text,
@@ -74,37 +83,61 @@ LANGUAGE sql STABLE AS $$
 $$;
 """
 
+# Dispatches on the version a row was sealed with.
+DIGEST_SQL = """
+CREATE OR REPLACE FUNCTION audit_events_digest(e audit_events) RETURNS text
+LANGUAGE sql STABLE AS $$
+  SELECT encode(sha256(convert_to(
+    CASE e.hash_version
+      WHEN 1 THEN audit_events_canonical_v1(e)
+    END, 'UTF8')), 'hex')
+$$;
+"""
+
+# The chain's head lives in its own row per workspace, not in the newest
+# event. Reading it from the events themselves meant a workspace whose every
+# event had expired started again at 1, re-using sequence numbers an export or
+# a SIEM had already seen, and that deleting the newest events left nothing
+# behind to notice. The head only moves forward: ``last_seq`` with every
+# insert, ``purged_through_seq`` with every delete the retention guard allows.
 SEAL_SQL = f"""
 CREATE OR REPLACE FUNCTION audit_events_seal() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
-  last_seq bigint;
-  last_hash text;
+  head_seq bigint;
+  head_hash text;
 BEGIN
-  -- One writer per workspace chain at a time. Held to the end of the
-  -- transaction, which is short: events are written after the change commits.
-  PERFORM pg_advisory_xact_lock(hashtextextended('sbomify.audit:' || NEW.workspace_id::text, 0));
+  INSERT INTO {HEADS_TABLE} (workspace_id, last_seq, last_hash, purged_through_seq)
+  VALUES (NEW.workspace_id, 0, '', 0)
+  ON CONFLICT (workspace_id) DO NOTHING;
 
-  SELECT chain_seq, entry_hash INTO last_seq, last_hash
-    FROM {TABLE}
-   WHERE workspace_id = NEW.workspace_id AND chain_seq IS NOT NULL
-   ORDER BY chain_seq DESC
-   LIMIT 1;
+  -- The row lock is what serialises writers to one workspace's chain. It is
+  -- held to the end of a short transaction: events are written after the
+  -- change they describe has committed.
+  SELECT last_seq, last_hash INTO head_seq, head_hash
+    FROM {HEADS_TABLE}
+   WHERE workspace_id = NEW.workspace_id
+     FOR UPDATE;
 
   NEW.occurred_at := clock_timestamp();
-  NEW.chain_seq := COALESCE(last_seq, 0) + 1;
-  NEW.prev_hash := COALESCE(last_hash, '');
-  NEW.entry_hash := encode(sha256(convert_to(audit_events_canonical(NEW), 'UTF8')), 'hex');
+  NEW.hash_version := {HASH_VERSION};
+  NEW.chain_seq := head_seq + 1;
+  NEW.prev_hash := head_hash;
+  NEW.entry_hash := audit_events_digest(NEW);
+
+  UPDATE {HEADS_TABLE}
+     SET last_seq = NEW.chain_seq, last_hash = NEW.entry_hash
+   WHERE workspace_id = NEW.workspace_id;
   RETURN NEW;
 END
 $$;
 """
 
-REFUSE_SQL = f"""
+REFUSE_SQL = """
 CREATE OR REPLACE FUNCTION audit_events_refuse() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION '{TABLE} is append-only: % is not permitted', TG_OP
+  RAISE EXCEPTION '% is append-only: % is not permitted', TG_TABLE_NAME, TG_OP
     USING ERRCODE = 'insufficient_privilege';
 END
 $$;
@@ -125,7 +158,28 @@ BEGIN
       OLD.event_id, retention
       USING ERRCODE = 'insufficient_privilege';
   END IF;
+  -- Remember how far retention has reached, so a gap at the old end of the
+  -- chain can be told apart from one cut by hand.
+  UPDATE {HEADS_TABLE}
+     SET purged_through_seq = GREATEST(purged_through_seq, OLD.chain_seq)
+   WHERE workspace_id = OLD.workspace_id;
   RETURN OLD;
+END
+$$;
+"""
+
+GUARD_HEAD_SQL = """
+CREATE OR REPLACE FUNCTION audit_chain_heads_guard_update() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.workspace_id <> OLD.workspace_id
+     OR NEW.last_seq < OLD.last_seq
+     OR NEW.purged_through_seq < OLD.purged_through_seq
+     OR (NEW.last_seq = OLD.last_seq AND NEW.last_hash <> OLD.last_hash) THEN
+    RAISE EXCEPTION 'audit chain heads only move forward'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN NEW;
 END
 $$;
 """
@@ -142,30 +196,54 @@ CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON {TABLE}
 DROP TRIGGER IF EXISTS audit_events_guard_delete ON {TABLE};
 CREATE TRIGGER audit_events_guard_delete BEFORE DELETE ON {TABLE}
   FOR EACH ROW EXECUTE FUNCTION audit_events_guard_delete();
+
+DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON {HEADS_TABLE};
+CREATE TRIGGER audit_chain_heads_guard_update BEFORE UPDATE ON {HEADS_TABLE}
+  FOR EACH ROW EXECUTE FUNCTION audit_chain_heads_guard_update();
+
+DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON {HEADS_TABLE};
+CREATE TRIGGER audit_chain_heads_no_delete BEFORE DELETE ON {HEADS_TABLE}
+  FOR EACH ROW EXECUTE FUNCTION audit_events_refuse();
 """
 
 TRUNCATE_TRIGGER_SQL = f"""
 DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
 CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON {TABLE}
   FOR EACH STATEMENT EXECUTE FUNCTION audit_events_refuse();
+
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
+CREATE TRIGGER audit_chain_heads_no_truncate BEFORE TRUNCATE ON {HEADS_TABLE}
+  FOR EACH STATEMENT EXECUTE FUNCTION audit_events_refuse();
+"""
+
+# Only for test databases, which Django flushes with TRUNCATE. It drops the
+# trigger rather than merely not creating it, so a database built by the
+# migration (which always installs it) ends up in the state the setting asks for.
+ALLOW_TRUNCATE_SQL = f"""
+DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
 """
 
 UNINSTALL_SQL = f"""
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
+DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON {HEADS_TABLE};
+DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON {HEADS_TABLE};
 DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
 DROP TRIGGER IF EXISTS audit_events_guard_delete ON {TABLE};
 DROP TRIGGER IF EXISTS audit_events_no_update ON {TABLE};
 DROP TRIGGER IF EXISTS audit_events_seal ON {TABLE};
+DROP FUNCTION IF EXISTS audit_chain_heads_guard_update();
 DROP FUNCTION IF EXISTS audit_events_guard_delete();
 DROP FUNCTION IF EXISTS audit_events_refuse();
 DROP FUNCTION IF EXISTS audit_events_seal();
-DROP FUNCTION IF EXISTS audit_events_canonical({TABLE});
+DROP FUNCTION IF EXISTS audit_events_digest({TABLE});
+DROP FUNCTION IF EXISTS audit_events_canonical_v1({TABLE});
 """
 
 
 def install_statements(*, block_truncate: bool = True) -> list[str]:
-    statements = [CANONICAL_SQL, SEAL_SQL, REFUSE_SQL, GUARD_DELETE_SQL, TRIGGERS_SQL]
-    if block_truncate:
-        statements.append(TRUNCATE_TRIGGER_SQL)
+    statements = [CANONICAL_SQL, DIGEST_SQL, SEAL_SQL, REFUSE_SQL, GUARD_DELETE_SQL, GUARD_HEAD_SQL, TRIGGERS_SQL]
+    statements.append(TRUNCATE_TRIGGER_SQL if block_truncate else ALLOW_TRUNCATE_SQL)
     return statements
 
 
@@ -196,16 +274,19 @@ class ChainReport:
     last_seq: int | None
     # chain_seq of every entry whose hash, link or position does not verify.
     broken: tuple[int, ...]
+    # What is wrong with the chain as a whole: entries missing at either end.
+    problems: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
-        return not self.broken
+        return not self.broken and not self.problems
 
 
 VERIFY_SQL = """
 SELECT chain_seq,
-       entry_hash = encode(sha256(convert_to(audit_events_canonical(e), 'UTF8')), 'hex') AS hash_ok,
+       entry_hash = audit_events_digest(e) AS hash_ok,
        prev_hash,
+       entry_hash,
        lag(entry_hash) OVER w AS expected_prev,
        lag(chain_seq) OVER w AS previous_seq
   FROM audit_events e
@@ -214,13 +295,16 @@ WINDOW w AS (ORDER BY chain_seq)
  ORDER BY chain_seq
 """
 
+HEAD_SQL = "SELECT last_seq, last_hash, purged_through_seq FROM audit_chain_heads WHERE workspace_id = %s"
+
 
 def verify_chain(workspace_id: int) -> ChainReport:
-    """Recompute every entry's hash and check each links to the one before.
+    """Recompute every entry's hash, check each links to the one before, and check both ends.
 
-    The oldest surviving entry is allowed to point at a predecessor that is no
-    longer there, because retention removes entries from the old end. Anything
-    else missing, edited or reordered is reported.
+    Entries may be missing from the old end only as far as retention has
+    deleted them, which the chain head records. The newest entry must be the
+    one the head says was written last. Anything else missing, edited or
+    reordered is reported.
     """
     if connection.vendor != "postgresql":
         return ChainReport(checked=0, first_seq=None, last_seq=None, broken=())
@@ -228,16 +312,37 @@ def verify_chain(workspace_id: int) -> ChainReport:
     broken: list[int] = []
     first_seq: int | None = None
     last_seq: int | None = None
+    last_hash = ""
     checked = 0
     with connection.cursor() as cursor:
+        cursor.execute(HEAD_SQL, [workspace_id])
+        head = cursor.fetchone()
         cursor.execute(VERIFY_SQL, [workspace_id])
-        for seq, hash_ok, prev_hash, expected_prev, previous_seq in cursor.fetchall():
+        for seq, hash_ok, prev_hash, entry_hash, expected_prev, previous_seq in cursor.fetchall():
             checked += 1
             if first_seq is None:
                 first_seq = seq
-            last_seq = seq
+            last_seq, last_hash = seq, entry_hash
             if not hash_ok:
                 broken.append(seq)
             elif previous_seq is not None and (previous_seq != seq - 1 or prev_hash != expected_prev):
                 broken.append(seq)
-    return ChainReport(checked=checked, first_seq=first_seq, last_seq=last_seq, broken=tuple(broken))
+
+    problems: list[str] = []
+    if head is None:
+        if checked:
+            problems.append("the chain head is missing")
+    else:
+        head_seq, head_hash, purged_through = head
+        expected_first = purged_through + 1
+        if first_seq is None:
+            if head_seq > purged_through:
+                problems.append(f"entries {expected_first} to {head_seq} are missing")
+        else:
+            if first_seq > expected_first:
+                problems.append(f"entries {expected_first} to {first_seq - 1} are missing, inside retention")
+            if last_seq != head_seq or last_hash != head_hash:
+                problems.append(f"the newest entries are missing: the chain was written up to {head_seq}")
+    return ChainReport(
+        checked=checked, first_seq=first_seq, last_seq=last_seq, broken=tuple(broken), problems=tuple(problems)
+    )

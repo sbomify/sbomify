@@ -163,3 +163,21 @@ def test_sign_in_is_recorded_in_each_internal_workspace(client, enterprise, samp
         client.force_login(sample_user)
     [event] = events(enterprise, action="auth.signed_in")
     assert event.actor_user_id == sample_user.pk
+
+
+def test_an_outsider_cannot_write_into_another_workspaces_log(client, enterprise, guest_user):
+    client.force_login(guest_user)
+    response = client.post(
+        reverse("workspaces:team_settings_tab", kwargs={"workspace_key": enterprise.key, "tab": "general"}),
+        {"x_action": "flood"},
+    )
+    assert response.status_code == 403
+    assert not events(enterprise)
+
+
+def test_a_request_with_no_workspace_in_its_url_is_not_filed_under_the_session(
+    owner_client, enterprise, django_capture_on_commit_callbacks
+):
+    with django_capture_on_commit_callbacks(execute=True):
+        owner_client.patch("/api/v1/components/doesnotexist", "{}", content_type="application/json")
+    assert not events(enterprise, action="request.patch")

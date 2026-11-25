@@ -156,3 +156,21 @@ def test_retention_change_is_itself_audited(owner_client, enterprise, django_cap
     assert response.status_code == 200
     [event] = events(enterprise, action="workspace.updated")
     assert event.metadata["changes"]["audit_log_retention_days"] == {"from": 365, "to": 730}
+
+
+def test_multi_word_target_types_read_as_words(owner_client, enterprise, sample_user, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=True):
+        record("access_token.created", workspace=enterprise, actor=sample_user, target=Target("access_token", "1", "CI"))
+    body = owner_client.get(_events_url(enterprise), **HX).content.decode()
+    assert "Access token" in body
+    assert "Accesstoken" not in body
+
+
+@pytest.mark.asyncio
+async def test_export_streams_under_asgi():
+    from sbomify.apps.audit.services import batched_async
+
+    lines = iter(f"{n}\n" for n in range(1200))
+    chunks = [chunk async for chunk in batched_async(lines)]
+    assert len(chunks) == 3
+    assert "".join(chunks).count("\n") == 1200

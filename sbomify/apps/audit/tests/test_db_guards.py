@@ -171,3 +171,95 @@ def test_a_chain_trimmed_by_retention_still_verifies(enterprise):
         _event(enterprise.pk)
     purge_expired()
     assert audit_db.verify_chain(enterprise.pk).ok
+
+
+def _head(workspace_id: int) -> tuple[int, str, int]:
+    with connection.cursor() as cursor:
+        cursor.execute(audit_db.HEAD_SQL, [workspace_id])
+        return cursor.fetchone()
+
+
+def test_the_head_tracks_the_chain(enterprise):
+    first = _event(enterprise.pk)
+    second = _event(enterprise.pk)
+    second.refresh_from_db()
+    last_seq, last_hash, purged_through = _head(enterprise.pk)
+    assert (last_seq, last_hash, purged_through) == (2, second.entry_hash, 0)
+    assert first.pk
+
+
+def test_the_head_only_moves_forward(enterprise):
+    _event(enterprise.pk)
+    _refused("UPDATE audit_chain_heads SET last_seq = 0 WHERE workspace_id = %s", [enterprise.pk])
+    _refused("UPDATE audit_chain_heads SET last_hash = 'x' WHERE workspace_id = %s", [enterprise.pk])
+    _refused("DELETE FROM audit_chain_heads WHERE workspace_id = %s", [enterprise.pk])
+
+
+def test_sequence_numbers_never_restart_after_everything_expires(enterprise):
+    enterprise.audit_log_retention_days = 30
+    enterprise.save()
+    _backdated(enterprise.pk, days=40)
+    _backdated(enterprise.pk, days=40)
+    assert purge_expired() == 2
+    assert audit_db.verify_chain(enterprise.pk).ok
+
+    fresh = _event(enterprise.pk)
+    fresh.refresh_from_db()
+    assert fresh.chain_seq == 3
+    assert fresh.prev_hash != ""
+    assert _head(enterprise.pk)[2] == 2
+    assert audit_db.verify_chain(enterprise.pk).ok
+
+
+def _delete_by_hand(workspace_id: int, where: str) -> None:
+    with transaction.atomic():
+        _sql("ALTER TABLE audit_events DISABLE TRIGGER audit_events_guard_delete")
+        _sql(f"DELETE FROM audit_events WHERE workspace_id = %s AND {where}", [workspace_id])
+        _sql("ALTER TABLE audit_events ENABLE TRIGGER audit_events_guard_delete")
+
+
+def test_verify_chain_catches_removed_newest_entries(enterprise):
+    for _ in range(3):
+        _event(enterprise.pk)
+    _delete_by_hand(enterprise.pk, "chain_seq = 3")
+    report = audit_db.verify_chain(enterprise.pk)
+    assert not report.ok
+    assert report.broken == ()
+    assert "newest" in report.problems[0]
+
+
+def test_verify_chain_catches_an_old_end_cut_inside_retention(enterprise):
+    for _ in range(3):
+        _event(enterprise.pk)
+    _delete_by_hand(enterprise.pk, "chain_seq = 1")
+    report = audit_db.verify_chain(enterprise.pk)
+    assert not report.ok
+    assert "inside retention" in report.problems[0]
+
+
+def test_verify_chain_catches_a_wiped_chain(enterprise):
+    for _ in range(2):
+        _event(enterprise.pk)
+    _delete_by_hand(enterprise.pk, "true")
+    assert not audit_db.verify_chain(enterprise.pk).ok
+
+
+def test_a_test_database_can_be_flushed_even_after_the_migration_blocked_it():
+    with transaction.atomic():
+        audit_db.install(block_truncate=True)
+        audit_db.install(block_truncate=False)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT count(*) FROM pg_trigger WHERE tgname LIKE '%%no_truncate'")
+            assert cursor.fetchone()[0] == 0
+
+
+def test_canonical_v1_is_frozen():
+    """Every row sealed as v1 is verified against this exact SQL.
+
+    If this fails, you edited the hash format. Restore v1 and add
+    audit_events_canonical_v2 with a new hash_version instead.
+    """
+    import hashlib
+
+    digest = hashlib.sha256(audit_db.CANONICAL_SQL.encode()).hexdigest()
+    assert digest == "1f37399e28cb0202290a294ad1f23af264c1a9e1f031b9617a511a5dce0c2a1f"

@@ -30,8 +30,12 @@ The ORM guards on the model exist only to fail early with a readable message.
 
 **The database seals each insert.** A `BEFORE INSERT` trigger sets
 `occurred_at` from the database clock and links the row into a per-workspace
-SHA-256 hash chain (`chain_seq`, `prev_hash`, `entry_hash`) under a
-per-workspace advisory lock. The triggers do not stop the table owner, who can
+SHA-256 hash chain (`chain_seq`, `prev_hash`, `entry_hash`). The chain's head
+lives in `audit_chain_heads`, one row per workspace that only moves forward and
+cannot be deleted, so removing the newest events, or old ones still inside
+retention, is detectable too, and sequence numbers never restart. Each row
+records its hash format version, so the format can change without
+re-defining the hash of rows already written. The triggers do not stop the table owner, who can
 disable them; the chain makes what they then did detectable, and running the
 app under a non-owner role prevents it. This is the same model as GitLab's and
 GitHub's audit streams, plus the tamper evidence of a hash chain.

@@ -114,7 +114,7 @@ class AuditLogExportView(_AuditView):
                 )
             return HttpResponseForbidden("Only workspace owners and admins can export the audit log.")
         export_format = "jsonl" if request.GET.get("format") == "jsonl" else "csv"
-        return export_response(workspace, filters_from(request), export_format)
+        return export_response(request, workspace, filters_from(request), export_format)
 
 
 class AuditRetentionView(_AuditView):

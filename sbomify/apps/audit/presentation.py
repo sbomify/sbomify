@@ -88,6 +88,7 @@ def describe(event: AuditEvent) -> dict[str, Any]:
     return {
         "event": event,
         "action_label": action_label(event.action),
+        "target_type_label": event.target_type.replace("_", " ").capitalize(),
         "summary": summary[:300],
         "outcome_variant": _OUTCOME_VARIANTS.get(event.outcome, "secondary"),
         "channel_label": _CHANNEL_LABELS.get(event.channel, event.channel),

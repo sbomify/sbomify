@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import io
 import json
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
+from itertools import islice
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from defusedcsv import csv
 from django.db import connection
 from django.db.models import Q, QuerySet
@@ -205,6 +207,24 @@ def export_jsonl(workspace_id: int, filters: AuditFilters) -> Iterator[str]:
         yield json.dumps(serialize(event), default=str) + "\n"
 
 
+EXPORT_BATCH = 500
+
+
+async def batched_async(lines: Iterator[str]) -> AsyncIterator[str]:
+    """Yield ``lines`` from an async context, a few hundred at a time.
+
+    Each batch is pulled on the database thread. thread_sensitive keeps every
+    pull on the same thread, which the server-side cursor behind the iterator
+    needs.
+    """
+
+    def take() -> str:
+        return "".join(islice(lines, EXPORT_BATCH))
+
+    while chunk := await sync_to_async(take, thread_sensitive=True)():
+        yield chunk
+
+
 def record_export(workspace: Any, filters: AuditFilters, export_format: str) -> None:
     """Reading the log in bulk is itself an event an auditor will ask about."""
     record(
@@ -231,16 +251,28 @@ def update_retention(request: HttpRequest, workspace: Any, days: int) -> Service
 
 PURGE_BATCH = 5000
 
-# A literal, parameterised statement: the table name is fixed and every value
-# is bound by the driver.
+# Literal, parameterised statements: the table names are fixed and every
+# value is bound by the driver.
+#
+# One workspace at a time, so each delete walks the (workspace_id, occurred_at)
+# index rather than joining every event to its workspace. The chain heads hold
+# one row per workspace that has ever recorded an event, deleted workspaces
+# included, which is the list to walk.
+PURGE_WORKSPACES_SQL = """
+SELECT h.workspace_id, GREATEST(COALESCE(w.audit_log_retention_days, %s), %s)
+  FROM audit_chain_heads h
+  LEFT JOIN workspaces_workspaces w ON w.id = h.workspace_id
+ WHERE h.purged_through_seq < h.last_seq
+"""
+
 PURGE_SQL = """
 DELETE FROM audit_events
  WHERE id IN (
-   SELECT e.id
-     FROM audit_events e
-     LEFT JOIN workspaces_workspaces w ON w.id = e.workspace_id
-    WHERE e.occurred_at < now() - make_interval(
-            days => GREATEST(COALESCE(w.audit_log_retention_days, %s), %s))
+   SELECT id
+     FROM audit_events
+    WHERE workspace_id = %s
+      AND occurred_at < now() - make_interval(days => %s)
+    ORDER BY occurred_at
     LIMIT %s
  )
 """
@@ -249,18 +281,24 @@ DELETE FROM audit_events
 def purge_expired() -> int:
     """Delete every event past its workspace's retention window. Returns the count.
 
-    The condition is the same one the delete trigger enforces, so this can
-    never ask for a row the database would refuse. Batched to keep each
-    transaction, and the locks it holds, short.
+    The window is the same one the delete trigger enforces, so this never asks
+    for a row the database would refuse. Batched to keep each transaction, and
+    the locks it holds, short.
     """
+    with connection.cursor() as cursor:
+        cursor.execute(PURGE_WORKSPACES_SQL, [RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS])
+        workspaces = cursor.fetchall()
+
     total = 0
-    while True:
-        with connection.cursor() as cursor:
-            cursor.execute(PURGE_SQL, [RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS, PURGE_BATCH])
-            deleted = int(cursor.rowcount)
-        total += deleted
-        if deleted < PURGE_BATCH:
-            return total
+    for workspace_id, retention_days in workspaces:
+        while True:
+            with connection.cursor() as cursor:
+                cursor.execute(PURGE_SQL, [workspace_id, retention_days, PURGE_BATCH])
+                deleted = int(cursor.rowcount)
+            total += deleted
+            if deleted < PURGE_BATCH:
+                break
+    return total
 
 
 OUTCOMES = [value for value, _label in Outcome.choices]

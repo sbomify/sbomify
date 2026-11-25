@@ -143,6 +143,8 @@ class AuditEvent(models.Model):
     # and never artifact content.
     metadata = models.JSONField(default=dict, blank=True)
 
+    # The hash format the row was sealed with; set by the insert trigger.
+    hash_version = models.PositiveSmallIntegerField(default=1, editable=False)
     prev_hash = models.CharField(max_length=64, blank=True, default="", editable=False)
     entry_hash = models.CharField(max_length=64, blank=True, default="", editable=False)
 
@@ -156,3 +158,25 @@ class AuditEvent(models.Model):
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         raise ValidationError(APPEND_ONLY_MESSAGE)
+
+
+class AuditChainHead(models.Model):
+    """Where each workspace's hash chain stands. Written only by the database triggers.
+
+    ``last_seq`` and ``last_hash`` name the newest event ever sealed and
+    ``purged_through_seq`` the newest one retention has deleted. Both only move
+    forward, and the row cannot be deleted, so a chain whose newest events
+    were removed, or whose old end was cut inside retention, no longer matches
+    its head.
+    """
+
+    class Meta:
+        db_table = "audit_chain_heads"
+
+    workspace_id = models.BigIntegerField(primary_key=True)
+    last_seq = models.BigIntegerField(default=0)
+    last_hash = models.CharField(max_length=64, blank=True, default="")
+    purged_through_seq = models.BigIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"workspace {self.workspace_id} at {self.last_seq}"

@@ -24,8 +24,10 @@ watched field changes, so housekeeping writes such as a token's last-used time
 are not. Fields whose value is a secret or long free text (an integration's
 credentials, a product's description) are recorded by name only.
 
-A request that changes state and records nothing more specific becomes a
-`request.*` event, so a new endpoint is covered before anyone adds it to
+A request that changes state and records nothing more specific, or that
+fails, becomes a `request.*` event. It is filed under the workspace its URL or
+workspace-bound token names, and only when the person is a member of that
+workspace: an outsider cannot write into another workspace's log. A new endpoint is therefore covered before anyone adds it to
 `TRACKED`. Refusals (401 and 403) are recorded with outcome `denied`, other
 errors with `failure`. Request bodies are never recorded.
 
@@ -78,8 +80,15 @@ report = verify_chain(workspace_id)
 report.ok, report.broken  # chain_seq of every entry that does not verify
 ```
 
-The oldest surviving entry may point at a predecessor that retention removed;
-that is not reported.
+Each workspace's chain head is kept in `audit_chain_heads`: the newest entry
+ever sealed, and how far retention has deleted. The head only moves forward and
+cannot be deleted, so `verify_chain` also reports newest entries that were
+removed, and old entries removed while still inside retention. A gap that
+retention made is not reported. Sequence numbers never restart, even after
+every event of a workspace has expired.
+
+Each row records the hash format it was sealed with (`hash_version`). Changing
+what the hash covers means adding `audit_events_canonical_v2`, never editing v1.
 
 ## Retention
 

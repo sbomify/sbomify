@@ -12,7 +12,7 @@
     </c-tables.cell>
     <c-tables.cell compact>
     {% if row.event.target_label or row.event.target_id %}
-        <c-overview.record title="{{ row.event.target_label|default:row.event.target_id }}" detail="{{ row.event.target_type|cut:'_'|capfirst }}" />
+        <c-overview.record title="{{ row.event.target_label|default:row.event.target_id }}" detail="{{ row.target_type_label }}" />
     {% endif %}
     </c-tables.cell>
     <c-tables.cell compact muted>

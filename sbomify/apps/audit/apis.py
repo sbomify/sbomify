@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
+from django.core.handlers.asgi import ASGIRequest
 from django.http import HttpRequest, StreamingHttpResponse
 from ninja import Query, Router, Schema
 from ninja.security import django_auth
@@ -143,16 +144,22 @@ def export_audit_events(
     status, workspace = _authorized(request, workspace_key)
     if status != 200:
         return status, workspace
-    return export_response(workspace, filters.to_filters(), export_format)
+    return export_response(request, workspace, filters.to_filters(), export_format)
 
 
-def export_response(workspace: Any, filters: services.AuditFilters, export_format: str) -> StreamingHttpResponse:
+def export_response(
+    request: HttpRequest, workspace: Any, filters: services.AuditFilters, export_format: str
+) -> StreamingHttpResponse:
     services.record_export(workspace, filters, export_format)
     if export_format == "jsonl":
         body, content_type = services.export_jsonl(workspace.pk, filters), "application/x-ndjson"
     else:
         body, content_type = services.export_csv(workspace.pk, filters), "text/csv; charset=utf-8"
-    response = StreamingHttpResponse(body, content_type=content_type)
+    # Under ASGI Django drains a sync iterator into a list before sending a
+    # byte, so a 100,000-row export would sit in memory. An async iterator is
+    # sent as it is produced.
+    content = services.batched_async(body) if isinstance(request, ASGIRequest) else body
+    response = StreamingHttpResponse(content, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="audit-log-{workspace.key}.{export_format}"'
     response["Cache-Control"] = "private, no-store"
     return response

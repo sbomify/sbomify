@@ -50,18 +50,27 @@ def _workspace_id(request: HttpRequest) -> int | None:
             except (TypeError, ValueError):
                 return None
 
+    # A workspace-bound token names the workspace its holder is acting in.
     token_team = getattr(request, "token_team", None)
     if token_team is not None:
         return int(token_team.pk)
 
-    session = getattr(request, "session", None)
-    current_workspace = session.get("current_workspace") if session is not None else None
-    if isinstance(current_workspace, dict) and current_workspace.get("id"):
-        try:
-            return int(current_workspace["id"])
-        except (TypeError, ValueError):
-            return None
+    # Nothing else is trusted to say. The session's current workspace is only
+    # the one last switched to, not the one this request touched, so filing an
+    # event under it would put activity on one tenant's resource into another
+    # tenant's log. Requests like that are covered by the model events instead.
     return None
+
+
+def _is_member(user: Any, workspace_id: int) -> bool:
+    """Only someone in the workspace can put a request event in its log.
+
+    Without this, anyone signed in could post to another workspace's URLs and
+    fill its audit log with refusals carrying their own form values.
+    """
+    from sbomify.apps.teams.models import Member
+
+    return Member.objects.filter(user=user, team_id=workspace_id).exists()
 
 
 def _outcome(status: int) -> str:
@@ -89,9 +98,11 @@ class AuditMiddleware:
     def __call__(self, request: HttpRequest) -> HttpResponse:
         with audit_context(from_request(request)) as ctx:
             response = self.get_response(request)
+            # A failed request is always recorded: whatever it queued to log
+            # was rolled back with it, so a non-zero count proves nothing.
             if (
                 request.method not in SAFE_METHODS
-                and ctx.recorded == 0
+                and (ctx.recorded == 0 or response.status_code >= 400)
                 and not request.path.startswith(SKIPPED_PREFIXES)
             ):
                 self._record_request(request, response)
@@ -102,7 +113,7 @@ class AuditMiddleware:
         if user is None or not user.is_authenticated:
             return
         workspace_id = _workspace_id(request)
-        if workspace_id is None:
+        if workspace_id is None or not _is_member(user, workspace_id):
             return
         match = getattr(request, "resolver_match", None)
         metadata: dict[str, Any] = {"route": match.view_name if match is not None else ""}
