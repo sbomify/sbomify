@@ -395,7 +395,7 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "asks_for_credentials": provider.asks_for_credentials,
         "setup_template": provider.setup_template,
         "client_id_hint": provider.client_id_hint,
-        "client_secret_hint": provider.client_secret_hint,
+        "client_credential_hint": provider.client_credential_hint,
     }
 
 

@@ -16,7 +16,8 @@ is the client secret. Both hold the *name* of a setting and never a value, but
 bandit reads "token" or "secret" in a keyword argument as a hardcoded password,
 so calling them what they are produces a B106 that is not a finding. Renaming
 them back reintroduces it. ``exchange_encoding``, how the token endpoint wants
-its body, is named around the word for the same reason.
+its body, and ``client_credential_hint``, the help under the secret field,
+are named around the word for the same reason.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ class ProviderSpec:
     setup_template: str = ""
     # What each pasted value looks like, under its field. Copy.
     client_id_hint: str = ""
-    client_secret_hint: str = ""
+    client_credential_hint: str = ""
     # What to tell someone whose pasted application is real but may not have
     # the scopes sbomify asks for, which is almost always an application of
     # the wrong type. Copy.
