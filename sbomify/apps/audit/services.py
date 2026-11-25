@@ -181,6 +181,9 @@ def _export_queryset(workspace_id: int, filters: AuditFilters) -> Iterator[Audit
 def export_csv(workspace_id: int, filters: AuditFilters) -> Iterator[str]:
     """CSV, header first, streamed a row at a time."""
     buffer = io.StringIO()
+    # This is defusedcsv's writer (see the import), which neutralises formula
+    # injection; the rule matches on the name alone.
+    # nosemgrep: opengrep-rules.python.lang.security.use-defusedcsv
     writer = csv.writer(buffer)  # type: ignore[no-untyped-call]
 
     def flush() -> str:
@@ -228,15 +231,17 @@ def update_retention(request: HttpRequest, workspace: Any, days: int) -> Service
 
 PURGE_BATCH = 5000
 
-PURGE_SQL = f"""
-DELETE FROM {AuditEvent._meta.db_table}
+# A literal, parameterised statement: the table name is fixed and every value
+# is bound by the driver.
+PURGE_SQL = """
+DELETE FROM audit_events
  WHERE id IN (
    SELECT e.id
-     FROM {AuditEvent._meta.db_table} e
+     FROM audit_events e
      LEFT JOIN workspaces_workspaces w ON w.id = e.workspace_id
     WHERE e.occurred_at < now() - make_interval(
-            days => GREATEST(COALESCE(w.audit_log_retention_days, {RETENTION_DEFAULT_DAYS}), {RETENTION_MIN_DAYS}))
-    LIMIT {PURGE_BATCH}
+            days => GREATEST(COALESCE(w.audit_log_retention_days, %s), %s))
+    LIMIT %s
  )
 """
 
@@ -251,7 +256,7 @@ def purge_expired() -> int:
     total = 0
     while True:
         with connection.cursor() as cursor:
-            cursor.execute(PURGE_SQL)
+            cursor.execute(PURGE_SQL, [RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS, PURGE_BATCH])
             deleted = int(cursor.rowcount)
         total += deleted
         if deleted < PURGE_BATCH:

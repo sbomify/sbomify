@@ -202,13 +202,13 @@ class ChainReport:
         return not self.broken
 
 
-VERIFY_SQL = f"""
+VERIFY_SQL = """
 SELECT chain_seq,
        entry_hash = encode(sha256(convert_to(audit_events_canonical(e), 'UTF8')), 'hex') AS hash_ok,
        prev_hash,
        lag(entry_hash) OVER w AS expected_prev,
        lag(chain_seq) OVER w AS previous_seq
-  FROM {TABLE} e
+  FROM audit_events e
  WHERE workspace_id = %s
 WINDOW w AS (ORDER BY chain_seq)
  ORDER BY chain_seq

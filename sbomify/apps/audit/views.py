@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.http.response import HttpResponseBase
 from django.shortcuts import render
 from django.urls import reverse
@@ -108,7 +108,11 @@ class AuditLogExportView(_AuditView):
             return HttpResponse("Workspace not found", status=404)
         allowed = services.authorize(request, workspace)
         if not allowed.ok:
-            return HttpResponse(allowed.error, status=allowed.status_code or 403)
+            if allowed.status_code == 402:
+                return HttpResponse(
+                    "The audit log is available on the Enterprise plan.", status=402, content_type="text/plain"
+                )
+            return HttpResponseForbidden("Only workspace owners and admins can export the audit log.")
         export_format = "jsonl" if request.GET.get("format") == "jsonl" else "csv"
         return export_response(workspace, filters_from(request), export_format)
 
