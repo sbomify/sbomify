@@ -130,9 +130,17 @@ def _recording_name(request: pytest.FixtureRequest) -> str:
     return node.name
 
 
+# Incidental frames are a convenience, and against a browser on another
+# machine they are not free: each 4K capture holds up the screencast for
+# seconds, so the video freezes on an old frame while the voice runs on.
+# SCREENCAST_INCIDENTAL_FRAMES=0 turns them off; the remote mode of
+# record_screencasts.sh sets it. Hero shots are unaffected.
+INCIDENTAL_FRAMES = os.environ.get("SCREENCAST_INCIDENTAL_FRAMES", "1") not in ("", "0", "false")
+
+
 def _maybe_capture_screenshot(page: Page) -> None:
     out_dir = _screenshot_state["dir"]
-    if out_dir is None:
+    if out_dir is None or not INCIDENTAL_FRAMES:
         return
     now = time.monotonic()
     if now - _screenshot_state["last_time"] < _SCREENSHOT_INTERVAL_SEC:
