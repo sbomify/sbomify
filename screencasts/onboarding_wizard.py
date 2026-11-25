@@ -24,7 +24,7 @@ from conftest import (
     smooth_scroll,
     type_text,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 # The recording browser reaches the app over plain http on a container IP,
 # which is not a secure context, so navigator.clipboard does not exist and
@@ -41,7 +41,7 @@ if (!navigator.clipboard) {
 
 
 @pytest.fixture
-def fresh_workspace(recording_context: BrowserContext, deletable_team: Team, settings) -> Team:
+def fresh_workspace(recording_context: BrowserContext, deletable_team: Workspace, settings) -> Workspace:
     """Make the recording's workspace look like one that was just created."""
     # The setup page prints the app's address in its prompt and command. The
     # test settings point it at localhost, which a viewer should never see.
@@ -61,7 +61,7 @@ def fresh_workspace(recording_context: BrowserContext, deletable_team: Team, set
 
 
 @pytest.mark.django_db(transaction=True)
-def onboarding_wizard(recording_page: Page, fresh_workspace: Team) -> None:
+def onboarding_wizard(recording_page: Page, fresh_workspace: Workspace) -> None:
     page = recording_page
 
     # A new workspace lands in the wizard instead of the dashboard. The

@@ -292,8 +292,8 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     pace(page, 1200)
 
     # ── 5. The public Trust Center advisories page ────────────────────────
-    team_key = seeded_advisories["product"].team.key
-    page.goto(f"/public/workspace/{team_key}/advisories/")
+    workspace_key = seeded_advisories["product"].team.key
+    page.goto(f"/public/workspace/{workspace_key}/advisories/")
     narrate(page, "customers_see_public")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)

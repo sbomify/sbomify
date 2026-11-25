@@ -24,13 +24,13 @@ from conftest import (
     start_on_dashboard,
     type_text,
 )
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 
 INVITEE = "jared@piedpiper.example.com"
 
 
 @pytest.fixture
-def workspace_with_members(deletable_team: Team) -> Team:
+def workspace_with_members(deletable_team: Workspace) -> Workspace:
     """Two colleagues already in the workspace, next to the owner."""
     user_model = get_user_model()
     for username, first, last, role in (
@@ -45,7 +45,7 @@ def workspace_with_members(deletable_team: Team) -> Team:
 
 
 @pytest.mark.django_db(transaction=True)
-def team_members(recording_page: Page, workspace_with_members: Team, pied_piper_with_sboms: dict) -> None:
+def team_members(recording_page: Page, workspace_with_members: Workspace, pied_piper_with_sboms: dict) -> None:
     page = recording_page
     mock_vuln_trends(page)
 

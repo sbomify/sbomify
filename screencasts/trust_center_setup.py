@@ -168,9 +168,9 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
     pace(page, 800)
 
     # ── 7. The public Trust Center ────────────────────────────────────────
-    team_key = public_product["product"].team.key
+    workspace_key = public_product["product"].team.key
     narrate(page, "what_customers_see")
-    page.goto(f"/public/workspace/{team_key}/")
+    page.goto(f"/public/workspace/{workspace_key}/")
     page.wait_for_load_state("networkidle")
     rewrite_localhost_urls(page)
     page.get_by_text(WELCOME).first.wait_for(state="visible", timeout=15_000)

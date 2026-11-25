@@ -31,7 +31,7 @@ from conftest import (
     start_on_dashboard,
 )
 from sbomify.apps.tea.mappers import TEA_API_VERSION
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 DOMAIN = "trust.piedpiper.com"
 
@@ -66,7 +66,7 @@ def _show_json(page: Page, url_label: str, payload: object) -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-def tea_enabling(recording_page: Page, deletable_team: Team, public_product: dict) -> None:
+def tea_enabling(recording_page: Page, deletable_team: Workspace, public_product: dict) -> None:
     page = recording_page
     auto_dismiss_toasts(page)
     # The opening line plays over the dashboard loading.
@@ -79,7 +79,7 @@ def tea_enabling(recording_page: Page, deletable_team: Team, public_product: dic
     enable_and_configure_trust_center(page)
 
     # ── 2. Domain verification (simulated) ────────────────────────────────
-    Team.objects.filter(key=deletable_team.key).update(custom_domain_validated=True)
+    Workspace.objects.filter(key=deletable_team.key).update(custom_domain_validated=True)
     narrate(page, "once_dns_records")
     pace(page, 600)
     page.reload()

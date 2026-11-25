@@ -24,14 +24,14 @@ from conftest import (
     smooth_scroll,
     start_on_dashboard,
 )
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 FRAMEWORK = "SOC 2 Type II"
 
 
 @pytest.fixture
 def controls_workspace(pied_piper_with_sboms: dict, sample_user) -> dict:
-    team: Team = pied_piper_with_sboms["product"].team
+    team: Workspace = pied_piper_with_sboms["product"].team
     team.name = "Pied Piper"
     team.is_public = True
     team.save(update_fields=["name", "is_public"])

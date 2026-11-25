@@ -69,7 +69,7 @@ VEX_FILE_BYTES = json.dumps(
 
 
 @pytest.fixture
-def component_with_sbom(deletable_team: Team) -> dict:
+def component_with_sbom(deletable_team: Workspace) -> dict:
     """A component with one scanned SBOM: one critical, one medium, no VEX yet."""
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 

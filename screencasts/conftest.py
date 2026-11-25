@@ -23,7 +23,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Workspace
 
@@ -1055,7 +1055,7 @@ def click_into_row(page: Page, name: str) -> None:
 
 
 def install_dict_backed_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
-    """Back :class:`S3Client` with an in-process dict instead of a bucket.
+    """Back :class:`StorageClient` with an in-process dict instead of a bucket.
 
     The screencast compose stack runs no object store, so any recording that
     uploads has to stand in for one. **Always store the bytes rather than
@@ -1075,14 +1075,14 @@ def install_dict_backed_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, s
     """
     store: dict[tuple[str, str], bytes] = {}
 
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
+    def _put(self: StorageClient, bucket_name: str, object_name: str, data: bytes) -> None:
         store[(bucket_name, object_name)] = data
 
-    def _get(self: S3Client, bucket_name: str, object_name: str) -> bytes | None:
+    def _get(self: StorageClient, bucket_name: str, object_name: str) -> bytes | None:
         return store.get((bucket_name, object_name))
 
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
+    monkeypatch.setattr(StorageClient, "get_file_data", _get)
     return store
 
 
@@ -1499,8 +1499,8 @@ def browser_base_url(live_server) -> str:
 @pytest.fixture
 def deletable_team(
     sample_user: AbstractBaseUser,
-    team_with_business_plan: Team,
-) -> Team:
+    team_with_business_plan: Workspace,
+) -> Workspace:
     """The recording's workspace: Pied Piper, owned by Richard Hendricks.
 
     The shared fixtures name these "Test Business Team" and "Test User", and

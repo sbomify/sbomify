@@ -37,7 +37,7 @@ from conftest import (
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 WORKSPACE_NAME = "Pied Piper"
 VISITOR_NAME = "Dana Whitfield"
@@ -100,7 +100,7 @@ def _document(component: Component, name: str, body: str, doc_type: str, subcate
 
 @pytest.fixture
 def gated_trust_center(pied_piper_product: dict, sample_user: Any, fake_s3: None) -> dict:
-    team: Team = pied_piper_product["product"].team
+    team: Workspace = pied_piper_product["product"].team
     team.name = WORKSPACE_NAME
     team.is_public = True
     team.save(update_fields=["name", "is_public"])

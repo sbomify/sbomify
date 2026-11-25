@@ -27,7 +27,7 @@ from conftest import (
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Workspace
 
 BRAND_COLOR = "#1F7A4D"
 ACCENT_COLOR = "#2EA36B"
@@ -56,7 +56,7 @@ def media_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, tuple[bytes, str]]
 
 @pytest.fixture
 def branding_workspace(pied_piper_with_sboms: dict, sample_user) -> dict:
-    team: Team = pied_piper_with_sboms["product"].team
+    team: Workspace = pied_piper_with_sboms["product"].team
     team.name = "Pied Piper"
     team.is_public = True
     team.save(update_fields=["name", "is_public"])
