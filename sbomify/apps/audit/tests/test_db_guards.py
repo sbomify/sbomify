@@ -263,3 +263,10 @@ def test_canonical_v1_is_frozen():
 
     digest = hashlib.sha256(audit_db.CANONICAL_SQL.encode()).hexdigest()
     assert digest == "1f37399e28cb0202290a294ad1f23af264c1a9e1f031b9617a511a5dce0c2a1f"
+
+
+def test_the_literal_sql_matches_the_constants():
+    from sbomify.apps.audit.models import RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS
+
+    assert f"GREATEST(COALESCE(retention, {RETENTION_DEFAULT_DAYS}), {RETENTION_MIN_DAYS})" in audit_db.GUARD_DELETE_SQL
+    assert f"NEW.hash_version := {audit_db.HASH_VERSION};" in audit_db.SEAL_SQL

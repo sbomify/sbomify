@@ -185,8 +185,7 @@ def export_csv(workspace_id: int, filters: AuditFilters) -> Iterator[str]:
     buffer = io.StringIO()
     # This is defusedcsv's writer (see the import), which neutralises formula
     # injection; the rule matches on the name alone.
-    # nosemgrep: opengrep-rules.python.lang.security.use-defusedcsv
-    writer = csv.writer(buffer)  # type: ignore[no-untyped-call]
+    writer = csv.writer(buffer)  # type: ignore[no-untyped-call]  # nosemgrep: opengrep-rules.python.lang.security.use-defusedcsv
 
     def flush() -> str:
         value = buffer.getvalue()

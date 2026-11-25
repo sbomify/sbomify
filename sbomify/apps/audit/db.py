@@ -35,11 +35,10 @@ from typing import Any
 
 from django.db import connection
 
-from .models import RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS
-
-TABLE = "audit_events"
-HEADS_TABLE = "audit_chain_heads"
-WORKSPACE_TABLE = "workspaces_workspaces"
+# Every statement below is a literal: table names and the retention bounds are
+# written out rather than formatted in, so nothing assembled at runtime ever
+# reaches cursor.execute. test_db_guards checks the written-out values still
+# match RETENTION_DEFAULT_DAYS, RETENTION_MIN_DAYS and HASH_VERSION.
 
 # The hash format every new row is sealed with. A row records the version it
 # was sealed under, so changing what the hash covers means adding a v2 function
@@ -100,14 +99,14 @@ $$;
 # a SIEM had already seen, and that deleting the newest events left nothing
 # behind to notice. The head only moves forward: ``last_seq`` with every
 # insert, ``purged_through_seq`` with every delete the retention guard allows.
-SEAL_SQL = f"""
+SEAL_SQL = """
 CREATE OR REPLACE FUNCTION audit_events_seal() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
   head_seq bigint;
   head_hash text;
 BEGIN
-  INSERT INTO {HEADS_TABLE} (workspace_id, last_seq, last_hash, purged_through_seq)
+  INSERT INTO audit_chain_heads (workspace_id, last_seq, last_hash, purged_through_seq)
   VALUES (NEW.workspace_id, 0, '', 0)
   ON CONFLICT (workspace_id) DO NOTHING;
 
@@ -115,17 +114,17 @@ BEGIN
   -- held to the end of a short transaction: events are written after the
   -- change they describe has committed.
   SELECT last_seq, last_hash INTO head_seq, head_hash
-    FROM {HEADS_TABLE}
+    FROM audit_chain_heads
    WHERE workspace_id = NEW.workspace_id
      FOR UPDATE;
 
   NEW.occurred_at := clock_timestamp();
-  NEW.hash_version := {HASH_VERSION};
+  NEW.hash_version := 1;
   NEW.chain_seq := head_seq + 1;
   NEW.prev_hash := head_hash;
   NEW.entry_hash := audit_events_digest(NEW);
 
-  UPDATE {HEADS_TABLE}
+  UPDATE audit_chain_heads
      SET last_seq = NEW.chain_seq, last_hash = NEW.entry_hash
    WHERE workspace_id = NEW.workspace_id;
   RETURN NEW;
@@ -143,16 +142,16 @@ END
 $$;
 """
 
-GUARD_DELETE_SQL = f"""
+GUARD_DELETE_SQL = """
 CREATE OR REPLACE FUNCTION audit_events_guard_delete() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
   retention integer;
 BEGIN
   SELECT w.audit_log_retention_days INTO retention
-    FROM {WORKSPACE_TABLE} w
+    FROM workspaces_workspaces w
    WHERE w.id = OLD.workspace_id;
-  retention := GREATEST(COALESCE(retention, {RETENTION_DEFAULT_DAYS}), {RETENTION_MIN_DAYS});
+  retention := GREATEST(COALESCE(retention, 365), 30);
   IF OLD.occurred_at >= now() - make_interval(days => retention) THEN
     RAISE EXCEPTION 'audit event % is inside its % day retention window and cannot be deleted',
       OLD.event_id, retention
@@ -160,7 +159,7 @@ BEGIN
   END IF;
   -- Remember how far retention has reached, so a gap at the old end of the
   -- chain can be told apart from one cut by hand.
-  UPDATE {HEADS_TABLE}
+  UPDATE audit_chain_heads
      SET purged_through_seq = GREATEST(purged_through_seq, OLD.chain_seq)
    WHERE workspace_id = OLD.workspace_id;
   RETURN OLD;
@@ -184,60 +183,60 @@ END
 $$;
 """
 
-TRIGGERS_SQL = f"""
-DROP TRIGGER IF EXISTS audit_events_seal ON {TABLE};
-CREATE TRIGGER audit_events_seal BEFORE INSERT ON {TABLE}
+TRIGGERS_SQL = """
+DROP TRIGGER IF EXISTS audit_events_seal ON audit_events;
+CREATE TRIGGER audit_events_seal BEFORE INSERT ON audit_events
   FOR EACH ROW EXECUTE FUNCTION audit_events_seal();
 
-DROP TRIGGER IF EXISTS audit_events_no_update ON {TABLE};
-CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON {TABLE}
+DROP TRIGGER IF EXISTS audit_events_no_update ON audit_events;
+CREATE TRIGGER audit_events_no_update BEFORE UPDATE ON audit_events
   FOR EACH ROW EXECUTE FUNCTION audit_events_refuse();
 
-DROP TRIGGER IF EXISTS audit_events_guard_delete ON {TABLE};
-CREATE TRIGGER audit_events_guard_delete BEFORE DELETE ON {TABLE}
+DROP TRIGGER IF EXISTS audit_events_guard_delete ON audit_events;
+CREATE TRIGGER audit_events_guard_delete BEFORE DELETE ON audit_events
   FOR EACH ROW EXECUTE FUNCTION audit_events_guard_delete();
 
-DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON {HEADS_TABLE};
-CREATE TRIGGER audit_chain_heads_guard_update BEFORE UPDATE ON {HEADS_TABLE}
+DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON audit_chain_heads;
+CREATE TRIGGER audit_chain_heads_guard_update BEFORE UPDATE ON audit_chain_heads
   FOR EACH ROW EXECUTE FUNCTION audit_chain_heads_guard_update();
 
-DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON {HEADS_TABLE};
-CREATE TRIGGER audit_chain_heads_no_delete BEFORE DELETE ON {HEADS_TABLE}
+DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON audit_chain_heads;
+CREATE TRIGGER audit_chain_heads_no_delete BEFORE DELETE ON audit_chain_heads
   FOR EACH ROW EXECUTE FUNCTION audit_events_refuse();
 """
 
-TRUNCATE_TRIGGER_SQL = f"""
-DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
-CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON {TABLE}
+TRUNCATE_TRIGGER_SQL = """
+DROP TRIGGER IF EXISTS audit_events_no_truncate ON audit_events;
+CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON audit_events
   FOR EACH STATEMENT EXECUTE FUNCTION audit_events_refuse();
 
-DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
-CREATE TRIGGER audit_chain_heads_no_truncate BEFORE TRUNCATE ON {HEADS_TABLE}
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON audit_chain_heads;
+CREATE TRIGGER audit_chain_heads_no_truncate BEFORE TRUNCATE ON audit_chain_heads
   FOR EACH STATEMENT EXECUTE FUNCTION audit_events_refuse();
 """
 
 # Only for test databases, which Django flushes with TRUNCATE. It drops the
 # trigger rather than merely not creating it, so a database built by the
 # migration (which always installs it) ends up in the state the setting asks for.
-ALLOW_TRUNCATE_SQL = f"""
-DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
-DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
+ALLOW_TRUNCATE_SQL = """
+DROP TRIGGER IF EXISTS audit_events_no_truncate ON audit_events;
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON audit_chain_heads;
 """
 
-UNINSTALL_SQL = f"""
-DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON {HEADS_TABLE};
-DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON {HEADS_TABLE};
-DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON {HEADS_TABLE};
-DROP TRIGGER IF EXISTS audit_events_no_truncate ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_guard_delete ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_no_update ON {TABLE};
-DROP TRIGGER IF EXISTS audit_events_seal ON {TABLE};
+UNINSTALL_SQL = """
+DROP TRIGGER IF EXISTS audit_chain_heads_no_truncate ON audit_chain_heads;
+DROP TRIGGER IF EXISTS audit_chain_heads_no_delete ON audit_chain_heads;
+DROP TRIGGER IF EXISTS audit_chain_heads_guard_update ON audit_chain_heads;
+DROP TRIGGER IF EXISTS audit_events_no_truncate ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_guard_delete ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_no_update ON audit_events;
+DROP TRIGGER IF EXISTS audit_events_seal ON audit_events;
 DROP FUNCTION IF EXISTS audit_chain_heads_guard_update();
 DROP FUNCTION IF EXISTS audit_events_guard_delete();
 DROP FUNCTION IF EXISTS audit_events_refuse();
 DROP FUNCTION IF EXISTS audit_events_seal();
-DROP FUNCTION IF EXISTS audit_events_digest({TABLE});
-DROP FUNCTION IF EXISTS audit_events_canonical_v1({TABLE});
+DROP FUNCTION IF EXISTS audit_events_digest(audit_events);
+DROP FUNCTION IF EXISTS audit_events_canonical_v1(audit_events);
 """
 
 
