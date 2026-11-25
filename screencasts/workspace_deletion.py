@@ -20,7 +20,9 @@ from conftest import (
 
 
 @pytest.mark.django_db(transaction=True)
-def workspace_deletion(recording_page: Page) -> None:
+def workspace_deletion(recording_page: Page, pied_piper_with_sboms: dict) -> None:
+    # Seeded so the dashboard the video opens on, and the workspace it deletes,
+    # hold real products rather than the empty first-run screen.
     page = recording_page
 
     # Intercept the vulnerability-trends endpoint with an empty div to prevent
@@ -57,7 +59,9 @@ def workspace_deletion(recording_page: Page) -> None:
     hover_and_click(page, confirm_input)
     pace(page, 400)
     type_text(confirm_input, "delete", delay=120)
-    pace(page, 600)
+    # The click deletes the workspace; let the line finish naming the button
+    # before it happens.
+    settle(page)
 
     confirm_delete_btn = page.locator("#deleteWorkspaceModal").get_by_role("button", name="Delete workspace")
     hover_and_click(page, confirm_delete_btn)
