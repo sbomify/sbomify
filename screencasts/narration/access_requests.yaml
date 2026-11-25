@@ -15,7 +15,11 @@ beats:
 
   report_gated_dana:
     text: >-
-      The report is gated, so Dana cannot open it yet. Dana requests access.
+      The report is gated, so Dana cannot open it yet.
+
+  dana_requests_access:
+    text: >-
+      Dana requests access.
 
   workspace_asks_nda:
     text: >-

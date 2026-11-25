@@ -209,6 +209,10 @@ def access_requests(
     request_btn = page.get_by_role("link", name="Request Access")
     request_btn.wait_for(state="visible", timeout=15_000)
     narrate(page, "report_gated_dana")
+    # Point at the gated notice while the line says so, then request.
+    page.get_by_text("Gated Component").first.hover()
+    settle(page)
+    narrate(page, "dana_requests_access")
     hover_and_click(page, request_btn)
     page.wait_for_load_state("networkidle")
 
