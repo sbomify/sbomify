@@ -270,3 +270,25 @@ def test_the_literal_sql_matches_the_constants():
 
     assert f"GREATEST(COALESCE(retention, {RETENTION_DEFAULT_DAYS}), {RETENTION_MIN_DAYS})" in audit_db.GUARD_DELETE_SQL
     assert f"NEW.hash_version := {audit_db.HASH_VERSION};" in audit_db.SEAL_SQL
+
+
+def test_verify_chain_uses_one_snapshot_during_an_insert(enterprise):
+    _event(enterprise.pk)
+    inserted = False
+
+    def insert_after_snapshot(execute, sql, params, many, context):
+        nonlocal inserted
+        result = execute(sql, params, many, context)
+        if not inserted and sql.lstrip().startswith(("SELECT", "WITH")) and "audit_chain_heads" in sql:
+            inserted = True
+            # A second writer can commit after this SELECT's snapshot. Using
+            # the same connection models that interleaving without threads.
+            _event(enterprise.pk)
+        return result
+
+    with connection.execute_wrapper(insert_after_snapshot):
+        report = audit_db.verify_chain(enterprise.pk)
+    assert inserted
+    assert AuditEvent.objects.filter(workspace_id=enterprise.pk).count() == 2
+    assert report.ok, report
+    assert report.checked == 1

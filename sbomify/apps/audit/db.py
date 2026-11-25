@@ -281,17 +281,25 @@ class ChainReport:
         return not self.broken and not self.problems
 
 
+# Head and events must come from one statement's MVCC snapshot. Separate
+# SELECTs can see different commits and report an intact chain as tampered.
 VERIFY_SQL = """
-SELECT chain_seq,
-       entry_hash = audit_events_digest(e) AS hash_ok,
-       prev_hash,
-       entry_hash,
-       lag(entry_hash) OVER w AS expected_prev,
-       lag(chain_seq) OVER w AS previous_seq
-  FROM audit_events e
- WHERE workspace_id = %s
-WINDOW w AS (ORDER BY chain_seq)
- ORDER BY chain_seq
+WITH verified AS (
+  SELECT chain_seq,
+         entry_hash = audit_events_digest(e) AS hash_ok,
+         prev_hash,
+         entry_hash,
+         lag(entry_hash) OVER w AS expected_prev,
+         lag(chain_seq) OVER w AS previous_seq
+    FROM audit_events e
+   WHERE workspace_id = %s
+  WINDOW w AS (ORDER BY chain_seq)
+)
+SELECT h.last_seq, h.last_hash, h.purged_through_seq, v.*
+  FROM (SELECT last_seq, last_hash, purged_through_seq
+          FROM audit_chain_heads WHERE workspace_id = %s) h
+  FULL OUTER JOIN verified v ON true
+ ORDER BY v.chain_seq
 """
 
 HEAD_SQL = "SELECT last_seq, last_hash, purged_through_seq FROM audit_chain_heads WHERE workspace_id = %s"
@@ -314,10 +322,23 @@ def verify_chain(workspace_id: int) -> ChainReport:
     last_hash = ""
     checked = 0
     with connection.cursor() as cursor:
-        cursor.execute(HEAD_SQL, [workspace_id])
-        head = cursor.fetchone()
-        cursor.execute(VERIFY_SQL, [workspace_id])
-        for seq, hash_ok, prev_hash, entry_hash, expected_prev, previous_seq in cursor.fetchall():
+        head = None
+        cursor.execute(VERIFY_SQL, [workspace_id, workspace_id])
+        for (
+            head_seq,
+            head_hash,
+            purged_through,
+            seq,
+            hash_ok,
+            prev_hash,
+            entry_hash,
+            expected_prev,
+            previous_seq,
+        ) in cursor.fetchall():
+            if head_seq is not None:
+                head = (head_seq, head_hash, purged_through)
+            if seq is None:
+                continue
             checked += 1
             if first_seq is None:
                 first_seq = seq
