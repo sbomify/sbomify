@@ -94,7 +94,8 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     pace(page, 600)
     narrate(page, "search_filter_list")
     hover_and_click(page, select_all)
-    pace(page, 700)
+    # Keep the picker open until the line has been said.
+    settle(page)
 
     with page.expect_response(
         lambda r: "/releases/" in r.url and r.request.method == "POST",
@@ -103,7 +104,11 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         hover_and_click(page, page.get_by_role("button", name="Add to Release"))
     page.locator("#modal-artifact-search").wait_for(state="hidden", timeout=20_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 1200)
+    # The header's artifact count is rendered with the page and does not
+    # follow the table the dialog refreshed, so it still reads 0. Reload to
+    # show the count the release really has.
     narrate(page, "release_holds_sbom")
+    page.reload()
+    page.wait_for_load_state("networkidle")
     settle(page)
     pace(page, 400)
