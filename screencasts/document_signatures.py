@@ -256,7 +256,8 @@ def document_signatures(recording_page: Page, signing_setup: dict, sample_user, 
     assert response.status_code == 201, response.content
     _append(page, '{"detail": "Provenance uploaded"}')
     _seed_verification_run(sbom)
-    pace(page, 1500)
+    # Stay on the pipeline until the provenance line has been said.
+    settle(page)
 
     # ── 2. The SBOM in the app ───────────────────────────────────────────
     page.goto("/components/")
