@@ -361,6 +361,59 @@ def test_provenance_upload_direct_statement(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("shape", ["sigstore-bundle", "jsonl"])
+def test_provenance_upload_build_tool_shapes(
+    shape: str,
+    sbom_with_hash: SBOM,
+    sample_access_token: AccessToken,
+    mocker: MockerFixture,
+) -> None:
+    """What ``cosign attest-blob --bundle`` and a multi-entry ``.intoto.jsonl`` look like."""
+    mocker.patch("boto3.resource")
+    upload = mocker.patch(
+        "sbomify.apps.core.object_store.StorageClient.upload_sbom_provenance",
+        return_value="aaa.provenance.json",
+    )
+    envelope = _wrap_in_dsse(_make_provenance_statement(sbom_with_hash.sha256_hash))
+    if shape == "sigstore-bundle":
+        body = json.dumps({"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json", "dsseEnvelope": envelope})
+    else:
+        other = _wrap_in_dsse(_make_provenance_statement("0" * 64))
+        body = f"{json.dumps(other)}\n{json.dumps(envelope)}\n"
+
+    response = Client().post(
+        f"/api/v1/sboms/sbom/{sbom_with_hash.id}/provenance",
+        data=body,
+        content_type="application/octet-stream",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201, response.json()
+    # Stored exactly as sent.
+    assert upload.call_args.args[2] == body.encode()
+
+
+@pytest.mark.django_db
+def test_provenance_upload_jsonl_names_the_bad_line(
+    sbom_with_hash: SBOM,
+    sample_access_token: AccessToken,
+    mocker: MockerFixture,
+) -> None:
+    mocker.patch("boto3.resource")
+    envelope = _wrap_in_dsse(_make_provenance_statement(sbom_with_hash.sha256_hash))
+
+    response = Client().post(
+        f"/api/v1/sboms/sbom/{sbom_with_hash.id}/provenance",
+        data=f"{json.dumps(envelope)}\nnot-json\n",
+        content_type="application/octet-stream",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid JSON on line 2"
+
+
+@pytest.mark.django_db
 def test_provenance_upload_digest_mismatch(
     sbom_with_hash: SBOM,
     sample_access_token: AccessToken,
