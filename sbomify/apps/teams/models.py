@@ -12,6 +12,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
+from sbomify.apps.audit.models import RETENTION_DEFAULT_DAYS, RETENTION_MAX_DAYS, RETENTION_MIN_DAYS
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.utils import generate_id, number_to_random_token
 
@@ -189,7 +190,15 @@ class Workspace(models.Model):
                     )
                 ),
                 name="valid_billing_relationship",
-            )
+            ),
+            # The audit log's delete trigger reads this column. Holding the
+            # bounds in the database too means no write path can set a window
+            # short enough to purge the record of the change that set it.
+            models.CheckConstraint(
+                condition=models.Q(audit_log_retention_days__gte=RETENTION_MIN_DAYS)
+                & models.Q(audit_log_retention_days__lte=RETENTION_MAX_DAYS),
+                name="workspace_audit_retention_in_bounds",
+            ),
         ]
 
     key = models.CharField(max_length=30, unique=True, null=True, validators=[MinLengthValidator(9)])
@@ -285,6 +294,11 @@ class Workspace(models.Model):
         default=1,
         validators=[MinValueValidator(1), MaxValueValidator(999_999)],
         help_text="Lowest number a new security advisory id may take in each year's sequence.",
+    )
+    audit_log_retention_days = models.PositiveIntegerField(
+        default=RETENTION_DEFAULT_DAYS,
+        validators=[MinValueValidator(RETENTION_MIN_DAYS), MaxValueValidator(RETENTION_MAX_DAYS)],
+        help_text="Days an audit log event is kept before it is deleted. The database refuses earlier deletion.",
     )
     security_txt_config = models.JSONField(
         default=dict,
@@ -554,10 +568,6 @@ class Workspace(models.Model):
                   False otherwise.
         """
         return self.get_company_nda_document() is not None
-
-
-# The old name answers until every open branch has re-run bin/rename_to_workspace.py.
-Team = Workspace  # rename-to-workspace: keep
 
 
 class Member(models.Model):

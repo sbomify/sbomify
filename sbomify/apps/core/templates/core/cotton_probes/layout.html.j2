@@ -28,6 +28,11 @@ assert on the output; it is not routed anywhere.
 <c-buttons.primary size="sm">Add entity</c-buttons.primary>
 </c-slot>
 </c-layout.section-header>
+<c-layout.section-header wrap icon="fas fa-plug" title="Wrapped header" subtitle="Actions drop under the text on a phone." data-probe="section-wrapped">
+<c-slot name="actions">
+<c-buttons.primary size="sm">Connect provider</c-buttons.primary>
+</c-slot>
+</c-layout.section-header>
 <c-layout.section-body class="space-y-3">
 <p class="m-0">Indented to the title's left edge.</p>
 </c-layout.section-body>

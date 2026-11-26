@@ -13,9 +13,10 @@ from django.utils import timezone
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.integrations import oauth
-from sbomify.apps.integrations.exceptions import ProviderAuthError
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderScopeRefused, ProviderUnavailable
 from sbomify.apps.integrations.models import Integration
 from sbomify.apps.integrations.providers import PROVIDERS, ProviderSpec
+from sbomify.apps.integrations.services import notifications
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -35,6 +36,8 @@ def save_connection(
     provider: ProviderSpec,
     token_set: oauth.TokenSet,
     user: User | None,
+    client_id: str | None = None,
+    client_secret: str | None = None,
 ) -> Integration:
     """Store a freshly authorized connection, replacing any earlier one.
 
@@ -52,10 +55,15 @@ def save_connection(
         provider=provider.key,
         defaults={
             "status": Integration.Status.CONNECTED,
+            # None, not "", as the default: bandit reads an empty string
+            # defaulted onto a parameter called a secret as a hardcoded one.
+            "client_id": client_id or "",
+            "client_secret": client_secret or "",
             "access_token": token_set.access_token,
             "refresh_token": token_set.refresh_token,
             "token_expires_at": token_set.expires_at,
             "scopes": list(token_set.scopes),
+            "account": token_set.account or {},
             "connected_by": user,
             "connected_at": timezone.now(),
         },
@@ -67,6 +75,54 @@ def save_connection(
         integration.save(update_fields=["last_sync_status", "last_sync_error", "updated_at"])
 
     return integration
+
+
+# The longest client id or secret worth sending. Vanta's are a few dozen
+# characters; this only stops a pasted page of text reaching the provider.
+_MAX_CREDENTIAL_LENGTH = 255
+
+
+def connect_with_client_credentials(
+    team: Workspace,
+    provider: ProviderSpec,
+    client_id: str,
+    client_secret: str,
+    user: User | None,
+) -> ServiceResult[Integration]:
+    """Connect with an application the workspace created at the provider.
+
+    A token is minted before anything is stored, so a mistyped secret or an
+    application of the wrong type is turned away on the form rather than
+    stored and found out by the first sync. The token it mints is kept: the
+    provider allows one live token per application, and minting another for
+    the first sync would only throw this one away.
+    """
+    client_id = client_id.strip()
+    client_secret = client_secret.strip()
+    if not client_id or not client_secret:
+        return ServiceResult.failure("Enter both the client ID and the client secret.", status_code=400)
+    if len(client_id) > _MAX_CREDENTIAL_LENGTH or len(client_secret) > _MAX_CREDENTIAL_LENGTH:
+        return ServiceResult.failure("That does not look like a client ID and secret.", status_code=400)
+
+    try:
+        token_set = oauth.client_credentials_grant(provider, client_id, client_secret)
+    except ProviderScopeRefused:
+        return ServiceResult.failure(
+            provider.scope_refused_hint
+            or f"{provider.name} accepted that client ID and secret, but not the permissions sbomify needs.",
+            status_code=400,
+        )
+    except ProviderAuthError:
+        return ServiceResult.failure(
+            f"{provider.name} did not accept that client ID and secret. Copy both again, and check the "
+            "secret has not been rotated or the application deleted.",
+            status_code=400,
+        )
+    except ProviderUnavailable as exc:
+        return ServiceResult.failure(exc.detail, status_code=502)
+
+    integration = save_connection(team, provider, token_set, user, client_id=client_id, client_secret=client_secret)
+    return ServiceResult.success(integration)
 
 
 def access_token(integration: Integration, provider: ProviderSpec) -> str:
@@ -89,6 +145,14 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
     ``ProviderUnavailable`` and leaves the connection alone, so the next
     scheduled sync can pick it up.
     """
+    # A token that never expires has nothing to refresh. Slack's bot token is
+    # one, and it comes with no refresh token, so the usual path would revoke a
+    # working connection on its first use for lacking one.
+    if not provider.tokens_expire:
+        if not integration.access_token:
+            raise ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
+        return integration.access_token
+
     if not integration.token_is_stale:
         return integration.access_token
 
@@ -111,7 +175,17 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
             _copy_credential(locked, integration)
             return locked.access_token
 
-        if not locked.refresh_token:
+        if provider.asks_for_credentials:
+            # No refresh token in this grant. A token that ran out is replaced
+            # by minting another from the workspace's own application.
+            try:
+                token_set = oauth.client_credentials_grant(provider, locked.client_id, locked.client_secret)
+            except ProviderAuthError as exc:
+                revoke_reason = f"{provider.name} no longer accepts the client ID and secret. Enter new ones."
+                refusal = exc
+            else:
+                _store_rotation(locked, token_set)
+        elif not locked.refresh_token:
             revoke_reason = "The connection has no refresh token. Reconnect the workspace."
             refusal = ProviderAuthError(f"{provider.name} needs reconnecting.", service=provider.key)
         else:
@@ -121,24 +195,7 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
                 revoke_reason = f"{provider.name} rejected the stored credential."
                 refusal = exc
             else:
-                locked.access_token = token_set.access_token
-                # An empty rotation means the provider reissued without
-                # replacing; keeping the old refresh token is what lets the
-                # next refresh work at all.
-                locked.refresh_token = token_set.refresh_token or locked.refresh_token
-                locked.token_expires_at = token_set.expires_at
-                locked.scopes = list(token_set.scopes)
-                locked.status = Integration.Status.CONNECTED
-                locked.save(
-                    update_fields=[
-                        "access_token",
-                        "refresh_token",
-                        "token_expires_at",
-                        "scopes",
-                        "status",
-                        "updated_at",
-                    ]
-                )
+                _store_rotation(locked, token_set)
 
     if refusal is not None:
         _mark_revoked(locked, revoke_reason)
@@ -149,12 +206,35 @@ def access_token(integration: Integration, provider: ProviderSpec) -> str:
     return locked.access_token
 
 
+def _store_rotation(locked: Integration, token_set: oauth.TokenSet) -> None:
+    """Save a newly issued token on the locked row, before anyone uses it."""
+    locked.access_token = token_set.access_token
+    # An empty rotation means the provider reissued without replacing; keeping
+    # the old refresh token is what lets the next refresh work at all.
+    locked.refresh_token = token_set.refresh_token or locked.refresh_token
+    locked.token_expires_at = token_set.expires_at
+    locked.scopes = list(token_set.scopes)
+    locked.status = Integration.Status.CONNECTED
+    locked.save(
+        update_fields=[
+            "access_token",
+            "refresh_token",
+            "token_expires_at",
+            "scopes",
+            "status",
+            "updated_at",
+        ]
+    )
+
+
 def _copy_credential(source: Integration, target: Integration) -> None:
     """Bring the caller's in-memory row up to date with the locked copy.
 
     The caller holds the instance it passed in and goes on using it after this
     returns, so it has to see whatever the locked row decided.
     """
+    target.client_id = source.client_id
+    target.client_secret = source.client_secret
     target.access_token = source.access_token
     target.refresh_token = source.refresh_token
     target.token_expires_at = source.token_expires_at
@@ -169,12 +249,16 @@ def _mark_revoked(integration: Integration, message: str) -> None:
 
     This runs after the lock is gone, so a reconnect can land in between, and
     saving the instance we hold would push a stale refusal over a working
-    connection. The refresh token we were refused on is what the write is keyed
-    to: if the row still carries it, the refusal is still true about what is
-    stored; if it does not, somebody has reconnected and being asked to
-    reconnect again is wrong.
+    connection. The credential we were refused on, the refresh token or the
+    client secret, is what the write is keyed to: if the row still carries it,
+    the refusal is still true about what is stored; if it does not, somebody
+    has reconnected and being asked to reconnect again is wrong.
     """
-    replaced = Integration.objects.filter(pk=integration.pk, refresh_token=integration.refresh_token).update(
+    replaced = Integration.objects.filter(
+        pk=integration.pk,
+        refresh_token=integration.refresh_token,
+        client_secret=integration.client_secret,
+    ).update(
         status=Integration.Status.REVOKED,
         last_sync_status=Integration.SyncStatus.FAILED,
         last_sync_error=message,
@@ -258,7 +342,7 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                 .annotate(control_count=Count("controls"))
                 .order_by("name")
             )
-            if integration is not None
+            if integration is not None and provider.kind == "compliance"
             else []
         )
         cards.append(
@@ -280,6 +364,11 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                     }
                     for catalog in catalogs
                 ],
+                "notifications": (
+                    notifications.routes_panel(integration)
+                    if integration is not None and provider.kind == "notifications"
+                    else None
+                ),
             }
         )
     return cards
@@ -298,8 +387,15 @@ def _provider_card(provider: ProviderSpec) -> dict[str, Any]:
         "tagline": provider.tagline,
         "icon": provider.icon,
         "docs_url": provider.docs_url,
+        "kind": provider.kind,
+        "syncs": provider.syncs,
+        "reads_intro": provider.reads_intro,
         "reads": provider.reads,
         "is_configured": provider.is_configured,
+        "asks_for_credentials": provider.asks_for_credentials,
+        "setup_template": provider.setup_template,
+        "client_id_hint": provider.client_id_hint,
+        "client_credential_hint": provider.client_credential_hint,
     }
 
 
@@ -312,6 +408,7 @@ def _sync_state(integration: Integration | None) -> dict[str, Any] | None:
         "last_sync_status": integration.last_sync_status,
         "last_sync_error": integration.last_sync_error,
         "connected_by": integration.connected_by,
+        "account_name": (integration.account or {}).get("name", ""),
     }
 
 

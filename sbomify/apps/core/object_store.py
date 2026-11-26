@@ -47,6 +47,10 @@ def log_orphaned_object(object_name: str) -> None:
     log.warning("%s: %s", ORPHANED_OBJECT_MARKER, object_name)
 
 
+#: The most keys one S3 DeleteObjects request accepts.
+DELETE_OBJECTS_LIMIT = 1000
+
+
 class ObjectStoreClient(ABC):
     """Base class for object storage backends."""
 
@@ -57,7 +61,13 @@ class ObjectStoreClient(ABC):
     def get_object(self, bucket_name: str, key: str) -> bytes | None: ...
 
     @abstractmethod
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None: ...
+
+    @abstractmethod
     def delete_object(self, bucket_name: str, key: str) -> None: ...
+
+    @abstractmethod
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None: ...
 
     @abstractmethod
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]: ...
@@ -67,6 +77,9 @@ class ObjectStoreClient(ABC):
 
     @abstractmethod
     def object_exists(self, bucket_name: str, key: str) -> bool: ...
+
+    @abstractmethod
+    def object_size(self, bucket_name: str, key: str) -> int | None: ...
 
     @abstractmethod
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
@@ -161,8 +174,40 @@ class S3ObjectStoreClient(ObjectStoreClient):
                 return None
             raise
 
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of the object, or ``None`` if it is not there.
+
+        A ranged GET, so a caller with a size ceiling gets a bounded read from a
+        store that answers GetObject but not HEAD.
+        """
+        try:
+            response = self._resource.Bucket(bucket_name).Object(key).get(Range=f"bytes=0-{length - 1}")
+            return response["Body"].read()  # type: ignore[no-any-return]
+        except ClientError as e:
+            code = e.response.get("Error", {}).get("Code")
+            if code in ("NoSuchKey", "404"):
+                return None
+            # A range starting at 0 is unsatisfiable only for an empty object.
+            if code in ("InvalidRange", "416"):
+                return b""
+            raise
+
     def delete_object(self, bucket_name: str, key: str) -> None:
         self._resource.Object(bucket_name, key).delete()
+
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None:
+        # One request per 1000 keys, the most DeleteObjects takes, rather than
+        # one per key. A key that is already gone is not an error.
+        for start in range(0, len(keys), DELETE_OBJECTS_LIMIT):
+            chunk = keys[start : start + DELETE_OBJECTS_LIMIT]
+            response = self._resource.Bucket(bucket_name).delete_objects(
+                Delete={"Objects": [{"Key": key} for key in chunk], "Quiet": True}
+            )
+            if errors := response.get("Errors"):
+                first = errors[0]
+                raise RuntimeError(
+                    f"{len(errors)} of {len(chunk)} deletes failed, first {first.get('Key')}: {first.get('Code')}"
+                )
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return list(self.iter_objects(bucket_name, prefix))
@@ -182,6 +227,19 @@ class S3ObjectStoreClient(ObjectStoreClient):
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
                 return False
+            raise
+
+    def object_size(self, bucket_name: str, key: str) -> int | None:
+        """The stored object's size in bytes, or ``None`` if it is not there.
+
+        A HEAD, like ``object_exists``, so a caller with a size ceiling can
+        refuse an object before paying to download it.
+        """
+        try:
+            return int(self._resource.Object(bucket_name, key).content_length)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
             raise
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
@@ -444,11 +502,39 @@ class GCSObjectStoreClient(ObjectStoreClient):
         )
         return result
 
+    def get_object_prefix(self, bucket_name: str, key: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of the object, or ``None`` if it is not there."""
+        from google.api_core import exceptions as gexc
+
+        blob = self._blob(bucket_name, key)
+
+        def _ranged_get() -> bytes:
+            try:
+                # Checksums cover the whole object, so a ranged read cannot be checked.
+                data: bytes = blob.download_as_bytes(
+                    start=0, end=length - 1, checksum=None, timeout=self._timeout, retry=self._retry
+                )
+                return data
+            except gexc.RequestRangeNotSatisfiable:
+                # A range starting at 0 is unsatisfiable only for an empty object.
+                return b""
+
+        result: bytes | None = self._call("GetObject", _ranged_get, missing_object=None)
+        return result
+
     def delete_object(self, bucket_name: str, key: str) -> None:
         # S3 DeleteObject succeeds on an absent key; match that so a retried
         # cleanup does not fail on the second pass.
         blob = self._blob(bucket_name, key)
         self._call("DeleteObject", lambda: blob.delete(timeout=self._timeout, retry=self._retry), missing_object=None)
+
+    def delete_objects(self, bucket_name: str, keys: list[str]) -> None:
+        # GCS has no multi-object delete. Its JSON batch endpoint bypasses the
+        # SDK's retry and timeout handling that bounds every other call here,
+        # so delete one key at a time. A key that is already gone is not an
+        # error, as with S3.
+        for key in keys:
+            self.delete_object(bucket_name, key)
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return list(self.iter_objects(bucket_name, prefix))
@@ -480,6 +566,17 @@ class GCSObjectStoreClient(ObjectStoreClient):
 
         exists: bool = self._call("HeadObject", _head, missing_object=False)
         return exists
+
+    def object_size(self, bucket_name: str, key: str) -> int | None:
+        """The stored object's size in bytes, or ``None`` if it is not there."""
+        blob = self._blob(bucket_name, key)
+
+        def _head() -> int:
+            blob.reload(timeout=self._timeout, retry=self._retry)
+            return int(blob.size)
+
+        size: int | None = self._call("HeadObject", _head, missing_object=None)
+        return size
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
         blob = self._blob(bucket_name, key)
@@ -614,6 +711,20 @@ class StorageClient:
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
+    def get_sbom_data_prefix(self, object_name: str, length: int) -> bytes | None:
+        """At most the first ``length`` bytes of a stored SBOM, or ``None`` if it is missing."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.get_object_prefix(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, length)
+
+    def get_sbom_size(self, object_name: str) -> int | None:
+        """Size of a stored SBOM in bytes, without downloading it."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+
+        return self._store.object_size(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
     def get_cached_aggregate(self, object_name: str) -> bytes | None:
         """Return a cached aggregated-SBOM blob by key, or None if absent (#998).
 
@@ -696,6 +807,9 @@ class StorageClient:
 
     def delete_object(self, bucket_name: str, object_name: str) -> None:
         self._store.delete_object(bucket_name, object_name)
+
+    def delete_objects(self, bucket_name: str, object_names: list[str]) -> None:
+        self._store.delete_objects(bucket_name, object_names)
 
     def object_exists(self, bucket_name: str, object_name: str) -> bool:
         """Return whether an object is present, without fetching its body."""

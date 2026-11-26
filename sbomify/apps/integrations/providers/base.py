@@ -2,19 +2,22 @@
 
 Everything provider-specific is data on one frozen dataclass, so the OAuth
 module, the views and the templates never branch on which provider they are
-looking at. Adding a second one is a new ``ProviderSpec`` and a sync function.
+looking at. A compliance provider is a ``ProviderSpec`` and a sync function; a
+notification provider is a ``ProviderSpec`` with ``kind="notifications"``.
 
-The four ``*_setting`` fields name settings rather than holding values,
+The ``*_setting`` fields name settings rather than holding values,
 because a spec is built at import time and the settings it reads are
 per-deployment and overridable in tests. Reading them through ``getattr`` at
 call time is what makes ``override_settings`` work on a connect flow.
 
-Two of those four are named around the usual words rather than using them.
+Two of them are named around the usual words rather than using them.
 ``exchange_url_setting`` is the token endpoint and ``client_credential_setting``
 is the client secret. Both hold the *name* of a setting and never a value, but
 bandit reads "token" or "secret" in a keyword argument as a hardcoded password,
 so calling them what they are produces a B106 that is not a finding. Renaming
-them back reintroduces it.
+them back reintroduces it. ``exchange_encoding``, how the token endpoint wants
+its body, and ``client_credential_hint``, the help under the secret field,
+are named around the word for the same reason.
 """
 
 from __future__ import annotations
@@ -39,14 +42,60 @@ class ProviderSpec:
     # provider's copy and says nothing about what sbomify does with it.
     reads: tuple[str, ...]
     scopes: tuple[str, ...]
-    authorize_url_setting: str
     exchange_url_setting: str
-    client_id_setting: str
-    client_credential_setting: str
+    # How a workspace gets its credential. ``authorization_code`` is the usual
+    # consent screen against one OAuth app this deployment registers.
+    # ``client_credentials`` is for a provider whose API only answers an app
+    # the customer creates in their own account: they paste its client id and
+    # secret, the connection stores them, and every token is minted from them.
+    # Vanta is one, because its read API is not available to partner apps.
+    grant: str = "authorization_code"
+    # Only an ``authorization_code`` provider has these. The client credentials
+    # of a ``client_credentials`` provider belong to the workspace, not the
+    # deployment, and live on its connection.
+    authorize_url_setting: str = ""
+    client_id_setting: str = ""
+    client_credential_setting: str = ""
+    # The guide to creating the application in the provider, shown above the
+    # credentials form. A template rather than a list of strings, because the
+    # guide needs links into the provider and a warning about the one mistake
+    # people actually make. Only used by a ``client_credentials`` provider.
+    setup_template: str = ""
+    # What each pasted value looks like, under its field. Copy.
+    client_id_hint: str = ""
+    client_credential_hint: str = ""
+    # What to tell someone whose pasted application is real but may not have
+    # the scopes sbomify asks for, which is almost always an application of
+    # the wrong type. Copy.
+    scope_refused_hint: str = ""
     # Dotted path to ``sync(integration) -> ServiceResult[SyncSummary]``.
     # A path rather than the function, so a provider module is free to import
-    # this one.
-    sync_path: str
+    # this one. Empty for a provider sbomify only writes to, which has nothing
+    # to sync and is never queued for it.
+    sync_path: str = ""
+    # What a connection is for, which decides what the tile shows under it: a
+    # compliance tool lists the frameworks it synced, a notification tool the
+    # channels sbomify posts to.
+    kind: str = "compliance"
+    # The line above ``reads``. A notification provider is written to, so
+    # "reads, and never writes" would be untrue on its tile.
+    reads_intro: str = "sbomify reads, and never writes:"
+    # How the token endpoint wants its body. Vanta refuses form encoding and
+    # Slack refuses JSON, so this cannot be one answer for every provider.
+    exchange_encoding: str = "json"
+    # Slack's authorize URL takes a comma-separated list where the OAuth spec
+    # says space-separated.
+    scope_separator: str = " "
+    # Whether an access token runs out. Slack bot tokens do not, and arrive
+    # with neither an expiry nor a refresh token; read with the usual rule, a
+    # connection like that would be "stale" on its first use and revoked for
+    # lacking a refresh token to renew it with.
+    tokens_expire: bool = True
+    # Dotted path to ``account(token_response: dict) -> dict``: who the
+    # connection is to, in the provider's own words, shown on the tile so an
+    # admin can tell which of their accounts is connected. Empty when the token
+    # response does not say.
+    account_path: str = ""
 
     def _setting(self, name: str) -> str:
         return str(getattr(settings, name, "") or "")
@@ -68,11 +117,26 @@ class ProviderSpec:
         return self._setting(self.client_credential_setting)
 
     @property
+    def asks_for_credentials(self) -> bool:
+        """Whether connecting means pasting a client id and secret, not a consent screen."""
+        return self.grant == "client_credentials"
+
+    @property
+    def syncs(self) -> bool:
+        """Whether this provider has anything to sync, and so a schedule."""
+        return bool(self.sync_path)
+
+    @property
     def is_configured(self) -> bool:
         """Whether this deployment holds credentials for the provider.
 
         A tile for a provider the deployment cannot actually reach is shown
         disabled rather than hidden: self-hosters need to know the feature
         exists and what to set, and hiding it makes that undiscoverable.
+
+        A provider whose credentials come from the workspace needs nothing from
+        the deployment but somewhere to send them.
         """
+        if self.asks_for_credentials:
+            return bool(self.token_url)
         return bool(self.client_id and self.client_secret and self.authorize_url and self.token_url)

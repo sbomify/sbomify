@@ -23,8 +23,8 @@ from sbomify.apps.core.htmx import HtmxFragmentMixin, htmx_error_response, htmx_
 from sbomify.apps.core.models import User
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.models import Integration
-from sbomify.apps.integrations.providers import get_provider
-from sbomify.apps.integrations.services import connections
+from sbomify.apps.integrations.providers import ProviderSpec, get_provider
+from sbomify.apps.integrations.services import connections, notifications
 from sbomify.apps.integrations.tasks import sync_integration
 from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -72,6 +72,12 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             return self._sync(request, team)
         if action == "publish":
             return self._publish(request, team)
+        if action == "route":
+            return self._route(request, team)
+        if action == "test":
+            return self._test(request, team)
+        if action == "connect":
+            return self._connect(request, team)
 
         return htmx_error_response("Unknown action")
 
@@ -85,8 +91,42 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
         if not result.ok:
             return htmx_error_response(result.error or "Could not disconnect")
 
+        if provider.kind == "notifications":
+            message = f"Disconnected {provider.name}. sbomify no longer posts to it."
+        else:
+            message = f"Disconnected {provider.name}. Its frameworks are no longer on your Trust Center."
+        return htmx_success_response(message, triggers={"refreshIntegrations": True})
+
+    def _connect(self, request: HttpRequest, team: Workspace) -> HttpResponse:
+        """Connect a provider from its credentials form, without leaving the tab.
+
+        A refusal re-renders the panel with the reason beside the form and the
+        client ID still filled in. Sent as a redirect it was a toast on a
+        reloaded page, which is easy to miss and reads as being bounced back.
+        The secret is never put back in the page.
+        """
+        spec = get_provider(request.POST.get("provider", ""))
+        if spec is None or not spec.asks_for_credentials:
+            return htmx_error_response("Unknown integration")
+        if not spec.is_configured:
+            return htmx_error_response(f"{spec.name} is not available on this deployment.")
+
+        client_id = request.POST.get("client_id", "")
+        result = connections.connect_with_client_credentials(
+            team, spec, client_id, request.POST.get("client_secret", ""), cast(User, request.user)
+        )
+        if not result.ok or result.value is None:
+            cards = connections.provider_cards(team)
+            for card in cards:
+                if card["provider"]["key"] == spec.key:
+                    card["credentials_error"] = result.error or f"Could not connect {spec.name}."
+                    card["credentials_client_id"] = client_id.strip()
+            return render(request, "integrations/integrations_panel.html.j2", {"team": team, "cards": cards})
+
+        if spec.syncs:
+            sync_integration.send(result.value.id)
         return htmx_success_response(
-            f"Disconnected {provider.name}. Its frameworks are no longer on your Trust Center.",
+            f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
             triggers={"refreshIntegrations": True},
         )
 
@@ -99,6 +139,8 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
         integration = connections.get_integration(team, provider.key)
         if integration is None:
             return htmx_error_response(f"{provider.name} is not connected")
+        if not provider.syncs:
+            return htmx_error_response(f"{provider.name} has nothing to sync")
         if not provider.is_configured:
             return htmx_error_response(f"{provider.name} is not set up on this deployment")
         # The worker claims none of these, so queueing one would answer
@@ -128,9 +170,34 @@ class IntegrationsView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequiredMi
             triggers={"refreshIntegrations": True},
         )
 
+    def _route(self, request: HttpRequest, team: Workspace) -> HttpResponse:
+        result = notifications.set_route(
+            team,
+            request.POST.get("provider", ""),
+            request.POST.get("event", ""),
+            request.POST.get("channel_id", ""),
+            request.POST.get("min_severity", ""),
+        )
+        if not result.ok:
+            return htmx_error_response(result.error or "Could not save the channel")
+        return htmx_success_response(result.value or "Saved", triggers={"refreshIntegrations": True})
+
+    def _test(self, request: HttpRequest, team: Workspace) -> HttpResponse:
+        # Sent in the request, unlike every other post: the point of a test is
+        # an answer now, and it is one message, not a sync.
+        result = notifications.send_test(team, request.POST.get("provider", ""), request.POST.get("event", ""))
+        if not result.ok:
+            return htmx_error_response(result.error or "Could not send the test message")
+        return htmx_success_response(result.value or "Sent", triggers={"refreshIntegrations": True})
+
 
 class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """Start the OAuth flow for one provider."""
+    """Connect one provider.
+
+    For most providers that means starting the OAuth flow. A provider that
+    asks for the workspace's own client id and secret is connected right here,
+    from the form, with no trip to the provider.
+    """
 
     allowed_roles = list(ADMINISTER)
 
@@ -144,7 +211,35 @@ class IntegrationConnectView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             messages.error(request, f"{spec.name} is not available on this deployment.")
             return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
+        if spec.asks_for_credentials:
+            return self._connect_with_credentials(request, workspace_key, spec)
+
         return HttpResponseRedirect(oauth.start_authorization(request, spec, workspace_key))
+
+    def _connect_with_credentials(self, request: HttpRequest, workspace_key: str, spec: ProviderSpec) -> HttpResponse:
+        team = _team_or_none(workspace_key)
+        if team is None:
+            messages.error(request, "Workspace not found")
+            return redirect("core:dashboard")
+
+        result = connections.connect_with_client_credentials(
+            team,
+            spec,
+            request.POST.get("client_id", ""),
+            request.POST.get("client_secret", ""),
+            cast(User, request.user),
+        )
+        if not result.ok or result.value is None:
+            messages.error(request, result.error or f"Could not connect {spec.name}.")
+            return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
+
+        if spec.syncs:
+            sync_integration.send(result.value.id)
+        messages.success(
+            request,
+            f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
+        )
+        return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
 
 class IntegrationCallbackView(LoginRequiredMixin, View):
@@ -199,10 +294,12 @@ class IntegrationCallbackView(LoginRequiredMixin, View):
             return redirect_to_team_settings(workspace_key, SETTINGS_TAB)
 
         integration = connections.save_connection(team, spec, token_set, user)
-        sync_integration.send(integration.id)
-
-        messages.success(
-            request,
-            f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
-        )
+        if spec.syncs:
+            sync_integration.send(integration.id)
+            messages.success(
+                request,
+                f"Connected {spec.name}. Your frameworks appear here once the first sync finishes.",
+            )
+        else:
+            messages.success(request, f"Connected {spec.name}. Choose a channel for each message below.")
         return redirect_to_team_settings(workspace_key, SETTINGS_TAB)

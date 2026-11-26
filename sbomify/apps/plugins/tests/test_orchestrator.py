@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.plugins.apis import _is_run_failing
 from sbomify.apps.plugins.builtins.checksum import ChecksumPlugin
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.orchestrator import (
@@ -24,6 +25,7 @@ from sbomify.apps.plugins.sdk.results import (
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.sboms.utils import SBOMDataError
 from sbomify.apps.teams.models import Workspace
+from sbomify.apps.vulnerability_scanning.utils import reconstruct_result_summary
 
 
 class MockPlugin(AssessmentPlugin):
@@ -754,6 +756,52 @@ class TestFinalizeRetryExhausted:
         assert after["satisfied"] is False
         assert after["failed_plugins"] == ["sbom-verification"]
         assert after["passing_plugins"] == []
+
+    @pytest.mark.parametrize("finalize", ["finalize_retry_exhausted", "finalize_stranded"])
+    def test_finalised_run_reads_as_failing_without_its_blob(self, test_sbom, db, finalize) -> None:
+        """Readers that skip the blob see the same failure as readers of it.
+
+        The artifact list rebuilds ``result`` from the ``result_summary``
+        column instead of loading the blob. Finalising is a queryset
+        ``update()``, which bypasses the ``save()`` that fills that column,
+        so it stayed NULL: the list showed an attestation check that never
+        finished as "pass" with 0 findings, while the product page, which
+        reads the blob, rightly showed no badge.
+        """
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="sbom-verification",
+            plugin_version="2.0.0",
+            category="attestation",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+
+        getattr(PluginOrchestrator(), finalize)(str(run.id), "GitHub returned 404 for sha256:abc...")
+
+        run.refresh_from_db()
+        assert run.result_summary == run.result["summary"]
+        assert run.result_skipped is None
+        run.result = reconstruct_result_summary(run)
+        assert _is_run_failing(run)
+
+    def test_finalised_security_run_is_left_out_of_the_trend(self, test_sbom, db) -> None:
+        """The trend reads the columns alone. A scan that never finished looked
+        at nothing, so it must not count as a clean scan with no vulnerabilities."""
+        from sbomify.apps.vulnerability_scanning.services.trends import examined_runs
+
+        run = AssessmentRun.objects.create(
+            sbom_id=test_sbom.id,
+            plugin_name="dependency-track",
+            plugin_version="1.0.0",
+            category="security",
+            run_reason="on_upload",
+            status=RunStatus.PENDING.value,
+        )
+
+        PluginOrchestrator().finalize_retry_exhausted(str(run.id), "Dependency-Track did not answer")
+
+        assert not examined_runs(AssessmentRun.objects.filter(pk=run.pk)).exists()
 
     def test_finalize_is_idempotent_on_terminal_state(self, test_sbom, db) -> None:
         """A run that's already COMPLETED/FAILED is left untouched."""

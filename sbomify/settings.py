@@ -289,6 +289,8 @@ INSTALLED_APPS = [
     "sbomify.apps.security_advisories",
     "sbomify.apps.ops",
     "sbomify.apps.integrations",
+    "sbomify.apps.mcp",
+    "sbomify.apps.audit",
 ]
 
 
@@ -346,6 +348,8 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Inside authentication, so the audit context can name who is acting.
+    "sbomify.apps.audit.middleware.AuditMiddleware",
     "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
@@ -1098,9 +1102,11 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
 # Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
-# directly (logout) rather than via OIDC discovery. Only needs setting when the
-# app reaches Keycloak at an address the browser cannot, e.g. an in-cluster
-# Service name. Empty counts as unset so a blank Helm/Compose value falls back.
+# directly (logout) rather than via OIDC discovery, and as the issuer /mcp
+# expects in OAuth tokens, so it must be Keycloak's KC_HOSTNAME_URL. Only needs
+# setting when the app reaches Keycloak at an address the browser cannot, e.g.
+# an in-cluster Service name. Empty counts as unset so a blank Helm/Compose
+# value falls back.
 KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
 # The OIDC client's credentials, for Keycloak or any other provider.
@@ -1168,6 +1174,32 @@ LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
+
+# Extra Host header values accepted by the MCP endpoint (comma-separated), on
+# top of APP_BASE_URL's hostname and loopback. The MCP app bypasses Django's
+# middleware, so DynamicHostValidationMiddleware does not guard /mcp; the MCP
+# SDK's own DNS-rebinding check does, and it needs to know the real hostname.
+# See sbomify/apps/mcp/server.py.
+MCP_ALLOWED_HOSTS = os.environ.get("MCP_ALLOWED_HOSTS", "")
+
+# Resource caps for the MCP endpoint. The caller there is an LLM whose inputs are
+# frequently attacker-influenced, so these bound what a coerced agent can consume.
+# See sbomify/apps/mcp/limits.py.
+MCP_MAX_UPLOAD_BYTES = int(os.environ.get("MCP_MAX_UPLOAD_BYTES", DATA_UPLOAD_MAX_MEMORY_SIZE))
+# Parsing an SBOM takes two to four times its size in memory, so this bounds one
+# call at roughly a hundred megabytes. See enforce_parse_size in mcp/limits.py.
+MCP_MAX_ARTIFACT_PARSE_BYTES = int(os.environ.get("MCP_MAX_ARTIFACT_PARSE_BYTES", 25 * 1024 * 1024))
+MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 1024))
+# Largest request body from a caller whose token cannot upload an artifact. A tool
+# call is a few kilobytes; only an upload carries more. See MCPRouter in asgi.py.
+MCP_MAX_REQUEST_BYTES = int(os.environ.get("MCP_MAX_REQUEST_BYTES", 1024 * 1024))
+# MCP requests in flight per worker process, each holding an executor thread and
+# a database connection. Two workers at the default use 16 connections, well
+# inside PostgreSQL's default of 100. See MCPRouter in sbomify/asgi.py.
+MCP_MAX_CONCURRENT_REQUESTS = int(os.environ.get("MCP_MAX_CONCURRENT_REQUESTS", 8))
+# Of those, how many may carry a body over MCP_MAX_REQUEST_BYTES. The transport buffers up to
+# three times MCP_MAX_UPLOAD_BYTES per request, so this bounds a worker's memory.
+MCP_MAX_CONCURRENT_UPLOADS = int(os.environ.get("MCP_MAX_CONCURRENT_UPLOADS", 2))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:
@@ -1317,9 +1349,6 @@ WORKSPACE_SUPPORTED_ROLES = [
 # admins shouldn't invite guests directly (they self-serve), but the
 # model-level constraint stays permissive.
 WORKSPACE_INVITABLE_ROLES = [(k, v) for k, v in WORKSPACE_SUPPORTED_ROLES if k != "bot"]
-# The team names answer until every open branch has re-run bin/rename_to_workspace.py.
-TEAMS_SUPPORTED_ROLES = WORKSPACE_SUPPORTED_ROLES  # rename-to-workspace: keep
-TEAMS_INVITABLE_ROLES = WORKSPACE_INVITABLE_ROLES  # rename-to-workspace: keep
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
@@ -1537,16 +1566,21 @@ TELEMETRY_ENABLED = telemetry_enabled(os.environ)
 # The redirect URI to register is /integrations/oauth/<provider>/callback on
 # whichever hostname the app is served from.
 
-VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
-VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
-
-# Vanta serves its API from one host for every region, but consent happens on
-# the customer's own regional app host: app.eu.vanta.com for EU accounts,
-# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
-# overrides the authorize URL.
-VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+# Vanta is the exception: its read API only answers an application the
+# customer creates in their own Vanta account, so each workspace pastes that
+# application's client id and secret and the deployment registers nothing.
+# One host serves the US, EU and AU regions.
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Slack is written to, not read from: the workspace installs the sbomify app
+# and picks a channel for each kind of message. Bot tokens do not expire, so
+# there is no refresh and nothing to sync.
+SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
+SLACK_OAUTH_AUTHORIZE_URL = os.environ.get("SLACK_OAUTH_AUTHORIZE_URL", "https://slack.com/oauth/v2/authorize")
+SLACK_OAUTH_TOKEN_URL = os.environ.get("SLACK_OAUTH_TOKEN_URL", "https://slack.com/api/oauth.v2.access")
+SLACK_API_BASE_URL = os.environ.get("SLACK_API_BASE_URL", "https://slack.com/api")
 
 # Token for the GitHub API calls the SBOM Verification plugin makes to fetch
 # attestations. Optional: without it every lookup shares GitHub's unauthenticated

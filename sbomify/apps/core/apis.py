@@ -298,8 +298,11 @@ def _get_user_team_id(request: HttpRequest) -> str | None:
         if default_team_id:
             return str(default_team_id)
 
-        # If no default workspace is set, fall back to first workspace
-        first_membership = Member.objects.filter(user=request.user).select_related("team").first()
+        # If no default workspace is set, fall back to first workspace.
+        # Ordered so the fallback is deterministic: an unordered .first() could
+        # hand two requests from the same user different workspaces (and let
+        # REST and MCP resolve the same legacy token to different workspaces).
+        first_membership = Member.objects.filter(user=request.user).select_related("team").order_by("pk").first()
         if first_membership:
             return str(first_membership.team.id)
 
@@ -2478,7 +2481,7 @@ def patch_component_metadata(request: Any, component_id: str, metadata: Componen
     if _is_guest_member(request):
         return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
 
-    log.debug(f"Incoming metadata payload for component {component_id}: {request.body}")
+    log.debug("Incoming metadata payload for component %s: %s", component_id, request.body)
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -4551,7 +4554,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, sbom.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
+            result = add_artifact_to_release(release, sbom=sbom, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4574,6 +4577,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": None,
                 "document_version": None,
                 "component_slug": get_component_public_slug(artifact.sbom.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_sbom"),
             }
         except Exception:
             log.exception("Error processing SBOM")
@@ -4599,7 +4604,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-            result = add_artifact_to_release(release, document=document, allow_replacement=False)
+            result = add_artifact_to_release(release, document=document, allow_replacement=payload.replace)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
                 if result.get("already_exists"):
@@ -4621,6 +4626,8 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                 "document_type": artifact.document.document_type,
                 "document_version": artifact.document.version or "",
                 "component_slug": get_component_public_slug(artifact.document.component, request),
+                "replaced": result["replaced"],
+                "replaced_artifact_name": (result.get("replaced_info") or {}).get("replaced_document"),
             }
         except Exception:
             log.exception("Error processing document")

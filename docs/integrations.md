@@ -4,9 +4,11 @@ A workspace's compliance programme usually already lives in a dedicated tool.
 Integrations read that programme and republish the part of it the workspace
 chooses, so the trust center can be true without anyone retyping it.
 
-Vanta is the first provider. This page is the operator reference: how to
-register the OAuth client, what the sync writes, and what to check when it
-stops.
+Vanta is the first compliance provider. Slack is the first notification
+provider: it reads nothing, and posts the VEX approval queue and vulnerability
+news to the channels a workspace picks (see [Slack](#slack)). This page is the
+operator reference: how each provider is connected, what each connection
+writes, and what to check when it stops.
 
 ## What a connection does
 
@@ -41,41 +43,70 @@ Four consequences worth knowing:
 - **Product-scope statuses are never touched.** The provider describes the
   organisation, so a status somebody set on one product stays theirs.
 
-## Setting up the Vanta OAuth client
+## Connecting Vanta
 
-Vanta issues one credential per connected customer through the OAuth
-authorization-code flow, so every workspace that connects gets its own token
-against its own Vanta account.
+Vanta needs nothing registered on the deployment. Each workspace connects with
+an application it creates in its own Vanta account, because that is the only
+way Vanta grants read access to frameworks and controls:
 
-1. Register an app in the Vanta developer portal with the scope
-   `vanta-api.all:read`.
-2. Register the redirect URI. It is one fixed URL per provider, with no
-   workspace in it:
+- The read scope, `vanta-api.all:read`, belongs to **Manage Vanta**
+  applications. Those use the `client_credentials` grant, and a token only
+  reaches the tenant that created the application.
+- A partner app on Vanta's consent screen (the **Build Integrations**, public
+  type) only gets connector scopes. Those push an app's own resources into
+  Vanta and cannot read a control, so there is no "Connect with Vanta" button
+  that would work here.
 
-   ```text
-   https://<your-host>/integrations/oauth/vanta/callback
-   ```
+What a workspace admin does. The Integrations tab walks through the same steps,
+with links to the Developer Console for each region:
 
-   The workspace being connected travels in the session, not the path, because
-   providers refuse any redirect URI they were not given.
-3. Set the credentials:
+1. In Vanta, open Settings, then Developer Console. This needs the Vanta Admin
+   role. The console is on the account's regional app host:
+   `app.vanta.com`, `app.eu.vanta.com` or `app.aus.vanta.com`, each at
+   `/settings/developer-console`.
+2. Click **Create** and choose **Manage Vanta** as the application type. Not
+   **Build Integrations**: see below.
+3. Name it something recognisable, such as "sbomify Trust Center".
+4. Click **Generate client secret**. Vanta shows the secret once.
+5. In sbomify, open Settings, then Integrations, and paste the client ID
+   (`vci_...`) and secret (`vcs_...`) into the Vanta section.
 
-   | Variable | Default | What it is |
-   | --- | --- | --- |
-   | `VANTA_CLIENT_ID` | empty | The app's client id (`vci_...`) |
-   | `VANTA_CLIENT_SECRET` | empty | The app's client secret (`vcs_...`) |
-   | `VANTA_OAUTH_AUTHORIZE_URL` | `https://app.vanta.com/oauth/authorize` | Where the customer consents |
-   | `VANTA_OAUTH_TOKEN_URL` | `https://api.vanta.com/oauth/token` | Where codes and refreshes are exchanged |
-   | `VANTA_API_BASE_URL` | `https://api.vanta.com` | Where the read calls go |
+sbomify mints a token straight away, so a mistyped secret or an application of
+the wrong type is turned away on the form instead of failing the first sync.
+The wrong type is the usual mistake: a **Build Integrations** application has a
+client ID and secret of the same shape, and Vanta accepts them, but refuses
+`vanta-api.all:read` with `invalid_scope`. sbomify reports that one separately,
+beside the form, and asks for a Manage Vanta application instead.
+The client ID and secret are stored on the connection, never rendered back,
+and used to mint a new token whenever the last one runs out (Vanta tokens last
+an hour, and there is no refresh token in this grant).
 
-Without both halves of the credential the provider's tile renders disabled
-rather than hidden, so a self-hoster can see the feature exists and what it
-wants.
+### When connecting fails
 
-**Regions.** Vanta serves its API from one host worldwide, but customers
-consent on their own regional app host: `app.eu.vanta.com` for EU accounts and
-`app.aus.vanta.com` for AU. A deployment whose customers are not all in the US
-overrides `VANTA_OAUTH_AUTHORIZE_URL`.
+| What the form says | What happened | Fix |
+| --- | --- | --- |
+| "...the application cannot read controls. It is probably a Build Integrations application." | The application is the wrong type. Vanta accepts its credentials but refuses `vanta-api.all:read` with `invalid_scope`. | Create a new application of type Manage Vanta. The type cannot be changed afterwards. |
+| "Vanta did not accept that client ID and secret." | A typo, a secret that was rotated, or an application that was deleted. | Copy both values again, or generate a new secret. |
+| "Vanta is not answering." | Vanta's token endpoint is down or rate limiting. | Try again in a minute. Nothing was saved. |
+
+A connection that worked and later shows **Needs reconnecting** has had its
+application deleted or its secret rotated in Vanta. Paste new credentials into
+the same form; the synced frameworks are kept.
+
+Vanta keeps **one active token per application**. Minting a new one revokes
+the previous one, so the application should be used for sbomify only: a
+script sharing it would knock sbomify's token out, and the other way round.
+
+The deployment settings, both with defaults that suit every Vanta region
+(the API host serves US, EU and AU accounts):
+
+| Variable | Default | What it is |
+| --- | --- | --- |
+| `VANTA_OAUTH_TOKEN_URL` | `https://api.vanta.com/oauth/token` | Where tokens are minted |
+| `VANTA_API_BASE_URL` | `https://api.vanta.com` | Where the read calls go |
+
+Vanta Gov accounts live on `api.vanta-gov.com`, so a deployment serving them
+overrides both.
 
 ## Syncing
 
@@ -112,9 +143,10 @@ different on purpose:
 
 - **Failed** is a bad day at the provider. The next scheduled run tries again,
   and nothing about the connection has changed.
-- **Needs reconnecting** means the refresh token was rejected. No retry can fix
-  that, so the scheduler skips the connection entirely and someone has to go
-  through the consent screen again.
+- **Needs reconnecting** means the stored credential was rejected: Slack's
+  token, or the client ID and secret of a workspace's Vanta application (it
+  was deleted, or its secret was rotated). No retry can fix that, so the
+  scheduler skips the connection entirely and someone has to connect again.
 
 Which one you get is decided by what the provider actually said, and the line
 matters: a connection wrongly marked as needing a reconnect is skipped by the
@@ -149,14 +181,81 @@ kept, so reconnecting is not a re-import, but nothing stays public: a trust
 center must not go on claiming a control is met from a source nobody is reading
 any more.
 
+## Slack
+
+Slack is the first provider sbomify writes to rather than reads from. A
+workspace installs the sbomify app into its Slack workspace, then picks a
+channel for each kind of message on the Integrations tab. Each message can go
+to a different channel, or be turned off.
+
+| Message | When it is posted |
+| --- | --- |
+| VEX approval queue | Each time a VEX ruling is submitted for approval |
+| Daily vulnerability digest | Every day at 08:00 UTC: open totals by severity, known exploited, past fix-by date, what opened and closed in the last 24 hours, rulings waiting, and the top five priorities |
+| New vulnerabilities | When a scan finds a vulnerability a component did not have before, at or above the severity the route asks for (high and above by default) |
+
+"New" is decided by `plugins.lifecycle.record_run`, the one place that knows a
+vulnerability is new to a component rather than new to a scan: a rescan, a
+second scanner or a fresh SBOM of the same component reports it again and
+opens nothing. A new vulnerability a published VEX already covers is not
+posted.
+
+### Setting up the Slack app
+
+1. Create an app at <https://api.slack.com/apps> and add the bot token scopes
+   `chat:write`, `chat:write.public`, `channels:read` and `groups:read`.
+2. Add the redirect URL:
+
+   ```text
+   https://<your-host>/integrations/oauth/slack/callback
+   ```
+
+3. Turn on public distribution if workspaces other than your own will connect.
+4. Set the credentials:
+
+   | Variable | Default | What it is |
+   | --- | --- | --- |
+   | `SLACK_CLIENT_ID` | empty | The app's client id |
+   | `SLACK_CLIENT_SECRET` | empty | The app's client secret |
+   | `SLACK_OAUTH_AUTHORIZE_URL` | `https://slack.com/oauth/v2/authorize` | Where the customer consents |
+   | `SLACK_OAUTH_TOKEN_URL` | `https://slack.com/api/oauth.v2.access` | Where codes are exchanged |
+   | `SLACK_API_BASE_URL` | `https://slack.com/api` | Where the Web API calls go |
+
+`chat:write.public` lets the bot post to any public channel without being
+invited. A private channel is only listed once the app has been invited to it.
+
+Leave token rotation off in the app's OAuth settings. sbomify keeps the bot
+token Slack issues and never refreshes it, so a rotating token stops working
+after 12 hours and the connection then needs reconnecting.
+
+### How delivery behaves
+
+Messages are posted by dramatiq tasks queued after the change that caused them
+commits, so a Slack outage delays a message and never fails a scan or a
+submission. Slack answers almost every call with a 200 and reports failure in
+the body, so the client sorts errors by what Slack said:
+
+- **A dead token** (`invalid_auth`, `token_revoked`, `account_inactive`,
+  `missing_scope`) marks the connection as needing a reconnect.
+- **A refused channel** (`channel_not_found`, `not_in_channel`, `is_archived`)
+  is recorded on that message's row, and every other message keeps working.
+- **Anything else** (rate limits, 5xx, timeouts) is retried by dramatiq.
+
+Bot tokens do not expire, so a Slack connection has no refresh and nothing to
+sync, and the scheduler never queues one.
+
 ## Adding a provider
 
 1. A `ProviderSpec` in `sbomify/apps/integrations/providers/`, added to
    `PROVIDERS`.
-2. A `sync(integration) -> ServiceResult[dict]` function named by the spec's
-   `sync_path`.
-3. A `ControlCatalog.Source` member whose value is the provider key, so a
-   disconnect can find what it published.
+2. For a compliance provider, a `sync(integration) -> ServiceResult[dict]`
+   function named by the spec's `sync_path`, and a `ControlCatalog.Source`
+   member whose value is the provider key, so a disconnect can find what it
+   published.
+3. For a notification provider, `kind="notifications"` on the spec. The routes,
+   the tasks and the tab are shared, but the client is Slack's today, so a
+   second one needs `services.notifications` to pick a client by provider.
 
-The OAuth module, the views and the templates are provider-agnostic and should
-not need changing.
+The OAuth module, the views and the templates are provider-agnostic. Where a
+provider departs from the OAuth spec (Slack's form-encoded token endpoint,
+comma-separated scopes, tokens that never expire) it says so on its spec.
