@@ -7,9 +7,10 @@ runs every available verification source in one pass:
 1. Re-computes SHA-256 and compares to the stored digest.
 2. Checks whether a sbomify-stored cryptographic signature is attached
    (cosign-bundle via the ``signature_blob_key`` on the SBOM row).
-3. Validates the stored signature: a Sigstore bundle with the ``sigstore``
-   library (``Verifier.production().verify_artifact``), an older cosign
-   bundle with ``cosign verify-blob``. The signer is reported, not judged.
+3. Validates the stored signature with the ``sigstore`` library
+   (``Verifier.production().verify_artifact``). An older cosign bundle is
+   first rewritten in the current format, with its inclusion proof from
+   Rekor. The signer is reported, not judged.
 4. Checks whether a sbomify-stored provenance attestation is attached
    and verifies its subject digest matches the SBOM hash.
 5. If the SBOM declares a GitHub VCS link, fetches the GitHub Sigstore
@@ -104,6 +105,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     _CRYPTO_FINDING_IDS = frozenset({"verification:signature-valid", "verification:provenance-digest"})
 
     DEFAULT_TIMEOUT = 60
+    REKOR_URL = "https://rekor.sigstore.dev"
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
     # cosign v3 strictly validates --type against the predicate type when
     # --new-bundle-format is active (default in v3). actions/attest-build-provenance
@@ -264,7 +266,8 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         library verifies in process. ``cosign`` v2, and v3 with
         ``--new-bundle-format=false``, writes the older cosign bundle
         (``base64Signature``, ``cert``, ``rekorBundle``), which the library
-        cannot load, so that one goes to the ``cosign`` binary.
+        cannot load as is. That one is rewritten in the current format first,
+        with the inclusion proof Rekor publishes for it.
 
         Either way the signature, certificate chain and transparency log entry
         are checked, and the signer is reported. Which signer is acceptable is
@@ -282,7 +285,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         if "mediaType" in document:
             return self._verify_sigstore_bundle(bundle_bytes, sbom_data)
         if "base64Signature" in document:
-            return self._verify_legacy_cosign_bundle(document, bundle_bytes, sbom_data)
+            return self._verify_legacy_cosign_bundle(document, sbom_data)
         return self._signature_finding(
             "fail",
             "Signature Is Not a Sigstore Bundle",
@@ -350,7 +353,9 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             break
         return identity
 
-    def _verify_sigstore_bundle(self, bundle_bytes: bytes, sbom_data: bytes) -> Finding:
+    def _verify_sigstore_bundle(
+        self, bundle_bytes: bytes, sbom_data: bytes, bundle_format: str = "sigstore"
+    ) -> Finding:
         try:
             from sigstore.models import Bundle
             from sigstore.verify import Verifier
@@ -371,11 +376,22 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 "fail",
                 "Cosign Signature Verification Failed",
                 f"Cosign bundle verification failed: {error}",
-                {"bundle_format": "sigstore", "error": error},
+                {"bundle_format": bundle_format, "error": error},
             )
-        return self._signature_verified(self._signer_identity(bundle.signing_certificate), "sigstore")
+        return self._signature_verified(self._signer_identity(bundle.signing_certificate), bundle_format)
 
-    def _verify_legacy_cosign_bundle(self, document: dict[str, Any], bundle_bytes: bytes, sbom_data: bytes) -> Finding:
+    def _verify_legacy_cosign_bundle(self, document: dict[str, Any], sbom_data: bytes) -> Finding:
+        """Verify a cosign v2 bundle with the same in-process verifier.
+
+        The older format carries the certificate, the signature and Rekor's
+        signed entry timestamp, but not the inclusion proof the Sigstore
+        bundle format requires. The proof is public: Rekor serves it for the
+        entry's log index. It is fetched, the bundle is rewritten in the
+        current format, and ``_verify_sigstore_bundle`` checks it exactly as
+        it checks a bundle cosign v3 wrote. Nothing fetched is trusted on its
+        own: the verifier checks the proof against Rekor's signed checkpoint
+        from the Sigstore trust root.
+        """
         if not document.get("cert"):
             return self._signature_finding(
                 "warning",
@@ -387,65 +403,91 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 {"bundle_format": "cosign-legacy"},
             )
 
-        cosign_path = shutil.which("cosign")
-        if not cosign_path:
-            return self._signature_finding(
-                "warning",
-                "Cosign Not Available",
-                "This bundle uses the older cosign format, which needs the cosign binary, and it is not installed.",
-                {"bundle_format": "cosign-legacy"},
-            )
-
-        with tempfile.TemporaryDirectory() as workdir:
-            sbom_path = Path(workdir) / "sbom"
-            bundle_path = Path(workdir) / "bundle.json"
-            sbom_path.write_bytes(sbom_data)
-            bundle_path.write_bytes(bundle_bytes)
-            cmd = [
-                "verify-blob",
-                "--bundle",
-                str(bundle_path),
-                "--certificate-identity-regexp",
-                ".*",
-                "--certificate-oidc-issuer-regexp",
-                ".*",
-                str(sbom_path),
-            ]
-            try:
-                result = self._run_cosign(cosign_path, cmd)
-            except subprocess.TimeoutExpired:
-                return self._signature_finding(
-                    "warning",
-                    "Cosign Signature Check Timed Out",
-                    "cosign verify-blob did not finish in time. Run the assessment again.",
-                    {"bundle_format": "cosign-legacy"},
-                )
-            except OSError as exc:
-                return self._signature_finding(
-                    "warning",
-                    "Cosign Not Available",
-                    f"Failed to launch cosign: {exc}",
-                    {"bundle_format": "cosign-legacy"},
-                )
-
-        if result.returncode != 0:
-            output = (result.stderr or result.stdout or "").strip().splitlines()
-            error = (output[0] if output else f"cosign returned {result.returncode}")[:300]
+        try:
+            payload = document["rekorBundle"]["Payload"]
+            log_index = int(payload["logIndex"])
+            body = payload["body"]
+            entry_timestamp = document["rekorBundle"]["SignedEntryTimestamp"]
+            certificate = self._pem_to_der(base64.b64decode(document["cert"]))
+            kind = json.loads(base64.b64decode(body))
+        except (KeyError, TypeError, ValueError) as exc:
             return self._signature_finding(
                 "fail",
                 "Cosign Signature Verification Failed",
-                f"Cosign bundle verification failed: {error}",
-                {"bundle_format": "cosign-legacy", "error": error},
+                f"The cosign bundle is incomplete: {self._short_error(exc)}",
+                {"bundle_format": "cosign-legacy"},
             )
 
-        identity: dict[str, str] = {}
-        try:
-            from cryptography import x509
+        proof = self._fetch_rekor_inclusion_proof(log_index, body)
+        if isinstance(proof, str):
+            return self._signature_finding(
+                "warning",
+                "Transparency Log Unavailable",
+                f"The signature could not be checked against the Rekor transparency log: {proof}",
+                {"bundle_format": "cosign-legacy"},
+            )
 
-            identity = self._signer_identity(x509.load_pem_x509_certificate(base64.b64decode(document["cert"])))
-        except (ValueError, TypeError):
-            logger.debug("Could not read the signer from a verified cosign bundle", exc_info=True)
-        return self._signature_verified(identity, "cosign-legacy")
+        converted = {
+            "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "verificationMaterial": {
+                "certificate": {"rawBytes": base64.b64encode(certificate).decode()},
+                "tlogEntries": [
+                    {
+                        "logIndex": str(log_index),
+                        "logId": {"keyId": base64.b64encode(bytes.fromhex(payload["logID"])).decode()},
+                        "kindVersion": {"kind": kind.get("kind", ""), "version": kind.get("apiVersion", "")},
+                        "integratedTime": str(payload["integratedTime"]),
+                        "inclusionPromise": {"signedEntryTimestamp": entry_timestamp},
+                        "inclusionProof": proof,
+                        "canonicalizedBody": body,
+                    }
+                ],
+            },
+            "messageSignature": {
+                "messageDigest": {
+                    "algorithm": "SHA2_256",
+                    "digest": base64.b64encode(hashlib.sha256(sbom_data).digest()).decode(),
+                },
+                "signature": document["base64Signature"],
+            },
+        }
+        return self._verify_sigstore_bundle(json.dumps(converted).encode(), sbom_data, "cosign-legacy")
+
+    @staticmethod
+    def _pem_to_der(pem: bytes) -> bytes:
+        from cryptography import x509
+        from cryptography.hazmat.primitives.serialization import Encoding
+
+        return x509.load_pem_x509_certificate(pem).public_bytes(Encoding.DER)
+
+    def _fetch_rekor_inclusion_proof(self, log_index: int, body: str) -> dict[str, Any] | str:
+        """Rekor's inclusion proof for ``log_index``, or why it could not be had."""
+        try:
+            response = get_http_session().get(
+                f"{self.REKOR_URL}/api/v1/log/entries",
+                params={"logIndex": log_index},
+                headers={"Accept": "application/json"},
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            return f"request failed ({type(exc).__name__})"
+        if response.status_code != 200:
+            return f"Rekor returned HTTP {response.status_code} for log index {log_index}"
+        try:
+            entries = response.json()
+            entry = next(iter(entries.values()))
+            proof = entry["verification"]["inclusionProof"]
+            if entry["body"] != body:
+                return f"the Rekor entry at log index {log_index} is not the one this bundle names"
+            return {
+                "logIndex": str(proof["logIndex"]),
+                "rootHash": base64.b64encode(bytes.fromhex(proof["rootHash"])).decode(),
+                "treeSize": str(proof["treeSize"]),
+                "hashes": [base64.b64encode(bytes.fromhex(h)).decode() for h in proof["hashes"]],
+                "checkpoint": {"envelope": proof["checkpoint"]},
+            }
+        except (ValueError, KeyError, TypeError, AttributeError, StopIteration):
+            return f"Rekor returned an unexpected response for log index {log_index}"
 
     # ------------------------------------------------------------------
     # 3. Stored-provenance presence + subject-digest match
@@ -854,21 +896,6 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         except OSError as exc:
             return {"success": False, "error": f"Failed to write bundle file: {exc}"}
 
-    def _run_cosign(self, cosign_path: str, args: list[str]) -> subprocess.CompletedProcess[str]:
-        """Run one ``cosign`` verification, the only subprocess this plugin starts.
-
-        The program is always the path ``shutil.which`` resolved for
-        ``cosign`` (passed as ``executable``, with ``cosign`` as argv[0]), and
-        ``args`` are fixed flags plus temp files sbomify wrote
-        itself. The certificate identity regexp for GitHub attestations is
-        ``re.escape``d from the SBOM, or set by an operator in plugin config.
-        The list goes to ``cosign`` directly, never through a shell, so none of
-        it is interpreted.
-        """
-        return subprocess.run(  # nosec B607 - executable is the absolute path shutil.which resolved
-            ["cosign", *args], executable=cosign_path, capture_output=True, text=True, timeout=self.timeout
-        )
-
     def _verify_with_cosign(
         self,
         sbom_path: Path,
@@ -883,6 +910,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             }
 
         cmd = [
+            cosign_path,
             "verify-blob-attestation",
             "--bundle",
             str(bundle_path),
@@ -898,7 +926,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         logger.debug("Running cosign: %s", " ".join(cmd))
 
         try:
-            result = self._run_cosign(cosign_path, cmd)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout)
         except subprocess.TimeoutExpired:
             return {"verified": False, "message": "cosign verify-blob-attestation timed out"}
         except OSError as exc:

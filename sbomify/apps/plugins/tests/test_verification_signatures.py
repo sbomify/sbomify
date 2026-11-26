@@ -57,16 +57,44 @@ def _fulcio_like_certificate() -> x509.Certificate:
     )
 
 
+REKOR_BODY = base64.b64encode(json.dumps({"kind": "hashedrekord", "apiVersion": "0.0.1"}).encode()).decode()
+LOG_ID = "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d"
+
+
 def _legacy_bundle(with_cert: bool = True) -> bytes:
     """The shape ``cosign sign-blob --bundle`` writes in v2."""
     bundle: dict[str, Any] = {
         "base64Signature": base64.b64encode(b"signature").decode(),
-        "rekorBundle": {"SignedEntryTimestamp": "", "Payload": {}},
+        "rekorBundle": {
+            "SignedEntryTimestamp": "c2V0",
+            "Payload": {"body": REKOR_BODY, "integratedTime": 1700000000, "logIndex": 42, "logID": LOG_ID},
+        },
     }
     if with_cert:
         pem = _fulcio_like_certificate().public_bytes(serialization.Encoding.PEM)
         bundle["cert"] = base64.b64encode(pem).decode()
     return json.dumps(bundle).encode()
+
+
+def _rekor_response(body: str = REKOR_BODY, status: int = 200) -> MagicMock:
+    response = MagicMock(status_code=status)
+    response.json.return_value = {
+        "entry-uuid": {
+            "body": body,
+            "verification": {
+                "inclusionProof": {
+                    "logIndex": 7,
+                    "rootHash": "ab" * 32,
+                    "treeSize": 100,
+                    "hashes": ["cd" * 32],
+                    "checkpoint": "rekor.sigstore.dev - 1\n100\nq6s=\n",
+                }
+            },
+        }
+    }
+    session = MagicMock()
+    session.get.return_value = response
+    return session
 
 
 def _cyclonedx_with_vcs(tmp_path: Path) -> tuple[Path, str]:
@@ -138,48 +166,83 @@ class TestBundleFormats:
         assert finding.status == "fail"
         assert "\n" not in finding.description
 
-    @patch(f"{MODULE}.shutil.which", return_value="/usr/bin/cosign")
-    @patch(f"{MODULE}.subprocess.run")
-    def test_legacy_bundle_is_verified_by_cosign(self, mock_run: MagicMock, _which: MagicMock) -> None:
-        mock_run.return_value = MagicMock(returncode=0, stdout="Verified OK", stderr="")
+    @patch(f"{MODULE}.get_http_session")
+    def test_legacy_bundle_is_rewritten_and_verified_in_process(self, mock_session: MagicMock) -> None:
+        mock_session.return_value = _rekor_response()
+        plugin = SBOMVerificationPlugin()
 
-        finding = SBOMVerificationPlugin()._verify_cosign_bundle(_legacy_bundle(), b"sbom bytes")
+        with patch.object(plugin, "_verify_sigstore_bundle", return_value=_signature_pass()) as verify:
+            finding = plugin._verify_cosign_bundle(_legacy_bundle(), b"sbom bytes")
 
         assert finding.status == "pass"
-        assert finding.metadata is not None
-        assert finding.metadata["bundle_format"] == "cosign-legacy"
-        assert finding.metadata["identity"] == SIGNER
-        cmd = mock_run.call_args.args[0]
-        assert cmd[:2] == ["cosign", "verify-blob"]
-        assert mock_run.call_args.kwargs["executable"] == "/usr/bin/cosign"
-        assert "--bundle" in cmd
+        converted_bytes, sbom, bundle_format = verify.call_args.args
+        assert sbom == b"sbom bytes"
+        assert bundle_format == "cosign-legacy"
+        converted = json.loads(converted_bytes)
+        assert converted["mediaType"] == "application/vnd.dev.sigstore.bundle.v0.3+json"
+        assert converted["messageSignature"] == {
+            "messageDigest": {
+                "algorithm": "SHA2_256",
+                "digest": base64.b64encode(hashlib.sha256(b"sbom bytes").digest()).decode(),
+            },
+            "signature": base64.b64encode(b"signature").decode(),
+        }
+        entry = converted["verificationMaterial"]["tlogEntries"][0]
+        assert entry["logIndex"] == "42"
+        assert entry["logId"]["keyId"] == base64.b64encode(bytes.fromhex(LOG_ID)).decode()
+        assert entry["kindVersion"] == {"kind": "hashedrekord", "version": "0.0.1"}
+        assert entry["canonicalizedBody"] == REKOR_BODY
+        assert entry["inclusionPromise"] == {"signedEntryTimestamp": "c2V0"}
+        assert entry["inclusionProof"]["logIndex"] == "7"
+        assert entry["inclusionProof"]["hashes"] == [base64.b64encode(bytes.fromhex("cd" * 32)).decode()]
+        assert mock_session.return_value.get.call_args.kwargs["params"] == {"logIndex": 42}
 
-    @patch(f"{MODULE}.shutil.which", return_value="/usr/bin/cosign")
-    @patch(f"{MODULE}.subprocess.run")
-    def test_legacy_bundle_cosign_rejects(self, mock_run: MagicMock, _which: MagicMock) -> None:
-        mock_run.return_value = MagicMock(
-            returncode=1, stdout="", stderr="Error: error verifying bundle: matching bundle to payload\nmore"
-        )
+    def test_legacy_bundle_signer_comes_from_its_certificate(self) -> None:
+        """The certificate survives the rewrite, so a pass names the real signer."""
+        plugin = SBOMVerificationPlugin()
+        document = json.loads(_legacy_bundle())
 
-        finding = SBOMVerificationPlugin()._verify_cosign_bundle(_legacy_bundle(), b"sbom bytes")
+        der = plugin._pem_to_der(base64.b64decode(document["cert"]))
 
-        assert finding.status == "fail"
-        assert "matching bundle to payload" in finding.description
-        assert "more" not in finding.description
+        assert plugin._signer_identity(x509.load_der_x509_certificate(der)) == {"identity": SIGNER, "issuer": ISSUER}
 
-    @patch(f"{MODULE}.shutil.which", return_value=None)
-    def test_legacy_bundle_without_cosign_is_a_warning(self, _which: MagicMock) -> None:
+    @patch(f"{MODULE}.get_http_session")
+    def test_rekor_entry_for_another_body_is_refused(self, mock_session: MagicMock) -> None:
+        mock_session.return_value = _rekor_response(body="b3RoZXI=")
+        plugin = SBOMVerificationPlugin()
+
+        with patch.object(plugin, "_verify_sigstore_bundle") as verify:
+            finding = plugin._verify_cosign_bundle(_legacy_bundle(), b"sbom bytes")
+
+        verify.assert_not_called()
+        assert finding.status == "warning"
+        assert "not the one this bundle names" in finding.description
+
+    @pytest.mark.parametrize("status", [404, 503])
+    @patch(f"{MODULE}.get_http_session")
+    def test_rekor_unreachable_is_a_warning(self, mock_session: MagicMock, status: int) -> None:
+        mock_session.return_value = _rekor_response(status=status)
+
         finding = SBOMVerificationPlugin()._verify_cosign_bundle(_legacy_bundle(), b"sbom bytes")
 
         assert finding.status == "warning"
+        assert finding.title == "Transparency Log Unavailable"
 
-    @patch(f"{MODULE}.subprocess.run")
-    def test_key_signed_legacy_bundle_is_not_verifiable(self, mock_run: MagicMock) -> None:
+    @patch(f"{MODULE}.get_http_session")
+    def test_key_signed_legacy_bundle_is_not_verifiable(self, mock_session: MagicMock) -> None:
         finding = SBOMVerificationPlugin()._verify_cosign_bundle(_legacy_bundle(with_cert=False), b"sbom")
 
         assert finding.status == "warning"
         assert "key" in finding.title.lower()
-        mock_run.assert_not_called()
+        mock_session.assert_not_called()
+
+    def test_incomplete_legacy_bundle_fails(self) -> None:
+        document = json.loads(_legacy_bundle())
+        del document["rekorBundle"]
+
+        finding = SBOMVerificationPlugin()._verify_cosign_bundle(json.dumps(document).encode(), b"sbom")
+
+        assert finding.status == "fail"
 
     @pytest.mark.parametrize("blob", [b"not json", b"[]", b'{"some": "json"}'])
     def test_anything_else_fails(self, blob: bytes) -> None:
