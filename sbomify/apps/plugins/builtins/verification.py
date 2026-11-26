@@ -402,7 +402,6 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             sbom_path.write_bytes(sbom_data)
             bundle_path.write_bytes(bundle_bytes)
             cmd = [
-                cosign_path,
                 "verify-blob",
                 "--bundle",
                 str(bundle_path),
@@ -413,7 +412,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 str(sbom_path),
             ]
             try:
-                result = self._run_cosign(cmd)
+                result = self._run_cosign(cosign_path, cmd)
             except subprocess.TimeoutExpired:
                 return self._signature_finding(
                     "warning",
@@ -855,17 +854,19 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         except OSError as exc:
             return {"success": False, "error": f"Failed to write bundle file: {exc}"}
 
-    def _run_cosign(self, cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    def _run_cosign(self, cosign_path: str, args: list[str]) -> subprocess.CompletedProcess[str]:
         """Run one ``cosign`` verification, the only subprocess this plugin starts.
 
-        ``cmd`` is always built by this class: the path ``shutil.which``
-        resolved for ``cosign``, fixed flags, and temp files sbomify wrote
+        The program is always the path ``shutil.which`` resolved for
+        ``cosign`` (passed as ``executable``, with ``cosign`` as argv[0]), and
+        ``args`` are fixed flags plus temp files sbomify wrote
         itself. The certificate identity regexp for GitHub attestations is
         ``re.escape``d from the SBOM, or set by an operator in plugin config.
-        No shell is involved, so none of it is interpreted.
+        The list goes to ``cosign`` directly, never through a shell, so none of
+        it is interpreted.
         """
-        return subprocess.run(  # nosemgrep: opengrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit
-            cmd, capture_output=True, text=True, timeout=self.timeout
+        return subprocess.run(  # nosec B607 - executable is the absolute path shutil.which resolved
+            ["cosign", *args], executable=cosign_path, capture_output=True, text=True, timeout=self.timeout
         )
 
     def _verify_with_cosign(
@@ -882,7 +883,6 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             }
 
         cmd = [
-            cosign_path,
             "verify-blob-attestation",
             "--bundle",
             str(bundle_path),
@@ -898,7 +898,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         logger.debug("Running cosign: %s", " ".join(cmd))
 
         try:
-            result = self._run_cosign(cmd)
+            result = self._run_cosign(cosign_path, cmd)
         except subprocess.TimeoutExpired:
             return {"verified": False, "message": "cosign verify-blob-attestation timed out"}
         except OSError as exc:
