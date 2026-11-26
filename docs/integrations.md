@@ -146,7 +146,9 @@ Vanta maps its controls onto a framework's requirements, and
 `GET /v1/frameworks/{id}?includeRequirements=true&requirementsScope=MY_PROGRAM`
 returns that mapping: each requirement's code (`CC6.1`, `A.5.15`, `AC-2`) with
 the ids of the Vanta controls that cover it. Those codes are the `control_id`
-of the built-in catalogues. Each run, for each synced framework:
+of the built-in catalogues. If `shorthand` is empty, the requirement `id` is
+used instead. Whitespace in codes is ignored, so `CC 1.1` matches `CC1.1`.
+Each run, for each synced framework:
 
 1. **Find the target.** The target is the workspace catalogue, built-in or
    imported, whose control codes match the most requirement codes. It needs

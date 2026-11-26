@@ -106,6 +106,8 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
     not a result the caller should record as a failed sync and retry; the
     generic runner turns it into a reconnect prompt.
     """
+    from sbomify.apps.integrations.models import Integration as IntegrationModel
+
     token = access_token(integration, VANTA)
     client = VantaClient(token, settings.VANTA_API_BASE_URL)
 
@@ -143,7 +145,15 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
 
         if _superseded(integration, generation):
             return _superseded_result(integration)
-        summary.controls_linked += link_framework(catalog, client.framework_requirements(framework_id))
+        requirements = client.framework_requirements(framework_id)
+        # Fetch outside the lock, then validate the connection and hold it
+        # through the mapping writes so a reconnect cannot slip between them.
+        with transaction.atomic():
+            if not (
+                IntegrationModel.objects.select_for_update().filter(pk=integration.pk, connected_at=generation).exists()
+            ):
+                return _superseded_result(integration)
+            summary.controls_linked += link_framework(catalog, requirements)
 
     if _superseded(integration, generation):
         return _superseded_result(integration)
@@ -172,7 +182,7 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
 
 
 def _normalise_code(code: str) -> str:
-    return " ".join(code.split()).upper().rstrip(".")
+    return "".join(code.split()).upper().rstrip(".")
 
 
 def _code_variants(code: str) -> set[str]:
@@ -203,25 +213,27 @@ def link_framework(catalog: ControlCatalog, requirements: list[dict[str, Any]] |
     the codes are what the two actually share.
     """
     covered_by: dict[str, set[str]] = {}
+    has_shorthand = False
     for item in requirements or []:
-        code = _text(item.get("shorthand"))
+        shorthand = _text(item.get("shorthand"))
+        code = shorthand or _text(item.get("id"))
         control_ids = item.get("controlIds")
         if not code or not isinstance(control_ids, list):
             continue
+        has_shorthand = has_shorthand or bool(shorthand)
         covered_by.setdefault(_normalise_code(code), set()).update(_text(c) for c in control_ids if _text(c))
 
     # A framework whose requirements carry no codes at all is far more likely
     # a response shape the parser missed than a framework without any, so it
     # is treated like an unreadable answer and the last good links stay.
     if requirements is None or not covered_by:
-        return (
-            ControlMapping.objects.filter(source_control__catalog=catalog, notes=LINK_NOTE)
-            .values("target_control_id")
-            .distinct()
-            .count()
-        )
+        return _existing_link_count(catalog)
 
     target, matches = _best_target(catalog, covered_by)
+    # An id may be an opaque identifier rather than a control code. Without
+    # shorthand or a matching target, it cannot establish that links changed.
+    if target is None and not has_shorthand:
+        return _existing_link_count(catalog)
 
     desired: set[tuple[str, str]] = set()
     if target is not None:
@@ -253,6 +265,15 @@ def link_framework(catalog: ControlCatalog, requirements: list[dict[str, Any]] |
         )
 
     return len({target_id for _source_id, target_id in desired})
+
+
+def _existing_link_count(catalog: ControlCatalog) -> int:
+    return (
+        ControlMapping.objects.filter(source_control__catalog=catalog, notes=LINK_NOTE)
+        .values("target_control_id")
+        .distinct()
+        .count()
+    )
 
 
 def _best_target(
