@@ -204,12 +204,17 @@ variants naming that id, so they keep working across a swap and need no script.
             widening the column. Ranges stack one per line and a long list folds
             behind a count, so only a single very long range can make the
             viewport scroll sideways.
+
+            The product name wraps at its spaces. Held to one line, a
+            realistic name such as "Pied Piper Compression Engine" alone was
+            enough to push the Updated column past the panel edge at desktop
+            widths, behind a sideways scrollbar.
             {% endcomment %}
             <c-tables.table stack="false" variant_class="min-w-[52rem] [&_td]:align-top [&_tbody:last-child_tr:last-child_td]:border-b-0 [&_tbody:last-child_td[rowspan]]:border-b-0 [&_tbody:hover_td]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)]" aria-label="Security advisories">
             <c-tables.head>
             <c-tables.header-cell compact scope="col" class="w-[6%]">CVSS</c-tables.header-cell>
             <c-tables.header-cell compact scope="col" class="w-[26%] min-w-[18rem]">Summary</c-tables.header-cell>
-            <c-tables.header-cell compact scope="col">Versions</c-tables.header-cell>
+            <c-tables.header-cell compact scope="col">Product</c-tables.header-cell>
             <c-tables.header-cell compact scope="col">Affected</c-tables.header-cell>
             <c-tables.header-cell compact scope="col">Unaffected</c-tables.header-cell>
             <c-tables.header-cell compact date scope="col">Published</c-tables.header-cell>
@@ -228,7 +233,7 @@ variants naming that id, so they keep working across a swap and need no script.
                                 {% include "core/components/trust_center/advisory_summary_cell.html.j2" %}
                                 </c-tables.cell>
                             {% endif %}
-                            <c-tables.cell compact class="whitespace-nowrap">{{ row.product }}</c-tables.cell>
+                            <c-tables.cell compact>{{ row.product }}</c-tables.cell>
                             <c-tables.cell compact muted>
                             <c-tables.value-list mono :values="row.affected_versions" />
                             </c-tables.cell>
