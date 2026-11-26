@@ -378,15 +378,16 @@ def _build_item_base(
     }
 
 
-def _visible_custom_metadata(request: HttpRequest, item: Any) -> dict[str, str]:
-    """Custom metadata is for signed-in readers only.
+def _visible_custom_metadata(request: HttpRequest, item: Any, read_action: str) -> dict[str, str]:
+    """Custom metadata is internal to the workspace that owns the item.
 
     The endpoints serving a public product or component answer anonymous
-    callers too; those get an empty object. Any authenticated caller who can
-    read the item, by session or by a valid access token, gets the pairs.
+    callers, guests and members of other workspaces too; those get an empty
+    object. Only a caller holding ``read_action`` on the item, by session or by
+    a valid access token, gets the pairs.
     """
     user = getattr(request, "user", None)
-    if user is None or not user.is_authenticated:
+    if user is None or not user.is_authenticated or not can(request, read_action, item).allowed:
         return {}
     # jsonb hands keys back in its own storage order; sort for a stable response.
     return dict(sorted((item.custom_metadata or {}).items()))
@@ -463,7 +464,7 @@ def _build_product_response(
     response["release_date"] = product.release_date.isoformat() if product.release_date else None
     response["end_of_support"] = product.end_of_support.isoformat() if product.end_of_support else None
     response["end_of_life"] = product.end_of_life.isoformat() if product.end_of_life else None
-    response["custom_metadata"] = _visible_custom_metadata(request, product)
+    response["custom_metadata"] = _visible_custom_metadata(request, product, "product:read")
     return response
 
 
@@ -488,7 +489,7 @@ def _build_component_response(
         component.document_count if hasattr(component, "document_count") else component.document_set.count()
     )
     response["metadata"] = component.metadata
-    response["custom_metadata"] = _visible_custom_metadata(request, component)
+    response["custom_metadata"] = _visible_custom_metadata(request, component, "component:read_internal")
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
@@ -2438,7 +2439,7 @@ def get_component_metadata(request: Any, component_id: str) -> Any:
         "end_of_support": component.end_of_support,
         "end_of_life": component.end_of_life,
         "vcs_url": component.vcs_url or None,
-        "custom_metadata": _visible_custom_metadata(request, component),
+        "custom_metadata": _visible_custom_metadata(request, component, "component:read_internal"),
     }
 
     comp_meta = ComponentMetaData.model_validate(response_data)

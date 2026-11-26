@@ -28,6 +28,7 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
 )
 from sbomify.apps.sboms.tests.test_views import setup_test_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
+from sbomify.apps.teams.models import Member
 
 # =============================================================================
 # Validation rules
@@ -299,7 +300,7 @@ def test_api_returns_keys_sorted_whatever_jsonb_stores(
 
 
 # =============================================================================
-# Visibility: authenticated callers only
+# Visibility: members of the owning workspace only
 # =============================================================================
 
 
@@ -334,10 +335,69 @@ def test_v2_hides_custom_metadata_from_anonymous(sample_product: Product) -> Non
 
 
 @pytest.mark.django_db
-def test_any_signed_in_user_sees_custom_metadata_on_a_public_product(
+def test_signed_in_outsider_does_not_see_custom_metadata_on_a_public_product(
     sample_product: Product,  # noqa: F811
     guest_user: Any,  # noqa: F811
 ) -> None:
+    sample_product.is_public = True
+    sample_product.custom_metadata = {"cost-centre": "CC-1042"}
+    sample_product.save()
+    client = Client()
+    client.force_login(guest_user)
+
+    v1 = client.get(reverse("api-1:get_product", kwargs={"product_id": sample_product.id}))
+    v2 = client.get(f"/api/v2/products/{sample_product.id}")
+
+    assert v1.status_code == 200, v1.content
+    assert v1.json()["custom_metadata"] == {}
+    assert v2.status_code == 200, v2.content
+    assert v2.json()["custom_metadata"] == {}
+
+
+@pytest.mark.django_db
+def test_signed_in_outsider_does_not_see_custom_metadata_on_a_public_component(
+    sample_component: Component,  # noqa: F811
+    guest_user: Any,  # noqa: F811
+) -> None:
+    sample_component.visibility = Component.Visibility.PUBLIC
+    sample_component.custom_metadata = {"owner": "payments"}
+    sample_component.save()
+    client = Client()
+    client.force_login(guest_user)
+
+    item = client.get(reverse("api-1:get_component", kwargs={"component_id": sample_component.id}))
+    meta = client.get(reverse("api-1:get_component_metadata", kwargs={"component_id": sample_component.id}))
+
+    assert item.status_code == 200, item.content
+    assert item.json()["custom_metadata"] == {}
+    assert meta.status_code == 200, meta.content
+    assert meta.json()["custom_metadata"] == {}
+
+
+@pytest.mark.django_db
+def test_guest_member_does_not_see_custom_metadata(
+    sample_product: Product,  # noqa: F811
+    guest_user: Any,  # noqa: F811
+) -> None:
+    Member.objects.create(team=sample_product.team, user=guest_user, role="guest")
+    sample_product.is_public = True
+    sample_product.custom_metadata = {"cost-centre": "CC-1042"}
+    sample_product.save()
+    client = Client()
+    client.force_login(guest_user)
+
+    response = client.get(reverse("api-1:get_product", kwargs={"product_id": sample_product.id}))
+
+    assert response.status_code == 200, response.content
+    assert response.json()["custom_metadata"] == {}
+
+
+@pytest.mark.django_db
+def test_workspace_member_sees_custom_metadata_on_a_public_product(
+    sample_product: Product,  # noqa: F811
+    guest_user: Any,  # noqa: F811
+) -> None:
+    Member.objects.create(team=sample_product.team, user=guest_user, role="member")
     sample_product.is_public = True
     sample_product.custom_metadata = {"cost-centre": "CC-1042"}
     sample_product.save()
