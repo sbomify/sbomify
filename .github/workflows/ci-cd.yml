@@ -432,6 +432,9 @@ jobs:
           grep -qx sbomify context.txt || { echo "::error::probe is broken, the app is missing"; exit 1; }
           ! grep -qxE 'charts|deploy|\.github|docs' context.txt ||
             { echo "::error::deployment files are in the build context, add them to .dockerignore"; exit 1; }
+          # Screencast recording is developer tooling and never ships in the image.
+          ! docker run --rm probe:ci find /code -iname '*screencast*' | grep -q . ||
+            { echo "::error::screencast tooling is in the build context, add it to .dockerignore"; exit 1; }
 
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
