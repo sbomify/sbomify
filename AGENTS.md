@@ -554,6 +554,7 @@ Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a to
 - **`audit_events` is append-only at the database.** Triggers in `audit/db.py` refuse `UPDATE` and `TRUNCATE`, and `DELETE` inside the workspace's retention window. Never add code or a migration that updates or deletes its rows.
 - **A new model people change in a workspace gets a `Tracked` entry** in `audit/signals.py`. Values safe to show go in `fields`; secrets and long free text in `redacted`, which records the name only.
 - **Anything else notable goes through `audit.recorder.record()`**, never a direct insert.
+- **Model signal receivers are bound per sender, never without one.** A sender-less `pre_delete`/`post_delete` receiver turns off Django's bulk delete for every model in the app. `signals.connect()` binds each tracked model and its proxies; `test_signal_scope.py` holds that line.
 
 ### WebSockets
 
