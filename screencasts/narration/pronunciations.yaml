@@ -49,3 +49,17 @@ replace:
   # every clip in every screencast. Uncomment the moment some copy needs it.
   #
   #   CISA: "/ˈsɪsə/"    # "SISA"; round-trips as "sisa". Bare it is ambiguous.
+
+  # Said "sock two", never spelled out. Bare, it measured longer (S O C two);
+  # "sock 2" keeps the possessive in "Pied Piper's SOC 2 report" intact.
+  SOC 2: "sock 2"
+
+  # One word, rhyming with "pearl". Bare it was heard as "POL"; the plain
+  # spelling "purl" was still read as letters next to CPE. IPA holds.
+  PURL: "/pɝl/"
+
+  # Roman numerals in a legal reference are numbers. Bare, "Annex I" came out
+  # as "Annex Ein". Add any other Annex, Part or Article numeral here the same
+  # way when copy starts to use it.
+  Annex I: "Annex one"
+  Part II: "Part two"

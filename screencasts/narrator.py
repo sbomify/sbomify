@@ -465,7 +465,7 @@ def _probe(term: str, replace: dict[str, str] | None, voice: str) -> tuple[str, 
     separator makes the clip measurably longer.
     """
     carrier = _PROBE_CARRIER.format(term=term)
-    wav, duration = synthesize(carrier, voice=voice, replace=replace)
+    wav, duration, _char_times = synthesize(carrier, voice=voice, replace=replace)
     heard = transcribe(wav)
     # Return just the substituted span, not the carrier around it.
     before, _, rest = heard.partition("mentions")
@@ -690,7 +690,7 @@ def audition(text: str, voices: list[str] | None = None) -> None:
 
     for voice in voices or AUDITION_VOICES:
         try:
-            wav, duration = synthesize(text, voice=voice, replace=replace)
+            wav, duration, _char_times = synthesize(text, voice=voice, replace=replace)
         except NarrationError as exc:
             _log(f"{voice}: unavailable ({exc})")
             continue
