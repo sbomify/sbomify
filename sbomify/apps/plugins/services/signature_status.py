@@ -57,7 +57,8 @@ def get_signature_status(sbom_id: str) -> ServiceResult[SignatureStatus]:
     if finding is None:
         return ServiceResult.success(SignatureStatus("unverified"))
     metadata = finding.get("metadata") or {}
-    state = {"pass": "verified", "fail": "failed"}.get(finding.get("status", ""), "unverified")
+    outcome = finding.get("status")
+    state = "verified" if outcome == "pass" else "failed" if outcome == "fail" else "unverified"
     return ServiceResult.success(
         SignatureStatus(state, signer=metadata.get("identity", ""), issuer=metadata.get("issuer", ""))
     )
