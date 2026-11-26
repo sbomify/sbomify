@@ -125,6 +125,8 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
     # ── 5. Custom domain ──────────────────────────────────────────────────
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
+    # The domain card arrives over HTMX, after the last rewrite ran.
+    rewrite_localhost_urls(page)
     smooth_scroll(page, domain_input, 500)
     narrate(page, "serve_own_address")
     hover_and_click(page, domain_input)
@@ -139,12 +141,13 @@ def trust_center_setup(recording_page: Page, public_product: dict, s3_short_circ
     page.locator("#team-custom-domain-wrapper").get_by_text("Pending verification").hover()
 
     # ── 6. Component visibility ───────────────────────────────────────────
-    narrate(page, "next_choose_what")
     navigate_to_components(page)
     link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
     link.wait_for(state="visible", timeout=15_000)
+    narrate(page, "next_choose_what")
     hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
+    page.locator("main").get_by_text("Latest versions").first.wait_for(state="visible", timeout=15_000)
 
     visibility = page.get_by_role("button", name="Component visibility")
     visibility.wait_for(state="visible", timeout=15_000)
