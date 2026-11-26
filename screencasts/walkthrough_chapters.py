@@ -822,7 +822,7 @@ def chapter_vulnerabilities(page: Page) -> None:
 
     narrate(page, "vulnerabilities_applied_drops_out")
     _open_core_component(page)
-    suppressed_badge = page.get_by_text("1 suppressed").first
+    suppressed_badge = page.get_by_test_id("vuln-suppressed-chip").first
     suppressed_badge.wait_for(state="visible", timeout=15_000)
     table = page.locator("#component-vulnerabilities-status")
     smooth_scroll(page, table, 500)
