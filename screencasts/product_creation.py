@@ -61,6 +61,7 @@ def _create_component(page: Page, name: str) -> None:
     hover_and_click(page, page.get_by_role("button", name="Create component"))
     page.wait_for_url("**/component/**", timeout=15_000)
     page.wait_for_load_state("networkidle")
+    page.get_by_text("No artifacts yet").first.wait_for(state="visible", timeout=15_000)
     pace(page, 500)
 
 
@@ -80,7 +81,7 @@ def _add_link(page: Page, link_type: str, title: str, url: str) -> None:
     page.locator("#add-link-type").select_option(link_type)
     pace(page, 300)
     _type_into(page, page.locator("#add-link-title"), title)
-    _type_into(page, page.locator("#add-link-url"), url, delay=35)
+    _type_into(page, page.locator("#add-link-url"), url, delay=12)
     hover_and_click(page, page.locator("button[type='submit'][form='add-link-form']"))
     page.locator("#product-links-card").get_by_text(title, exact=True).wait_for(state="visible", timeout=10_000)
     pace(page, 500)
@@ -92,9 +93,10 @@ def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
     page.locator("#add-identifier-form").wait_for(state="visible", timeout=5_000)
     page.locator("#add-identifier-type").select_option(identifier_type)
     pace(page, 300)
-    _type_into(page, page.locator("#add-identifier-value"), value, delay=35)
+    _type_into(page, page.locator("#add-identifier-value"), value, delay=12)
     hover_and_click(page, page.locator("button[type='submit'][form='add-identifier-form']"))
     page.locator("#product-identifiers-card").get_by_text(value).first.wait_for(state="visible", timeout=10_000)
+    page.locator("#add-identifier-form").wait_for(state="hidden", timeout=10_000)
     pace(page, 500)
 
 
@@ -124,7 +126,7 @@ def product_creation(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     narrate(page, "product_name_description")
     _type_into(page, page.locator("input#name"), PRODUCT_NAME)
-    _type_into(page, page.locator("textarea[name='description']"), PRODUCT_DESCRIPTION, delay=35)
+    _type_into(page, page.locator("textarea[name='description']"), PRODUCT_DESCRIPTION, delay=18)
     hover_and_click(page, page.get_by_role("button", name="Create product"))
     page.wait_for_url("**/product/**", timeout=15_000)
     page.wait_for_load_state("networkidle")
