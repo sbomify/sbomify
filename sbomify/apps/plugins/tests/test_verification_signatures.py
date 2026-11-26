@@ -150,7 +150,8 @@ class TestBundleFormats:
         assert finding.metadata["bundle_format"] == "cosign-legacy"
         assert finding.metadata["identity"] == SIGNER
         cmd = mock_run.call_args.args[0]
-        assert cmd[:2] == ["/usr/bin/cosign", "verify-blob"]
+        assert cmd[:2] == ["cosign", "verify-blob"]
+        assert mock_run.call_args.kwargs["executable"] == "/usr/bin/cosign"
         assert "--bundle" in cmd
 
     @patch(f"{MODULE}.shutil.which", return_value="/usr/bin/cosign")
