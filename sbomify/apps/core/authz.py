@@ -58,8 +58,9 @@ ROLE_BOT = "bot"
 # enforces the invariant; keeping it is what stops this degenerating into
 # per-role permission soup where "what can an admin do" needs a codebase search.
 OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
-"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace and
-granting the owner role are the only *capabilities* an admin lacks. The other
+"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace,
+granting the owner role and changing audit log retention are the only
+*capabilities* an admin lacks. The other
 owner-exclusive rule — an admin may not remove an owner — is relational (it
 depends on the target member's role, not just the actor's), so it cannot be
 expressed as a tier and lives in the member-removal guards instead."""
@@ -67,7 +68,7 @@ expressed as a tier and lives in the member-removal guards instead."""
 ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Workspace governance: settings, custom domain, trust-center config, branding,
 billing, member management, integrations, and visibility changes. Admins are
-near-owners; see ``OWNER_ONLY`` for the two things they can't do."""
+near-owners; see ``OWNER_ONLY`` for the three things they can't do."""
 
 MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
 """Create/update products, components, releases, and artifact metadata — the
@@ -139,8 +140,8 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_OWNER,
         "Owner",
         "Full control of the workspace. Everything an admin can do, plus deleting "
-        "the workspace, making someone an owner, and changing or removing admins "
-        "and other owners.",
+        "the workspace, making someone an owner, changing how long the audit log "
+        "is kept, and changing or removing admins and other owners.",
     ),
     (
         ROLE_ADMIN,
@@ -148,7 +149,8 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         "Runs the workspace day to day: create, edit and delete products, "
         "components and releases; upload artifacts; manage workspace settings, "
         "the Trust Center, integrations, members and billing. Cannot make someone "
-        "an owner, change or remove an owner or another admin, or delete the workspace.",
+        "an owner, change or remove an owner or another admin, change how long the "
+        "audit log is kept, or delete the workspace.",
     ),
     (
         ROLE_MEMBER,
@@ -243,10 +245,11 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "access_request:read": ADMINISTER,
     "access_request:decide": ADMINISTER,
     # The workspace audit log: who did what. Reading it shows every member's
-    # activity, and its retention decides how long that record survives, so
-    # both are governance.
+    # activity, so it is governance. Its retention decides how long that record
+    # survives, and the nightly purge applies a shortened window at once, so an
+    # admin could otherwise erase the history of their own actions. Owner only.
     "audit_log:read": ADMINISTER,
-    "audit_log:manage": ADMINISTER,
+    "audit_log:manage": OWNER_ONLY,
     # owner + admin management (the dominant capability)
     # Workspace configuration — contact profiles, suppliers. NOT "create a
     # thing in this workspace": that is product:create / component:create.

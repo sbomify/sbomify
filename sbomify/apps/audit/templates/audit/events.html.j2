@@ -63,15 +63,23 @@
     <c-feedback.empty-state compact icon="fas fa-clipboard-list" title="No events yet" message="Changes made in this workspace will appear here." />
 {% endif %}
 </c-cards.card>
-<c-cards.card title="Retention" subtitle="Events older than this are deleted automatically. Nothing can delete them sooner. Choose from {{ retention_min }} to {{ retention_max }} days.">
-<form hx-post="{% url 'audit:retention' workspace_key=workspace.key %}"
-      hx-swap="none"
-      class="flex flex-wrap items-end gap-3">
-    {% csrf_token %}
-    <c-forms.field label="Keep events for (days)" for="audit-retention-days">
-    <c-forms.input size="sm" type="number" id="audit-retention-days" name="retention_days" value="{{ retention_days }}" min="{{ retention_min }}" max="{{ retention_max }}" required />
-    </c-forms.field>
-    <c-buttons.primary size="sm" type="submit">Save retention</c-buttons.primary>
-</form>
-</c-cards.card>
+{% if can_change_retention %}
+    <c-cards.card title="Retention" subtitle="Events older than this are deleted automatically. Nothing can delete them sooner. Choose from {{ retention_min }} to {{ retention_max }} days.">
+    <form hx-post="{% url 'audit:retention' workspace_key=workspace.key %}"
+          hx-swap="none"
+          class="flex flex-wrap items-end gap-3">
+        {% csrf_token %}
+        <c-forms.field label="Keep events for (days)" for="audit-retention-days">
+        <c-forms.input size="sm" type="number" id="audit-retention-days" name="retention_days" value="{{ retention_days }}" min="{{ retention_min }}" max="{{ retention_max }}" required />
+        </c-forms.field>
+        <c-buttons.primary size="sm" type="submit">Save retention</c-buttons.primary>
+    </form>
+    </c-cards.card>
+{% else %}
+    <c-cards.card title="Retention" subtitle="Events older than this are deleted automatically. Nothing can delete them sooner.">
+    <p class="text-sm text-text m-0">
+        Events are kept for {{ retention_days }} days. Only the workspace owner can change this.
+    </p>
+    </c-cards.card>
+{% endif %}
 </c-layout.frame>

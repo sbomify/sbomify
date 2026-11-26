@@ -92,6 +92,7 @@ class AuditLogView(HtmxFragmentMixin, _AuditView):
             "action_filters": ACTION_FILTERS,
             "outcomes": services.OUTCOMES,
             "retention_days": workspace.audit_log_retention_days,
+            "can_change_retention": services.authorize(request, workspace, "audit_log:manage").ok,
             "retention_min": RETENTION_MIN_DAYS,
             "retention_max": RETENTION_MAX_DAYS,
             "is_filtered": bool(filters.as_dict()),
@@ -128,5 +129,7 @@ class AuditRetentionView(_AuditView):
             return htmx_error_response(f"Enter a number of days from {RETENTION_MIN_DAYS} to {RETENTION_MAX_DAYS}.")
         result = services.update_retention(request, workspace, days)
         if not result.ok:
+            if result.status_code == 403:
+                services.record_retention_refused(workspace, days)
             return htmx_error_response(result.error or "Could not save the retention period.")
         return htmx_success_response(f"Audit events are now kept for {days} days.")

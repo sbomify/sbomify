@@ -158,6 +158,51 @@ def test_retention_change_is_itself_audited(owner_client, enterprise, django_cap
     assert event.metadata["changes"]["audit_log_retention_days"] == {"from": 365, "to": 730}
 
 
+@pytest.fixture
+def admin_user(django_user_model, enterprise):
+    from sbomify.apps.teams.models import Member
+
+    user = django_user_model.objects.create_user(username="plainadmin", email="admin@example.com", password="x")
+    Member.objects.create(team=enterprise, user=user, role="admin")
+    return user
+
+
+def test_admin_reads_the_log_but_cannot_change_retention(
+    client, enterprise, admin_user, django_capture_on_commit_callbacks
+):
+    setup_authenticated_client_session(client, enterprise, admin_user)
+    page = client.get(_events_url(enterprise), **HX)
+    assert page.status_code == 200
+    assert "Only the workspace owner can change this." in page.content.decode()
+    assert 'name="retention_days"' not in page.content.decode()
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = client.post(
+            reverse("audit:retention", kwargs={"workspace_key": enterprise.key}), {"retention_days": 30}
+        )
+
+    assert "Only the workspace owner can change audit log retention." in response.headers["HX-Trigger"]
+    enterprise.refresh_from_db()
+    assert enterprise.audit_log_retention_days == 365
+    [refused] = events(enterprise, action="workspace.updated")
+    assert refused.outcome == "denied"
+    assert refused.actor_user_id == admin_user.pk
+    assert refused.metadata["changes"]["audit_log_retention_days"] == {"from": 365, "to": 30}
+
+
+def test_admin_token_cannot_change_retention_over_the_api(client, enterprise, admin_user, make_token):
+    url = reverse("api-2:set_audit_retention", kwargs={"workspace_key": enterprise.key})
+    response = client.put(
+        url,
+        json.dumps({"retention_days": 30}),
+        content_type="application/json",
+        **get_api_headers(make_token(user=admin_user)),
+    )
+    assert response.status_code == 403
+    enterprise.refresh_from_db()
+    assert enterprise.audit_log_retention_days == 365
+
+
 def test_multi_word_target_types_read_as_words(owner_client, enterprise, sample_user, django_capture_on_commit_callbacks):
     with django_capture_on_commit_callbacks(execute=True):
         record("access_token.created", workspace=enterprise, actor=sample_user, target=Target("access_token", "1", "CI"))

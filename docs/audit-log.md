@@ -94,8 +94,11 @@ what the hash covers means adding `audit_events_canonical_v2`, never editing v1.
 
 Each workspace keeps events for `audit_log_retention_days`, 365 by default,
 between 30 and 3650. The bounds are a database check constraint, so no path can
-set a window short enough to erase the change that set it. Changing retention
-is itself recorded as `workspace.updated`.
+set a window short enough to erase the change that set it. Only the workspace
+owner can change retention: the purge applies a shortened window at once, so an
+admin could otherwise erase the history of their own actions. Changing retention
+is itself recorded as `workspace.updated`, and a refused attempt is recorded too,
+with the outcome `denied`.
 
 `purge_expired_audit_events` runs daily at 03:30 UTC and deletes exactly what
 the delete trigger allows. Events of a deleted workspace are kept for the
@@ -104,8 +107,8 @@ default 365 days.
 ## API
 
 Served on v1 and v2 at the same paths under `/api/v1/audit/` and `/api/v2/audit/`. Session or personal access token; the caller must be an
-owner or admin, and a scoped token needs `audit_log:read` (or `audit_log:manage`
-to change retention). A workspace without the audit log answers `402`.
+owner or admin, and a scoped token needs `audit_log:read`. Changing retention
+needs the owner and, for a scoped token, `audit_log:manage`. A workspace without the audit log answers `402`.
 
 ```text
 GET /api/v2/audit/{workspace_key}/events?action=product&outcome=denied&since=2026-01-01T00:00:00Z&limit=50
