@@ -17,6 +17,13 @@ Two shapes of the Vanta API drive the code:
 
 * **Frameworks are identified by id, not by name.** A renamed framework has to
   update in place or a workspace ends up publishing the same programme twice.
+
+A synced framework is also **linked** to the workspace's own copy of the same
+framework, when it has one: Vanta maps its controls onto the framework's
+requirements ("CC6.1", "A.5.15"), and those codes are the ``control_id`` of
+the built-in catalogues. Each link is a ``ControlMapping`` from the Vanta
+control to the built-in control it covers. Linking only records the
+relationship; it never writes a status into the built-in catalogue.
 """
 
 from __future__ import annotations
@@ -29,9 +36,16 @@ from django.conf import settings
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
-from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
+from sbomify.apps.controls.models import (
+    INTEGRATION_SOURCES,
+    Control,
+    ControlCatalog,
+    ControlMapping,
+    ControlStatus,
+    ControlStatusLog,
+)
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.integrations.providers.vanta import VANTA, VantaClient
+from sbomify.apps.integrations.providers.vanta import LINK_NOTE, VANTA, VantaClient
 from sbomify.apps.integrations.services.connections import access_token
 from sbomify.logging import getLogger
 
@@ -62,6 +76,14 @@ SYNC_NOTE = "Synced from Vanta"
 _UNGROUPED = "General"
 
 
+# How much of a Vanta framework's requirements have to match a catalogue's
+# control codes before the two are taken to be the same framework. Requirement
+# codes are short ("1.1", "3.2"), so a few coincidences between unrelated
+# frameworks are expected; a majority is not.
+LINK_MIN_MATCHES = 3
+LINK_MIN_SHARE = 0.5
+
+
 @dataclass
 class SyncSummary:
     """What one run did, for the settings page and the task log."""
@@ -70,6 +92,7 @@ class SyncSummary:
     controls: int = 0
     statuses_changed: int = 0
     controls_removed: int = 0
+    controls_linked: int = 0
     framework_names: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
@@ -118,6 +141,10 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
         controls = list(client.framework_controls(framework_id))
         _sync_framework_controls(client, catalog, controls, detail_cache, summary, integration, generation)
 
+        if _superseded(integration, generation):
+            return _superseded_result(integration)
+        summary.controls_linked += link_framework(catalog, client.framework_requirements(framework_id))
+
     if _superseded(integration, generation):
         return _superseded_result(integration)
 
@@ -142,6 +169,114 @@ def sync(integration: Integration) -> ServiceResult[dict[str, Any]]:
         summary.statuses_changed,
     )
     return ServiceResult.success(summary.as_dict())
+
+
+def _normalise_code(code: str) -> str:
+    return " ".join(code.split()).upper().rstrip(".")
+
+
+def _code_variants(code: str) -> set[str]:
+    """The forms one requirement code can take across sources.
+
+    ISO 27001's Annex A controls are "A.5.1" in the built-in catalogue and can
+    appear without the prefix elsewhere, so both forms are tried.
+    """
+    normalised = _normalise_code(code)
+    variants = {normalised}
+    if normalised.startswith("A."):
+        variants.add(normalised[2:])
+    else:
+        variants.add(f"A.{normalised}")
+    return variants
+
+
+def link_framework(catalog: ControlCatalog, requirements: list[dict[str, Any]] | None) -> int:
+    """Link a synced framework's controls to the workspace's own copy of it.
+
+    Returns how many of the workspace's controls ended up linked. ``None``
+    requirements means Vanta's answer could not be read, so the links from the
+    last good run are kept rather than dropped on a shape surprise.
+
+    The target is whichever catalogue the workspace holds, built-in or
+    imported, whose control codes match most of this framework's requirement
+    codes. Names are not compared: Vanta's framework names are its own, and
+    the codes are what the two actually share.
+    """
+    covered_by: dict[str, set[str]] = {}
+    for item in requirements or []:
+        code = _text(item.get("shorthand"))
+        control_ids = item.get("controlIds")
+        if not code or not isinstance(control_ids, list):
+            continue
+        covered_by.setdefault(_normalise_code(code), set()).update(_text(c) for c in control_ids if _text(c))
+
+    # A framework whose requirements carry no codes at all is far more likely
+    # a response shape the parser missed than a framework without any, so it
+    # is treated like an unreadable answer and the last good links stay.
+    if requirements is None or not covered_by:
+        return (
+            ControlMapping.objects.filter(source_control__catalog=catalog, notes=LINK_NOTE)
+            .values("target_control_id")
+            .distinct()
+            .count()
+        )
+
+    target, matches = _best_target(catalog, covered_by)
+
+    desired: set[tuple[str, str]] = set()
+    if target is not None:
+        synced = {row.external_id: row.id for row in Control.objects.filter(catalog=catalog).only("id", "external_id")}
+        for code, target_control_id in matches.items():
+            for vanta_id in covered_by[code]:
+                source_id = synced.get(_fit_distinct(Control, "external_id", vanta_id))
+                if source_id:
+                    desired.add((source_id, target_control_id))
+
+    with transaction.atomic():
+        existing = ControlMapping.objects.filter(source_control__catalog=catalog, notes=LINK_NOTE)
+        current = set(existing.values_list("source_control_id", "target_control_id"))
+        stale = current - desired
+        if stale:
+            for source_id, target_id in stale:
+                existing.filter(source_control_id=source_id, target_control_id=target_id).delete()
+        ControlMapping.objects.bulk_create(
+            [
+                ControlMapping(
+                    source_control_id=source_id,
+                    target_control_id=target_id,
+                    relation_type=ControlMapping.RelationType.RELATED,
+                    notes=LINK_NOTE,
+                )
+                for source_id, target_id in sorted(desired - current)
+            ],
+            ignore_conflicts=True,
+        )
+
+    return len({target_id for _source_id, target_id in desired})
+
+
+def _best_target(
+    catalog: ControlCatalog, covered_by: dict[str, set[str]]
+) -> tuple[ControlCatalog | None, dict[str, str]]:
+    """The workspace catalogue this framework is, and which codes match in it."""
+    if not covered_by:
+        return None, {}
+
+    best: tuple[ControlCatalog | None, dict[str, str]] = (None, {})
+    candidates = ControlCatalog.objects.filter(team=catalog.team).exclude(source__in=INTEGRATION_SOURCES)
+    for candidate in candidates:
+        by_code: dict[str, str] = {}
+        for control_id, code in Control.objects.filter(catalog=candidate).values_list("id", "control_id"):
+            for variant in _code_variants(code):
+                by_code.setdefault(variant, control_id)
+        matches = {code: by_code[code] for code in covered_by if code in by_code}
+        if len(matches) > len(best[1]):
+            best = (candidate, matches)
+
+    target, matches = best
+    if len(matches) < LINK_MIN_MATCHES or len(matches) < LINK_MIN_SHARE * len(covered_by):
+        return None, {}
+    return target, matches
 
 
 def _superseded(integration: Integration, generation: Any) -> bool:

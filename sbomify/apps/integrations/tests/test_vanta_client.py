@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import requests
 
@@ -200,3 +202,38 @@ class TestRateLimit:
         with pytest.raises(VantaUnavailable):
             client.control("c1")
         assert len(calls) == vanta_module.RATE_LIMIT_ATTEMPTS
+
+
+
+class TestFrameworkRequirements:
+    def test_asks_for_the_accounts_own_mapping(self, client, monkeypatch) -> None:
+        captured: dict[str, Any] = {}
+
+        def fake_request(method, url, **kwargs):
+            captured["url"] = url
+            captured["params"] = kwargs.get("params")
+            return _Response(
+                200,
+                {
+                    "id": "fw_soc2",
+                    "requirements": {
+                        "scope": "MY_PROGRAM",
+                        "items": [{"id": "r1", "shorthand": "CC6.1", "controlIds": ["c1"]}, "junk"],
+                    },
+                },
+            )
+
+        monkeypatch.setattr(vanta_module, "request_with_retry", fake_request)
+
+        items = client.framework_requirements("fw_soc2")
+
+        assert captured["url"].endswith("/v1/frameworks/fw_soc2")
+        assert captured["params"]["includeRequirements"] == "true"
+        assert captured["params"]["requirementsScope"] == "MY_PROGRAM"
+        assert items == [{"id": "r1", "shorthand": "CC6.1", "controlIds": ["c1"]}]
+
+    @pytest.mark.parametrize("payload", [{"id": "fw"}, {"requirements": []}, {"requirements": {"items": "no"}}])
+    def test_an_unreadable_answer_is_none_not_empty(self, client, monkeypatch, payload) -> None:
+        monkeypatch.setattr(vanta_module, "request_with_retry", lambda *a, **k: _Response(200, payload))
+
+        assert client.framework_requirements("fw") is None

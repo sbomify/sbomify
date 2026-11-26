@@ -52,6 +52,10 @@ RATE_LIMIT_ATTEMPTS = 3
 _sleep = time.sleep
 _monotonic = time.monotonic
 
+# Marks the control mappings a sync owns, so the next run can replace them
+# without touching mappings somebody made by hand through the API.
+LINK_NOTE = "Mapped in Vanta"
+
 # Vanta caps a page at 100 items. Asking for the cap is what keeps a 300
 # control framework to three requests instead of thirty.
 PAGE_SIZE = 100
@@ -215,3 +219,23 @@ class VantaClient:
     def control(self, control_id: str) -> dict[str, Any]:
         """One control, which is the only place Vanta exposes its status."""
         return self._get(f"/v1/controls/{control_id}")
+
+    def framework_requirements(self, framework_id: str) -> list[dict[str, Any]] | None:
+        """The framework's requirements, each with the controls Vanta maps to it.
+
+        ``MY_PROGRAM`` rather than ``CATALOG``: the mapping the account has
+        actually made, including controls it added, not the framework's
+        published default. None when the response cannot be read, which the
+        caller must not take to mean "no requirements".
+        """
+        payload = self._get(
+            f"/v1/frameworks/{framework_id}",
+            {"includeRequirements": "true", "requirementsScope": "MY_PROGRAM", "includeStatus": "false"},
+        )
+        requirements = payload.get("requirements")
+        if not isinstance(requirements, dict):
+            return None
+        items = requirements.get("items")
+        if not isinstance(items, list):
+            return None
+        return [item for item in items if isinstance(item, dict)]
