@@ -698,7 +698,7 @@ def recheck() -> int:
 
     def check(sha: str) -> tuple[str, str | None]:
         label, text, clip = jobs[sha]
-        wav = subprocess.run(
+        wav = subprocess.run(  # nosec B607 - ffmpeg by name from PATH, fixed argv, shell=False
             ["ffmpeg", "-v", "error", "-i", str(clip), "-ac", "1", "-ar", "16000", "-f", "wav", "-"],
             capture_output=True,
             check=True,
