@@ -34,3 +34,27 @@ beats:
     text: >-
       The release now holds the SBOM of every component, as shipped in version
       2.0.0.
+
+  ships_with:
+    text: >-
+      This version also ships the Pied Piper Runtime, a separate product with its
+      own components and releases.
+
+  add_runtime:
+    text: >-
+      Under Ships with, add the runtime release it includes.
+
+  pick_version:
+    text: >-
+      The list holds the releases of your other products, grouped by product.
+      Choose version 3.1.0, and add it.
+
+  combined_sbom:
+    text: >-
+      Now it is listed here. The release's combined SBOM carries the runtime's
+      SBOMs along with its own, so one download covers everything it ships.
+
+  public_page:
+    text: >-
+      Customers see it too. The release's public page lists the runtime under
+      Ships with, linked to its own release.

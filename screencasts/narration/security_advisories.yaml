@@ -5,8 +5,8 @@ speed: 1.0
 beats:
   intro:
     text: >-
-      In sbomify, an AI agent can draft and maintain your security advisories.
-      Here is how, and why a person still decides what your customers read.
+      In sbomify, an AI agent can draft and maintain your security advisories,
+      while a person decides what your customers read.
 
   security_advisories_lists:
     text: >-
@@ -23,15 +23,29 @@ beats:
       Then it tries to publish. sbomify refuses. An agent cannot publish,
       withdraw or delete an advisory.
 
+  advisory_ids:
+    text: >-
+      Before you publish, decide how its ID reads. In Settings, under General,
+      set your own prefix and the number to start counting from.
+
+  next_advisory_preview:
+    text: >-
+      Save, and the preview shows the ID your next advisory gets.
+
   draft_waits_for_you:
     text: >-
-      The draft waits for you, marked as written by an AI agent. Only your
-      workspace can see it.
+      Back in Security advisories, the draft waits for you, marked as written by
+      an AI agent. Only your workspace can see it.
 
   read_it_through:
     text: >-
       Read it through. When it is right, publish it and choose who can read it.
       Publishing is the review, and only a person can do it.
+
+  published_with_id:
+    text: >-
+      It goes out under your prefix, the year and your starting number.
+      Advisories published earlier keep their IDs.
 
   agent_changes_published:
     text: >-
@@ -65,5 +79,5 @@ beats:
 
   customers_see_public:
     text: >-
-      Your Trust Center shows only what a person approved. An agent proposes, and
-      a person decides.
+      Your Trust Center shows only what a person approved, under your own ID. An
+      agent proposes, and a person decides.

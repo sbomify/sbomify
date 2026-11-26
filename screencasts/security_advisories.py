@@ -5,13 +5,16 @@ The person's side of an agent-first advisory workflow:
 1. **The agent drafts.** A terminal-style console shows an AI agent's real API
    calls, made with a real AI agent token: creating the advisory works (201, a
    draft), publishing it is refused (403).
-2. **A person publishes.** The draft opens marked "An AI agent drafted this
-   advisory"; the person reads it and publishes it publicly.
-3. **The agent changes a published advisory.** Two more real calls, an edit
+2. **The advisory id.** Settings > General: the workspace's own advisory id
+   prefix and starting number, saved, with the preview of the next id.
+3. **A person publishes.** The draft opens marked "An AI agent drafted this
+   advisory"; the person reads it and publishes it publicly, and it gets
+   the id the settings promised.
+4. **The agent changes a published advisory.** Two more real calls, an edit
    and a timeline update, both answered 202: held as proposals, not applied.
-4. **A person decides.** The advisory's "Waiting for review" list shows each
+5. **A person decides.** The advisory's "Waiting for review" list shows each
    change with its diff. Approve the edit, reject the update with a reason.
-5. **The outcome.** The public Trust Center advisories page.
+6. **The outcome.** The public Trust Center advisories page, under the new id.
 
 One published, resolved advisory is seeded so the list and the Trust Center are
 not empty, and the product carries a ``v2.1.0`` release for the agent to name
@@ -34,6 +37,7 @@ from conftest import (
     close_agent_console,
     hover_and_click,
     narrate,
+    navigate_to_settings,
     pace,
     rewrite_localhost_urls,
     settle,
@@ -53,6 +57,9 @@ RESOLVED_ADVISORY_TITLE = "Path traversal in archive extraction"
 AFFECTED_VERSION = "v2.1.0"
 AGENT_TOKEN_NAME = "Claude Code"  # nosec B105 - the token's label, not a secret
 API_BASE = "https://app.sbomify.com/api/v2/advisories"
+
+ADVISORY_ID_PREFIX = "PP"
+ADVISORY_ID_START = "100"
 
 REJECT_NOTE = "2.1.1 has not shipped yet. Post this once it is released."
 
@@ -175,15 +182,37 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     agent_console_append(page, "HTTP/1.1 403 Forbidden", json.dumps({"detail": refused.json()["detail"]}))
     settle(page)
 
-    # ── 2. A person reads the draft and publishes it ─────────────────────
-    narrate(page, "draft_waits_for_you")
+    # ── 2. The workspace's own advisory ids ──────────────────────────────
+    narrate(page, "advisory_ids")
     close_agent_console(page)
-    page.reload()
+    navigate_to_settings(page)
+    prefix = page.locator("#advisory-id-prefix")
+    smooth_scroll(page, prefix, 600)
+    hover_and_click(page, prefix)
+    type_text(prefix, ADVISORY_ID_PREFIX, delay=120, clear=True)
+    pace(page, 300)
+    start_at = page.locator("#advisory-id-start-at")
+    hover_and_click(page, start_at)
+    type_text(start_at, ADVISORY_ID_START, delay=120, clear=True)
+    pace(page, 300)
+
+    narrate(page, "next_advisory_preview")
+    hover_and_click(page, page.get_by_role("button", name="Save advisory ids"))
+    preview = page.locator("#advisory-id-preview")
+    preview.get_by_text(f"{ADVISORY_ID_PREFIX}-").wait_for(state="visible", timeout=15_000)
+    pace(page, 500)
+    preview.hover()
+    settle(page)
+
+    # ── 3. A person reads the draft and publishes it ─────────────────────
+    narrate(page, "draft_waits_for_you")
+    hover_and_click(page, sidebar_link(page, "Security advisories"))
     page.wait_for_load_state("networkidle")
     row_link = page.locator("main tr", has_text=NEW_ADVISORY_TITLE).first
     row_link.wait_for(state="visible", timeout=15_000)
     pace(page, 600)
-    hover_and_click(page, row_link)
+    # The title, not the row: the row's centre is the product chip, a link to the product.
+    hover_and_click(page, row_link.get_by_text("Improper authentication").first)
     page.wait_for_load_state("networkidle")
     banner = page.get_by_text("An AI agent drafted this advisory").first
     banner.wait_for(state="visible", timeout=15_000)
@@ -204,8 +233,11 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     hover_and_click(page, modal.get_by_role("button", name="Publish"))
     page.wait_for_load_state("networkidle")
     page.get_by_role("link", name="View in Trust Center").first.wait_for(state="visible", timeout=15_000)
+    narrate(page, "published_with_id")
+    page.get_by_text(f"{ADVISORY_ID_PREFIX}-", exact=False).first.hover()
+    settle(page)
 
-    # ── 3. The agent changes the published advisory: held ────────────────
+    # ── 4. The agent changes the published advisory: held ────────────────
     agent_console(
         page,
         f'Claude Code · API token "{AGENT_TOKEN_NAME}" (AI agent)',
@@ -250,7 +282,7 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     agent_console_append(page, "HTTP/1.1 202 Accepted", json.dumps({"id": update.json()["id"], "status": "pending"}))
     settle(page)
 
-    # ── 4. A person decides each change ──────────────────────────────────
+    # ── 5. A person decides each change ──────────────────────────────────
     narrate(page, "waiting_for_review")
     close_agent_console(page)
     page.reload()
@@ -291,7 +323,7 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     page.get_by_text("Nothing waiting").first.wait_for(state="visible", timeout=15_000)
     pace(page, 1200)
 
-    # ── 5. The public Trust Center advisories page ────────────────────────
+    # ── 6. The public Trust Center advisories page ────────────────────────
     workspace_key = seeded_advisories["product"].team.key
     page.goto(f"/public/workspace/{workspace_key}/advisories/")
     narrate(page, "customers_see_public")
@@ -299,3 +331,5 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     rewrite_localhost_urls(page)
     page.locator(f"text={NEW_ADVISORY_TITLE}").first.wait_for(state="visible", timeout=15_000)
     page.locator(f"text={NEW_ADVISORY_TITLE}").first.hover()
+    pace(page, 1500)
+    page.get_by_text(f"{ADVISORY_ID_PREFIX}-", exact=False).first.hover()

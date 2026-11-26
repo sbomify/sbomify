@@ -1,20 +1,27 @@
-"""Record the VEX upload screencast.
+"""Record the VEX upload screencast, placed among the other ways a VEX is made.
 
-Drives: Dashboard → Components → a component whose scan found a critical →
-actions menu → Upload VEX → drop a CycloneDX VEX → the dry-run preview →
-Apply this VEX → the critical leaves the open vulnerabilities, the version row
-lists the VEX → filter to "Closed by a decision" to see it with its reason.
+Most teams never upload a VEX, so the recording opens on the two ways sbomify
+makes one without a file: a row's Triage action (sbomify writes the VEX from the
+decision) and the Vulnerabilities Review tab, where an AI agent's proposed
+ruling waits for a person. Then the upload itself, for VEX another tool
+produced: actions menu, Upload VEX, the dry-run preview, Apply this VEX, the
+critical leaves the open list, and "Closed by a decision" shows it with its
+reason. It closes by pointing back to triage and AI agents.
 
 Infrastructure notes: the stack runs no S3, so ``upload_data_as_file`` and
 ``get_file_data`` are backed by a dict. The upload enqueues a re-annotation job
 in production; here ``reannotate_component_runs``, the function that job calls,
 runs right after the upload. The seeded scan's finding rows are projected with
-``sync_findings`` as scan completion would.
+``sync_findings`` as scan completion would. The pending agent ruling on the
+Review tab is seeded through the real triage API with an AI agent token.
 """
 
 import json
+import re
 
 import pytest
+from django.contrib.auth.base_user import AbstractBaseUser
+from django.test import Client
 from django.urls import reverse
 from playwright.sync_api import Page
 
@@ -25,9 +32,13 @@ from conftest import (
     navigate_to_components,
     pace,
     settle,
+    sidebar_link,
     smooth_scroll,
     start_on_dashboard,
 )
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core import authz
 from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component
@@ -69,8 +80,8 @@ VEX_FILE_BYTES = json.dumps(
 
 
 @pytest.fixture
-def component_with_sbom(deletable_team: Workspace) -> dict:
-    """A component with one scanned SBOM: one critical, one medium, no VEX yet."""
+def component_with_sbom(sample_user: AbstractBaseUser, deletable_team: Workspace) -> dict:
+    """A component with one scanned SBOM (one critical, one medium, no VEX yet) and an agent's pending ruling."""
     from sbomify.apps.vulnerability_scanning.findings import sync_findings
 
     component = Component.objects.create(team=deletable_team, name=COMPONENT_NAME)
@@ -115,6 +126,40 @@ def component_with_sbom(deletable_team: Workspace) -> dict:
         },
     )
     sync_findings(run, fresh=True)
+
+    # An AI agent already sent a ruling on the medium for review: it waits on
+    # the Review tab. Sent through the real triage API with an AI agent token.
+    from sbomify.apps.vulnerability_scanning.services.vex_submissions import record_impact
+
+    token = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        team=deletable_team,
+        encoded_token=token,
+        description="Claude Code",
+        scopes=authz.SCOPE_PRESETS["agent"],
+    )
+    sent = Client().post(
+        f"/api/v2/vulnerability-scanning/components/{component.id}/triage?review=true",
+        data=json.dumps(
+            {
+                "decisions": [
+                    {
+                        "vuln_id": OTHER_CVE,
+                        "purl": "pkg:npm/lodash@4.17.20",
+                        "state": "not_affected",
+                        "justification": "code_not_present",
+                        "detail": "lodash is only used by the test runner. It is not in the shipped build.",
+                    }
+                ],
+                "context": "I checked the shipped build. lodash comes in through the test toolchain only.",
+            }
+        ),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token}",
+    )
+    assert sent.status_code == 202, sent.content
+    record_impact(sent.json()["id"])
     return {"component": component, "sbom": sbom}
 
 
@@ -131,6 +176,7 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(StorageClient, "upload_data_as_file", _put)
     monkeypatch.setattr(StorageClient, "get_file_data", _get)
+    monkeypatch.setattr(StorageClient, "get_sbom_data_prefix", lambda self, name, limit: None)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -146,7 +192,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     narrate(page, "intro")
     start_on_dashboard(page, pause_ms=600)
 
-    # ── 1. The component and its scan ─────────────────────────────────────
+    # ── 1. Most VEX is never uploaded ─────────────────────────────────────
     navigate_to_components(page)
     link = page.locator("main").get_by_role("link", name=COMPONENT_NAME, exact=True).first
     link.wait_for(state="visible", timeout=15_000)
@@ -155,11 +201,36 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     row = page.locator(f"tr:has-text('{CVE}')").first
     row.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, row, 400)
-    narrate(page, "component_s_scan")
+    menu = page.get_by_role("button", name=re.compile(rf"^Actions for {CVE} "))
+    menu.wait_for(state="visible", timeout=15_000)
+
+    narrate(page, "triage_option")
+    hover_and_click(page, menu)
+    pace(page, 400)
+    page.get_by_role("menuitem", name="Triage").hover()
+    settle(page)
+    page.keyboard.press("Escape")
+
+    narrate(page, "review_option")
+    hover_and_click(page, sidebar_link(page, "Vulnerabilities"))
+    page.wait_for_load_state("networkidle")
+    review_tab = page.get_by_role("link", name=re.compile(r"^Review"))
+    review_tab.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, review_tab)
+    page.wait_for_load_state("networkidle")
+    review = page.locator("#vex-review")
+    review.get_by_role("button", name="Approve").first.wait_for(state="visible", timeout=15_000)
+    review.get_by_text("AI agent").first.hover()
     settle(page)
 
     # ── 2. Upload VEX ─────────────────────────────────────────────────────
+    narrate(page, "upload_other_tool")
+    page.goto(component_url)
+    page.wait_for_load_state("networkidle")
     actions = page.get_by_role("button", name="Component actions")
+    actions.wait_for(state="visible", timeout=15_000)
+    actions.hover()
+    settle(page)
     narrate(page, "open_component_s")
     hover_and_click(page, actions)
     pace(page, 400)
@@ -214,4 +285,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     closed.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, closed, 300)
     closed.hover()
-    pace(page, 1200)
+    settle(page)
+
+    narrate(page, "close")
+    pace(page, 800)

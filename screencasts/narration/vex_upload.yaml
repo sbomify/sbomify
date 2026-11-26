@@ -5,13 +5,22 @@ speed: 1.0
 beats:
   intro:
     text: >-
-      Here is how to upload a VEX document, to tell sbomify and customers which
-      vulnerabilities do not affect you.
+      Most teams never upload a VEX. sbomify writes one from your triage
+      decisions, and AI agents can propose rulings that a person approves.
 
-  component_s_scan:
+  triage_option:
     text: >-
-      This component's scan reports a critical in the requests package. Your team
-      found it is not reachable.
+      On any vulnerability, Triage records your decision, and sbomify writes the
+      VEX for you.
+
+  review_option:
+    text: >-
+      Rulings from AI agents wait on the Review tab until a person approves
+      them.
+
+  upload_other_tool:
+    text: >-
+      Upload is for VEX that another tool produced, like a supplier's.
 
   open_component_s:
     text: >-
@@ -38,3 +47,8 @@ beats:
     text: >-
       Nothing is deleted. Filter to closed by a decision to see it, with the
       reason attached.
+
+  close:
+    text: >-
+      For your own decisions, use Triage, and let AI agents propose rulings for
+      a person to approve.

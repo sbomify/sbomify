@@ -3,12 +3,18 @@
 Drives: Dashboard → Products → the product → its auto-created "latest"
 release → Product actions → Create release (New release page) → name,
 version, description → the new release → Add Artifact → select every SBOM →
-Add to Release.
+Add to Release → Ships with → Add release (another product's release) → the
+release's public page and its "Ships with" section.
 
 Prerequisite: uses the pied_piper_with_sboms ORM fixture which creates the full
 Pied Piper hierarchy (product with components) with CycloneDX SBOMs.
 The SBOM creation signal auto-creates a "latest" Release on the product.
+A second product, the Pied Piper Runtime, is seeded with its own 3.1.0 release
+for the new release to ship with. The workspace and both products are public so
+the release's public page exists and lists the link.
 """
+
+from typing import Any
 
 import pytest
 from playwright.sync_api import Page
@@ -20,15 +26,57 @@ from conftest import (
     narrate,
     navigate_to_products,
     pace,
+    rewrite_localhost_urls,
     settle,
     smooth_scroll,
     start_on_dashboard,
     type_text,
 )
+from sbomify.apps.core.models import Release, ReleaseArtifact
+from sbomify.apps.sboms.models import SBOM, Component, Product
 
 RELEASE_NAME = "Middle-Out Rewrite"
 RELEASE_VERSION = "2.0.0"
 RELEASE_DESCRIPTION = "Complete rewrite of the compression engine using the middle-out algorithm"
+
+
+RUNTIME_PRODUCT_NAME = "Pied Piper Runtime"
+RUNTIME_VERSION = "3.1.0"
+
+
+@pytest.fixture
+def runtime_release(pied_piper_with_sboms: dict) -> dict:
+    """A second product with its own release, for the new release to ship with."""
+    product = pied_piper_with_sboms["product"]
+    team = product.team
+    team.is_public = True
+    team.save(update_fields=["is_public"])
+    product.is_public = True
+    product.save(update_fields=["is_public"])
+    for component in pied_piper_with_sboms["components"].values():
+        component.visibility = Component.Visibility.PUBLIC
+        component.save(update_fields=["visibility"])
+
+    component = Component.objects.create(team=team, name="Runtime", visibility=Component.Visibility.PUBLIC)
+    runtime = Product.objects.create(
+        team=team,
+        name=RUNTIME_PRODUCT_NAME,
+        description="The sandboxed runtime Pied Piper applications run on",
+        is_public=True,
+    )
+    runtime.components.set([component])
+    sbom = SBOM.objects.create(
+        name="com.piedpiper/runtime",
+        version=RUNTIME_VERSION,
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="runtime-3.1.0.cdx.json",
+        source="api",
+        component=component,
+    )
+    release = Release.objects.create(product=runtime, name=f"v{RUNTIME_VERSION}", version=RUNTIME_VERSION)
+    ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    return {**pied_piper_with_sboms, "runtime_release": release}
 
 
 def _type_into(page: Page, locator, text: str, delay: int = 50) -> None:
@@ -38,7 +86,7 @@ def _type_into(page: Page, locator, text: str, delay: int = 50) -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
+def release_creation(recording_page: Page, runtime_release: dict[str, Any]) -> None:
     page = recording_page
 
     mock_vuln_trends(page)
@@ -110,5 +158,49 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     narrate(page, "release_holds_sbom")
     page.reload()
     page.wait_for_load_state("networkidle")
-    settle(page)
+    release_url = page.url
+
+    # ── 4. Ships with: another product's release ─────────────────────────
+    card = page.locator("#release-links-card")
+    card.wait_for(state="visible", timeout=10_000)
+    narrate(page, "ships_with")
+    smooth_scroll(page, card, 900)
+    card.get_by_text("Ships with no other release").hover()
+    # Nothing is added until the line naming the add has been said.
+    narrate(page, "add_runtime")
+    hover_and_click(page, card.get_by_role("button", name="Add release").first)
+    picker = page.locator("#add-release-link-release")
+    picker.wait_for(state="visible", timeout=10_000)
     pace(page, 400)
+    narrate(page, "pick_version")
+    hover_and_click(page, picker)
+    # Choose on "Choose version 3.1.0", not while the list is still being described.
+    pace(page, 3600)
+    picker.select_option(label=RUNTIME_VERSION)
+    pace(page, 700)
+    settle(page)
+    with page.expect_response(lambda r: "/links" in r.url and r.request.method == "POST", timeout=15_000):
+        hover_and_click(page, page.locator("#addReleaseLinkModal").get_by_role("button", name="Add"))
+    row = page.locator("#release-links-card tr", has_text=RUNTIME_PRODUCT_NAME).first
+    row.wait_for(state="visible", timeout=15_000)
+
+    narrate(page, "combined_sbom")
+    row.hover()
+    pace(page, 1800)
+    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
+    pace(page, 700)
+    page.locator("a[title='Download as CycloneDX']:visible").first.hover()
+    settle(page)
+
+    # ── 5. The release's public page ──────────────────────────────────────
+    narrate(page, "public_page")
+    release_id = release_url.rstrip("/").split("/")[-1]
+    product_id = runtime_release["product"].id
+    page.goto(f"/public/product/{product_id}/release/{release_id}/")
+    page.wait_for_load_state("networkidle")
+    rewrite_localhost_urls(page)
+    public_links = page.get_by_role("table", name="Linked releases")
+    public_links.wait_for(state="visible", timeout=15_000)
+    pace(page, 800)
+    smooth_scroll(page, public_links, 900)
+    public_links.get_by_role("link", name=f"v{RUNTIME_VERSION}").hover()

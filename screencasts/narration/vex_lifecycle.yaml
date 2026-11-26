@@ -5,58 +5,83 @@ speed: 1.0
 beats:
   intro:
     text: >-
-      Here is the VEX lifecycle in sbomify: from a scan finding to a statement
-      your customers can see.
+      A VEX tells your customers which vulnerabilities do not affect them. Here
+      is where one comes from in sbomify, and what your customers end up
+      seeing.
 
-  latest_scan_component:
+  scan_found:
     text: >-
-      The latest scan of this component found a critical, a high and a medium
-      vulnerability.
+      The latest scan of Compression Core Library found two criticals and two
+      highs.
 
-  team_checks_critical:
+  team_checks_libwebp:
     text: >-
-      Your team checks the critical and finds the vulnerable code is never
-      reached.
+      Most teams never write a VEX file by hand. Your team checks the libwebp
+      critical, and finds the vulnerable decoder is never called.
 
-  write_vex_statement:
+  triage_not_affected:
     text: >-
-      So you write a VEX statement: this CVE is not affected, because the code is
-      not reachable.
+      So you triage it. Choose Not affected, give the justification, code not
+      reachable, and say why in your own words.
 
-  upload_component_s:
+  save_writes_vex:
     text: >-
-      Back on the component, upload it from the actions menu with Upload VEX.
+      Save the decision, and sbomify writes the VEX for the component itself.
+      There is no file to write or upload.
 
-  before_anything_stored:
+  vex_on_component:
     text: >-
-      Before anything is stored, a preview shows what the VEX would suppress.
+      The new VEX is listed on the component, and its page shows the libwebp
+      decision it carries.
 
-  once_applied_critical:
+  agent_tries_apply:
     text: >-
-      Once applied, the critical leaves the open list. Only the high and the
-      medium remain.
+      An AI agent can do the same check. With a token made for an AI agent, it
+      rules the OpenSSL high not affected, and tries to apply that ruling
+      itself.
 
-  trust_center_shows:
+  agent_refused:
     text: >-
-      Your Trust Center shows the same thing. One vulnerability is suppressed by
-      VEX.
+      sbomify refuses. An agent cannot apply a ruling on its own, so it sends
+      the ruling for review instead, with its reasoning.
 
-  later_re_issue:
+  agent_sends_review:
     text: >-
-      Later you re-issue the VEX as version 2. It keeps the first statement and
-      also clears the high.
+      sbomify accepts it, and nothing changes yet.
 
-  upload_same_way:
+  ruling_waits_review:
     text: >-
-      Upload version 2 from the same actions menu. This time the preview counts
-      two suppressed vulnerabilities.
+      The ruling waits on the Review tab, marked as from an AI agent, with what
+      it checked and what it would close.
 
-  sbomify_always_applies:
+  approve_same_vex:
     text: >-
-      sbomify always applies the newest VEX, so version 2 replaces version 1. Only
-      the medium is left.
+      Approve it, and the ruling lands in the same VEX as your own decision.
 
-  trust_center_two:
+  upload_other_tool:
     text: >-
-      On the Trust Center, two are now suppressed, and customers can download the
-      latest VEX.
+      Some VEX comes from another tool, like a supplier's. That is what upload
+      is for.
+
+  upload_from_menu:
+    text: >-
+      In the component's actions menu, choose Upload VEX, and drop in the file.
+
+  preview_first:
+    text: >-
+      Before anything is stored, a preview shows what it would suppress.
+
+  apply_closes:
+    text: >-
+      Apply it, and the krb5 high closes too. Only the zlib critical is still
+      open, because that one is real.
+
+  trust_center:
+    text: >-
+      On your Trust Center, customers see three vulnerabilities suppressed by
+      VEX, and the one you are still fixing.
+
+  download_one_vex:
+    text: >-
+      And they download one VEX that carries every decision, wherever it came
+      from.
