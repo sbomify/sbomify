@@ -566,7 +566,7 @@ class TestComponentVulnFilterContext:
         )
         return component, vex_doc, run
 
-    def _component_page_context(self, member, user, mocker, **vex_kwargs):
+    def _component_page(self, member, user, mocker, **vex_kwargs):
         import json
 
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -588,10 +588,35 @@ class TestComponentVulnFilterContext:
         response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
 
         assert response.status_code == 200
-        return response.context
+        return response
+
+    def _context(self, *args, **kwargs):
+        return self._component_page(*args, **kwargs).context
+
+    def test_header_keeps_suppressed_out_of_the_open_chip(self, sample_team_with_owner_member, sample_user, mocker):
+        """The suppressed tally sits in a neutral chip of its own. Inside the
+        red one, "1 Critical · 1 suppressed" read as the critical being the
+        suppressed finding."""
+        import re
+
+        from django.utils.html import strip_tags
+
+        html = self._component_page(sample_team_with_owner_member, sample_user, mocker).content.decode()
+
+        def chip(testid: str) -> str:
+            # Each chip runs to the next chip or the end of the strip.
+            pattern = rf'<span[^>]*data-testid="{testid}"[^>]*>(.*?)</span>\s*(?=<span[^>]*data-testid=|</div>)'
+            match = re.search(pattern, html, re.S)
+            assert match, f"{testid} not rendered"
+            return re.sub(r"\s+", " ", strip_tags(match.group(1))).strip()
+
+        open_chip = chip("vuln-open-chip")
+        assert open_chip == "1 Critical open in latest scan"
+        assert "suppressed" not in open_chip
+        assert chip("vuln-suppressed-chip") == "1 more suppressed by VEX"
 
     def test_summary_excludes_suppressed_and_the_panel_agrees(self, sample_team_with_owner_member, sample_user, mocker):
-        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker)
+        context = self._context(sample_team_with_owner_member, sample_user, mocker)
         assert context["vuln_summary"] == {
             "total": 1,
             "critical": 1,
@@ -615,7 +640,7 @@ class TestComponentVulnFilterContext:
     ):
         """A VEX written for version 1 does not speak for the 2.0 scan: the
         header and the panel both still count its finding as open."""
-        context = self._component_page_context(sample_team_with_owner_member, sample_user, mocker, vex_version="1")
+        context = self._context(sample_team_with_owner_member, sample_user, mocker, vex_version="1")
 
         assert context["vuln_summary"] == {
             "total": 2,

@@ -1,0 +1,70 @@
+{% comment %}
+How to create the Vanta application sbomify connects with, above the
+credentials form.
+
+Written for a workspace admin who has never opened Vanta's Developer Console.
+Three things decide whether a first attempt works, so each one is said where
+it is needed rather than in a paragraph nobody reads:
+
+- **Where to go.** The console lives on the account's regional app host, so
+  there is one link per region. The API is the same host for all three, which
+  is why nothing else on this form asks about region.
+- **Which type to pick.** Developer Console offers Build Integrations first,
+  its client ID and secret look exactly like a Manage Vanta one, and Vanta
+  accepts them. Only the read is refused, so the warning sits on that step.
+- **That the secret is shown once.** Losing it means generating another.
+{% endcomment %}
+<div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-1">
+        <h4 class="text-sm font-semibold text-text m-0">Connect your Vanta account</h4>
+        <p class="text-sm text-text-muted m-0">
+            sbomify reads Vanta through an application you create in your own Vanta account. It takes about two minutes, and you need to be an admin in Vanta.
+        </p>
+    </div>
+    <ol class="flex flex-col gap-3 list-decimal pl-5 text-sm text-text m-0">
+        <li>
+            Open the Developer Console in Vanta. Pick the one for your account:
+            <span class="inline-flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                <a href="https://app.vanta.com/settings/developer-console"
+                   target="_blank"
+                   rel="noopener"
+                   class="font-medium">US</a>
+                <a href="https://app.eu.vanta.com/settings/developer-console"
+                   target="_blank"
+                   rel="noopener"
+                   class="font-medium">EU</a>
+                <a href="https://app.aus.vanta.com/settings/developer-console"
+                   target="_blank"
+                   rel="noopener"
+                   class="font-medium">Australia</a>
+            </span>
+            <span class="block text-text-muted mt-1">In Vanta this is Settings, then Developer Console.</span>
+        </li>
+        <li>
+            Click <strong>Create</strong> and choose <strong>Manage Vanta</strong> as the application type.
+            <c-feedback.alert variant="warning" class="mt-2" title="Choose Manage Vanta, not Build Integrations">
+            A Build Integrations application gives you a client ID and secret that look the same, but it cannot read your frameworks or controls, so connecting fails.
+            </c-feedback.alert>
+        </li>
+        <li>
+            Give it a name you will recognise, such as <strong>sbomify Trust Center</strong>. Any description works.
+        </li>
+        <li>
+            Click <strong>Generate client secret</strong>, then copy the client ID and the secret into the fields below. Vanta only shows the secret once.
+        </li>
+    </ol>
+    <ul class="flex flex-col gap-1 m-0 pl-0 list-none text-sm text-text-muted">
+        <li class="flex items-start gap-2">
+            <i class="fas fa-lock mt-1 text-xs" aria-hidden="true"></i>
+            <span>sbomify only asks for read access. It never changes anything in Vanta.</span>
+        </li>
+        <li class="flex items-start gap-2">
+            <i class="fas fa-circle-info mt-1 text-xs" aria-hidden="true"></i>
+            <span>Use this application for sbomify only. Vanta keeps one active token per application, so sharing it with another tool disconnects one of them.</span>
+        </li>
+        <li class="flex items-start gap-2">
+            <i class="fas fa-eye-slash mt-1 text-xs" aria-hidden="true"></i>
+            <span>Nothing goes on your Trust Center until you choose which frameworks to show.</span>
+        </li>
+    </ul>
+</div>

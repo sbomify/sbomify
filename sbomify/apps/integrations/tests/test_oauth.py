@@ -308,3 +308,43 @@ class TestClientCredentialsGrant:
 
         with pytest.raises(ProviderAuthError):
             oauth.client_credentials_grant(VANTA, client_id, client_secret)
+
+
+@pytest.mark.usefixtures("vanta_credentials")
+class TestScopeRefusal:
+    """What Vanta answers when the pasted application is a Build Integrations one."""
+
+    def test_invalid_scope_is_its_own_refusal(self, monkeypatch) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        # Vanta's real answer, captured from a Build Integrations application.
+        monkeypatch.setattr(
+            oauth,
+            "request_with_retry",
+            lambda *a, **k: _Response(
+                400,
+                {
+                    "error": "invalid_scope",
+                    "error_description": "Can only request Connectors scopes with this application. vcs_echo",
+                },
+            ),
+        )
+
+        with pytest.raises(ProviderScopeRefused) as caught:
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+
+        # Still a refusal, so the refresh path revokes the connection as before.
+        assert isinstance(caught.value, ProviderAuthError)
+        assert "vcs_echo" not in caught.value.detail
+
+    @pytest.mark.parametrize("payload", [{"error": "invalid_client"}, {"error": 7}, ["invalid_scope"], ValueError("x")])
+    def test_any_other_refusal_stays_a_plain_one(self, monkeypatch, payload) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(400, payload))
+
+        with pytest.raises(ProviderAuthError) as caught:
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+        assert not isinstance(caught.value, ProviderScopeRefused)

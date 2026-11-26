@@ -583,7 +583,9 @@ class TestNoProviderCredentialReachesATemplate:
             "reads",
             "is_configured",
             "asks_for_credentials",
-            "setup_steps",
+            "setup_template",
+            "client_id_hint",
+            "client_credential_hint",
         }
         assert "vcs_workspace" not in str(card)
         assert "vci_workspace" not in str(card)
@@ -757,3 +759,22 @@ class TestClientCredentials:
         card = connections.provider_cards(connected_vanta.team)[0]
 
         assert "vcs_workspace" not in str(card)
+
+
+class TestWrongKindOfApplication:
+    def test_a_scope_refusal_says_which_application_to_create(self, sample_team_with_owner_member, monkeypatch) -> None:  # noqa: F811
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+
+        def refuse(provider, client_id, client_secret):
+            raise ProviderScopeRefused("Vanta refused the permissions sbomify asks for.", service="vanta")
+
+        monkeypatch.setattr(oauth, "client_credentials_grant", refuse)
+
+        result = connections.connect_with_client_credentials(
+            sample_team_with_owner_member.team, VANTA, "vci_mine", "vcs_mine", None
+        )
+
+        assert not result.ok
+        assert result.error == VANTA.scope_refused_hint
+        assert "Manage Vanta" in (result.error or "")
+        assert not Integration.objects.filter(team=sample_team_with_owner_member.team).exists()

@@ -16,7 +16,8 @@ is the client secret. Both hold the *name* of a setting and never a value, but
 bandit reads "token" or "secret" in a keyword argument as a hardcoded password,
 so calling them what they are produces a B106 that is not a finding. Renaming
 them back reintroduces it. ``exchange_encoding``, how the token endpoint wants
-its body, is named around the word for the same reason.
+its body, and ``client_credential_hint``, the help under the secret field,
+are named around the word for the same reason.
 """
 
 from __future__ import annotations
@@ -55,9 +56,18 @@ class ProviderSpec:
     authorize_url_setting: str = ""
     client_id_setting: str = ""
     client_credential_setting: str = ""
-    # What the customer does in the provider before pasting credentials, one
-    # step per line. Copy. Only shown for a ``client_credentials`` provider.
-    setup_steps: tuple[str, ...] = ()
+    # The guide to creating the application in the provider, shown above the
+    # credentials form. A template rather than a list of strings, because the
+    # guide needs links into the provider and a warning about the one mistake
+    # people actually make. Only used by a ``client_credentials`` provider.
+    setup_template: str = ""
+    # What each pasted value looks like, under its field. Copy.
+    client_id_hint: str = ""
+    client_credential_hint: str = ""
+    # What to tell someone whose pasted application is real but may not have
+    # the scopes sbomify asks for, which is almost always an application of
+    # the wrong type. Copy.
+    scope_refused_hint: str = ""
     # Dotted path to ``sync(integration) -> ServiceResult[SyncSummary]``.
     # A path rather than the function, so a provider module is free to import
     # this one. Empty for a provider sbomify only writes to, which has nothing

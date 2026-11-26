@@ -242,6 +242,11 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # or revoking. Approval makes the requester a guest of the workspace.
     "access_request:read": ADMINISTER,
     "access_request:decide": ADMINISTER,
+    # The workspace audit log: who did what. Reading it shows every member's
+    # activity, and its retention decides how long that record survives, so
+    # both are governance.
+    "audit_log:read": ADMINISTER,
+    "audit_log:manage": ADMINISTER,
     # owner + admin management (the dominant capability)
     # Workspace configuration — contact profiles, suppliers. NOT "create a
     # thing in this workspace": that is product:create / component:create.

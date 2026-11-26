@@ -23,6 +23,9 @@ from channels.db import database_sync_to_async
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from sbomify.apps.audit import mcp as audit_mcp
+from sbomify.apps.audit.context import enter as enter_audit_context
+from sbomify.apps.audit.context import leave as leave_audit_context
 from sbomify.apps.core.authz import scope_permits
 
 from .. import registry
@@ -181,6 +184,10 @@ def mcp_tool(
             principal = await principal_for(request, attempted_action=name)
             mark_tool_audited(request)
 
+            # Everything the tool changes is attributed to the agent and the
+            # person it acts for, and the call itself lands in the workspace
+            # audit log whatever its outcome.
+            audit_token = enter_audit_context(audit_mcp.context_for(principal))
             try:
                 # Defence in depth: refuse anything the token's scopes don't grant,
                 # before the tool body runs. The per-resource can() check inside each
@@ -221,16 +228,21 @@ def mcp_tool(
                 # purpose. The agent still gets the message in full; only the
                 # log is cut.
                 audit(name, principal, outcome="denied", detail=untrusted(str(exc), limit=AUDIT_DETAIL_LIMIT))
+                await run_db(audit_mcp.record_tool_call, principal, name, outcome="denied", writes=writes)
                 raise
             except Exception:
                 # Deliberately no detail: an unexpected exception's message can
                 # carry query fragments or storage paths, which belong in the
                 # traceback, not the audit stream.
                 audit(name, principal, outcome="error")
+                await run_db(audit_mcp.record_tool_call, principal, name, outcome="failure", writes=writes)
                 raise
-
-            audit(name, principal, outcome="success")
-            return checked
+            else:
+                audit(name, principal, outcome="success")
+                await run_db(audit_mcp.record_tool_call, principal, name, outcome="success", writes=writes)
+                return checked
+            finally:
+                leave_audit_context(audit_token)
 
         # FastMCP builds the input schema from the signature, and
         # functools.wraps sets __wrapped__, which inspect.signature follows.
