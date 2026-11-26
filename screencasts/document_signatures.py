@@ -11,16 +11,20 @@ SBOM Verification assessment passing.
 The two uploads go through the real ``/api/v1/sboms/sbom/<id>/signature`` and
 ``/provenance`` endpoints in-process, with the S3 writes stubbed (the stack runs
 no object store) and the verification enqueue stubbed. The verification result
-is seeded through the ORM: running the real plugin would need the SBOM bytes and
-a real Sigstore bundle from object storage, which this stack does not have. The
-seeded run carries the same findings a passing run produces.
+comes from the plugin itself (see ``_verification_result``), with only its
+Sigstore and storage reads stood in for, because this stack has no object store
+and no Sigstore bundle. The card and the Signed chip both read that run.
 """
 
 import base64
+import hashlib
 import html as html_lib
 import json
+import tempfile
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from django.test import Client
@@ -38,6 +42,7 @@ from conftest import (
 )
 from sbomify.apps.plugins.builtins.verification import SBOMVerificationPlugin
 from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.sdk.base import SBOMContext
 from sbomify.apps.plugins.sdk.enums import RunReason
 
 # The first component in ``PIED_PIPER_COMPONENTS`` — the natural lead
@@ -46,74 +51,52 @@ from sbomify.apps.plugins.sdk.enums import RunReason
 SIGNED_COMPONENT_NAME = "Compression Core Library"
 
 
-def _verification_result(plugin_name: str, plugin_version: str) -> dict:
-    """Build the AssessmentResult JSON for a passing sbom-verification run.
+def _verification_result() -> dict:
+    """Build the result a real sbom-verification run gives a signed SBOM.
 
-    The card reads ``run.result["summary"]`` to compute its overall
-    status, so the dict matches the schema produced by the real
-    plugin (see ``sbomify/apps/plugins/sdk/results.py``). All five
-    canonical findings are reported as ``pass``; the rolled-up
-    ``verification:attestation`` summary finding is included so
-    BSI / FDA / NTIA's ``requires_one_of: attestation`` clause
-    finds a satisfying signal.
+    The findings come from the plugin itself, so their ids, titles and count
+    are the ones the app shows, not a copy that drifts. Only the two network
+    checks are stood in for: the Sigstore verification reports the keyless
+    GitHub Actions signer a release workflow would have, and the stored
+    provenance is a DSSE envelope whose subject is the SBOM digest. The
+    SBOM carries no repository link, so the GitHub attestation lookup is
+    the informational "no VCS" note rather than a network call.
     """
-    now = datetime.now(tz=timezone.utc).isoformat()
-    findings = [
-        {
-            "id": fid,
-            "title": title,
-            "description": desc,
-            "severity": "info",
-            "status": "pass",
-        }
-        for fid, title, desc in (
-            (
-                "verification:digest:integrity",
-                "SBOM digest integrity",
-                "Recomputed SHA-256 matches the stored hash.",
-            ),
-            (
-                "verification:signature:present",
-                "Signature attached",
-                "A detached signature is stored alongside the SBOM.",
-            ),
-            (
-                "verification:signature:valid",
-                "Signature verified",
-                "The stored cosign-bundle signature verifies against the SBOM bytes.",
-            ),
-            (
-                "verification:provenance:present",
-                "Provenance attached",
-                "A SLSA provenance attestation is stored alongside the SBOM.",
-            ),
-            (
-                "verification:provenance:digest",
-                "Provenance digest match",
-                "The provenance subject digest matches the SBOM hash.",
-            ),
-            (
-                "verification:attestation",
-                "Attestation summary",
-                "At least one cryptographic source verified for this SBOM.",
-            ),
-        )
-    ]
-    return {
-        "schema_version": "1.0",
-        "plugin_name": plugin_name,
-        "plugin_version": plugin_version,
-        "category": "attestation",
-        "assessed_at": now,
-        "summary": {
-            "total_findings": len(findings),
-            "pass_count": len(findings),
-            "fail_count": 0,
-            "warning_count": 0,
-            "error_count": 0,
-        },
-        "findings": findings,
+    plugin = SBOMVerificationPlugin()
+    sbom_bytes = b"{}"
+    digest = hashlib.sha256(sbom_bytes).hexdigest()
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [{"name": "sbom.cdx.json", "digest": {"sha256": digest}}],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {},
     }
+    envelope = {
+        "payloadType": "application/vnd.in-toto+json",
+        "payload": base64.b64encode(json.dumps(statement).encode()).decode(),
+        "signatures": [],
+    }
+    signed = plugin._signature_verified(
+        {
+            "identity": "https://github.com/piedpiper/compression-core/.github/workflows/release.yml@refs/tags/v1.0.0",
+            "issuer": "https://token.actions.githubusercontent.com",
+        },
+        "sigstore",
+    )
+    context = SBOMContext(
+        sha256_hash=digest,
+        signature_blob_key="signature",
+        signature_type="cosign-bundle",
+        provenance_blob_key="provenance",
+    )
+    with tempfile.TemporaryDirectory() as workdir:
+        sbom_path = Path(workdir) / "sbom.json"
+        sbom_path.write_bytes(sbom_bytes)
+        with (
+            patch.object(plugin, "_check_signature_valid", return_value=signed),
+            patch.object(plugin, "_fetch_blob", return_value=json.dumps(envelope).encode()),
+        ):
+            return plugin.assess("screencast", sbom_path, context=context).to_dict()
 
 
 SBOM_SHA256 = "9f2c4e7a1b3d5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
@@ -142,14 +125,13 @@ def signing_setup(pied_piper_with_sboms: dict, mocker) -> dict:
 
 def _seed_verification_run(sbom) -> None:
     """The passing sbom-verification run the upload would trigger."""
-    plugin_name = "sbom-verification"
-    plugin_version = SBOMVerificationPlugin.VERSION
+    result = _verification_result()
     now = datetime.now(tz=timezone.utc)
     AssessmentRun.objects.create(
         id=uuid.uuid4(),
         sbom=sbom,
-        plugin_name=plugin_name,
-        plugin_version=plugin_version,
+        plugin_name=result["plugin_name"],
+        plugin_version=result["plugin_version"],
         plugin_config_hash="0" * 64,
         category="attestation",
         run_reason=RunReason.ON_UPLOAD.value,
@@ -157,7 +139,7 @@ def _seed_verification_run(sbom) -> None:
         started_at=now,
         completed_at=now,
         input_content_digest="0" * 64,
-        result=_verification_result(plugin_name, plugin_version),
+        result=result,
         result_schema_version="1.0",
     )
 
