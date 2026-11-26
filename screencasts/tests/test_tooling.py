@@ -182,3 +182,39 @@ def test_backfill_without_a_cache_says_so_rather_than_raising(
     backfill_timings.main()
 
     assert "no narration cache" in capsys.readouterr().out
+
+
+REPLACE = {"sbomify": "/ˈɛsbɑmify/", "SOC 2": "sock 2"}
+
+
+def test_a_take_that_reads_an_ipa_slash_aloud_is_flagged(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(narrator, "transcribe", lambda wav, filename="": "Track controls in slash sbomify.")
+
+    assert narrator.hears_spoken_slash("Track controls in sbomify.", b"wav", REPLACE)
+
+
+def test_a_line_without_an_ipa_entry_is_never_transcribed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("transcribed a line that uses no IPA entry")
+
+    monkeypatch.setattr(narrator, "transcribe", fail)
+
+    assert narrator.hears_spoken_slash("Upload a SOC 2 report.", b"wav", REPLACE) is None
+
+
+def test_a_take_that_reads_a_slash_is_synthesized_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    heard = iter(["in slash sbomify", "in sbomify"])
+    takes: list[str] = []
+
+    def fake_synthesize(text: str, **_kwargs: object) -> tuple[bytes, float, list[tuple[str, float, float]]]:
+        takes.append(text)
+        return b"wav", 1.0, []
+
+    monkeypatch.setenv(narrator.API_KEY_ENV, "key")
+    monkeypatch.setattr(narrator, "synthesize", fake_synthesize)
+    monkeypatch.setattr(narrator, "transcribe", lambda wav, filename="": next(heard))
+    clip_narrator = narrator.Narrator(beats={"intro": {"text": "in sbomify", "caption": "in sbomify"}}, replace=REPLACE)
+
+    clip_narrator._request("in sbomify")
+
+    assert len(takes) == 2

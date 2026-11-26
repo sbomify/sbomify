@@ -148,6 +148,7 @@ Narration (spoken voiceover + .vtt subtitles):
   warm <name>           Synthesize a screencast's narration without recording
   warm-all              Synthesize every narration script
   prune [--dry-run]     Delete cached audio no narration script refers to
+  recheck               Drop cached clips where an IPA slash was read aloud
   lint                  Check every narrate() key against its narration file
   audition "<line>"     Speak one line in each shortlisted voice, to pick by ear
   try <term> <spelling>...  Compare pronunciations of one term, by evidence
@@ -186,7 +187,7 @@ case "${1:-}" in
         echo "Available screencasts:"
         list_screencasts
         ;;
-    warm|warm-all|prune|lint|audition|try|verify|proof)
+    warm|warm-all|prune|recheck|lint|audition|try|verify|proof)
         ensure_services
         narration_tool "$@"
         ;;

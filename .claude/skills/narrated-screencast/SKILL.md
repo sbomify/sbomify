@@ -441,6 +441,7 @@ not drift apart. Edit chapter copy in the chapter's own file.
 ./bin/record_screencasts.sh warm <name>   # synthesize only, to review copy
 ./bin/record_screencasts.sh warm-all      # cache everything before a long run
 ./bin/record_screencasts.sh prune         # drop audio no script refers to
+./bin/record_screencasts.sh recheck       # drop clips that read an IPA slash aloud
 ```
 
 `warm-all` before a batch is worth it: a cold line blocks the recording while
@@ -449,6 +450,13 @@ it synthesizes, and a blocked beat is reported at the end of the run.
 `prune` clears superseded audio: every edit to a line — or to the pronunciation
 map — re-keys that clip, and nothing reads the old one again. `--dry-run` first
 if you want to look.
+
+An IPA value in the pronunciation map sits between slashes, and on some takes
+the synthesizer reads a slash aloud ("in slash sbomify"). Every new clip that
+uses an IPA entry is transcribed after synthesis, and a take that says "slash"
+is synthesized again. `recheck` runs the same check over the cache and drops
+any clip that fails, so the next recording re-synthesizes it. Prefer a plain
+respelling to IPA wherever one survives probing.
 
 Synthesis needs `XAI_API_KEY` **only** for lines not already in
 `screencasts/narration/audio/`. An unchanged re-record makes zero API calls.

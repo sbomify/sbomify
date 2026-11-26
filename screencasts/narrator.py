@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,13 @@ CACHE_BITRATE = "32k"
 REQUEST_TIMEOUT = 180.0
 MAX_ATTEMPTS = 4
 RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+
+# An IPA value in the pronunciation map is written between slashes, and now and
+# then the synthesizer reads a delimiter aloud: "in slash sbomify". It happens
+# on a minority of takes of the same line, so nothing about the text predicts
+# it. Every clip that uses such an entry is transcribed, and a take where a
+# slash is heard is thrown away and synthesized again.
+SPOKEN_SLASH_ATTEMPTS = 4
 
 
 class NarrationError(RuntimeError):
@@ -236,6 +244,27 @@ def transcribe(audio: bytes, filename: str = "probe.wav") -> str:
     return str(response.json()["text"]).strip()
 
 
+def _ipa_terms_in(text: str, replace: dict[str, str]) -> list[str]:
+    """The map entries written as IPA between slashes that ``text`` uses."""
+    return [
+        term
+        for term, value in replace.items()
+        if value.startswith("/") and re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, re.IGNORECASE)
+    ]
+
+
+def hears_spoken_slash(text: str, wav: bytes, replace: dict[str, str]) -> str | None:
+    """Return the transcript if a slash delimiter was read aloud, else ``None``.
+
+    Only lines that use an IPA entry are sent to speech-to-text, and a line
+    whose own text says "slash" is never flagged.
+    """
+    if not _ipa_terms_in(text, replace) or "slash" in text.lower():
+        return None
+    heard = transcribe(wav, filename="take.wav")
+    return heard if re.search(r"\bslash\b", heard, re.IGNORECASE) else None
+
+
 class _Index:
     """The on-disk manifest of synthesized clips, keyed by content hash."""
 
@@ -262,6 +291,13 @@ class _Index:
             self._data[sha] = entry
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(json.dumps(dict(sorted(self._data.items())), indent=2) + "\n")
+
+    def drop(self, sha: str) -> None:
+        with self._lock:
+            entry = self._data.pop(sha, None)
+            self._path.write_text(json.dumps(dict(sorted(self._data.items())), indent=2) + "\n")
+        if entry is not None:
+            (AUDIO_DIR / entry["file"]).unlink(missing_ok=True)
 
 
 class Narrator:
@@ -415,7 +451,13 @@ class Narrator:
                 f"{API_KEY_ENV} is not set and this line is not in the narration cache. "
                 "Export the key to synthesize it, or restore screencasts/narration/audio/."
             )
-        return synthesize(text, voice=self._voice, speed=self._speed, replace=self._replace)
+        for attempt in range(1, SPOKEN_SLASH_ATTEMPTS + 1):
+            wav, duration, char_times = synthesize(text, voice=self._voice, speed=self._speed, replace=self._replace)
+            heard = hears_spoken_slash(text, wav, self._replace)
+            if heard is None:
+                return wav, duration, char_times
+            _log(f"take {attempt} read a slash aloud, synthesizing again: {heard!r}")
+        raise NarrationError(f"every take read a slash aloud for: {text!r}")
 
 
 def _to_opus(wav: bytes, destination: Path) -> None:
@@ -632,6 +674,49 @@ def warm_all() -> None:
     _log(f"{len(names)} scripts, {total / 60:.1f} minutes of narration cached")
 
 
+def recheck() -> int:
+    """Find cached clips where a slash delimiter was read aloud, and drop them.
+
+    The synthesis guard catches this for new clips; this sweeps the clips that
+    were cached before it existed. Every clip that uses an IPA entry is
+    transcribed, and one where a slash is heard is removed from the cache so
+    the next warm or recording synthesizes it again. Returns the number dropped.
+    """
+    replace = load_pronunciations()
+    index = _Index()
+    jobs: dict[str, tuple[str, str, Path]] = {}
+    for path in sorted(NARRATION_DIR.glob("*.yaml")):
+        if path.stem == "pronunciations":
+            continue
+        script = load_script(path.stem)
+        narrator = Narrator(beats=script["beats"], voice=script["voice"], speed=script["speed"])
+        for key, beat in script["beats"].items():
+            sha = narrator._sha(beat["text"])
+            entry = index.get(sha)
+            if entry is not None and _ipa_terms_in(beat["text"], replace):
+                jobs.setdefault(sha, (f"{path.stem}.{key}", beat["text"], AUDIO_DIR / entry["file"]))
+
+    def check(sha: str) -> tuple[str, str | None]:
+        label, text, clip = jobs[sha]
+        wav = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(clip), "-ac", "1", "-ar", "16000", "-f", "wav", "-"],
+            capture_output=True,
+            check=True,
+        ).stdout
+        return sha, hears_spoken_slash(text, wav, replace)
+
+    dropped = 0
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for sha, heard in pool.map(check, sorted(jobs)):
+            if heard is None:
+                continue
+            _log(f"slash read aloud in {jobs[sha][0]}: {heard!r}")
+            index.drop(sha)
+            dropped += 1
+    _log(f"checked {len(jobs)} clip(s) that use an IPA entry, dropped {dropped}")
+    return dropped
+
+
 def prune(dry_run: bool = False) -> int:
     """Delete cached audio no current narration script refers to.
 
@@ -713,6 +798,8 @@ def main(argv: list[str]) -> int:
             warm(rest[0])
         elif command == "warm-all":
             warm_all()
+        elif command == "recheck":
+            recheck()
         elif command == "prune":
             prune(dry_run="--dry-run" in rest)
         elif command == "audition":

@@ -8,6 +8,11 @@
 # out as "s dash bom".  Write the sounds joined ("essbomify") or use IPA
 # between slashes.
 #
+# Prefer a respelling to IPA where one survives the probe.  Now and then the
+# synthesizer reads an IPA delimiter aloud ("in slash sbomify"), so every clip
+# that uses an IPA entry is transcribed after synthesis and a take that says
+# "slash" is synthesized again.  `narrator.py recheck` sweeps the cache.
+#
 # Every entry below was checked by round-tripping it through synthesis and
 # speech-to-text.  Add nothing here on instinct — probe it first:
 #
@@ -55,8 +60,10 @@ replace:
   SOC 2: "sock 2"
 
   # One word, rhyming with "pearl". Bare it was heard as "POL"; the plain
-  # spelling "purl" was still read as letters next to CPE. IPA holds.
-  PURL: "/pɝl/"
+  # spelling "purl" was still read as letters next to CPE. The IPA value
+  # "/pɝl/" read its slash aloud on every take of "the package URL, or PURL".
+  # "pearl" came back as one word on ten of ten takes across both PURL lines.
+  PURL: "pearl"
 
   # Roman numerals in a legal reference are numbers. Bare, "Annex I" came out
   # as "Annex Ein". Add any other Annex, Part or Article numeral here the same
