@@ -16,7 +16,9 @@ VULNERABILITIES = [
     ("open", {"state": "open", "critical": 3, "high": 1300, "other": 11, "new": 2}),
     ("high-only", {"state": "open", "critical": 0, "high": 1, "other": 0, "new": None}),
     ("other-only", {"state": "open", "critical": 0, "high": 0, "other": 4, "new": 1}),
+    ("open-suppressed", {"state": "open", "critical": 1, "high": 2, "other": 0, "new": None, "suppressed": 1}),
     ("none", {"state": "none"}),
+    ("none-suppressed", {"state": "none", "suppressed": 1}),
     ("nothing-scanned", {"state": "nothing_scanned"}),
     ("not-scanned", {"state": "not_scanned"}),
     ("not-applicable", {"state": "not_applicable"}),
@@ -55,7 +57,11 @@ def _text(fragment: str) -> str:
         ("vuln-open", "3 critical, 1,300 high 2 new · 11 other"),
         ("vuln-high-only", "1 high"),
         ("vuln-other-only", "4 other 1 new"),
+        # Beside open counts the suppressed tally is "more", so it is not read
+        # as one of the critical or high findings above it.
+        ("vuln-open-suppressed", "1 critical, 2 high 1 more suppressed by VEX"),
         ("vuln-none", "None open"),
+        ("vuln-none-suppressed", "None open 1 suppressed by VEX"),
         ("vuln-nothing-scanned", "Nothing scanned"),
         ("vuln-not-scanned", "Not scanned"),
         ("vuln-not-applicable", "—"),

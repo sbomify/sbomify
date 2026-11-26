@@ -97,15 +97,23 @@
             </span>
         </span>
         </c-chips.metric-chip>
-        {# Latest-scan vulnerability summary (design review / mock). #}
-        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
+        {% comment %}
+        Latest-scan vulnerability summary, as two chips. The first says what is
+        open, in the severity it carries. What a VEX cleared goes in a neutral
+        chip of its own: inside the red one it read as one more alarming figure,
+        and "1 Critical · 2 High · 1 suppressed" left the reader asking whether
+        the critical was the one suppressed. Counts here exclude what VEX
+        cleared, matching the Trust Center posture; the suppressed chip says so
+        rather than letting the numbers silently shrink.
+        {% endcomment %}
+        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low %}
             {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
             {% if vuln_summary.critical or vuln_summary.high %}
                 {% firstof "danger" as vuln_chip_accent %}
             {% else %}
                 {% firstof "warning" as vuln_chip_accent %}
             {% endif %}
-            <c-chips.metric-chip accent="{{ vuln_chip_accent }}">
+            <c-chips.metric-chip accent="{{ vuln_chip_accent }}" data-testid="vuln-open-chip">
             <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
             {% if vuln_summary.critical %}
                 <c-chips.metric.value>{{ vuln_summary.critical|intcomma }} Critical</c-chips.metric.value>
@@ -124,11 +132,28 @@
                 {% endif %}
                 <c-chips.metric.value>{{ vuln_summary.low|intcomma }} Low</c-chips.metric.value>
             {% endif %}
-            {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
-            {% if vuln_summary.suppressed %}
-                <c-chips.metric.label>· {{ vuln_summary.suppressed }} suppressed</c-chips.metric.label>
+            <c-chips.metric.label>open in latest scan</c-chips.metric.label>
+            </c-chips.metric-chip>
+        {% elif vuln_summary.suppressed %}
+            {# Everything the scan found was cleared by VEX: say that nothing is open, so the strip does not read as unscanned. #}
+            <c-chips.metric-chip accent="success" data-testid="vuln-open-chip">
+            <i class="fas fa-check text-xs" aria-hidden="true"></i>
+            <c-chips.metric.value>None open</c-chips.metric.value>
+            <c-chips.metric.label>in latest scan</c-chips.metric.label>
+            </c-chips.metric-chip>
+        {% endif %}
+        {% if vuln_summary.suppressed %}
+            {% comment %}"more" when an open chip sits beside it, so the two figures read as separate sets. Settled first for the same djlint reason as the accent.{% endcomment %}
+            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low %}
+                {% firstof "more suppressed by VEX" as vuln_suppressed_label %}
+            {% else %}
+                {% firstof "suppressed by VEX" as vuln_suppressed_label %}
             {% endif %}
-            <c-chips.metric.label>· latest scan</c-chips.metric.label>
+            <c-chips.metric-chip data-testid="vuln-suppressed-chip" title="A VEX statement marks {{ vuln_summary.suppressed|pluralize:'this finding,these findings' }} as not affecting this component. Not included in the open count.">
+            <i class="fas fa-shield-halved text-xs text-text-muted"
+               aria-hidden="true"></i>
+            <c-chips.metric.value>{{ vuln_summary.suppressed|intcomma }}</c-chips.metric.value>
+            <c-chips.metric.label>{{ vuln_suppressed_label }}</c-chips.metric.label>
             </c-chips.metric-chip>
         {% endif %}
     </div>
