@@ -20,6 +20,7 @@ import base64
 import hashlib
 import html as html_lib
 import json
+import re
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -269,7 +270,7 @@ def document_signatures(recording_page: Page, signing_setup: dict, sample_user, 
     smooth_scroll(page, passed, 300)
     passed.hover()
     narrate(page, "sbom_verification_assessment")
-    show_met = page.get_by_role("button", name="Show 6 met requirements")
+    show_met = page.get_by_role("button", name=re.compile(r"^Show \d+ met requirements"))
     pace(page, 1500)
     hover_and_click(page, show_met)
     pace(page, 600)
