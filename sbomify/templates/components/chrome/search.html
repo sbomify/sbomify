@@ -23,7 +23,7 @@ id allows a live gallery example; only the navbar instance owns the shortcut.
         <kbd class="inline-flex items-center gap-0.5 rounded border border-border px-1.5 py-0.5 text-[10px] leading-4 font-normal text-text-muted">
             {# The server renders the label Alpine will set, so the hint does not grow once scripts run. Kept on one line: whitespace inside would widen it. #}
             {# djlint:off #}
-            <span x-text="shortcutLabel">{% if "Mac" in request.headers.user_agent %}⌘{% else %}Ctrl{% endif %}</span>K
+            <span x-text="shortcutLabel">{% if "Mac" in request.headers.user_agent %}⌘{% else %}^{% endif %}</span>K
             {# djlint:on #}
         </kbd>
     </span>
