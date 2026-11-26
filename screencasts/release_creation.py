@@ -174,8 +174,8 @@ def release_creation(recording_page: Page, runtime_release: dict[str, Any]) -> N
     pace(page, 400)
     narrate(page, "pick_version")
     hover_and_click(page, picker)
-    # Choose on "Choose version 3.1.0", not while the list is still being described.
-    pace(page, 3600)
+    # Choose on "3.1.0", once the line has named the version.
+    pace(page, 1600)
     picker.select_option(label=RUNTIME_VERSION)
     pace(page, 700)
     settle(page)

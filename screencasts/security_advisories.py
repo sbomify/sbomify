@@ -321,7 +321,9 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     hover_and_click(page, dialog.get_by_role("button", name="Reject", exact=True))
     page.wait_for_load_state("networkidle")
     page.get_by_text("Nothing waiting").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 1200)
+    page.get_by_text("Nothing waiting").first.hover()
+    # Stay on the unchanged advisory until the line about it has been said.
+    settle(page)
 
     # ── 6. The public Trust Center advisories page ────────────────────────
     workspace_key = seeded_advisories["product"].team.key

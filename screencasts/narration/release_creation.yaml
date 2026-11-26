@@ -46,8 +46,7 @@ beats:
 
   pick_version:
     text: >-
-      The list holds the releases of your other products, grouped by product.
-      Choose version 3.1.0, and add it.
+      Pick the runtime's version, 3.1.0, and add it.
 
   combined_sbom:
     text: >-
