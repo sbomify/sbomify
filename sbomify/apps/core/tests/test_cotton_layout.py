@@ -297,6 +297,28 @@ def test_compact_replaces_the_padding_and_retunes_the_parts(rendered: str) -> No
     assert "[--stat-value-size:1.5rem]" in card
 
 
+def test_compact_is_a_flat_tile_a_step_under_its_panel(rendered: str) -> None:
+    """Compact strips sit inside a card, an inset or a dialog. A raised,
+    gradient tile there reads as a third box, so compact drops both and takes
+    a smaller radius than the panel around it. The full card keeps them."""
+    compact = _classes(rendered, STAT_CARD, "Ready").split()
+    assert "rounded-lg" in compact
+    assert "bg-surface" in compact
+    assert "rounded-xl" not in compact
+    assert "shadow-[var(--shadow-xs)]" not in compact
+    assert not any(part.startswith("bg-[linear-gradient") for part in compact)
+    full = _classes(rendered, STAT_CARD, "Total products").split()
+    assert "rounded-xl" in full
+    assert "rounded-lg" not in full
+    assert any(part.startswith("bg-[linear-gradient") for part in full)
+
+
+def test_an_explicit_info_accent_takes_the_info_ink(rendered: str) -> None:
+    card = _classes(rendered, STAT_CARD, "Would suppress")
+    assert "[--stat-ink:var(--color-info-ink)]" in card
+    assert sum(part.startswith("[--stat-ink:") for part in card.split() if "data-" not in part) == 1
+
+
 @pytest.mark.parametrize(
     ("marker", "token"),
     [("Vulnerabilities", "danger"), ("Stale scans", "warning"), ("Ready", "success")],
