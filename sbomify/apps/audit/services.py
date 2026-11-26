@@ -88,6 +88,8 @@ def authorize(request: HttpRequest, workspace: Any, action: str = "audit_log:rea
     if not plan_has_audit_log(workspace.billing_plan):
         return ServiceResult.failure("The audit log is available on the Enterprise plan.", status_code=402)
     if not can(request, action, workspace):
+        if action == "audit_log:manage":
+            return ServiceResult.failure("Only the workspace owner can change audit log retention.", status_code=403)
         return ServiceResult.failure("Only workspace owners and admins can view the audit log.", status_code=403)
     return ServiceResult.success()
 
@@ -246,6 +248,22 @@ def update_retention(request: HttpRequest, workspace: Any, days: int) -> Service
     # A tracked field: the change is recorded as workspace.updated.
     workspace.save(update_fields=["audit_log_retention_days"])
     return ServiceResult.success(days)
+
+
+def record_retention_refused(workspace: Any, days: int) -> None:
+    """A refused retention change is recorded like an applied one, as denied.
+
+    The HTMX form answers a refusal with a 200 toast, so the request event the
+    middleware writes would read as a success. The API answers 403 and the
+    middleware records that one.
+    """
+    record(
+        "workspace.updated",
+        workspace=workspace,
+        target=Target("workspace", str(workspace.pk), str(workspace.name or "")),
+        outcome=Outcome.DENIED,
+        metadata={"changes": {"audit_log_retention_days": {"from": workspace.audit_log_retention_days, "to": days}}},
+    )
 
 
 PURGE_BATCH = 5000
