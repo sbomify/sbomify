@@ -33,9 +33,9 @@
         "jsbarcode": "^3.12.3",
         "license-expressions": "^0.8.0",
         "lightningcss": "^1.33.0",
-        "marked": "^18.2.1",
+        "marked": "^18.3.0",
         "postcss": "^8.5.33",
-        "signature_pad": "^5.1.6",
+        "signature_pad": "^5.1.7",
         "tailwindcss": "^4.3.5",
         "typescript": "^6.0.2",
         "vite": "^8.3.8",
@@ -951,7 +951,7 @@
 
     "markdownlint-cli": ["markdownlint-cli@0.50.1", "", { "dependencies": { "commander": "~15.1.0", "deep-extend": "~0.6.0", "ignore": "~7.0.16", "js-yaml": "~5.5.0", "jsonc-parser": "~3.3.1", "jsonpointer": "~5.0.1", "markdown-it": "~15.0.3", "markdownlint": "~0.42.2", "minimatch": "~11.0.9", "run-con": "~1.3.3", "smol-toml": "~1.9.1", "tinyglobby": "~0.2.17" }, "bin": { "markdownlint": "markdownlint.js" } }, "sha512-3F9ON1oW8dlY2mkvQGzyDrcrfx6xiWYgS8arlijuw/JH/ZaPHE6nxp9/SP2V8YqbK8GaqZtkLD6hayPa4uj2mw=="],
 
-    "marked": ["marked@18.2.1", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-ii4bxCTCqqwpT86XZWgJNs+ZnAIZksmLGYMViWA7PDIXYIeNo1x6cDdX3JOip9NM/cI6p8z57FxliACboTruMA=="],
+    "marked": ["marked@18.3.0", "", { "bin": { "marked": "bin/marked.js" } }, "sha512-ed8zmPXlBb3UfGXN5iHMQyMhFpdqLgoV5umUXx/Q1R+FW3q8VpqpyoKUwlENL9appo2UMvNLURDVaT3AMOryGA=="],
 
     "math-intrinsics": ["math-intrinsics@1.1.0", "", {}, "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="],
 
@@ -1139,7 +1139,7 @@
 
     "signal-exit": ["signal-exit@4.1.0", "", {}, "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="],
 
-    "signature_pad": ["signature_pad@5.1.6", "", {}, "sha512-LRIUy9/eLJ1hYnplIeTY7peoxOlpnS4YPK/6yRRSZwt1qq6kmwbfMXgkOCRjrOGdzP2gIrzdBIpnzRXpgyF/rg=="],
+    "signature_pad": ["signature_pad@5.1.7", "", {}, "sha512-qlAdrVK8wlr1EJLz/ZxBL4doOesdsCZm+zr/y/keF/yX+Eg9Gn1scmg331X4cLGnhsNjSk+hqF6+CQ195G6Myw=="],
 
     "smob": ["smob@1.6.2", "", {}, "sha512-RQsvleCbF8cVHEv+xuDGaA4pOizFqJ0GgjtMSRo6oP8pnN7WsigHgVGey6aILRBKv4W2YOMHLqbKdnB6hpB9fw=="],
 
