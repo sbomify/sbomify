@@ -228,6 +228,7 @@ class PluginOrchestrator:
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
+                rerun_requested=run_reason is RunReason.MANUAL and existing_run_id is None,
             )
 
             # Write to temporary file and execute plugin
@@ -356,11 +357,11 @@ class PluginOrchestrator:
             # applies to: latest, v5.0.0" without a separate query.
             self._sync_run_releases(assessment_run, sbom_id)
 
-            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
-            # scoped downstream state (e.g. DT project version tags). After
-            # the M2M is populated, call sync_release_tags so the plugin can
-            # reconcile against the final canonical release set. One-shot
-            # plugins skip this — they have no long-lived external state.
+            # Continuous plugins (scan_mode=CONTINUOUS) may keep release-scoped
+            # state outside sbomify. After the M2M is populated, call
+            # sync_release_tags so such a plugin can reconcile against the final
+            # release set. No built-in plugin overrides it today, and one-shot
+            # plugins skip it: they keep no state outside sbomify.
             if metadata.scan_mode == ScanMode.CONTINUOUS:
                 try:
                     plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
@@ -631,12 +632,16 @@ class PluginOrchestrator:
                 self._lock_missing_content_report(run)
             now = timezone.now()
             synthesized_result["assessed_at"] = now.isoformat()
+            # update() skips the save() that fills the result columns, and
+            # readers that never load the blob go by those columns alone.
             updated = AssessmentRun.objects.filter(
                 id=run_id,
                 status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),
             ).update(
                 status=RunStatus.COMPLETED.value,
                 result=synthesized_result,
+                result_summary=synthesized_result["summary"],
+                result_skipped=None,
                 result_schema_version="1.0",
                 error_message=error_message,
                 completed_at=now,

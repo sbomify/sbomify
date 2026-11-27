@@ -84,17 +84,24 @@ class TestRoleVisibility:
         assert "API tokens" not in titles
 
     def test_every_internal_role_finds_what_its_views_admit(self):
-        """The API tokens tab and the vulnerability pages admit every internal
-        role, so search finds them for each one, the operator included."""
+        """The API tokens tab (and the MCP server entry that points at it) and
+        the vulnerability pages admit every internal role, so search finds them
+        for each one, the operator included."""
         from sbomify.apps.core.authz import READ_INTERNAL
 
         for role in READ_INTERNAL:
             titles = {
                 r["title"]
-                for query in ("api key", "vulnerability scans", "vulnerability trends", "cryptography")
+                for query in ("api key", "mcp", "vulnerability scans", "vulnerability trends", "cryptography")
                 for r in search_destinations(query, role=role, workspace_key="AAAAAAAA")
             }
-            assert {"API tokens", "Vulnerabilities", "Vulnerability trends", "Cryptography"} <= titles, role
+            assert {
+                "API tokens",
+                "MCP server (AI agents)",
+                "Vulnerabilities",
+                "Vulnerability trends",
+                "Cryptography",
+            } <= titles, role
 
     def test_an_owner_sees_owner_only_destinations(self):
         titles = [r["title"] for r in search_destinations("billing", role="owner", workspace_key="AAAAAAAA")]
@@ -313,6 +320,48 @@ class TestEntitySearch:
         )
 
         assert self._search(client, member, "CVE-2020-11111") == []
+
+    def test_a_finding_a_vex_ruled_out_is_not_offered(self, client, sample_team_with_owner_member):
+        """The section is "Affected components". The lifecycle row stays open
+        while the scanner keeps reporting the CVE, so the VEX has to be asked."""
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import AssessmentRun, VulnerabilityLifecycle
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.findings import sync_findings
+
+        member = sample_team_with_owner_member
+        component = Component.objects.create(team=member.team, name="Ruled-out Gateway")
+        sbom = SBOM.objects.create(name="gw", component=component, version="1.0", format="cyclonedx")
+        run = AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {
+                        "id": "CVE-2021-45046",
+                        "severity": "critical",
+                        "component": {"name": "log4j-core", "version": "2.15.0", "ecosystem": "maven"},
+                        "analysis_state": "not_affected",
+                    }
+                ],
+                "summary": {"total_findings": 0, "suppressed_count": 1},
+            },
+        )
+        sync_findings(run)
+        now = timezone.now()
+        VulnerabilityLifecycle.objects.create(
+            component=component,
+            advisory_id="CVE-2021-45046",
+            severity="critical",
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+
+        assert self._search(client, member, "CVE-2021-45046") == []
 
     def test_a_release_version_is_findable(self, client, sample_team_with_owner_member):
         from sbomify.apps.core.models import Product, Release

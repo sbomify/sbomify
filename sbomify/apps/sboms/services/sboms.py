@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
@@ -337,13 +337,19 @@ def _serialize_crypto_asset(asset: CryptoAsset) -> dict[str, Any]:
     }
 
 
-def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[str, Any]]:
+def get_crypto_inventory(
+    request: HttpRequest, sbom_id: str, *, load: Callable[[str], bytes | None] | None = None
+) -> ServiceResult[dict[str, Any]]:
     """Derive the cryptographic-asset (CBOM) inventory for an SBOM.
 
     Reads the immutable artifact from storage and projects its
     ``cryptographic-asset`` components (ADR-004 — nothing is persisted or
     mutated). Returns an empty inventory when the artifact carries no crypto
     assets or is not a parseable CycloneDX document.
+
+    ``load`` reads the stored file in place of a plain storage read, so a caller
+    that must bound what it parses can check it first. It runs only on a cache
+    miss, so a cached inventory costs no transfer.
     """
     try:
         sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
@@ -374,7 +380,7 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
         return ServiceResult.success(cached)
 
     try:
-        raw = StorageClient("SBOMS").get_sbom_data(sbom.sbom_filename)
+        raw = (load or StorageClient("SBOMS").get_sbom_data)(sbom.sbom_filename)
     except (BotoCoreError, ClientError) as exc:
         # The posture card is best-effort and lazy-loaded after page render
         # (ComponentCryptoPostureView / SbomCryptoInventoryView): ANY storage

@@ -148,6 +148,33 @@ def _settled(page):
     expect(page.locator(".htmx-request, .htmx-settling")).to_have_count(0)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_reindex_completion_replaces_the_component_loading_state(authenticated_page, sbom_with_findings, mocker):
+    from playwright.sync_api import expect
+
+    from sbomify.apps.plugins.models import AssessmentRun
+    from sbomify.apps.vulnerability_scanning import tasks
+    from sbomify.apps.vulnerability_scanning.findings import delete_rows_for_runs
+
+    sbom = sbom_with_findings
+    delete_rows_for_runs(list(AssessmentRun.objects.filter(sbom=sbom).values_list("id", flat=True)))
+    send = mocker.patch.object(tasks.reindex_sbom_findings, "send")
+    mocker.patch("sbomify.apps.core.utils.broadcast_to_workspace")
+    page = authenticated_page
+    panel = _open_component_panel(page, sbom)
+    expect(panel.get_by_text("Loading vulnerability details", exact=True)).to_be_visible()
+    send.assert_called_once_with([sbom.id])
+
+    tasks.reindex_sbom_findings([sbom.id])
+    page.evaluate(
+        """() => window.dispatchEvent(new CustomEvent('ws:message', {
+            detail: { type: 'findings_indexed' },
+        }))"""
+    )
+    expect(_row_menu(panel, "CVE-2024-0001")).to_be_visible()
+    expect(panel.get_by_text("Loading vulnerability details", exact=True)).to_have_count(0)
+
+
 def _to_second_page_of_ten(page, panel):
     """Ten to a page, on page two: somewhere a reload would not return the reader to."""
     from playwright.sync_api import expect

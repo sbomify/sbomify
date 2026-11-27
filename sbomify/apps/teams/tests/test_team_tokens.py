@@ -1,6 +1,7 @@
 """Tests for team tokens view."""
 
 import json
+import re
 from datetime import timedelta
 
 import pytest
@@ -79,6 +80,29 @@ class TestTeamTokensView:
         response = client.get(reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true")
         assert response.status_code == 200
         assert b"Scoped Token" in response.content
+
+    def test_get_shows_token_type(self, client: Client, sample_team_with_owner_member):
+        """Each token row names the access scope it was created with."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        AccessToken.objects.create(
+            user=user, description="CI", encoded_token="ci_tok", team=team, scopes=SCOPE_PRESETS["publish"]
+        )
+        AccessToken.objects.create(
+            user=user, description="Setup", encoded_token="setup_tok", team=team, scopes=["component:create"]
+        )
+
+        response = client.get(
+            reverse("workspaces:team_tokens", kwargs={"workspace_key": team.key}), HTTP_HX_REQUEST="true"
+        )
+        body = response.content.decode()
+        assert response.status_code == 200
+        assert re.search(r">\s*Type\s*<", body)
+        # The scope picker's options read "Publish only (CI/CD upload)", so match the bare badge text.
+        assert re.search(r">\s*Publish only\s*<", body)
+        assert re.search(r">\s*Custom\s*<", body)
 
     def test_get_shows_last_used(self, client: Client, sample_team_with_owner_member):
         """The token list surfaces last_used_at: a relative time when set, 'never' when not."""

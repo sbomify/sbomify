@@ -89,6 +89,14 @@
       "roles": ["owner", "admin"]
     },
     {
+      "title": "CRA reports",
+      "url_name": "compliance:cra_reports",
+      "section": "navigate",
+      "icon": "fa-tower-broadcast",
+      "keywords": ["enisa", "article 14", "incident report", "early warning", "vulnerability notification", "srp", "single reporting platform", "csirt", "actively exploited", "final report"],
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
       "title": "Vulnerability trends",
       "url_name": "core:dashboard_trends",
       "section": "navigate",
@@ -111,6 +119,13 @@
       "section": "settings",
       "icon": "fa-user",
       "keywords": ["my profile", "personal settings", "user settings", "email", "password", "my account"]
+    },
+    {
+      "title": "Trust Center access",
+      "url_name": "core:trust_center_access",
+      "section": "settings",
+      "icon": "fa-key",
+      "keywords": ["access requests", "my requests", "requested access", "nda", "gated", "trust centers"]
     },
     {
       "title": "Upgrade plan",
@@ -176,7 +191,7 @@
       "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-users",
-      "keywords": ["team", "invite", "users", "people", "permissions", "roles", "access"],
+      "keywords": ["team", "invite", "users", "people", "permissions", "roles", "access", "change role", "promote", "demote"],
       "args": ["workspace_key"],
       "fragment": "members",
       "roles": ["owner", "admin"]
@@ -188,6 +203,16 @@
       "section": "settings",
       "icon": "fa-key",
       "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
+      "args": ["workspace_key"],
+      "fragment": "tokens",
+      "roles": ["owner", "admin", "member", "operator"]
+    },
+    {
+      "title": "MCP server (AI agents)",
+      "url_name": "workspaces:team_settings",
+      "section": "settings",
+      "icon": "fa-robot",
+      "keywords": ["mcp", "model context protocol", "ai agent", "agent", "claude", "cursor", "llm"],
       "args": ["workspace_key"],
       "fragment": "tokens",
       "roles": ["owner", "admin", "member", "operator"]
@@ -217,7 +242,7 @@
       "url_name": "workspaces:team_settings",
       "section": "settings",
       "icon": "fa-plug",
-      "keywords": ["vanta", "connect", "oauth", "sync", "compliance tool", "drata", "data source", "frameworks"],
+      "keywords": ["vanta", "connect", "oauth", "sync", "compliance tool", "drata", "data source", "frameworks", "slack", "notifications", "alerts", "digest", "channel"],
       "args": ["workspace_key"],
       "fragment": "integrations",
       "roles": ["owner", "admin"]

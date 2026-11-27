@@ -35,7 +35,9 @@ export function registerComponentMetaInfo() {
             // Lifecycle event fields (aligned with Common Lifecycle Enumeration)
             release_date: null,
             end_of_support: null,
-            end_of_life: null
+            end_of_life: null,
+            vcs_url: null,
+            custom_metadata: {}
         } as ComponentMetaInfo,
         showEditButton: props.allowEdit, // Alias for template binding
         isEmpty: isEmpty, // Helper

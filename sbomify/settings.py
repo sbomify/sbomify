@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -34,6 +35,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import (
+    is_backend_outage_traceback,
     is_benign_shielded_future_error,
     is_on_demand_tls_ask_denial,
     redact_access_log_secrets,
@@ -256,6 +258,7 @@ INSTALLED_APPS = [
     "sbomify.apps.security_advisories",
     "sbomify.apps.ops",
     "sbomify.apps.integrations",
+    "sbomify.apps.mcp",
 ]
 
 
@@ -288,6 +291,13 @@ API_V1_SUNSET = _sunset_date("API_V1_SUNSET", "none")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Turns a 500 caused by an unreachable Postgres or Redis into a 503 with
+    # Retry-After. Outside the stale cache so a Trust Center page is replayed
+    # first, and only what that cannot answer becomes a 503.
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
+    # Outermost of the rest: the database errors it answers for are raised in the
+    # middleware below as well as in views.
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     # Outer enough to see the final API response; copies the per-token throttle budget
     # stashed on the request onto X-RateLimit-* headers.
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
@@ -306,6 +316,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -778,6 +789,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -863,6 +875,13 @@ LOGGING = {
             "()": "django.utils.log.CallbackFilter",
             "callback": lambda record: not is_on_demand_tls_ask_denial(record),
         },
+        # A request or task that failed because Postgres or Redis was
+        # unreachable writes its own traceback, once per request in flight. The
+        # shared outage line already said it, throttled, so these are dropped.
+        "suppress_backend_outage_tracebacks": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_backend_outage_traceback(record),
+        },
         # Keeps the first line of each distinct fault per five-minute window and
         # drops the repeats, so an outage that lasts is still reported for as
         # long as it lasts. Same throttle the Sentry before_send hook applies,
@@ -877,7 +896,11 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
-            "filters": ["suppress_on_demand_tls_ask_denials", "throttle_self_healing_notices"],
+            "filters": [
+                "suppress_on_demand_tls_ask_denials",
+                "suppress_backend_outage_tracebacks",
+                "throttle_self_healing_notices",
+            ],
         },
         "console_asyncio": {
             "class": "logging.StreamHandler",
@@ -985,15 +1008,53 @@ ACCOUNT_ADAPTER = "sbomify.apps.core.adapters.CustomAccountAdapter"
 # Keycloak settings
 KEYCLOAK_SERVER_URL = os.environ.get("KEYCLOAK_SERVER_URL", "http://keycloak:8080/")
 # Browser-facing Keycloak URL, used where the app sends the browser to Keycloak
-# directly (logout) rather than via OIDC discovery. Only needs setting when the
-# app reaches Keycloak at an address the browser cannot, e.g. an in-cluster
-# Service name. Empty counts as unset so a blank Helm/Compose value falls back.
+# directly (logout) rather than via OIDC discovery, and as the issuer /mcp
+# expects in OAuth tokens, so it must be Keycloak's KC_HOSTNAME_URL. Only needs
+# setting when the app reaches Keycloak at an address the browser cannot, e.g.
+# an in-cluster Service name. Empty counts as unset so a blank Helm/Compose
+# value falls back.
 KEYCLOAK_PUBLIC_URL = os.environ.get("KEYCLOAK_PUBLIC_URL") or KEYCLOAK_SERVER_URL
 KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "sbomify")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
+# The OIDC client's credentials, for Keycloak or any other provider.
+# OIDC_CLIENT_ID / OIDC_CLIENT_SECRET are the provider-neutral names and win
+# when set; empty counts as unset, so an install that only sets the KEYCLOAK_*
+# names is unchanged.
+KEYCLOAK_CLIENT_ID = os.environ.get("OIDC_CLIENT_ID") or os.environ.get("KEYCLOAK_CLIENT_ID", "sbomify")
+KEYCLOAK_CLIENT_SECRET = os.environ.get("OIDC_CLIENT_SECRET") or os.environ.get("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_ADMIN_USERNAME = os.environ.get("KEYCLOAK_ADMIN_USERNAME", "admin")
 KEYCLOAK_ADMIN_PASSWORD = os.environ.get("KEYCLOAK_ADMIN_PASSWORD", "admin")
+
+# Generic OIDC overrides, for an identity provider other than Keycloak (Auth0,
+# Entra ID, Okta, Authentik, Zitadel, ...). An install that sets neither is
+# unchanged. Empty counts as unset so a blank Helm/Compose value falls back.
+#
+# OIDC_DISCOVERY_URL: the provider's .well-known/openid-configuration document.
+# When unset, the Keycloak realm's document is used.
+# OIDC_LOGOUT_URL: the browser-facing RP-initiated logout (end session)
+# endpoint. When unset, logout uses the discovery document's
+# end_session_endpoint if OIDC_DISCOVERY_URL is set, and the Keycloak realm's
+# endpoint under KEYCLOAK_PUBLIC_URL otherwise.
+OIDC_DISCOVERY_URL = os.environ.get("OIDC_DISCOVERY_URL", "")
+OIDC_LOGOUT_URL = os.environ.get("OIDC_LOGOUT_URL", "")
+
+
+def _trusted_email(value: str) -> bool | list[str]:
+    """OIDC_TRUST_EMAIL as allauth's ``verified_email``: off, on, or a list of domains."""
+    value = value.strip()
+    if value.lower() in ("", "false", "0", "no"):
+        return False
+    if value.lower() in ("true", "1", "yes"):
+        return True
+    return [domain.strip().lower().lstrip("@") for domain in value.split(",") if domain.strip()]
+
+
+# Treat the provider's email addresses as confirmed even without an
+# email_verified claim (Entra ID sends none), like Keycloak's "Trust Email" on
+# an identity provider. Off by default. "true" trusts every address; a
+# comma-separated list of domains (example.com,example.org) trusts only those.
+# A confirmed address is linked to an existing account with the same address,
+# so only trust a provider that controls the addresses it issues.
+OIDC_TRUST_EMAIL = _trusted_email(os.environ.get("OIDC_TRUST_EMAIL", ""))
 
 SOCIALACCOUNT_PROVIDERS = {
     "openid_connect": {
@@ -1004,7 +1065,9 @@ SOCIALACCOUNT_PROVIDERS = {
                 "client_id": KEYCLOAK_CLIENT_ID,
                 "secret": KEYCLOAK_CLIENT_SECRET,
                 "settings": {
-                    "server_url": f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "server_url": OIDC_DISCOVERY_URL
+                    or f"{KEYCLOAK_SERVER_URL}realms/{KEYCLOAK_REALM}/.well-known/openid-configuration",
+                    "verified_email": OIDC_TRUST_EMAIL,
                 },
             }
         ]
@@ -1013,10 +1076,36 @@ SOCIALACCOUNT_PROVIDERS = {
 
 LOGIN_REDIRECT_URL = "/"
 ACCOUNT_LOGOUT_REDIRECT_URL = "/"
-LOGIN_URL = "/login"
+LOGIN_URL = "/login/"
 
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 WEBSITE_BASE_URL = os.environ.get("WEBSITE_BASE_URL", APP_BASE_URL)
+
+# Extra Host header values accepted by the MCP endpoint (comma-separated), on
+# top of APP_BASE_URL's hostname and loopback. The MCP app bypasses Django's
+# middleware, so DynamicHostValidationMiddleware does not guard /mcp; the MCP
+# SDK's own DNS-rebinding check does, and it needs to know the real hostname.
+# See sbomify/apps/mcp/server.py.
+MCP_ALLOWED_HOSTS = os.environ.get("MCP_ALLOWED_HOSTS", "")
+
+# Resource caps for the MCP endpoint. The caller there is an LLM whose inputs are
+# frequently attacker-influenced, so these bound what a coerced agent can consume.
+# See sbomify/apps/mcp/limits.py.
+MCP_MAX_UPLOAD_BYTES = int(os.environ.get("MCP_MAX_UPLOAD_BYTES", DATA_UPLOAD_MAX_MEMORY_SIZE))
+# Parsing an SBOM takes two to four times its size in memory, so this bounds one
+# call at roughly a hundred megabytes. See enforce_parse_size in mcp/limits.py.
+MCP_MAX_ARTIFACT_PARSE_BYTES = int(os.environ.get("MCP_MAX_ARTIFACT_PARSE_BYTES", 25 * 1024 * 1024))
+MCP_MAX_RESPONSE_BYTES = int(os.environ.get("MCP_MAX_RESPONSE_BYTES", 1024 * 1024))
+# Largest request body from a caller whose token cannot upload an artifact. A tool
+# call is a few kilobytes; only an upload carries more. See MCPRouter in asgi.py.
+MCP_MAX_REQUEST_BYTES = int(os.environ.get("MCP_MAX_REQUEST_BYTES", 1024 * 1024))
+# MCP requests in flight per worker process, each holding an executor thread and
+# a database connection. Two workers at the default use 16 connections, well
+# inside PostgreSQL's default of 100. See MCPRouter in sbomify/asgi.py.
+MCP_MAX_CONCURRENT_REQUESTS = int(os.environ.get("MCP_MAX_CONCURRENT_REQUESTS", 8))
+# Of those, how many may carry a body over MCP_MAX_REQUEST_BYTES. The transport buffers up to
+# three times MCP_MAX_UPLOAD_BYTES per request, so this bounds a worker's memory.
+MCP_MAX_CONCURRENT_UPLOADS = int(os.environ.get("MCP_MAX_CONCURRENT_UPLOADS", 2))
 _trust_center_raw = os.environ.get("TRUST_CENTER_DOMAIN", "").strip()
 TRUST_CENTER_DOMAIN = ""
 if _trust_center_raw:
@@ -1027,6 +1116,13 @@ if _trust_center_raw:
         _parsed_trust_center = urlparse(f"//{_trust_center_raw}")
     # Use netloc to preserve port for local/dev usage (e.g. "trustcenters.test:8000").
     TRUST_CENTER_DOMAIN = _parsed_trust_center.netloc or _parsed_trust_center.hostname or ""
+
+# How long a public Trust Center page is kept to be served while the database is
+# unavailable (see core/stale_cache.py). 0 turns it off.
+TRUST_CENTER_STALE_CACHE_TTL = int(os.environ.get("TRUST_CENTER_STALE_CACHE_TTL", "86400"))
+# At most one rewrite of a page's stored copy per this many seconds.
+TRUST_CENTER_STALE_CACHE_REFRESH = int(os.environ.get("TRUST_CENTER_STALE_CACHE_REFRESH", "60"))
+TRUST_CENTER_STALE_CACHE_MAX_BYTES = int(os.environ.get("TRUST_CENTER_STALE_CACHE_MAX_BYTES", str(1024 * 1024)))
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
@@ -1117,9 +1213,6 @@ WORKSPACE_SUPPORTED_ROLES = [
 # admins shouldn't invite guests directly (they self-serve), but the
 # model-level constraint stays permissive.
 WORKSPACE_INVITABLE_ROLES = [(k, v) for k, v in WORKSPACE_SUPPORTED_ROLES if k != "bot"]
-# The team names answer until every open branch has re-run bin/rename_to_workspace.py.
-TEAMS_SUPPORTED_ROLES = WORKSPACE_SUPPORTED_ROLES  # rename-to-workspace: keep
-TEAMS_INVITABLE_ROLES = WORKSPACE_INVITABLE_ROLES  # rename-to-workspace: keep
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
@@ -1177,7 +1270,17 @@ OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "6
 ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = max(0, int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300")))
 
 # Object storage settings
-STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3")
+# "s3" for any S3-compatible service (AWS S3, R2, MinIO...), "gcs" for Google
+# Cloud Storage through Application Default Credentials (ADR-0007). Bucket
+# names come from the AWS_*_STORAGE_BUCKET_NAME settings either way.
+STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "s3").strip().lower()
+
+# GCS only. Project for the client; empty takes it from the credentials.
+GCS_PROJECT_ID = os.environ.get("GCS_PROJECT_ID", "")
+# GCS only. Service account that signs download URLs through IAM signBlob when
+# the credentials hold no private key (Workload Identity). Empty signs as the
+# workload's own service account.
+GCS_SIGNING_SERVICE_ACCOUNT = os.environ.get("GCS_SIGNING_SERVICE_ACCOUNT", "")
 
 # AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
@@ -1265,6 +1368,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
+    "sbomify.apps.compliance.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",
     "sbomify.apps.vulnerability_scanning.notifications.get_notifications",
@@ -1290,6 +1394,21 @@ ENTERPRISE_SALES_EMAIL = os.environ.get("ENTERPRISE_SALES_EMAIL", "hello@sbomify
 POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY", "")
 POSTHOG_HOST = os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com")
 
+# Installation telemetry: the installation usage report goes to its own PostHog
+# project, never the user analytics one above. The key is a write-only project
+# key, hardcoded so every installation reports to the same place without a
+# self-hoster configuring anything. TELEMETRY_ENABLED=False turns it off.
+TELEMETRY_POSTHOG_API_KEY = "phc_tt6dpYfx2yVK876BTJCBP5Xd6uZ95mrxmEyHvyE2UGq5"
+TELEMETRY_POSTHOG_HOST = "https://us.i.posthog.com"
+
+
+def telemetry_enabled(environ: Mapping[str, str]) -> bool:
+    """On unless TELEMETRY_ENABLED says otherwise. Off by default in CI, which sets CI."""
+    return _env_bool(environ.get("TELEMETRY_ENABLED") or None, not _env_bool(environ.get("CI"), False))
+
+
+TELEMETRY_ENABLED = telemetry_enabled(os.environ)
+
 # Integrations
 #
 # One OAuth client per provider, registered by whoever runs this deployment.
@@ -1309,6 +1428,15 @@ VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
 VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
+
+# Slack is written to, not read from: the workspace installs the sbomify app
+# and picks a channel for each kind of message. Bot tokens do not expire, so
+# there is no refresh and nothing to sync.
+SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID", "")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
+SLACK_OAUTH_AUTHORIZE_URL = os.environ.get("SLACK_OAUTH_AUTHORIZE_URL", "https://slack.com/oauth/v2/authorize")
+SLACK_OAUTH_TOKEN_URL = os.environ.get("SLACK_OAUTH_TOKEN_URL", "https://slack.com/api/oauth.v2.access")
+SLACK_API_BASE_URL = os.environ.get("SLACK_API_BASE_URL", "https://slack.com/api")
 
 # Token for the GitHub API calls the SBOM Verification plugin makes to fetch
 # attestations. Optional: without it every lookup shares GitHub's unauthenticated

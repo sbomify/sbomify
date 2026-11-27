@@ -5,6 +5,7 @@ import { showSuccess, showError } from '../alerts';
 interface AccessToken {
     id: string;
     description: string;
+    scope_label: string;
     created_at: string;
 }
 

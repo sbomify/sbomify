@@ -430,3 +430,46 @@ class TestInvitations:
         ]
 
         assert shown == ([1, 1, 1] if verified else [0, 0, 0])
+
+
+def _trusting(verified_email: bool | list[str]):
+    from copy import deepcopy
+
+    from django.conf import settings
+    from django.test import override_settings
+
+    providers = deepcopy(settings.SOCIALACCOUNT_PROVIDERS)
+    providers["openid_connect"]["APPS"][0]["settings"]["verified_email"] = verified_email
+    return override_settings(SOCIALACCOUNT_PROVIDERS=providers)
+
+
+@pytest.mark.django_db
+class TestTrustingTheProvidersEmail:
+    """OIDC_TRUST_EMAIL: for a provider that sends no email_verified, such as Entra ID."""
+
+    def test_off_by_default(self) -> None:
+        _sign_in("new@example.com", verified=False)
+
+        assert User.objects.get(email="new@example.com").email_verified is False
+
+    def test_trusting_every_address(self) -> None:
+        with _trusting(True):
+            _sign_in("new@example.com", verified=False)
+
+        assert User.objects.get(email="new@example.com").email_verified is True
+
+    @pytest.mark.parametrize("email,trusted", [("ada@example.com", True), ("ada@elsewhere.example", False)])
+    def test_trusting_listed_domains_only(self, email: str, trusted: bool) -> None:
+        with _trusting(["example.com"]):
+            _sign_in(email, verified=False)
+
+        assert User.objects.get(email=email).email_verified is trusted
+
+    def test_a_trusted_address_links_the_existing_account(self) -> None:
+        holder = User.objects.create_user(username="holder", email="holder@example.com")
+
+        with _trusting(["example.com"]):
+            request = _sign_in(holder.email, verified=False)
+
+        assert request.user == holder
+        assert SocialAccount.objects.get().user == holder

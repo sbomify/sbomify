@@ -24,6 +24,7 @@ os.environ["TRIAL_ENDING_NOTIFICATION_DAYS"] = "3"
 
 # Disable PostHog analytics in tests
 os.environ["POSTHOG_API_KEY"] = ""
+os.environ["TELEMETRY_ENABLED"] = "False"
 
 # Mock email settings
 os.environ["DEFAULT_FROM_EMAIL"] = "test@sbomify.com"
@@ -55,6 +56,7 @@ DRAMATIQ_BROKER = {
         "dramatiq.middleware.Retries",
         "dramatiq.middleware.TimeLimit",
         "django_dramatiq.middleware.DbConnectionsMiddleware",
+        "sbomify.dramatiq_middleware.BackendOutageMiddleware",
     ],
 }
 
@@ -129,13 +131,27 @@ STORAGES = {
     },
 }
 
-# Django Vite test settings
+# Django Vite test settings.
+#
+# ``manifest.json`` is a ``bun run build`` artifact and is gitignored, so a clean
+# checkout does not have one. With ``dev_mode: False`` and no manifest, every
+# test that renders a template fails with ``DjangoViteAssetNotFoundError`` —
+# around 200 of them, spread across billing, compliance, core, teams, sboms and
+# documents, all with an error that says nothing about the real cause.
+#
+# So: use the built manifest when it exists (CI builds assets, and that path
+# exercises what production actually serves), and fall back to dev mode when it
+# does not. Dev mode emits dev-server URLs without consulting a manifest, which
+# is enough for tests that assert on rendered content — no test asserts on
+# asset URLs. The suite is then green straight from a clone.
+_VITE_MANIFEST = BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"
+
 DJANGO_VITE = {
     "default": {
-        "dev_mode": False,  # Always False for tests
+        "dev_mode": not _VITE_MANIFEST.exists(),
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"),
+        "manifest_path": str(_VITE_MANIFEST),
         "static_url_prefix": "dist/",
     }
 }
@@ -143,6 +159,8 @@ DJANGO_VITE = {
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.core.backend_unavailable.BackendUnavailableMiddleware",
+    "sbomify.apps.core.stale_cache.TrustCenterStaleCacheMiddleware",
     "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
     "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
     "sbomify.apps.core.middleware.CustomDomainContextMiddleware",
@@ -156,6 +174,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",

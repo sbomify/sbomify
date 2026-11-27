@@ -50,6 +50,27 @@ docker compose -f docker-compose.tests.yml exec tests uv run coverage run -m pyt
 docker compose -f docker-compose.tests.yml exec tests uv run coverage report
 ```
 
+Notes on the test environment:
+
+- **Frontend assets are optional.** Template-rendering tests resolve Vite assets through `sbomify/static/dist/manifest.json`, a gitignored `bun run build` artifact. `sbomify/test_settings.py` falls back to Vite dev mode when it is absent, so the suite is green straight from a clone. Run `bun run build` first if you want tests to exercise the built-asset path production actually serves (CI does).
+- **Never run two pytest sessions against the same test database.** They share `test_sbomify_test` and will corrupt each other's schema mid-run, producing failures that look like real regressions. Give the second run its own database with `-e TEST_DATABASE_NAME=<other>`.
+- **Two checkouts can run tests concurrently** by giving each stack its own network and compose project — Docker refuses to create two networks on the same subnet:
+
+```bash
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree up -d
+TEST_SUBNET_PREFIX=172.30.0 docker compose -f docker-compose.tests.yml -p myworktree \
+  exec -e TEST_DATABASE_NAME=sbomify_myworktree tests uv run pytest
+```
+
+Making the subnet configurable narrowed it from `/16` to `/24`, and Docker will not re-address a
+network that already exists. A checkout that ran tests before this change fails its next `up` with a
+network config mismatch. Remove the old network once; the next `up` rebuilds it:
+
+```bash
+docker compose -f docker-compose.tests.yml down
+docker network rm sbomify_testnet
+```
+
 If tests fail with `database "test_sbomify_test" already exists` or `is being accessed by other users` (stale DB from killed parallel runs), clean up:
 
 ```bash
@@ -509,6 +530,23 @@ Plugins analyze SBOMs without modifying them:
 
 `PluginOrchestrator` (`sbomify/apps/plugins/orchestrator.py`) manages execution, dependency checking, config hashing, and retry logic (`RetryLaterError`).
 
+### MCP Server (ADR-009)
+
+`sbomify/apps/mcp/` serves a Model Context Protocol endpoint at `/mcp`, dispatched from `sbomify/asgi.py`. Curated task-oriented tools, not a generated wrapper over the REST API.
+
+Rules when touching it:
+
+- **Every tool must be `async`.** In mcp 1.28 a sync tool function runs directly on the event loop, where Django ORM access raises `SynchronousOnlyOperation`. Wrap DB work in `run_db()` (`tools/_base.py`).
+- **Register tools via `mcp_tool(mcp, name, action, writes=...)`.** It supplies authentication, the token-scope gate, the audit event, and the response-size cap. The `action` must be a member of `authz.ALL_ACTIONS`.
+- **Destructive and administrative actions cannot be exposed.** `registry.register` rejects any `*:delete` or `*:administer` action, plus a named set of the outward-facing ones authz carves up to ADMINISTER: setting product or component visibility, managing publishers or members, billing, and publishing an advisory. Deletion is not an agent-reachable operation.
+- **Treat artifact content as untrusted.** Anything read out of an uploaded SBOM or document is attacker-influenced; pass free text through `limits.untrusted()` and never widen a tool's authority based on it.
+- **Reuse existing REST view functions for writes.** Ninja's decorators return the undecorated function, so `apis.sbom_upload_cyclonedx(request, component_id)` is a plain call — do not reimplement upload validation.
+- Session state is impossible: production runs four worker processes with no affinity, so the server is `stateless_http=True`.
+
+Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a tool is added.
+
+`docs/mcp.md` covers both connecting a client and running the endpoint. A change to the tool surface needs a change there.
+
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
@@ -538,7 +576,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 - **Database**: PostgreSQL 17
 - **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
-- **Caching/Broker**: Redis 8
+- **Caching/Broker**: Valkey 9 (anything speaking the Redis protocol works, Redis 8 included)
 
 ### Authentication
 
@@ -561,7 +599,7 @@ Tiers, on the write side: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owne
 
 `operator` is the read-mostly security role: it reads everything internal (`READ_INTERNAL`) and holds exactly one write, `artifact:publish_vex`, which is the `TRIAGE` tier. That lets it record triage decisions in the app and through the triage API, and nothing else — no products, no components, no releases, no uploads, no settings. The VEX **file upload** endpoints pair `artifact:publish_vex` with `artifact:publish`, which operators do not have, so uploading an artifact stays with members, admins and CI bots. The split mirrors Dependency-Track's `VULNERABILITY_ANALYSIS` vs `BOM_UPLOAD`.
 
-Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capabilities they lack are deleting the workspace and inviting someone as owner (`OWNER_ONLY`). The other owner-exclusive rules — *an admin may not remove an owner, and may not change the role of, or remove, an owner or another admin* — are relational rather than tiers, so they live in `check_member_removal` and `check_role_change` (`teams/permissions.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
@@ -773,6 +811,10 @@ words people actually type in `keywords` — including the ones the UI does not 
 - **ADR-003**: Plugin-based assessment system for SBOM analysis
 - **ADR-004**: Immutable artifacts — sbomify never modifies uploaded SBOMs/documents
 - **ADR-005**: Tailwind CSS + Alpine.js + HTMX frontend architecture (replacing Bootstrap)
+- **ADR-006**: Generalized BOM model
+- **ADR-007**: GCS support and cloud workload identity, and (a second 0007) removal of the Project layer
+- **ADR-008**: Workspace roles as a linear capability ladder
+- **ADR-009**: MCP server mounted in the Django app, authorized by scoped access tokens
 
 ## API Documentation
 

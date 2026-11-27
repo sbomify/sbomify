@@ -1,0 +1,31 @@
+{% comment %}
+Long prose shown as its opening, with a button for the rest: an advisory's
+description can run to pages, and it should not push the timeline and
+everything after it out of reach.
+
+The clamp is applied by Alpine, through data-clamped, so a page without
+scripts shows the whole text rather than a cut-off one with no way to open it.
+After clamping, the component measures whether anything was actually hidden and
+shows the fade and the button only then: a short description reads as it is.
+
+The fade runs into the surface colour, so put this on a c-branded.surface. The
+button is the library's secondary button, as every button on a trust centre is.
+{% endcomment %}
+<c-vars more="Show more" less="Show less" class />
+<div x-data="{ open: false, long: false }" x-init="$nextTick(() => { long = $refs.body.scrollHeight > $refs.body.clientHeight + 1 })" class="flex flex-col items-start gap-3
+    {% if class %}{{ class }}{% endif %}
+    " {{ attrs }}>
+    <div x-ref="body"
+         class="relative w-full data-[clamped]:max-h-[15rem] data-[clamped]:overflow-clip"
+         :data-clamped="!open || null">
+        {{ slot }}
+        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(to_bottom,transparent,var(--color-surface))]"
+             x-show="long && !open"
+             x-cloak
+             aria-hidden="true"></div>
+    </div>
+    <c-buttons.secondary size="sm" x-show="long" x-cloak @click="open = !open" ::aria-expanded="open">
+    <span x-show="!open">{{ more }}</span>
+    <span x-show="open" x-cloak>{{ less }}</span>
+    </c-buttons.secondary>
+</div>

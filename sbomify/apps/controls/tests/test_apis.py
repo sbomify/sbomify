@@ -67,6 +67,29 @@ class TestCatalogActivation:
 
         assert response.status_code == 404
 
+    def test_read_only_scoped_token_cannot_activate(self, authenticated_api_client, sample_team_with_owner_member):
+        """A read-only token must not perform an admin write, even for an owner.
+
+        The catalog writes authorize through can("controls:manage"), so the token
+        action-scope gate runs: a bare role check let a read-only token through.
+        """
+        from sbomify.apps.core.authz import SCOPE_PRESETS
+
+        client, access_token = authenticated_api_client
+        access_token.scopes = SCOPE_PRESETS["read_only"]
+        access_token.save(update_fields=["scopes"])
+        headers = get_api_headers(access_token)
+
+        response = client.post(
+            "/api/v1/controls/catalogs/activate/",
+            data=json.dumps({"catalog_name": "soc2-type2"}),
+            content_type="application/json",
+            **headers,
+        )
+
+        assert response.status_code == 403
+        assert not ControlCatalog.objects.filter(team=sample_team_with_owner_member.team).exists()
+
 
 @pytest.mark.django_db
 class TestListCatalogs:

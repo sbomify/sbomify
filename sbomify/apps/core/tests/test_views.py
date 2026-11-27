@@ -127,6 +127,101 @@ def test_logout_redirects_browser_to_public_keycloak_url(client: Client, sample_
 
 
 @pytest.mark.django_db
+def test_logout_uses_oidc_logout_url_override(client: Client, sample_user: AbstractBaseUser):
+    """OIDC_LOGOUT_URL replaces the Keycloak realm endpoint, e.g. for Auth0."""
+    client.force_login(sample_user)
+    with override_settings(
+        KEYCLOAK_PUBLIC_URL="https://keycloak.example.com/",
+        KEYCLOAK_REALM="sbomify",
+        KEYCLOAK_CLIENT_ID="auth0-client",
+        APP_BASE_URL="http://test-return.url",
+        OIDC_LOGOUT_URL="https://tenant.auth0.com/oidc/logout",
+    ):
+        response = client.get(reverse("core:logout"))
+        assert response.status_code == 302
+        assert response.url.startswith("https://tenant.auth0.com/oidc/logout?")
+        assert "keycloak.example.com" not in response.url
+        assert "client_id=auth0-client" in response.url
+        assert "post_logout_redirect_uri=http%3A%2F%2Ftest-return.url" in response.url
+
+
+@pytest.mark.django_db
+def test_logout_keeps_query_on_oidc_logout_url(client: Client, sample_user: AbstractBaseUser):
+    """A query string already on OIDC_LOGOUT_URL is merged, not doubled up with a second '?'."""
+    client.force_login(sample_user)
+    with override_settings(
+        KEYCLOAK_CLIENT_ID="sbomify",
+        APP_BASE_URL="http://test-return.url",
+        OIDC_LOGOUT_URL="https://idp.example.com/logout?federated=1",
+    ):
+        response = client.get(reverse("core:logout"))
+        assert response.status_code == 302
+        assert response.url.startswith("https://idp.example.com/logout?")
+        assert response.url.count("?") == 1
+        assert "federated=1" in response.url
+        assert "client_id=sbomify" in response.url
+
+
+@pytest.mark.django_db
+def test_logout_sends_id_token_hint(client: Client, sample_user: AbstractBaseUser):
+    """The ID token kept at sign-in goes back as id_token_hint, which Okta requires."""
+    client.force_login(sample_user)
+    session = client.session
+    session["oidc_id_token"] = "header.payload.signature"
+    session.save()
+    with override_settings(OIDC_LOGOUT_URL="https://example.okta.com/oauth2/v1/logout", APP_BASE_URL="http://t"):
+        response = client.get(reverse("core:logout"))
+    assert "id_token_hint=header.payload.signature" in response.url
+    assert "oidc_id_token" not in client.session
+
+
+@pytest.mark.django_db
+def test_logout_without_id_token_omits_hint(client: Client, sample_user: AbstractBaseUser):
+    client.force_login(sample_user)
+    with override_settings(OIDC_LOGOUT_URL="https://idp.example.com/logout", APP_BASE_URL="http://t"):
+        response = client.get(reverse("core:logout"))
+    assert "id_token_hint" not in response.url
+
+
+@pytest.mark.django_db
+def test_logout_uses_discovered_end_session_endpoint(client: Client, sample_user: AbstractBaseUser, mocker):
+    """With OIDC_DISCOVERY_URL set and no OIDC_LOGOUT_URL, logout follows the discovery document."""
+    mocker.patch(
+        "allauth.socialaccount.providers.openid_connect.views.OpenIDConnectOAuth2Adapter.openid_config",
+        new_callable=mocker.PropertyMock,
+        return_value={"end_session_endpoint": "https://login.example.com/tenant/oauth2/v2.0/logout"},
+    )
+    client.force_login(sample_user)
+    with override_settings(
+        OIDC_DISCOVERY_URL="https://login.example.com/tenant/v2.0/.well-known/openid-configuration",
+        OIDC_LOGOUT_URL="",
+        KEYCLOAK_PUBLIC_URL="https://keycloak.example.com/",
+        APP_BASE_URL="http://t",
+    ):
+        response = client.get(reverse("core:logout"))
+    assert response.url.startswith("https://login.example.com/tenant/oauth2/v2.0/logout?")
+
+
+@pytest.mark.django_db
+def test_logout_is_local_when_provider_has_no_end_session(client: Client, sample_user: AbstractBaseUser, mocker):
+    """A provider without RP-initiated logout (Google, Auth0 with it off) signs out of sbomify only."""
+    mocker.patch(
+        "allauth.socialaccount.providers.openid_connect.views.OpenIDConnectOAuth2Adapter.openid_config",
+        new_callable=mocker.PropertyMock,
+        return_value={"authorization_endpoint": "https://accounts.example.com/auth"},
+    )
+    client.force_login(sample_user)
+    with override_settings(
+        OIDC_DISCOVERY_URL="https://accounts.example.com/.well-known/openid-configuration",
+        OIDC_LOGOUT_URL="",
+        KEYCLOAK_PUBLIC_URL="https://keycloak.example.com/",
+    ):
+        response = client.get(reverse("core:logout"))
+    assert response.url == reverse("core:signed_out")
+    assert "_auth_user_id" not in client.session
+
+
+@pytest.mark.django_db
 def test_delete_nonexistent_access_token(sample_user: AbstractBaseUser):
     client = Client()
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -296,6 +391,14 @@ def test_logout_unauthenticated_user_redirects_to_login(client: Client) -> None:
     assert response.status_code == 302
     # Should redirect to keycloak_login
     assert "/login" in response["Location"] or "keycloak" in response["Location"].lower()
+
+
+@pytest.mark.django_db
+def test_login_required_redirect_lands_on_the_login_route_directly(client: Client) -> None:
+    """LOGIN_URL carries the trailing slash, so APPEND_SLASH adds no extra hop."""
+    response = client.get(reverse("core:support_contact"), follow=False)
+    assert response.status_code == 302
+    assert response["Location"].startswith(f"{reverse('core:keycloak_login')}?next=")
 
 
 @pytest.mark.django_db

@@ -261,7 +261,10 @@ class TestMembersRoleLegend:
         from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_DESCRIPTIONS
 
         admin_description = next(d for role, _label, d in ROLE_DESCRIPTIONS if role == ROLE_ADMIN)
-        assert "Cannot invite or remove an owner, or delete the workspace." in admin_description
+        assert (
+            "Cannot make someone an owner, change or remove an owner or another admin, or delete the workspace."
+            in admin_description
+        )
 
     def test_legend_states_what_an_operator_cannot_do(self):
         """An operator is defined by its limits, so the legend has to name them."""

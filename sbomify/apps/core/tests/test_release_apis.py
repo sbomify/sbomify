@@ -824,6 +824,8 @@ def test_add_sbom_to_release(
     data = response.json()
     assert data["artifact_type"] == "sbom"
     assert data["artifact_name"] == sample_sbom.name
+    assert data["replaced"] is False
+    assert data["replaced_artifact_name"] is None
 
     # Verify artifact was added to database
     assert ReleaseArtifact.objects.filter(release=release, sbom=sample_sbom, document=None).exists()
@@ -1191,6 +1193,91 @@ def test_add_duplicate_sbom_format_to_release(
 
     assert response.status_code == 400
     assert "already contains an SBOM of format" in response.json()["detail"]
+
+    # The earlier SBOM is still the one in the release.
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom1.id]
+
+
+@pytest.mark.django_db
+def test_add_sbom_with_replace_supersedes_same_format_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Only an explicit replace=True swaps in a new SBOM for a component already in the release."""
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    sbom1 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 1", version="1.0.0"
+    )
+    sbom2 = SBOM.objects.create(
+        component=sample_component, format="cyclonedx", format_version="1.6", name="SBOM 2", version="2.0.0"
+    )
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, sbom=sbom1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    response = client.post(
+        url,
+        json.dumps({"sbom_id": sbom2.id, "replace": True}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["artifact_name"] == "SBOM 2"
+    # The client is told what it superseded, so a matrix build overwriting itself is not silent.
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "SBOM 1"
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("sbom_id", flat=True)) == [sbom2.id]
+
+
+@pytest.mark.django_db
+def test_add_document_with_replace_supersedes_same_type_from_same_component(
+    sample_product: Product,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    client = Client()
+
+    sample_component.team = sample_product.team
+    sample_component.save()
+    sample_product.components.add(sample_component)
+
+    doc1 = Document.objects.create(component=sample_component, name="Doc 1", version="1.0.0", document_type="other")
+    doc2 = Document.objects.create(component=sample_component, name="Doc 2", version="2.0.0", document_type="other")
+
+    release = Release.objects.create(product=sample_product, name="v1.0.0")
+    ReleaseArtifact.objects.create(release=release, document=doc1)
+
+    url = reverse("api-1:add_artifacts_to_release", kwargs={"release_id": release.id})
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_product.team, sample_product.team.members.first())
+
+    def add(document: Document, **extra: bool):
+        return client.post(
+            url,
+            json.dumps({"document_id": document.id, **extra}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+        )
+
+    assert add(doc2).status_code == 400
+    response = add(doc2, replace=True)
+    assert response.status_code == 201
+    assert response.json()["replaced"] is True
+    assert response.json()["replaced_artifact_name"] == "Doc 1"
+    assert list(ReleaseArtifact.objects.filter(release=release).values_list("document_id", flat=True)) == [doc2.id]
 
 
 @pytest.mark.django_db
@@ -2066,6 +2153,36 @@ class TestReleaseDeleteKeepsLifecycleHistory:
         assert "lifecycle record" in response.json()["detail"]
         assert Release.objects.filter(id=release.id).exists()
         assert ReleaseCLEEvent.objects.filter(release=release).count() == 1
+
+    @pytest.mark.django_db
+    def test_the_records_are_counted_under_the_product_lock(
+        self,
+        sample_product: Product,
+        sample_access_token: AccessToken,
+    ):
+        """A CLE event is written under that lock, so one written while the delete waited is seen."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from sbomify.apps.sboms.models import ReleaseCLEEvent
+
+        client = Client()
+        release = Release.objects.create(product=sample_product, name="v1.0.0")
+        self._event(release)
+        self._as_owner(client, sample_product)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = client.delete(
+                reverse("api-1:delete_release", kwargs={"release_id": release.id}),
+                HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
+            )
+
+        assert response.status_code == 400
+        statements = [query["sql"] for query in queries.captured_queries]
+        product_table, event_table = Product._meta.db_table, ReleaseCLEEvent._meta.db_table
+        locks = [i for i, sql in enumerate(statements) if "FOR UPDATE" in sql and f'FROM "{product_table}"' in sql]
+        counts = [i for i, sql in enumerate(statements) if f'FROM "{event_table}"' in sql]
+        assert locks and counts and locks[0] < counts[0], statements
 
     @pytest.mark.django_db
     def test_a_release_without_them_still_deletes(

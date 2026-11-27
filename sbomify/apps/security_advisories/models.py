@@ -5,7 +5,7 @@ in *their* products: what it is, which products and versions it touches, what
 users should do, and how the story developed over time. It is internal status
 tracking first and trust-center content second.
 
-Aggregate root is :class:`SecurityAdvisory`, scoped to a ``teams.Team``. Everything
+Aggregate root is :class:`SecurityAdvisory`, scoped to a ``teams.Workspace``. Everything
 else cascades from it. History lives in the append-only :class:`AdvisoryEvent`
 timeline, which carries both human messages and field-change audit rows, so the
 advisory has one chronological story rather than two.
@@ -96,6 +96,10 @@ class ReferenceType(models.TextChoices):
     EDB = "edb", "Exploit-DB"
     MSRC = "msrc", "Microsoft Security Response Center"
     JVNDB = "jvndb", "JVN iPedia"
+    GSD = "gsd", "Global Security Database"
+    HSEC = "hsec", "Haskell security advisory"
+    PSF = "psf", "Python Software Foundation advisory"
+    DRUPAL = "drupal", "Drupal security advisory"
     OTHER = "other", "Other"
 
 
@@ -116,11 +120,16 @@ _REFERENCE_PREFIXES: tuple[tuple[str, str], ...] = (
     ("ALSA-", ReferenceType.ALSA),
     ("ALAS-", ReferenceType.ALAS),
     ("SUSE-SU-", ReferenceType.SUSE),
+    ("OPENSUSE-SU-", ReferenceType.SUSE),
     ("VU#", ReferenceType.CERT_VU),
     ("ZDI-", ReferenceType.ZDI),
     ("EDB-", ReferenceType.EDB),
     ("MSRC-", ReferenceType.MSRC),
     ("JVNDB-", ReferenceType.JVNDB),
+    ("GSD-", ReferenceType.GSD),
+    ("HSEC-", ReferenceType.HSEC),
+    ("PSF-", ReferenceType.PSF),
+    ("DRUPAL-", ReferenceType.DRUPAL),
 )
 
 
@@ -302,7 +311,7 @@ class SecurityAdvisory(models.Model):
         CVE and CSAF practice, and never goes below ``advisory_id_start_at``, so
         a team moving from another platform can skip the numbers it already
         issued there. Callers must already hold a lock that serialises concurrent
-        publishes for the team (lock the ``Team`` row); there is no counter table
+        publishes for the team (lock the ``Workspace`` row); there is no counter table
         to lock instead, and the highest existing id for the year is the counter.
         """
         year = year or timezone.now().year
@@ -1068,6 +1077,7 @@ class AdvisoryEvent(models.Model):
         # CRA Article 14 leaves a reporting trail the advisory has to evidence.
         CRA_EARLY_WARNING = "cra_early_warning", "CRA early warning submitted"
         CRA_NOTIFICATION = "cra_notification", "CRA notification submitted"
+        CRA_INTERMEDIATE_REPORT = "cra_intermediate_report", "CRA intermediate report submitted"
         CRA_FINAL_REPORT = "cra_final_report", "CRA final report submitted"
         USERS_NOTIFIED = "users_notified", "Impacted users notified"
         # A new body for an earlier message. The timeline is append-only, so an

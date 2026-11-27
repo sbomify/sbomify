@@ -5,7 +5,7 @@ import tempfile
 import typing
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import urlencode, urljoin
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 if typing.TYPE_CHECKING:
     from django.http import HttpRequest
@@ -31,9 +31,11 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.adapters import OIDC_ID_TOKEN_SESSION_KEY
 from sbomify.apps.core.apis import _check_billing_limits, _enforce_limit_under_lock
 from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
+from sbomify.apps.core.services.trust_center_session import SESSION_HOST_KEY as TRUST_CENTER_SESSION_HOST_KEY
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.artifact_upload import ArtifactUploadView as ArtifactUploadView
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
@@ -48,6 +50,9 @@ from sbomify.apps.core.views.components_dashboard import ComponentCreateView as 
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
 from sbomify.apps.core.views.design_system import DesignSystemView as DesignSystemView
+from sbomify.apps.core.views.product_custom_metadata import (
+    ProductCustomMetadataView as ProductCustomMetadataView,
+)
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
 from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
 from sbomify.apps.core.views.product_identifiers import ProductIdentifiersView as ProductIdentifiersView
@@ -60,7 +65,9 @@ from sbomify.apps.core.views.products_dashboard import ProductCreateView as Prod
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.release_create import ReleaseCreateView as ReleaseCreateView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
+from sbomify.apps.core.views.release_details_private import ReleaseLifecycleView as ReleaseLifecycleView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
+from sbomify.apps.core.views.release_links import ReleaseLinksView as ReleaseLinksView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
 from sbomify.apps.core.views.search import SearchView as SearchView
 from sbomify.apps.core.views.security_advisories import (
@@ -75,6 +82,7 @@ from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailVi
 from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoryProductReleasesView as SecurityAdvisoryProductReleasesView,
 )
+from sbomify.apps.core.views.signed_out import SignedOutView as SignedOutView
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,
@@ -82,6 +90,7 @@ from sbomify.apps.core.views.trust_center_advisories import (
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoryDetailView as TrustCenterAdvisoryDetailView,
 )
+from sbomify.apps.core.views.trust_center_session import trust_center_sign_in_url
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
 from sbomify.apps.sboms.utils import get_product_sbom_package
 
@@ -127,6 +136,12 @@ def keycloak_login(request: HttpRequest) -> HttpResponse:
     OIDC authorize URL (including callback and state) for us.
     """
 
+    # A Trust Center host cannot hold the app's session, so its readers sign in
+    # on the app domain and are handed back (see core/services/trust_center_session.py).
+    trust_center_url = trust_center_sign_in_url(request, request.GET.get("next"))
+    if trust_center_url:
+        return redirect(trust_center_url)
+
     login_path = reverse("openid_connect_login", args=["keycloak"])
     # Validate next parameter to prevent open redirect attacks
     # Only allow relative paths (must start with / and not contain ://)
@@ -158,7 +173,12 @@ def _get_access_tokens(user: Any) -> list[dict[str, Any]]:
     """Helper function to get access tokens for a user."""
     access_tokens_qs = AccessToken.objects.filter(user=user).order_by("-created_at")
     return [
-        {"id": str(token.id), "description": token.description, "created_at": token.created_at.isoformat()}
+        {
+            "id": str(token.id),
+            "description": token.description,
+            "scope_label": token.scope_label,
+            "created_at": token.created_at.isoformat(),
+        }
         for token in access_tokens_qs
     ]
 
@@ -399,7 +419,7 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
 
 
 def logout(request: HttpRequest) -> HttpResponse:
-    """Log the user out of both Django and Keycloak.
+    """Log the user out of both Django and the identity provider.
 
     If the user is not authenticated, simply redirect to the login page.
     """
@@ -407,31 +427,59 @@ def logout(request: HttpRequest) -> HttpResponse:
         # User is already logged out, redirect to login
         return redirect(reverse("core:keycloak_login"))
 
-    django_logout(request)
-    # Redirect to Keycloak logout endpoint and then straight into its login page.
-    # Using post_logout_redirect_uri avoids pausing on the Keycloak "You are logged out" splash.
-    # The browser follows this redirect, so it must be the browser-facing URL.
-    base_url = settings.KEYCLOAK_PUBLIC_URL.rstrip("/")
-    realm = settings.KEYCLOAK_REALM
-    client_id = settings.KEYCLOAK_CLIENT_ID
+    # Signing out of a Trust Center leaves the reader signed in to sbomify itself.
+    if request.session.get(TRUST_CENTER_SESSION_HOST_KEY):
+        django_logout(request)
+        return redirect("/")
 
-    # Where Keycloak should send the user after logout: our login entrypoint,
-    # which immediately redirects back into the Keycloak auth flow.
+    # Read before django_logout flushes the session.
+    id_token = request.session.get(OIDC_ID_TOKEN_SESSION_KEY)
+    end_session_url = _end_session_url(request)
+    django_logout(request)
+
+    # Where the provider should send the user after logout: our login entrypoint,
+    # which immediately redirects back into the OIDC auth flow. Using
+    # post_logout_redirect_uri avoids pausing on a "You are logged out" splash.
     login_path = reverse("openid_connect_login", args=["keycloak"])
     login_redirect = (
         urljoin(settings.APP_BASE_URL.rstrip("/") + "/", login_path.lstrip("/"))
         if getattr(settings, "APP_BASE_URL", None)
         else request.build_absolute_uri(login_path)
     )
+    if not end_session_url:
+        # The provider offers no RP-initiated logout: sign out of sbomify only.
+        return redirect("core:signed_out")
 
-    logout_query = urlencode(
-        {
-            "client_id": client_id,
-            "post_logout_redirect_uri": login_redirect,
-        }
-    )
-    redirect_url = f"{base_url}/realms/{realm}/protocol/openid-connect/logout?{logout_query}"
+    # Keep any query the operator put on OIDC_LOGOUT_URL; ours wins on a clash.
+    logout_url = urlsplit(end_session_url)
+    logout_query = dict(parse_qsl(logout_url.query, keep_blank_values=True))
+    logout_query.update({"client_id": settings.KEYCLOAK_CLIENT_ID, "post_logout_redirect_uri": login_redirect})
+    if id_token:
+        logout_query["id_token_hint"] = id_token
+    redirect_url = urlunsplit(logout_url._replace(query=urlencode(logout_query)))
     return redirect(redirect_url)
+
+
+def _end_session_url(request: HttpRequest) -> str:
+    """The browser-facing logout endpoint, or "" when the provider has none.
+
+    OIDC_LOGOUT_URL wins. A provider set through OIDC_DISCOVERY_URL is asked
+    for its end_session_endpoint. Otherwise this is the Keycloak realm's
+    endpoint under KEYCLOAK_PUBLIC_URL, which may differ from the address the
+    app reaches Keycloak at.
+    """
+    if logout_url := getattr(settings, "OIDC_LOGOUT_URL", ""):
+        return str(logout_url)
+    if getattr(settings, "OIDC_DISCOVERY_URL", ""):
+        from allauth.socialaccount.providers.openid_connect.views import OpenIDConnectOAuth2Adapter
+
+        try:
+            config = OpenIDConnectOAuth2Adapter(request, "keycloak").openid_config
+        except Exception:
+            logger.warning("Could not read the OIDC discovery document for logout", exc_info=True)
+            return ""
+        return str(config.get("end_session_endpoint") or "")
+    return f"{settings.KEYCLOAK_PUBLIC_URL.rstrip('/')}/realms/{settings.KEYCLOAK_REALM}/protocol/openid-connect/logout"
 
 
 def login_error(request: HttpRequest) -> HttpResponse:
@@ -513,10 +561,16 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         # reject any subsequent ``add()`` to this component. The clear MUST
         # happen before the team change.
         component.products.clear()
+        old_team_id = component.team_id
         component.team_id = team_id
         if not target_team.can_be_private():
             component.visibility = Component.Visibility.PUBLIC
         component.save()
+
+        # Its projects leave the old workspace's Dependency-Track tree; its save queued the new one's.
+        from sbomify.apps.vulnerability_scanning.services.dt_release_tree import queue_sync
+
+        queue_sync(old_team_id)
 
     messages.add_message(
         request,

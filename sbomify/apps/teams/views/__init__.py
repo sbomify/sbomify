@@ -35,7 +35,6 @@ from sbomify.apps.teams.models import (
     Member,
     Workspace,
 )
-from sbomify.apps.teams.permissions import check_member_removal
 from sbomify.apps.teams.queries import count_team_members, invitation_email
 from sbomify.apps.teams.services.invitations import invite_member, revoke_invitation
 from sbomify.apps.teams.utils import (
@@ -198,24 +197,12 @@ def team_details(request: HttpRequest, workspace_key: str) -> HttpResponse:
 def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
     from sbomify.apps.teams.utils import remove_member_safely
 
-    user = cast(User, request.user)
-
     try:
         membership = Member.objects.get(pk=membership_id)
     except Member.DoesNotExist:
         messages.add_message(request, messages.ERROR, "Membership not found")
         # Redirect to dashboard if membership not found, as team key is unavailable.
         return redirect("core:dashboard")
-
-    # Authorize against the TARGET membership's workspace: this view takes a bare PK, so
-    # the session workspace is not a valid basis. Rules (including the owner
-    # protections) are shared with the settings members tab via check_member_removal.
-    denial = check_member_removal(actor=user, target=membership)
-    if denial:
-        if denial.forbidden:
-            return error_response(request, HttpResponseForbidden(denial.message))
-        messages.add_message(request, denial.level, denial.message)
-        return redirect_to_team_settings(membership.team.key or "", "members")
 
     return remove_member_safely(request, membership)
 

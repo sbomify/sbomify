@@ -139,15 +139,16 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_OWNER,
         "Owner",
         "Full control of the workspace. Everything an admin can do, plus deleting "
-        "the workspace, inviting owners and removing other owners.",
+        "the workspace, making someone an owner, and changing or removing admins "
+        "and other owners.",
     ),
     (
         ROLE_ADMIN,
         "Admin",
         "Runs the workspace day to day: create, edit and delete products, "
         "components and releases; upload artifacts; manage workspace settings, "
-        "the Trust Center, integrations, members and billing. Cannot invite or "
-        "remove an owner, or delete the workspace.",
+        "the Trust Center, integrations, members and billing. Cannot make someone "
+        "an owner, change or remove an owner or another admin, or delete the workspace.",
     ),
     (
         ROLE_MEMBER,
@@ -215,6 +216,23 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "advisory:manage": ADMINISTER,
     "advisory:publish": ADMINISTER,
     "advisory:delete": ADMINISTER,
+    # CRA Article 14 reports go to ENISA and the national CSIRTs, so recording
+    # one is the same outward act as publishing an advisory.
+    "cra_report:manage": ADMINISTER,
+    # The CRA Declaration-of-Conformity assessment wizard. Reading and editing an
+    # assessment are both owner/admin today (the wizard is governance, not
+    # day-to-day contribution), so both sit at ADMINISTER. Split read from manage
+    # so a read-only token reads the assessment but cannot save steps, generate a
+    # document, or sign a DoC — the scope gate in can() enforces that split, which
+    # a bare role check (verify_item_access) cannot.
+    "cra_assessment:read": ADMINISTER,
+    "cra_assessment:manage": ADMINISTER,
+    # Compliance control catalogs are workspace-level framework configuration:
+    # activating, importing, editing status/mappings/evidence and running
+    # automation sync. Owner/admin, like the rest of workspace governance, and a
+    # named action so a scoped token (read-only / publish / agent) cannot write
+    # them just because its holder happens to be an admin.
+    "controls:manage": ADMINISTER,
     "component:set_visibility": ADMINISTER,
     # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
     # to an external repo — unlike a PAT, which is scoped, expiring and tied to
@@ -267,6 +285,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "component:read_internal": READ_INTERNAL,
     "product:read": READ_INTERNAL,
     "advisory:read": READ_INTERNAL,
+    "cra_report:read": READ_INTERNAL,
     "release:read": READ_INTERNAL_OR_BOT,
     "document:read": READ_INTERNAL,
     "sbom:read": READ_INTERNAL,
@@ -350,6 +369,33 @@ def is_agent_scope(scopes: list[str] | None) -> bool:
     return scopes is not None and frozenset(scopes) in _AGENT_SCOPE_HISTORY
 
 
+# Every scope list the publish preset has ever stored, for the same reason.
+_PUBLISH_SCOPE_HISTORY: tuple[frozenset[str], ...] = (
+    frozenset({"artifact:publish"}),
+    frozenset(SCOPE_PRESETS["publish"] or []),
+)
+
+
+def scope_label(scopes: list[str] | None) -> str:
+    """The token type a person picked when creating a token, read back off its stored scopes.
+
+    Matches the preset labels in the token-creation form. A token whose scopes
+    match no preset, past or present, is ``Custom``.
+    """
+    if scopes is None:
+        return "Full access"
+    scope_set = frozenset(scopes)
+    if scope_set in _AGENT_SCOPE_HISTORY:
+        return "AI agent"
+    if scope_set in _PUBLISH_SCOPE_HISTORY:
+        return "Publish only"
+    # Keyed on the verb like the preset itself, so a read-only token made before
+    # a read action was added still reads as read-only.
+    if scope_set and all(s.split(":", 1)[-1].startswith("read") or s in _ABAC_ACTIONS for s in scope_set):
+        return "Read-only"
+    return "Custom"
+
+
 def credential_channel(request: Any) -> str:
     """How an API request was sent, read off its credential: ``ci``, ``agent`` or ``api``.
 
@@ -368,13 +414,17 @@ def credential_channel(request: Any) -> str:
     return "api"
 
 
-def _scope_permits(scopes: list[str] | None, action: str) -> bool:
+def scope_permits(scopes: list[str] | None, action: str) -> bool:
     """Does a token's ``scopes`` grant ``action``?
 
     ``None`` means an unscoped (legacy / full-capability) token — it permits
     everything, matching the ``expires_at IS NULL = never expires`` precedent.
     An empty list permits nothing. Scope can only *narrow* access; the role and
     resource-attribute checks still run afterwards.
+
+    Public because the MCP server (``sbomify.apps.mcp.registry``) reuses it to
+    filter its advertised tool list to what the caller's token could actually
+    invoke. That is presentation only — enforcement remains ``can()`` below.
     """
     if scopes is None or SCOPE_WILDCARD in scopes:
         return True
@@ -430,7 +480,7 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
     # the user's role would allow it. Non-token actors (sessions, delegated
     # user-stub checks) carry no access_token_record, so this is a no-op for them.
     token = getattr(request, "access_token_record", None)
-    if token is not None and not _scope_permits(token.scopes, action):
+    if token is not None and not scope_permits(token.scopes, action):
         return Decision(False, f"token scope does not grant {action!r}")
 
     if action in _ABAC_ACTIONS:

@@ -4,6 +4,7 @@ import {
     formatDateTime,
     formatRelativeDate,
     formatCompactRelativeDate,
+    isHttpUrl,
 } from './utils'
 
 describe('Utils', () => {
@@ -332,6 +333,20 @@ describe('Utils', () => {
         test('should use 12-hour format', () => {
             const result = lastChecked('2024-06-15T14:30:00Z')
             expect(result).not.toMatch(/\b14:/)
+        })
+    })
+
+    describe('isHttpUrl', () => {
+        test('accepts http and https repository URLs', () => {
+            expect(isHttpUrl('https://github.com/example/repo')).toBe(true)
+            expect(isHttpUrl('http://git.example.com/group/project.git')).toBe(true)
+        })
+
+        test('rejects other schemes, bare text and credentials', () => {
+            expect(isHttpUrl('javascript:alert(1)')).toBe(false)
+            expect(isHttpUrl('git@github.com:example/repo.git')).toBe(false)
+            expect(isHttpUrl('github.com/example/repo')).toBe(false)
+            expect(isHttpUrl('https://user:token@github.com/example/repo')).toBe(false)
         })
     })
 })

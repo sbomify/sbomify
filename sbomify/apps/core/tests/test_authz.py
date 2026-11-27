@@ -103,6 +103,20 @@ _MATRIX = {
         "team",
         {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
     ),
+    # CRA Declaration-of-Conformity wizard and compliance control catalogs are
+    # workspace governance: owner/admin only, both read and write.
+    "cra_assessment:read": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "cra_assessment:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
+    "controls:manage": (
+        "team",
+        {"owner": True, "operator": False, "member": False, "admin": True, "guest": False, "bot": False},
+    ),
     "workspace:delete": (
         "team",
         {"owner": True, "operator": False, "member": False, "admin": False, "guest": False, "bot": False},
@@ -431,30 +445,30 @@ class TestScopePermits:
     """
 
     def test_none_scope_permits_everything(self):
-        assert authz._scope_permits(None, "component:manage") is True
-        assert authz._scope_permits(None, "workspace:delete") is True
+        assert authz.scope_permits(None, "component:manage") is True
+        assert authz.scope_permits(None, "workspace:delete") is True
 
     def test_wildcard_permits_everything(self):
-        assert authz._scope_permits(["*"], "component:manage") is True
-        assert authz._scope_permits(["*"], "billing:manage") is True
+        assert authz.scope_permits(["*"], "component:manage") is True
+        assert authz.scope_permits(["*"], "billing:manage") is True
 
     def test_exact_action_scope(self):
-        assert authz._scope_permits(["sbom:read"], "sbom:read") is True
-        assert authz._scope_permits(["sbom:read"], "sbom:manage") is False
-        assert authz._scope_permits(["sbom:read"], "component:manage") is False
+        assert authz.scope_permits(["sbom:read"], "sbom:read") is True
+        assert authz.scope_permits(["sbom:read"], "sbom:manage") is False
+        assert authz.scope_permits(["sbom:read"], "component:manage") is False
 
     def test_resource_bundle_scope(self):
-        assert authz._scope_permits(["component:*"], "component:manage") is True
-        assert authz._scope_permits(["component:*"], "component:read_internal") is True
-        assert authz._scope_permits(["component:*"], "sbom:manage") is False
+        assert authz.scope_permits(["component:*"], "component:manage") is True
+        assert authz.scope_permits(["component:*"], "component:read_internal") is True
+        assert authz.scope_permits(["component:*"], "sbom:manage") is False
 
     def test_empty_scope_permits_nothing(self):
-        assert authz._scope_permits([], "sbom:read") is False
+        assert authz.scope_permits([], "sbom:read") is False
 
     def test_publish_only_token(self):
         scopes = ["artifact:publish"]
-        assert authz._scope_permits(scopes, "artifact:publish") is True
-        assert authz._scope_permits(scopes, "component:manage") is False
+        assert authz.scope_permits(scopes, "artifact:publish") is True
+        assert authz.scope_permits(scopes, "component:manage") is False
 
     def test_is_valid_scope(self):
         assert authz.is_valid_scope("*") is True
@@ -642,3 +656,22 @@ class TestTheOperatorCanReachWhatItMayDo:
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["component:manage"]
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["sbom:manage"]
         assert authz.ROLE_OPERATOR not in authz._ROLE_ACTIONS["artifact:publish"]
+
+
+@pytest.mark.parametrize(
+    ("scopes", "label"),
+    [
+        (None, "Full access"),
+        (authz.SCOPE_PRESETS["publish"], "Publish only"),
+        (["artifact:publish"], "Publish only"),
+        (authz.SCOPE_PRESETS["agent"], "AI agent"),
+        (["workspace:read", "vex_submission:create", "vex_submission:read"], "AI agent"),
+        (authz.SCOPE_PRESETS["read_only"], "Read-only"),
+        (["sbom:read"], "Read-only"),
+        (["component:read_internal", "component:access"], "Read-only"),
+        (["workspace:read", "component:create"], "Custom"),
+        ([], "Custom"),
+    ],
+)
+def test_scope_label_names_the_preset_a_token_was_made_with(scopes, label):
+    assert authz.scope_label(scopes) == label

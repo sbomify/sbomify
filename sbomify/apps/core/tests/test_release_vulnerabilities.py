@@ -8,11 +8,12 @@ from django.urls import reverse
 from pytest_mock import MockerFixture
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+from sbomify.apps.core.services.release_lifecycle import set_release_state
 from sbomify.apps.core.services.release_vulnerabilities import build_release_vulnerabilities
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Member, Workspace
 from sbomify.apps.vulnerability_scanning.posture import build_release_vuln_postures
 
 pytestmark = pytest.mark.django_db
@@ -76,7 +77,7 @@ def test_rollup_matches_the_product_page_and_counts_each_artifact(
 
 def test_outsider_is_refused(release: Release, django_user_model) -> None:
     outsider = Member.objects.create(
-        team=Team.objects.create(name="Elsewhere"),
+        team=Workspace.objects.create(name="Elsewhere"),
         user=django_user_model.objects.create_user(username="outsider", email="outsider@example.com"),
         role="owner",
     )
@@ -101,8 +102,26 @@ def test_release_page_lists_vulnerabilities(
     assert "<c-" not in content
     assert 'id="release-vulnerabilities"' in content
     assert "CVE-1" in content and "CVE-2" in content
+    assert 'href="https://insights.sbomify.com/CVE-1/"' in content
     assert "1 SBOM not scanned yet" in content
     assert 'id="release-artifact-vulnerabilities"' in content
+
+
+def test_a_retired_release_page_says_its_unscanned_sboms_were_never_scanned(
+    client: Client, sample_team_with_owner_member: Member, release: Release, mocker: MockerFixture
+) -> None:
+    member = sample_team_with_owner_member
+    setup_authenticated_client_session(client, member.team, member.user)
+    mocker.patch("sbomify.apps.billing.config.needs_plan_selection", return_value=False)
+    component = ReleaseArtifact.objects.filter(release=release).first().sbom.component
+    _sbom(component, "next", [])  # newer, so nothing the release ships is scanned any more
+    assert set_release_state(release, "withdraw", reason="defective").ok
+
+    response = client.get(reverse("core:release_details", args=[release.product_id, release.id]))
+
+    content = response.content.decode()
+    assert "1 SBOM without scan results" in content
+    assert "not scanned yet" not in content
 
 
 def test_release_without_sboms_has_no_vulnerabilities_section(
@@ -117,3 +136,48 @@ def test_release_without_sboms_has_no_vulnerabilities_section(
 
     assert response.status_code == 200
     assert 'id="release-vulnerabilities"' not in response.content.decode()
+
+
+def test_each_release_s_artifact_rows_read_that_release_s_run(sample_team_with_owner_member: Member) -> None:
+    """One SBOM in two releases with different VEX. The artifact row must agree
+    with the rollup above it, which reads the run covering the release."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    team = sample_team_with_owner_member.team
+    product = Product.objects.create(team=team, name="Example")
+    component = Component.objects.create(team=team, name="Library")
+    sbom = SBOM.objects.create(name="shared", component=component, version="1.0", format="cyclonedx")
+    older = Release.objects.create(product=product, name="v1")
+    newer = Release.objects.create(product=product, name="v2")
+    for release in (older, newer):
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+    open_run = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result={"findings": [_finding("CVE-7", "critical")]},
+    )
+    AssessmentRun.objects.filter(pk=open_run.pk).update(created_at=timezone.now() - timedelta(hours=1))
+    open_run.releases.add(older)
+    ruled = AssessmentRun.objects.create(
+        sbom=sbom,
+        plugin_name="osv",
+        category="security",
+        status="completed",
+        result={"findings": [_finding("CVE-7", "critical") | {"analysis_state": "not_affected"}]},
+    )
+    ruled.releases.add(newer)
+    request = _request(sample_team_with_owner_member)
+
+    old_view = build_release_vulnerabilities(request, older.id).value
+    new_view = build_release_vulnerabilities(request, newer.id).value
+
+    assert old_view["counts"]["critical"] == 1
+    assert old_view["artifacts"][sbom.id]["critical"] == 1
+    assert old_view["artifacts"][sbom.id]["suppressed"] == 0
+    assert new_view["counts"]["critical"] == 0
+    assert new_view["artifacts"][sbom.id]["critical"] == 0
+    assert new_view["artifacts"][sbom.id]["suppressed"] == 1

@@ -6,6 +6,7 @@
     <c-navigation.tab panel="product-lifecycle" active_binding="detailTab === 'lifecycle'" @click="selectDetailTab('lifecycle')">Lifecycle</c-navigation.tab>
     <c-navigation.tab panel="product-links" active_binding="detailTab === 'links'" @click="selectDetailTab('links')" hx-get="{% url 'core:product_links' product.id %}" hx-trigger="click once" hx-target="#product-links-panel" hx-swap="innerHTML show:none focus-scroll:false">Links</c-navigation.tab>
     <c-navigation.tab panel="product-identifiers" active_binding="detailTab === 'identifiers'" @click="selectDetailTab('identifiers')" hx-get="{% url 'core:product_identifiers' product.id %}" hx-trigger="click once" hx-target="#product-identifiers-panel" hx-swap="innerHTML show:none focus-scroll:false">Identifiers</c-navigation.tab>
+    <c-navigation.tab panel="product-custom-metadata" active_binding="detailTab === 'metadata'" @click="selectDetailTab('metadata')" hx-get="{% url 'core:product_custom_metadata' product.id %}" hx-trigger="click once" hx-target="#product-custom-metadata-panel" hx-swap="innerHTML show:none focus-scroll:false">Metadata</c-navigation.tab>
     <c-navigation.tab panel="product-compliance" active_binding="detailTab === 'compliance'" @click="selectDetailTab('compliance')" hx-get="{% url 'controls:product_controls' current_team.key product.id %}" hx-trigger="click once" hx-target="#product-controls-panel" hx-swap="innerHTML show:none focus-scroll:false">Compliance</c-navigation.tab>
     </c-navigation.tabs>
     <div x-ref="panels">
@@ -40,6 +41,16 @@
              x-cloak>
             <div id="product-identifiers-panel">
                 <c-feedback.loading message="Loading product identifiers" />
+            </div>
+        </div>
+        <div id="panel-product-custom-metadata"
+             role="tabpanel"
+             aria-labelledby="tab-product-custom-metadata"
+             tabindex="0"
+             x-show="detailTab === 'metadata'"
+             x-cloak>
+            <div id="product-custom-metadata-panel">
+                <c-feedback.loading message="Loading custom metadata" />
             </div>
         </div>
         <div id="panel-product-compliance"
