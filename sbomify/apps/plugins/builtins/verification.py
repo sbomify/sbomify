@@ -653,6 +653,20 @@ class SBOMVerificationPlugin(AssessmentPlugin):
 
         github_org = vcs_info.get("org", "")
         github_repo = vcs_info.get("repo", "")
+        if vcs_info.get("source") != "document":
+            # Only a package names a repository. That project's attestations are for
+            # its own builds, never for this SBOM, so asking it only bought hours of
+            # retries ending on "No attestation found".
+            return self._gha_finding(
+                "warning",
+                "No GitHub Repository for This SBOM",
+                (
+                    f"The SBOM names a GitHub repository only for one of its packages "
+                    f"({github_org}/{github_repo}), not for itself. sbomify looks for a GitHub "
+                    "attestation in the repository the SBOM's own subject names, so it did not ask."
+                ),
+                metadata={"reason": "vcs_from_package", "vcs_source": vcs_info.get("source", "package")},
+            )
         # ``--certificate-identity-regexp`` interprets its argument as a
         # regex, so any metacharacters (``.``, ``+``, etc.) in the org or
         # repo would broaden the match and weaken identity verification.
@@ -667,20 +681,13 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         precomputed = context.sha256_hash if context else None
         digest = precomputed or hashlib.sha256(sbom_data).hexdigest()
 
-        # Qualified when the repository came from a dependency rather than from
-        # the document's own subject. _extract_vcs_info falls back to the first
-        # component carrying a VCS reference, which for a Python SBOM is
-        # typically an upstream OSS project — naming it unqualified tells the
-        # reader to go and fix a workflow in a repository they do not own.
-        repo_provenance = "" if vcs_info.get("source") == "document" else " (from a package reference in the SBOM)"
-
         # Per-source failures below emit ``warning`` rather than ``fail`` so
         # they don't drive ``fail_count > 0`` on the run when another source
         # (stored signature/provenance) has already verified the SBOM. The
         # aggregating ``verification:attestation`` summary is the single
         # ``fail`` signal for "no source verified" — it's what BSI's
         # ``requires_one_of: attestation`` consumes.
-        bundle = self._download_github_bundle(github_org, github_repo, digest, repo_provenance)
+        bundle = self._download_github_bundle(github_org, github_repo, digest)
         if not bundle.get("success"):
             return self._gha_finding(
                 "warning",
@@ -696,7 +703,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 # can see both sides.
                 (
                     f"Could not retrieve an attestation from GitHub for this SBOM. sbomify asked "
-                    f"{github_org}/{github_repo}{repo_provenance} for subject digest "
+                    f"{github_org}/{github_repo} for subject digest "
                     f"sha256:{digest}, the SHA-256 of this SBOM as sbomify stored it. GitHub's "
                     f"response: {bundle.get('error', 'unknown')}. If the attestation exists and "
                     f"the digest above does not match its subject, the workflow is attesting a "
@@ -809,7 +816,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 delays.append(3600)
         return max(delays, default=3600)
 
-    def _download_github_bundle(self, org: str, repo: str, digest: str, repo_provenance: str = "") -> dict[str, Any]:
+    def _download_github_bundle(self, org: str, repo: str, digest: str) -> dict[str, Any]:
         """Fetch the attestation bundle from GitHub's public Attestations API.
 
         Raises ``AttestationNotYetAvailableError`` on ``404`` and
@@ -845,7 +852,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             # image, or a copy of the SBOM written before augmentation rewrote
             # it) is the failure mode that never resolves however long we retry.
             raise AttestationNotYetAvailableError(
-                f"GitHub returned no attestation for this SBOM from {org}/{repo}{repo_provenance}. "
+                f"GitHub returned no attestation for this SBOM from {org}/{repo}. "
                 f"sbomify asked for the SHA-256 of the SBOM as sbomify stored it: sha256:{digest}. "
                 f"If the workflow has no attest step, add actions/attest-build-provenance for the "
                 f"file you upload. If it already attests, it attested a different file, such as a "
@@ -855,7 +862,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
         if self._is_rate_limited(response):
             raise GitHubRateLimitedError(
-                f"GitHub refused the attestation lookup for this SBOM from {org}/{repo}{repo_provenance} "
+                f"GitHub refused the attestation lookup for this SBOM from {org}/{repo} "
                 f"because sbomify reached GitHub's API rate limit. This says nothing about the SBOM or its "
                 f"attestation. sbomify asked for sha256:{digest}. Run the assessment again later.",
                 title="GitHub rate limit reached",

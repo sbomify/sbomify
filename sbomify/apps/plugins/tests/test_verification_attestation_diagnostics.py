@@ -222,8 +222,7 @@ def _cyclonedx_with_dependency_vcs(tmp_path: Path) -> tuple[Path, str]:
 class TestItSaysWhereTheRepositoryCameFrom:
     """``_extract_vcs_info`` falls back to the first component carrying a VCS
     reference, which for a Python SBOM is typically an upstream OSS project.
-    Naming it unqualified told the reader to go and fix a workflow in a
-    repository they do not own."""
+    That repository is never asked; only the SBOM's own one is."""
 
     def _finding_for(self, sbom_file: Path, sha256: str):
         plugin = SBOMVerificationPlugin()
@@ -237,12 +236,24 @@ class TestItSaysWhereTheRepositoryCameFrom:
             result = plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
         return next(f for f in result.findings if f.id == "verification:github-attestation")
 
-    def test_a_dependency_repo_is_qualified(self, tmp_path: Path) -> None:
-        finding = self._finding_for(*_cyclonedx_with_dependency_vcs(tmp_path))
+    def test_a_dependency_repo_is_not_asked(self, tmp_path: Path) -> None:
+        """A package's repository cannot hold an attestation for this SBOM. Asking it made
+        the run retry for hours and end on a high "No attestation found" error."""
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
 
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+        ):
+            sbom_file, sha256 = _cyclonedx_with_dependency_vcs(tmp_path)
+            result = plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
+        finding = next(f for f in result.findings if f.id == "verification:github-attestation")
+
+        assert session.get.call_count == 0
+        assert finding.status == "warning"
+        assert finding.metadata["reason"] == "vcs_from_package"
         assert "psf/requests" in finding.description
-        assert "from a package reference" in finding.description
-        assert finding.metadata["vcs_source"] == "component"
 
     def test_the_documents_own_repo_is_not_qualified(self, sbom) -> None:
         """The common case must stay direct — hedging it would make every
@@ -255,12 +266,9 @@ class TestItSaysWhereTheRepositoryCameFrom:
 
 
 class TestTheRetryMessageIsQualifiedToo:
-    """The 404 path is the one users actually reach.
-
-    It becomes the run's error after the retry budget is spent, so leaving it
-    unqualified meant the dominant message still told a reader to go and fix a
-    workflow in a dependency's repository — the exact harm the qualifier was
-    added for, on the path that matters most.
+    """The 404 path is the one users actually reach, and it becomes the run's
+    error after the retry budget is spent. Only the SBOM's own repository gets
+    there, so its message names that repository plainly.
     """
 
     def _raise_404_for(self, sbom_file: Path, sha256: str) -> str:
@@ -275,12 +283,6 @@ class TestTheRetryMessageIsQualifiedToo:
         ):
             plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
         return str(excinfo.value)
-
-    def test_a_dependency_repo_is_qualified(self, tmp_path: Path) -> None:
-        message = self._raise_404_for(*_cyclonedx_with_dependency_vcs(tmp_path))
-
-        assert "psf/requests" in message
-        assert "from a package reference" in message
 
     def test_the_documents_own_repo_is_not(self, sbom) -> None:
         message = self._raise_404_for(*sbom)
