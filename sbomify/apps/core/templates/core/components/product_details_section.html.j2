@@ -1,6 +1,8 @@
+{# Tab loads queue here rather than inherit #product-content's replace, which cancelled one tab's load when another started. #}
 <section class="flex flex-col gap-4"
          aria-labelledby="product-details-heading"
-         x-data="{ selectDetailTab(tab) { this.$refs.panels.style.minHeight = this.$refs.panels.offsetHeight + 'px'; this.detailTab = tab; }, init() { if (this.detailTab !== 'lifecycle') this.$nextTick(() => { htmx.process(this.$root); this.$root.querySelector(`[data-detail-tab='${this.detailTab}']`)?.click(); }); } }">
+         hx-sync="this:queue all"
+         x-data="{ selectDetailTab(tab) { this.$refs.panels.style.minHeight = this.$refs.panels.offsetHeight + 'px'; this.detailTab = tab; }, init() { if (this.detailTab !== 'lifecycle') document.body.addEventListener('htmx:afterSettle', () => this.$root.querySelector(`[data-detail-tab='${this.detailTab}']`)?.click(), { once: true }); } }">
     <c-layout.section-header id="product-details-heading" title="Product details" level="2" />
     <c-navigation.tabs aria-label="Product details">
     <c-navigation.tab panel="product-lifecycle" active_binding="detailTab === 'lifecycle'" data-detail-tab="lifecycle" @click="selectDetailTab('lifecycle')">Lifecycle</c-navigation.tab>

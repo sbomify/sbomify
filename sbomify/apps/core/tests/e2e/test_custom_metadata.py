@@ -95,3 +95,6 @@ def test_product_details_tab_survives_a_live_refresh(
 
     expect(page.get_by_role("tab", name="Metadata", exact=True)).to_have_attribute("aria-selected", "true")
     expect(page.locator("#product-custom-metadata-panel").get_by_text("platform", exact=True)).to_be_visible()
+    # The refresh loaded Lifecycle behind the open tab; going back finds it loaded, not stuck.
+    page.get_by_role("tab", name="Lifecycle", exact=True).click()
+    expect(page.locator("#product-lifecycle-panel").get_by_text("No lifecycle dates set", exact=True)).to_be_visible()
