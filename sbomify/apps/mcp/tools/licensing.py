@@ -44,6 +44,15 @@ def register_tools(mcp: FastMCP) -> None:
                 for entry in get_license_list()
                 if not term or term in entry["key"].casefold() or term in str(entry.get("name", "")).casefold()
             ]
+            if term:
+                # Exact identifier, then identifiers and names that start with the term, then the rest.
+                matches.sort(
+                    key=lambda entry: (
+                        entry["key"].casefold() != term,
+                        not entry["key"].casefold().startswith(term),
+                        not str(entry.get("name", "")).casefold().startswith(term),
+                    )
+                )
             safe_page, safe_size = clamp_page(page, page_size)
             start = (safe_page - 1) * safe_size
             return serializers.paginated(
