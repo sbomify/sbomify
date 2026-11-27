@@ -2,7 +2,8 @@
 {% load django_vite %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block content %}
-    {% include "core/product_content.html.j2" %}
+    {# Holds the Product details tab outside #product-content, which a live refresh replaces whole. #}
+    <div x-data="{ detailTab: 'lifecycle' }" class="contents">{% include "core/product_content.html.j2" %}</div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}

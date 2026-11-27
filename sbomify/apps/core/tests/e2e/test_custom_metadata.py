@@ -71,3 +71,27 @@ def test_product_metadata_card_save_and_reopen(
     assert product.custom_metadata == {"owner": "new owner"}
     panel.get_by_role("button", name="Edit", exact=True).click()
     expect(panel.get_by_role("textbox", name="Value 1", exact=True)).to_have_value("new owner")
+
+
+@pytest.mark.django_db
+def test_product_details_tab_survives_a_live_refresh(
+    authenticated_page: Page, team_with_business_plan: Workspace
+) -> None:
+    """A broadcast replaces the whole product view, the metadata save's own broadcast included.
+    The Product details tab the reader picked stays open, its content loaded again."""
+    from sbomify.apps.core.models import Product
+
+    product = Product.objects.create(
+        team=team_with_business_plan, name="Product details tab", custom_metadata={"owner": "platform"}
+    )
+    page = authenticated_page
+    page.goto(reverse("core:product_details", kwargs={"product_id": product.pk}))
+    page.get_by_role("tab", name="Metadata", exact=True).click()
+    expect(page.locator("#product-custom-metadata-panel").get_by_text("platform", exact=True)).to_be_visible()
+
+    product_url = reverse("core:product_details", kwargs={"product_id": product.pk})
+    with page.expect_response(lambda r: r.request.method == "GET" and r.url.split("?")[0].endswith(product_url)):
+        page.evaluate("htmx.trigger(document.body, 'refresh-product')")
+
+    expect(page.get_by_role("tab", name="Metadata", exact=True)).to_have_attribute("aria-selected", "true")
+    expect(page.locator("#product-custom-metadata-panel").get_by_text("platform", exact=True)).to_be_visible()
