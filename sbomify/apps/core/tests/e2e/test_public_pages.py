@@ -250,3 +250,45 @@ def test_advisory_filters_open_from_the_toggle_on_a_phone(
     page.wait_for_load_state("networkidle")
     expect(page.locator("#advisoryFilterBody")).to_be_visible()
     expect(page.locator("#advisoryFilterBody input[name=severity][value=high]")).to_be_checked()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 1440, 1280])
+def test_public_advisory_table_fits_without_a_sideways_scroll(
+    authenticated_page: Page,
+    trust_center_product,  # noqa: F811
+    sample_user,  # noqa: F811
+    width: int,
+) -> None:
+    """On a desktop screen the advisory index fits its column: a product with a
+    realistic name, a version and both dates used to push the Updated column
+    past the panel edge behind a horizontal scrollbar."""
+    from sbomify.apps.core.models import Release
+
+    team = trust_center_product.team
+    trust_center_product.name = "Pied Piper Compression Engine"
+    trust_center_product.save()
+    release = Release.objects.create(product=trust_center_product, name="v2.1.0", version="2.1.0")
+    created = create_advisory(
+        team,
+        sample_user,
+        title="Improper authentication in SAML assertion handling",
+        severity="critical",
+        identifier="CVE-2026-41337",
+        remediation_status="investigating",
+        cvss_score=9.1,
+        products=[trust_center_product],
+        affected_releases=[release],
+    )
+    assert created.ok, created.error
+    assert publish_advisory(team, sample_user, created.value, visibility="public").ok
+
+    page = authenticated_page
+    page.set_viewport_size({"width": width, "height": 1080})
+    page.goto(f"/public/workspace/{team.key}/advisories/")
+    page.wait_for_load_state("networkidle")
+
+    viewport = page.locator("#advisoryBrowse [data-table-viewport]")
+    expect(viewport.get_by_role("columnheader", name="Updated")).to_be_visible()
+    overflow = viewport.evaluate("el => el.scrollWidth - el.clientWidth")
+    assert overflow <= 0, f"advisory table overflows its panel by {overflow}px at {width}px"

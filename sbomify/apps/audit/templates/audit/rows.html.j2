@@ -1,0 +1,32 @@
+{% for row in rows %}
+    <c-tables.row>
+    <c-tables.cell compact date muted>
+    <time datetime="{{ row.event.occurred_at|date:'c' }}"
+          title="{{ row.event.occurred_at|date:'c' }}">{{ row.event.occurred_at|date:"j M Y, H:i:s" }}</time>
+    </c-tables.cell>
+    <c-tables.cell compact>
+    <c-overview.record title="{{ row.actor_label }}" detail="{{ row.actor_detail }}" />
+    </c-tables.cell>
+    <c-tables.cell compact>
+    <c-overview.record title="{{ row.action_label }}" detail="{{ row.summary }}" />
+    </c-tables.cell>
+    <c-tables.cell compact>
+    {% if row.event.target_label or row.event.target_id %}
+        <c-overview.record title="{{ row.event.target_label|default:row.event.target_id }}" detail="{{ row.target_type_label }}" />
+    {% endif %}
+    </c-tables.cell>
+    <c-tables.cell compact muted>
+    <c-overview.record title="{{ row.channel_label }}" detail="{{ row.event.ip_address|default:'' }}" />
+    </c-tables.cell>
+    <c-tables.cell compact end>
+    <c-badges.dynamic variant="{{ row.outcome_variant }}">{{ row.event.get_outcome_display }}</c-badges.dynamic>
+    </c-tables.cell>
+    </c-tables.row>
+{% endfor %}
+{% if more_url %}
+    <tr id="audit-log-more">
+        <td colspan="6" class="px-5 py-3 text-center">
+            <c-buttons.secondary size="sm" hx-get="{{ more_url }}" hx-target="#audit-log-more" hx-swap="outerHTML">Show older events</c-buttons.secondary>
+        </td>
+    </tr>
+{% endif %}

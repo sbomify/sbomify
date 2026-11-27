@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from sbomify.apps.integrations import oauth
 from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
-from sbomify.apps.integrations.providers.vanta import VANTA
+from sbomify.apps.integrations.tests._providers import ROTATING
 
 
 class _Response:
@@ -37,14 +37,14 @@ def request_with_session(rf: RequestFactory):
     return request
 
 
-@pytest.mark.usefixtures("vanta_credentials")
+@pytest.mark.usefixtures("rotating_credentials")
 class TestAuthorizationUrl:
     def test_carries_every_parameter_the_provider_needs(self, request_with_session) -> None:
-        url = oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        url = oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
 
         parsed = urlparse(url)
         params = parse_qs(parsed.query)
-        assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == VANTA.authorize_url
+        assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == ROTATING.authorize_url
         assert params["client_id"] == ["vci_test"]
         assert params["response_type"] == ["code"]
         assert params["scope"] == ["vanta-api.all:read"]
@@ -53,67 +53,67 @@ class TestAuthorizationUrl:
 
     def test_redirect_uri_has_no_workspace_in_it(self, request_with_session) -> None:
         """Providers register one exact callback, so the workspace cannot be in the path."""
-        url = oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        url = oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
         redirect_uri = parse_qs(urlparse(url).query)["redirect_uri"][0]
         assert "workspacekey1" not in redirect_uri
 
 
-@pytest.mark.usefixtures("vanta_credentials")
+@pytest.mark.usefixtures("rotating_credentials")
 class TestConsumeState:
     def test_round_trips_the_workspace(self, request_with_session) -> None:
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
         nonce = request_with_session.session[oauth.SESSION_KEY]["nonce"]
 
-        assert oauth.consume_state(request_with_session, VANTA, nonce) == "workspacekey1"
+        assert oauth.consume_state(request_with_session, ROTATING, nonce) == "workspacekey1"
 
     def test_is_single_use(self, request_with_session) -> None:
         """A replayed callback must not connect a second time."""
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
         nonce = request_with_session.session[oauth.SESSION_KEY]["nonce"]
 
-        assert oauth.consume_state(request_with_session, VANTA, nonce) == "workspacekey1"
-        assert oauth.consume_state(request_with_session, VANTA, nonce) is None
+        assert oauth.consume_state(request_with_session, ROTATING, nonce) == "workspacekey1"
+        assert oauth.consume_state(request_with_session, ROTATING, nonce) is None
 
     def test_rejects_a_state_that_does_not_match(self, request_with_session) -> None:
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
 
-        assert oauth.consume_state(request_with_session, VANTA, "not-the-nonce") is None
+        assert oauth.consume_state(request_with_session, ROTATING, "not-the-nonce") is None
 
     def test_a_rejected_state_is_also_cleared(self, request_with_session) -> None:
         """A nonce that failed one check must not be available for a second go."""
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
         nonce = request_with_session.session[oauth.SESSION_KEY]["nonce"]
 
-        assert oauth.consume_state(request_with_session, VANTA, "wrong") is None
-        assert oauth.consume_state(request_with_session, VANTA, nonce) is None
+        assert oauth.consume_state(request_with_session, ROTATING, "wrong") is None
+        assert oauth.consume_state(request_with_session, ROTATING, nonce) is None
 
     def test_rejects_an_empty_state(self, request_with_session) -> None:
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
 
-        assert oauth.consume_state(request_with_session, VANTA, "") is None
+        assert oauth.consume_state(request_with_session, ROTATING, "") is None
 
     def test_rejects_a_stale_flow(self, request_with_session) -> None:
-        oauth.start_authorization(request_with_session, VANTA, "workspacekey1")
+        oauth.start_authorization(request_with_session, ROTATING, "workspacekey1")
         pending = request_with_session.session[oauth.SESSION_KEY]
         pending["started_at"] = (timezone.now() - oauth.STATE_MAX_AGE - timedelta(minutes=1)).isoformat()
         request_with_session.session[oauth.SESSION_KEY] = pending
 
-        assert oauth.consume_state(request_with_session, VANTA, pending["nonce"]) is None
+        assert oauth.consume_state(request_with_session, ROTATING, pending["nonce"]) is None
 
     def test_rejects_a_flow_started_for_another_provider(self, request_with_session) -> None:
         from dataclasses import replace
 
-        other = replace(VANTA, key="other")
+        other = replace(ROTATING, key="other")
         oauth.start_authorization(request_with_session, other, "workspacekey1")
         nonce = request_with_session.session[oauth.SESSION_KEY]["nonce"]
 
-        assert oauth.consume_state(request_with_session, VANTA, nonce) is None
+        assert oauth.consume_state(request_with_session, ROTATING, nonce) is None
 
     def test_rejects_a_callback_with_no_flow_at_all(self, request_with_session) -> None:
-        assert oauth.consume_state(request_with_session, VANTA, "anything") is None
+        assert oauth.consume_state(request_with_session, ROTATING, "anything") is None
 
 
-@pytest.mark.usefixtures("vanta_credentials")
+@pytest.mark.usefixtures("rotating_credentials")
 class TestTokenRequests:
     def test_exchange_sends_the_grant_and_parses_the_token(self, request_with_session, monkeypatch) -> None:
         captured: dict[str, object] = {}
@@ -136,10 +136,10 @@ class TestTokenRequests:
 
         monkeypatch.setattr(oauth, "request_with_retry", fake_request)
 
-        token_set = oauth.exchange_code(request_with_session, VANTA, "vac_code")
+        token_set = oauth.exchange_code(request_with_session, ROTATING, "vac_code")
 
         assert captured["method"] == "POST"
-        assert captured["url"] == VANTA.token_url
+        assert captured["url"] == ROTATING.token_url
         assert captured["json"]["grant_type"] == "authorization_code"
         assert captured["json"]["code"] == "vac_code"
         assert captured["json"]["client_secret"] == "vcs_test"
@@ -161,7 +161,7 @@ class TestTokenRequests:
 
         monkeypatch.setattr(oauth, "request_with_retry", fake_request)
 
-        token_set = oauth.refresh(VANTA, "vrt_one")
+        token_set = oauth.refresh(ROTATING, "vrt_one")
 
         assert captured["json"]["grant_type"] == "refresh_token"
         assert captured["json"]["refresh_token"] == "vrt_one"
@@ -172,9 +172,9 @@ class TestTokenRequests:
             oauth, "request_with_retry", lambda *a, **k: _Response(200, {"access_token": "vat", "expires_in": 60})
         )
 
-        token_set = oauth.refresh(VANTA, "vrt_one")
+        token_set = oauth.refresh(ROTATING, "vrt_one")
 
-        assert token_set.scopes == VANTA.scopes
+        assert token_set.scopes == ROTATING.scopes
         assert token_set.refresh_token == ""
 
     @pytest.mark.parametrize("status", [400, 401, 403])
@@ -183,7 +183,7 @@ class TestTokenRequests:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {"error": "invalid_grant"}))
 
         with pytest.raises(ProviderAuthError):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     @pytest.mark.parametrize("status", [408, 429])
     def test_a_timeout_or_a_rate_limit_is_not_a_refusal(self, monkeypatch, status) -> None:
@@ -197,7 +197,7 @@ class TestTokenRequests:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {"error": "slow_down"}))
 
         with pytest.raises(ProviderUnavailable):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     def test_a_refusal_does_not_echo_the_error_body(self, monkeypatch) -> None:
         """The body can repeat the client secret back, so it must not surface."""
@@ -208,7 +208,7 @@ class TestTokenRequests:
         )
 
         with pytest.raises(ProviderAuthError) as exc:
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
         assert "vcs_test" not in exc.value.detail
 
@@ -218,7 +218,7 @@ class TestTokenRequests:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(status, {}))
 
         with pytest.raises(ProviderUnavailable):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     def test_an_unreachable_provider_is_transient(self, monkeypatch) -> None:
         def boom(*args, **kwargs):
@@ -227,21 +227,124 @@ class TestTokenRequests:
         monkeypatch.setattr(oauth, "request_with_retry", boom)
 
         with pytest.raises(ProviderUnavailable):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     def test_a_response_with_no_access_token_is_transient(self, monkeypatch) -> None:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(200, {"expires_in": 60}))
 
         with pytest.raises(ProviderUnavailable):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     def test_a_non_json_response_is_transient(self, monkeypatch) -> None:
         monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(200, ValueError("not json")))
 
         with pytest.raises(ProviderUnavailable):
-            oauth.refresh(VANTA, "vrt_one")
+            oauth.refresh(ROTATING, "vrt_one")
 
     def test_the_transient_half_is_not_the_terminal_one(self) -> None:
         """The two must not be catchable as each other, or the split does nothing."""
         assert not issubclass(ProviderUnavailable, ProviderAuthError)
         assert not issubclass(ProviderAuthError, ProviderUnavailable)
+
+
+@pytest.mark.usefixtures("vanta_credentials")
+class TestClientCredentialsGrant:
+    """Vanta's grant, minted from the workspace's own application."""
+
+    def test_sends_the_workspaces_application_and_the_read_scope(self, monkeypatch) -> None:
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        captured: dict[str, object] = {}
+
+        def fake_request(method, url, **kwargs):
+            captured["url"] = url
+            captured["json"] = kwargs.get("json")
+            captured["data"] = kwargs.get("data")
+            captured["headers"] = kwargs.get("headers")
+            # What Vanta documents for this grant: no refresh token, no scope.
+            return _Response(200, {"access_token": "vat_minted", "expires_in": 3600, "token_type": "Bearer"})
+
+        monkeypatch.setattr(oauth, "request_with_retry", fake_request)
+
+        token_set = oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+
+        assert captured["url"] == "https://api.vanta.example/oauth/token"
+        assert captured["json"] == {
+            "client_id": "vci_mine",
+            "client_secret": "vcs_mine",
+            "grant_type": "client_credentials",
+            "scope": "vanta-api.all:read",
+        }
+        assert captured["data"] is None
+        assert captured["headers"]["Content-Type"] == "application/json"
+        assert token_set.access_token == "vat_minted"
+        assert token_set.refresh_token == ""
+        assert token_set.expires_at is not None
+
+    def test_a_refused_application_is_terminal(self, monkeypatch) -> None:
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(401, {"error": "invalid_client"}))
+
+        with pytest.raises(ProviderAuthError):
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_gone")
+
+    def test_a_rate_limit_is_not_a_refusal(self, monkeypatch) -> None:
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(429, {}))
+
+        with pytest.raises(ProviderUnavailable):
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+
+    @pytest.mark.parametrize(("client_id", "client_secret"), [("", "vcs"), ("vci", "")])
+    def test_nothing_to_mint_with_is_never_sent(self, monkeypatch, client_id, client_secret) -> None:
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        def fail(*args, **kwargs):
+            raise AssertionError("should not have called Vanta")
+
+        monkeypatch.setattr(oauth, "request_with_retry", fail)
+
+        with pytest.raises(ProviderAuthError):
+            oauth.client_credentials_grant(VANTA, client_id, client_secret)
+
+
+@pytest.mark.usefixtures("vanta_credentials")
+class TestScopeRefusal:
+    """What Vanta answers when the pasted application is a Build Integrations one."""
+
+    def test_invalid_scope_is_its_own_refusal(self, monkeypatch) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        # Vanta's real answer, captured from a Build Integrations application.
+        monkeypatch.setattr(
+            oauth,
+            "request_with_retry",
+            lambda *a, **k: _Response(
+                400,
+                {
+                    "error": "invalid_scope",
+                    "error_description": "Can only request Connectors scopes with this application. vcs_echo",
+                },
+            ),
+        )
+
+        with pytest.raises(ProviderScopeRefused) as caught:
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+
+        # Still a refusal, so the refresh path revokes the connection as before.
+        assert isinstance(caught.value, ProviderAuthError)
+        assert "vcs_echo" not in caught.value.detail
+
+    @pytest.mark.parametrize("payload", [{"error": "invalid_client"}, {"error": 7}, ["invalid_scope"], ValueError("x")])
+    def test_any_other_refusal_stays_a_plain_one(self, monkeypatch, payload) -> None:
+        from sbomify.apps.integrations.exceptions import ProviderScopeRefused
+        from sbomify.apps.integrations.providers.vanta import VANTA
+
+        monkeypatch.setattr(oauth, "request_with_retry", lambda *a, **k: _Response(400, payload))
+
+        with pytest.raises(ProviderAuthError) as caught:
+            oauth.client_credentials_grant(VANTA, "vci_mine", "vcs_mine")
+        assert not isinstance(caught.value, ProviderScopeRefused)

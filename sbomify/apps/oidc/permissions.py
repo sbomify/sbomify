@@ -34,7 +34,13 @@ from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
 def _lookup_binding(request: Any) -> Any:
     """Return the OIDCBinding row that owns the request's token user, or None."""
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
-    if token_record is None or token_record.user_id is None:
+    # ``user_id`` via getattr, not attribute access: the MCP server is growing a
+    # second kind of credential (#1235), and the whole point of its documented
+    # contract is that a credential answering ``.scopes`` and ``.pk`` is enough.
+    # One that carries no bot user is not a Trusted Publishing bot, which is the
+    # answer this predicate exists to give, so absence reads as "no binding"
+    # rather than raising on the upload path.
+    if token_record is None or getattr(token_record, "user_id", None) is None:
         return None
     # ``oidc_binding`` is the reverse-side related_name on
     # ``OIDCBinding.bot_user`` (OneToOne). Looked up via the model so mypy
@@ -59,14 +65,28 @@ def _cached_binding(request: Any) -> Any:
     return binding
 
 
-def _token_is_oidc_typed(token_record: AccessToken) -> bool:
+def _token_is_oidc_typed(token_record: Any) -> bool:
     """True iff the token's signed JWT carries ``token_type="oidc"``.
 
     Authentication only matches a row whose stored ``token_type`` equals the
     signed claim, so the column is as trustworthy as the HMAC over the claim.
     PATs can carry an ``expires_at`` too, so that column can't tell them apart.
+    A credential that is not an access-token row stores no type, so it is not
+    OIDC-issued.
     """
-    return token_record.token_type == TOKEN_TYPE_OIDC
+    return getattr(token_record, "token_type", None) == TOKEN_TYPE_OIDC
+
+
+def token_is_oidc_issued(token_record: Any) -> bool:
+    """Whether the credential's signed token carries ``token_type="oidc"``.
+
+    The authoritative signal on its own, without the ``OIDCBinding`` probe
+    ``request_is_oidc_authed`` falls back to. That fallback is belt-and-braces
+    for an authorization decision, where an orphaned binding must still confine
+    a bot; a caller that only wants to label what kind of credential it is
+    looking at should not pay a query per request for it.
+    """
+    return token_record is not None and _token_is_oidc_typed(token_record)
 
 
 def request_is_oidc_authed(request: Any) -> bool:

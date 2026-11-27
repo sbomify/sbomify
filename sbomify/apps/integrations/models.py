@@ -44,9 +44,9 @@ class Integration(models.Model):
 
     class Status(models.TextChoices):
         CONNECTED = "connected", "Connected"
-        # The refresh token was rejected. Nothing can be synced until someone
-        # goes through the provider's consent screen again, so this is a
-        # separate state from a sync that merely failed.
+        # The stored credential was rejected: a refresh token, or a client id
+        # and secret. Nothing can be synced until someone connects again, so
+        # this is a separate state from a sync that merely failed.
         REVOKED = "revoked", "Needs reconnecting"
 
     class SyncStatus(models.TextChoices):
@@ -68,6 +68,13 @@ class Integration(models.Model):
     )
     provider = models.CharField(max_length=32, choices=Provider.choices)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.CONNECTED)
+
+    # A workspace's own application at the provider, for a provider that
+    # connects with ``client_credentials`` rather than a consent screen. Empty
+    # for every other provider. The secret gets the same treatment as the
+    # tokens: it never reaches a template, an API schema or a log line.
+    client_id = models.CharField(max_length=255, blank=True, default="")
+    client_secret = models.TextField(blank=True, default="")
 
     access_token = models.TextField(blank=True, default="")
     refresh_token = models.TextField(blank=True, default="")
