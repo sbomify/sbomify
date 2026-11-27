@@ -136,6 +136,42 @@ the control out of the framework, so a control that reaches the mapper applies
 by definition, and inventing an N/A would quietly remove it from the
 denominator of a published score.
 
+### Linking to the workspace's own framework
+
+A synced framework is a separate catalogue from the built-in one, so a
+workspace that tracks SOC 2 by hand and connects Vanta has two SOC 2
+frameworks. The sync links them.
+
+Vanta maps its controls onto a framework's requirements, and
+`GET /v1/frameworks/{id}?includeRequirements=true&requirementsScope=MY_PROGRAM`
+returns that mapping: each requirement's code (`CC6.1`, `A.5.15`, `AC-2`) with
+the ids of the Vanta controls that cover it. Those codes are the `control_id`
+of the built-in catalogues. If `shorthand` is empty, the requirement `id` is
+used instead. Whitespace in codes is ignored, so `CC 1.1` matches `CC1.1`.
+Each run, for each synced framework:
+
+1. **Find the target.** The target is the workspace catalogue, built-in or
+   imported, whose control codes match the most requirement codes. It needs
+   at least three matches and at least half of the requirements; short codes
+   like `1.1` collide between unrelated frameworks, but a majority does not.
+   Framework names are not compared. ISO 27001 Annex A codes match with or
+   without the `A.` prefix.
+2. **Write the links.** There is one `controls.ControlMapping` per pair of a
+   Vanta control and the built-in control it covers, with relation `related`
+   and the note "Mapped in Vanta". Links are replaced on every run. Mappings
+   made by hand through the API carry a different note and are never touched.
+3. **Keep the last good links** when the framework detail cannot be read, or
+   its requirements carry no codes. That is a shape problem, not an
+   instruction to unlink.
+
+Linking records the relationship only. **No status is written into the
+built-in catalogue**, so a hand-kept SOC 2 does not silently change because
+Vanta says otherwise. The Integrations tab shows which framework each synced
+one is linked to, and how many of its controls. Mappings are also returned by
+`GET /api/v1/controls/controls/{control_id}/mappings/`.
+
+It costs one extra request per framework per sync.
+
 ## When something goes wrong
 
 The Integrations tab shows the last sync and its error. Two states are

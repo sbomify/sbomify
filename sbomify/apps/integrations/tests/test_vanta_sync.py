@@ -26,6 +26,9 @@ class FakeVantaClient:
         self._controls = controls
         self._details = details
         self.detail_calls: list[str] = []
+        # Unset means the framework detail could not be read, which is also
+        # what every test written before linking existed expects.
+        self.requirements: dict[str, list[dict] | None] = {}
 
     def frameworks(self):
         return iter(self._frameworks)
@@ -36,6 +39,9 @@ class FakeVantaClient:
     def control(self, control_id: str) -> dict[str, Any]:
         self.detail_calls.append(control_id)
         return self._details.get(control_id, {})
+
+    def framework_requirements(self, framework_id: str) -> list[dict] | None:
+        return self.requirements.get(framework_id)
 
 
 @pytest.fixture
@@ -796,3 +802,154 @@ class TestARecreatedControlDoesNotInheritTheOldOne:
         assert old.external_id == "c_old"
         new = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="c_new")
         assert new.pk != old.pk
+
+
+
+def _builtin(team, name: str, codes: list[str]) -> ControlCatalog:
+    """The workspace's own copy of a framework, as activating a built-in one leaves it."""
+    catalog = ControlCatalog.objects.create(team=team, name=name, version="2024", source=ControlCatalog.Source.BUILTIN)
+    for order, code in enumerate(codes):
+        Control.objects.create(catalog=catalog, group="Security", control_id=code, title=code, sort_order=order)
+    return catalog
+
+
+def _requirement(code: str | None, *control_ids: str) -> dict[str, Any]:
+    return {"id": f"req_{code}", "name": code or "", "shorthand": code, "controlIds": list(control_ids)}
+
+
+class TestLinkingToTheWorkspacesOwnFramework:
+    """A synced framework is linked to the built-in copy of the same framework."""
+
+    @pytest.fixture
+    def soc2_account(self, install_client):
+        fake = install_client(
+            [SOC2],
+            {
+                "fw_soc2": [
+                    _control("v_access", "ACC-1", "Access reviews", "Access"),
+                    _control("v_mfa", "ACC-2", "MFA enforced", "Access"),
+                    _control("v_policy", "POL-1", "Security policy", "Governance"),
+                ]
+            },
+            {"v_access": {"status": "COMPLETED"}, "v_mfa": {"status": "IN_PROGRESS"}, "v_policy": {}},
+        )
+        fake.requirements["fw_soc2"] = [
+            _requirement("CC6.1", "v_access", "v_mfa"),
+            _requirement("CC6.2", "v_access"),
+            _requirement("CC1.1", "v_policy"),
+            _requirement("CC9.9", "v_policy"),
+        ]
+        return fake
+
+    def _links(self, team) -> set[tuple[str, str]]:
+        from sbomify.apps.controls.models import ControlMapping
+
+        return set(
+            ControlMapping.objects.filter(source_control__catalog__team=team, notes=vanta_sync.LINK_NOTE).values_list(
+                "source_control__external_id", "target_control__control_id"
+            )
+        )
+
+    def test_vanta_controls_are_linked_to_the_requirements_they_cover(self, connected_vanta, soc2_account) -> None:
+        _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2", "CC6.3"])
+
+        result = sync(connected_vanta)
+
+        assert self._links(connected_vanta.team) == {
+            ("v_access", "CC6.1"),
+            ("v_mfa", "CC6.1"),
+            ("v_access", "CC6.2"),
+            ("v_policy", "CC1.1"),
+        }
+        # Three of the workspace's controls are covered; CC6.3 is not, and
+        # CC9.9 is not in the workspace's catalogue at all.
+        assert result.value["controls_linked"] == 3
+
+    def test_linking_writes_no_status_into_the_workspaces_framework(self, connected_vanta, soc2_account) -> None:
+        builtin = _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2"])
+
+        sync(connected_vanta)
+
+        assert not ControlStatus.objects.filter(control__catalog=builtin).exists()
+
+    def test_nothing_is_linked_without_a_matching_framework(self, connected_vanta, soc2_account) -> None:
+        _builtin(connected_vanta.team, "NIST SP 800-53", ["AC-1", "AC-2", "AC-3"])
+
+        result = sync(connected_vanta)
+
+        assert self._links(connected_vanta.team) == set()
+        assert result.value["controls_linked"] == 0
+
+    def test_a_coincidental_overlap_is_not_a_match(self, connected_vanta, install_client) -> None:
+        """Short codes like "1.1" collide between unrelated frameworks."""
+        fake = install_client([SOC2], {"fw_soc2": [_control("v1", "X-1", "One", "General")]}, {})
+        fake.requirements["fw_soc2"] = [_requirement(f"{n}.1", "v1") for n in range(1, 11)]
+        _builtin(connected_vanta.team, "CIS Controls v8", ["1.1", "2.1", "99.1"])
+
+        sync(connected_vanta)
+
+        assert self._links(connected_vanta.team) == set()
+
+    def test_iso_annex_codes_match_with_or_without_the_prefix(self, connected_vanta, install_client) -> None:
+        fake = install_client([ISO], {"fw_iso": [_control("v_iso", "ISO-1", "Policies", "Governance")]}, {})
+        fake.requirements["fw_iso"] = [_requirement(code, "v_iso") for code in ("5.1", "5.2", "5.3")]
+        _builtin(connected_vanta.team, "ISO 27001:2022", ["A.5.1", "A.5.2", "A.5.3", "A.5.4"])
+
+        sync(connected_vanta)
+
+        assert self._links(connected_vanta.team) == {("v_iso", "A.5.1"), ("v_iso", "A.5.2"), ("v_iso", "A.5.3")}
+
+    def test_a_resync_replaces_links_vanta_no_longer_makes(self, connected_vanta, soc2_account) -> None:
+        _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2"])
+        sync(connected_vanta)
+
+        soc2_account.requirements["fw_soc2"] = [
+            _requirement("CC6.1", "v_access"),
+            _requirement("CC6.2", "v_access"),
+            _requirement("CC1.1", "v_policy"),
+        ]
+        sync(connected_vanta)
+
+        assert ("v_mfa", "CC6.1") not in self._links(connected_vanta.team)
+        assert ("v_access", "CC6.1") in self._links(connected_vanta.team)
+
+    def test_an_unreadable_answer_keeps_the_last_links(self, connected_vanta, soc2_account) -> None:
+        _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2"])
+        sync(connected_vanta)
+        before = self._links(connected_vanta.team)
+
+        for unreadable in (None, [], [_requirement(None, "v_access")]):
+            soc2_account.requirements["fw_soc2"] = unreadable
+            result = sync(connected_vanta)
+
+            assert self._links(connected_vanta.team) == before
+            assert result.value["controls_linked"] == 3
+
+    def test_a_mapping_made_by_hand_survives_a_sync(self, connected_vanta, soc2_account) -> None:
+        from sbomify.apps.controls.models import ControlMapping
+
+        builtin = _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2", "CC6.3"])
+        sync(connected_vanta)
+        source = Control.objects.get(catalog__source=ControlCatalog.Source.VANTA, external_id="v_policy")
+        ControlMapping.objects.create(
+            source_control=source,
+            target_control=builtin.controls.get(control_id="CC6.3"),
+            relation_type=ControlMapping.RelationType.PARTIAL,
+            notes="Our auditor's call",
+        )
+
+        soc2_account.requirements["fw_soc2"] = [_requirement("CC6.1", "v_access"), _requirement("CC6.2", "v_access")]
+        soc2_account.requirements["fw_soc2"].append(_requirement("CC1.1", "v_access"))
+        sync(connected_vanta)
+
+        assert ControlMapping.objects.filter(notes="Our auditor's call").exists()
+
+    def test_the_integrations_card_says_what_is_linked(self, connected_vanta, soc2_account) -> None:
+        from sbomify.apps.integrations.services import connections
+
+        _builtin(connected_vanta.team, "SOC 2 Type II", ["CC1.1", "CC6.1", "CC6.2", "CC6.3"])
+        sync(connected_vanta)
+
+        card = connections.provider_cards(connected_vanta.team)[0]
+
+        assert card["catalogs"][0]["linked_to"] == {"name": "SOC 2 Type II", "linked": 3, "total": 4}

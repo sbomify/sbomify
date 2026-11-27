@@ -361,6 +361,7 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
                         # is still marked published.
                         "is_published": catalog.is_published and catalog.is_active,
                         "control_count": catalog.control_count,
+                        "linked_to": _linked_to(catalog),
                     }
                     for catalog in catalogs
                 ],
@@ -372,6 +373,27 @@ def provider_cards(team: Workspace) -> list[dict[str, Any]]:
             }
         )
     return cards
+
+
+def _linked_to(catalog: Any) -> dict[str, Any] | None:
+    """Which of the workspace's own frameworks a synced one is linked to, and how far.
+
+    One target per synced framework, by construction of the sync, so the first
+    link names it.
+    """
+    from sbomify.apps.controls.models import Control, ControlMapping
+    from sbomify.apps.integrations.providers.vanta import LINK_NOTE
+
+    links = ControlMapping.objects.filter(source_control__catalog=catalog, notes=LINK_NOTE)
+    first = links.select_related("target_control__catalog").first()
+    if first is None:
+        return None
+    target = first.target_control.catalog
+    return {
+        "name": target.name,
+        "linked": links.values("target_control_id").distinct().count(),
+        "total": Control.objects.filter(catalog=target).count(),
+    }
 
 
 def _provider_card(provider: ProviderSpec) -> dict[str, Any]:

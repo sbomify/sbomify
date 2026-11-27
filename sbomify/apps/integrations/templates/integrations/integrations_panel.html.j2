@@ -170,6 +170,9 @@ with each other after an action.
                                     <div class="text-sm font-medium text-text">{{ catalog.name }}</div>
                                     <div class="text-xs text-text-muted mt-0.5">
                                         {{ catalog.control_count }} control{{ catalog.control_count|pluralize }}
+                                        {% if catalog.linked_to %}
+                                            · Linked to your {{ catalog.linked_to.name }} framework: {{ catalog.linked_to.linked }} of {{ catalog.linked_to.total }} controls
+                                        {% endif %}
                                     </div>
                                 </div>
                                 <form method="post"
