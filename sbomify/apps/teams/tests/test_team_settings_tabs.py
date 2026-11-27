@@ -257,13 +257,13 @@ class TestMembersRoleLegend:
             assert description.split(".")[0] in content
 
     def test_legend_reflects_the_owner_admin_boundary(self):
-        """The two owner-exclusive rules must be stated to users, not just enforced."""
+        """The owner-exclusive rules must be stated to users, not just enforced."""
         from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_DESCRIPTIONS
 
         admin_description = next(d for role, _label, d in ROLE_DESCRIPTIONS if role == ROLE_ADMIN)
         assert (
-            "Cannot make someone an owner, change or remove an owner or another admin, or delete the workspace."
-            in admin_description
+            "Cannot make someone an owner, change or remove an owner or another admin, change how long the "
+            "audit log is kept, or delete the workspace." in admin_description
         )
 
     def test_legend_states_what_an_operator_cannot_do(self):
