@@ -26,7 +26,9 @@ no "new" line.
 
 Either form may carry suppressed: findings a VEX closed. They are never part
 of the open figures, and are stated on a line of their own so a version the
-VEX cleared does not read the same as one nothing was found in.
+VEX cleared does not read the same as one nothing was found in. Beside open
+counts the line says "more", so "1 critical, 2 high" over "1 suppressed" is
+not read as one of those three being the suppressed one.
 {% endcomment %}
 <c-vars summary bind />
 {% if bind %}
@@ -63,7 +65,8 @@ VEX cleared does not read the same as one nothing was found in.
         </template>
         <span class="text-xs text-text-muted whitespace-nowrap"
               x-show="counts && counts.suppressed"
-              x-text="counts && counts.suppressed ? $number(counts.suppressed) + ' suppressed by VEX' : ''"></span>
+              title="Not included in the open count"
+              x-text="counts && counts.suppressed ? $number(counts.suppressed) + (counts.total ? ' more' : '') + ' suppressed by VEX' : ''"></span>
     </span>
 {% elif summary.state == "open" %}
     <span class="flex flex-col gap-0.5" {{ attrs }}>
@@ -78,7 +81,7 @@ VEX cleared does not read the same as one nothing was found in.
             <span class="text-sm text-text whitespace-nowrap">{{ summary.other|intcomma }} other</span>
             {% if summary.new %}<span class="text-xs text-text-muted whitespace-nowrap">{{ summary.new|intcomma }} new</span>{% endif %}
         {% endif %}
-        {% if summary.suppressed %}<span class="text-xs text-text-muted whitespace-nowrap">{{ summary.suppressed|intcomma }} suppressed by VEX</span>{% endif %}
+        {% if summary.suppressed %}<span class="text-xs text-text-muted whitespace-nowrap" title="Not included in the open count">{{ summary.suppressed|intcomma }} more suppressed by VEX</span>{% endif %}
         {# djlint:on #}
     </span>
 {% elif summary.state == "none" %}

@@ -281,6 +281,7 @@ INSTALLED_APPS = [
     "sbomify.apps.ops",
     "sbomify.apps.integrations",
     "sbomify.apps.mcp",
+    "sbomify.apps.audit",
 ]
 
 
@@ -338,6 +339,8 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Inside authentication, so the audit context can name who is acting.
+    "sbomify.apps.audit.middleware.AuditMiddleware",
     "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
@@ -1554,14 +1557,10 @@ TELEMETRY_ENABLED = telemetry_enabled(os.environ)
 # The redirect URI to register is /integrations/oauth/<provider>/callback on
 # whichever hostname the app is served from.
 
-VANTA_CLIENT_ID = os.environ.get("VANTA_CLIENT_ID", "")
-VANTA_CLIENT_SECRET = os.environ.get("VANTA_CLIENT_SECRET", "")
-
-# Vanta serves its API from one host for every region, but consent happens on
-# the customer's own regional app host: app.eu.vanta.com for EU accounts,
-# app.aus.vanta.com for AU. A deployment whose customers are not all in the US
-# overrides the authorize URL.
-VANTA_OAUTH_AUTHORIZE_URL = os.environ.get("VANTA_OAUTH_AUTHORIZE_URL", "https://app.vanta.com/oauth/authorize")
+# Vanta is the exception: its read API only answers an application the
+# customer creates in their own Vanta account, so each workspace pastes that
+# application's client id and secret and the deployment registers nothing.
+# One host serves the US, EU and AU regions.
 VANTA_OAUTH_TOKEN_URL = os.environ.get("VANTA_OAUTH_TOKEN_URL", "https://api.vanta.com/oauth/token")
 VANTA_API_BASE_URL = os.environ.get("VANTA_API_BASE_URL", "https://api.vanta.com")
 

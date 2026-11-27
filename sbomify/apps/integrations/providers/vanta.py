@@ -1,11 +1,15 @@
 """Vanta: the spec for the connection, and a thin read client over its API.
 
-Vanta issues one credential per connected customer through the OAuth
-authorization-code flow, so every workspace that connects gets its own token
-against its own Vanta account. The token endpoint is a single host for every
-region; the consent screen is not, which is why ``VANTA_OAUTH_AUTHORIZE_URL``
-is a setting rather than a constant (EU and AU customers consent on
-``app.eu.vanta.com`` and ``app.aus.vanta.com``).
+Each workspace connects with an application it creates in its own Vanta
+account, and pastes that application's client id and secret into sbomify.
+That is the only way Vanta grants read access to frameworks and controls:
+``vanta-api.all:read`` belongs to "Manage Vanta" applications, which use the
+``client_credentials`` grant against the tenant that created them. A partner
+app on Vanta's consent screen only gets connector scopes, which push an app's
+own resources into Vanta and cannot read a control.
+
+One API and token host serves the US, EU and AU regions, so nothing here
+depends on where the customer's account lives.
 
 The client is read-only on purpose. sbomify publishes what Vanta already
 knows; it is never the system of record for a control, and nothing here can
@@ -14,6 +18,7 @@ write back.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Iterator
 
 import requests
@@ -32,6 +37,21 @@ class VantaUnavailable(ProviderUnavailable):
     error_code = "vanta_unavailable"
 
 
+# Vanta allows a Manage Vanta application 50 requests a minute and answers the
+# 51st with a 429 that carries no Retry-After. A sync costs one request per
+# control, so an unpaced run trips that limit partway through its first
+# framework. Spacing calls a little wider than 60/50 seconds keeps a run under
+# it; a 429 that still arrives (another client on the same tenant) is waited
+# out a few times before the run gives up for the next schedule.
+MIN_REQUEST_INTERVAL = 1.3
+RATE_LIMIT_WAIT = 20.0
+RATE_LIMIT_ATTEMPTS = 3
+
+# Indirection so tests can stop the clock without patching ``time`` for
+# everything else that imports it.
+_sleep = time.sleep
+_monotonic = time.monotonic
+
 # Vanta caps a page at 100 items. Asking for the cap is what keeps a 300
 # control framework to three requests instead of thirty.
 PAGE_SIZE = 100
@@ -46,16 +66,22 @@ VANTA = ProviderSpec(
     name="Vanta",
     tagline="Publish the frameworks and controls you already track in Vanta.",
     icon="fas fa-shield-halved",
-    docs_url="https://developer.vanta.com/docs/concepts/authentication",
+    docs_url="https://developer.vanta.com/docs/quickstart/manage-vanta",
     reads=(
         "The frameworks your Vanta account tracks",
         "The controls in each framework, and how far each one has got",
     ),
     scopes=("vanta-api.all:read",),
-    authorize_url_setting="VANTA_OAUTH_AUTHORIZE_URL",
     exchange_url_setting="VANTA_OAUTH_TOKEN_URL",
-    client_id_setting="VANTA_CLIENT_ID",
-    client_credential_setting="VANTA_CLIENT_SECRET",
+    grant="client_credentials",
+    setup_template="integrations/setup/vanta.html.j2",
+    client_id_hint="Starts with vci_",
+    client_credential_hint="Starts with vcs_. Vanta shows it once, when you generate it.",
+    scope_refused_hint=(
+        "Vanta accepted that client ID and secret, but the application cannot read controls. It is probably a "
+        "Build Integrations application. Create a new application, choose Manage Vanta as its type, and paste "
+        "its client ID and secret instead."
+    ),
     sync_path="sbomify.apps.integrations.services.vanta_sync.sync",
 )
 
@@ -104,21 +130,40 @@ class VantaClient:
     def __init__(self, access_token: str, base_url: str) -> None:
         self._access_token = access_token
         self._base_url = base_url.rstrip("/")
+        self._last_request_at: float | None = None
+
+    def _pace(self) -> None:
+        """Wait until the next request fits under Vanta's per-minute limit."""
+        if self._last_request_at is not None:
+            remaining = MIN_REQUEST_INTERVAL - (_monotonic() - self._last_request_at)
+            if remaining > 0:
+                _sleep(remaining)
+        self._last_request_at = _monotonic()
+
+    def _send(self, url: str, params: dict[str, Any]) -> requests.Response:
+        for attempt in range(RATE_LIMIT_ATTEMPTS):
+            self._pace()
+            try:
+                response = request_with_retry(
+                    "GET",
+                    url,
+                    params=params,
+                    headers={
+                        "Authorization": f"Bearer {self._access_token}",
+                        "Accept": "application/json",
+                    },
+                )
+            except requests.RequestException as exc:
+                raise VantaUnavailable(f"Could not reach Vanta: {exc}") from exc
+            if response.status_code != 429:
+                return response
+            if attempt + 1 < RATE_LIMIT_ATTEMPTS:
+                _sleep(RATE_LIMIT_WAIT)
+        raise VantaUnavailable("Vanta kept asking sbomify to slow down. The next scheduled sync tries again.")
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self._base_url}{path}"
-        try:
-            response = request_with_retry(
-                "GET",
-                url,
-                params=params or {},
-                headers={
-                    "Authorization": f"Bearer {self._access_token}",
-                    "Accept": "application/json",
-                },
-            )
-        except requests.RequestException as exc:
-            raise VantaUnavailable(f"Could not reach Vanta: {exc}") from exc
+        response = self._send(url, params or {})
 
         if response.status_code in (401, 403):
             raise ProviderAuthError("Vanta rejected the connection. Reconnect the workspace.", service="vanta")

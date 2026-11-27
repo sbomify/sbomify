@@ -1,0 +1,77 @@
+<c-layout.frame id="audit-log-panel">
+<c-layout.section-header level="2" wrap title="Audit log" subtitle="What members, their agents and CI did in this workspace. Events cannot be changed or deleted.">
+<c-slot name="actions">
+<c-buttons.secondary size="sm" href="{{ export_csv_url }}"><i class="fas fa-file-csv" aria-hidden="true"></i> Export CSV</c-buttons.secondary>
+<c-buttons.secondary size="sm" href="{{ export_jsonl_url }}"><i class="fas fa-file-code" aria-hidden="true"></i> Export JSON</c-buttons.secondary>
+</c-slot>
+</c-layout.section-header>
+<c-cards.card flush>
+<form id="audit-log-filters"
+      hx-get="{{ events_url }}"
+      hx-target="#audit-log-panel"
+      hx-swap="outerHTML"
+      hx-trigger="change, submit">
+    <c-tables.toolbar>
+    <div class="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <c-forms.field label="Action" for="audit-filter-action">
+        <c-forms.select id="audit-filter-action" name="action">
+        <option value="">All actions</option>
+        {% for value, label in action_filters %}
+            <option value="{{ value }}"
+                    {% if params.action == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+        </c-forms.select>
+        </c-forms.field>
+        <c-forms.field label="Outcome" for="audit-filter-outcome">
+        <c-forms.select id="audit-filter-outcome" name="outcome">
+        <option value="">All outcomes</option>
+        {% for value in outcomes %}
+            <option value="{{ value }}"
+                    {% if params.outcome == value %}selected{% endif %}>{{ value|capfirst }}</option>
+        {% endfor %}
+        </c-forms.select>
+        </c-forms.field>
+        <c-forms.field label="Actor" for="audit-filter-actor">
+        <c-forms.input id="audit-filter-actor" name="actor" value="{{ params.actor|default:'' }}" placeholder="Email" />
+        </c-forms.field>
+        <c-forms.field label="From" for="audit-filter-since">
+        <c-forms.input type="date" id="audit-filter-since" name="since" value="{{ params.since|default:'' }}" />
+        </c-forms.field>
+        <c-forms.field label="To" for="audit-filter-until">
+        <c-forms.input type="date" id="audit-filter-until" name="until" value="{{ params.until|default:'' }}" />
+        </c-forms.field>
+    </div>
+    </c-tables.toolbar>
+</form>
+{% if rows %}
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell compact date>Time</c-tables.header-cell>
+    <c-tables.header-cell compact>Actor</c-tables.header-cell>
+    <c-tables.header-cell compact>Action</c-tables.header-cell>
+    <c-tables.header-cell compact>Target</c-tables.header-cell>
+    <c-tables.header-cell compact>Source</c-tables.header-cell>
+    <c-tables.header-cell compact end>Outcome</c-tables.header-cell>
+    </c-tables.head>
+    <tbody id="audit-log-rows">
+        {% include 'audit/rows.html.j2' %}
+    </tbody>
+    </c-tables.table>
+{% elif is_filtered %}
+    <c-feedback.empty-state compact icon="fas fa-filter" title="No matching events" message="Nothing matches these filters. Widen the dates or clear a filter." />
+{% else %}
+    <c-feedback.empty-state compact icon="fas fa-clipboard-list" title="No events yet" message="Changes made in this workspace will appear here." />
+{% endif %}
+</c-cards.card>
+<c-cards.card title="Retention" subtitle="Events older than this are deleted automatically. Nothing can delete them sooner. Choose from {{ retention_min }} to {{ retention_max }} days.">
+<form hx-post="{% url 'audit:retention' workspace_key=workspace.key %}"
+      hx-swap="none"
+      class="flex flex-wrap items-end gap-3">
+    {% csrf_token %}
+    <c-forms.field label="Keep events for (days)" for="audit-retention-days">
+    <c-forms.input size="sm" type="number" id="audit-retention-days" name="retention_days" value="{{ retention_days }}" min="{{ retention_min }}" max="{{ retention_max }}" required />
+    </c-forms.field>
+    <c-buttons.primary size="sm" type="submit">Save retention</c-buttons.primary>
+</form>
+</c-cards.card>
+</c-layout.frame>
