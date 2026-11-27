@@ -174,6 +174,7 @@ MIDDLEWARE = [
     "sbomify.apps.core.middleware.ApiVersionDeprecationMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "sbomify.apps.audit.middleware.AuditMiddleware",
     "sbomify.apps.core.middleware.TrustCenterSessionScopeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -222,3 +223,8 @@ TEA_CACHE_TTL = 0
 TESTING = True
 PLAYWRIGHT_DJANGO_HOST = os.environ.get("PLAYWRIGHT_DJANGO_HOST", "host.docker.internal")
 PLAYWRIGHT_CDP_ENDPOINT = os.environ.get("PLAYWRIGHT_CDP_ENDPOINT", "http://localhost:9222")
+
+# Django flushes a transactional test's database with TRUNCATE, which the audit
+# log refuses in production. Every other guard on the table stays installed;
+# test_db_guards installs this one in a transaction to prove it holds.
+AUDIT_LOG_BLOCK_TRUNCATE = False

@@ -12,11 +12,17 @@ rather than hidden, so the step keeps its name for a screen reader. The
 caption states no display of its own, so nothing there stacks. A completed
 step says so in text as well as in the circle's fill.
 
+The gap between circle and caption belongs to the step, not the caption:
+Tailwind's not-sr-only resets margin to 0, so a margin on the caption vanished
+at exactly the breakpoint label_class reveals it and the text ran into the
+circle. A gap survives that, and a sr-only caption is out of flow so it adds
+none.
+
 compact uses a small neutral dot for setup flows. Its data-state attribute can
 also follow Alpine state, without passing a class recipe out to the page.
 {% endcomment %}
 <c-vars state label label_class compact class />
-<div class="{% if compact %}group {% endif %}flex items-center{% if class %} {{ class }}{% endif %}"
+<div class="{% if compact %}group {% endif %}flex items-center gap-3{% if class %} {{ class }}{% endif %}"
      data-state="{{ state }}"
      {% if compact %}aria-label="{{ label }}"{% endif %}
      {{ attrs }}>
@@ -26,6 +32,6 @@ also follow Alpine state, without passing a class recipe out to the page.
     <span class="relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold transition-all duration-300 {% if state == 'active' %}bg-[linear-gradient(135deg,var(--color-primary-fill)_0%,var(--color-primary-fill-end)_100%)] text-white shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-primary)_20%,transparent)]{% elif state == 'completed' %}bg-[linear-gradient(135deg,var(--color-success)_0%,var(--color-success-dark)_100%)] text-white{% else %}bg-border text-text-muted{% endif %}">{{ slot }}</span>
     {% endif %}
     {% if label %}
-        <span class="ml-3 text-sm font-medium transition-colors duration-200 {% if compact %}text-[color:var(--color-text-muted)] group-data-[state=active]:text-text group-data-[state=completed]:text-text{% elif state == 'active' %}text-text{% else %}text-text-muted{% endif %}{% if label_class %} {{ label_class }}{% endif %}">{{ label }}{% if state == 'completed' %}<span class="sr-only"> (completed)</span>{% endif %}</span>
+        <span class="text-sm font-medium transition-colors duration-200 {% if compact %}text-[color:var(--color-text-muted)] group-data-[state=active]:text-text group-data-[state=completed]:text-text{% elif state == 'active' %}text-text{% else %}text-text-muted{% endif %}{% if label_class %} {{ label_class }}{% endif %}">{{ label }}{% if state == 'completed' %}<span class="sr-only"> (completed)</span>{% endif %}</span>
     {% endif %}
 </div>

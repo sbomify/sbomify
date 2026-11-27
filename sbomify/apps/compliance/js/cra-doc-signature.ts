@@ -153,7 +153,7 @@ function craDocSignature() {
           this.signedAt = data.signed_at;
           this.isSigned = data.is_signed;
           showSuccess(
-            'Signature saved. Click "Generate Declaration of Conformity" to refresh the rendered DoC.',
+            'Signature saved. Regenerate the Declaration of Conformity to include it.',
           );
         } else {
           const err = (await resp.json().catch(() => ({}))) as ApiError;

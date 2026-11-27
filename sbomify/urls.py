@@ -89,6 +89,7 @@ urlpatterns = [
     # Keep the legacy prefix but avoid clashing namespaces with the primary workspaces URLs
     path("workspace/", include(("sbomify.apps.teams.urls", "workspaces"), namespace="teams-legacy")),
     path("workspaces/", include("sbomify.apps.teams.urls")),
+    path("workspaces/", include("sbomify.apps.audit.urls")),
     path("", include("sbomify.apps.sboms.urls")),
     path("", include("sbomify.apps.documents.urls")),
     path("onboarding/", include("sbomify.apps.onboarding.urls")),

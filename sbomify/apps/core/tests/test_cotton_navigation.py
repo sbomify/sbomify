@@ -310,7 +310,7 @@ def test_step_circle_states(rendered: str, marker: str, recipe_bit: str) -> None
 
 
 def test_only_the_active_step_brightens_its_label(rendered: str) -> None:
-    label = "ml-3 text-sm font-medium transition-colors duration-200"
+    label = "text-sm font-medium transition-colors duration-200"
     assert f'<span class="{label} text-text">Assessment</span>' in rendered
     # A completed step says so in text as well as in its fill.
     assert f'<span class="{label} text-text-muted">Scope<span class="sr-only"> (completed)</span></span>' in rendered
@@ -318,7 +318,7 @@ def test_only_the_active_step_brightens_its_label(rendered: str) -> None:
 
 def test_step_takes_class_and_attrs(rendered: str) -> None:
     step = _open_tag(rendered, "div", 'data-probe="step"')
-    assert 'class="flex items-center ml-1"' in step
+    assert 'class="flex items-center gap-3 ml-1"' in step
 
 
 def test_label_class_lands_on_the_caption_only(rendered: str) -> None:

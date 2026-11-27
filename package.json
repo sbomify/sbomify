@@ -26,7 +26,7 @@
     "@types/node": "^26.6.6",
     "alpinejs": "3.17.5",
     "chart.js": "^4.6.1",
-    "dompurify": "^3.4.18",
+    "dompurify": "^3.5.0",
     "htmx-ext-alpine-morph": "^2.0.2",
     "jsbarcode": "^3.12.3",
     "license-expressions": "^0.8.0",
@@ -49,6 +49,6 @@
     "@typescript-eslint/parser": "^8.73.0",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
-    "markdownlint-cli": "0.50.0"
+    "markdownlint-cli": "0.50.1"
   }
 }

@@ -38,7 +38,7 @@ def test_only_the_current_tabs_create_button_paints_before_alpine(
     ("user_agent", "label"),
     [
         ("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_6) AppleWebKit/537.36 Chrome/141.0 Safari/537.36", "⌘"),
-        ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36", "Ctrl"),
+        ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/141.0 Safari/537.36", "^"),
     ],
 )
 def test_search_shortcut_hint_is_rendered_by_the_server(

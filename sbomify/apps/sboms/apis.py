@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import logging
@@ -39,6 +38,7 @@ from sbomify.apps.sboms.utils import (
 )
 
 from .models import SBOM, Component
+from .provenance import ProvenanceFormatError, matching_subject, parse_statements, subject_digests
 from .schemas import (
     ComponentMetaData,
     CryptoInventorySchema,
@@ -1551,12 +1551,12 @@ def download_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[st
     auth=(PersonalAccessTokenAuth(), django_auth),
 )
 def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
-    """Upload an in-toto provenance attestation (DSSE envelope or direct Statement) for an SBOM.
+    """Upload an in-toto provenance attestation for an SBOM.
 
-    The body must be valid JSON. For DSSE envelopes the base64-decoded payload
-    is inspected; for direct Statements the body itself is inspected.
-    In both cases, the ``subject`` array must contain a digest matching the
-    SBOM's ``sha256_hash``.
+    Accepts a direct Statement, a DSSE envelope, a Sigstore bundle carrying a
+    ``dsseEnvelope`` (``cosign attest-blob --bundle``), or a ``.intoto.jsonl``
+    file holding any of those one per line. At least one subject must carry a
+    SHA-256 matching the SBOM's ``sha256_hash``. The body is stored as sent.
     """
     result = _get_sbom_or_error(request, sbom_id, write=True)
     if not isinstance(result, SBOM):
@@ -1574,47 +1574,15 @@ def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str
         }
 
     try:
-        body = json.loads(raw_body)
-    except (json.JSONDecodeError, ValueError):
-        return 400, {"detail": "Invalid JSON", "error_code": ErrorCode.BAD_REQUEST}
+        statements = parse_statements(raw_body)
+    except ProvenanceFormatError as exc:
+        return 400, {"detail": str(exc), "error_code": ErrorCode.BAD_REQUEST}
 
-    if not isinstance(body, dict):
-        return 400, {"detail": "Provenance must be a JSON object", "error_code": ErrorCode.BAD_REQUEST}
-
-    # Determine whether this is a DSSE envelope or a direct in-toto Statement
-    statement: dict[str, Any] | None = None
-    if "payloadType" in body and "payload" in body:
-        try:
-            payload_bytes = base64.b64decode(body["payload"], validate=True)
-            statement = json.loads(payload_bytes)
-        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
-            return 400, {"detail": "Failed to decode DSSE envelope payload", "error_code": ErrorCode.BAD_REQUEST}
-        if not isinstance(statement, dict):
-            return 400, {"detail": "DSSE payload is not a JSON object", "error_code": ErrorCode.BAD_REQUEST}
-    elif "_type" in body and "subject" in body:
-        statement = body
-    else:
-        return 400, {
-            "detail": (
-                "Provenance must be a DSSE envelope (with payloadType/payload) or a direct Statement (with subject)"
-            ),
-            "error_code": ErrorCode.BAD_REQUEST,
-        }
-
-    # Validate subject digest matches SBOM hash
-    subjects = statement.get("subject", [])
-    if not isinstance(subjects, list) or not subjects:
+    if not subject_digests(statements):
         return 400, {"detail": "Provenance statement has no subjects", "error_code": ErrorCode.BAD_REQUEST}
 
     sbom_hash = sbom.sha256_hash
-
-    def _subject_matches(subj: Any) -> bool:
-        if not isinstance(subj, dict):
-            return False
-        digest = subj.get("digest")
-        return isinstance(digest, dict) and digest.get("sha256") == sbom_hash
-
-    if not any(_subject_matches(subj) for subj in subjects):
+    if matching_subject(statements, sbom_hash) is None:
         return 400, {
             "detail": f"No subject sha256 digest matches the SBOM hash ({sbom_hash})",
             "error_code": ErrorCode.BAD_REQUEST,

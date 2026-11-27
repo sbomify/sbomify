@@ -547,6 +547,14 @@ Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a to
 
 `docs/mcp.md` covers both connecting a client and running the endpoint. A change to the tool surface needs a change there.
 
+### Audit Log (ADR-010)
+
+`sbomify/apps/audit/` records what members, their agents and CI did in each Enterprise workspace. `docs/audit-log.md` is the reference.
+
+- **`audit_events` is append-only at the database.** Triggers in `audit/db.py` refuse `UPDATE` and `TRUNCATE`, and `DELETE` inside the workspace's retention window. Never add code or a migration that updates or deletes its rows.
+- **A new model people change in a workspace gets a `Tracked` entry** in `audit/signals.py`. Values safe to show go in `fields`; secrets and long free text in `redacted`, which records the name only.
+- **Anything else notable goes through `audit.recorder.record()`**, never a direct insert.
+
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.
@@ -815,6 +823,7 @@ words people actually type in `keywords` — including the ones the UI does not 
 - **ADR-007**: GCS support and cloud workload identity, and (a second 0007) removal of the Project layer
 - **ADR-008**: Workspace roles as a linear capability ladder
 - **ADR-009**: MCP server mounted in the Django app, authorized by scoped access tokens
+- **ADR-010**: Append-only audit log enforced by PostgreSQL triggers, with a per-workspace hash chain
 
 ## API Documentation
 

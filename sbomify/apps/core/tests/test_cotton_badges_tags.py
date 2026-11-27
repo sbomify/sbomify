@@ -328,6 +328,11 @@ def test_neutral_chip_recipe(rendered: str) -> None:
     assert "text-text-muted" in chip
 
 
+def test_neutral_chip_never_outgrows_its_column(rendered: str) -> None:
+    """A long product name in a narrow column spilled into the status badges beside it."""
+    assert "max-w-full" in _probe(rendered, "chip-neutral")
+
+
 def test_tag_renders_an_anchor_with_href_and_no_underline(rendered: str) -> None:
     tag = _probe(rendered, "tag-link")
     assert tag.startswith("<a ")

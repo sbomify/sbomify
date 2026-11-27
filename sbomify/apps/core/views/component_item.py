@@ -259,6 +259,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
         vulnerability_summary = None
         assessment_runs = None
+        signature_status = None
         vex_suppressions = None
         vex_suppression_terms: list[str] = []
         vex_suppression_states: list[str] = []
@@ -278,6 +279,12 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
             item = result.value
+
+            if item and item.get("signature_blob_key"):
+                from sbomify.apps.plugins.services.signature_status import get_signature_status
+
+                status_result = get_signature_status(item_id)
+                signature_status = status_result.value if status_result.ok else None
 
             from sbomify.apps.sboms.models import SBOM
             from sbomify.apps.vulnerability_scanning.vex import vex_suppression_rows
@@ -524,6 +531,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "component_id": component_id,
                 "vulnerability_summary": vulnerability_summary,
                 "assessment_runs": assessment_runs,
+                "signature_status": signature_status,
                 "vex_suppressions": vex_suppressions,
                 "vex_suppression_terms": vex_suppression_terms,
                 "vex_suppression_states": vex_suppression_states,

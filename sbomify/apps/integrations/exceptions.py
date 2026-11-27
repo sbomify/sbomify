@@ -28,3 +28,14 @@ class ProviderUnavailable(ExternalServiceError):
     """The provider could not answer. The next scheduled sync tries again."""
 
     error_code = "provider_unavailable"
+
+
+class ProviderScopeRefused(ProviderAuthError):
+    """The credential is real but its application may not have these scopes.
+
+    Worth its own type because the fix is different: not a typo in the
+    secret, but an application of the wrong kind, which the person connecting
+    can only put right by creating another one.
+    """
+
+    error_code = "provider_scope_refused"
