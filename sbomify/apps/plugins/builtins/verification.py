@@ -12,7 +12,9 @@ runs every available verification source in one pass:
    first rewritten in the current format, with its inclusion proof from
    Rekor. The signer is reported, not judged.
 4. Checks whether a sbomify-stored provenance attestation is attached
-   and verifies its subject digest matches the SBOM hash.
+   and whether a subject digest matches the SBOM hash. It counts as an
+   attestation only when a Sigstore bundle's DSSE signature verifies
+   over a statement naming the SBOM.
 5. If the SBOM declares a GitHub VCS link, fetches the GitHub Sigstore
    attestation bundle from the public Attestations API and verifies it
    with ``cosign verify-blob-attestation``. A missing attestation is only
@@ -99,7 +101,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     that drives ``_is_passing`` for upstream consumers (BSI, FDA, etc.).
     """
 
-    VERSION = "2.1.0"
+    VERSION = "2.2.0"
 
     # Stored sources that can verify an SBOM without GitHub.
     _CRYPTO_FINDING_IDS = frozenset({"verification:signature-valid", "verification:provenance-digest"})
@@ -587,14 +589,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             )
 
         if (subject := matching_subject(statements, expected_hash)) is not None:
-            return Finding(
-                id="verification:provenance-digest",
-                title="Provenance Digest Matches",
-                description="A provenance subject SHA-256 digest matches the stored SBOM hash.",
-                status="pass",
-                severity="info",
-                metadata={"matched_subject": subject.get("name"), "digest": expected_hash},
-            )
+            return self._signed_provenance_finding(blob, expected_hash, subject.get("name"))
 
         return Finding(
             id="verification:provenance-digest",
@@ -606,6 +601,81 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 "expected_hash": expected_hash,
                 "subject_digests": digests,
             },
+        )
+
+    def _signed_provenance_finding(self, blob: bytes, expected_hash: str, subject_name: Any) -> Finding:
+        """A subject matches; pass only if a Sigstore bundle signs a statement naming the SBOM.
+
+        Anyone who can upload can write a Statement naming the SBOM's digest,
+        so the match alone does not say who built it.
+        """
+        metadata: dict[str, Any] = {"matched_subject": subject_name, "digest": expected_hash}
+        text = blob.decode("utf-8")
+        try:
+            documents = [json.loads(text)]
+        except json.JSONDecodeError:
+            documents = [json.loads(line) for line in text.splitlines() if line.strip()]
+        bundles = [doc for doc in documents if "dsseEnvelope" in doc and "verificationMaterial" in doc]
+
+        error = ""
+        if bundles:
+            try:
+                from sigstore.models import Bundle
+                from sigstore.verify import Verifier
+                from sigstore.verify.policy import UnsafeNoOp
+            except ImportError:
+                return Finding(
+                    id="verification:provenance-digest",
+                    title="Sigstore Library Not Available",
+                    description="The sigstore library is not installed, so the provenance signature cannot be checked.",
+                    status="warning",
+                    severity="medium",
+                    metadata=metadata,
+                )
+            verifier = Verifier.production()
+            for document in bundles:
+                try:
+                    bundle = Bundle.from_json(json.dumps(document))
+                    _, payload = verifier.verify_dsse(bundle, UnsafeNoOp())
+                    statement = json.loads(payload)
+                except Exception as exc:
+                    error = self._short_error(exc)
+                    continue
+                if isinstance(statement, dict) and matching_subject([statement], expected_hash) is not None:
+                    signer = self._signer_identity(bundle.signing_certificate)
+                    return Finding(
+                        id="verification:provenance-digest",
+                        title="Signed Provenance Matches",
+                        description=(
+                            f"A signed provenance attestation names this SBOM's SHA-256 digest. "
+                            f"Signed by {signer.get('identity', 'an unknown identity')}, "
+                            f"issued by {signer.get('issuer', 'an unknown issuer')}."
+                        ),
+                        status="pass",
+                        severity="info",
+                        metadata={**metadata, **signer},
+                    )
+
+        if error:
+            return Finding(
+                id="verification:provenance-digest",
+                title="Provenance Signature Invalid",
+                description=f"The provenance names this SBOM, but its signature did not verify: {error}",
+                status="fail",
+                severity="high",
+                metadata={**metadata, "error": error},
+            )
+        return Finding(
+            id="verification:provenance-digest",
+            title="Provenance Not Signed",
+            description=(
+                "The provenance names this SBOM, but it is not a signed Sigstore bundle, so sbomify cannot "
+                "check who made it. Attach the bundle that cosign attest-blob --bundle or GitHub artifact "
+                "attestations write."
+            ),
+            status="warning",
+            severity="medium",
+            metadata=metadata,
         )
 
     # ------------------------------------------------------------------

@@ -47,13 +47,35 @@ def _cyclonedx_with_vcs(tmp_path: Path, org: str = "acme", repo: str = "widget")
     return path, hashlib.sha256(body).hexdigest()
 
 
+def _signed_provenance(plugin: SBOMVerificationPlugin, sha256: str) -> tuple[bytes, list[Any]]:
+    """A Sigstore provenance bundle naming ``sha256``, and patches that make its signature verify."""
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [{"name": "test.json", "digest": {"sha256": sha256}}],
+    }
+    payload = json.dumps(statement).encode()
+    bundle = {
+        "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+        "verificationMaterial": {},
+        "dsseEnvelope": {"payloadType": "application/vnd.in-toto+json", "payload": base64.b64encode(payload).decode()},
+    }
+    verifier = MagicMock()
+    verifier.verify_dsse.return_value = ("application/vnd.in-toto+json", payload)
+    patches = [
+        patch("sigstore.models.Bundle.from_json", return_value=MagicMock()),
+        patch("sigstore.verify.Verifier.production", return_value=verifier),
+        patch.object(plugin, "_signer_identity", return_value={"identity": "builder", "issuer": "issuer"}),
+    ]
+    return json.dumps(bundle).encode(), patches
+
+
 class TestMetadata:
     def test_metadata(self) -> None:
         plugin = SBOMVerificationPlugin()
         meta = plugin.get_metadata()
 
         assert meta.name == "sbom-verification"
-        assert meta.version == "2.1.0"
+        assert meta.version == "2.2.0"
         # The unified plugin lives in the ``attestation`` category so a
         # single ``requires_one_of`` clause in BSI/FDA/etc. matches it
         # without needing to enumerate plugins by name.
@@ -211,7 +233,8 @@ class TestProvenanceDigest:
             result = plugin.assess("sbom-1", sbom_file, context=context)
 
         finding = next(f for f in result.findings if f.id == "verification:provenance-digest")
-        assert finding.status == "pass"
+        assert finding.status == "warning"
+        assert finding.title == "Provenance Not Signed"
 
     def test_provenance_digest_mismatch(self, tmp_path: Path) -> None:
         sbom_file, sha256 = _sbom_file(tmp_path)
@@ -247,7 +270,8 @@ class TestProvenanceDigest:
             result = plugin.assess("sbom-1", sbom_file, context=context)
 
         finding = next(f for f in result.findings if f.id == "verification:provenance-digest")
-        assert finding.status == "pass"
+        assert finding.status == "warning"
+        assert finding.title == "Provenance Not Signed"
 
     def test_provenance_parse_error(self, tmp_path: Path) -> None:
         sbom_file, sha256 = _sbom_file(tmp_path)
@@ -264,7 +288,7 @@ class TestProvenanceDigest:
 
 class TestOverall:
     def test_overall_provenance_passes_summary(self, tmp_path: Path) -> None:
-        """Provenance subject-digest match satisfies the attestation summary.
+        """Signed provenance naming the SBOM satisfies the attestation summary.
 
         Six sub-findings + the aggregating ``verification:attestation``
         summary = 7 total. The plugin reports a passing summary when
@@ -273,12 +297,6 @@ class TestOverall:
         content = b'{"bomFormat": "CycloneDX"}'
         sbom_file, sha256 = _sbom_file(tmp_path, content)
 
-        statement = {
-            "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{"name": "test.json", "digest": {"sha256": sha256}}],
-        }
-        provenance_blob = json.dumps(statement).encode()
-
         context = SBOMContext(
             sha256_hash=sha256,
             signature_blob_key="abc.sig",
@@ -286,6 +304,7 @@ class TestOverall:
             provenance_blob_key="prov.json",
         )
         plugin = SBOMVerificationPlugin()
+        provenance_blob, signed = _signed_provenance(plugin, sha256)
 
         def mock_fetch(key: str) -> bytes | None:
             if key == "abc.sig":
@@ -294,7 +313,7 @@ class TestOverall:
                 return provenance_blob
             return None
 
-        with patch.object(plugin, "_fetch_blob", side_effect=mock_fetch):
+        with patch.object(plugin, "_fetch_blob", side_effect=mock_fetch), signed[0], signed[1], signed[2]:
             result = plugin.assess("sbom-1", sbom_file, context=context)
 
         assert result.summary.fail_count == 0
@@ -635,23 +654,17 @@ class TestAttestationSummary:
         summary = next(f for f in result.findings if f.id == "verification:attestation")
         assert summary.status == "fail"
 
-    def test_summary_pass_with_provenance_match(self, tmp_path: Path) -> None:
+    def test_summary_pass_with_signed_provenance_match(self, tmp_path: Path) -> None:
         """Any single passing crypto source flips the summary to pass."""
         sbom_file, sha256 = _sbom_file(tmp_path)
-        statement = {
-            "_type": "https://in-toto.io/Statement/v0.1",
-            "subject": [{"name": "x", "digest": {"sha256": sha256}}],
-        }
-        provenance_blob = base64.b64encode(json.dumps(statement).encode()).decode()
-        envelope = {"payloadType": "application/vnd.in-toto+json", "payload": provenance_blob}
-
         context = SBOMContext(
             sha256_hash=sha256,
             provenance_blob_key="prov.json",
         )
         plugin = SBOMVerificationPlugin()
+        provenance_blob, signed = _signed_provenance(plugin, sha256)
 
-        with patch.object(plugin, "_fetch_blob", return_value=json.dumps(envelope).encode()):
+        with patch.object(plugin, "_fetch_blob", return_value=provenance_blob), signed[0], signed[1], signed[2]:
             result = plugin.assess("sbom-1", sbom_file, context=context)
 
         summary = next(f for f in result.findings if f.id == "verification:attestation")

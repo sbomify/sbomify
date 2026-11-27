@@ -339,17 +339,113 @@ class TestProvenanceShapes:
             }
             return json.dumps(bundle).encode()
 
-        assert self._digest_finding(tmp_path, build).status == "pass"
+        finding = self._digest_finding(tmp_path, build)
+        assert finding.metadata is not None
+        assert finding.metadata["matched_subject"] == "sbom.json"
 
     def test_multi_line_jsonl(self, tmp_path: Path) -> None:
         def build(sha256: str) -> bytes:
             lines = [json.dumps(self._envelope("0" * 64)), json.dumps(self._envelope(sha256))]
             return "\n".join(lines).encode() + b"\n"
 
-        assert self._digest_finding(tmp_path, build).status == "pass"
+        finding = self._digest_finding(tmp_path, build)
+        assert finding.metadata is not None
+        assert finding.metadata["matched_subject"] == "sbom.json"
 
     def test_unrecognised_document(self, tmp_path: Path) -> None:
         finding = self._digest_finding(tmp_path, lambda _sha256: b'{"random": "data"}')
 
         assert finding.status == "fail"
         assert finding.title == "Provenance Format Unrecognised"
+
+
+class TestSignedProvenance:
+    """Only provenance whose signature verifies counts as an attestation.
+
+    Anyone who can upload can write a Statement naming the SBOM's digest, so a
+    matching subject alone proves nothing about who built it.
+    """
+
+    BUNDLE_TYPE = "application/vnd.dev.sigstore.bundle.v0.3+json"
+
+    @classmethod
+    def _bundle(cls, sha256: str) -> dict[str, Any]:
+        return {
+            "mediaType": cls.BUNDLE_TYPE,
+            "verificationMaterial": {"certificate": {"rawBytes": "AAAA"}},
+            "dsseEnvelope": TestProvenanceShapes._envelope(sha256),
+        }
+
+    @staticmethod
+    def _verifier(signed_digest: str | None) -> MagicMock:
+        verifier = MagicMock()
+        if signed_digest is None:
+            verifier.verify_dsse.side_effect = ValueError("signature does not match\nmore detail")
+        else:
+            statement = TestProvenanceShapes._statement(signed_digest)
+            verifier.verify_dsse.return_value = ("application/vnd.in-toto+json", json.dumps(statement).encode())
+        return verifier
+
+    def _assess(self, tmp_path: Path, build: Callable[[str], bytes], signed_digest: str | None = "") -> Any:
+        """Assess with ``build(sha256)`` as the provenance; the verifier signs ``signed_digest``.
+
+        ``signed_digest=""`` signs this SBOM's own digest, ``None`` fails verification.
+        """
+        sbom_file, sha256 = _plain_sbom(tmp_path)
+        context = SBOMContext(sha256_hash=sha256, provenance_blob_key="p.json")
+        plugin = SBOMVerificationPlugin()
+        bundle = MagicMock(signing_certificate=_fulcio_like_certificate())
+        verifier = self._verifier(sha256 if signed_digest == "" else signed_digest)
+        with (
+            patch.object(plugin, "_fetch_blob", return_value=build(sha256)),
+            patch("sigstore.models.Bundle.from_json", return_value=bundle),
+            patch("sigstore.verify.Verifier.production", return_value=verifier),
+        ):
+            return plugin.assess("sbom-1", sbom_file, context=context)
+
+    def test_an_unsigned_statement_does_not_attest(self, tmp_path: Path) -> None:
+        result = self._assess(tmp_path, lambda sha256: json.dumps(TestProvenanceShapes._statement(sha256)).encode())
+
+        assert _by_id(result, "verification:provenance-digest").status == "warning"
+        assert _by_id(result, "verification:attestation").status == "fail"
+
+    def test_an_envelope_signature_sbomify_cannot_check_does_not_attest(self, tmp_path: Path) -> None:
+        def build(sha256: str) -> bytes:
+            envelope = TestProvenanceShapes._envelope(sha256)
+            envelope["signatures"] = [{"sig": "abc123"}]
+            return json.dumps(envelope).encode()
+
+        result = self._assess(tmp_path, build)
+
+        assert _by_id(result, "verification:provenance-digest").status == "warning"
+        assert _by_id(result, "verification:attestation").status == "fail"
+
+    def test_a_verified_bundle_naming_this_sbom_attests(self, tmp_path: Path) -> None:
+        result = self._assess(tmp_path, lambda sha256: json.dumps(self._bundle(sha256)).encode())
+
+        finding = _by_id(result, "verification:provenance-digest")
+        assert finding.status == "pass"
+        assert SIGNER in finding.description
+        assert finding.metadata is not None
+        assert finding.metadata["identity"] == SIGNER
+        assert _by_id(result, "verification:attestation").status == "pass"
+
+    def test_a_bundle_whose_signature_fails_is_a_failure(self, tmp_path: Path) -> None:
+        result = self._assess(tmp_path, lambda sha256: json.dumps(self._bundle(sha256)).encode(), signed_digest=None)
+
+        finding = _by_id(result, "verification:provenance-digest")
+        assert finding.status == "fail"
+        assert "\n" not in finding.description
+        assert _by_id(result, "verification:attestation").status == "fail"
+
+    def test_a_signature_over_another_artifact_does_not_attest_this_one(self, tmp_path: Path) -> None:
+        """A real signed bundle for something else, beside an unsigned line naming this SBOM."""
+
+        def build(sha256: str) -> bytes:
+            lines = [json.dumps(self._bundle("0" * 64)), json.dumps(TestProvenanceShapes._envelope(sha256))]
+            return "\n".join(lines).encode()
+
+        result = self._assess(tmp_path, build, signed_digest="0" * 64)
+
+        assert _by_id(result, "verification:provenance-digest").status == "warning"
+        assert _by_id(result, "verification:attestation").status == "fail"
