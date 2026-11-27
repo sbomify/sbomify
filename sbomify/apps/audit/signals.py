@@ -5,10 +5,15 @@ an update that touches a listed field, and a delete each become one event,
 attributed to whoever the open ``AuditContext`` names. Changes made with no
 context open are background work, not user activity, and are skipped.
 
-Receivers are connected once, without a sender, and look the instance's
-concrete model up here. That is what makes proxy models (``core.Product`` over
-``sboms.Product``) count: Django sends ``post_save`` with the proxy class as
+Receivers are connected per sender: once for each tracked concrete model and
+once for each proxy over one. Proxies need their own connection (``core.Product``
+over ``sboms.Product``): Django sends ``post_save`` with the proxy class as
 sender, so a receiver bound to the concrete class would never hear them.
+
+They are never connected without a sender. Django deletes a model in one bulk
+``DELETE`` only when nothing listens to its delete signals, and a sender-less
+receiver listens to every model, so cascades into large untracked tables would
+load and signal every row.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from typing import Any
 
 from django.apps import apps
 from django.contrib.auth.signals import user_logged_in, user_logged_out
-from django.db.models import QuerySet
+from django.db.models import Model, QuerySet
 from django.db.models.signals import m2m_changed, post_delete, post_save, pre_delete, pre_save
 
 from .context import current
@@ -410,14 +415,25 @@ def on_user_logged_out(sender: Any, request: Any, user: Any, **kwargs: Any) -> N
         )
 
 
+def tracked_senders() -> list[type[Model]]:
+    """Every model whose signals the audit log needs: tracked models and their proxies.
+
+    Every app is loaded before any ``ready()`` runs, so a proxy added anywhere
+    is in this list without being named.
+    """
+    return [model for model in apps.get_models() if model._meta.concrete_model in _BY_MODEL]
+
+
 def connect() -> None:
     _resolve_registry()
     m2m_changed.connect(
         on_links_added, sender=apps.get_model("sboms", "ProductComponent"), dispatch_uid="audit_links_added"
     )
-    pre_save.connect(on_pre_save, dispatch_uid="audit_pre_save")
-    post_save.connect(on_post_save, dispatch_uid="audit_post_save")
-    pre_delete.connect(on_pre_delete, dispatch_uid="audit_pre_delete")
-    post_delete.connect(on_post_delete, dispatch_uid="audit_post_delete")
+    for model in tracked_senders():
+        label = model._meta.label_lower
+        pre_save.connect(on_pre_save, sender=model, dispatch_uid=f"audit_pre_save:{label}")
+        post_save.connect(on_post_save, sender=model, dispatch_uid=f"audit_post_save:{label}")
+        pre_delete.connect(on_pre_delete, sender=model, dispatch_uid=f"audit_pre_delete:{label}")
+        post_delete.connect(on_post_delete, sender=model, dispatch_uid=f"audit_post_delete:{label}")
     user_logged_in.connect(on_user_logged_in, dispatch_uid="audit_user_logged_in")
     user_logged_out.connect(on_user_logged_out, dispatch_uid="audit_user_logged_out")
