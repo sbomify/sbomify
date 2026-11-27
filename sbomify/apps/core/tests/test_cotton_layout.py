@@ -203,6 +203,27 @@ def test_section_header_without_actions_leaves_the_title_block_unstretched(rende
     assert "flex-1" not in rendered[rendered.rindex(SECTION_HEADER, 0, plain) : plain]
 
 
+def _section_header(rendered: str, probe: str, action: str) -> str:
+    """The header's markup from its shell up to its action's label."""
+    start = rendered.rindex(SECTION_HEADER, 0, rendered.index(f'data-probe="{probe}"'))
+    return rendered[start : rendered.index(action, start)]
+
+
+def test_section_header_wrap_drops_the_actions_under_the_text_on_mobile(rendered: str) -> None:
+    """wrap is compact's mobile wrap at full size: the header may wrap, and the
+    actions take their own line indented past the chip below sm."""
+    header = _section_header(rendered, "section-wrapped", "Connect provider")
+    assert header.startswith(f"{SECTION_HEADER} flex-wrap")
+    assert '<div class="shrink-0 max-sm:basis-full max-sm:pl-11">' in header
+    assert '<h3 class="text-base font-semibold text-text m-0">Wrapped header</h3>' in header
+
+
+def test_section_header_without_wrap_keeps_the_actions_beside_the_text(rendered: str) -> None:
+    header = _section_header(rendered, "section-actioned", "Add entity")
+    assert not header.startswith(f"{SECTION_HEADER} flex-wrap")
+    assert '<div class="shrink-0">' in header
+
+
 def test_section_header_accent_reaches_the_chip(rendered: str) -> None:
     chip = _classes(rendered, "shrink-0 flex items-center justify-center w-8 h-8", "fas fa-envelope-open-text")
     assert "bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] text-success" in chip
@@ -274,6 +295,28 @@ def test_compact_replaces_the_padding_and_retunes_the_parts(rendered: str) -> No
     assert "sm:px-5" not in card
     assert "text-center" not in card
     assert "[--stat-value-size:1.5rem]" in card
+
+
+def test_compact_is_a_flat_tile_a_step_under_its_panel(rendered: str) -> None:
+    """Compact strips sit inside a card, an inset or a dialog. A raised,
+    gradient tile there reads as a third box, so compact drops both and takes
+    a smaller radius than the panel around it. The full card keeps them."""
+    compact = _classes(rendered, STAT_CARD, "Ready").split()
+    assert "rounded-lg" in compact
+    assert "bg-surface" in compact
+    assert "rounded-xl" not in compact
+    assert "shadow-[var(--shadow-xs)]" not in compact
+    assert not any(part.startswith("bg-[linear-gradient") for part in compact)
+    full = _classes(rendered, STAT_CARD, "Total products").split()
+    assert "rounded-xl" in full
+    assert "rounded-lg" not in full
+    assert any(part.startswith("bg-[linear-gradient") for part in full)
+
+
+def test_an_explicit_info_accent_takes_the_info_ink(rendered: str) -> None:
+    card = _classes(rendered, STAT_CARD, "Would suppress")
+    assert "[--stat-ink:var(--color-info-ink)]" in card
+    assert sum(part.startswith("[--stat-ink:") for part in card.split() if "data-" not in part) == 1
 
 
 @pytest.mark.parametrize(

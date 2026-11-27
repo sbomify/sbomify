@@ -53,7 +53,7 @@ class TestMetadata:
         meta = plugin.get_metadata()
 
         assert meta.name == "sbom-verification"
-        assert meta.version == "2.0.1"
+        assert meta.version == "2.1.0"
         # The unified plugin lives in the ``attestation`` category so a
         # single ``requires_one_of`` clause in BSI/FDA/etc. matches it
         # without needing to enumerate plugins by name.
@@ -307,8 +307,9 @@ class TestOverall:
         assert statuses["verification:signature-valid"] == "warning"
         assert statuses["verification:provenance-present"] == "pass"
         assert statuses["verification:provenance-digest"] == "pass"
-        # No GitHub VCS in this minimal SBOM -> warning, not fail.
-        assert statuses["verification:github-attestation"] == "warning"
+        # No GitHub VCS in this minimal SBOM, and the provenance already
+        # verified it, so the missing GitHub source is only a note.
+        assert statuses["verification:github-attestation"] == "info"
         # Provenance match → summary passes.
         assert statuses["verification:attestation"] == "pass"
 

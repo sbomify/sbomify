@@ -88,10 +88,27 @@
             <c-chips.metric.value>{{ item.source_display }}</c-chips.metric.value>
             </c-chips.metric-chip>
             {% if item.signature_blob_key %}
-                <c-chips.metric-chip accent="success">
-                <i class="fas fa-lock text-xs" aria-hidden="true"></i>
-                <c-chips.metric.value>Signed</c-chips.metric.value>
-                </c-chips.metric-chip>
+                {% if signature_status.state == 'verified' %}
+                    <c-chips.metric-chip accent="success" title="{{ signature_status.signed_by }}">
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Signed</c-chips.metric.value>
+                    </c-chips.metric-chip>
+                {% elif signature_status.state == 'failed' %}
+                    <c-chips.metric-chip accent="danger">
+                    <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Signature invalid</c-chips.metric.value>
+                    </c-chips.metric-chip>
+                {% elif signature_status.state == 'checking' %}
+                    <c-chips.metric-chip>
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Checking signature</c-chips.metric.value>
+                    </c-chips.metric-chip>
+                {% else %}
+                    <c-chips.metric-chip accent="warning">
+                    <i class="fas fa-lock-open text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Signature not verified</c-chips.metric.value>
+                    </c-chips.metric-chip>
+                {% endif %}
             {% endif %}
             {% if item.provenance_blob_key %}
                 <c-chips.metric-chip accent="info">

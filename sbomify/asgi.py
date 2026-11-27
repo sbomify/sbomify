@@ -34,6 +34,7 @@ from channels.auth import AuthMiddlewareStack  # noqa: E402
 from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from sbomify.apps.core.routing import websocket_urlpatterns  # noqa: E402
+from sbomify.apps.mcp import oauth  # noqa: E402
 from sbomify.apps.mcp.auth import (  # noqa: E402
     MCPRateLimitedError,
     audit_invalid_request,
@@ -60,12 +61,16 @@ MCP_BODY_SECONDS = 30.0
 MCP_UPLOAD_BODY_SECONDS = 300.0
 
 
-async def _send_error(send: Send, status: int, message: str, *, retry_after: int | None = None) -> None:
+async def _send_error(
+    send: Send, status: int, message: str, *, retry_after: int | None = None, www_authenticate: str | None = None
+) -> None:
     """A JSON-RPC error sent before the body is read, so it cannot name the request's id."""
     body = json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": -32000, "message": message}}).encode()
     headers = [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]
     if retry_after is not None:
         headers.append((b"retry-after", str(retry_after).encode()))
+    if www_authenticate is not None:
+        headers.append((b"www-authenticate", www_authenticate.encode()))
     await send({"type": "http.response.start", "status": status, "headers": headers})
     await send({"type": "http.response.body", "body": body})
 
@@ -256,7 +261,9 @@ class MCPRouter:
                         if isinstance(refused, MCPRateLimitedError):
                             await _send_error(send, 429, str(refused), retry_after=refused.retry_after)
                         else:
-                            await _send_error(send, 401, str(refused))
+                            sent_one = any(name == b"authorization" for name, _ in scope.get("headers") or [])
+                            challenge = oauth.www_authenticate(invalid=sent_one)
+                            await _send_error(send, 401, str(refused), www_authenticate=challenge)
                         return
                     may_upload = await may_send_large_body(scope)
                     cap = mcp.settings.max_request_body_size if may_upload else settings.MCP_MAX_REQUEST_BYTES
