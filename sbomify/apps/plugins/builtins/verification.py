@@ -1224,7 +1224,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             title="No Attestation Source Available",
             description=(
                 "No cryptographic attestation could be verified for this SBOM. "
-                "Attach a cosign-bundle signature, a provenance attestation, or "
+                "Attach a cosign-bundle signature, a signed provenance bundle, or "
                 "publish the SBOM via GitHub Actions with artifact attestations enabled."
             ),
             status="fail",
