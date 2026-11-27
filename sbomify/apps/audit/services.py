@@ -85,10 +85,11 @@ class AuditPage:
 
 
 def authorize(request: HttpRequest, workspace: Any, action: str = "audit_log:read") -> ServiceResult[None]:
-    if not plan_has_audit_log(workspace.billing_plan):
-        return ServiceResult.failure("The audit log is available on the Enterprise plan.", status_code=402)
+    # Access before plan: a caller who cannot read the log must not learn which plan the workspace is on.
     if not can(request, action, workspace):
         return ServiceResult.failure("Only workspace owners and admins can view the audit log.", status_code=403)
+    if not plan_has_audit_log(workspace.billing_plan):
+        return ServiceResult.failure("The audit log is available on the Enterprise plan.", status_code=402)
     return ServiceResult.success()
 
 

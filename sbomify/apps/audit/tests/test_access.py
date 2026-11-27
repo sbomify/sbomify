@@ -11,6 +11,7 @@ from django.urls import reverse
 
 from sbomify.apps.audit.recorder import Target, record
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers, setup_authenticated_client_session
+from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.settings_tabs import visible_tabs
 
 from .conftest import events
@@ -135,6 +136,40 @@ def test_api_on_business_plan_is_payment_required(client, team_with_business_pla
     )
     url = reverse("api-2:list_audit_events", kwargs={"workspace_key": team_with_business_plan.key})
     assert client.get(url, **get_api_headers(token)).status_code == 402
+
+
+@pytest.mark.parametrize(
+    ("method", "route"),
+    [
+        ("get", "api-2:list_audit_events"),
+        ("get", "api-2:export_audit_events"),
+        ("get", "api-2:get_audit_retention"),
+        ("put", "api-2:set_audit_retention"),
+    ],
+)
+def test_api_does_not_tell_an_outsider_which_plan_a_workspace_is_on(
+    client, django_user_model, enterprise, team_with_business_plan, method, route
+):
+    outsider = django_user_model.objects.create_user(username="outsider", email="outsider@example.com", password="x")
+    client.force_login(outsider)
+
+    def status(workspace) -> int:
+        url = reverse(route, kwargs={"workspace_key": workspace.key})
+        body = json.dumps({"retention_days": 90}) if method == "put" else None
+        return getattr(client, method)(url, body, content_type="application/json").status_code
+
+    assert {"enterprise": status(enterprise), "business": status(team_with_business_plan)} == {
+        "enterprise": 403,
+        "business": 403,
+    }
+
+
+def test_api_refuses_a_plain_member_before_mentioning_the_plan(client, django_user_model, team_with_business_plan):
+    member = django_user_model.objects.create_user(username="bizmember", email="bizmember@example.com", password="x")
+    Member.objects.create(team=team_with_business_plan, user=member, role="member")
+    client.force_login(member)
+    url = reverse("api-2:list_audit_events", kwargs={"workspace_key": team_with_business_plan.key})
+    assert client.get(url).status_code == 403
 
 
 @pytest.mark.parametrize(("days", "status"), [(29, 422), (3651, 422), (90, 200)])
