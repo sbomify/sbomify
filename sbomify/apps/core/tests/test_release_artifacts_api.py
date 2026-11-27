@@ -270,6 +270,39 @@ class TestAddArtifactsToReleaseAPI:
         # Verify artifact was created
         assert ReleaseArtifact.objects.filter(release=self.release, sbom=self.sbom).exists()
 
+    @pytest.mark.parametrize(
+        ("field", "detail"), [("sbom_id", "SBOM not found"), ("document_id", "Document not found")]
+    )
+    def test_an_unknown_artifact_is_not_found(
+        self, authenticated_api_client: tuple[Client, Any], field: str, detail: str
+    ) -> None:
+        """An id that names nothing is the caller's mistake, not a server error."""
+        client, access_token = authenticated_api_client
+
+        response = client.post(
+            f"/api/v1/releases/{self.release.id}/artifacts",
+            data=json.dumps({field: "nosuchartifact"}),
+            content_type="application/json",
+            **get_api_headers(access_token),
+        )
+
+        assert response.status_code == 404
+        assert json.loads(response.content)["detail"] == detail
+
+    def test_replace_must_be_a_json_boolean(self, authenticated_api_client: tuple[Client, Any]) -> None:
+        """A string such as "yes" is refused rather than read as true and allowed to evict an artifact."""
+        client, access_token = authenticated_api_client
+
+        response = client.post(
+            f"/api/v1/releases/{self.release.id}/artifacts",
+            data=json.dumps({"sbom_id": str(self.sbom.id), "replace": "yes"}),
+            content_type="application/json",
+            **get_api_headers(access_token),
+        )
+
+        assert response.status_code == 422
+        assert not ReleaseArtifact.objects.filter(release=self.release, sbom=self.sbom).exists()
+
     def test_pinning_an_artifact_broadcasts_to_the_workspace(
         self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
     ) -> None:

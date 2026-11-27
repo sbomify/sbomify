@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, StrictBool, model_validator
 
 from sbomify.apps.core.custom_metadata import CustomMetadata
 from sbomify.apps.teams.schemas import ContactProfileSchema
@@ -793,7 +793,7 @@ class ReleaseArtifactCreateSchema(BaseModel):
 
     sbom_id: str | None = None
     document_id: str | None = None
-    replace: bool = Field(
+    replace: StrictBool = Field(
         False,
         description=(
             "Explicitly replace an artifact of the same kind from the same component that is already "
