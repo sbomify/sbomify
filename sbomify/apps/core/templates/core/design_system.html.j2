@@ -416,6 +416,15 @@
         needs the title as an h2, and fill the named
         <code class="tw-code-inline">actions</code> slot for the control the section is headed by.
     </p>
+    <c-layout.section-header wrap icon="fas fa-shield-halved" title="Vanta" subtitle="Publish the frameworks and controls you already track in Vanta.">
+    <c-slot name="actions">
+    <c-buttons.primary size="sm">Connect Vanta</c-buttons.primary>
+    </c-slot>
+    </c-layout.section-header>
+    <p class="text-sm text-text-muted">
+        Pass <code class="tw-code-inline">wrap</code> when the actions are too wide to share a phone's width with
+        the subtitle: below the small breakpoint they drop onto their own line, indented past the chip.
+    </p>
     <hr class="border-border">
     {% comment %} The steps sit in their own block, the way a page nests them in its form: the
 first-of-type rule that drops the leading hairline reads the section's position
@@ -1453,7 +1462,8 @@ first-of-type rule that drops the leading hairline reads the section's position
         <c-layout.stat-card compact accent="danger" value="0" label="Unscanned" />
     </div>
     <p class="text-sm text-text-muted">
-        Compact changes spacing and type size. Accents include semantic colors and severity levels.
+        Compact is the flat tile for a strip inside another surface: no shadow or accent gradient, and a
+        smaller radius than the panel around it. Accents include semantic colors and severity levels.
         Zero values stay neutral. For client state, x_value binds the value and its zero state together.
     </p>
     <div x-data="{ count: 0 }" class="flex flex-wrap items-center gap-4">

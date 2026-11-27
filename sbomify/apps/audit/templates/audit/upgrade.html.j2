@@ -1,0 +1,8 @@
+<c-layout.frame id="audit-log-panel">
+<c-layout.section-header level="2" title="Audit log" subtitle="What members, their agents and CI did in this workspace." />
+<c-cards.card>
+<c-feedback.empty-state compact icon="fas fa-clipboard-list" title="Available on Enterprise" message="Upgrade to Enterprise to keep a record of every change in this workspace that nobody can edit or delete, export it, and choose how long it is kept.">
+<c-buttons.primary size="sm" href="{% url 'workspaces:team_settings_tab' workspace_key=workspace.key tab='billing' %}">View plans</c-buttons.primary>
+</c-feedback.empty-state>
+</c-cards.card>
+</c-layout.frame>

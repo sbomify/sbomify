@@ -199,6 +199,11 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "Dependency Track. View scanning statistics and configure workspace preferences.",
             },
             {
+                "name": "Audit Log",
+                "description": "Read and export a workspace's append-only audit log, and set how long it is kept. "
+                "Owners and admins on the Enterprise plan.",
+            },
+            {
                 "name": "Licensing",
                 "description": "List licenses and validate license expressions.",
             },
@@ -251,6 +256,7 @@ MOUNTS: tuple[tuple[str, str], ...] = (
     ("/compliance", "sbomify.apps.compliance.apis.router"),
     ("/controls", "sbomify.apps.controls.apis.router"),
     ("/advisories", "sbomify.apps.security_advisories.apis.router"),
+    ("/audit", "sbomify.apps.audit.apis.router"),
     ("/internal", "sbomify.apps.teams.apis.internal_router"),
     ("/auth/oidc", "sbomify.apps.oidc.apis.router"),
 )

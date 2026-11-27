@@ -1,4 +1,9 @@
-"""The authorization-code flow, with nothing provider-specific in it.
+"""The OAuth grants, with nothing provider-specific in them.
+
+Most providers use the authorization-code flow below. A provider that only
+answers an app the customer creates in their own account uses
+``client_credentials_grant`` instead, with the client id and secret the
+workspace pasted in.
 
 Two things here are worth knowing before editing:
 
@@ -29,7 +34,7 @@ from django.utils import timezone
 from django.utils.module_loading import import_string
 
 from sbomify.apps.core.integrations.http import request_with_retry
-from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderUnavailable
+from sbomify.apps.integrations.exceptions import ProviderAuthError, ProviderScopeRefused, ProviderUnavailable
 from sbomify.apps.integrations.providers.base import ProviderSpec
 from sbomify.logging import getLogger
 
@@ -142,6 +147,26 @@ def refresh(provider: ProviderSpec, refresh_token: str) -> TokenSet:
     )
 
 
+def client_credentials_grant(provider: ProviderSpec, client_id: str, client_secret: str) -> TokenSet:
+    """Mint an access token from a workspace's own client id and secret.
+
+    There is no refresh token in this grant. A token that runs out is replaced
+    by minting another from the same credentials.
+    """
+    if not (client_id and client_secret):
+        # Nothing on the connection to mint with, which only a reconnect fixes.
+        raise ProviderAuthError(f"{provider.name} needs a client ID and secret.", service=provider.key)
+    return _token_request(
+        provider,
+        {
+            "grant_type": "client_credentials",
+            "scope": provider.scope_separator.join(provider.scopes),
+        },
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+
+
 # Two 4xx codes that say nothing about the credential: 408 is the provider
 # timing out on its own request and 429 is it asking us to slow down. Reading
 # either as a refusal costs the workspace its connection over a busy minute,
@@ -149,8 +174,21 @@ def refresh(provider: ProviderSpec, refresh_token: str) -> TokenSet:
 _RETRYABLE_STATUSES = frozenset({408, 429})
 
 
-def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
-    if not (provider.client_id and provider.client_secret and provider.token_url):
+def _token_request(
+    provider: ProviderSpec,
+    payload: dict[str, str],
+    client_id: str | None = None,
+    client_secret: str | None = None,
+) -> TokenSet:
+    """Call the token endpoint, as the deployment's app unless told whose.
+
+    ``client_id`` and ``client_secret`` are a workspace's own credentials, for
+    a ``client_credentials`` provider. Without them the request is made as the
+    OAuth app this deployment registered.
+    """
+    client_id = client_id if client_id is not None else provider.client_id
+    client_secret = client_secret if client_secret is not None else provider.client_secret
+    if not (client_id and client_secret and provider.token_url):
         # This deployment's own settings, not the provider's answer. Sent
         # anyway, the grant is refused and the refusal revokes the connection,
         # so restoring the setting would leave every workspace to reconnect by
@@ -158,8 +196,8 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
         raise ProviderUnavailable(f"{provider.name} is not configured on this deployment.", service=provider.key)
 
     body = {
-        "client_id": provider.client_id,
-        "client_secret": provider.client_secret,
+        "client_id": client_id,
+        "client_secret": client_secret,
         **payload,
     }
 
@@ -190,6 +228,10 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
         # Every other 4xx is the provider answering, and for a grant that means
         # the grant itself was refused (``invalid_grant`` and friends are all
         # 400).
+        if _oauth_error_code(response) == "invalid_scope":
+            raise ProviderScopeRefused(
+                f"{provider.name} refused the permissions sbomify asks for.", service=provider.key
+            )
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     try:
@@ -209,6 +251,21 @@ def _token_request(provider: ProviderSpec, payload: dict[str, str]) -> TokenSet:
         raise ProviderAuthError(f"{provider.name} refused the connection.", service=provider.key)
 
     return _token_set(provider, data)
+
+
+def _oauth_error_code(response: requests.Response) -> str:
+    """The OAuth ``error`` code of a refusal, and nothing else from its body.
+
+    The code is one of a short list the OAuth spec defines, so it is safe to
+    branch on. The rest of the body (``error_description`` and anything a
+    provider adds) is free text that can echo the request, so it is never read.
+    """
+    try:
+        data = response.json()
+    except ValueError:
+        return ""
+    error = data.get("error") if isinstance(data, dict) else None
+    return error if isinstance(error, str) else ""
 
 
 def _token_set(provider: ProviderSpec, data: Any) -> TokenSet:

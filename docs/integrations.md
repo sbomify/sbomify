@@ -7,7 +7,7 @@ chooses, so the trust center can be true without anyone retyping it.
 Vanta is the first compliance provider. Slack is the first notification
 provider: it reads nothing, and posts the VEX approval queue and vulnerability
 news to the channels a workspace picks (see [Slack](#slack)). This page is the
-operator reference: how to register each OAuth client, what each connection
+operator reference: how each provider is connected, what each connection
 writes, and what to check when it stops.
 
 ## What a connection does
@@ -43,41 +43,70 @@ Four consequences worth knowing:
 - **Product-scope statuses are never touched.** The provider describes the
   organisation, so a status somebody set on one product stays theirs.
 
-## Setting up the Vanta OAuth client
+## Connecting Vanta
 
-Vanta issues one credential per connected customer through the OAuth
-authorization-code flow, so every workspace that connects gets its own token
-against its own Vanta account.
+Vanta needs nothing registered on the deployment. Each workspace connects with
+an application it creates in its own Vanta account, because that is the only
+way Vanta grants read access to frameworks and controls:
 
-1. Register an app in the Vanta developer portal with the scope
-   `vanta-api.all:read`.
-2. Register the redirect URI. It is one fixed URL per provider, with no
-   workspace in it:
+- The read scope, `vanta-api.all:read`, belongs to **Manage Vanta**
+  applications. Those use the `client_credentials` grant, and a token only
+  reaches the tenant that created the application.
+- A partner app on Vanta's consent screen (the **Build Integrations**, public
+  type) only gets connector scopes. Those push an app's own resources into
+  Vanta and cannot read a control, so there is no "Connect with Vanta" button
+  that would work here.
 
-   ```text
-   https://<your-host>/integrations/oauth/vanta/callback
-   ```
+What a workspace admin does. The Integrations tab walks through the same steps,
+with links to the Developer Console for each region:
 
-   The workspace being connected travels in the session, not the path, because
-   providers refuse any redirect URI they were not given.
-3. Set the credentials:
+1. In Vanta, open Settings, then Developer Console. This needs the Vanta Admin
+   role. The console is on the account's regional app host:
+   `app.vanta.com`, `app.eu.vanta.com` or `app.aus.vanta.com`, each at
+   `/settings/developer-console`.
+2. Click **Create** and choose **Manage Vanta** as the application type. Not
+   **Build Integrations**: see below.
+3. Name it something recognisable, such as "sbomify Trust Center".
+4. Click **Generate client secret**. Vanta shows the secret once.
+5. In sbomify, open Settings, then Integrations, and paste the client ID
+   (`vci_...`) and secret (`vcs_...`) into the Vanta section.
 
-   | Variable | Default | What it is |
-   | --- | --- | --- |
-   | `VANTA_CLIENT_ID` | empty | The app's client id (`vci_...`) |
-   | `VANTA_CLIENT_SECRET` | empty | The app's client secret (`vcs_...`) |
-   | `VANTA_OAUTH_AUTHORIZE_URL` | `https://app.vanta.com/oauth/authorize` | Where the customer consents |
-   | `VANTA_OAUTH_TOKEN_URL` | `https://api.vanta.com/oauth/token` | Where codes and refreshes are exchanged |
-   | `VANTA_API_BASE_URL` | `https://api.vanta.com` | Where the read calls go |
+sbomify mints a token straight away, so a mistyped secret or an application of
+the wrong type is turned away on the form instead of failing the first sync.
+The wrong type is the usual mistake: a **Build Integrations** application has a
+client ID and secret of the same shape, and Vanta accepts them, but refuses
+`vanta-api.all:read` with `invalid_scope`. sbomify reports that one separately,
+beside the form, and asks for a Manage Vanta application instead.
+The client ID and secret are stored on the connection, never rendered back,
+and used to mint a new token whenever the last one runs out (Vanta tokens last
+an hour, and there is no refresh token in this grant).
 
-Without both halves of the credential the provider's tile renders disabled
-rather than hidden, so a self-hoster can see the feature exists and what it
-wants.
+### When connecting fails
 
-**Regions.** Vanta serves its API from one host worldwide, but customers
-consent on their own regional app host: `app.eu.vanta.com` for EU accounts and
-`app.aus.vanta.com` for AU. A deployment whose customers are not all in the US
-overrides `VANTA_OAUTH_AUTHORIZE_URL`.
+| What the form says | What happened | Fix |
+| --- | --- | --- |
+| "...the application cannot read controls. It is probably a Build Integrations application." | The application is the wrong type. Vanta accepts its credentials but refuses `vanta-api.all:read` with `invalid_scope`. | Create a new application of type Manage Vanta. The type cannot be changed afterwards. |
+| "Vanta did not accept that client ID and secret." | A typo, a secret that was rotated, or an application that was deleted. | Copy both values again, or generate a new secret. |
+| "Vanta is not answering." | Vanta's token endpoint is down or rate limiting. | Try again in a minute. Nothing was saved. |
+
+A connection that worked and later shows **Needs reconnecting** has had its
+application deleted or its secret rotated in Vanta. Paste new credentials into
+the same form; the synced frameworks are kept.
+
+Vanta keeps **one active token per application**. Minting a new one revokes
+the previous one, so the application should be used for sbomify only: a
+script sharing it would knock sbomify's token out, and the other way round.
+
+The deployment settings, both with defaults that suit every Vanta region
+(the API host serves US, EU and AU accounts):
+
+| Variable | Default | What it is |
+| --- | --- | --- |
+| `VANTA_OAUTH_TOKEN_URL` | `https://api.vanta.com/oauth/token` | Where tokens are minted |
+| `VANTA_API_BASE_URL` | `https://api.vanta.com` | Where the read calls go |
+
+Vanta Gov accounts live on `api.vanta-gov.com`, so a deployment serving them
+overrides both.
 
 ## Syncing
 
@@ -114,9 +143,10 @@ different on purpose:
 
 - **Failed** is a bad day at the provider. The next scheduled run tries again,
   and nothing about the connection has changed.
-- **Needs reconnecting** means the refresh token was rejected. No retry can fix
-  that, so the scheduler skips the connection entirely and someone has to go
-  through the consent screen again.
+- **Needs reconnecting** means the stored credential was rejected: Slack's
+  token, or the client ID and secret of a workspace's Vanta application (it
+  was deleted, or its secret was rotated). No retry can fix that, so the
+  scheduler skips the connection entirely and someone has to connect again.
 
 Which one you get is decided by what the provider actually said, and the line
 matters: a connection wrongly marked as needing a reconnect is skipped by the
