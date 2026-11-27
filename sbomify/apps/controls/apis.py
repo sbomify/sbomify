@@ -98,7 +98,10 @@ def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, Error
     agent) is denied even when its holder is an owner/admin. A bare role check
     skips that gate, which let a read-only token perform catalog writes.
     """
-    if not can(request, "controls:manage", team):
+    decision = can(request, "controls:manage", team)
+    if not decision:
+        if decision.reason.startswith("token scope"):
+            return 403, ErrorResponse(detail="This API token's scope does not allow changing controls")
         return 403, ErrorResponse(detail="Only workspace owners and admins can perform this action")
     return None
 
