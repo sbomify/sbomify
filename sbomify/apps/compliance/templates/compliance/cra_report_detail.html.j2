@@ -64,7 +64,7 @@
         </tbody>
         </c-tables.table>
         </c-cards.card>
-        <c-cards.card title="For the ENISA portal" subtitle="Each field as the Single Reporting Platform asks for it. Copy it into the portal, then record the filing below.">
+        <c-cards.card title="For the ENISA portal" subtitle="The fields the Single Reporting Platform asks for at this stage. Copy them into the portal, then record the filing below.">
         <div class="flex flex-col gap-4">
             <c-navigation.tabs links aria-label="Stage to file">
             {% for option in copy_stages %}
@@ -81,7 +81,7 @@
                 </c-feedback.alert>
             {% endif %}
             {% for row in layout %}
-                {% if row.value or row.required %}
+                {% if row.on_form and row.value or row.required %}
                     {% if row.missing %}
                         <c-forms.field label="{{ row.label }}" for="copy-{{ row.id }}" error="Needed for this stage">
                         <c-copy-field id="copy-{{ row.id }}" value="" label="{{ row.label }}" />

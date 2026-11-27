@@ -230,6 +230,31 @@ class TestFilings:
         assert rows["general_information"]["missing"] is True
         assert "suspected_unlawful" not in rows
 
+    def test_the_final_report_leaves_out_what_the_early_warning_filed(self, report):
+        rows = {row["id"]: row for row in report_service.srp_layout(report, Stage.FINAL_REPORT)}
+
+        assert rows["title"]["value"] and rows["title"]["on_form"] is False
+        assert rows["title"]["required"] is False
+        assert rows["measures_taken"]["on_form"] is True
+
+    def test_an_incident_is_not_asked_when_it_occurred_at_the_final_report(self, team, owner, product):
+        incident = report_service.create_report(
+            team, owner, kind="incident", product_id=product.id, aware_at=AWARE
+        ).value
+
+        rows = {row["id"]: row for row in report_service.srp_layout(incident, Stage.FINAL_REPORT)}
+
+        assert rows["incident_occurred_at"]["missing"] is False
+        assert rows["incident_occurred_at"]["on_form"] is False
+
+    def test_the_copy_panel_shows_only_the_stages_form(self, team, owner, report):
+        url = reverse("compliance:cra_report_detail", args=[report.id])
+
+        html = _client_for(team, owner).get(f"{url}?stage=final_report").content.decode()
+
+        assert 'id="copy-measures_taken"' in html
+        assert 'id="copy-title"' not in html
+
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
@@ -1271,6 +1296,16 @@ class TestFilingEvidence:
         assert body["filed_by"] == owner.email
         assert body["snapshot"]["srp_fields"]["title"] == "Router OS remote code execution"
         assert "general_information" not in body["snapshot"]["srp_fields"]
+
+    def test_a_filing_shows_only_what_its_stage_took(self, team, owner, report):
+        report_service.update_report(report, owner, values={"measures_taken": "Patched in 2.1.1."})
+        filing = report_service.record_filing(report, owner, stage=Stage.FINAL_REPORT, srp_reference="F").value
+
+        rows = {row["id"] for row in report_service.filing_layout(filing)}
+
+        assert "measures_taken" in rows
+        assert "title" not in rows
+        assert filing.snapshot["srp_fields"]["title"] == "Router OS remote code execution"
 
     def test_another_reports_filing_reads_as_absent(self, team, owner, product, report):
         filing = report_service.record_filing(report, owner, stage=Stage.EARLY_WARNING).value

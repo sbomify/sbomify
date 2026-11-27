@@ -1,37 +1,41 @@
 # Final Report
-**CRA Article 14 — Within 14 days (vulnerability) / 1 month (incident) after corrective measure**
+**CRA Article 14: within 14 days after a corrective measure is available (vulnerability) or 1 month after the notification (incident)**
 ---
 
 **Date:** {{ date }}
 **Manufacturer:** {{ manufacturer_name }}
 **Product:** {{ product_name }}
-**Reference:** [Link to Notification]
+**Reference:** [SRP reference of the notification]
 
-## Vulnerability / Incident Description
+Field names follow ENISA's CRA SRP Glossary, version 1.6.
 
-**Detailed description:** [Provide a detailed description including severity and impact]
+## Required for both
 
-## Threat Analysis
+**Corrective or mitigating measures taken:** [Bulleted list or structured text]
 
-**Threat type / root cause:** [Describe the underlying cause]
+**Corrective or mitigating measures that users can take:** [Action-oriented text]
 
-**Malicious actor details (if known):** [Describe any known threat actor information]
+## Required for an actively exploited vulnerability
 
-## Resolution
+**Date when corrective or mitigating measure has been available:** [YYYY-MM-DD HH:MM]
 
-**Security update information:** [Describe the fix or patch applied]
+**Details about the security update/corrective measure available:** [Fix version and how to get it]
 
-**Fix version:** [Version number containing the fix]
+**Description of the severity of the vulnerability:** [Detailed structured narrative]
 
-**Root cause analysis:** [Describe the root cause and how it was addressed]
+**Description of the impact of the vulnerability:** [Detailed structured narrative]
 
-## Prevention
+**Malicious actor that has exploited/is exploiting the vulnerability:** [Required if known, at most 100 characters]
 
-**Preventive measures implemented:** [Describe steps taken to prevent recurrence]
+## Required for a severe incident
 
-## Mitigation Status
+**Applied and ongoing mitigation measures:** [Structured narrative]
 
-**Current mitigation status:** [ ] Fully mitigated / [ ] Partially mitigated / [ ] Ongoing
+**Detailed description of the Severity of the incident:** [Structured narrative]
+
+**Detailed description of the Impact of the incident:** [Structured narrative]
+
+**Type of Threat or root cause that is likely to have triggered incident:** [Classification and short explanation]
 
 ## Contact Information
 
@@ -40,6 +44,6 @@
 {% endif %}
 
 ---
-> Submit via ENISA Single Reporting Platform (SRP).
-> Vulnerability reports: submit within 14 days after corrective measure is available.
+> Submit via the ENISA Single Reporting Platform (SRP).
+> Vulnerability reports: submit within 14 days after the corrective measure is available.
 > Incident reports: submit within 1 month after the incident notification.
