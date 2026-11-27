@@ -14,6 +14,10 @@ mock.module('../../core/js/csrf', () => ({
 mock.module('../../core/js/alerts', () => ({
   showError: () => {},
   showSuccess: () => {},
+  showWarning: () => {},
+  showInfo: () => {},
+  showToast: () => {},
+  showConfirmation: () => {},
 }));
 mock.module('./cra-shared', () => craSharedMock());
 

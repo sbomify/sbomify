@@ -88,8 +88,7 @@ class TestPlanHasCustomDomainAccess:
             name="Custom Paid Plan",
             description="Custom Paid Plan",
         )
-        # Since has_custom_domain_access is a property that checks key in ["business", "enterprise"]
-        # custom plans that aren't in that list should not have access
+        # Only business and enterprise have access, whatever other plans exist
         assert plan_has_custom_domain_access("custom_paid") is False
 
     def test_billing_plan_model_lookup_business_plan(self):
@@ -99,7 +98,6 @@ class TestPlanHasCustomDomainAccess:
             name="Business Plan",
             description="Business Plan",
         )
-        # The function looks up the model and uses has_custom_domain_access property
         assert plan_has_custom_domain_access("business") is True
 
 

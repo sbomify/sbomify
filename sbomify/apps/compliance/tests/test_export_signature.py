@@ -24,7 +24,7 @@ from sigstore.verify import Verifier
 from sbomify.apps.compliance.models import CRAExportPackage
 from sbomify.apps.compliance.services.export_service import build_export_package, get_signature_url
 from sbomify.apps.compliance.services.export_signature import sign_export
-from sbomify.apps.compliance.services.wizard_service import get_compliance_summary
+from sbomify.apps.compliance.services.wizard_service import get_step_context
 from sbomify.apps.compliance.tests.test_export_service import (  # noqa: F401
     assessment,
     assessment_with_docs,
@@ -314,7 +314,7 @@ class TestStepFiveSummary:
             signed_at=datetime(2026, 8, 6, 1, 3, 1, tzinfo=UTC),
         )
 
-        last = get_compliance_summary(assessment).value["last_export"]
+        last = get_step_context(assessment, 5).value["last_export"]
 
         assert last["id"] == package.id
         assert last["file_name"] == f"cra-package-export-test-product-{SIGNED_DIGEST[:12]}.zip"
@@ -323,7 +323,7 @@ class TestStepFiveSummary:
     def test_an_unsigned_export_has_no_signature(self, assessment):
         _package(assessment)
 
-        assert get_compliance_summary(assessment).value["last_export"]["signature"] is None
+        assert get_step_context(assessment, 5).value["last_export"]["signature"] is None
 
 
 @pytest.mark.django_db

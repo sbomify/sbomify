@@ -84,6 +84,15 @@ _MAX_VERSIONS = 100
 _MAX_IDENTIFIERS = 100
 _MAX_REFERENCES = 100
 
+# Per level, keyed by the entity's FK field on its event and support-definition
+# models: (event model, support-definition model, label for error messages).
+_LEVELS: dict[str, tuple[type[BaseCLEEvent], type[BaseCLESupportDefinition], str]] = {
+    "product": (ProductCLEEvent, ProductCLESupportDefinition, "product"),
+    "component": (ComponentCLEEvent, ComponentCLESupportDefinition, "component"),
+    "release": (ReleaseCLEEvent, ReleaseCLESupportDefinition, "release"),
+    "component_release": (ComponentReleaseCLEEvent, ComponentReleaseCLESupportDefinition, "component release"),
+}
+
 
 def _validate_json_fields(
     versions: list[dict[str, Any]],
@@ -128,15 +137,11 @@ def _validate_json_fields(
 
 
 def create_cle_event_generic(
+    level: str,
     entity: django_models.Model,
-    entity_fk_field: str,
-    event_model: type[BaseCLEEvent],
-    support_def_model: type[BaseCLESupportDefinition],
     event_type: str,
     effective: datetime,
     *,
-    entity_label: str = "entity",
-    recompute_fn: Any | None = None,
     version: str = "",
     versions: list[dict[str, Any]] | None = None,
     support_id: str = "",
@@ -148,16 +153,13 @@ def create_cle_event_generic(
     description: str = "",
     references: list[str] | None = None,
 ) -> ServiceResult[Any]:
-    """Create a CLE lifecycle event for any entity level.
+    """Create a CLE lifecycle event for an entity at ``level`` (a key of ``_LEVELS``).
 
-    Generic implementation that accepts the entity instance, the FK field name
-    on the event/support-def model (e.g. ``"product"``, ``"component"``), and
-    the concrete event and support-definition model classes.
-
-    ``entity_label`` is used in human-readable error messages (e.g. "product",
-    "component").  ``recompute_fn``, when provided, is called with the locked
-    entity after the event is created (used for product lifecycle date caching).
+    Validates required fields per event type and auto-assigns the next event_id.
+    For a product it also recomputes the cached lifecycle dates.
     """
+    event_model, support_def_model, entity_label = _LEVELS[level]
+    entity_fk_field = level
     versions = versions or []
     identifiers = identifiers or []
     references = references or []
@@ -218,8 +220,8 @@ def create_cle_event_generic(
         }
         event = event_model.objects.create(**create_kwargs)  # type: ignore[attr-defined]
 
-        if recompute_fn is not None:
-            recompute_fn(locked_entity)
+        if level == "product":
+            recompute_lifecycle_dates(locked_entity)
 
     return ServiceResult.success(event)
 
@@ -271,20 +273,18 @@ def _validate_event_fields_generic(
 
 
 def create_support_definition_generic(
+    level: str,
     entity: django_models.Model,
-    entity_fk_field: str,
-    support_def_model: type[BaseCLESupportDefinition],
     support_id: str,
     description: str,
     url: str = "",
-    *,
-    entity_label: str = "entity",
 ) -> ServiceResult[Any]:
-    """Create a named support tier definition for any entity level."""
+    """Create a named support tier definition for an entity at ``level``."""
+    _, support_def_model, entity_label = _LEVELS[level]
     try:
         with transaction.atomic():
             create_kwargs = {
-                entity_fk_field: entity,
+                level: entity,
                 "support_id": support_id,
                 "description": description,
                 "url": url,
@@ -299,53 +299,19 @@ def create_support_definition_generic(
     return ServiceResult.success(definition)
 
 
-# ---------------------------------------------------------------------------
-# Product-level convenience wrappers (backward compatible)
-# ---------------------------------------------------------------------------
+# Per-level entry points. Keyword arguments are create_cle_event_generic's.
 
 
 def create_cle_event(
-    product: Product,
-    event_type: str,
-    effective: datetime,
-    *,
-    version: str = "",
-    versions: list[dict[str, Any]] | None = None,
-    support_id: str = "",
-    license: str = "",
-    superseded_by_version: str = "",
-    identifiers: list[dict[str, Any]] | None = None,
-    withdrawn_event_id: int | None = None,
-    reason: str = "",
-    description: str = "",
-    references: list[str] | None = None,
+    product: Product, event_type: str, effective: datetime, **fields: Any
 ) -> ServiceResult[ProductCLEEvent]:
-    """Create a new CLE lifecycle event for a product.
+    """Create a CLE lifecycle event for a product and recompute its cached lifecycle dates.
 
-    Validates required fields per event type, auto-assigns the next event_id,
-    and recomputes cached lifecycle dates on the product. A product's support
-    dates apply to every release without its own, so Dependency-Track is
-    brought in line once the event commits.
+    A product's support dates apply to every release without its own, so
+    Dependency-Track is brought in line once the event commits.
     """
     result: ServiceResult[ProductCLEEvent] = create_cle_event_generic(
-        entity=product,
-        entity_fk_field="product",
-        event_model=ProductCLEEvent,
-        support_def_model=ProductCLESupportDefinition,
-        event_type=event_type,
-        effective=effective,
-        entity_label="product",
-        recompute_fn=recompute_lifecycle_dates,
-        version=version,
-        versions=versions,
-        support_id=support_id,
-        license=license,
-        superseded_by_version=superseded_by_version,
-        identifiers=identifiers,
-        withdrawn_event_id=withdrawn_event_id,
-        reason=reason,
-        description=description,
-        references=references,
+        "product", product, event_type, effective, **fields
     )
     if result.ok:
         after_lifecycle_change(product.pk)
@@ -417,88 +383,11 @@ def set_product_dates(product: Product, dates: dict[str, date | None]) -> Servic
     return ServiceResult.success(changed)
 
 
-def create_support_definition(
-    product: Product,
-    support_id: str,
-    description: str,
-    url: str = "",
-) -> ServiceResult[ProductCLESupportDefinition]:
-    """Create a named support tier definition for a product."""
-    return create_support_definition_generic(
-        entity=product,
-        entity_fk_field="product",
-        support_def_model=ProductCLESupportDefinition,
-        support_id=support_id,
-        description=description,
-        url=url,
-        entity_label="product",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Component-level convenience wrappers
-# ---------------------------------------------------------------------------
-
-
 def create_component_cle_event(
-    component: Component,
-    event_type: str,
-    effective: datetime,
-    *,
-    version: str = "",
-    versions: list[dict[str, Any]] | None = None,
-    support_id: str = "",
-    license: str = "",
-    superseded_by_version: str = "",
-    identifiers: list[dict[str, Any]] | None = None,
-    withdrawn_event_id: int | None = None,
-    reason: str = "",
-    description: str = "",
-    references: list[str] | None = None,
+    component: Component, event_type: str, effective: datetime, **fields: Any
 ) -> ServiceResult[ComponentCLEEvent]:
-    """Create a new CLE lifecycle event for a component."""
-    return create_cle_event_generic(
-        entity=component,
-        entity_fk_field="component",
-        event_model=ComponentCLEEvent,
-        support_def_model=ComponentCLESupportDefinition,
-        event_type=event_type,
-        effective=effective,
-        entity_label="component",
-        version=version,
-        versions=versions,
-        support_id=support_id,
-        license=license,
-        superseded_by_version=superseded_by_version,
-        identifiers=identifiers,
-        withdrawn_event_id=withdrawn_event_id,
-        reason=reason,
-        description=description,
-        references=references,
-    )
-
-
-def create_component_support_definition(
-    component: Component,
-    support_id: str,
-    description: str,
-    url: str = "",
-) -> ServiceResult[ComponentCLESupportDefinition]:
-    """Create a named support tier definition for a component."""
-    return create_support_definition_generic(
-        entity=component,
-        entity_fk_field="component",
-        support_def_model=ComponentCLESupportDefinition,
-        support_id=support_id,
-        description=description,
-        url=url,
-        entity_label="component",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Release-level convenience wrappers
-# ---------------------------------------------------------------------------
+    """Create a CLE lifecycle event for a component."""
+    return create_cle_event_generic("component", component, event_type, effective, **fields)
 
 
 def create_release_cle_event(
@@ -568,13 +457,10 @@ def create_release_cle_event(
                     return ServiceResult.failure(backdated, status_code=400)
 
         result: ServiceResult[ReleaseCLEEvent] = create_cle_event_generic(
-            entity=release,
-            entity_fk_field="release",
-            event_model=ReleaseCLEEvent,
-            support_def_model=ReleaseCLESupportDefinition,
-            event_type=event_type,
-            effective=effective,
-            entity_label="release",
+            "release",
+            release,
+            event_type,
+            effective,
             version=version,
             versions=versions,
             support_id=support_id,
@@ -637,26 +523,21 @@ def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCL
     old = edge.cle_event
     if old is None:
         return ServiceResult.success(None)
-    publish: dict[str, Any] = {
-        "entity": edge.from_release,
-        "entity_fk_field": "release",
-        "event_model": ReleaseCLEEvent,
-        "support_def_model": ReleaseCLESupportDefinition,
-        "entity_label": "release",
-    }
     withdrawn = create_cle_event_generic(
-        **publish,
-        event_type=CLEEventType.WITHDRAWN,
-        effective=timezone.now(),
+        "release",
+        edge.from_release,
+        CLEEventType.WITHDRAWN,
+        timezone.now(),
         withdrawn_event_id=old.event_id,
         reason="The successor's release date moved.",
     )
     if not withdrawn.ok:
         return withdrawn
     result: ServiceResult[ReleaseCLEEvent | None] = create_cle_event_generic(
-        **publish,
-        event_type=CLEEventType.SUPERSEDED_BY,
-        effective=edge.effective,
+        "release",
+        edge.from_release,
+        CLEEventType.SUPERSEDED_BY,
+        edge.effective,
         version=old.version,
         versions=old.versions,
         support_id=old.support_id,
@@ -672,83 +553,39 @@ def republish_supersession(edge: ReleaseSupersession) -> ServiceResult[ReleaseCL
     return result
 
 
+def create_component_release_cle_event(
+    component_release: ComponentRelease, event_type: str, effective: datetime, **fields: Any
+) -> ServiceResult[ComponentReleaseCLEEvent]:
+    """Create a CLE lifecycle event for a component release."""
+    return create_cle_event_generic("component_release", component_release, event_type, effective, **fields)
+
+
+def create_support_definition(
+    product: Product, support_id: str, description: str, url: str = ""
+) -> ServiceResult[ProductCLESupportDefinition]:
+    """Create a named support tier definition for a product."""
+    return create_support_definition_generic("product", product, support_id, description, url)
+
+
+def create_component_support_definition(
+    component: Component, support_id: str, description: str, url: str = ""
+) -> ServiceResult[ComponentCLESupportDefinition]:
+    """Create a named support tier definition for a component."""
+    return create_support_definition_generic("component", component, support_id, description, url)
+
+
 def create_release_support_definition(
-    release: Release,
-    support_id: str,
-    description: str,
-    url: str = "",
+    release: Release, support_id: str, description: str, url: str = ""
 ) -> ServiceResult[ReleaseCLESupportDefinition]:
     """Create a named support tier definition for a release."""
-    return create_support_definition_generic(
-        entity=release,
-        entity_fk_field="release",
-        support_def_model=ReleaseCLESupportDefinition,
-        support_id=support_id,
-        description=description,
-        url=url,
-        entity_label="release",
-    )
-
-
-# ---------------------------------------------------------------------------
-# ComponentRelease-level convenience wrappers
-# ---------------------------------------------------------------------------
-
-
-def create_component_release_cle_event(
-    component_release: ComponentRelease,
-    event_type: str,
-    effective: datetime,
-    *,
-    version: str = "",
-    versions: list[dict[str, Any]] | None = None,
-    support_id: str = "",
-    license: str = "",
-    superseded_by_version: str = "",
-    identifiers: list[dict[str, Any]] | None = None,
-    withdrawn_event_id: int | None = None,
-    reason: str = "",
-    description: str = "",
-    references: list[str] | None = None,
-) -> ServiceResult[ComponentReleaseCLEEvent]:
-    """Create a new CLE lifecycle event for a component release."""
-    return create_cle_event_generic(
-        entity=component_release,
-        entity_fk_field="component_release",
-        event_model=ComponentReleaseCLEEvent,
-        support_def_model=ComponentReleaseCLESupportDefinition,
-        event_type=event_type,
-        effective=effective,
-        entity_label="component release",
-        version=version,
-        versions=versions,
-        support_id=support_id,
-        license=license,
-        superseded_by_version=superseded_by_version,
-        identifiers=identifiers,
-        withdrawn_event_id=withdrawn_event_id,
-        reason=reason,
-        description=description,
-        references=references,
-    )
+    return create_support_definition_generic("release", release, support_id, description, url)
 
 
 def create_component_release_support_definition(
-    component_release: ComponentRelease,
-    support_id: str,
-    description: str,
-    url: str = "",
+    component_release: ComponentRelease, support_id: str, description: str, url: str = ""
 ) -> ServiceResult[ComponentReleaseCLESupportDefinition]:
     """Create a named support tier definition for a component release."""
-    return create_support_definition_generic(
-        entity=component_release,
-        entity_fk_field="component_release",
-        support_def_model=ComponentReleaseCLESupportDefinition,
-        support_id=support_id,
-        description=description,
-        url=url,
-        entity_label="component release",
-    )
+    return create_support_definition_generic("component_release", component_release, support_id, description, url)
 
 
 def recompute_lifecycle_dates(product: Product) -> None:
@@ -808,13 +645,10 @@ def recompute_lifecycle_dates(product: Product) -> None:
     recompute_release_lifecycle(product)
 
 
-def _get_cle_document_generic(
-    event_model: type[BaseCLEEvent],
-    support_def_model: type[BaseCLESupportDefinition],
-    entity_fk_field: str,
-    entity: django_models.Model,
-) -> ServiceResult[CLE]:
-    """Build a libtea CLE document from events and definitions for any entity level."""
+def _get_cle_document_generic(level: str, entity: django_models.Model) -> ServiceResult[CLE]:
+    """Build a libtea CLE document from the events and definitions of an entity at ``level``."""
+    event_model, support_def_model, _ = _LEVELS[level]
+    entity_fk_field = level
     filter_kwargs = {entity_fk_field: entity}
     events = event_model.objects.filter(**filter_kwargs).order_by("-event_id")  # type: ignore[attr-defined]
 
@@ -846,24 +680,22 @@ def _get_cle_document_generic(
 
 def get_cle_document(product: Product) -> ServiceResult[CLE]:
     """Build a libtea CLE document from a product's CLE events and definitions."""
-    return _get_cle_document_generic(ProductCLEEvent, ProductCLESupportDefinition, "product", product)
+    return _get_cle_document_generic("product", product)
 
 
 def get_component_cle_document(component: Component) -> ServiceResult[CLE]:
     """Build a libtea CLE document from a component's CLE events and definitions."""
-    return _get_cle_document_generic(ComponentCLEEvent, ComponentCLESupportDefinition, "component", component)
+    return _get_cle_document_generic("component", component)
 
 
 def get_release_cle_document(release: Release) -> ServiceResult[CLE]:
     """Build a libtea CLE document from a release's CLE events and definitions."""
-    return _get_cle_document_generic(ReleaseCLEEvent, ReleaseCLESupportDefinition, "release", release)
+    return _get_cle_document_generic("release", release)
 
 
 def get_component_release_cle_document(component_release: ComponentRelease) -> ServiceResult[CLE]:
     """Build a libtea CLE document from a component release's CLE events and definitions."""
-    return _get_cle_document_generic(
-        ComponentReleaseCLEEvent, ComponentReleaseCLESupportDefinition, "component_release", component_release
-    )
+    return _get_cle_document_generic("component_release", component_release)
 
 
 def _to_libtea_event(event: BaseCLEEvent) -> TeaCLEEvent:

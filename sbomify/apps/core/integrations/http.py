@@ -32,14 +32,3 @@ def post_form(
     **kwargs: Any,
 ) -> requests.Response:
     return request_with_retry("POST", url, data=data, timeout=timeout, **kwargs)
-
-
-def get_json(
-    url: str,
-    *,
-    timeout: tuple[float, float] | float = DEFAULT_TIMEOUT,
-    **kwargs: Any,
-) -> requests.Response:
-    headers = kwargs.pop("headers", {})
-    headers.setdefault("Accept", "application/json")
-    return request_with_retry("GET", url, headers=headers, timeout=timeout, **kwargs)

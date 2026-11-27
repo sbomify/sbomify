@@ -56,9 +56,7 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
-COPY postcss.config.js ./
 COPY eslint.config.js ./
-COPY .prettierrc.js ./
 
 # Install dependencies
 RUN bun install --frozen-lockfile --production
@@ -117,9 +115,7 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
-COPY postcss.config.js ./
 COPY eslint.config.js ./
-COPY .prettierrc.js ./
 
 # Install dependencies (before source files for better Docker layer caching)
 RUN bun install --frozen-lockfile

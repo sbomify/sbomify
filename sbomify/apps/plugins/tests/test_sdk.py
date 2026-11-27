@@ -24,7 +24,6 @@ class TestAssessmentCategory:
     def test_category_values(self) -> None:
         """Test that all expected categories exist with correct values."""
         assert AssessmentCategory.SECURITY.value == "security"
-        assert AssessmentCategory.LICENSE.value == "license"
         assert AssessmentCategory.COMPLIANCE.value == "compliance"
         assert AssessmentCategory.ATTESTATION.value == "attestation"
 
@@ -59,7 +58,6 @@ class TestRunReason:
         assert RunReason.SCHEDULED_REFRESH.value == "scheduled_refresh"
         assert RunReason.MANUAL.value == "manual"
         assert RunReason.CONFIG_CHANGE.value == "config_change"
-        assert RunReason.PLUGIN_UPDATE.value == "plugin_update"
 
     def test_reason_is_string_enum(self) -> None:
         """Test that RunReason inherits from str."""
@@ -81,23 +79,6 @@ class TestPluginMetadata:
         assert metadata.name == "test-plugin"
         assert metadata.version == "1.0.0"
         assert metadata.category == AssessmentCategory.COMPLIANCE
-
-    def test_to_dict(self) -> None:
-        """Test converting PluginMetadata to dictionary."""
-        metadata = PluginMetadata(
-            name="test-plugin",
-            version="1.0.0",
-            category=AssessmentCategory.SECURITY,
-        )
-
-        result = metadata.to_dict()
-
-        assert result == {
-            "name": "test-plugin",
-            "version": "1.0.0",
-            "category": "security",
-            "scan_mode": "one_shot",
-        }
 
 
 class TestFinding:
@@ -312,14 +293,14 @@ class TestAssessmentPlugin:
                 return PluginMetadata(
                     name="configurable",
                     version="1.0.0",
-                    category=AssessmentCategory.LICENSE,
+                    category=AssessmentCategory.COMPLIANCE,
                 )
 
             def assess(self, sbom_id: str, sbom_path: Path) -> AssessmentResult:
                 return AssessmentResult(
                     plugin_name="configurable",
                     plugin_version="1.0.0",
-                    category="license",
+                    category="compliance",
                     assessed_at=datetime.now(timezone.utc).isoformat(),
                     summary=AssessmentSummary(total_findings=0),
                     metadata={"config": self.config},

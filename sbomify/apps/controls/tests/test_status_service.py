@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from sbomify.apps.controls.models import ControlStatus
+from sbomify.apps.controls.services.catalog_service import (
+    _BUILTIN_CATALOGS,
+    _DATA_DIR,
+    activate_builtin_catalog,
+    import_oscal_catalog,
+)
 from sbomify.apps.controls.services.status_service import (
     bulk_update_statuses,
+    get_controls_detail,
     get_controls_summary,
     upsert_status,
 )
@@ -132,3 +141,36 @@ class TestGetControlsSummary:
         assert result.ok
         assert result.value["total"] == 0
         assert result.value["percentage"] == 0.0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("catalog_name", sorted(_BUILTIN_CATALOGS))
+def test_every_builtin_group_gets_its_catalog_icon(sample_team, catalog_name) -> None:
+    groups = json.loads((_DATA_DIR / _BUILTIN_CATALOGS[catalog_name]).read_text(encoding="utf-8"))["groups"]
+    catalog = activate_builtin_catalog(sample_team, catalog_name).value
+
+    detail = get_controls_detail(catalog).value
+    summary = get_controls_summary(sample_team, catalog=catalog).value
+
+    expected = {group["name"]: group["icon"] for group in groups}
+    assert {category["name"]: category["icon"] for category in detail} == expected
+    assert {category["name"]: category["icon"] for category in summary["categories"]} == expected
+
+
+@pytest.mark.django_db
+def test_an_imported_group_title_keeps_its_icon(sample_team) -> None:
+    """An OSCAL import keeps its own group titles; NIST SP 800-171 names its families like this."""
+    oscal = {
+        "catalog": {
+            "metadata": {"title": "NIST SP 800-171", "version": "2"},
+            "groups": [
+                {"title": "Access Control", "controls": [{"id": "ac-1", "title": "Limit access"}]},
+                {"title": "Something else", "controls": [{"id": "x-1", "title": "Other"}]},
+            ],
+        }
+    }
+    catalog = import_oscal_catalog(sample_team, oscal).value
+
+    icons = {category["name"]: category["icon"] for category in get_controls_detail(catalog).value}
+
+    assert icons == {"Access Control": "fa-key", "Something else": "fa-circle"}

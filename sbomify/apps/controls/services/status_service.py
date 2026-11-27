@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
 from sbomify.apps.controls.models import Control, ControlCatalog, ControlStatus, ControlStatusLog
+from sbomify.apps.controls.services.catalog_service import _BUILTIN_CATALOGS, _DATA_DIR
 from sbomify.apps.core.services.results import ServiceResult
 
 if TYPE_CHECKING:
@@ -13,65 +15,9 @@ if TYPE_CHECKING:
 
 _VALID_STATUSES = {choice[0] for choice in ControlStatus.Status.choices}
 
-# Fallback icons for known group names
-_GROUP_ICONS: dict[str, str] = {
-    # SOC 2 Type II
-    "Security": "fa-lock",
-    "Availability": "fa-server",
-    "Processing Integrity": "fa-check-double",
-    "Confidentiality": "fa-shield-halved",
-    "Privacy": "fa-user-shield",
-    # ISO 27001:2022
-    "Organisational Controls": "fa-building",
-    "People Controls": "fa-users",
-    "Physical Controls": "fa-warehouse",
-    "Technological Controls": "fa-microchip",
-    # NIST CSF 2.0
-    "Govern (GV)": "fa-landmark",
-    "Identify (ID)": "fa-magnifying-glass",
-    "Protect (PR)": "fa-shield-halved",
-    "Detect (DE)": "fa-eye",
-    "Respond (RS)": "fa-reply",
-    "Recover (RC)": "fa-arrows-rotate",
-    # CIS Controls v8
-    "Inventory and Control of Enterprise Assets": "fa-desktop",
-    "Inventory and Control of Software Assets": "fa-box",
-    "Data Protection": "fa-database",
-    "Secure Configuration of Enterprise Assets and Software": "fa-sliders",
-    "Account Management": "fa-user-gear",
-    "Access Control Management": "fa-key",
-    "Continuous Vulnerability Management": "fa-bug",
-    "Audit Log Management": "fa-clipboard-list",
-    "Email and Web Browser Protections": "fa-envelope-open",
-    "Malware Defenses": "fa-shield-virus",
-    "Data Recovery": "fa-clock-rotate-left",
-    "Network Infrastructure Management": "fa-network-wired",
-    "Network Monitoring and Defense": "fa-tower-broadcast",
-    "Security Awareness and Skills Training": "fa-graduation-cap",
-    "Service Provider Management": "fa-handshake",
-    "Application Software Security": "fa-code",
-    "Incident Response Management": "fa-bell",
-    "Penetration Testing": "fa-crosshairs",
-    # HIPAA
-    "Administrative Safeguards": "fa-file-shield",
-    "Physical Safeguards": "fa-door-closed",
-    "Technical Safeguards": "fa-laptop-code",
-    "Organizational Requirements": "fa-sitemap",
-    "Policies, Procedures, and Documentation": "fa-file-lines",
-    "Privacy Rule": "fa-user-lock",
-    "Breach Notification Rule": "fa-triangle-exclamation",
-    # GDPR
-    "Principles of Processing": "fa-scale-balanced",
-    "Lawfulness and Consent": "fa-gavel",
-    "Transparency and Information": "fa-circle-info",
-    "Data Subject Rights": "fa-hand",
-    "Controller and Processor Obligations": "fa-list-check",
-    "Security and Breach Notification": "fa-bell",
-    "Data Protection Impact Assessment": "fa-chart-line",
-    "Data Protection Officer": "fa-user-tie",
-    "International Transfers": "fa-globe",
-    "Remedies, Liability, and Penalties": "fa-section",
-    # CMMC 2.0
+# Group names no built-in catalog uses. An imported OSCAL catalog keeps its own
+# group titles, and NIST SP 800-171 names its families like this.
+_IMPORTED_GROUP_ICONS: dict[str, str] = {
     "Access Control": "fa-key",
     "Awareness and Training": "fa-chalkboard-user",
     "Audit and Accountability": "fa-clipboard-list",
@@ -86,7 +32,6 @@ _GROUP_ICONS: dict[str, str] = {
     "Security Assessment": "fa-magnifying-glass-chart",
     "System and Communications Protection": "fa-network-wired",
     "System and Information Integrity": "fa-shield-halved",
-    # CSA CCM
     "Audit & Assurance": "fa-clipboard-check",
     "Application & Interface Security": "fa-code",
     "Business Continuity Management & Operational Resilience": "fa-arrows-rotate",
@@ -104,19 +49,13 @@ _GROUP_ICONS: dict[str, str] = {
     "Supply Chain Management, Transparency, and Accountability": "fa-truck",
     "Threat & Vulnerability Management": "fa-bug",
     "Universal Endpoint Management": "fa-laptop",
-    # PCI DSS
-    "Install and Maintain Network Security Controls": "fa-network-wired",
-    "Apply Secure Configurations to All System Components": "fa-sliders",
-    "Protect Stored Account Data": "fa-database",
-    "Protect Cardholder Data with Strong Cryptography During Transmission Over Open, Public Networks": "fa-lock",
-    "Protect All Systems and Networks from Malicious Software": "fa-shield-virus",
-    "Develop and Maintain Secure Systems and Software": "fa-code",
-    "Restrict Access to System Components and Cardholder Data by Business Need to Know": "fa-user-lock",
-    "Identify Users and Authenticate Access to System Components": "fa-fingerprint",
-    "Restrict Physical Access to Cardholder Data": "fa-door-closed",
-    "Log and Monitor All Access to System Components and Cardholder Data": "fa-clipboard-list",
-    "Test Security of Systems and Networks Regularly": "fa-vial",
-    "Support Information Security with Organizational Policies and Programs": "fa-file-shield",
+}
+
+# Every built-in catalog carries its groups' icons.
+_GROUP_ICONS: dict[str, str] = _IMPORTED_GROUP_ICONS | {
+    group["name"]: group["icon"]
+    for filename in _BUILTIN_CATALOGS.values()
+    for group in json.loads((_DATA_DIR / filename).read_text(encoding="utf-8"))["groups"]
 }
 
 

@@ -16,25 +16,8 @@ export function registerFileDragAndDrop() {
             fieldName,
             dragover: false,
 
-            get isEmpty() {
-                return !this.file && !this.existingUrl;
-            },
-
-            get hasFile() {
-                return !!this.file || !!this.existingUrl;
-            },
-
             get showExisting() {
                 return !!this.existingUrl && !this.file;
-            },
-
-            get isImagePreview() {
-                return !!this.file && this.isImage(this.file);
-            },
-
-            get acceptHint() {
-                if (!this.accept) return '';
-                return `Accepted: ${this.accept}`;
             },
 
             isImage(file: File | null) {

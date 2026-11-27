@@ -259,22 +259,6 @@ class Document(models.Model):
         """Get the external reference URL for this document."""
         return f"/api/v1/documents/{self.id}/download"
 
-    def is_nda(self) -> bool:
-        """Check if document is an NDA.
-
-        Returns:
-            True if document is an NDA, False otherwise.
-        """
-        return self.document_type == self.DocumentType.NDA
-
-    def is_compliance_document(self) -> bool:
-        """Check if document is a compliance document.
-
-        Returns:
-            True if compliance_subcategory is set, False otherwise.
-        """
-        return bool(self.compliance_subcategory)
-
     def get_compliance_badge(self) -> str | None:
         """Get the compliance badge label for this document.
 
@@ -288,19 +272,6 @@ class Document(models.Model):
             return None
 
         return dict(self.ComplianceSubcategory.choices).get(self.compliance_subcategory or "")
-
-    def verify_content_hash(self, expected_hash: str) -> bool | None:
-        """Verify that the document's content hash matches the expected hash.
-
-        Args:
-            expected_hash: The expected SHA-256 hash to compare against
-
-        Returns:
-            True if hashes match, False otherwise. Returns None if content_hash is not set.
-        """
-        if not self.content_hash:
-            return None
-        return self.content_hash == expected_hash
 
 
 # The "Legal and Compliance" block of DocumentType, as a value rather than a

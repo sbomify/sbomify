@@ -1,4 +1,4 @@
-import { showError } from '../alerts-global';
+import { showError } from '../alerts';
 
 interface AccountDangerZoneConfig {
     csrfToken: string;

@@ -89,7 +89,7 @@ flowchart TD
     end
 
     subgraph "Daily Cron (9:00 AM UTC)"
-        C1[daily_onboarding_reminders\nonboarding/cron.py]
+        C1[process_onboarding_sequence_batch_task\nonboarding/tasks/__init__.py]
     end
 
     S1 --> |"10s delay"| E1["📧 Welcome\nSubject: Welcome to sbomify - Let's Get Started!\nTrigger: Immediately after signup"]
@@ -293,9 +293,8 @@ flowchart TD
 | `sbomify/apps/billing/billing_processing.py` | Stripe webhook handlers (trigger billing emails) |
 | `sbomify/apps/billing/tasks/__init__.py` | Enterprise inquiry Dramatiq task |
 | `sbomify/apps/onboarding/signals.py` | Welcome email trigger (post-signup) |
-| `sbomify/apps/onboarding/cron.py` | Daily drip cron job (9 AM UTC) |
 | `sbomify/apps/onboarding/services/__init__.py` | Onboarding email service (send + eligibility) |
-| `sbomify/apps/onboarding/tasks/__init__.py` | Onboarding Dramatiq tasks |
+| `sbomify/apps/onboarding/tasks/__init__.py` | Onboarding Dramatiq tasks, including the daily drip cron job (9 AM UTC) |
 | `sbomify/apps/teams/signals.py` | New user welcome email trigger |
 | `sbomify/apps/teams/views/__init__.py` | Team invite email sender |
 | `sbomify/apps/documents/views/access_requests.py` | Document access emails (views) |

@@ -53,7 +53,7 @@ def test_task_uses_the_longer_of_normal_backoff_and_service_wait(
     mocker: MockerFixture, retry_after_seconds: int | None, attempt: int
 ) -> None:
     orchestrator = mocker.patch("sbomify.apps.plugins.tasks.PluginOrchestrator").return_value
-    orchestrator.run_assessment_by_name.side_effect = RetryLaterError(
+    orchestrator.run_assessment.side_effect = RetryLaterError(
         "Wait for the service",
         assessment_run_id="00000000-0000-0000-0000-000000000001",
         retry_after_seconds=retry_after_seconds,
@@ -98,7 +98,7 @@ def test_hour_long_rate_limit_gets_an_attempt_after_reset(mocker: MockerFixture)
                 raise
         return completed
 
-    orchestrator.run_assessment_by_name.side_effect = assess
+    orchestrator.run_assessment.side_effect = assess
     send = mocker.patch.object(run_assessment_task, "send_with_options")
     mocker.patch("sbomify.apps.plugins.tasks.announce_assessment_settled")
     first = cast(
@@ -111,7 +111,7 @@ def test_hour_long_rate_limit_gets_an_attempt_after_reset(mocker: MockerFixture)
 
     result = cast(dict[str, Any], run_assessment_task.fn(**send.call_args.kwargs["kwargs"]))
     assert result["status"] == "completed"
-    assert orchestrator.run_assessment_by_name.call_count == 2
+    assert orchestrator.run_assessment.call_count == 2
     orchestrator.finalize_retry_exhausted.assert_not_called()
 
 
@@ -142,7 +142,7 @@ def test_task_persists_the_scheduled_retry_for_cleanup(
 
     run = _run(sample_team_with_owner_member.team, status="pending", age=timedelta(hours=5))
     orchestrator = mocker.patch("sbomify.apps.plugins.tasks.PluginOrchestrator").return_value
-    orchestrator.run_assessment_by_name.side_effect = GitHubRateLimitedError(
+    orchestrator.run_assessment.side_effect = GitHubRateLimitedError(
         "Quota resets later", assessment_run_id=str(run.id), retry_after_seconds=7200
     )
     mocker.patch.object(run_assessment_task, "send_with_options")

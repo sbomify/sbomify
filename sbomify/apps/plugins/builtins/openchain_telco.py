@@ -40,9 +40,9 @@ from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
-    AssessmentSummary,
     Finding,
     PluginMetadata,
+    summarize,
 )
 from sbomify.logging import getLogger
 
@@ -100,13 +100,7 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
 
         findings = self._check(sbom_data)
 
-        summary = AssessmentSummary(
-            total_findings=len(findings),
-            pass_count=sum(1 for f in findings if f.status == "pass"),
-            fail_count=sum(1 for f in findings if f.status == "fail"),
-            warning_count=sum(1 for f in findings if f.status == "warning"),
-            error_count=0,
-        )
+        summary = summarize(findings)
         logger.info(
             f"[OPENCHAIN-TELCO] Completed for SBOM {sbom_id}: "
             f"{summary.pass_count} pass, {summary.fail_count} fail, {summary.warning_count} warn"
@@ -394,20 +388,13 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """An unreadable document cannot be judged conformant or not."""
-        return AssessmentResult(
-            plugin_name="openchain-telco-1.1",
-            plugin_version=self.VERSION,
-            category=AssessmentCategory.COMPLIANCE.value,
-            assessed_at=datetime.now(timezone.utc).isoformat(),
-            summary=AssessmentSummary(total_findings=1, pass_count=0, fail_count=0, warning_count=0, error_count=1),
-            findings=[
-                Finding(
-                    id="openchain-telco-1.1:error",
-                    title="Assessment Error",
-                    description=error_message,
-                    status="error",
-                    severity="high",
-                )
-            ],
+        return self.build_single_finding_result(
+            finding_id="openchain-telco-1.1:error",
+            title="Assessment Error",
+            description=error_message,
+            status="error",
+            severity="high",
             metadata={"standard_name": self.STANDARD_NAME, "standard_version": self.STANDARD_VERSION},
+            error_count=1,
+            total_findings=1,
         )

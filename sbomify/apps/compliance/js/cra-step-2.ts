@@ -115,10 +115,6 @@ function craStep2() {
       return Math.max(summaryCount, listCount) > 0;
     },
 
-    hasWaivedChecks(comp: ComponentStatus): boolean {
-      return (comp.bsi_assessment?.failing_checks || []).some(c => !!c.waived);
-    },
-
     toggleFixes(componentId: string): void {
       const wasExpanded = !!this.expandedFixes[componentId];
       // Close all others — only one component's fixes visible at a time

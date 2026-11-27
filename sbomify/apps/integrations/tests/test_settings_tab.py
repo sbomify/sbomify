@@ -13,7 +13,7 @@ from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_s
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.settings_tabs import TABS_BY_KEY, visible_tabs
-from sbomify.apps.teams.utils import ALLOWED_TABS, redirect_to_team_settings
+from sbomify.apps.teams.utils import redirect_to_team_settings
 
 pytestmark = pytest.mark.django_db
 
@@ -34,7 +34,7 @@ class TestTabRegistration:
 
     def test_it_is_reachable_by_the_old_fragment_links(self, sample_team_with_owner_member) -> None:  # noqa: F811
         """#integrations was already an allowed tab name, so the redirect must land on the page."""
-        assert "integrations" in ALLOWED_TABS
+        assert "integrations" in TABS_BY_KEY
         response = redirect_to_team_settings(sample_team_with_owner_member.team.key, "integrations")
         assert response.url.endswith("/settings/integrations")
 

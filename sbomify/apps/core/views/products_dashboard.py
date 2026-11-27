@@ -65,10 +65,7 @@ class InventoryView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
 
 class ProductsDashboardView(InventoryView):
-    def post(self, request: HttpRequest) -> HttpResponse:
-        # Kept so anything still posting the create form at the list URL keeps
-        # working; the form itself now lives at product_new.
-        return _create_product(request)
+    """The Products inventory page."""
 
 
 class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

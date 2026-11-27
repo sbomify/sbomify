@@ -55,7 +55,6 @@ interface WebSocketStoreState {
     reconnectAttempts: number;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
     stableTimer: ReturnType<typeof setTimeout> | null;
-    lastError: string | null;
     hasOpened: boolean;
     userChannel: boolean;
 }
@@ -76,7 +75,6 @@ export function registerWebSocketStore(): void {
         reconnectAttempts: 0,
         reconnectTimer: null,
         stableTimer: null,
-        lastError: null,
         hasOpened: false,
         userChannel: false,
 
@@ -134,7 +132,6 @@ export function registerWebSocketStore(): void {
 
             state.workspaceKey = workspaceKey;
             state.connecting = true;
-            state.lastError = null;
 
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const path = state.userChannel ? 'user' : `workspace/${workspaceKey}`;
@@ -146,7 +143,6 @@ export function registerWebSocketStore(): void {
                 state.socket.onopen = () => {
                     state.connected = true;
                     state.connecting = false;
-                    state.lastError = null;
 
                     // Budget refunded only once the socket has held open, not
                     // here: see CONNECTION_STABLE_AFTER_MS. onclose clears this
@@ -231,14 +227,8 @@ export function registerWebSocketStore(): void {
                     }
                 };
 
-                state.socket.onerror = () => {
-                    state.lastError = 'Connection error';
-                    // onclose will be called after onerror
-                };
-
             } catch (error) {
                 state.connecting = false;
-                state.lastError = error instanceof Error ? error.message : 'Connection failed';
                 if (DEBUG) {
                     console.error('[WebSocket] Connection error:', error);
                 }
@@ -296,7 +286,6 @@ export function registerWebSocketStore(): void {
             // a tab that sleeps through all ten attempts stays silent. Retrying
             // on visibilitychange is the upgrade if that turns up in practice.
             if (state.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
-                state.lastError = 'Max reconnection attempts reached';
                 if (DEBUG) {
                     console.warn('[WebSocket] Max reconnection attempts reached, giving up');
                 }
@@ -315,14 +304,6 @@ export function registerWebSocketStore(): void {
                     this.openSocket(state.workspaceKey);
                 }
             }, delay);
-        },
-
-        /**
-         * Check if connected and ready to receive messages.
-         */
-        isReady(): boolean {
-            const state = this as unknown as WebSocketStoreState;
-            return state.connected && state.socket !== null && state.socket.readyState === WebSocket.OPEN;
         }
     } as WebSocketStoreState & {
         connect: (workspaceKey: string) => void;
@@ -330,7 +311,6 @@ export function registerWebSocketStore(): void {
         openSocket: (workspaceKey: string) => void;
         disconnect: () => void;
         scheduleReconnect: () => void;
-        isReady: () => boolean;
     });
 }
 

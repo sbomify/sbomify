@@ -16,6 +16,13 @@ class AccessRequestResponse(BaseModel):
     notes: str = ""
 
 
+class AccessRequestCreatedResponse(AccessRequestResponse):
+    """A new access request, and the NDA the requester has to sign next, if any."""
+
+    requires_nda: bool = False
+    nda_document_id: str | None = None
+
+
 class NDASignRequest(BaseModel):
     """Request schema for signing NDA."""
 

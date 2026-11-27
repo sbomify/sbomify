@@ -123,11 +123,6 @@ describe('Assessment Results Card', () => {
             expect(MORE_TOGGLE_CLASS).toBe('.pkg-toggle-more')
             expect(LESS_TOGGLE_CLASS).toBe('.pkg-toggle-less')
         })
-
-        test('should use correct accordion collapse class', () => {
-            const ACCORDION_COLLAPSE_CLASS = '.accordion-collapse'
-            expect(ACCORDION_COLLAPSE_CLASS).toBe('.accordion-collapse')
-        })
     })
 
     describe('Scroll Behavior', () => {

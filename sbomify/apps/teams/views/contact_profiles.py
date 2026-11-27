@@ -17,6 +17,7 @@ from sbomify.apps.teams.apis import (
     create_contact_profile,
     delete_contact_profile,
     get_contact_profile,
+    get_readable_contact_profile,
     get_team,
     list_contact_profiles,
     update_contact_profile,
@@ -155,7 +156,7 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
 
         profile = None
         if profile_id:
-            status_code, profile = get_contact_profile(request, workspace_key, profile_id, return_instance=True)
+            status_code, profile = get_readable_contact_profile(request, workspace_key, profile_id)
             if status_code != 200:
                 return htmx_error_response(_party_copy(profile.get("detail", "Failed to load party")))
 
@@ -395,7 +396,7 @@ class ContactProfileFormView(HtmxFragmentMixin, TeamRoleRequiredMixin, LoginRequ
         return self._render_profile_list_response(request, workspace_key, "Party created")
 
     def _update_profile(self, request: HttpRequest, workspace_key: str, profile_id: str) -> HttpResponse:
-        status_code, profile = get_contact_profile(request, workspace_key, profile_id, return_instance=True)
+        status_code, profile = get_readable_contact_profile(request, workspace_key, profile_id)
         if status_code != 200:
             return htmx_error_response(_party_copy(profile.get("detail", "Failed to load party")))
 

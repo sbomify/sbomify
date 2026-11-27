@@ -6,7 +6,11 @@ const mockShowError = mock<(message: string) => void>()
 
 mock.module('../alerts', () => ({
     showSuccess: mockShowSuccess,
-    showError: mockShowError
+    showError: mockShowError,
+    showWarning: mock(),
+    showInfo: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 interface DeleteModalConfig {
@@ -119,94 +123,6 @@ describe('Delete Modal', () => {
         })
     })
 
-    describe('Focus Trap Logic', () => {
-        test('should identify focusable element selectors', () => {
-            const focusableSelectors = [
-                'a[href]',
-                'button:not([disabled])',
-                'textarea:not([disabled])',
-                'input:not([disabled])',
-                'select:not([disabled])',
-                '[tabindex]:not([tabindex="-1"])'
-            ].join(', ')
-
-            expect(focusableSelectors).toContain('a[href]')
-            expect(focusableSelectors).toContain('button:not([disabled])')
-            expect(focusableSelectors).toContain('textarea:not([disabled])')
-            expect(focusableSelectors).toContain('input:not([disabled])')
-            expect(focusableSelectors).toContain('select:not([disabled])')
-            expect(focusableSelectors).toContain('[tabindex]:not([tabindex="-1"])')
-        })
-
-        test('should store trigger elements by modal ID', () => {
-            const triggerElements: Record<string, HTMLElement | null> = {}
-
-            triggerElements['modal-1'] = null
-            triggerElements['modal-2'] = null
-
-            expect('modal-1' in triggerElements).toBe(true)
-            expect('modal-2' in triggerElements).toBe(true)
-            expect('modal-3' in triggerElements).toBe(false)
-        })
-
-        test('should clean up trigger elements on modal close', () => {
-            const triggerElements: Record<string, HTMLElement | null> = {
-                'modal-1': null
-            }
-
-            const handleModalClose = (modalId: string) => {
-                delete triggerElements[modalId]
-            }
-
-            handleModalClose('modal-1')
-            expect('modal-1' in triggerElements).toBe(false)
-        })
-    })
-
-    describe('Modal Visibility State', () => {
-        test('should track visibility changes correctly', () => {
-            let wasVisible = false
-
-            const checkVisibility = (isCurrentlyVisible: boolean): { opened: boolean; closed: boolean } => {
-                let opened = false
-                let closed = false
-
-                if (isCurrentlyVisible && !wasVisible) {
-                    opened = true
-                    wasVisible = true
-                } else if (!isCurrentlyVisible && wasVisible) {
-                    closed = true
-                    wasVisible = false
-                }
-
-                return { opened, closed }
-            }
-
-            expect(checkVisibility(true)).toEqual({ opened: true, closed: false })
-            expect(checkVisibility(true)).toEqual({ opened: false, closed: false })
-            expect(checkVisibility(false)).toEqual({ opened: false, closed: true })
-            expect(checkVisibility(false)).toEqual({ opened: false, closed: false })
-        })
-
-        test('should prevent concurrent visibility checks', () => {
-            let isProcessing = false
-            let checkCount = 0
-
-            const checkVisibility = (): boolean => {
-                if (isProcessing) return false
-                isProcessing = true
-                checkCount++
-                isProcessing = false
-                return true
-            }
-
-            expect(checkVisibility()).toBe(true)
-            expect(checkCount).toBe(1)
-            expect(checkVisibility()).toBe(true)
-            expect(checkCount).toBe(2)
-        })
-    })
-
     describe('Delete Handler Logic', () => {
         test('should prevent duplicate submissions', () => {
             let isLoading = false
@@ -270,18 +186,6 @@ describe('Delete Modal', () => {
             expect(extractErrorDetail({ detail: 'Not found' })).toBe('Not found')
             expect(extractErrorDetail({ error: 'Something went wrong' })).toBe('{"error":"Something went wrong"}')
             expect(extractErrorDetail(null)).toBe('')
-        })
-    })
-
-    describe('Timeout Constants', () => {
-        test('should use appropriate delay values', () => {
-            const FOCUS_DELAY_MS = 50
-            const FOCUS_RETURN_DELAY_MS = 100
-            const INITIAL_CHECK_DELAY_MS = 150
-
-            expect(FOCUS_DELAY_MS).toBeLessThan(FOCUS_RETURN_DELAY_MS)
-            expect(FOCUS_RETURN_DELAY_MS).toBeLessThan(INITIAL_CHECK_DELAY_MS)
-            expect(INITIAL_CHECK_DELAY_MS).toBeLessThan(500)
         })
     })
 })

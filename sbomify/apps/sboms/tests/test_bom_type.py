@@ -153,30 +153,6 @@ class TestLatestSbomWithBomType:
         # latest_sbom filters by bom_type=sbom, so VEX is excluded
         assert sample_component.latest_sbom.id == sbom.id
 
-    def test_latest_bom_artifact_returns_newest_regardless_of_bom_type(self, sample_component: Component):
-        """Component.latest_bom_artifact returns the newest record regardless of bom_type."""
-        SBOM.objects.create(
-            name="old-sbom",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.6",
-            sbom_filename="s.json",
-            component=sample_component,
-            source="test",
-            bom_type="sbom",
-        )
-        vex = SBOM.objects.create(
-            name="new-vex",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.6",
-            sbom_filename="v.json",
-            component=sample_component,
-            source="test",
-            bom_type="vex",
-        )
-        assert sample_component.latest_bom_artifact.id == vex.id
-
     def test_filtering_by_bom_type_returns_correct_latest(self, sample_component: Component):
         """Filtering by bom_type=sbom returns only actual SBOMs."""
         sbom = SBOM.objects.create(

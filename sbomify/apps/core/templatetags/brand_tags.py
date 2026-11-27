@@ -9,7 +9,6 @@ from sbomify.apps.teams.branding import (
     darken_hex,
     hex_to_rgb_tuple,
     ink_on_color,
-    is_dark_color,
     lighten_hex,
     resolve_brand_color,
 )
@@ -46,18 +45,6 @@ def lighten(hex_color: Any, amount: Any = 0.1) -> Any:
 def darken(hex_color: Any, amount: Any = 0.1) -> Any:
     """Darken a hex color by a given amount (0.0 to 1.0)."""
     return darken_hex(hex_color, amount)
-
-
-@register.filter
-def is_dark(hex_color: Any) -> bool:
-    """Should light text sit on this colour? True means white text."""
-    return is_dark_color(hex_color if isinstance(hex_color, str) else None)
-
-
-@register.filter
-def ink_on(hex_color: Any) -> str:
-    """The text colour to print on top of this colour."""
-    return ink_on_color(hex_color if isinstance(hex_color, str) else None)
 
 
 @register.filter

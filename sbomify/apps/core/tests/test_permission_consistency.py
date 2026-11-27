@@ -107,6 +107,21 @@ class TestGetEndpointPermissions:
         assert data["name"] == "Public Component"
         assert data["visibility"] == "public"
 
+    def test_get_component_ignores_return_instance_over_http(self, sample_team, sample_product):  # noqa: F811
+        """A stray return_instance query parameter is ignored; the usual body comes back."""
+        public_component = Component.objects.create(
+            name="Public Component",
+            team=sample_team,
+            visibility=Component.Visibility.PUBLIC,
+        )
+        sample_product.components.add(public_component)
+        url = reverse("api-1:get_component", kwargs={"component_id": public_component.id})
+
+        response = Client().get(url, {"return_instance": "true"})
+
+        assert response.status_code == 200
+        assert response.json() == Client().get(url).json()
+
     def test_get_component_invalid_bearer_rejected(self, sample_team, sample_product):  # noqa: F811
         """A public-by-id endpoint must 401 a bad bearer instead of downgrading to anonymous."""
         public_component = Component.objects.create(

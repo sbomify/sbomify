@@ -4,9 +4,8 @@ Stripe client wrapper for handling Stripe operations.
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
-from functools import wraps
+from functools import cache, wraps
 from typing import Any, TypeVar
 
 import stripe
@@ -206,11 +205,6 @@ class StripeClient:
         return stripe.Customer.create(**kwargs)
 
     @handle_stripe_errors
-    def update_customer(self, customer_id: str, **kwargs: Any) -> Any:
-        """Update a customer in Stripe."""
-        return stripe.Customer.modify(customer_id, api_key=self._api_key, **kwargs)
-
-    @handle_stripe_errors
     def create_subscription(
         self,
         customer_id: str,
@@ -342,13 +336,6 @@ class StripeClient:
         return stripe.Webhook.construct_event(payload, sig_header, secret)  # type: ignore[no-untyped-call]
 
     @handle_stripe_errors
-    def get_product_with_prices(self, product_id: str) -> tuple[Any, Any]:
-        """Retrieve a product with all its prices."""
-        product = stripe.Product.retrieve(product_id, api_key=self._api_key)
-        prices = stripe.Price.list(product=product_id, active=True, limit=STRIPE_API_LIMIT, api_key=self._api_key)
-        return product, prices.data
-
-    @handle_stripe_errors
     def get_all_products_with_prices(self) -> list[dict[str, Any]]:
         """Retrieve all active products with their prices."""
         products = stripe.Product.list(active=True, limit=STRIPE_API_LIMIT, api_key=self._api_key)
@@ -396,22 +383,7 @@ class StripeClient:
         return stripe.checkout.Session.create(**session_data, api_key=self._api_key)
 
 
-_lock = threading.Lock()
-_default_client: StripeClient | None = None
-
-
+@cache
 def get_stripe_client() -> StripeClient:
-    """Return a shared StripeClient singleton (thread-safe, single API key)."""
-    global _default_client
-    if _default_client is None:
-        with _lock:
-            if _default_client is None:
-                _default_client = StripeClient()
-    return _default_client
-
-
-def _reset_default_client() -> None:
-    """Reset the singleton for test isolation."""
-    global _default_client
-    with _lock:
-        _default_client = None
+    """Return the shared StripeClient. Tests reset it with get_stripe_client.cache_clear()."""
+    return StripeClient()

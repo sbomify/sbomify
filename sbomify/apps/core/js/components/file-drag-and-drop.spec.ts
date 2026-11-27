@@ -34,27 +34,6 @@ describe('File Drag and Drop', () => {
     })
 
     describe('State Management', () => {
-        test('isEmpty should return true when no file and no existing URL', () => {
-            const isEmpty = (file: File | null, existingUrl: string): boolean => {
-                return !file && !existingUrl
-            }
-
-            expect(isEmpty(null, '')).toBe(true)
-            expect(isEmpty(null, '/some/url')).toBe(false)
-        })
-
-        test('hasFile should return true when file or existing URL present', () => {
-            const hasFile = (file: File | null, existingUrl: string): boolean => {
-                return !!file || !!existingUrl
-            }
-
-            const mockFile = new File(['content'], 'test.png', { type: 'image/png' })
-
-            expect(hasFile(null, '')).toBe(false)
-            expect(hasFile(mockFile, '')).toBe(true)
-            expect(hasFile(null, '/some/url')).toBe(true)
-        })
-
         test('showExisting should return true when existing URL but no new file', () => {
             const showExisting = (file: File | null, existingUrl: string): boolean => {
                 return !!existingUrl && !file
@@ -82,29 +61,6 @@ describe('File Drag and Drop', () => {
             expect(isImage(imageFile)).toBe(true)
             expect(isImage(pdfFile)).toBe(false)
             expect(isImage(null)).toBe(false)
-        })
-
-        test('isImagePreview should check file type', () => {
-            const isImagePreview = (file: File | null): boolean => {
-                if (!file) return false
-                return file.type.startsWith('image/')
-            }
-
-            const imageFile = new File(['content'], 'test.jpg', { type: 'image/jpeg' })
-            expect(isImagePreview(imageFile)).toBe(true)
-        })
-    })
-
-    describe('Accept Hint', () => {
-        test('should generate accept hint from accept string', () => {
-            const getAcceptHint = (accept: string): string => {
-                if (!accept) return ''
-                return `Accepted: ${accept}`
-            }
-
-            expect(getAcceptHint('image/*')).toBe('Accepted: image/*')
-            expect(getAcceptHint('.pdf,.doc')).toBe('Accepted: .pdf,.doc')
-            expect(getAcceptHint('')).toBe('')
         })
     })
 

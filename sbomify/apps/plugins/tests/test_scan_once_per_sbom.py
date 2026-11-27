@@ -406,7 +406,6 @@ class TestAttachReleaseToRunsTask:
             "plugin_name": "dependency-track",
             "run_reason": RunReason.ON_RELEASE_ASSOCIATION,
             "config": {"dt_server_id": "pinned"},
-            "release_id": str(release.id),
         }
         assert enqueued == ([scan] if scans else [])
 

@@ -1,12 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from 'bun:test'
-
-const mockAxiosGet = mock<(url: string) => Promise<{ data: unknown[] }>>()
-
-mock.module('axios', () => ({
-    default: {
-        get: mockAxiosGet
-    }
-}))
+import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test'
 
 const mockShowError = mock<(message: string) => void>()
 const mockShowWarning = mock<(message: string) => void>()
@@ -15,7 +7,10 @@ const mockShowInfo = mock<(message: string) => void>()
 mock.module('../alerts', () => ({
     showError: mockShowError,
     showWarning: mockShowWarning,
-    showInfo: mockShowInfo
+    showInfo: mockShowInfo,
+    showSuccess: mock(),
+    showToast: mock(),
+    showConfirmation: mock()
 }))
 
 const mockAlpineData = mock<(name: string, callback: () => unknown) => void>()
@@ -25,6 +20,11 @@ mock.module('alpinejs', () => ({
         data: mockAlpineData
     }
 }))
+
+const { registerSiteNotifications } = await import('./site-notifications')
+registerSiteNotifications()
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const siteNotifications = mockAlpineData.mock.calls[0][1] as () => Record<string, any>
 
 interface Notification {
     id: string
@@ -37,7 +37,6 @@ interface Notification {
 
 describe('Site Notifications', () => {
     beforeEach(() => {
-        mockAxiosGet.mockClear()
         mockShowError.mockClear()
         mockShowWarning.mockClear()
         mockShowInfo.mockClear()
@@ -193,6 +192,38 @@ describe('Site Notifications', () => {
 
             processNotifications([{ id: 'n1', type: 't', message: 'm', severity: 'info', created_at: 'd' }], false)
             expect(processedCount).toBe(1)
+        })
+    })
+
+    describe('Fetching', () => {
+        const globals = globalThis as unknown as Record<string, unknown>
+        const realFetch = globals.fetch
+
+        afterEach(() => {
+            globals.fetch = realFetch
+        })
+
+        test('an initial load stores the list and marks every item processed', async () => {
+            const list = [{ id: 'n1', type: 'billing', message: 'Renew soon', severity: 'warning', created_at: '2024-01-01' }]
+            const fetcher = mock(async () => Response.json(list))
+            globals.fetch = fetcher
+            const component = siteNotifications()
+            await component.fetchNotifications(true)
+            expect(fetcher).toHaveBeenCalledWith('/api/v1/notifications/')
+            expect(component.notifications).toEqual(list)
+            expect(component.processedNotifications.has('n1')).toBe(true)
+        })
+
+        test('a failed response backs off and keeps the current list', async () => {
+            const consoleError = spyOn(console, 'error').mockImplementation(() => {})
+            globals.fetch = mock(async () => new Response('', { status: 503 }))
+            const component = siteNotifications()
+            component.rescheduleWithBackoff = mock()
+            await component.fetchNotifications(false)
+            expect(component.notifications).toEqual([])
+            expect(component.consecutiveErrors).toBe(1)
+            expect(component.rescheduleWithBackoff).toHaveBeenCalledTimes(1)
+            consoleError.mockRestore()
         })
     })
 })

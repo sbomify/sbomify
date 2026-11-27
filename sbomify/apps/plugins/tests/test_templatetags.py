@@ -19,14 +19,14 @@ class TestFormatRunReason:
     def test_manual(self) -> None:
         assert format_run_reason("manual") == "Manual"
 
-    def test_scheduled(self) -> None:
-        assert format_run_reason("scheduled") == "Scheduled"
-
     def test_config_change(self) -> None:
         assert format_run_reason("config_change") == "Config Change"
 
-    def test_migration(self) -> None:
-        assert format_run_reason("migration") == "Migration"
+    def test_every_run_reason_has_a_label(self) -> None:
+        from sbomify.apps.plugins.sdk.enums import RunReason
+
+        for reason in RunReason:
+            assert format_run_reason(reason.value) != reason.value
 
     def test_every_sdk_reason_has_an_explicit_label(self) -> None:
         """A RunReason the SDK defines must be worded here, not left to the fallback.

@@ -53,21 +53,6 @@ def compute_config_hash(config: dict[str, Any] | None) -> str:
     return hashlib.sha256(serialized.encode()).hexdigest()
 
 
-def compute_content_digest(content: bytes) -> str:
-    """Compute SHA256 digest of content for auditability.
-
-    This is used to track the exact SBOM content that was assessed,
-    enabling verification that results correspond to specific inputs.
-
-    Args:
-        content: Raw bytes content to hash.
-
-    Returns:
-        64-character hexadecimal SHA256 hash string.
-    """
-    return hashlib.sha256(content).hexdigest()
-
-
 # HTTP Client Utilities
 
 

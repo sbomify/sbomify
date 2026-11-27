@@ -1,49 +1,23 @@
 """
 Shared utilities for Dramatiq tasks.
-
-This module provides common decorators and utilities for SBOM processing tasks
-to reduce duplication and ensure consistent error handling patterns.
 """
 
 from __future__ import annotations
 
 import logging
-import types
-from collections.abc import Callable
-from functools import wraps
 from typing import Any
 
-import dramatiq
-from django.db import DatabaseError, OperationalError, connection, transaction
-from tenacity import (
-    before_sleep_log,
-    retry,
-    retry_if_exception_type,
-    stop_after_delay,
-    wait_exponential,
-)
-
-from sbomify.apps.core.services.logging import log_error, log_info
+import sentry_sdk
 
 logger = logging.getLogger(__name__)
-
-_sentry_sdk: types.ModuleType | None
-try:  # Optional Sentry integration
-    import sentry_sdk as _sentry_sdk_imported
-
-    _sentry_sdk = _sentry_sdk_imported
-except Exception:  # pragma: no cover - optional dependency
-    _sentry_sdk = None
 
 
 def record_task_breadcrumb(
     task_name: str, message: str, level: str = "info", data: dict[str, Any] | None = None
 ) -> None:
     """Add a Sentry breadcrumb for task execution when Sentry is configured."""
-    if _sentry_sdk is None:
-        return
     try:
-        _sentry_sdk.add_breadcrumb(
+        sentry_sdk.add_breadcrumb(
             category="tasks",
             message=f"{task_name}: {message}",
             level=level,
@@ -52,66 +26,6 @@ def record_task_breadcrumb(
     except Exception:
         # Breadcrumbs should never break task execution
         return
-
-
-def sbom_processing_task(
-    queue_name: str = "sbom_processing",
-    max_retries: int = 3,
-    time_limit: int = 300000,
-    store_results: bool = True,
-) -> Callable[..., Any]:
-    """
-    Decorator for SBOM processing tasks with common retry and error handling patterns.
-
-    This decorator provides:
-    - Consistent Dramatiq actor configuration
-    - Database error retry logic with exponential backoff
-    - Transaction management with connection ensuring
-    - Standardized error response format
-
-    Args:
-        queue_name: Dramatiq queue name (default: "sbom_processing")
-        max_retries: Maximum retry attempts (default: 3)
-        time_limit: Task timeout in milliseconds (default: 300000 = 5 minutes)
-        store_results: Whether to store task results (default: True)
-    """
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        # Apply Dramatiq decorators
-        @dramatiq.actor(
-            queue_name=queue_name,
-            max_retries=max_retries,
-            time_limit=time_limit,
-            store_results=store_results,
-        )
-        @retry(
-            retry=retry_if_exception_type((OperationalError, DatabaseError)),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
-            stop=stop_after_delay(60),
-            before_sleep=before_sleep_log(logger, logging.WARNING),
-        )
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            # Ensure database connection
-            with transaction.atomic():
-                connection.ensure_connection()
-                try:
-                    task_name = func.__name__
-                    log_info(logger, "task_start", task=task_name, args_count=len(args))
-                    record_task_breadcrumb(task_name, "start", data={"args_count": len(args)})
-                    result: dict[str, Any] = func(*args, **kwargs)
-                    return result
-                except Exception as e:
-                    # Log the error with task context
-                    task_name = func.__name__
-                    log_error(logger, "task_failed", task=task_name, error=str(e))
-                    record_task_breadcrumb(task_name, "error", level="error", data={"error": str(e)})
-                    # Re-raise to allow Dramatiq retry logic to handle it
-                    raise
-
-        return wrapper
-
-    return decorator
 
 
 def format_task_error(task_name: str, sbom_id: str, error_msg: str) -> dict[str, Any]:
@@ -126,5 +40,8 @@ def format_task_error(task_name: str, sbom_id: str, error_msg: str) -> dict[str,
     Returns:
         Standardized error response dictionary
     """
-    log_error(logger, "task_error", task=task_name, sbom_id=sbom_id, error=error_msg)
+    logger.error(
+        f"task_error task={task_name} sbom_id={sbom_id} error={error_msg}",
+        extra={"context": {"task": task_name, "sbom_id": sbom_id, "error": error_msg}},
+    )
     return {"error": error_msg, "status": "failed", "sbom_id": sbom_id, "task": task_name}

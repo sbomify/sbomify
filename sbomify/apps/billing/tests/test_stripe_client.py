@@ -155,19 +155,6 @@ class TestStripeClient:
             email="test@example.com", name="Test User", metadata={}, api_key=self.client._api_key
         )
 
-    @patch("stripe.Customer.modify")
-    def test_update_customer_success(self, mock_modify):
-        """Test successful customer update."""
-        mock_customer = MagicMock()
-        mock_modify.return_value = mock_customer
-
-        result = self.client.update_customer("cus_123", email="new@example.com", name="New Name")
-
-        assert result == mock_customer
-        mock_modify.assert_called_once_with(
-            "cus_123", api_key=self.client._api_key, email="new@example.com", name="New Name"
-        )
-
     @patch("stripe.Customer.delete")
     def test_delete_customer_success(self, mock_delete):
         """Test successful customer deletion."""

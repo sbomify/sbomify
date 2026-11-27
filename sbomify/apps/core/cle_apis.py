@@ -28,6 +28,7 @@ from sbomify.apps.core.services.cle import (
     create_release_support_definition,
     create_support_definition,
 )
+from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.models import (
     ComponentCLEEvent,
     ComponentCLESupportDefinition,
@@ -48,6 +49,34 @@ _ERROR_CODE_BY_STATUS: dict[int, ErrorCode] = {
     404: ErrorCode.NOT_FOUND,
     409: ErrorCode.CONFLICT,
 }
+
+
+def _event_fields(payload: CLEEventCreateSchema) -> dict[str, Any]:
+    """The service's keyword arguments for a new CLE event."""
+    return {
+        "event_type": payload.event_type,
+        "effective": payload.effective,
+        "version": payload.version,
+        "versions": [v.model_dump() for v in payload.versions],
+        "support_id": payload.support_id,
+        "license": payload.license,
+        "superseded_by_version": payload.superseded_by_version,
+        "identifiers": [i.model_dump() for i in payload.identifiers],
+        "withdrawn_event_id": payload.withdrawn_event_id,
+        "reason": payload.reason,
+        "description": payload.description,
+        "references": payload.references,
+    }
+
+
+def _created(svc_result: ServiceResult[Any]) -> tuple[int, Any]:
+    """201 with the created object, or the service's error mapped to a status and code."""
+    if not svc_result.ok:
+        status = svc_result.status_code or 400
+        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
+        return status, {"detail": svc_result.error, "error_code": error_code}
+
+    return 201, svc_result.value
 
 
 # ---------------------------------------------------------------------------
@@ -170,28 +199,7 @@ def create_cle_event_endpoint(request: HttpRequest, product_id: str, payload: CL
     if not isinstance(result, Product):
         return result
 
-    svc_result = create_cle_event(
-        product=result,
-        event_type=payload.event_type,
-        effective=payload.effective,
-        version=payload.version,
-        versions=[v.model_dump() for v in payload.versions],
-        support_id=payload.support_id,
-        license=payload.license,
-        superseded_by_version=payload.superseded_by_version,
-        identifiers=[i.model_dump() for i in payload.identifiers],
-        withdrawn_event_id=payload.withdrawn_event_id,
-        reason=payload.reason,
-        description=payload.description,
-        references=payload.references,
-    )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
+    return _created(create_cle_event(product=result, **_event_fields(payload)))
 
 
 @router.get(
@@ -250,19 +258,11 @@ def create_cle_support_definition_endpoint(
     if not isinstance(result, Product):
         return result
 
-    svc_result = create_support_definition(
-        product=result,
-        support_id=payload.support_id,
-        description=payload.description,
-        url=payload.url,
+    return _created(
+        create_support_definition(
+            product=result, support_id=payload.support_id, description=payload.description, url=payload.url
+        )
     )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
 
 
 # ===========================================================================
@@ -300,28 +300,7 @@ def create_component_cle_event_endpoint(request: HttpRequest, component_id: str,
     if not isinstance(result, Component):
         return result
 
-    svc_result = create_component_cle_event(
-        component=result,
-        event_type=payload.event_type,
-        effective=payload.effective,
-        version=payload.version,
-        versions=[v.model_dump() for v in payload.versions],
-        support_id=payload.support_id,
-        license=payload.license,
-        superseded_by_version=payload.superseded_by_version,
-        identifiers=[i.model_dump() for i in payload.identifiers],
-        withdrawn_event_id=payload.withdrawn_event_id,
-        reason=payload.reason,
-        description=payload.description,
-        references=payload.references,
-    )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
+    return _created(create_component_cle_event(component=result, **_event_fields(payload)))
 
 
 @router.get(
@@ -380,19 +359,11 @@ def create_component_cle_support_definition_endpoint(
     if not isinstance(result, Component):
         return result
 
-    svc_result = create_component_support_definition(
-        component=result,
-        support_id=payload.support_id,
-        description=payload.description,
-        url=payload.url,
+    return _created(
+        create_component_support_definition(
+            component=result, support_id=payload.support_id, description=payload.description, url=payload.url
+        )
     )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
 
 
 # ===========================================================================
@@ -527,19 +498,11 @@ def create_release_cle_support_definition_endpoint(
     if not isinstance(result, Release):
         return result
 
-    svc_result = create_release_support_definition(
-        release=result,
-        support_id=payload.support_id,
-        description=payload.description,
-        url=payload.url,
+    return _created(
+        create_release_support_definition(
+            release=result, support_id=payload.support_id, description=payload.description, url=payload.url
+        )
     )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
 
 
 # ===========================================================================
@@ -579,28 +542,7 @@ def create_component_release_cle_event_endpoint(
     if not isinstance(result, ComponentRelease):
         return result
 
-    svc_result = create_component_release_cle_event(
-        component_release=result,
-        event_type=payload.event_type,
-        effective=payload.effective,
-        version=payload.version,
-        versions=[v.model_dump() for v in payload.versions],
-        support_id=payload.support_id,
-        license=payload.license,
-        superseded_by_version=payload.superseded_by_version,
-        identifiers=[i.model_dump() for i in payload.identifiers],
-        withdrawn_event_id=payload.withdrawn_event_id,
-        reason=payload.reason,
-        description=payload.description,
-        references=payload.references,
-    )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value
+    return _created(create_component_release_cle_event(component_release=result, **_event_fields(payload)))
 
 
 @router.get(
@@ -659,16 +601,8 @@ def create_component_release_cle_support_definition_endpoint(
     if not isinstance(result, ComponentRelease):
         return result
 
-    svc_result = create_component_release_support_definition(
-        component_release=result,
-        support_id=payload.support_id,
-        description=payload.description,
-        url=payload.url,
+    return _created(
+        create_component_release_support_definition(
+            component_release=result, support_id=payload.support_id, description=payload.description, url=payload.url
+        )
     )
-
-    if not svc_result.ok:
-        status = svc_result.status_code or 400
-        error_code = _ERROR_CODE_BY_STATUS.get(status, ErrorCode.BAD_REQUEST)
-        return status, {"detail": svc_result.error, "error_code": error_code}
-
-    return 201, svc_result.value

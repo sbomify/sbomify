@@ -1,6 +1,6 @@
 {# Compact icon-only badge with tooltip for public pages #}
 {# Usage: {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %} #}
-{# Expected assessment dict: display_name (str), category (str: attestation, compliance, license), #}
+{# Expected assessment dict: display_name (str), category (str: attestation, compliance), #}
 {# plus optional standard_name/standard_version/completed_at for a citable tooltip. #}
 {# Security scans are never shown: a badge only a clean scan earns reveals a dirty one by its absence. #}
 {% if assessment and assessment.category != 'security' %}
@@ -9,11 +9,6 @@
             <span class="compliance-icon compliance-icon--attestation"
                   x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: Attestation verified{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
                 <i class="fas fa-certificate"></i>
-            </span>
-        {% elif assessment.category == 'license' %}
-            <span class="compliance-icon compliance-icon--license"
-                  x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: {% if assessment.warning_count %}No failed checks{% else %}All checks passed{% endif %}{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
-                <i class="fas fa-scale-balanced"></i>
             </span>
         {% else %}
             {# Default: compliance or unknown category #}

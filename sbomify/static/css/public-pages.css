@@ -216,11 +216,6 @@
     color: var(--color-accent);
 }
 
-.public-badge.badge-license {
-    background: color-mix(in oklab, var(--color-accent-pink) 15%, transparent);
-    color: var(--color-accent-pink);
-}
-
 /* Compact "n/n checks" chip inside an assessment badge */
 .public-badge .public-badge-count {
     padding: 0.0625rem 0.375rem;

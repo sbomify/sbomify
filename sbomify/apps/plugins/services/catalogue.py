@@ -10,7 +10,7 @@ from ..models import RegisteredPlugin
 # to draw its cards in the same order or each placeholder gets another card's
 # height, which is the jump it exists to prevent. Anything unlisted sorts last,
 # by name, exactly as the view's own tiebreaker does.
-CATEGORY_ORDER = {"compliance": 0, "license": 1, "security": 2, "attestation": 3}
+CATEGORY_ORDER = {"compliance": 0, "security": 2, "attestation": 3}
 
 
 def get_catalogue_shape() -> ServiceResult[dict[str, int | list[int]]]:

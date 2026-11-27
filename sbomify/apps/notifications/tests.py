@@ -29,14 +29,16 @@ def mock_notification_provider(request):
     """Mock notification provider for testing"""
     from .schemas import NotificationSchema
     
-    return NotificationSchema(
-        id="test_notification",
-        type="test",
-        message="Test notification",
-        severity="info",
-        created_at=datetime.utcnow().isoformat(),
-        action_url="/test/url/"
-    )
+    return [
+        NotificationSchema(
+            id="test_notification",
+            type="test",
+            message="Test notification",
+            severity="info",
+            created_at=datetime.utcnow().isoformat(),
+            action_url="/test/url/"
+        )
+    ]
 
 
 def mock_list_provider(request):

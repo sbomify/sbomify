@@ -249,25 +249,6 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
         raise DecodeError("Invalid token format") from e
 
 
-def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
-    "Get user from personal access token (deprecated: use get_user_and_token_record instead)"
-
-    try:
-        payload = decode_personal_access_token(token)
-    except DecodeError as e:
-        log.warning(f"Failed to decode token: {str(e)}")
-        return None
-
-    # Convert sub to string if needed
-    user_id = str(payload["sub"])
-    try:
-        user = get_user_model().objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
-        return user
-    except get_user_model().DoesNotExist:
-        log.error("No active user found for token (user_id=%s)", user_id)
-        return None
-
-
 def get_user_and_token_record(
     token: str, *, source_ip: str | None = None, attempted_action: str | None = None
 ) -> tuple[AbstractBaseUser | None, AccessToken | None]:

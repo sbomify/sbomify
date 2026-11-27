@@ -7,7 +7,6 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from sbomify.apps.core.custom_metadata import CustomMetadata
-from sbomify.apps.teams.schemas import ContactProfileSchema
 
 
 class ErrorCode(str, Enum):
@@ -380,12 +379,6 @@ class ComponentResponseSchema(BaseModel):
     freshness: dict[str, Any] | None = None
 
 
-class ProductComponentLinkSchema(BaseModel):
-    """Schema for linking/unlinking components to/from products."""
-
-    component_ids: list[str]
-
-
 # Additional schemas for core functionality
 class DashboardSBOMUploadInfo(BaseModel):
     component_name: str
@@ -398,20 +391,6 @@ class DashboardStatsResponse(BaseModel):
     total_products: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
-
-
-class UserItemsResponse(BaseModel):
-    team_key: str
-    team_name: str
-    item_key: str
-    item_name: str
-
-
-class ItemTypes(str, Enum):
-    """Types of items in the system."""
-
-    component = "component"
-    product = "product"
 
 
 class PaginationMeta(BaseModel):
@@ -556,65 +535,6 @@ class PaginatedDocumentsResponse(BaseModel):
 
     items: list[DocumentWithReleasesSchema]
     pagination: PaginationMeta
-
-
-class CopyComponentMetadataRequest(BaseModel):
-    """Schema for copying metadata from one component to another."""
-
-    source_component_id: str
-    target_component_id: str
-
-
-class ContactInfo(BaseModel):
-    """Basic contact information schema."""
-
-    name: str | None = None
-    email: str | None = None
-    phone: str | None = None
-
-
-class SupplierInfo(BaseModel):
-    """Supplier information schema."""
-
-    name: str | None = None
-    url: list[str] | None = None
-    address: str | None = None
-    contacts: list[ContactInfo] = Field(default_factory=list)
-
-
-class ComponentMetadataCore(BaseModel):
-    """Core component metadata schema without SBOM-specific dependencies."""
-
-    id: str
-    name: str
-    supplier: SupplierInfo = Field(default_factory=SupplierInfo)
-    manufacturer: SupplierInfo = Field(default_factory=SupplierInfo)
-    authors: list[ContactInfo] = Field(default_factory=list)
-    licenses: list[str] = Field(default_factory=list)
-    lifecycle_phase: str | None = None
-    contact_profile_id: str | None = None
-    contact_profile: ContactProfileSchema | None = None
-    uses_custom_contact: bool = True
-
-
-class ComponentMetadataUpdateCore(BaseModel):
-    """Core schema for updating component metadata."""
-
-    contact_profile_id: str | None = None
-    supplier: SupplierInfo | None = None
-    authors: list[ContactInfo] | None = None
-    licenses: list[str] | None = None
-    lifecycle_phase: str | None = None
-
-
-class ComponentMetadataPatchCore(BaseModel):
-    """Core schema for partially updating component metadata using PATCH."""
-
-    contact_profile_id: str | None = None
-    supplier: SupplierInfo | None = None
-    authors: list[ContactInfo] | None = None
-    licenses: list[str] | None = None
-    lifecycle_phase: str | None = None
 
 
 # Release schemas
@@ -836,12 +756,6 @@ class ReleaseLinkSchema(BaseModel):
     product_name: str
     is_prerelease: bool
     linked_at: datetime
-
-
-class ReleaseArtifactsUpdateSchema(BaseModel):
-    """Schema for bulk updating artifacts in a release."""
-
-    artifacts: list[ReleaseArtifactCreateSchema]
 
 
 class SBOMReleaseTaggingSchema(BaseModel):

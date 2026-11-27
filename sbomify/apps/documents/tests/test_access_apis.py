@@ -482,3 +482,88 @@ class TestSignNDAAPI:
         assert signature is not None
         # Django test client sets REMOTE_ADDR to 127.0.0.1 by default
         assert signature.ip_address is not None
+
+
+@pytest.mark.django_db
+class TestSignNDAAPIRequestStatus:
+    """Signing the NDA reports a request as pending only while it is."""
+
+    @pytest.fixture
+    def sign(
+        self,
+        team_with_business_plan,
+        guest_user,
+        pending_access_request,
+        company_nda_document,
+        django_capture_on_commit_callbacks,
+    ):
+        """Sign as the requester, with the request in the given status; returns (response, notify, broadcast)."""
+
+        def _sign(status):
+            AccessRequest.objects.filter(pk=pending_access_request.pk).update(status=status)
+            url = reverse(
+                "api-1:sign_nda",
+                kwargs={"team_key": team_with_business_plan.key, "request_id": pending_access_request.id},
+            )
+            with (
+                patch("sbomify.apps.documents.access_apis.StorageClient") as storage,
+                patch("sbomify.apps.documents.access_apis.notify_admins_of_access_request") as notify,
+                patch("sbomify.apps.documents.access_apis.broadcast_to_workspace") as broadcast,
+                django_capture_on_commit_callbacks(execute=True),
+            ):
+                storage.return_value.get_document_data.return_value = b"Test NDA Content"
+                response = _session_client(guest_user).post(
+                    url,
+                    json.dumps({"signed_name": "Test User", "consent": True}),
+                    content_type="application/json",
+                )
+            return response, notify, broadcast
+
+        return _sign
+
+    def test_a_pending_request_is_announced_to_the_admins(self, sign):
+        response, notify, broadcast = sign(AccessRequest.Status.PENDING)
+
+        assert response.status_code == 200
+        notify.assert_called_once()
+        assert notify.call_args.kwargs["requires_nda"] is True
+        assert broadcast.call_args.kwargs["data"]["status"] == "pending"
+
+    @pytest.mark.parametrize(
+        "status",
+        [AccessRequest.Status.APPROVED, AccessRequest.Status.REJECTED, AccessRequest.Status.REVOKED],
+    )
+    def test_a_request_that_is_not_pending_is_not(self, sign, pending_access_request, status):
+        response, notify, broadcast = sign(status)
+
+        assert response.status_code == 200
+        notify.assert_not_called()
+        assert broadcast.call_args.kwargs["data"]["status"] == status.value
+        assert NDASignature.objects.filter(access_request=pending_access_request).count() == 1
+
+
+@pytest.mark.django_db
+class TestCreateAccessRequestAPI:
+    """The response to a new request says whether the NDA has to be signed next."""
+
+    @staticmethod
+    def _create(team, user):
+        return _session_client(user).post(
+            reverse("api-1:create_access_request", kwargs={"team_key": team.key}),
+            {},
+            content_type="application/json",
+        )
+
+    def test_names_the_nda_the_requester_has_to_sign(self, team_with_business_plan, guest_user, company_nda_document):
+        response = self._create(team_with_business_plan, guest_user)
+
+        assert response.status_code == 201
+        assert response.json()["requires_nda"] is True
+        assert response.json()["nda_document_id"] == company_nda_document.id
+
+    def test_says_no_nda_is_needed_when_the_workspace_has_none(self, team_with_business_plan, guest_user):
+        response = self._create(team_with_business_plan, guest_user)
+
+        assert response.status_code == 201
+        assert response.json()["requires_nda"] is False
+        assert response.json()["nda_document_id"] is None

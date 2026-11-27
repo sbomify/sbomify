@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import (
-    delete_bot_user_for_binding,
+    delete_bot_user_by_id,
     provision_bot_user_for_binding,
 )
 from sbomify.apps.sboms.models import Component
@@ -161,7 +161,7 @@ class TestDeletion:
         bot = provision_bot_user_for_binding(binding)
         binding.bot_user = bot
         binding.save(update_fields=["bot_user"])
-        binding_id = binding.id
+        bot_id = bot.pk
         username = bot.username
 
         binding.delete()  # triggers post_delete signal
@@ -171,7 +171,7 @@ class TestDeletion:
         # And the bot's Member row went with the User via FK CASCADE
         assert not Member.objects.filter(team=component.team, user__username=username).exists()
         # Idempotent cleanup: calling delete again is fine
-        delete_bot_user_for_binding(binding_id)
+        delete_bot_user_by_id(bot_id)
 
     @pytest.mark.django_db
     def test_deleting_binding_revokes_issued_access_tokens(self, component: Component) -> None:

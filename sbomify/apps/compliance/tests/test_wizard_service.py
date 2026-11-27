@@ -12,9 +12,7 @@ from sbomify.apps.compliance.models import (
     OSCALFinding,
 )
 from sbomify.apps.compliance.services.wizard_service import (
-    get_assessment_by_id,
     get_assessment_list_for_team,
-    get_compliance_summary,
     get_or_create_assessment,
     get_step_context,
     save_step_data,
@@ -778,7 +776,7 @@ class TestSaveStepData:
 @pytest.mark.django_db
 class TestGetComplianceSummary:
     def test_returns_summary_shape(self, assessment):
-        result = get_compliance_summary(assessment)
+        result = get_step_context(assessment, 5)
 
         assert result.ok
         data = result.value
@@ -808,7 +806,7 @@ class TestGetComplianceSummary:
         answers it. Annex V item 2a cannot be produced without it."""
         self._complete_steps_1_to_4(assessment, sample_user, {"is_eu_established": True})
 
-        result = get_compliance_summary(assessment)
+        result = get_step_context(assessment, 5)
 
         assert result.ok
         assert result.value["overall_ready"] is True
@@ -825,29 +823,12 @@ class TestGetComplianceSummary:
         self._complete_steps_1_to_4(assessment, sample_user)
         assert assessment.is_eu_established is None
 
-        result = get_compliance_summary(assessment)
+        result = get_step_context(assessment, 5)
 
         assert result.ok
         assert result.value["overall_ready"] is False
         assert result.value["export_available"] is False
         assert result.value["steps"][1]["eu_representation_problems"] != []
-
-
-@pytest.mark.django_db
-class TestGetAssessmentById:
-    def test_returns_assessment(self, assessment):
-        result = get_assessment_by_id(assessment.id)
-        assert result.ok
-        assert result.value is not None
-        assert result.value.id == assessment.id
-        # Verify select_related data is accessible without extra queries
-        assert result.value.team is not None
-        assert result.value.product is not None
-
-    def test_nonexistent_returns_failure(self):
-        result = get_assessment_by_id("nonexistent99")
-        assert not result.ok
-        assert result.status_code == 404
 
 
 @pytest.mark.django_db
@@ -952,7 +933,7 @@ class TestStep1EuRepresentation:
         assessment.refresh_from_db()
         assert assessment.is_eu_established is False
         assert assessment.authorized_rep_name == "Acme EU Compliance BV"
-        assert assessment.authorized_rep_is_complete is True
+        assert assessment.eu_representation_problems == []
 
     def test_step_1_rejects_a_value_longer_than_its_column(self, assessment, sample_user):
         """A 400, not a 500. The generic 4000-char cap is far above the

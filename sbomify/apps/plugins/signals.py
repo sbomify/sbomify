@@ -113,7 +113,7 @@ def enqueue_dependents_for_completion(run: AssessmentRun) -> None:
        candidates to that intersection prevents a re-enqueue for plugins
        a team has explicitly opted out of.
     2. Look up every dependent in that intersection whose ``dependencies``
-       JSON references the just-completed plugin's *category* or *name*.
+       JSON references the just-completed plugin's *category*.
     3. For each dependent, find its latest run on the same SBOM
        (any status). Three skip conditions:
 
@@ -172,13 +172,8 @@ def enqueue_dependents_for_completion(run: AssessmentRun) -> None:
         dependents: list[str] = []
         for plugin in candidates:
             deps = plugin.dependencies or {}
-            clauses = list(deps.get("requires_one_of", [])) + list(deps.get("requires_all", []))
-            for clause in clauses:
-                ctype = clause.get("type")
-                cvalue = clause.get("value")
-                if (ctype == "category" and cvalue == upstream_category) or (
-                    ctype == "plugin" and cvalue == upstream_plugin_name
-                ):
+            for clause in deps.get("requires_one_of", []):
+                if clause.get("type") == "category" and clause.get("value") == upstream_category:
                     dependents.append(plugin.name)
                     break
 

@@ -1,5 +1,5 @@
 import Alpine from 'alpinejs';
-import $axios from '../utils';
+import { getCsrfToken } from '../csrf';
 import { showError, showSuccess } from '../alerts';
 
 interface Release {
@@ -53,16 +53,10 @@ function emptyForm(now = ''): ReleaseForm {
     };
 }
 
-function getDefaultDateTime(): string {
-    const now = new Date();
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-}
-
+// A datetime-local value in local time; a missing or invalid value means now.
 function formatDateTimeForInput(value?: string): string {
-    if (!value) return getDefaultDateTime();
-    const date = new Date(value);
-    if (isNaN(date.getTime())) return getDefaultDateTime();
+    let date = value ? new Date(value) : new Date();
+    if (isNaN(date.getTime())) date = new Date();
     const pad = (n: number) => n.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
@@ -141,7 +135,7 @@ export function registerReleaseEditor() {
             this.showModal = false;
             // Dispatch event to close any open datetime pickers
             window.dispatchEvent(new CustomEvent('close-all-pickers'));
-            this.form = emptyForm(getDefaultDateTime());
+            this.form = emptyForm(formatDateTimeForInput());
             this.replacesLocked = false;
         },
 
@@ -178,16 +172,23 @@ export function registerReleaseEditor() {
                         : [];
                 }
 
-                await $axios.patch(`/api/v1/releases/${this.form.id}`, data);
+                const response = await fetch(`/api/v1/releases/${this.form.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify(data),
+                });
+                if (!response.ok) {
+                    const body = await response.json().catch(() => ({}));
+                    showError(body.detail || 'Failed to save release');
+                    return;
+                }
                 showSuccess('Release updated');
 
                 this.closeModal();
                 this.$dispatch(refreshEvent);
             } catch (error: unknown) {
                 console.error('Failed to save release:', error);
-                const axiosError = error as { response?: { data?: { detail?: string } } };
-                const detail = axiosError?.response?.data?.detail;
-                showError(detail || 'Failed to save release');
+                showError('Failed to save release');
             } finally {
                 this.saving = false;
             }
@@ -208,7 +209,11 @@ export function registerReleaseEditor() {
             this.saving = true;
 
             try {
-                await $axios.delete(`/api/v1/releases/${this.deleteTarget.id}`);
+                const response = await fetch(`/api/v1/releases/${this.deleteTarget.id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': getCsrfToken() },
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 showSuccess('Release deleted');
                 this.closeDeleteModal();
                 this.$dispatch(refreshEvent);

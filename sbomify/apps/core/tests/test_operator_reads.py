@@ -64,7 +64,7 @@ READS = [
     ("api-1:list_component_release_cle_events", "component_release_id"),
     ("api-1:list_component_release_cle_support_definitions", "component_release_id"),
     ("core:sbom_download_product", "product_id"),
-    ("core:get_component_metadata", "component_id"),
+    ("api-1:get_component_metadata", "component_id"),
 ]
 
 

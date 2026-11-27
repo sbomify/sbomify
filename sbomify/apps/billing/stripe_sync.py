@@ -636,40 +636,22 @@ def _find_stripe_product_and_prices(plan: BillingPlan) -> tuple[str | None, str 
             key=lambda p: getattr(p, "created", 0) or 0,
         )
 
-        monthly_price_id = plan.stripe_price_monthly_id
-        annual_price_id = plan.stripe_price_annual_id
+        # Stripe is the source of truth, read only. The oldest price per
+        # interval is taken, as the most stable, canonical one.
+        price_ids: dict[str, str | None] = {}
+        for period, interval in (("monthly", "month"), ("annual", "year")):
+            price_id = getattr(plan, f"stripe_price_{period}_id")
+            if not price_id:
+                price = next((p for p in existing_prices if p.recurring and p.recurring.interval == interval), None)
+                if price:
+                    price_id = price.id
+                    amount = price.unit_amount / 100 if price.unit_amount else 0
+                    logger.debug(f"Found {period} price {price_id} (${amount}) for plan {plan.key}")
+                else:
+                    logger.warning(f"No {period} price found in Stripe for plan {plan.key}")
+            price_ids[period] = price_id
 
-        # Find monthly price from Stripe (Stripe is source of truth - read only)
-        # Takes the oldest monthly price (most stable/canonical)
-        if not monthly_price_id:
-            monthly_price = next(
-                (p for p in existing_prices if p.recurring and p.recurring.interval == "month"),
-                None,
-            )
-
-            if monthly_price:
-                monthly_price_id = monthly_price.id
-                amount = monthly_price.unit_amount / 100 if monthly_price.unit_amount else 0
-                logger.debug(f"Found monthly price {monthly_price_id} (${amount}) for plan {plan.key}")
-            else:
-                logger.warning(f"No monthly price found in Stripe for plan {plan.key}")
-
-        # Find annual price from Stripe (Stripe is source of truth - read only)
-        # Takes the oldest annual price (most stable/canonical)
-        if not annual_price_id:
-            annual_price = next(
-                (p for p in existing_prices if p.recurring and p.recurring.interval == "year"),
-                None,
-            )
-
-            if annual_price:
-                annual_price_id = annual_price.id
-                amount = annual_price.unit_amount / 100 if annual_price.unit_amount else 0
-                logger.debug(f"Found annual price {annual_price_id} (${amount}) for plan {plan.key}")
-            else:
-                logger.warning(f"No annual price found in Stripe for plan {plan.key}")
-
-        return (product.id, monthly_price_id, annual_price_id)
+        return (product.id, price_ids["monthly"], price_ids["annual"])
 
     except StripeError as e:
         logger.error(f"Error finding/creating Stripe product/prices for plan {plan.key}: {e}")
@@ -733,51 +715,31 @@ def sync_plan_prices_from_stripe(plan_key: str | None = None) -> dict[str, Any]:
                         plan.stripe_product_id = product_id
                         update_fields = ["stripe_product_id"]
 
-                        if monthly_id:
-                            plan.stripe_price_monthly_id = monthly_id
-                            update_fields.append("stripe_price_monthly_id")
+                        for period, price_id in (("monthly", monthly_id), ("annual", annual_id)):
+                            if not price_id:
+                                continue
+                            setattr(plan, f"stripe_price_{period}_id", price_id)
+                            update_fields.append(f"stripe_price_{period}_id")
+                            price_field = f"{period}_price"
                             try:
-                                monthly_stripe_price = stripe_client.get_price(monthly_id)
-                                if monthly_stripe_price and monthly_stripe_price.unit_amount is not None:
-                                    plan.monthly_price = Decimal(monthly_stripe_price.unit_amount) / Decimal("100")
-                                    update_fields.append("monthly_price")
-                                    logger.debug(f"Set monthly_price to ${plan.monthly_price} from Stripe")
+                                stripe_price = stripe_client.get_price(price_id)
+                                if stripe_price and stripe_price.unit_amount is not None:
+                                    setattr(plan, price_field, Decimal(stripe_price.unit_amount) / Decimal("100"))
+                                    update_fields.append(price_field)
+                                    logger.debug(f"Set {price_field} to ${getattr(plan, price_field)} from Stripe")
                                 else:
                                     logger.warning(
-                                        f"Stripe monthly price {monthly_id} has no amount. "
-                                        f"Preserving existing monthly price: "
-                                        f"${plan.monthly_price}"
+                                        f"Stripe {period} price {price_id} has no amount. "
+                                        f"Preserving existing {period} price: "
+                                        f"${getattr(plan, price_field)}"
                                     )
                             except StripeError as e:
+                                # Do not update the price - preserve existing value
                                 logger.warning(
-                                    f"Could not fetch monthly price for {monthly_id}: {e}. "
-                                    f"Preserving existing monthly price: "
-                                    f"${plan.monthly_price}"
+                                    f"Could not fetch {period} price for {price_id}: {e}. "
+                                    f"Preserving existing {period} price: "
+                                    f"${getattr(plan, price_field)}"
                                 )
-                                # Do not update monthly_price - preserve existing value
-
-                        if annual_id:
-                            plan.stripe_price_annual_id = annual_id
-                            update_fields.append("stripe_price_annual_id")
-                            try:
-                                annual_stripe_price = stripe_client.get_price(annual_id)
-                                if annual_stripe_price and annual_stripe_price.unit_amount is not None:
-                                    plan.annual_price = Decimal(annual_stripe_price.unit_amount) / Decimal("100")
-                                    update_fields.append("annual_price")
-                                    logger.debug(f"Set annual_price to ${plan.annual_price} from Stripe")
-                                else:
-                                    logger.warning(
-                                        f"Stripe annual price {annual_id} has no amount. "
-                                        f"Preserving existing annual price: "
-                                        f"${plan.annual_price}"
-                                    )
-                            except StripeError as e:
-                                logger.warning(
-                                    f"Could not fetch annual price for {annual_id}: {e}. "
-                                    f"Preserving existing annual price: "
-                                    f"${plan.annual_price}"
-                                )
-                                # Do not update annual_price - preserve existing value
 
                         plan.save(update_fields=update_fields)
                         logger.info(f"Updated plan {plan.key} with Stripe IDs")
@@ -812,59 +774,35 @@ def sync_plan_prices_from_stripe(plan_key: str | None = None) -> dict[str, Any]:
             updated = False
             price_updates: dict[str, Any] = {}
 
-            # Sync monthly price
-            # IMPORTANT: Only update price if we successfully fetch it from Stripe
-            # If fetch fails, preserve existing price - do not clear it
-            if plan.stripe_price_monthly_id:
+            # IMPORTANT: Only update a price we successfully fetch from Stripe.
+            # If the fetch fails, preserve the existing price - do not clear it.
+            for period in ("monthly", "annual"):
+                price_id = getattr(plan, f"stripe_price_{period}_id")
+                if not price_id:
+                    continue
+                price_field = f"{period}_price"
+                existing_price = getattr(plan, price_field)
                 try:
-                    stripe_price = stripe_client.get_price(plan.stripe_price_monthly_id)
+                    stripe_price = stripe_client.get_price(price_id)
                     if stripe_price and stripe_price.unit_amount is not None:
                         stripe_amount = Decimal(stripe_price.unit_amount) / Decimal("100")
                         # Compare with proper Decimal handling
-                        current_price = Decimal(str(plan.monthly_price)) if plan.monthly_price is not None else None
+                        current_price = Decimal(str(existing_price)) if existing_price is not None else None
                         if current_price is None or abs(current_price - stripe_amount) > Decimal("0.01"):
-                            price_updates["monthly_price"] = stripe_amount
+                            price_updates[price_field] = stripe_amount
                             updated = True
-                            logger.info(f"Plan {plan.key}: monthly price update: ${current_price} -> ${stripe_amount}")
+                            logger.info(f"Plan {plan.key}: {period} price update: ${current_price} -> ${stripe_amount}")
                         else:
-                            logger.debug(f"Plan {plan.key}: monthly price already matches: ${stripe_amount}")
+                            logger.debug(f"Plan {plan.key}: {period} price already matches: ${stripe_amount}")
                     else:
                         logger.warning(
-                            f"Plan {plan.key}: Stripe monthly price "
-                            f"{plan.stripe_price_monthly_id} has no amount. "
-                            f"Preserving existing price: ${plan.monthly_price}"
+                            f"Plan {plan.key}: Stripe {period} price "
+                            f"{price_id} has no amount. "
+                            f"Preserving existing price: ${existing_price}"
                         )
                 except StripeError as e:
-                    error_msg = f"Failed to fetch monthly price for plan {plan.key}: {e}"
-                    logger.warning(f"{error_msg}. Preserving existing monthly price: ${plan.monthly_price}")
-                    results["errors"].append(error_msg)
-                    # Do not update price - preserve existing value
-
-            # Sync annual price
-            # IMPORTANT: Only update price if we successfully fetch it from Stripe
-            # If fetch fails, preserve existing price - do not clear it
-            if plan.stripe_price_annual_id:
-                try:
-                    stripe_price = stripe_client.get_price(plan.stripe_price_annual_id)
-                    if stripe_price and stripe_price.unit_amount is not None:
-                        stripe_amount = Decimal(stripe_price.unit_amount) / Decimal("100")
-                        # Compare with proper Decimal handling
-                        current_price = Decimal(str(plan.annual_price)) if plan.annual_price is not None else None
-                        if current_price is None or abs(current_price - stripe_amount) > Decimal("0.01"):
-                            price_updates["annual_price"] = stripe_amount
-                            updated = True
-                            logger.info(f"Plan {plan.key}: annual price update: ${current_price} -> ${stripe_amount}")
-                        else:
-                            logger.debug(f"Plan {plan.key}: annual price already matches: ${stripe_amount}")
-                    else:
-                        logger.warning(
-                            f"Plan {plan.key}: Stripe annual price "
-                            f"{plan.stripe_price_annual_id} has no amount. "
-                            f"Preserving existing price: ${plan.annual_price}"
-                        )
-                except StripeError as e:
-                    error_msg = f"Failed to fetch annual price for plan {plan.key}: {e}"
-                    logger.warning(f"{error_msg}. Preserving existing annual price: ${plan.annual_price}")
+                    error_msg = f"Failed to fetch {period} price for plan {plan.key}: {e}"
+                    logger.warning(f"{error_msg}. Preserving existing {period} price: ${existing_price}")
                     results["errors"].append(error_msg)
                     # Do not update price - preserve existing value
 

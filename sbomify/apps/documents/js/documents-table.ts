@@ -153,18 +153,6 @@ export function registerDocumentsTable() {
         this.currentPage = 1
       },
 
-      goToPage(page: number): void {
-        if (page >= 1 && page <= this.totalPages) {
-          this.currentPage = page
-        }
-      },
-
-      isVisible(index: number): boolean {
-        const start = (this.currentPage - 1) * this.pageSize
-        const end = start + this.pageSize
-        return index >= start && index < end
-      },
-
       editDocument(documentId: string): void {
         const item = this.allDocuments.find(doc => doc.document.id === documentId)
         if (!item) return

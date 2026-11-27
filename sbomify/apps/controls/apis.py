@@ -47,10 +47,7 @@ from sbomify.apps.controls.services.mapping_service import (
     get_mappings_for_control,
     import_mappings_bulk,
 )
-from sbomify.apps.controls.services.public_service import (
-    get_public_controls,
-    get_public_product_controls,
-)
+from sbomify.apps.controls.services.public_service import get_public_controls_list
 from sbomify.apps.controls.services.status_service import (
     bulk_update_statuses,
     get_controls_detail,
@@ -103,6 +100,50 @@ def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, Error
     return None
 
 
+def _team_or_error(
+    request: HttpRequest, *, admin: bool = False
+) -> tuple[Workspace | None, tuple[int, ErrorResponse] | None]:
+    """Resolve the current workspace, then check the caller may read it, or with ``admin`` manage it."""
+    team, err = _get_user_team(request)
+    if team is None:
+        return None, err
+    if admin:
+        err = _check_admin_role(request, team)
+    elif not can(request, "workspace:read", team):
+        err = 403, ErrorResponse(detail="Forbidden")
+    return (None, err) if err else (team, None)
+
+
+def _public_summary_response(team: Workspace, product: Product | None = None) -> HttpResponse | tuple[int, Any]:
+    """The first published catalog's public summary, cacheable for a minute."""
+    result = get_public_controls_list(team, product)
+    if not result.ok or not result.value:
+        return 404, ErrorResponse(detail="No active catalog")
+
+    data = result.value[0]
+    response_schema = PublicControlsSummarySchema(
+        catalog_name=data["catalog"]["name"],
+        catalog_version=data["catalog"].get("version", ""),
+        total=data["total"],
+        addressed=data["addressed"],
+        percentage=data["percentage"],
+        by_status=data["by_status"],
+        categories=data["categories"],
+    )
+
+    response = HttpResponse(
+        response_schema.model_dump_json(),
+        content_type="application/json",
+        status=200,
+    )
+    # A minute, not an hour. Unpublishing a framework and disconnecting the
+    # provider both promise the score comes off the trust center straight away,
+    # and there is no purge on the edge to make that true, so the cache window
+    # is the upper bound on how long a taken-down claim can still be served.
+    response["Cache-Control"] = "public, max-age=60"
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Authenticated endpoints — Catalogs
 # ---------------------------------------------------------------------------
@@ -115,13 +156,11 @@ def _check_admin_role(request: HttpRequest, team: Workspace) -> tuple[int, Error
     summary="List catalogs for the current workspace",
 )
 def list_catalogs(request: HttpRequest, include_inactive: bool = False) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     result = get_all_catalogs(team) if include_inactive else get_active_catalogs(team)
     if not result.ok:
@@ -148,14 +187,11 @@ def list_catalogs(request: HttpRequest, include_inactive: bool = False) -> tuple
     summary="Activate a built-in catalog",
 )
 def activate_catalog(request: HttpRequest, payload: ActivateCatalogSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     result = activate_builtin_catalog(team, payload.catalog_name)
     if not result.ok:
@@ -184,14 +220,11 @@ def import_oscal(request: HttpRequest) -> tuple[int, Any]:
     """Import an OSCAL catalog JSON. Accepts standard NIST OSCAL format."""
     import json
 
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     # Parse JSON from request body
     try:
@@ -243,13 +276,11 @@ def import_oscal(request: HttpRequest) -> tuple[int, Any]:
     summary="Get catalog detail",
 )
 def get_catalog(request: HttpRequest, catalog_id: str) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -274,14 +305,11 @@ def get_catalog(request: HttpRequest, catalog_id: str) -> tuple[int, Any]:
     summary="Update catalog (toggle is_active)",
 )
 def update_catalog(request: HttpRequest, catalog_id: str, payload: CatalogPatchSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -308,14 +336,11 @@ def update_catalog(request: HttpRequest, catalog_id: str, payload: CatalogPatchS
     summary="Delete a catalog and all its controls/statuses",
 )
 def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     result = delete_catalog(catalog_id, team)
     if not result.ok:
@@ -341,13 +366,11 @@ def delete_catalog_endpoint(request: HttpRequest, catalog_id: str) -> tuple[int,
     summary="Export controls as CSV",
 )
 def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = None) -> HttpResponse | tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -386,13 +409,11 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
     summary="Export controls summary as CSV",
 )
 def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -422,13 +443,11 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
     summary="List controls with statuses for a catalog",
 )
 def list_controls(request: HttpRequest, catalog_id: str, product_id: str | None = None) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
@@ -472,14 +491,11 @@ def list_controls(request: HttpRequest, catalog_id: str, product_id: str | None 
     summary="Upsert a control status",
 )
 def upsert_control_status(request: HttpRequest, control_id: str, payload: StatusUpdateSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     try:
         control = Control.objects.select_related("catalog").get(id=control_id, catalog__team=team)
@@ -518,14 +534,11 @@ def upsert_control_status(request: HttpRequest, control_id: str, payload: Status
     summary="Bulk update control statuses (atomic)",
 )
 def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     user = cast(User, request.user)
     updates = [item.model_dump() for item in payload.items]
@@ -549,13 +562,11 @@ def bulk_update(request: HttpRequest, payload: BulkStatusUpdateSchema) -> tuple[
     summary="Get all mappings for a control (both directions)",
 )
 def list_control_mappings(request: HttpRequest, control_id: str) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     try:
         control = Control.objects.select_related("catalog").get(id=control_id, catalog__team=team)
@@ -596,14 +607,11 @@ def list_control_mappings(request: HttpRequest, control_id: str) -> tuple[int, A
     summary="Create a control mapping (admin only)",
 )
 def create_control_mapping(request: HttpRequest, payload: CreateMappingSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     try:
         source = Control.objects.select_related("catalog").get(id=payload.source_control_id, catalog__team=team)
@@ -643,14 +651,11 @@ def create_control_mapping(request: HttpRequest, payload: CreateMappingSchema) -
     summary="Bulk import control mappings (admin only)",
 )
 def bulk_import_mappings(request: HttpRequest, payload: BulkMappingSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     items = [item.model_dump() for item in payload.items]
     result = import_mappings_bulk(items, team)
@@ -699,13 +704,11 @@ def _resolve_control_status(
     summary="List evidence for a control",
 )
 def list_evidence(request: HttpRequest, control_id: str) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     control_status, cs_err = _resolve_control_status(control_id, team)
     if cs_err:
@@ -734,14 +737,11 @@ def list_evidence(request: HttpRequest, control_id: str) -> tuple[int, Any]:
     summary="Add evidence to a control",
 )
 def add_evidence(request: HttpRequest, control_id: str, payload: CreateEvidenceSchema) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     if payload.evidence_type not in _VALID_EVIDENCE_TYPES:
         return 400, ErrorResponse(
@@ -782,14 +782,11 @@ def add_evidence(request: HttpRequest, control_id: str, payload: CreateEvidenceS
     summary="Delete evidence",
 )
 def delete_evidence(request: HttpRequest, evidence_id: str) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     try:
         ev = ControlEvidence.objects.select_related("control_status__control__catalog").get(
@@ -814,14 +811,11 @@ def delete_evidence(request: HttpRequest, evidence_id: str) -> tuple[int, Any]:
     summary="Sync control statuses from latest plugin assessments (admin only)",
 )
 def sync_automation(request: HttpRequest) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request, admin=True)
     if err:
         return err
 
     assert team is not None
-    admin_err = _check_admin_role(request, team)
-    if admin_err:
-        return admin_err
 
     result = sync_from_latest_assessments(team)
     if not result.ok:
@@ -842,13 +836,11 @@ def sync_automation(request: HttpRequest) -> tuple[int, Any]:
     summary="Get plugin-to-control automation mappings",
 )
 def list_automation_mappings(request: HttpRequest) -> tuple[int, Any]:
-    team, err = _get_user_team(request)
+    team, err = _team_or_error(request)
     if err:
         return err
 
     assert team is not None
-    if not can(request, "workspace:read", team):
-        return 403, ErrorResponse(detail="Forbidden")
 
     return 200, AutomationMappingSchema(mappings=get_automation_mappings())
 
@@ -878,34 +870,7 @@ def public_controls_summary(request: HttpRequest, workspace_key: str) -> HttpRes
     if not team.is_public:
         return 404, ErrorResponse(detail="Workspace not found")
 
-    result = get_public_controls(team)
-    if not result.ok:
-        status_code = result.status_code or 404
-        return status_code, ErrorResponse(detail=result.error or "No active catalog")
-
-    data = result.value
-    assert data is not None
-    response_schema = PublicControlsSummarySchema(
-        catalog_name=data["catalog"]["name"],
-        catalog_version=data["catalog"].get("version", ""),
-        total=data["total"],
-        addressed=data["addressed"],
-        percentage=data["percentage"],
-        by_status=data["by_status"],
-        categories=data["categories"],
-    )
-
-    response = HttpResponse(
-        response_schema.model_dump_json(),
-        content_type="application/json",
-        status=200,
-    )
-    # A minute, not an hour. Unpublishing a framework and disconnecting the
-    # provider both promise the score comes off the trust center straight away,
-    # and there is no purge on the edge to make that true, so the cache window
-    # is the upper bound on how long a taken-down claim can still be served.
-    response["Cache-Control"] = "public, max-age=60"
-    return response
+    return _public_summary_response(team)
 
 
 @router.get(
@@ -938,31 +903,4 @@ def public_product_controls_summary(
     if not product.is_public:
         return 404, ErrorResponse(detail="Product not found")
 
-    result = get_public_product_controls(product)
-    if not result.ok:
-        status_code = result.status_code or 404
-        return status_code, ErrorResponse(detail=result.error or "No active catalog")
-
-    data = result.value
-    assert data is not None
-    response_schema = PublicControlsSummarySchema(
-        catalog_name=data["catalog"]["name"],
-        catalog_version=data["catalog"].get("version", ""),
-        total=data["total"],
-        addressed=data["addressed"],
-        percentage=data["percentage"],
-        by_status=data["by_status"],
-        categories=data["categories"],
-    )
-
-    response = HttpResponse(
-        response_schema.model_dump_json(),
-        content_type="application/json",
-        status=200,
-    )
-    # A minute, not an hour. Unpublishing a framework and disconnecting the
-    # provider both promise the score comes off the trust center straight away,
-    # and there is no purge on the edge to make that true, so the cache window
-    # is the upper bound on how long a taken-down claim can still be served.
-    response["Cache-Control"] = "public, max-age=60"
-    return response
+    return _public_summary_response(team, product)

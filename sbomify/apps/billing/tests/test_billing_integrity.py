@@ -1,5 +1,5 @@
 """Billing integrity: community-downgrade cancels the real subscription, grace period is
-enforced and not reset on repeated failures."""
+not reset on repeated failures."""
 
 import datetime
 from unittest.mock import MagicMock, patch
@@ -13,7 +13,6 @@ from sbomify.apps.billing.apis import _handle_community_downgrade
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.teams.models import Workspace
 
-User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 
