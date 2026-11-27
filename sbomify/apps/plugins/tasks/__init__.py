@@ -342,7 +342,11 @@ RETRY_LATER_DELAYS_MS = [minutes * 60 * 1000 for minutes in (2, 4, 8, 16, 32, 60
     # Dramatiq-level retries for unhandled exceptions (e.g., DB errors).
     # RetryLaterError is handled separately and does not count toward this limit.
     max_retries=3,
-    time_limit=300000,  # 5 minutes
+    # Seven minutes: the OSV scanner's own five-minute timeout has to fire first,
+    # with room left for fetching the SBOM before it and saving findings after.
+    # At an equal limit the worker was killed mid-scan instead, which rolled the
+    # run back and retried a scan that had already run out of time.
+    time_limit=420000,
     store_results=True,
 )
 @retry(
