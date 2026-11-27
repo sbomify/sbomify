@@ -336,7 +336,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.4.7
+          image: quay.io/keycloak/keycloak:26.8.2
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -450,7 +450,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: bootstrap
-          image: quay.io/keycloak/keycloak:26.4.7
+          image: quay.io/keycloak/keycloak:26.8.2
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
