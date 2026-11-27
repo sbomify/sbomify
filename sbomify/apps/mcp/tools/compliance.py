@@ -46,10 +46,11 @@ InternalDocumentKind = Literal[
     "final_report",
 ]
 
-# The wizard is owner and admin work, so its writes declare an admin-tier scope:
-# a token scoped for day-to-day product work does not answer a conformity
-# assessment.
-_ASSESSOR = ("workspace:manage",)
+# The wizard is owner and admin work, so its tools declare the wizard's own
+# admin-tier scopes, which the compliance views check: a token scoped for
+# day-to-day product work does not read or answer a conformity assessment.
+_ASSESSMENT_READER = ("cra_assessment:read",)
+_ASSESSOR = ("cra_assessment:read", "cra_assessment:manage")
 
 # Steps a person saves in sbomify. Step 3 writes into the public security.txt,
 # step 5 publishes the Declaration of Conformity.
@@ -133,7 +134,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "get_cra_assessment", "product:read")
+    @mcp_tool(mcp, "get_cra_assessment", "product:read", also_requires=_ASSESSMENT_READER)
     async def get_cra_assessment(
         principal: Principal, assessment_id: str | None = None, product_id: str | None = None
     ) -> dict[str, Any]:
@@ -170,7 +171,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(query)
 
-    @mcp_tool(mcp, "get_cra_step", "product:read")
+    @mcp_tool(mcp, "get_cra_step", "product:read", also_requires=_ASSESSMENT_READER)
     async def get_cra_step(principal: Principal, assessment_id: str, step: int) -> dict[str, Any]:
         """Read one step of a CRA assessment with the data it holds.
 
@@ -341,7 +342,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "get_cra_export", "product:read")
+    @mcp_tool(mcp, "get_cra_export", "product:read", also_requires=_ASSESSMENT_READER)
     async def get_cra_export(principal: Principal, assessment_id: str, package_id: str) -> dict[str, Any]:
         """One export package of a CRA assessment: its files, integrity hash and signature.
 

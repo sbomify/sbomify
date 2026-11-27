@@ -7,13 +7,17 @@ runs every available verification source in one pass:
 1. Re-computes SHA-256 and compares to the stored digest.
 2. Checks whether a sbomify-stored cryptographic signature is attached
    (cosign-bundle via the ``signature_blob_key`` on the SBOM row).
-3. Validates the stored signature using the ``sigstore`` library
-   (``Verifier.production().verify_artifact``) when supported.
+3. Validates the stored signature with the ``sigstore`` library
+   (``Verifier.production().verify_artifact``). An older cosign bundle is
+   first rewritten in the current format, with its inclusion proof from
+   Rekor. The signer is reported, not judged.
 4. Checks whether a sbomify-stored provenance attestation is attached
    and verifies its subject digest matches the SBOM hash.
 5. If the SBOM declares a GitHub VCS link, fetches the GitHub Sigstore
    attestation bundle from the public Attestations API and verifies it
-   with ``cosign verify-blob-attestation``.
+   with ``cosign verify-blob-attestation``. A missing attestation is only
+   retried while no stored source has verified the SBOM; after one has, it
+   is recorded as an ``info`` note instead.
 6. Emits an aggregating ``verification:attestation`` summary finding
    whose status is ``pass`` when *any* cryptographic source verified
    and ``fail`` when none did. This is the signal BSI consumes via
@@ -28,6 +32,7 @@ or a GitHub-published attestation.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import json
 import logging
@@ -56,6 +61,12 @@ from sbomify.apps.plugins.sdk.results import (
     PluginMetadata,
 )
 from sbomify.apps.plugins.utils import get_http_session
+from sbomify.apps.sboms.provenance import (
+    ProvenanceFormatError,
+    matching_subject,
+    parse_statements,
+    subject_digests,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +99,13 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     that drives ``_is_passing`` for upstream consumers (BSI, FDA, etc.).
     """
 
-    VERSION = "2.0.1"
+    VERSION = "2.1.0"
+
+    # Stored sources that can verify an SBOM without GitHub.
+    _CRYPTO_FINDING_IDS = frozenset({"verification:signature-valid", "verification:provenance-digest"})
 
     DEFAULT_TIMEOUT = 60
+    REKOR_URL = "https://rekor.sigstore.dev"
     DEFAULT_CERTIFICATE_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
     # cosign v3 strictly validates --type against the predicate type when
     # --new-bundle-format is active (default in v3). actions/attest-build-provenance
@@ -244,53 +259,235 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         )
 
     def _verify_cosign_bundle(self, bundle_bytes: bytes, sbom_data: bytes) -> Finding:
-        """Verify a Cosign/Sigstore bundle against the SBOM content.
+        """Verify a Sigstore bundle against the SBOM content.
 
-        Note: Uses UnsafeNoOp policy which verifies the signature is
-        cryptographically valid but does NOT check signer identity.
-        A proper identity policy should be configured per-deployment.
+        Two formats reach this. ``cosign`` v3 writes the Sigstore bundle
+        (``mediaType``, ``verificationMaterial``), which the ``sigstore``
+        library verifies in process. ``cosign`` v2, and v3 with
+        ``--new-bundle-format=false``, writes the older cosign bundle
+        (``base64Signature``, ``cert``, ``rekorBundle``), which the library
+        cannot load as is. That one is rewritten in the current format first,
+        with the inclusion proof Rekor publishes for it.
+
+        Either way the signature, certificate chain and transparency log entry
+        are checked, and the signer is reported. Which signer is acceptable is
+        not decided here: there is no identity policy to check it against.
         """
+        try:
+            document = json.loads(bundle_bytes)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            document = None
+        if not isinstance(document, dict):
+            return self._signature_finding(
+                "fail", "Signature Is Not a Sigstore Bundle", "The signature file is not a JSON Sigstore bundle."
+            )
+
+        if "mediaType" in document:
+            return self._verify_sigstore_bundle(bundle_bytes, sbom_data)
+        if "base64Signature" in document:
+            return self._verify_legacy_cosign_bundle(document, sbom_data)
+        return self._signature_finding(
+            "fail",
+            "Signature Is Not a Sigstore Bundle",
+            "The signature file is JSON, but neither a Sigstore bundle nor a cosign bundle.",
+        )
+
+    @staticmethod
+    def _signature_finding(
+        status: str, title: str, description: str, metadata: dict[str, Any] | None = None
+    ) -> Finding:
+        return Finding(
+            id="verification:signature-valid",
+            title=title,
+            description=description,
+            status=status,
+            severity="info" if status == "pass" else ("low" if status == "warning" else "high"),
+            metadata={"signature_type": "cosign-bundle", **(metadata or {})},
+        )
+
+    def _signature_verified(self, identity: dict[str, str], bundle_format: str) -> Finding:
+        signer = identity.get("identity") or "an unknown identity"
+        issuer = identity.get("issuer")
+        description = f"The signature over this SBOM is valid. Signed by {signer}"
+        description += f" (issuer {issuer})." if issuer else "."
+        description += " sbomify does not check which signers to trust, so confirm this is the one you expect."
+        return self._signature_finding(
+            "pass",
+            "Cosign Signature Cryptographically Valid",
+            description,
+            {"bundle_format": bundle_format, "identity_verified": False, **identity},
+        )
+
+    @staticmethod
+    def _short_error(exc: BaseException) -> str:
+        message = str(exc).strip().splitlines()
+        return (message[0] if message else type(exc).__name__)[:300]
+
+    @staticmethod
+    def _signer_identity(certificate: Any) -> dict[str, str]:
+        """The subject and OIDC issuer a Fulcio certificate was issued for."""
+        from cryptography import x509
+
+        identity: dict[str, str] = {}
+        try:
+            names = certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            for kind in (x509.RFC822Name, x509.UniformResourceIdentifier, x509.OtherName):
+                values = names.get_values_for_type(kind)
+                if values:
+                    value = values[0]
+                    identity["identity"] = value if isinstance(value, str) else repr(value)
+                    break
+        except x509.ExtensionNotFound:
+            pass
+
+        # Fulcio records the issuer twice: 57264.1.8 as a DER UTF8String, and
+        # the deprecated 57264.1.1 as raw bytes.
+        for oid, der in (("1.3.6.1.4.1.57264.1.8", True), ("1.3.6.1.4.1.57264.1.1", False)):
+            try:
+                raw = certificate.extensions.get_extension_for_oid(x509.ObjectIdentifier(oid)).value.value
+            except x509.ExtensionNotFound:
+                continue
+            if der and len(raw) > 2 and raw[0] == 0x0C:
+                raw = raw[2:] if raw[1] < 0x80 else raw[2 + (raw[1] & 0x7F) :]
+            identity["issuer"] = raw.decode("utf-8", "replace")
+            break
+        return identity
+
+    def _verify_sigstore_bundle(
+        self, bundle_bytes: bytes, sbom_data: bytes, bundle_format: str = "sigstore"
+    ) -> Finding:
         try:
             from sigstore.models import Bundle
             from sigstore.verify import Verifier
             from sigstore.verify.policy import UnsafeNoOp
-
-            verifier = Verifier.production()
-            bundle = Bundle.from_json(bundle_bytes)
-            verifier.verify_artifact(
-                input_=sbom_data,
-                bundle=bundle,
-                policy=UnsafeNoOp(),
-            )
-            return Finding(
-                id="verification:signature-valid",
-                title="Cosign Signature Cryptographically Valid",
-                description=(
-                    "Cosign bundle signature is cryptographically valid. "
-                    "Note: signer identity was not verified (no identity policy configured)."
-                ),
-                status="pass",
-                severity="info",
-                metadata={"signature_type": "cosign-bundle", "identity_verified": False},
-            )
         except ImportError:
-            return Finding(
-                id="verification:signature-valid",
-                title="Sigstore Library Not Available",
-                description="The sigstore library is not installed — cannot verify cosign bundle.",
-                status="warning",
-                severity="low",
-                metadata={"signature_type": "cosign-bundle"},
+            return self._signature_finding(
+                "warning",
+                "Sigstore Library Not Available",
+                "The sigstore library is not installed, so the bundle cannot be verified.",
             )
+
+        try:
+            bundle = Bundle.from_json(bundle_bytes)
+            Verifier.production().verify_artifact(input_=sbom_data, bundle=bundle, policy=UnsafeNoOp())
         except Exception as exc:
-            return Finding(
-                id="verification:signature-valid",
-                title="Cosign Signature Verification Failed",
-                description=f"Cosign bundle verification failed: {exc}",
-                status="fail",
-                severity="high",
-                metadata={"signature_type": "cosign-bundle", "error": str(exc)},
+            error = self._short_error(exc)
+            return self._signature_finding(
+                "fail",
+                "Cosign Signature Verification Failed",
+                f"Cosign bundle verification failed: {error}",
+                {"bundle_format": bundle_format, "error": error},
             )
+        return self._signature_verified(self._signer_identity(bundle.signing_certificate), bundle_format)
+
+    def _verify_legacy_cosign_bundle(self, document: dict[str, Any], sbom_data: bytes) -> Finding:
+        """Verify a cosign v2 bundle with the same in-process verifier.
+
+        The older format carries the certificate, the signature and Rekor's
+        signed entry timestamp, but not the inclusion proof the Sigstore
+        bundle format requires. The proof is public: Rekor serves it for the
+        entry's log index. It is fetched, the bundle is rewritten in the
+        current format, and ``_verify_sigstore_bundle`` checks it exactly as
+        it checks a bundle cosign v3 wrote. Nothing fetched is trusted on its
+        own: the verifier checks the proof against Rekor's signed checkpoint
+        from the Sigstore trust root.
+        """
+        if not document.get("cert"):
+            return self._signature_finding(
+                "warning",
+                "Key-Based Signature Not Verified",
+                (
+                    "This cosign bundle was signed with a key, not keylessly. sbomify has no public key to "
+                    "check it against. Sign without --key to get a verifiable bundle."
+                ),
+                {"bundle_format": "cosign-legacy"},
+            )
+
+        try:
+            payload = document["rekorBundle"]["Payload"]
+            log_index = int(payload["logIndex"])
+            body = payload["body"]
+            entry_timestamp = document["rekorBundle"]["SignedEntryTimestamp"]
+            certificate = self._pem_to_der(base64.b64decode(document["cert"]))
+            kind = json.loads(base64.b64decode(body))
+        except (KeyError, TypeError, ValueError) as exc:
+            return self._signature_finding(
+                "fail",
+                "Cosign Signature Verification Failed",
+                f"The cosign bundle is incomplete: {self._short_error(exc)}",
+                {"bundle_format": "cosign-legacy"},
+            )
+
+        proof = self._fetch_rekor_inclusion_proof(log_index, body)
+        if isinstance(proof, str):
+            return self._signature_finding(
+                "warning",
+                "Transparency Log Unavailable",
+                f"The signature could not be checked against the Rekor transparency log: {proof}",
+                {"bundle_format": "cosign-legacy"},
+            )
+
+        converted = {
+            "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "verificationMaterial": {
+                "certificate": {"rawBytes": base64.b64encode(certificate).decode()},
+                "tlogEntries": [
+                    {
+                        "logIndex": str(log_index),
+                        "logId": {"keyId": base64.b64encode(bytes.fromhex(payload["logID"])).decode()},
+                        "kindVersion": {"kind": kind.get("kind", ""), "version": kind.get("apiVersion", "")},
+                        "integratedTime": str(payload["integratedTime"]),
+                        "inclusionPromise": {"signedEntryTimestamp": entry_timestamp},
+                        "inclusionProof": proof,
+                        "canonicalizedBody": body,
+                    }
+                ],
+            },
+            "messageSignature": {
+                "messageDigest": {
+                    "algorithm": "SHA2_256",
+                    "digest": base64.b64encode(hashlib.sha256(sbom_data).digest()).decode(),
+                },
+                "signature": document["base64Signature"],
+            },
+        }
+        return self._verify_sigstore_bundle(json.dumps(converted).encode(), sbom_data, "cosign-legacy")
+
+    @staticmethod
+    def _pem_to_der(pem: bytes) -> bytes:
+        from cryptography import x509
+        from cryptography.hazmat.primitives.serialization import Encoding
+
+        return x509.load_pem_x509_certificate(pem).public_bytes(Encoding.DER)
+
+    def _fetch_rekor_inclusion_proof(self, log_index: int, body: str) -> dict[str, Any] | str:
+        """Rekor's inclusion proof for ``log_index``, or why it could not be had."""
+        try:
+            response = get_http_session().get(
+                f"{self.REKOR_URL}/api/v1/log/entries",
+                params={"logIndex": log_index},
+                headers={"Accept": "application/json"},
+                timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            return f"request failed ({type(exc).__name__})"
+        if response.status_code != 200:
+            return f"Rekor returned HTTP {response.status_code} for log index {log_index}"
+        try:
+            entries = response.json()
+            entry = next(iter(entries.values()))
+            proof = entry["verification"]["inclusionProof"]
+            if entry["body"] != body:
+                return f"the Rekor entry at log index {log_index} is not the one this bundle names"
+            return {
+                "logIndex": str(proof["logIndex"]),
+                "rootHash": base64.b64encode(bytes.fromhex(proof["rootHash"])).decode(),
+                "treeSize": str(proof["treeSize"]),
+                "hashes": [base64.b64encode(bytes.fromhex(h)).decode() for h in proof["hashes"]],
+                "checkpoint": {"envelope": proof["checkpoint"]},
+            }
+        except (ValueError, KeyError, TypeError, AttributeError, StopIteration):
+            return f"Rekor returned an unexpected response for log index {log_index}"
 
     # ------------------------------------------------------------------
     # 3. Stored-provenance presence + subject-digest match
@@ -347,35 +544,29 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         """Parse a provenance attestation and check subject digests.
 
         Supports:
-        - Direct in-toto Statement (``_type`` == ``https://in-toto.io/Statement/...``)
-        - DSSE envelope wrapping a Statement (``payloadType`` present, base64
-          payload)
+        Every shape ``sbomify.apps.sboms.provenance`` reads: a Statement, a
+        DSSE envelope, a Sigstore bundle with a ``dsseEnvelope``, or JSONL of
+        those.
         """
         try:
-            data = json.loads(blob)
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            statements = parse_statements(blob)
+        except ProvenanceFormatError as exc:
+            parse_failed = str(exc).startswith("Invalid JSON")
             return Finding(
                 id="verification:provenance-digest",
-                title="Provenance Parse Error",
-                description=f"Could not parse provenance JSON: {exc}",
+                title="Provenance Parse Error" if parse_failed else "Provenance Format Unrecognised",
+                description=(
+                    f"Could not parse provenance JSON: {exc}"
+                    if parse_failed
+                    else "Provenance payload is neither a DSSE envelope, a Sigstore bundle nor an in-toto Statement."
+                ),
                 status="fail",
                 severity="high",
                 metadata={"error": str(exc)},
             )
 
-        statement = self._extract_statement(data)
-        if statement is None:
-            return Finding(
-                id="verification:provenance-digest",
-                title="Provenance Format Unrecognised",
-                description="Provenance payload is neither a DSSE envelope nor an in-toto Statement.",
-                status="fail",
-                severity="high",
-                metadata={},
-            )
-
-        subjects: list[dict[str, Any]] = statement.get("subject", [])
-        if not subjects:
+        digests = subject_digests(statements)
+        if not digests:
             return Finding(
                 id="verification:provenance-digest",
                 title="No Subjects in Provenance",
@@ -392,26 +583,18 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 description="Provenance subjects found but no stored SHA-256 hash to compare against.",
                 status="warning",
                 severity="medium",
-                metadata={"subjects_count": len(subjects)},
+                metadata={"subjects_count": len(digests)},
             )
 
-        for subj in subjects:
-            if not isinstance(subj, dict):
-                continue
-            digest = subj.get("digest")
-            digest_sha256 = digest.get("sha256") if isinstance(digest, dict) else None
-            if digest_sha256 == expected_hash:
-                return Finding(
-                    id="verification:provenance-digest",
-                    title="Provenance Digest Matches",
-                    description="A provenance subject SHA-256 digest matches the stored SBOM hash.",
-                    status="pass",
-                    severity="info",
-                    metadata={
-                        "matched_subject": subj.get("name"),
-                        "digest": digest_sha256,
-                    },
-                )
+        if (subject := matching_subject(statements, expected_hash)) is not None:
+            return Finding(
+                id="verification:provenance-digest",
+                title="Provenance Digest Matches",
+                description="A provenance subject SHA-256 digest matches the stored SBOM hash.",
+                status="pass",
+                severity="info",
+                metadata={"matched_subject": subject.get("name"), "digest": expected_hash},
+            )
 
         return Finding(
             id="verification:provenance-digest",
@@ -421,33 +604,9 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             severity="high",
             metadata={
                 "expected_hash": expected_hash,
-                "subject_digests": [(s.get("digest") or {}).get("sha256") for s in subjects if isinstance(s, dict)],
+                "subject_digests": digests,
             },
         )
-
-    @staticmethod
-    def _extract_statement(data: Any) -> dict[str, Any] | None:
-        """Return the in-toto Statement dict, unwrapping DSSE if needed."""
-        if not isinstance(data, dict):
-            return None
-
-        if "_type" in data and "subject" in data:
-            return data
-
-        if "payloadType" in data and "payload" in data:
-            payload = data["payload"]
-            if not isinstance(payload, (str, bytes, bytearray)):
-                return None
-            try:
-                raw = base64.b64decode(payload, validate=True)
-                statement = json.loads(raw)
-            except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
-                return None
-            if not isinstance(statement, dict):
-                return None
-            return statement
-
-        return None
 
     # ------------------------------------------------------------------
     # 4. GitHub-published attestation (formerly the github-attestation plugin)
@@ -947,12 +1106,11 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         ``fail_count > 0`` so the orchestrator does not consider the run
         passing.
         """
-        crypto_ids = {
-            "verification:signature-valid",
-            "verification:provenance-digest",
-            "verification:github-attestation",
-        }
-        crypto_findings = [f for f in findings if f.id in crypto_ids]
+        crypto_findings = [
+            f
+            for f in findings
+            if f.id in SBOMVerificationPlugin._CRYPTO_FINDING_IDS or f.id == "verification:github-attestation"
+        ]
         passed = [f for f in crypto_findings if f.status == "pass"]
         failed = [f for f in crypto_findings if f.status == "fail"]
 
@@ -1021,13 +1179,35 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             self._check_signature_valid(sbom_data, context),
             self._check_provenance_present(context),
             self._check_provenance_digest(context),
-            self._check_github_attestation(sbom_data, sbom_path, sbom_dict, context),
         ]
+        verified_elsewhere = any(f.id in self._CRYPTO_FINDING_IDS and f.status == "pass" for f in findings)
+        try:
+            github = self._check_github_attestation(sbom_data, sbom_path, sbom_dict, context)
+        except RetryLaterError as exc:
+            # Waiting on GitHub only makes sense while nothing else has
+            # verified the SBOM. Once a stored signature or provenance has,
+            # retrying holds that result back for hours and, when the
+            # retries run out, replaces it with an error.
+            if not verified_elsewhere:
+                raise
+            github = self._gha_finding(
+                "warning",
+                exc.title or "No GitHub Attestation Found",
+                str(exc),
+                metadata={"reason": "not_retried_other_source_verified"},
+            )
+        if verified_elsewhere and github.status == "warning":
+            # GitHub is one way to verify an SBOM, not a requirement. With
+            # another source verified, its absence is worth noting, not
+            # reviewing.
+            github = dataclasses.replace(github, status="info", severity="info")
+        findings.append(github)
         findings.append(self._attestation_summary(findings))
 
         pass_count = sum(1 for f in findings if f.status == "pass")
         fail_count = sum(1 for f in findings if f.status == "fail")
         warning_count = sum(1 for f in findings if f.status == "warning")
+        info_count = sum(1 for f in findings if f.status == "info")
 
         summary = AssessmentSummary(
             total_findings=len(findings),
@@ -1035,6 +1215,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             fail_count=fail_count,
             warning_count=warning_count,
             error_count=0,
+            info_count=info_count,
         )
 
         return AssessmentResult(

@@ -55,7 +55,7 @@ export function navbarSearch(): AlpineComponent<NavbarSearch> {
     sections: [],
     suggestions: [],
     activeIndex: -1,
-    shortcutLabel: /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl',
+    shortcutLabel: /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : '^',
     timer: undefined,
     request: undefined,
     revision: 0,

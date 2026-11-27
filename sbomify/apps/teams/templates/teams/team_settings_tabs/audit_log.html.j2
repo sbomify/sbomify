@@ -1,0 +1,6 @@
+<div id="audit-log-panel"
+     hx-get="{% url 'audit:events' workspace_key=team.key %}"
+     hx-trigger="load"
+     hx-swap="outerHTML">
+    <c-feedback.loading-table message="Loading audit log..." />
+</div>

@@ -52,7 +52,7 @@
         {% endif %}
         <c-tables.header-cell sort="severity" class="w-32">Severity</c-tables.header-cell>
         <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
-        <c-tables.header-cell class="hidden md:table-cell w-48">Products</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell w-48 2xl:w-72">Products</c-tables.header-cell>
         <c-tables.header-cell sort="status" class="w-44">Status</c-tables.header-cell>
         <c-tables.header-cell sort="updated" date class="hidden sm:table-cell w-40">Updated</c-tables.header-cell>
         <c-tables.actions-cell as="th" label="Actions" />
@@ -85,7 +85,7 @@
                 </div>
                 </c-tables.cell>
                 <c-tables.cell class="hidden md:table-cell">
-                <div class="flex flex-wrap gap-1.5">
+                <div class="flex flex-wrap gap-1.5 min-w-0">
                     {% comment %}
                         An advisory can name a product this workspace does not
                         track, and keeps naming it after one is deleted. Those
@@ -94,15 +94,17 @@
                     {% endcomment %}
                     <template x-for="product in advisory.products" :key="product.key">
                         <c-chips.neutral>
-                        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                        <i class="fas fa-cube text-[10px] opacity-70 shrink-0"
+                           aria-hidden="true"></i>
                         <template x-if="product.id">
                             <a :href="'{% url 'core:product_details' 0 %}'.replace('0', product.id)"
                                @click.stop
-                               class="transition-colors hover:opacity-80"
+                               class="truncate transition-colors hover:opacity-80"
+                               :title="product.name"
                                x-text="product.name"></a>
                         </template>
                         <template x-if="!product.id">
-                            <span x-text="product.name"></span>
+                            <span class="truncate" :title="product.name" x-text="product.name"></span>
                         </template>
                         </c-chips.neutral>
                     </template>
